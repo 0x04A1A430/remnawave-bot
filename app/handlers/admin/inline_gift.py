@@ -21,6 +21,9 @@ Syntax (flags are mixable in any order; each applies its component):
   Balance:
     @botname @user -b 1500         — +1500 ₽
 
+  Reset traffic usage:
+    @botname @user -g              — сброс использованного трафика
+
   Mixed (одним подарком, флаги в любом порядке):
     @botname @user -p 30 500 3 -t 100 60 -b 1500 -d 15
     @botname @user -b 1500 -t 100
@@ -34,6 +37,7 @@ Placeholder: - (dash) = пропустить позицию, не менять �
 """
 
 import html
+import re
 import secrets
 from dataclasses import dataclass
 
@@ -61,7 +65,10 @@ _MAX_DEVICES = 999
 # `-r` doubles as the standalone multi-activation prefix ("-r N days..."); as a
 # mixable flag it means "reset traffic usage". Both coexist: multi requires a
 # trailing numeric count and a bare "@user -r" target, so they never collide.
-_FLAG_TOKENS = {'-d', '-b', '-t', '-p', '-r'}
+# Mixable flag tokens. A single '-' is the "skip position" sentinel, not a flag.
+# `-g` = reset traffic usage. `-r` is reserved for the standalone multi-activation
+# prefix ("-r N days...") and is NOT mixable.
+_FLAG_TOKENS = {'-d', '-b', '-t', '-p', '-g'}
 
 
 def _is_admin(telegram_id: int) -> bool:
@@ -259,7 +266,7 @@ def _parse_query(query_text: str) -> ParsedQuery:
             i = j
             continue
 
-        if tok == '-r':
+        if tok == '-g':
             parsed.reset_traffic = True
             i += 1
             continue
@@ -321,6 +328,19 @@ def _subscription_body_lines(
     return lines
 
 
+def _recipient_html(display: str) -> str:
+    """Оборачивает в моноспейс только идентификатор получателя.
+
+    «clayx. (@clayxk)» → clayx. (<code>@clayxk</code>) — ник удобно копировать.
+    «@clayxk» / «id:123» (без имени) → целиком в <code>.
+    """
+    safe = html.escape(display) if display else ''
+    m = re.search(r'\((@[^\s)]+)\)$', safe) or re.search(r'\((id:\d+)\)$', safe)
+    if m:
+        return f'{safe[: m.start(1)]}<code>{m.group(1)}</code>{safe[m.end(1):]}'
+    return f'<code>{safe}</code>'
+
+
 def _build_subscription_caption(
     display: str,
     days: int | None,
@@ -329,7 +349,6 @@ def _build_subscription_caption(
     texts,
     multi_count: int = 0,
 ) -> str:
-    safe = html.escape(display) if display else ''
     lines = _subscription_body_lines(days, traffic_gb, devices, texts)
     body = '\n'.join(lines) if lines else '—'
     hint = texts.t('INLINE_GIFT_CAPTION_HINT', 'Нажмите кнопку ниже, чтобы активировать.')
@@ -339,7 +358,7 @@ def _build_subscription_caption(
         return f'<b>{header}</b>\n\n<blockquote>{body}</blockquote>\n\n<code>{hint}</code>'
 
     header = texts.t('INLINE_GIFT_CAPTION_HEADER', 'Подарочная подписка для')
-    return f'<b>{header} <code>{safe}</code></b>\n\n<blockquote>{body}</blockquote>\n\n<code>{hint}</code>'
+    return f'<b>{header} {_recipient_html(display)}</b>\n\n<blockquote>{body}</blockquote>\n\n<code>{hint}</code>'
 
 
 def _temp_body_line(gb: int, days: int, texts) -> str:
@@ -356,7 +375,6 @@ def _build_combo_caption(
     texts,
 ) -> str:
     """Full gift caption: header + all component lines."""
-    safe = html.escape(display) if display else ''
     lines: list[str] = []
 
     if parsed.has_subscription:
@@ -377,7 +395,7 @@ def _build_combo_caption(
     body = '\n'.join(lines) if lines else '—'
     hint = texts.t('INLINE_GIFT_CAPTION_HINT', 'Нажмите кнопку ниже, чтобы активировать.')
     header = texts.t('INLINE_GIFT_CAPTION_HEADER', 'Подарочная подписка для')
-    return f'<b>{header} <code>{safe}</code></b>\n\n<blockquote>{body}</blockquote>\n\n<code>{hint}</code>'
+    return f'<b>{header} {_recipient_html(display)}</b>\n\n<blockquote>{body}</blockquote>\n\n<code>{hint}</code>'
 
 
 def _build_syntax_hint(texts) -> list[types.InlineQueryResultArticle]:
@@ -395,7 +413,7 @@ def _build_syntax_hint(texts) -> list[types.InlineQueryResultArticle]:
         ('hint_disc', '@user -d 15', 'Скидка 15%'),
         ('hint_bal', '@user -b 1500', 'Пополнить баланс на 1500 ₽'),
         ('hint_t', '@user -t 100 60', 'Временный трафик: 100 ГБ на 60 дней (без дней — 30)'),
-        ('hint_r', '@user -r', 'Сброс использованного трафика'),
+        ('hint_g', '@user -g', 'Сброс использованного трафика'),
         ('hint_mix', '@user -p 1 500 3 -t 100 -b 1500 -d 15', 'Микс флагов одним подарком'),
     ]
     results = []
@@ -432,9 +450,9 @@ def _flag_hint(query_text: str, texts) -> str:
         return '-t 100 [60]  — временный трафик, по умолчанию 30 дней  (миксируется)'
     if '-p' in t:
         return '-p дни [гб [уст.]]  |  - пропуск позиции  (миксируется)'
-    if '-r' in t:
-        return '-r  — сброс использованного трафика  (миксируется)'
-    return '@user -p дни [гб [уст.]] | -t гб [дней] | -d % | -b ₽ | -r сброс трафика | флаги миксируются | - пропуск'
+    if '-g' in t:
+        return '-g  — сброс использованного трафика  (миксируется)'
+    return '@user -p дни [гб [уст.]] | -t гб [дней] | -d % | -b ₽ | -g сброс трафика | флаги миксируются | - пропуск'
 
 
 async def handle_admin_inline_query(inline_query: types.InlineQuery) -> None:

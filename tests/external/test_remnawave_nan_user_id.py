@@ -111,3 +111,81 @@ def test_parse_user_keeps_valid_numeric_id():
     }
     user = api._parse_user(raw)
     assert user.id == 42
+
+
+# ---- identity by Description (v3: uuid absent, match `{tg} - {id}` / `TG: <id>`) ----
+
+
+def test_description_match_negative():
+    api = _api()
+    assert not api._description_matches_telegram_id(None, 123)
+    assert not api._description_matches_telegram_id('', 123)
+    assert not api._description_matches_telegram_id('Bot user: A B @user', 123)
+    assert not api._description_matches_telegram_id('TG: 12345', 123)
+
+
+def test_description_match_own_identifier():
+    api = _api()
+    assert api._description_matches_telegram_id('TG: 123', 123)
+    assert api._description_matches_telegram_id('Bot user: A B | TG: 123 | Email: x@y.z', 123)
+
+
+def test_description_match_user_template():
+    api = _api()
+    assert api._description_matches_telegram_id('@user_name - 123', 123)
+    assert api._description_matches_telegram_id('user_name - 123', 123)
+    assert api._description_matches_telegram_id('user_name – 123', 123)
+    assert api._description_matches_telegram_id('user_name 123', 123)
+
+
+def test_resolve_user_id_by_description_v3():
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+
+    api = _api()
+    api._use_user_id = lambda: True
+    items = [
+        SimpleNamespace(id=12, description='@utopia12347 - 123456789'),
+    ]
+    api._get_users_by_stream_filter = AsyncMock(return_value=items)
+
+    async def run():
+        return await api.resolve_user_id_by_telegram_description(123456789)
+
+    import asyncio
+
+    loop = asyncio.new_event_loop()
+    try:
+        assert loop.run_until_complete(run()) == 12
+    finally:
+        loop.close()
+
+
+def test_resolve_user_id_by_description_fallback_to_full_walk():
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+
+    api = _api()
+    api._use_user_id = lambda: True
+
+    async def fake_filter(filters):
+        # telegramId-фильтр не отдал ничего -> полный обход по Description
+        if 'telegramId' in filters:
+            return []
+        return [
+            SimpleNamespace(id=21, description='Жанна пользователь'),
+            SimpleNamespace(id=22, description='TG: 777'),
+        ]
+
+    api._get_users_by_stream_filter = AsyncMock(side_effect=fake_filter)
+
+    async def run():
+        return await api.resolve_user_id_by_telegram_description(777)
+
+    import asyncio
+
+    loop = asyncio.new_event_loop()
+    try:
+        assert loop.run_until_complete(run()) == 22
+    finally:
+        loop.close()
