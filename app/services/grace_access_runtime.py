@@ -13,11 +13,11 @@ panel gateway routes through the api client's ``user_id=...`` parameter.
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
-from typing import Any, Callable
+from typing import Any
 from uuid import UUID
 
 import structlog
