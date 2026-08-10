@@ -111,6 +111,7 @@ class EmailService:
         body_html: str,
         body_text: str | None = None,
         attachments: list[tuple[str, bytes, str]] | None = None,
+        unsubscribe_url: str | None = None,
     ) -> bool:
         """
         Send an email.
@@ -121,6 +122,9 @@ class EmailService:
             body_html: HTML body content
             body_text: Plain text body (optional, generated from HTML if not provided)
             attachments: Optional list of (filename, content, mimetype) tuples
+            unsubscribe_url: One-click unsubscribe URL. Задаётся ТОЛЬКО для
+                маркетинговых писем — на транзакционных (код входа, чек об
+                оплате) List-Unsubscribe не ставят.
 
         Returns:
             True if email was sent successfully, False otherwise
@@ -150,6 +154,28 @@ class EmailService:
             msg['To'] = to_email
             msg['Date'] = formatdate(localtime=False)
             msg['Message-ID'] = make_msgid(domain=safe_from_email.split('@')[-1])
+
+            # RFC 8058: пара List-Unsubscribe + List-Unsubscribe-Post — это то, из
+            # чего Gmail/Yahoo рисуют свою кнопку «Отписаться» рядом с адресом
+            # отправителя. Без -Post заголовок считается «старым» и кнопку дают
+            # не всегда.
+            if unsubscribe_url:
+                safe_unsubscribe = unsubscribe_url.strip()
+                # URL приходит из настроек/БД: перенос строки в нём дописал бы
+                # произвольный заголовок в письмо, поэтому такой URL не чиним, а
+                # выбрасываем целиком вместе с заголовками.
+                if any(ch in safe_unsubscribe for ch in '\r\n<>') or not safe_unsubscribe.startswith(
+                    ('http://', 'https://')
+                ):
+                    logger.warning('Некорректный unsubscribe_url — заголовки отписки пропущены')
+                else:
+                    from .email_unsubscribe import build_unsubscribe_mailto
+
+                    targets = [f'<{safe_unsubscribe}>']
+                    if mailto := build_unsubscribe_mailto():
+                        targets.append(f'<{mailto}>')
+                    msg['List-Unsubscribe'] = ', '.join(targets)
+                    msg['List-Unsubscribe-Post'] = 'List-Unsubscribe=One-Click'
 
             # Plain text version
             if body_text is None:

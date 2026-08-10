@@ -2051,6 +2051,7 @@ async def _send_offer_to_users(
                             email=user.email,
                             language=user.language or db_user.language,
                             username=user.first_name or user.username or '',
+                            user_id=user.id,
                             message_text=message_text,
                             valid_hours=template.valid_hours,
                             discount_percent=template.discount_percent or 0,
