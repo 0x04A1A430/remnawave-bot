@@ -788,7 +788,6 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
                     )
 
                 new_activated = activated + 1
-                remaining = max_act - new_activated
                 gift.activated_count = new_activated
                 if new_activated >= max_act:
                     gift.is_activated = True

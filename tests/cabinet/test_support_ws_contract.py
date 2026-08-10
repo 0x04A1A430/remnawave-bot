@@ -827,13 +827,17 @@ def test_register_support_ticket_event_bridge_is_idempotent(monkeypatch):
     from app.services.event_emitter import event_emitter
 
     registered = []
-    monkeypatch.setattr(event_emitter, 'on', lambda event_type, callback: registered.append(event_type))
-    monkeypatch.setattr(support_ws, '_bridge_registered', False)
+    monkeypatch.setattr(event_emitter, 'off', lambda event_type, callback: registered.append(f'off:{event_type}'))
+    monkeypatch.setattr(event_emitter, 'on', lambda event_type, callback: registered.append(f'on:{event_type}'))
 
     support_ws.register_support_ticket_event_bridge()
-    support_ws.register_support_ticket_event_bridge()  # second call must be a no-op
+    support_ws.register_support_ticket_event_bridge()  # повторный вызов заменяет обработчики
 
-    assert registered == ['ticket.message_added', 'ticket.created', 'ticket.status_changed']
+    on_events = [e for e in registered if e.startswith('on:')]
+    off_events = [e for e in registered if e.startswith('off:')]
+    assert on_events == ['on:ticket.message_added', 'on:ticket.created', 'on:ticket.status_changed'] * 2
+    # каждому on сопутствует парный off — дублей активных обработчиков не накапливается
+    assert len(off_events) == len(on_events)
 
 
 def test_bridge_only_emits_whitelisted_event_names():
