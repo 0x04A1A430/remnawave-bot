@@ -527,10 +527,35 @@ class RemnaWaveService:
         )
         return first_name, last_name, username
 
+    async def _fetch_telegram_name(
+        self,
+        bot: Any | None,
+        telegram_id: int,
+    ) -> tuple[str | None, str | None, str | None]:
+        """Достаёт (first_name, last_name, username) из Telegram Bot API.
+
+        Возвращает (None, None, None), если бот не передан, пользователь не
+        доступен боту (chat not found) или произошёл любой сбой — вызывающий
+        остаётся на заглушке "User <telegram_id>".
+        """
+        if bot is None or not telegram_id:
+            return None, None, None
+        try:
+            chat = await bot.get_chat(chat_id=telegram_id)
+        except Exception:
+            return None, None, None
+        return (
+            getattr(chat, 'first_name', None),
+            getattr(chat, 'last_name', None),
+            getattr(chat, 'username', None),
+        )
+
     async def _get_or_create_bot_user_from_panel(
         self,
         db: AsyncSession,
         panel_user: dict[str, Any],
+        *,
+        bot: Any | None = None,
     ) -> tuple[User | None, bool]:
         """Возвращает пользователя бота, создавая его при необходимости.
 
@@ -553,11 +578,27 @@ class RemnaWaveService:
         full_first_name = fallback_first_name
         full_last_name = None
 
+        tg_identity: tuple[str | None, str | None, str | None] = (None, None, None)
+
         if (first_name_from_desc and last_name_from_desc) or first_name_from_desc:
             full_first_name = first_name_from_desc
             full_last_name = last_name_from_desc
+        else:
+            # Из панели имя не извлеклось. Если синк запущен из админки бота —
+            # пробуем настоящее имя из Telegram Bot API, чтобы не плодить
+            # заглушки "User <telegram_id>" (остаток дообогащает
+            # scripts/backfill_user_names.py).
+            tg_identity = await self._fetch_telegram_name(bot, telegram_id)
+            tg_first, tg_last, tg_username = tg_identity
+            if tg_first:
+                full_first_name = tg_first
+                full_last_name = tg_last
+            elif tg_username:
+                full_first_name = tg_username
 
         username = username_from_desc or panel_user.get('username')
+        if not username:
+            username = tg_identity[2]
 
         try:
             create_kwargs = dict(
@@ -1412,7 +1453,13 @@ class RemnaWaveService:
         finally:
             await exit_stack.aclose()
 
-    async def sync_users_from_panel(self, db: AsyncSession, sync_type: str = 'all') -> dict[str, int]:
+    async def sync_users_from_panel(
+        self,
+        db: AsyncSession,
+        sync_type: str = 'all',
+        *,
+        bot: Any | None = None,
+    ) -> dict[str, int]:
         # In multi-tariff mode, match panel users to subscriptions by remnawave_uuid
         if settings.is_multi_tariff_enabled():
             return await self._sync_users_from_panel_multi(db, sync_type)
@@ -1565,7 +1612,7 @@ class RemnaWaveService:
                                 telegram_id=telegram_id,
                             )
 
-                            db_user, is_created = await self._get_or_create_bot_user_from_panel(db, panel_user)
+                            db_user, is_created = await self._get_or_create_bot_user_from_panel(db, panel_user, bot=bot)
 
                             if not db_user:
                                 logger.error(
