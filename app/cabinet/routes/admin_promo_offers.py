@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field, validator
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.database.crud.discount_offer import (
     count_discount_offers,
     list_discount_offers,
@@ -675,8 +676,11 @@ async def broadcast_offer(
 
     # Reduce to plain (telegram_id, offer_id) so the fan-out can run detached: the
     # request's DB session closes on return, and ORM objects would then fail to lazy-load.
+    notifications_enabled = settings.is_notifications_enabled()
     notify_targets = [
-        (recipient.telegram_id, offer.id) for recipient, offer in offers_to_notify if recipient.telegram_id
+        (recipient.telegram_id, offer.id)
+        for recipient, offer in offers_to_notify
+        if notifications_enabled and recipient.telegram_id and is_promo_offers_enabled(recipient)
     ]
 
     # Email-only юзеры (без telegram_id): оффер у них уже создан выше, но о нём
@@ -688,7 +692,8 @@ async def broadcast_offer(
         for recipient, _offer in offers_to_notify
         # Отписавшихся от промо пропускаем: тумблер кабинета обязан работать и
         # для почты, иначе отписка ничего не меняет и превращается в жалобу.
-        if not recipient.telegram_id
+        if notifications_enabled
+        and not recipient.telegram_id
         and recipient.email
         and recipient.email_verified
         and is_promo_offers_enabled(recipient)

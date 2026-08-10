@@ -25,6 +25,41 @@ from app.services.tribute_service import TributeService
 
 logger = structlog.get_logger(__name__)
 
+# Strong refs to fire-and-forget webhook background tasks so they are not
+# garbage-collected mid-execution (per asyncio.create_task docs).
+_webhook_bg_tasks: set[asyncio.Task] = set()
+
+
+def _spawn_webhook_bg(coro) -> None:
+    task = asyncio.create_task(coro)
+    _webhook_bg_tasks.add(task)
+    task.add_done_callback(_webhook_bg_tasks.discard)
+
+
+async def drain_webhook_bg_tasks(timeout: float = 30.0) -> None:
+    """Дождаться фоновых обработчиков вебхуков перед остановкой процесса.
+
+    Вебхук отвечает 200 сразу после проверки подписи, то есть провайдер уже
+    считает коллбек доставленным и повторять его не будет. Уйти в shutdown с
+    незавершёнными задачами значит потерять зачисление: деньги у провайдера
+    прошли, у нас — нет, и никто об этом не узнает.
+
+    Ждём с потолком, чтобы застрявшая задача не держала выкат бесконечно;
+    что не успело — пишем ошибкой, по ней платёж можно найти руками.
+    """
+    pending = [task for task in _webhook_bg_tasks if not task.done()]
+    if not pending:
+        return
+
+    logger.info('Дожидаемся фоновой обработки вебхуков перед остановкой', count=len(pending))
+    _, still_pending = await asyncio.wait(pending, timeout=timeout)
+    if still_pending:
+        logger.error(
+            'Фоновая обработка вебхуков не завершилась за отведённое время — '
+            'зачисление могло не примениться, проверьте платежи вручную',
+            count=len(still_pending),
+        )
+
 
 def _create_cors_response() -> Response:
     return Response(
@@ -1534,19 +1569,27 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
                 logger.warning('Etoplatezhi webhook: invalid signature')
                 return JSONResponse({'status': False}, status_code=status.HTTP_400_BAD_REQUEST)
 
-            try:
-                success = await _process_payment_service_callback(
-                    payment_service,
-                    payload,
-                    'process_etoplatezhi_callback',
-                )
-                if not success:
-                    logger.error(
-                        'Etoplatezhi webhook processing failed',
-                        data=payload.get('payment', {}).get('id'),
+            # ACK instantly, process in background. Under callback bursts the
+            # synchronous processing made EtoPlatezhi's client time out
+            # (499/408) before we responded, triggering retries. The processor
+            # opens its own DB session and row-locks per payment, so concurrent
+            # callbacks stay safe. EtoPlatezhi still retries on non-200/timeout.
+            async def _process_etoplatezhi_bg() -> None:
+                try:
+                    success = await _process_payment_service_callback(
+                        payment_service,
+                        payload,
+                        'process_etoplatezhi_callback',
                     )
-            except Exception as e:
-                logger.exception('Etoplatezhi webhook processing error', error=e)
+                    if not success:
+                        logger.error(
+                            'Etoplatezhi webhook processing failed',
+                            data=payload.get('payment', {}).get('id'),
+                        )
+                except Exception as e:
+                    logger.exception('Etoplatezhi webhook processing error', error=e)
+
+            _spawn_webhook_bg(_process_etoplatezhi_bg())
             # Always return 200 — Etoplatezhi expects 200 for valid signature
             return JSONResponse({'status': True}, status_code=status.HTTP_200_OK)
 

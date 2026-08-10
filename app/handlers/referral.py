@@ -860,7 +860,12 @@ async def confirm_withdrawal_request(callback: types.CallbackQuery, db_user: Use
 
     # Уведомление в топик, если настроено
     topic_id = settings.REFERRAL_WITHDRAWAL_NOTIFICATIONS_TOPIC_ID
-    if topic_id and settings.ADMIN_NOTIFICATIONS_CHAT_ID:
+    if (
+        topic_id
+        and settings.ADMIN_NOTIFICATIONS_CHAT_ID
+        and settings.ADMIN_NOTIFICATIONS_ENABLED
+        and settings.ADMIN_NOTIFICATIONS_PARTNERS_ENABLED
+    ):
         try:
             await callback.bot.send_message(
                 chat_id=settings.ADMIN_NOTIFICATIONS_CHAT_ID,
