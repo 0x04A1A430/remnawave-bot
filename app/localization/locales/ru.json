@@ -1945,6 +1945,7 @@
   "DEVICE_RENAME_BUTTON": "✏️",
   "PAYMENT_METHODS_NONE_AVAILABLE": "💳 <b>Способы пополнения баланса</b>\n\n⚠️ В данный момент способы оплаты временно недоступны.\nПопробуйте позже.\n\nВыберите способ пополнения:",
   "PROMOCODE_SUBSCRIPTION_NOT_FOUND": "❌ Подписка не найдена",
+  "PROMOCODE_TRAFFIC_NOT_APPLICABLE": "❌ Этот промокод даёт только трафик, а у вашей подписки он безлимитный. Код не потрачен.",
   "PROMOCODE_USER_NOT_FOUND": "❌ Пользователь не найден",
   "PROMOCODE_TRIAL_SUBSCRIPTION_EXISTS": "❌ У вас уже есть подписка, поэтому триал-промокод применить нельзя.",
   "PROMOCODE_TRIAL_PROVISIONING_FAILED": "❌ Не удалось выдать триал прямо сейчас. Попробуйте позже.",
