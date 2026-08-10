@@ -2392,7 +2392,7 @@ class MonitoringService:
                 'SUBSCRIPTION_EXPIRED_1D',
                 (
                     '<b>Подписка{tariff_label} закончилась</b>\n\n'
-                    'Доступ был отключён {end_date}. Продлите подписку, чтобы вернуться в сервис.'
+                    'Доступ был отключён {end_date}. Вы были переведены на временный доступ.'
                 ),
             )
             message = template.format(
