@@ -997,6 +997,26 @@ async def test_external_squad_is_detached_only_in_overlay_and_kept_in_snapshot()
     assert panel.snapshot.external_squad_uuid is None
 
 
+async def test_external_squad_is_assigned_when_policy_configured() -> None:
+    """GRACE_ACCESS_EXTERNAL_SQUAD_UUID задан — грейс выдаёт external squad вместо отвязки."""
+    now = datetime(2026, 7, 15, 12, tzinfo=UTC)
+    clock = MutableClock(now)
+    external_squad = '44444444-4444-4444-4444-444444444444'
+    billing = replace(
+        make_billing(status='expired', end_at=now - timedelta(minutes=1)),
+        external_squad_uuid=external_squad,
+    )
+    snapshot = make_snapshot(expire_at=billing.end_at)
+    policy = make_policy(external_squad_uuid=external_squad)
+    service, _, panel, _ = make_service(billing=billing, snapshot=snapshot, clock=clock, policy=policy)
+
+    result = await service.start_if_eligible(billing, GraceReason.EXPIRED)
+
+    assert result.session is not None
+    assert result.session.overlay.external_squad_uuid == external_squad
+    assert panel.snapshot.external_squad_uuid == external_squad
+
+
 async def test_manual_panel_change_is_terminal_conflict_and_never_reapplied() -> None:
     now = datetime(2026, 7, 15, 12, tzinfo=UTC)
     clock = MutableClock(now)
