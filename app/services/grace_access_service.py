@@ -170,6 +170,7 @@ class GracePanelSnapshot:
     external_squad_uuid: str | None = None
     traffic_is_known: bool = True
     last_traffic_reset_at: datetime | None = None
+    tag: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
