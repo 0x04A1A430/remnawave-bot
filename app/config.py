@@ -247,6 +247,7 @@ class Settings(BaseSettings):
     PRICE_180_DAYS: int = 499000
     PRICE_360_DAYS: int = 899000
     PAID_SUBSCRIPTION_USER_TAG: str | None = None
+    GRACE_USER_TAG: str | None = 'GRACE'
 
     PRICE_TRAFFIC_5GB: int = 2000
     PRICE_TRAFFIC_10GB: int = 3500
@@ -2020,6 +2021,9 @@ class Settings(BaseSettings):
             self.PAID_SUBSCRIPTION_USER_TAG,
             'PAID_SUBSCRIPTION_USER_TAG',
         )
+
+    def get_grace_user_tag(self) -> str | None:
+        return self._normalize_user_tag(self.GRACE_USER_TAG, 'GRACE_USER_TAG')
 
     def get_bot_username(self) -> str | None:
         username = getattr(self, 'BOT_USERNAME', None)

@@ -282,6 +282,7 @@ class _PanelTarget:
     squad_uuids: tuple[str, ...]
     external_squad_uuid: str | None
     device_limit: int | None = None
+    tag: str | None = None
 
 
 class RemnawaveGracePanelGateway:
@@ -324,6 +325,7 @@ class RemnawaveGracePanelGateway:
                 expire_at=_as_utc(overlay.expire_at),
                 traffic_limit_bytes=overlay.traffic_limit_bytes,
                 active_internal_squads=list(overlay.squad_uuids),
+                tag=settings.get_grace_user_tag(),
             )
         if updated is None or not panel_matches_overlay(
             _panel_user_to_snapshot(updated),
@@ -419,12 +421,19 @@ class RemnawaveGracePanelGateway:
                     raise GracePanelTransitionConflict('Canonical Remnawave user disappeared during LIMITED restore')
                 current = _panel_user_to_snapshot(current_user)
                 if _panel_matches_target(current, target):
+                    if target.tag is not None and current.tag != target.tag:
+                        await api.update_user(
+                            uuid=_BLANK_UUID,
+                            user_id=billing.remnawave_id,
+                            tag=target.tag,
+                        )
                     if _panel_user_matches_device_limit(current_user, target):
                         return
                     updated_device = await api.update_user(
                         uuid=_BLANK_UUID,
                         user_id=billing.remnawave_id,
                         hwid_device_limit=target.device_limit,
+                        tag=target.tag,
                     )
                     if updated_device is None:
                         updated_device = await api.get_user_by_uuid(_BLANK_UUID, user_id=billing.remnawave_id)
@@ -1443,6 +1452,7 @@ def _panel_user_to_snapshot(panel_user: Any) -> GracePanelSnapshot:
         external_squad_uuid=panel_user.external_squad_uuid,
         traffic_is_known=panel_user.user_traffic is not None,
         last_traffic_reset_at=_as_utc(panel_user.last_traffic_reset_at) if panel_user.last_traffic_reset_at else None,
+        tag=getattr(panel_user, 'tag', None),
     )
 
 
@@ -1456,6 +1466,7 @@ def _build_restore_target(snapshot: GracePanelSnapshot, *, now: datetime) -> _Pa
             traffic_limit_bytes=snapshot.traffic_limit_bytes,
             squad_uuids=snapshot.squad_uuids,
             external_squad_uuid=snapshot.external_squad_uuid,
+            tag=snapshot.tag,
         )
     if status == 'limited':
         panel_status = PanelUserStatus.LIMITED
@@ -1467,6 +1478,7 @@ def _build_restore_target(snapshot: GracePanelSnapshot, *, now: datetime) -> _Pa
         traffic_limit_bytes=snapshot.traffic_limit_bytes,
         squad_uuids=snapshot.squad_uuids,
         external_squad_uuid=snapshot.external_squad_uuid,
+        tag=snapshot.tag,
     )
 
 
@@ -1490,6 +1502,7 @@ def _build_billing_target(billing: GraceBillingState, *, now: datetime) -> _Pane
         squad_uuids=billing.squad_uuids,
         external_squad_uuid=billing.external_squad_uuid,
         device_limit=billing.device_limit,
+        tag=(settings.get_trial_user_tag() if billing.is_trial else settings.get_paid_subscription_user_tag()),
     )
 
 
@@ -1517,6 +1530,8 @@ def _serialize_panel_target(
         raise GracePanelError(f'Unsupported canonical panel status {target.status!r}')
     if target.device_limit is not None:
         kwargs['hwid_device_limit'] = target.device_limit
+    if target.tag is not None:
+        kwargs['tag'] = target.tag
     return kwargs
 
 
@@ -1583,6 +1598,8 @@ async def _apply_limited_target(
         }
         if target.device_limit is not None:
             phase_a_kwargs['hwid_device_limit'] = target.device_limit
+        if target.tag is not None:
+            phase_a_kwargs['tag'] = target.tag
         phase_a_user = await api.update_user(**phase_a_kwargs)
         if phase_a_user is None:
             phase_a_user = await api.get_user_by_uuid(_BLANK_UUID, user_id=remnawave_id)
@@ -1612,6 +1629,7 @@ async def _apply_limited_target(
         user_id=remnawave_id,
         active_internal_squads=list(target.squad_uuids),
         external_squad_uuid=target.external_squad_uuid,
+        tag=target.tag,
     )
     if phase_b_user is not None and _panel_user_matches_target(phase_b_user, target):
         return phase_b_user
@@ -1780,6 +1798,7 @@ def _panel_to_json(value: GracePanelSnapshot) -> dict[str, Any]:
         'external_squad_uuid': value.external_squad_uuid,
         'traffic_is_known': value.traffic_is_known,
         'last_traffic_reset_at': _datetime_to_json(value.last_traffic_reset_at),
+        'tag': value.tag,
     }
 
 
@@ -1799,6 +1818,7 @@ def _panel_from_json(raw: Any, *, fallback_remnawave_id: int | None = None) -> G
         external_squad_uuid=_optional_string(data.get('external_squad_uuid')),
         traffic_is_known=bool(data.get('traffic_is_known', True)),
         last_traffic_reset_at=_datetime_from_json(data.get('last_traffic_reset_at')),
+        tag=_optional_string(data.get('tag')),
     )
 
 

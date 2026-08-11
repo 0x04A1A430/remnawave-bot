@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from typing import Any
@@ -325,6 +326,58 @@ async def test_restore_limited_snapshot_recognizes_safe_active_intermediate(
     assert api.user.external_squad_uuid == EXTERNAL_SQUAD
 
 
+async def test_restore_returns_original_tag(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Restoring a snapshot must return the tag captured before grace."""
+    snapshot = replace(
+        make_limited_snapshot(),
+        tag='PAID',
+    )
+    overlay = make_overlay()
+    api = FakeRemnawaveApi(
+        make_panel_user(
+            status=UserStatus.ACTIVE,
+            expire_at=overlay.expire_at,
+            traffic_limit_bytes=overlay.traffic_limit_bytes,
+            squad_uuids=overlay.squad_uuids,
+        )
+    )
+    install_fake_api(monkeypatch, api)
+    gateway = RemnawaveGracePanelGateway()
+
+    api.user.status = UserStatus.LIMITED
+    outcome = await gateway.restore_snapshot(PANEL_ID, snapshot, overlay)
+
+    assert outcome is GraceRestoreOutcome.RESTORED
+    assert api.updates[-1].get('tag') == 'PAID'
+
+
+async def test_billing_target_restores_paid_tag(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """apply_billing_state must restore the paid (non-trial) tag."""
+    from app.config import Settings
+
+    monkeypatch.setattr(Settings, 'get_paid_subscription_user_tag', lambda self: 'PAID')
+    billing = make_limited_billing()
+    overlay = make_overlay()
+    api = FakeRemnawaveApi(
+        make_panel_user(
+            status=UserStatus.LIMITED,
+            expire_at=billing.end_at,
+            traffic_limit_bytes=billing.traffic_limit_bytes,
+            squad_uuids=(REGULAR_SQUAD,),
+            external_squad_uuid=EXTERNAL_SQUAD,
+        )
+    )
+    install_fake_api(monkeypatch, api)
+
+    await RemnawaveGracePanelGateway().apply_billing_state(billing, expected_overlay=overlay)
+
+    assert any(update.get('tag') == 'PAID' for update in api.updates)
+
+
 @pytest.mark.parametrize(
     ('status', 'squad_uuids'),
     [
@@ -412,13 +465,20 @@ async def test_apply_limited_billing_updates_device_limit_even_when_other_fields
     )
 
     assert api.user.hwid_device_limit == billing.device_limit
-    # Exactly one PATCH, keyed by numeric id.
+    # Numeric-id keyed PATCHes: restore the paid tag (currently GRACE on the
+    # panel user from the overlay) and apply the canonical device limit.
     assert api.updates == [
         {
             'uuid': '',
             'user_id': PANEL_ID,
+            'tag': 'PAID',
+        },
+        {
+            'uuid': '',
+            'user_id': PANEL_ID,
             'hwid_device_limit': billing.device_limit,
-        }
+            'tag': 'PAID',
+        },
     ]
     assert_no_derived_status_writes(api)
 
@@ -495,6 +555,30 @@ async def test_apply_overlay_detaches_external_squad_first_and_addresses_the_id(
     assert api.updates[1]['status'] is UserStatus.ACTIVE
     assert api.user.active_internal_squads == [{'uuid': GRACE_SQUAD}]
     assert api.user.external_squad_uuid is None
+
+
+async def test_apply_overlay_sets_grace_tag(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The overlay must mark the panel user with the configured grace tag."""
+    from app.config import Settings
+
+    monkeypatch.setattr(Settings, 'get_grace_user_tag', lambda self: 'GRACE')
+    overlay = make_overlay()
+    api = FakeRemnawaveApi(
+        make_panel_user(
+            status=UserStatus.EXPIRED,
+            expire_at=NOW - timedelta(days=1),
+            traffic_limit_bytes=10 * GIB,
+            squad_uuids=(REGULAR_SQUAD,),
+            external_squad_uuid=EXTERNAL_SQUAD,
+        )
+    )
+    install_fake_api(monkeypatch, api)
+
+    await RemnawaveGracePanelGateway().apply_overlay(PANEL_ID, overlay)
+
+    assert api.updates[1].get('tag') == 'GRACE'
 
 
 async def test_read_snapshot_returns_the_id_identity(
