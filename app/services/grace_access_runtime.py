@@ -1363,7 +1363,6 @@ def _build_policy() -> GraceAccessPolicy:
         duration=timedelta(hours=settings.GRACE_ACCESS_DURATION_HOURS),
         expired_squad_uuid=settings.GRACE_ACCESS_EXPIRED_SQUAD_UUID.strip(),
         limited_squad_uuid=settings.GRACE_ACCESS_LIMITED_SQUAD_UUID.strip(),
-        external_squad_uuid=settings.GRACE_ACCESS_EXTERNAL_SQUAD_UUID.strip(),
         traffic_bytes=settings.GRACE_ACCESS_TRAFFIC_GB * gib,
         trial_enabled=settings.GRACE_ACCESS_TRIAL_ENABLED,
         daily_enabled=settings.GRACE_ACCESS_DAILY_ENABLED,
@@ -1385,13 +1384,6 @@ def _validate_active_configuration() -> None:
             UUID(raw_uuid.strip())
         except ValueError as error:
             raise ValueError(f'{label} must contain a valid UUID') from error
-
-    external_raw = settings.GRACE_ACCESS_EXTERNAL_SQUAD_UUID.strip()
-    if external_raw:
-        try:
-            UUID(external_raw)
-        except ValueError as error:
-            raise ValueError('GRACE_ACCESS_EXTERNAL_SQUAD_UUID must contain a valid UUID') from error
 
 
 async def _acquire_database_lock(db: AsyncSession, subscription_id: int) -> None:
