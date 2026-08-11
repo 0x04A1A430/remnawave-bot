@@ -1,5 +1,11 @@
 """Tests for inline gift flag parsing (mixable -p/-t/-b/-d) and preview rendering."""
 
+from datetime import UTC, datetime
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+
 from app.handlers.admin.inline_gift import (
     _FOREVER_DAYS,
     _build_combo_caption,
@@ -10,7 +16,7 @@ from app.handlers.admin.inline_gift import (
     _parse_query,
     _temp_body_line,
 )
-from app.handlers.inline_gift import _build_info_text
+from app.handlers.inline_gift import _apply_gift_panel_update, _build_info_text
 
 
 class FakeTexts:
@@ -344,3 +350,123 @@ class TestActivationPreview:
         assert 'Срок: <b>30 дней</b>' in text
         assert 'Трафик: <b>500 ГБ</b>' in text
         assert 'Устройств: <b>3</b>' in text
+
+
+def _sub(**kw):
+    base = SimpleNamespace(
+        id=13,
+        user_id=1,
+        status='limited',
+        end_date=datetime(2099, 8, 10, tzinfo=UTC),
+        traffic_limit_gb=0,
+        traffic_used_gb=0.0,
+        device_limit=999,
+        connected_squads=['fc97776d-ef3f-4263-bc55-cd2b0817574a'],
+        remnawave_uuid='804ec070-163c-4096-9661-97ed5369cf70',
+        remnawave_id=42,
+        subscription_url='',
+        subscription_crypto_link='',
+        updated_at=datetime.now(UTC),
+        tariff=SimpleNamespace(external_squad_uuid=None, traffic_reset_mode=None),
+    )
+    for k, v in kw.items():
+        setattr(base, k, v)
+    return base
+
+
+def _user():
+    return SimpleNamespace(
+        id=1,
+        telegram_id=7194570395,
+        full_name='Test',
+        username='test',
+        email=None,
+        remnawave_uuid='804ec070-163c-4096-9661-97ed5369cf70',
+        remnawave_id=42,
+        language='ru',
+    )
+
+
+class _FakeApi:
+    def __init__(self):
+        self.updated = None
+
+    async def update_user(self, **kwargs):
+        self.updated = kwargs
+        return SimpleNamespace(
+            subscription_url='https://s',
+            subscription_crypto_link='crypto',
+            happ_crypto_link='crypto',
+        )
+
+
+@pytest.mark.asyncio
+async def test_gift_panel_update_finishes_grace_via_grace_safe(monkeypatch):
+    """A gifted subscription with an open grace session must be pushed through
+    update_panel_user_grace_safe (which completes grace as PAID) and become
+    active in the panel — not be left for reconciliation to REVOKE."""
+    from app.services import grace_access_runtime as gar
+
+    sub = _sub()
+    user = _user()
+    db = AsyncMock()
+    db.commit = AsyncMock()
+    api = _FakeApi()
+
+    graceful_updated = SimpleNamespace(
+        subscription_url='https://g',
+        subscription_crypto_link='gc',
+        happ_crypto_link='gc',
+    )
+    grace_safe_mock = AsyncMock(return_value=graceful_updated)
+    overlay_mock = AsyncMock(return_value=SimpleNamespace())  # open grace
+    monkeypatch.setattr(gar, 'get_open_grace_overlay', overlay_mock)
+    monkeypatch.setattr(gar, 'update_panel_user_grace_safe', grace_safe_mock)
+
+    svc = MagicMock()
+    svc.get_api_client.return_value.__aenter__.return_value = api
+    svc._resolve_remnawave_id_by_telegram = AsyncMock(return_value=42)
+    svc.is_configured = True
+
+    with patch('app.services.subscription_service.SubscriptionService', return_value=svc):
+        await _apply_gift_panel_update(db, sub, user)
+
+    # Grace path used → db committed before guard session read
+    db.commit.assert_awaited_once()
+    # update_panel_user_grace_safe was used, its kwargs carry ACTIVE + future expiry
+    grace_safe_mock.assert_awaited_once()
+    called_kwargs = grace_safe_mock.await_args.kwargs
+    assert called_kwargs['status'].value == 'ACTIVE'
+    assert called_kwargs['expire_at'] == sub.end_date
+    assert called_kwargs['user_id'] == 42
+    # its result URL stored
+    assert sub.subscription_url == 'https://g'
+
+
+@pytest.mark.asyncio
+async def test_gift_panel_update_without_grace_uses_plain_update(monkeypatch):
+    """Without an open grace session the gift still activates the panel user."""
+    from app.services import grace_access_runtime as gar
+
+    sub = _sub()
+    user = _user()
+    db = AsyncMock()
+    db.commit = AsyncMock()
+    api = _FakeApi()
+
+    overlay_mock = AsyncMock(return_value=None)  # no grace
+    monkeypatch.setattr(gar, 'get_open_grace_overlay', overlay_mock)
+    grace_safe_mock = AsyncMock()
+    monkeypatch.setattr(gar, 'update_panel_user_grace_safe', grace_safe_mock)
+
+    svc = MagicMock()
+    svc.get_api_client.return_value.__aenter__.return_value = api
+    svc._resolve_remnawave_id_by_telegram = AsyncMock(return_value=42)
+
+    with patch('app.services.subscription_service.SubscriptionService', return_value=svc):
+        await _apply_gift_panel_update(db, sub, user)
+
+    grace_safe_mock.assert_not_awaited()
+    db.commit.assert_awaited_once()
+    assert api.updated['status'].value == 'ACTIVE'
+    assert api.updated['expire_at'] == sub.end_date
