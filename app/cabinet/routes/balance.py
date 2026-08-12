@@ -193,7 +193,6 @@ async def get_payment_methods(
                     definitions = settings.get_platega_method_definitions()
                     info = definitions.get(int(opt_id), {}) if opt_id.isdigit() else {}
                     description = info.get('description') or info.get('name') or ''
-
                 formatted_options.append(
                     {
                         'id': opt_id,
