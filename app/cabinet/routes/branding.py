@@ -50,12 +50,9 @@ TELEGRAM_OIDC_ENABLED_KEY = 'TELEGRAM_OIDC_ENABLED'
 TELEGRAM_OIDC_CLIENT_ID_KEY = 'TELEGRAM_OIDC_CLIENT_ID'
 
 # Default animation config
-# Дизайн кабинета xila в стиле страницы подписок использует статичный слой
-# .bg-decor (блобы + сетка) — анимированный фон по умолчанию выключен.
-# Админ может включить его в кабинете: Настройки → Оформление.
 DEFAULT_ANIMATION_CONFIG = {
-    'enabled': False,
-    'type': 'none',
+    'enabled': True,
+    'type': 'aurora',
     'settings': {},
     'opacity': 1.0,
     'blur': 0,
@@ -101,18 +98,18 @@ class BrandingNameUpdate(BaseModel):
 class ThemeColorsResponse(BaseModel):
     """Theme colors settings."""
 
-    accent: str = '#c0392b'
-    darkBackground: str = '#0e0e0e'
-    darkSurface: str = '#181818'
-    darkText: str = '#e2e2e2'
-    darkTextSecondary: str = '#808080'
-    lightBackground: str = '#0e0e0e'
-    lightSurface: str = '#181818'
-    lightText: str = '#e2e2e2'
-    lightTextSecondary: str = '#808080'
-    success: str = '#3ddc97'
-    warning: str = '#f6c453'
-    error: str = '#f0617d'
+    accent: str = '#3b82f6'
+    darkBackground: str = '#0a0f1a'
+    darkSurface: str = '#0f172a'
+    darkText: str = '#f1f5f9'
+    darkTextSecondary: str = '#94a3b8'
+    lightBackground: str = '#F7E7CE'
+    lightSurface: str = '#FEF9F0'
+    lightText: str = '#1F1A12'
+    lightTextSecondary: str = '#7D6B48'
+    success: str = '#22c55e'
+    warning: str = '#f59e0b'
+    error: str = '#ef4444'
 
 
 class ThemeColorsUpdate(BaseModel):
@@ -347,20 +344,20 @@ class AnalyticsCountersUpdate(BaseModel):
     google_ads_label: str | None = None
 
 
-# Default theme colors — палитра xila (тёмный glass, красный акцент)
+# Default theme colors
 DEFAULT_THEME_COLORS = {
-    'accent': '#c0392b',
-    'darkBackground': '#0e0e0e',
-    'darkSurface': '#181818',
-    'darkText': '#e2e2e2',
-    'darkTextSecondary': '#808080',
-    'lightBackground': '#0e0e0e',
-    'lightSurface': '#181818',
-    'lightText': '#e2e2e2',
-    'lightTextSecondary': '#808080',
-    'success': '#3ddc97',
-    'warning': '#f6c453',
-    'error': '#f0617d',
+    'accent': '#3b82f6',
+    'darkBackground': '#0a0f1a',
+    'darkSurface': '#0f172a',
+    'darkText': '#f1f5f9',
+    'darkTextSecondary': '#94a3b8',
+    'lightBackground': '#F7E7CE',
+    'lightSurface': '#FEF9F0',
+    'lightText': '#1F1A12',
+    'lightTextSecondary': '#7D6B48',
+    'success': '#22c55e',
+    'warning': '#f59e0b',
+    'error': '#ef4444',
 }
 
 
