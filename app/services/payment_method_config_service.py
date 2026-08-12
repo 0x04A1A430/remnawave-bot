@@ -1,5 +1,7 @@
 """Service for managing payment method display configurations in cabinet."""
 
+import re
+
 import structlog
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,6 +12,19 @@ from app.database.models import PaymentMethodConfig, PromoGroup
 
 
 logger = structlog.get_logger(__name__)
+
+
+# Вырезает Telegram-теги <tg-emoji ...>…</tg-emoji>, оставляя внутренний текст
+# (эмодзи/название). Бот рендерит эти теги в Telegram, а в веб-кабинете они
+# показываются сырьём, поэтому при формировании веб-ответов они удаляются.
+_TG_EMOJI_TAG_RE = re.compile(r'</?tg-emoji[^>]*>')
+
+
+def strip_tg_emoji(value: str | None) -> str | None:
+    """Remove Telegram-only <tg-emoji …>…</tg-emoji> tags from a string."""
+    if not value:
+        return value
+    return _TG_EMOJI_TAG_RE.sub('', value).strip()
 
 
 # ============ Display-name override cache ============
@@ -641,15 +656,16 @@ async def get_enabled_methods_for_user(
             for opt in available_sub_options:
                 opt_id = opt['id']
                 if config.sub_options.get(opt_id, True):
-                    enabled_options.append(opt)
+                    clean_opt = {**opt, 'name': strip_tg_emoji(opt.get('name')) or opt.get('name')}
+                    enabled_options.append(clean_opt)
             if enabled_options:
                 options = enabled_options
 
         result.append(
             {
                 'id': method_id,
-                'name': display_name,
-                'description': config.description,
+                'name': strip_tg_emoji(display_name) or display_name,
+                'description': strip_tg_emoji(config.description),
                 'min_amount_kopeks': min_amount,
                 'max_amount_kopeks': max_amount,
                 'options': options,
