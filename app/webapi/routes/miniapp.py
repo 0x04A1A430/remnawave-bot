@@ -799,7 +799,7 @@ async def get_payment_methods(
                     icon=info.get('icon') or ('' if method_code == 2 else ''),
                     title_key=f'topup.method.platega.option.{method_code}.title',
                     description_key=f'topup.method.platega.option.{method_code}.description',
-                    title=info.get('title') or info.get('name') or f'Platega {method_code}',
+                    title=info.get('name') or info.get('title') or f'Platega {method_code}',
                     description=info.get('description') or info.get('name'),
                 )
             )
