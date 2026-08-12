@@ -50,12 +50,6 @@ DEFAULT_MENU_CONFIG: dict[str, Any] = {
             'max_per_row': 1,
         },
         {
-            'id': 'resume_row',
-            'buttons': ['resume_checkout'],
-            'conditions': {'has_saved_cart': True},
-            'max_per_row': 1,
-        },
-        {
             'id': 'promo_referral_row',
             'buttons': ['promocode', 'referrals'],
             'conditions': None,
@@ -170,16 +164,6 @@ DEFAULT_MENU_CONFIG: dict[str, Any] = {
             'builtin_id': 'simple_subscription',
             'text': {'ru': 'Простая подписка', 'en': 'Simple subscription'},
             'action': 'simple_subscription_purchase',
-            'enabled': True,
-            'visibility': 'all',
-            'conditions': None,
-            'dynamic_text': False,
-        },
-        'resume_checkout': {
-            'type': 'builtin',
-            'builtin_id': 'resume_checkout',
-            'text': {'ru': 'Вернуться к оформлению', 'en': 'Resume checkout'},
-            'action': 'return_to_saved_cart',
             'enabled': True,
             'visibility': 'all',
             'conditions': None,
@@ -309,13 +293,6 @@ BUILTIN_BUTTONS_INFO: list[dict[str, Any]] = [
         'default_text': {'ru': 'Простая подписка', 'en': 'Simple subscription'},
         'callback_data': 'simple_subscription_purchase',
         'default_conditions': {'simple_subscription_enabled': True},
-        'supports_dynamic_text': False,
-    },
-    {
-        'id': 'resume_checkout',
-        'default_text': {'ru': 'Вернуться к оформлению', 'en': 'Resume checkout'},
-        'callback_data': 'return_to_saved_cart',
-        'default_conditions': {'has_saved_cart': True},
         'supports_dynamic_text': False,
     },
     {
