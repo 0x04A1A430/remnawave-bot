@@ -268,7 +268,19 @@ async def show_balance_menu(callback: types.CallbackQuery, db_user: User, db: As
 
     balance_text = texts.BALANCE_INFO.format(balance=texts.format_price(db_user.balance_kopeks))
 
-    reply_markup = get_balance_keyboard(db_user.language)
+    try:
+        from app.services.user_cart_service import user_cart_service
+
+        has_saved_cart = await user_cart_service.has_user_cart(db_user.id)
+    except Exception as e:
+        logger.error(
+            'Ошибка проверки сохраненной корзины в меню баланса',
+            db_user_id=db_user.id,
+            error=e,
+        )
+        has_saved_cart = False
+
+    reply_markup = get_balance_keyboard(db_user.language, has_saved_cart=has_saved_cart)
 
     try:
         if callback.message and callback.message.text:

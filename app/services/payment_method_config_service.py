@@ -289,7 +289,7 @@ def _get_platega_sub_options() -> list[dict] | None:
             options.append(
                 {
                     'id': str(method_code),
-                    'name': info.get('title') or info.get('name') or f'Platega {method_code}',
+                    'name': info.get('name') or info.get('title') or f'Platega {method_code}',
                 }
             )
         return options or None
