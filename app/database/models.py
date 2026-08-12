@@ -3490,6 +3490,9 @@ class PaymentMethodConfig(Base):
     # Переопределение отображаемого имени (null = использовать из env)
     display_name = Column(String(255), nullable=True)
 
+    # Кастомное описание метода (null = дефолтное описание из кабинета)
+    description = Column(Text, nullable=True)
+
     # Под-опции включения/выключения (JSON): {"card": true, "sbp": false}
     # Для методов с вариантами: yookassa, pal24, platega
     sub_options = Column(JSON, nullable=True, default=None)
@@ -3500,6 +3503,9 @@ class PaymentMethodConfig(Base):
     # Переопределение мин/макс сумм (null = из env)
     min_amount_kopeks = Column(Integer, nullable=True)
     max_amount_kopeks = Column(Integer, nullable=True)
+
+    # Открывать страницу оплаты сразу (window.location.href) вместо панели со ссылкой
+    open_url_direct = Column(Boolean, nullable=False, default=False, server_default='false')
 
     # --- Условия отображения ---
 
