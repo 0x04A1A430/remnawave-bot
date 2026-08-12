@@ -537,6 +537,15 @@ class BackupService:
 
             logger.info(message)
 
+            if self.bot:
+                await self._send_backup_file_to_chat(
+                    str(backup_path),
+                    filename=filename,
+                    tables_count=overview.get('tables_count', 0),
+                    total_records=overview.get('total_records', 0),
+                    size_mb=size_mb,
+                )
+
             return True, message, str(backup_path)
 
         except Exception as e:
@@ -2168,7 +2177,15 @@ class BackupService:
         except Exception as e:
             logger.error('Ошибка отправки уведомления о бекапе', error=e)
 
-    async def _send_backup_file_to_chat(self, file_path: str):
+    async def _send_backup_file_to_chat(
+        self,
+        file_path: str,
+        *,
+        filename: str | None = None,
+        tables_count: int = 0,
+        total_records: int = 0,
+        size_mb: float = 0.0,
+    ):
         try:
             if not settings.is_backup_send_enabled():
                 return
@@ -2186,10 +2203,20 @@ class BackupService:
                 if temp_zip_path:
                     file_to_send = temp_zip_path
 
-            caption = '<b>Резервная копия</b>\n\n'
-            if temp_zip_path:
-                caption += '<b>Архив защищён паролем</b>\n\n'
-            caption += f'<i>{datetime.now(UTC).strftime("%d.%m.%Y %H:%M:%S")}</i>'
+            file_name = filename or Path(file_to_send).name
+            topic_id = settings.BACKUP_SEND_TOPIC_ID
+            now = datetime.now(UTC)
+
+            caption_lines = [
+                '<blockquote>',
+                f'Файл: <code>{html_lib.escape(file_name)}</code>',
+                f'Таблиц: {tables_count}',
+                f'Записей: {total_records:,}'.replace(',', ' '),
+                f'Размер: {size_mb:.2f} MB',
+                '</blockquote>',
+                f'<i>{now.strftime("%d.%m.%Y %H:%M:%S")}</i>',
+            ]
+            caption = '\n'.join(caption_lines)
 
             send_kwargs = {
                 'chat_id': chat_id,
@@ -2198,8 +2225,8 @@ class BackupService:
                 'parse_mode': 'HTML',
             }
 
-            if settings.BACKUP_SEND_TOPIC_ID:
-                send_kwargs['message_thread_id'] = settings.BACKUP_SEND_TOPIC_ID
+            if topic_id:
+                send_kwargs['message_thread_id'] = topic_id
 
             await self.bot.send_document(**send_kwargs)
             logger.info('Бекап отправлен в чат', chat_id=chat_id)
