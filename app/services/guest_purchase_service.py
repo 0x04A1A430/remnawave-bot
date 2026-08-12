@@ -156,6 +156,7 @@ async def create_purchase(
     source: str = 'landing',
     subid: str | None = None,
     referrer: str | None = None,
+    campaign_slug: str | None = None,
     buyer_user_id: int | None = None,
     commit: bool = True,
 ) -> GuestPurchase:
@@ -165,6 +166,7 @@ async def create_purchase(
         commit=commit,
         subid=subid,
         referrer=referrer,
+        campaign_slug=campaign_slug,
         landing_id=landing.id if landing else None,
         tariff_id=tariff.id,
         period_days=period_days,
