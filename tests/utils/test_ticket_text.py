@@ -85,3 +85,27 @@ def test_preview_marks_cut_text():
     preview = preview_text(long_text, limit=100)
     assert preview.endswith('...')
     assert len(preview) == 103
+
+
+def test_bot_limit_matches_cabinet_and_webapi():
+    """Ровно это расхождение и породило баг: бот резал 500, кабинет принимал 4000.
+
+    Схемы — источник правды: пользователь пишет одно и то же сообщение из двух
+    клиентов одной системы и должен получать одинаковый результат.
+    """
+    from app.cabinet.schemas.tickets import TicketCreateRequest, TicketMessageCreateRequest
+    from app.webapi.schemas.tickets import TicketReplyRequest
+
+    fields = [
+        TicketCreateRequest.model_fields['message'],
+        TicketMessageCreateRequest.model_fields['message'],
+        TicketReplyRequest.model_fields['message_text'],
+    ]
+    schema_limits = {
+        constraint.max_length
+        for field in fields
+        for constraint in field.metadata
+        if getattr(constraint, 'max_length', None) is not None
+    }
+
+    assert schema_limits == {TICKET_MESSAGE_MAX_LENGTH}

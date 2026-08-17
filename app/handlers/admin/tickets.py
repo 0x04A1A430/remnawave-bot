@@ -1025,11 +1025,14 @@ async def notify_user_about_ticket_reply(bot: Bot, ticket: Ticket, reply_text: s
         chat_id = int(user.telegram_id)
         texts = get_texts(user.language)
 
-        # Формируем уведомление
+        # Формируем уведомление. Превью экранируем ПОСЛЕ обрезки: бот шлёт с
+        # parse_mode=HTML, и угловая скобка в ответе поддержки («откройте
+        # <config>») ломает разбор — уведомление не доходит вовсе. Экранировать
+        # до обрезки нельзя: срез разорвал бы `&quot;` с тем же результатом.
         base_text = texts.t(
             'TICKET_REPLY_NOTIFICATION',
             '🎫 Получен ответ по тикету #{ticket_id}\n\n{reply_preview}\n\nНажмите кнопку ниже, чтобы перейти к тикету:',
-        ).format(ticket_id=ticket.id, reply_preview=preview_text(reply_text))
+        ).format(ticket_id=ticket.id, reply_preview=html.escape(preview_text(reply_text)))
         keyboard = types.InlineKeyboardMarkup(
             inline_keyboard=[
                 [
