@@ -92,6 +92,11 @@ class Settings(BaseSettings):
     TEST_EMAIL_PASSWORD: str = ''  # Password for test account
 
     SUPPORT_USERNAME: str = '@support'
+    # Публичные контакты сервиса, которые кабинет отдаёт в GET /info/service.
+    # До этого хендлер читал SUPPORT_EMAIL и WEBSITE_URL через getattr, но таких
+    # полей в Settings никогда не было — эндпоинт всегда возвращал None.
+    SUPPORT_EMAIL: str | None = None
+    SERVICE_WEBSITE_URL: str | None = None
     SUPPORT_MENU_ENABLED: bool = True
     SUPPORT_SYSTEM_MODE: str = 'both'  # one of: tickets, contact, both
     # SLA for support tickets. Дефолты совпадают с .env.example: без него бот
