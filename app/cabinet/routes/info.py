@@ -309,17 +309,20 @@ async def get_service_info(
     SERVICE_NAME / SERVICE_DESCRIPTION / WEBSITE_URL, которых в Settings нет,
     поэтому любой инстанс отдавал «VPN Service» с пустыми контактами.
     """
-    requested_lang = language.split('-', maxsplit=1)[0].lower()
+    requested_lang = _normalize_language_code(language)
     branding = settings.get_miniapp_branding()
     name = branding['service_name'].get(requested_lang) or branding['service_name']['default']
     description = branding['service_description'].get(requested_lang) or branding['service_description']['default']
 
+    # Незаполненный контакт — это null, а не пустая строка: так отвечала прежняя
+    # версия ручки (`getattr(...) or getattr(...)`), так же поступает соседний
+    # /support-config, и только так работает клиентская проверка «контакт задан».
     return ServiceInfoResponse(
         name=name,
         description=description,
-        support_email=settings.SUPPORT_EMAIL,
-        support_telegram=settings.SUPPORT_USERNAME,
-        website=settings.SERVICE_WEBSITE_URL,
+        support_email=(settings.SUPPORT_EMAIL or '').strip() or None,
+        support_telegram=(settings.SUPPORT_USERNAME or '').strip() or None,
+        website=(settings.SERVICE_WEBSITE_URL or '').strip() or None,
     )
 
 
