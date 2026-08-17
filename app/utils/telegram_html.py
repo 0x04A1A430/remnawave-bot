@@ -197,6 +197,15 @@ def _trim_broken_tag(chunk: str) -> str:
     return chunk
 
 
+def trim_broken_markup(chunk: str) -> str:
+    """Обрезает незакрытый тег или неполную HTML-сущность в конце куска.
+
+    Нужна всем, кто режет уже экранированный текст по длине: обрыв внутри
+    `&quot;` ломает разбор HTML на стороне Telegram.
+    """
+    return _trim_broken_tag(chunk)
+
+
 def split_telegram_text(text: str | None, *, max_length: int = 3500) -> list[str]:
     if not text:
         return []
