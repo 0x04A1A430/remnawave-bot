@@ -1,7 +1,7 @@
 """guest_purchases: слаг рекламной кампании
 
-Revision ID: 0105
-Revises: 0104
+Revision ID: 0106
+Revises: 0105
 Create Date: 2026-08-12
 
 Добавляет ``campaign_slug`` в ``guest_purchases``. Покупатель приходит с
@@ -15,8 +15,8 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = '0105'
-down_revision: Union[str, None] = '0104'
+revision: str = '0106'
+down_revision: Union[str, None] = '0105'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

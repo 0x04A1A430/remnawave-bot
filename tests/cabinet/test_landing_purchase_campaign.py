@@ -41,6 +41,7 @@ def test_returns_none_without_any_source() -> None:
         'semi;colon',
         'слаг',
         'a' * 65,
+        'trailing_newline\n',
     ],
 )
 def test_invalid_cookie_is_ignored(bad: str) -> None:
@@ -51,3 +52,23 @@ def test_invalid_body_slug_does_not_fall_back_to_cookie() -> None:
     """Мусор в теле — ошибка вызывающей стороны, а не повод молча подставить
     другой источник и записать покупку не на ту кампанию."""
     assert _extract_campaign_slug('bad slug', _request({'campaign': 'good_one'})) is None
+
+
+@pytest.mark.parametrize('blank', ['', '   '], ids=['empty', 'whitespace'])
+def test_blank_body_slug_still_lets_the_cookie_work(blank: str) -> None:
+    """Пустое поле — «не прислали», а не «прислали мусор».
+
+    Фронтенд, который всегда заполняет поле из хранилища, шлёт пустую строку,
+    когда кампании нет. Считать её мусором значит выключить куку ровно на той
+    инсталляции, ради которой она и заведена.
+    """
+    assert _extract_campaign_slug(blank, _request({'campaign': 'good_one'})) == 'good_one'
+
+
+def test_trailing_newline_in_body_is_rejected() -> None:
+    """re-шный «$» пропускает \\n в конце, pydantic-паттерн кабинета — нет.
+
+    Без fullmatch «одинаковая» валидация слага разъезжается между ручками, и в
+    purchase оседает значение, которое кампании уже не найдёт.
+    """
+    assert _extract_campaign_slug('promo\n', _request()) is None
