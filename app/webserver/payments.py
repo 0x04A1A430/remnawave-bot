@@ -771,13 +771,12 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
 
             # Platega sends both one-off payment callbacks and recurring СБП-subscription
             # callbacks (charge + status-change) to this same endpoint. Subscription
-            # payloads carry PaymentMethod 6, a SubscriptionId, or a SUBSCRIPTION_-prefixed
-            # Status and must be routed to the dedicated handler (Task 6).
-            is_subscription = (
-                payload.get('PaymentMethod') == 6
-                or 'SubscriptionId' in payload
-                or str(payload.get('Status', '')).startswith('SUBSCRIPTION_')
-            )
+            # payloads carry paymentMethod 6, a subscriptionId, or a SUBSCRIPTION_-prefixed
+            # status — matched case-insensitively, because the live charge callback
+            # arrives in camelCase while the spec examples are PascalCase.
+            from app.services.platega_recurrent import is_subscription_callback
+
+            is_subscription = is_subscription_callback(payload)
 
             try:
                 if is_subscription:
@@ -804,7 +803,13 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
                 transaction_id = (
                     payload.get('id') or payload.get('transactionId') or payload.get('transaction_id') or 'unknown'
                 )
-                logger.error('Platega webhook processing failed', transaction_id=transaction_id)
+                # Ключи (не значения) в логе: по ним видно, в какой форме пришёл
+                # коллбек, если он снова не совпадёт с ожидаемой.
+                logger.error(
+                    'Platega webhook processing failed',
+                    transaction_id=transaction_id,
+                    payload_keys=sorted(payload) if isinstance(payload, dict) else None,
+                )
                 return JSONResponse(
                     {'status': 'error', 'reason': 'not_processed'},
                     status_code=status.HTTP_400_BAD_REQUEST,
