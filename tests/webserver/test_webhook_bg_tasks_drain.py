@@ -128,7 +128,7 @@ async def test_webhook_acks_before_processing_finishes(monkeypatch):
 
     from app.config import settings
 
-    monkeypatch.setattr(type(settings), 'is_etoplatezhi_enabled', lambda self: True)
+    monkeypatch.setattr(type(settings), 'is_etoplatezhi_configured', lambda self: True)
 
     router = payments.create_payment_router(SimpleNamespace(), SimpleNamespace())
     route = next(r for r in router.routes if r.path == settings.ETOPLATEZHI_WEBHOOK_PATH and 'POST' in r.methods)

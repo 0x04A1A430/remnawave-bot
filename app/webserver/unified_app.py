@@ -221,6 +221,15 @@ def create_unified_app(
         'riopay': settings.is_riopay_enabled(),
     }
 
+    # Маршруты вебхуков фиксируются на старте по учётным данным, а флаги
+    # включения переключают в рантайме. Провайдер, включённый уже после
+    # запуска и без кредов в конфиге, принимает оплату, но его коллбек падает
+    # в 404 — и увидеть это неоткуда, запрос до бота не доходит. Поэтому
+    # список смонтированных путей отдаётся в health рядом с флагами.
+    payment_webhook_paths = sorted(
+        {route.path for route in getattr(payments_router, 'routes', []) if getattr(route, 'path', None)}
+    )
+
     if enable_telegram_webhook:
         telegram_processor = telegram.TelegramWebhookProcessor(
             bot=bot,
@@ -281,6 +290,7 @@ def create_unified_app(
         payment_state = {
             'enabled': bool(payments_router),
             'providers': payment_providers_state,
+            'mounted_paths': payment_webhook_paths,
         }
 
         miniapp_state = {
