@@ -448,6 +448,12 @@ class BanNotificationService:
         """Send a BanHammer ban notification using a template for its cause."""
         if not self._bot:
             return False, 'Бот не инициализирован', None
+        # Тот же глобальный рубильник, что и у остальных методов сервиса:
+        # без него выключенные уведомления всё равно доставляли BanHammer-сообщения
+        # в Telegram, хотя email-ветка ниже уже уходит через
+        # notification_delivery_service, который рубильник уважает.
+        if not settings.is_notifications_enabled():
+            return False, 'Уведомления пользователям отключены', None
 
         template_names = {
             'torrent': 'BAN_MSG_TORRENT',

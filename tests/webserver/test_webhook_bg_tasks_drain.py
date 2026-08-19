@@ -63,7 +63,11 @@ async def test_drain_waits_for_unfinished_processing():
     assert not drain.done(), 'дренаж завершился, не дождавшись обработки'
 
     release.set()
-    await drain
+    # Дренаж ждём с внешним таймаутом, а не голым `await drain`: иначе тест
+    # полагается на таймаут той самой функции, которую и проверяет, и при её
+    # поломке зависает вместо того, чтобы упасть. Соседний тест ниже уже
+    # ограничивает дренаж так же.
+    await asyncio.wait_for(drain, timeout=1)
     assert finished
 
 
