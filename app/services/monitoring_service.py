@@ -63,6 +63,7 @@ from app.services.notification_settings_service import NotificationSettingsServi
 from app.services.promo_offer_service import promo_offer_service
 from app.services.subscription_service import SubscriptionService, get_traffic_reset_strategy
 from app.utils.cache import cache
+from app.utils.formatters import format_username_link
 from app.utils.message_patch import caption_exceeds_telegram_limit
 from app.utils.miniapp_buttons import build_miniapp_or_callback_button
 from app.utils.promo_offer import get_user_active_promo_discount_percent
@@ -495,6 +496,9 @@ class MonitoringService:
 
         `cause` ('charge_error' | 'insufficient_balance') selects the email/non-Telegram
         reason wording so a non-balance charge failure isn't mislabelled as low balance."""
+        if not NotificationSettingsService.are_notifications_globally_enabled():
+            return
+
         cycle_token = int(subscription.end_date.timestamp())
         now_ts = current_time.timestamp()
         hours_left = (subscription.end_date - current_time).total_seconds() / 3600.0
@@ -551,8 +555,13 @@ class MonitoringService:
 
                 user = await get_user_by_id(db, subscription.user_id)
                 if user and self.bot:
+                    from app.utils.notification_prefs import is_subscription_expiry_enabled
+
                     # Skip notification if user has another ACTIVE subscription (multi-tariff)
-                    skip_notify = False
+                    skip_notify = (
+                        not NotificationSettingsService.are_notifications_globally_enabled()
+                        or not is_subscription_expiry_enabled(user)
+                    )
                     if settings.is_multi_tariff_enabled():
                         other_active = await db.execute(
                             select(Subscription.id)
@@ -564,7 +573,7 @@ class MonitoringService:
                             )
                             .limit(1)
                         )
-                        skip_notify = other_active.scalar_one_or_none() is not None
+                        skip_notify = skip_notify or other_active.scalar_one_or_none() is not None
                     if not skip_notify:
                         await self._send_subscription_expired_notification(user, subscription, tariff_name=_tariff_name)
 
@@ -710,6 +719,9 @@ class MonitoringService:
             return None
 
     async def _check_expiring_subscriptions(self, db: AsyncSession):
+        if not NotificationSettingsService.are_notifications_globally_enabled():
+            return
+
         try:
             warning_days = settings.get_autopay_warning_days()
             all_processed_users = set()
@@ -828,6 +840,9 @@ class MonitoringService:
             logger.error('Ошибка проверки истекающих подписок', error=e)
 
     async def _check_trial_expiring_soon(self, db: AsyncSession):
+        if not NotificationSettingsService.are_notifications_globally_enabled():
+            return
+
         try:
             threshold_time = datetime.now(UTC) + timedelta(hours=2)
 
@@ -856,6 +871,11 @@ class MonitoringService:
             for subscription in trial_expiring:
                 user = subscription.user
                 if not user:
+                    continue
+
+                from app.utils.notification_prefs import is_subscription_expiry_enabled
+
+                if not is_subscription_expiry_enabled(user):
                     continue
 
                 if await notification_sent(db, user.id, subscription.id, 'trial_2h'):
@@ -1224,6 +1244,11 @@ class MonitoringService:
                 if not user:
                     continue
 
+                from app.utils.notification_prefs import is_subscription_expiry_enabled
+
+                if not is_subscription_expiry_enabled(user):
+                    continue
+
                 if subscription.end_date is None:
                     continue
 
@@ -1425,7 +1450,12 @@ class MonitoringService:
                     try:
                         if not await cache.exists(autopay_legacy_key):
                             user = sub.user
-                            if user and user.telegram_id and self.bot:
+                            if (
+                                user
+                                and user.telegram_id
+                                and self.bot
+                                and NotificationSettingsService.are_notifications_globally_enabled()
+                            ):
                                 await self.bot.send_message(
                                     chat_id=user.telegram_id,
                                     text=(
@@ -1684,7 +1714,11 @@ class MonitoringService:
                                 )
 
                             # Send notification via appropriate channel
-                            if user.telegram_id and self.bot:
+                            if (
+                                user.telegram_id
+                                and self.bot
+                                and NotificationSettingsService.are_notifications_globally_enabled()
+                            ):
                                 await self._send_autopay_success_notification(
                                     user, charge_amount, autopay_period, subscription=subscription
                                 )
@@ -2400,7 +2434,7 @@ class MonitoringService:
 
     async def _check_traffic_warnings(self, db: AsyncSession):
         """Check subscriptions approaching traffic limit and notify users."""
-        if not self.bot:
+        if not self.bot or not NotificationSettingsService.are_notifications_globally_enabled():
             return
 
         try:
@@ -2498,7 +2532,7 @@ class MonitoringService:
         - Quiet hours: skips sending between 22:00 and 09:00 server time
         - Rate-limited: max 1 alert per 24 hours per user
         """
-        if not self.bot:
+        if not self.bot or not NotificationSettingsService.are_notifications_globally_enabled():
             return
 
         try:
@@ -2996,8 +3030,8 @@ class MonitoringService:
                     # Детали пользователя: имя, Telegram ID и username
                     full_name = html.escape(ticket.user.full_name or '') if ticket.user else 'Unknown'
                     telegram_id_display = ticket.user.telegram_id if ticket.user else '—'
-                    username_display = html.escape(
-                        (ticket.user.username or 'отсутствует') if ticket.user else 'отсутствует'
+                    username_display = format_username_link(
+                        ticket.user.username if ticket.user else None, 'отсутствует'
                     )
                     safe_title = html.escape(title) if title else '—'
 
@@ -3006,7 +3040,7 @@ class MonitoringService:
                         f'🆔 <b>ID:</b> <code>{ticket.id}</code>\n'
                         f'👤 <b>Пользователь:</b> {full_name}\n'
                         f'🆔 <b>Telegram ID:</b> <code>{telegram_id_display}</code>\n'
-                        f'📱 <b>Username:</b> @{username_display}\n'
+                        f'📱 <b>Username:</b> {username_display}\n'
                         f'📝 <b>Заголовок:</b> {safe_title}\n'
                         f'⏱️ <b>Ожидает ответа:</b> {waited_minutes} мин\n'
                     )

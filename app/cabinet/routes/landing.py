@@ -113,6 +113,11 @@ class LandingConfigResponse(BaseModel):
 
 _EMAIL_RE = re.compile(r'^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$')
 _TELEGRAM_RE = re.compile(r'^@?[a-zA-Z][a-zA-Z0-9_]{4,31}$')
+# Тот же набор символов, что валидирует кабинет в schemas/auth.py и утилита
+# captureCampaignFromUrl() во фронтенде — слаг ходит между ними без переводов.
+# Сверяем через fullmatch: у re «$» пропускает завершающий перевод строки, а у
+# pydantic-паттерна в schemas/auth.py — нет, и «одинаковая» проверка разошлась бы.
+_CAMPAIGN_SLUG_RE = re.compile(r'^[a-zA-Z0-9_-]{1,64}$')
 
 
 def _validate_contact(contact_type: str, contact_value: str) -> None:
@@ -121,6 +126,29 @@ def _validate_contact(contact_type: str, contact_value: str) -> None:
         raise ValueError('Invalid email format')
     if contact_type == 'telegram' and not _TELEGRAM_RE.match(contact_value):
         raise ValueError('Invalid Telegram username format')
+
+
+def _extract_campaign_slug(body_slug: str | None, request: Request) -> str | None:
+    """Resolve the advertising campaign slug for a guest purchase.
+
+    Body wins over cookie: the body works for a landing on any domain, while
+    the cookie only survives when the landing sits on a sibling subdomain of
+    the cabinet. A malformed value is dropped instead of silently falling back
+    to the other source — attributing a purchase to the wrong campaign is worse
+    than not attributing it at all.
+
+    A blank body value is «not sent», not «sent and malformed»: a frontend that
+    always fills the field from storage posts an empty string when there is no
+    campaign, and treating that as a malformed slug would disable the cookie
+    source on exactly the deployment it exists for.
+    """
+    if body_slug is not None and body_slug.strip():
+        return body_slug if _CAMPAIGN_SLUG_RE.fullmatch(body_slug) else None
+
+    cookie_slug = request.cookies.get('campaign')
+    if cookie_slug and _CAMPAIGN_SLUG_RE.fullmatch(cookie_slug):
+        return cookie_slug
+    return None
 
 
 class PurchaseRequest(BaseModel):
@@ -137,6 +165,7 @@ class PurchaseRequest(BaseModel):
     referrer: str | None = Field(default=None, max_length=500)
     subid: str | None = Field(default=None, max_length=255)
     yclid: str | None = Field(default=None, max_length=64, pattern=r'^[0-9]{1,64}$')
+    campaign_slug: str | None = Field(default=None, max_length=64)
 
     @model_validator(mode='after')
     def validate_contacts(self) -> 'PurchaseRequest':
@@ -819,6 +848,7 @@ async def create_landing_purchase(
         gift_message=body.gift_message,
         subid=body.subid,
         referrer=body.referrer,
+        campaign_slug=_extract_campaign_slug(body.campaign_slug, raw_request),
         commit=False,
     )
 
