@@ -81,7 +81,15 @@ try:
         RemnaWaveService,
     )
 except Exception:
-    RemnaWaveConfigurationError = None
+
+    class RemnaWaveConfigurationError(Exception):
+        """Заглушка на случай, когда сервис панели не импортировался.
+
+        Именно класс, а не None: иначе `except RemnaWaveConfigurationError`
+        ниже падал бы с TypeError вместо обработки ошибки. Реально сюда никто
+        не попадёт — при отсутствии сервиса `_get_service()` отдаёт 503 раньше.
+        """
+
     RemnaWaveService = None
 
 try:
