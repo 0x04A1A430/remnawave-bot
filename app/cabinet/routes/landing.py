@@ -27,6 +27,7 @@ from app.services.guest_purchase_service import (
 from app.services.payment_method_config_service import _get_method_defaults
 from app.services.payment_service import PaymentService
 from app.utils.cache import RateLimitCache, cache
+from app.utils.gift_links import build_bot_gift_claim_link, build_cabinet_gift_claim_link
 
 
 logger = structlog.get_logger(__name__)
@@ -316,14 +317,17 @@ def _build_purchase_status_response(purchase: GuestPurchase) -> PurchaseStatusRe
     claim_url: str | None = None
     bot_claim_link: str | None = None
     if is_claimable:
-        cabinet_base = (settings.CABINET_URL or '').rstrip('/')
-        if cabinet_base:
-            claim_url = f'{cabinet_base}/buy/gift/{purchase.token}'
+        if settings.CABINET_URL:
+            try:
+                claim_url = build_cabinet_gift_claim_link(purchase.token, settings.CABINET_URL)
+            except Exception:
+                claim_url = None
         bot_username = settings.get_bot_username()
         if bot_username:
-            # Telegram start params are length-limited; use a token prefix.
-            # The bot handler resolves gifts by prefix (start.py:149).
-            bot_claim_link = f'https://t.me/{bot_username}?start=GIFT_{purchase.token[:12]}'
+            try:
+                bot_claim_link = build_bot_gift_claim_link(purchase.token, bot_username)
+            except Exception:
+                bot_claim_link = None
 
     return PurchaseStatusResponse(
         status=purchase.status,
