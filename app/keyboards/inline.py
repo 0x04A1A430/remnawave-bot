@@ -1103,7 +1103,11 @@ def get_insufficient_balance_keyboard(
 
 
 def get_subscription_keyboard(
-    language: str = DEFAULT_LANGUAGE, has_subscription: bool = False, is_trial: bool = False, subscription=None
+    language: str = DEFAULT_LANGUAGE,
+    has_subscription: bool = False,
+    is_trial: bool = False,
+    subscription=None,
+    gift_enabled: bool = False,
 ) -> InlineKeyboardMarkup:
     from app.config import settings
 
@@ -1286,6 +1290,16 @@ def get_subscription_keyboard(
                         )
                     ]
                 )
+
+    if gift_enabled:
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t('GIFT_SUBSCRIPTION_BUTTON', '🎁 Подарить подписку'),
+                    callback_data='subscription_gift',
+                )
+            ]
+        )
 
     keyboard.append([InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu')])
 
