@@ -36,13 +36,10 @@ from app.database.models import (
     _aware,
 )
 from app.services.subscription_service import SubscriptionService
-from app.utils.gift_links import GIFT_TOKEN_MIN_PREFIX_LENGTH
+from app.utils.gift_links import GIFT_TOKEN_MIN_PREFIX_LENGTH  # noqa: F401
 
 
 logger = structlog.get_logger(__name__)
-
-# Re-export GIFT_TOKEN_MIN_PREFIX_LENGTH for backwards compatibility
-__all__ = ['GIFT_TOKEN_MIN_PREFIX_LENGTH']
 
 _TELEGRAM_USERNAME_RE = re.compile(r'^[a-zA-Z][a-zA-Z0-9_]{4,31}$')
 
@@ -1350,10 +1347,10 @@ async def activate_purchase(db: AsyncSession, purchase_token: str, *, skip_notif
                     device_limit=tariff.device_limit,
                     connected_squads=squads,
                     is_trial=False,
+                    tariff_id=tariff.id,
                     update_server_counters=True,
                     commit=False,
                 )
-                subscription.tariff_id = tariff.id
             else:
                 subscription = await create_paid_subscription(
                     db=db,
@@ -1395,10 +1392,10 @@ async def activate_purchase(db: AsyncSession, purchase_token: str, *, skip_notif
                     device_limit=tariff.device_limit,
                     connected_squads=squads,
                     is_trial=False,
+                    tariff_id=tariff.id,
                     update_server_counters=True,
                     commit=False,
                 )
-                subscription.tariff_id = tariff.id
             else:
                 subscription = await create_paid_subscription(
                     db=db,

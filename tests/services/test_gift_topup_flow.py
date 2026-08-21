@@ -1022,6 +1022,10 @@ class TestGiftAutoPurchaseAndIsolation:
                 AsyncMock(return_value=False),
             ),
             patch(
+                'app.database.crud.subscription.get_subscription_by_id_for_user',
+                AsyncMock(return_value=None),
+            ),
+            patch(
                 'app.services.subscription_auto_purchase_service.purchase_gift_from_balance',
                 AsyncMock(),
             ) as mock_gift_purchase,

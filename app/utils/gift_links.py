@@ -50,6 +50,10 @@ class InvalidClaimLinkError(GiftLinkError, ValueError):
     """Raised when a claim link for sharing is invalid, empty, or malformed."""
 
 
+class InvalidShareTextError(GiftLinkError, ValueError):
+    """Raised when share text is invalid, empty, or malformed."""
+
+
 def _validate_gift_token(token: str) -> str:
     """Validate that the token is a valid, secure URL-safe token."""
     if not isinstance(token, str) or not token:
@@ -162,7 +166,7 @@ def build_telegram_gift_share_url(claim_link: str, localized_share_text: str) ->
 
     Raises:
         InvalidClaimLinkError: If claim_link is empty or not a valid URL.
-        ValueError: If localized_share_text is not a string.
+        InvalidShareTextError: If localized_share_text is not a string or is empty.
     """
     if not isinstance(claim_link, str):
         raise InvalidClaimLinkError('Claim link must be a string')
@@ -176,7 +180,11 @@ def build_telegram_gift_share_url(claim_link: str, localized_share_text: str) ->
         raise InvalidClaimLinkError(f'Invalid claim link: {claim_link!r}')
 
     if not isinstance(localized_share_text, str):
-        raise ValueError('Share text must be a string')
+        raise InvalidShareTextError('Share text must be a string')
+
+    cleaned_text = localized_share_text.strip()
+    if not cleaned_text:
+        raise InvalidShareTextError('Share text cannot be empty')
 
     query = urllib.parse.urlencode(
         {

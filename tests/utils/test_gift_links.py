@@ -17,6 +17,7 @@ from app.utils.gift_links import (
     InvalidCabinetUrlError,
     InvalidClaimLinkError,
     InvalidGiftTokenError,
+    InvalidShareTextError,
     MissingBotUsernameError,
     MissingCabinetUrlError,
     build_bot_gift_claim_link,
@@ -215,6 +216,15 @@ class TestBuildTelegramGiftShareUrl:
         with pytest.raises(InvalidClaimLinkError):
             build_telegram_gift_share_url(invalid_claim_link, 'Gift text')  # type: ignore[arg-type]
 
+    @pytest.mark.parametrize(
+        'invalid_share_text',
+        [None, '', '   ', 123, []],
+    )
+    def test_rejects_invalid_or_empty_share_text(self, invalid_share_text: str | None) -> None:
+        claim_link = 'https://t.me/test_bot?start=GIFT_123'
+        with pytest.raises(InvalidShareTextError):
+            build_telegram_gift_share_url(claim_link, invalid_share_text)  # type: ignore[arg-type]
+
     def test_share_text_contains_no_price_and_no_raw_token(self) -> None:
         """Verify contract: share payload contains claim URL, but no prices or raw tokens."""
         raw_token = generate_purchase_token()
@@ -241,6 +251,7 @@ class TestBuildTelegramGiftShareUrl:
         assert issubclass(InvalidCabinetUrlError, GiftLinkError)
         assert issubclass(MissingCabinetUrlError, InvalidCabinetUrlError)
         assert issubclass(InvalidClaimLinkError, GiftLinkError)
+        assert issubclass(InvalidShareTextError, GiftLinkError)
 
 
 class TestLandingGiftLinkIntegration:
