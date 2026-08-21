@@ -97,25 +97,36 @@ class PaymentCommonMixin:
 
         # Если для пользователя есть незавершённый checkout, предлагаем вернуться к нему.
         if user:
+            cart_data = None
             try:
-                has_saved_cart = await user_cart_service.has_user_cart(user.id)
+                cart_data = await user_cart_service.get_user_cart(user.id)
             except Exception as cart_error:
                 logger.warning(
                     'Не удалось проверить наличие сохраненной корзины у пользователя',
                     user_id=user.id,
                     cart_error=cart_error,
                 )
-                has_saved_cart = False
 
-            if has_saved_cart:
-                keyboard_rows.append(
-                    [
-                        build_miniapp_or_callback_button(
-                            text=texts.RETURN_TO_SUBSCRIPTION_CHECKOUT,
-                            callback_data='return_to_saved_cart',
-                        )
-                    ]
-                )
+            if cart_data:
+                cart_mode = cart_data.get('cart_mode')
+                if cart_mode == 'gift_purchase':
+                    keyboard_rows.append(
+                        [
+                            build_miniapp_or_callback_button(
+                                text=texts.t('GIFT_RETURN_TO_CART_BUTTON', '🎁 Вернуться к подарку'),
+                                callback_data='return_to_gift_cart',
+                            )
+                        ]
+                    )
+                else:
+                    keyboard_rows.append(
+                        [
+                            build_miniapp_or_callback_button(
+                                text=texts.RETURN_TO_SUBSCRIPTION_CHECKOUT,
+                                callback_data='return_to_saved_cart',
+                            )
+                        ]
+                    )
             else:
                 draft_exists = await has_subscription_checkout_draft(user.id)
                 if should_offer_checkout_resume(user, draft_exists, subscription=subscription):

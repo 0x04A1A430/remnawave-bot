@@ -631,4 +631,3 @@ async def test_purchase_gift_telegram_unresolvable_warning(monkeypatch):
         response = await gift_routes.create_gift_purchase(body=req, user=user, db=db)
         assert response.status == 'ok'
         assert response.warning == 'telegram_unresolvable'
-

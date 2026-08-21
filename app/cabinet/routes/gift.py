@@ -396,15 +396,21 @@ async def create_gift_purchase(
     except GiftFeatureDisabledError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Gift feature is not enabled') from exc
     except GiftPurchaseRestrictedError as exc:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Purchases are restricted for this account') from exc
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail='Purchases are restricted for this account'
+        ) from exc
     except GiftTariffUnavailableError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Tariff not found or inactive') from exc
     except GiftPeriodUnavailableError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Price is not configured for this period') from exc
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail='Price is not configured for this period'
+        ) from exc
     except GiftInsufficientBalanceError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Insufficient balance') from exc
     except GiftPriceChangedError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Price has changed, please try again') from exc
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail='Price has changed, please try again'
+        ) from exc
     except GiftIdempotencyConflictError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail='Idempotency conflict') from exc
 

@@ -178,8 +178,10 @@ def build_telegram_gift_share_url(claim_link: str, localized_share_text: str) ->
     if not isinstance(localized_share_text, str):
         raise ValueError('Share text must be a string')
 
-    query = urllib.parse.urlencode({
-        'url': cleaned_link,
-        'text': localized_share_text,
-    })
+    query = urllib.parse.urlencode(
+        {
+            'url': cleaned_link,
+            'text': localized_share_text,
+        }
+    )
     return f'https://t.me/share/url?{query}'

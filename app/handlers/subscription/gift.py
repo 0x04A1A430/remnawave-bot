@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database.models import User
 from app.handlers.subscription.purchase import show_subscription_info
+from app.keyboards.inline import get_insufficient_balance_keyboard
 from app.localization.texts import get_texts
 from app.services.gift_notification_service import (
     build_gift_result_presentation,
@@ -34,6 +35,7 @@ from app.services.gift_purchase_service import (
     purchase_gift_from_balance,
     quote_gift_purchase,
 )
+from app.services.user_cart_service import user_cart_service
 from app.states import GiftPurchaseStates
 
 
@@ -424,10 +426,16 @@ async def handle_gift_cancel(
     db: AsyncSession,
     state: FSMContext,
 ) -> None:
-    """Cancel gift checkout and return to origin subscription view."""
+    """Cancel gift checkout, clean up saved gift cart, and return to origin subscription view."""
     if isinstance(callback.message, InaccessibleMessage):
         await callback.answer()
         return
+
+    # If user has a saved gift cart, clear it and top-up intent
+    cart_data = await user_cart_service.get_user_cart(db_user.id)
+    if cart_data and cart_data.get('cart_mode') == 'gift_purchase':
+        await user_cart_service.delete_user_cart(db_user.id)
+        await user_cart_service.clear_topup_intent(db_user.id)
 
     data = await state.get_data()
     origin = data.get('gift_origin_callback', 'menu_subscription')
@@ -508,14 +516,55 @@ async def handle_gift_confirm(
         )
         return
     except GiftInsufficientBalanceError as err:
-        # Retain checkout intact for top-up flow (Task 6)
+        missing_amount = err.required_kopeks - err.available_kopeks
+        cart_data = {
+            'cart_mode': 'gift_purchase',
+            'gift_checkout_id': checkout_id,
+            'tariff_id': tariff_id,
+            'period_days': period_days,
+            'total_price': expected_price_kopeks,
+            'missing_amount': missing_amount,
+            'saved_cart': True,
+            'return_to_cart': True,
+            'user_id': db_user.id,
+        }
+        saved = await user_cart_service.save_user_cart(db_user.id, cart_data)
+        if not saved:
+            req_str = texts.format_price(err.required_kopeks)
+            avail_str = texts.format_price(err.available_kopeks)
+            msg = texts.t(
+                'GIFT_INSUFFICIENT_BALANCE_ERROR',
+                '❌ Недостаточно средств на балансе. Требуется: {required}, доступно: {available}.',
+            ).format(required=req_str, available=avail_str)
+            await callback.answer(msg, show_alert=True)
+            return
+
         req_str = texts.format_price(err.required_kopeks)
         avail_str = texts.format_price(err.available_kopeks)
-        msg = texts.t(
-            'GIFT_INSUFFICIENT_BALANCE_ERROR',
-            '❌ Недостаточно средств на балансе. Требуется: {required}, доступно: {available}.',
-        ).format(required=req_str, available=avail_str)
-        await callback.answer(msg, show_alert=True)
+        missing_str = texts.format_price(missing_amount)
+
+        text = texts.t(
+            'GIFT_INSUFFICIENT_BALANCE_TITLE',
+            '💰 <b>Недостаточно средств для оформления подарка</b>\n\n'
+            'Требуется: <b>{required}</b>\n'
+            'У вас: <b>{balance}</b>\n'
+            'Не хватает: <b>{missing}</b>\n\n'
+            '🛒 <i>Ваша корзина сохранена! После пополнения баланса вы сможете вернуться к оформлению подарка.</i>\n\n'
+            'Выберите способ пополнения:',
+        ).format(
+            required=req_str,
+            balance=avail_str,
+            missing=missing_str,
+        )
+        reply_markup = get_insufficient_balance_keyboard(
+            language=db_user.language,
+            amount_kopeks=missing_amount,
+            resume_callback='return_to_gift_cart',
+            has_saved_cart=True,
+            resume_text=texts.t('GIFT_RETURN_TO_CART_BUTTON', '🎁 Вернуться к подарку'),
+        )
+        await callback.message.edit_text(text, reply_markup=reply_markup, parse_mode='HTML')
+        await callback.answer()
         return
     except GiftPurchaseRestrictedError:
         await state.clear()
@@ -582,6 +631,12 @@ async def handle_gift_confirm(
         )
         return
 
+    # Clear gift cart and intent if present
+    cart_data = await user_cart_service.get_user_cart(db_user.id)
+    if cart_data and cart_data.get('cart_mode') == 'gift_purchase':
+        await user_cart_service.delete_user_cart(db_user.id)
+        await user_cart_service.clear_topup_intent(db_user.id)
+
     text, keyboard = build_gift_result_presentation(
         language=db_user.language,
         purchase_result=result,
@@ -603,7 +658,172 @@ async def handle_return_to_gift_cart(
     if isinstance(callback.message, InaccessibleMessage):
         await callback.answer()
         return
-    await callback.answer()
+
+    texts = get_texts(db_user.language)
+    cart_data = await user_cart_service.get_user_cart(db_user.id)
+    if not cart_data:
+        await callback.answer(
+            texts.t('GIFT_CART_EXPIRED', '❌ Срок действия сохраненной корзины подарка истек.'),
+            show_alert=True,
+        )
+        return
+
+    if cart_data.get('cart_mode') != 'gift_purchase' or cart_data.get('user_id') != db_user.id:
+        await user_cart_service.delete_user_cart(db_user.id)
+        await user_cart_service.clear_topup_intent(db_user.id)
+        await callback.answer(
+            texts.t('GIFT_CART_INVALID', '❌ Сохраненный подарок недоступен или некорректен.'),
+            show_alert=True,
+        )
+        return
+
+    tariff_id = cart_data.get('tariff_id')
+    period_days = cart_data.get('period_days')
+    checkout_id = cart_data.get('gift_checkout_id') or uuid.uuid4().hex
+    saved_total_price = cart_data.get('total_price')
+
+    if not tariff_id or not period_days:
+        await user_cart_service.delete_user_cart(db_user.id)
+        await user_cart_service.clear_topup_intent(db_user.id)
+        await callback.answer(
+            texts.t('GIFT_CART_INVALID', '❌ Сохраненный подарок недоступен или некорректен.'),
+            show_alert=True,
+        )
+        return
+
+    try:
+        quote = await quote_gift_purchase(db, buyer=db_user, tariff_id=tariff_id, period_days=period_days)
+    except GiftFeatureDisabledError:
+        await user_cart_service.delete_user_cart(db_user.id)
+        await user_cart_service.clear_topup_intent(db_user.id)
+        await state.clear()
+        await callback.answer(
+            texts.t('GIFT_FEATURE_DISABLED', 'Покупка подарков временно недоступна.'),
+            show_alert=True,
+        )
+        return
+    except GiftTariffUnavailableError:
+        await user_cart_service.delete_user_cart(db_user.id)
+        await user_cart_service.clear_topup_intent(db_user.id)
+        await state.clear()
+        back_kb = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text=texts.t('GIFT_CANCEL_BUTTON', '❌ Отмена'),
+                        callback_data='gift_cancel',
+                    )
+                ]
+            ]
+        )
+        await callback.message.edit_text(
+            texts.t('GIFT_TARIFF_UNAVAILABLE', 'Выбранный тариф недоступен для подарка.'),
+            reply_markup=back_kb,
+        )
+        await callback.answer()
+        return
+    except GiftPeriodUnavailableError:
+        await user_cart_service.delete_user_cart(db_user.id)
+        await user_cart_service.clear_topup_intent(db_user.id)
+        await state.clear()
+        back_kb = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text=texts.t('GIFT_BACK_TO_TARIFFS_BUTTON', '◀️ К тарифам'),
+                        callback_data='gift_back_tariffs',
+                    )
+                ]
+            ]
+        )
+        await callback.message.edit_text(
+            texts.t('GIFT_PERIOD_UNAVAILABLE', 'Выбранный период недоступен.'),
+            reply_markup=back_kb,
+        )
+        await callback.answer()
+        return
+    except GiftPurchaseRestrictedError:
+        await user_cart_service.delete_user_cart(db_user.id)
+        await user_cart_service.clear_topup_intent(db_user.id)
+        await state.clear()
+        await callback.answer(
+            texts.t('GIFT_PURCHASE_RESTRICTED_ERROR', '❌ Покупка подписок недоступна для вашего аккаунта.'),
+            show_alert=True,
+        )
+        return
+    except GiftError as err:
+        logger.warning('Failed to requote gift on resume', error=str(err), tariff_id=tariff_id, period_days=period_days)
+        await callback.answer(
+            texts.t('GIFT_GENERIC_ERROR', 'Произошла ошибка при оформлении подарка. Попробуйте позже.'),
+            show_alert=True,
+        )
+        return
+
+    # Check if balance is still insufficient
+    if db_user.balance_kopeks < quote.final_price_kopeks:
+        new_missing = quote.final_price_kopeks - db_user.balance_kopeks
+        cart_data['total_price'] = quote.final_price_kopeks
+        cart_data['missing_amount'] = new_missing
+        await user_cart_service.save_user_cart(db_user.id, cart_data)
+
+        await state.set_state(GiftPurchaseStates.confirming_purchase)
+        await state.update_data(
+            gift_checkout_id=checkout_id,
+            gift_tariff_id=tariff_id,
+            gift_period_days=period_days,
+            gift_expected_price_kopeks=quote.final_price_kopeks,
+        )
+
+        req_str = texts.format_price(quote.final_price_kopeks)
+        bal_str = texts.format_price(db_user.balance_kopeks)
+        missing_str = texts.format_price(new_missing)
+
+        text = texts.t(
+            'GIFT_INSUFFICIENT_BALANCE_TITLE',
+            '💰 <b>Недостаточно средств для оформления подарка</b>\n\n'
+            'Требуется: <b>{required}</b>\n'
+            'У вас: <b>{balance}</b>\n'
+            'Не хватает: <b>{missing}</b>\n\n'
+            '🛒 <i>Ваша корзина сохранена! После пополнения баланса вы сможете вернуться к оформлению подарка.</i>\n\n'
+            'Выберите способ пополнения:',
+        ).format(
+            required=req_str,
+            balance=bal_str,
+            missing=missing_str,
+        )
+        reply_markup = get_insufficient_balance_keyboard(
+            language=db_user.language,
+            amount_kopeks=new_missing,
+            resume_callback='return_to_gift_cart',
+            has_saved_cart=True,
+            resume_text=texts.t('GIFT_RETURN_TO_CART_BUTTON', '🎁 Вернуться к подарку'),
+        )
+        await callback.message.edit_text(text, reply_markup=reply_markup, parse_mode='HTML')
+        await callback.answer()
+        return
+
+    # Balance is sufficient -> render confirmation summary
+    await state.set_state(GiftPurchaseStates.confirming_purchase)
+    await state.update_data(
+        gift_checkout_id=checkout_id,
+        gift_tariff_id=tariff_id,
+        gift_period_days=period_days,
+        gift_expected_price_kopeks=quote.final_price_kopeks,
+    )
+
+    text, keyboard = _render_confirmation_summary(db_user, quote)
+    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='HTML')
+
+    if saved_total_price is not None and quote.final_price_kopeks != saved_total_price:
+        await callback.answer(
+            texts.t(
+                'GIFT_PRICE_CHANGED_ERROR',
+                '⚠️ Цена на выбранный тариф изменилась. Пожалуйста, подтвердите покупку заново.',
+            ),
+            show_alert=True,
+        )
+    else:
+        await callback.answer()
 
 
 # ── Handler Registration ───────────────────────────────────────────────────

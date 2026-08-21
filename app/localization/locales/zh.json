@@ -2174,5 +2174,9 @@
   "GIFT_PRICE_CHANGED_ERROR": "⚠️ 所选套餐的价格已发生变动，请重新确认购买。",
   "GIFT_INSUFFICIENT_BALANCE_ERROR": "❌ 余额不足。需要：{required}，可用：{available}。",
   "GIFT_NO_CLAIM_CHANNEL_ERROR": "❌ 礼物服务暂不可用：未配置链接发放渠道。",
-  "GIFT_PURCHASE_RESTRICTED_ERROR": "❌ 您的账户已被限制购买订阅。"
+  "GIFT_PURCHASE_RESTRICTED_ERROR": "❌ 您的账户已被限制购买订阅。",
+  "GIFT_INSUFFICIENT_BALANCE_TITLE": "💰 <b>余额不足以购买礼物</b>\n\n所需金额: <b>{required}</b>\n当前余额: <b>{balance}</b>\n缺少金额: <b>{missing}</b>\n\n🛒 <i>您的购物车已保存！充值后您可以返回继续完成礼物购买。</i>\n\n请选择充值方式:",
+  "GIFT_CART_EXPIRED": "❌ 保存的礼物购物车已过期。",
+  "GIFT_CART_INVALID": "❌ 保存的礼物不可用或无效。",
+  "GIFT_AUTO_PURCHASE_FAILED": "❌ 无法自动完成礼物购买：所选套餐或服务已不可用。"
 }

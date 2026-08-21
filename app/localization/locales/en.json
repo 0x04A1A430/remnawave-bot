@@ -2174,5 +2174,9 @@
   "GIFT_PRICE_CHANGED_ERROR": "⚠️ The price for the selected plan has changed. Please confirm the purchase again.",
   "GIFT_INSUFFICIENT_BALANCE_ERROR": "❌ Insufficient balance. Required: {required}, available: {available}.",
   "GIFT_NO_CLAIM_CHANNEL_ERROR": "❌ Gift service is temporarily unavailable: claim channel is not configured.",
-  "GIFT_PURCHASE_RESTRICTED_ERROR": "❌ Subscription purchases are restricted for your account."
+  "GIFT_PURCHASE_RESTRICTED_ERROR": "❌ Subscription purchases are restricted for your account.",
+  "GIFT_INSUFFICIENT_BALANCE_TITLE": "💰 <b>Insufficient funds for gift purchase</b>\n\nRequired: <b>{required}</b>\nYour balance: <b>{balance}</b>\nMissing: <b>{missing}</b>\n\n🛒 <i>Your cart has been saved! After topping up your balance, you can return to complete your gift purchase.</i>\n\nChoose payment method:",
+  "GIFT_CART_EXPIRED": "❌ Saved gift cart has expired.",
+  "GIFT_CART_INVALID": "❌ Saved gift is unavailable or invalid.",
+  "GIFT_AUTO_PURCHASE_FAILED": "❌ Could not automatically complete gift purchase: selected tariff or service is no longer available."
 }
