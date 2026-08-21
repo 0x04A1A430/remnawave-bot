@@ -2167,5 +2167,12 @@
   "GIFT_PERIOD_UNAVAILABLE": "The selected period is unavailable.",
   "GIFT_INVALID_SELECTION": "Invalid selection parameters.",
   "GIFT_GENERIC_ERROR": "An error occurred while processing the gift. Please try again later.",
-  "GIFT_TRAFFIC_UNLIMITED": "∞ (unlimited)"
+  "GIFT_TRAFFIC_UNLIMITED": "∞ (unlimited)",
+  "GIFT_PURCHASE_SUCCESS_TEXT": "🎁 <b>Gift subscription successfully created!</b>\n\n📦 Plan: <b>{tariff_name}</b>\n📅 Period: <b>{period_days} days</b>\n📊 Traffic: <b>{traffic}</b>\n📱 Devices: <b>{devices}</b>\n\n🔗 Gift link:\n{claim_link}\n\nSend this link to the recipient or use the «Send gift» button below. The recipient can activate the subscription in one click.",
+  "GIFT_PURCHASE_REPLAY_TEXT": "🎁 <b>Gift subscription was already created earlier</b>\n\n📦 Plan: <b>{tariff_name}</b>\n📅 Period: <b>{period_days} days</b>\n📊 Traffic: <b>{traffic}</b>\n📱 Devices: <b>{devices}</b>\n\n🔗 Gift link:\n{claim_link}\n\nSend this link to the recipient or use the «Send gift» button below.",
+  "GIFT_SHARE_TEXT": "🎁 Hi! I'm gifting you a subscription to {tariff_name} ({period_days} days). Click the link to activate!",
+  "GIFT_PRICE_CHANGED_ERROR": "⚠️ The price for the selected plan has changed. Please confirm the purchase again.",
+  "GIFT_INSUFFICIENT_BALANCE_ERROR": "❌ Insufficient balance. Required: {required}, available: {available}.",
+  "GIFT_NO_CLAIM_CHANNEL_ERROR": "❌ Gift service is temporarily unavailable: claim channel is not configured.",
+  "GIFT_PURCHASE_RESTRICTED_ERROR": "❌ Subscription purchases are restricted for your account."
 }

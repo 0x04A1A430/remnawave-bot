@@ -15,15 +15,23 @@ from app.config import settings
 from app.database.models import User
 from app.handlers.subscription.purchase import show_subscription_info
 from app.localization.texts import get_texts
+from app.services.gift_notification_service import (
+    build_gift_result_presentation,
+    resolve_gift_claim_channel,
+)
 from app.services.gift_purchase_service import (
     GiftError,
     GiftFeatureDisabledError,
+    GiftInsufficientBalanceError,
     GiftPeriodUnavailableError,
+    GiftPriceChangedError,
+    GiftPurchaseRestrictedError,
     GiftQuote,
     GiftTariffOffer,
     GiftTariffUnavailableError,
     is_gift_enabled,
     list_gift_offers,
+    purchase_gift_from_balance,
     quote_gift_purchase,
 )
 from app.states import GiftPurchaseStates
@@ -439,7 +447,7 @@ async def handle_gift_confirm(
     db: AsyncSession,
     state: FSMContext,
 ) -> None:
-    """Confirmation handler (Task 4 requote-only validation / Task 5 debit implementation)."""
+    """Confirmation handler: validates selection, preflights channels, purchases from balance, and renders result."""
     if isinstance(callback.message, InaccessibleMessage):
         await callback.answer()
         return
@@ -448,16 +456,141 @@ async def handle_gift_confirm(
     data = await state.get_data()
     tariff_id = data.get('gift_tariff_id')
     period_days = data.get('gift_period_days')
+    expected_price_kopeks = data.get('gift_expected_price_kopeks')
 
-    if not tariff_id or not period_days:
+    if not tariff_id or not period_days or expected_price_kopeks is None:
         await callback.answer(
             texts.t('GIFT_INVALID_SELECTION', 'Некорректные параметры выбора.'),
             show_alert=True,
         )
         return
 
-    # In Task 4, balance confirmation logic will be fully handled in Task 5.
+    checkout_id = data.get('gift_checkout_id')
+    if not checkout_id:
+        checkout_id = uuid.uuid4().hex
+        await state.update_data(gift_checkout_id=checkout_id)
+
+    # Preflight claim channels before debiting
+    bot_username, cabinet_url = await resolve_gift_claim_channel(bot=callback.bot)
+    if not bot_username and not cabinet_url:
+        await callback.answer(
+            texts.t(
+                'GIFT_NO_CLAIM_CHANNEL_ERROR',
+                '❌ Сервис подарков временно недоступен: не настроен канал выдачи ссылки.',
+            ),
+            show_alert=True,
+        )
+        return
+
+    try:
+        result = await purchase_gift_from_balance(
+            db=db,
+            buyer_id=db_user.id,
+            tariff_id=tariff_id,
+            period_days=period_days,
+            expected_price_kopeks=expected_price_kopeks,
+            idempotency_key=checkout_id,
+            source='bot',
+        )
+    except GiftPriceChangedError as err:
+        # Update FSM with fresh price, retain checkout for re-confirmation
+        await state.update_data(
+            gift_expected_price_kopeks=err.fresh_quote.final_price_kopeks,
+        )
+        text, keyboard = _render_confirmation_summary(db_user, err.fresh_quote)
+        await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='HTML')
+        await callback.answer(
+            texts.t(
+                'GIFT_PRICE_CHANGED_ERROR',
+                '⚠️ Цена на выбранный тариф изменилась. Пожалуйста, подтвердите покупку заново.',
+            ),
+            show_alert=True,
+        )
+        return
+    except GiftInsufficientBalanceError as err:
+        # Retain checkout intact for top-up flow (Task 6)
+        req_str = texts.format_price(err.required_kopeks)
+        avail_str = texts.format_price(err.available_kopeks)
+        msg = texts.t(
+            'GIFT_INSUFFICIENT_BALANCE_ERROR',
+            '❌ Недостаточно средств на балансе. Требуется: {required}, доступно: {available}.',
+        ).format(required=req_str, available=avail_str)
+        await callback.answer(msg, show_alert=True)
+        return
+    except GiftPurchaseRestrictedError:
+        await state.clear()
+        await callback.answer(
+            texts.t('GIFT_PURCHASE_RESTRICTED_ERROR', '❌ Покупка подписок недоступна для вашего аккаунта.'),
+            show_alert=True,
+        )
+        return
+    except GiftFeatureDisabledError:
+        await state.clear()
+        await callback.answer(
+            texts.t('GIFT_FEATURE_DISABLED', 'Покупка подарков временно недоступна.'),
+            show_alert=True,
+        )
+        return
+    except GiftTariffUnavailableError:
+        await state.clear()
+        back_kb = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text=texts.t('GIFT_CANCEL_BUTTON', '❌ Отмена'),
+                        callback_data='gift_cancel',
+                    )
+                ]
+            ]
+        )
+        await callback.message.edit_text(
+            texts.t('GIFT_TARIFF_UNAVAILABLE', 'Выбранный тариф недоступен для подарка.'),
+            reply_markup=back_kb,
+        )
+        await callback.answer()
+        return
+    except GiftPeriodUnavailableError:
+        await state.clear()
+        back_kb = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text=texts.t('GIFT_BACK_TO_TARIFFS_BUTTON', '◀️ К тарифам'),
+                        callback_data='gift_back_tariffs',
+                    )
+                ]
+            ]
+        )
+        await callback.message.edit_text(
+            texts.t('GIFT_PERIOD_UNAVAILABLE', 'Выбранный период недоступен.'),
+            reply_markup=back_kb,
+        )
+        await callback.answer()
+        return
+    except GiftError as err:
+        logger.error('Unexpected gift domain failure', buyer_id=db_user.id, error=str(err))
+        await callback.answer(
+            texts.t('GIFT_GENERIC_ERROR', 'Произошла ошибка при оформлении подарка. Попробуйте позже.'),
+            show_alert=True,
+        )
+        return
+    except Exception as err:
+        logger.error('Unhandled error in gift confirmation', buyer_id=db_user.id, error=str(err), exc_info=True)
+        await callback.answer(
+            texts.t('GIFT_GENERIC_ERROR', 'Произошла ошибка при оформлении подарка. Попробуйте позже.'),
+            show_alert=True,
+        )
+        return
+
+    text, keyboard = build_gift_result_presentation(
+        language=db_user.language,
+        purchase_result=result,
+        bot_username=bot_username,
+        cabinet_url=cabinet_url,
+    )
+    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='HTML')
     await callback.answer()
+    await state.clear()
 
 
 async def handle_return_to_gift_cart(

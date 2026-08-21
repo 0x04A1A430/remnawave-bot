@@ -2167,5 +2167,12 @@
   "GIFT_PERIOD_UNAVAILABLE": "دوره انتخاب شده در دسترس نیست.",
   "GIFT_INVALID_SELECTION": "پارامترهای انتخاب نامعتبر است.",
   "GIFT_GENERIC_ERROR": "هنگام پردازش هدیه خطایی رخ داد. لطفاً بعداً دوباره امتحان کنید.",
-  "GIFT_TRAFFIC_UNLIMITED": "∞ (نامحدود)"
+  "GIFT_TRAFFIC_UNLIMITED": "∞ (نامحدود)",
+  "GIFT_PURCHASE_SUCCESS_TEXT": "🎁 <b>هدیه با موفقیت ایجاد شد!</b>\n\n📦 پلن: <b>{tariff_name}</b>\n📅 مدت: <b>{period_days} روز</b>\n📊 ترافیک: <b>{traffic}</b>\n📱 دستگاه‌ها: <b>{devices}</b>\n\n🔗 لینک هدیه:\n{claim_link}\n\nاین لینک را برای دریافت‌کننده ارسال کنید یا از دکمه «ارسال هدیه» زیر استفاده کنید. دریافت‌کننده می‌تواند با یک کلیک اشتراک را فعال کند.",
+  "GIFT_PURCHASE_REPLAY_TEXT": "🎁 <b>این هدیه قبلاً ثبت شده است</b>\n\n📦 پلن: <b>{tariff_name}</b>\n📅 مدت: <b>{period_days} روز</b>\n📊 ترافیک: <b>{traffic}</b>\n📱 دستگاه‌ها: <b>{devices}</b>\n\n🔗 لینک هدیه:\n{claim_link}\n\nاین لینک را برای دریافت‌کننده ارسال کنید یا از دکمه «ارسال هدیه» زیر استفاده کنید.",
+  "GIFT_SHARE_TEXT": "🎁 سلام! من به شما یک اشتراک {tariff_name} ({period_days} روز) هدیه می‌دهم. برای فعال‌سازی روی لینک کلیک کنید!",
+  "GIFT_PRICE_CHANGED_ERROR": "⚠️ قیمت پلن انتخابی تغییر کرده است. لطفاً خرید را مجدداً تأیید کنید.",
+  "GIFT_INSUFFICIENT_BALANCE_ERROR": "❌ موجودی کافی نیست. مبلغ مورد نیاز: {required}، موجودی: {available}.",
+  "GIFT_NO_CLAIM_CHANNEL_ERROR": "❌ سرویس هدیه موقتاً در دسترس نیست: کانال دریافت لینک پیکربندی نشده است.",
+  "GIFT_PURCHASE_RESTRICTED_ERROR": "❌ امکان خرید اشتراک برای حساب شما محدود شده است."
 }

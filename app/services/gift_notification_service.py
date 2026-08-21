@@ -1,0 +1,250 @@
+"""Presentation and notification services for gift purchases (Telegram & Cabinet).
+
+Security and Privacy Constraints:
+- Standalone gift tokens must NEVER appear in message text, keyboards, callback data, logs,
+  or fallback output. A bearer token may appear ONLY as part of the canonical claim URL.
+- Financial details (price, balance, discount amount, transaction id) must NEVER be included
+  in recipient copy, share text, or the final gift result message.
+- Dynamic fields (e.g. tariff names) must be HTML escaped when formatting HTML messages.
+"""
+
+from __future__ import annotations
+
+import html
+from typing import TYPE_CHECKING
+
+import structlog
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+
+from app.config import settings
+from app.localization.texts import get_texts
+from app.services.gift_purchase_service import GiftPurchaseResult
+from app.utils.gift_links import (
+    GiftLinkError,
+    _normalize_bot_username,
+    _normalize_cabinet_url,
+    build_bot_gift_claim_link,
+    build_cabinet_gift_claim_link,
+    build_telegram_gift_share_url,
+)
+
+
+if TYPE_CHECKING:
+    from aiogram import Bot, types
+
+    from app.database.models import User
+
+logger = structlog.get_logger(__name__)
+
+
+async def resolve_gift_claim_channel(
+    bot: Bot | None = None,
+    bot_username: str | None = None,
+    cabinet_url: str | None = None,
+) -> tuple[str | None, str | None]:
+    """Resolve and validate available claim channels (bot username and/or cabinet URL).
+
+    Resolution precedence for bot username:
+    1. Explicit `bot_username` argument if valid.
+    2. Synchronized `settings.get_bot_username()` if valid.
+    3. `await bot.get_me()` recovery if bot instance is supplied.
+
+    Resolution precedence for cabinet URL:
+    1. Explicit `cabinet_url` argument if valid.
+    2. `settings.CABINET_URL` if configured and valid.
+
+    Returns:
+        tuple[bot_username, cabinet_url]: Normalized channel strings or None if unavailable/invalid.
+    """
+    resolved_bot_username = bot_username or settings.get_bot_username()
+    if not resolved_bot_username and bot is not None:
+        try:
+            me = await bot.get_me()
+            resolved_bot_username = me.username
+        except Exception as err:
+            logger.debug('Failed to resolve bot username via bot.get_me()', error=str(err))
+            resolved_bot_username = None
+
+    if resolved_bot_username:
+        try:
+            resolved_bot_username = _normalize_bot_username(resolved_bot_username)
+        except Exception:
+            resolved_bot_username = None
+    else:
+        resolved_bot_username = None
+
+    resolved_cabinet_url = cabinet_url or getattr(settings, 'CABINET_URL', None)
+    if resolved_cabinet_url:
+        try:
+            resolved_cabinet_url = _normalize_cabinet_url(resolved_cabinet_url)
+        except Exception:
+            resolved_cabinet_url = None
+    else:
+        resolved_cabinet_url = None
+
+    return resolved_bot_username, resolved_cabinet_url
+
+
+def build_gift_result_presentation(
+    language: str,
+    purchase_result: GiftPurchaseResult,
+    bot_username: str | None = None,
+    cabinet_url: str | None = None,
+) -> tuple[str, InlineKeyboardMarkup]:
+    """Build localized text and inline keyboard for gift purchase result.
+
+    Excludes all financial details (prices, balance, discounts, transaction IDs)
+    and standalone bearer tokens. Dynamic strings are HTML escaped.
+
+    Args:
+        language: User language code (e.g. 'ru', 'en', 'ua', 'fa', 'zh').
+        purchase_result: Result of balance purchase or idempotent replay.
+        bot_username: Normalized bot username (preferred deep-link channel).
+        cabinet_url: Normalized cabinet base URL (fallback channel).
+
+    Returns:
+        tuple[text, keyboard]: Localized HTML message text and inline keyboard.
+
+    Raises:
+        ValueError: If neither bot_username nor cabinet_url can form a valid claim URL.
+    """
+    token = purchase_result.purchase.token
+    claim_link: str | None = None
+
+    if bot_username:
+        try:
+            claim_link = build_bot_gift_claim_link(token, bot_username)
+        except GiftLinkError as err:
+            logger.debug('Failed to build bot gift claim link', error=str(err))
+
+    if not claim_link and cabinet_url:
+        try:
+            claim_link = build_cabinet_gift_claim_link(token, cabinet_url)
+        except GiftLinkError as err:
+            logger.debug('Failed to build cabinet gift claim link', error=str(err))
+
+    if not claim_link:
+        raise ValueError('Cannot build gift result presentation: neither bot deep link nor cabinet URL available')
+
+    texts = get_texts(language)
+    quote = purchase_result.quote
+
+    # Localized share text for native Telegram chat-picker (NO financial details, NO standalone token)
+    share_text = texts.t(
+        'GIFT_SHARE_TEXT',
+        '🎁 Привет! Я дарю тебе подписку на {tariff_name} ({period_days} дн.). Нажми на ссылку, чтобы активировать!',
+    ).format(
+        tariff_name=quote.tariff_name,
+        period_days=quote.period_days,
+    )
+    share_url = build_telegram_gift_share_url(claim_link, share_text)
+
+    # Localized message body (HTML formatted)
+    escaped_tariff_name = html.escape(quote.tariff_name)
+    traffic_str = (
+        texts.format_traffic(quote.traffic_limit_gb)
+        if quote.traffic_limit_gb is not None
+        else texts.t('GIFT_TRAFFIC_UNLIMITED', '∞ (безлимит)')
+    )
+    devices_str = texts.format_device_limit(quote.device_limit)
+
+    if purchase_result.is_idempotent_replay:
+        body_template = texts.t(
+            'GIFT_PURCHASE_REPLAY_TEXT',
+            '🎁 <b>Подарок уже был оформлен ранее</b>\n\n'
+            '📦 Тариф: <b>{tariff_name}</b>\n'
+            '📅 Период: <b>{period_days} дн.</b>\n'
+            '📊 Трафик: <b>{traffic}</b>\n'
+            '📱 Устройства: <b>{devices}</b>\n\n'
+            '🔗 Ссылка на подарок:\n{claim_link}\n\n'
+            'Отправьте эту ссылку получателю или воспользуйтесь кнопкой «Отправить подарок» ниже.',
+        )
+    else:
+        body_template = texts.t(
+            'GIFT_PURCHASE_SUCCESS_TEXT',
+            '🎁 <b>Подарок успешно оформлен!</b>\n\n'
+            '📦 Тариф: <b>{tariff_name}</b>\n'
+            '📅 Период: <b>{period_days} дн.</b>\n'
+            '📊 Трафик: <b>{traffic}</b>\n'
+            '📱 Устройства: <b>{devices}</b>\n\n'
+            '🔗 Ссылка на подарок:\n{claim_link}\n\n'
+            'Отправьте эту ссылку получателю или воспользуйтесь кнопкой «Отправить подарок» ниже. '
+            'Получатель сможет активировать подписку в один клик.',
+        )
+
+    text = body_template.format(
+        tariff_name=escaped_tariff_name,
+        period_days=quote.period_days,
+        traffic=traffic_str,
+        devices=devices_str,
+        claim_link=claim_link,
+    )
+
+    buttons = [
+        [
+            InlineKeyboardButton(
+                text=texts.t('GIFT_SEND_BUTTON', '🎁 Отправить подарок'),
+                url=share_url,
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text=texts.t('GIFT_OPEN_BUTTON', '🔗 Открыть подарок'),
+                url=claim_link,
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text=texts.t('GIFT_BACK_TO_SUBSCRIPTION_BUTTON', '◀️ К подписке'),
+                callback_data='menu_subscription',
+            ),
+            InlineKeyboardButton(
+                text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '⬅️ В главное меню'),
+                callback_data='back_to_menu',
+            ),
+        ],
+    ]
+    keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
+
+    return text, keyboard
+
+
+async def send_gift_result_message(
+    bot: Bot,
+    user: User,
+    purchase_result: GiftPurchaseResult,
+    bot_username: str | None = None,
+    cabinet_url: str | None = None,
+) -> types.Message | None:
+    """Send localized gift result presentation directly to user's Telegram chat.
+
+    Used after top-up auto-purchase or direct balance confirmation.
+    """
+    resolved_bot_username, resolved_cabinet_url = await resolve_gift_claim_channel(
+        bot=bot,
+        bot_username=bot_username,
+        cabinet_url=cabinet_url,
+    )
+
+    try:
+        text, keyboard = build_gift_result_presentation(
+            language=user.language,
+            purchase_result=purchase_result,
+            bot_username=resolved_bot_username,
+            cabinet_url=resolved_cabinet_url,
+        )
+    except Exception as err:
+        logger.error('Failed to build gift result presentation for notification', user_id=user.id, error=str(err))
+        return None
+
+    target_chat_id = user.telegram_id or user.id
+    try:
+        return await bot.send_message(
+            chat_id=target_chat_id,
+            text=text,
+            reply_markup=keyboard,
+            parse_mode='HTML',
+        )
+    except Exception as err:
+        logger.error('Failed to send gift result message to user chat', user_id=user.id, error=str(err))
+        return None
