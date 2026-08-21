@@ -200,6 +200,7 @@ async def create_purchase(
     campaign_slug: str | None = None,
     buyer_user_id: int | None = None,
     commit: bool = True,
+    idempotency_key: str | None = None,
 ) -> GuestPurchase:
     """Create a guest purchase record."""
     purchase = await create_guest_purchase(
@@ -221,6 +222,7 @@ async def create_purchase(
         gift_message=gift_message,
         source=source,
         buyer_user_id=buyer_user_id,
+        idempotency_key=idempotency_key,
         status=GuestPurchaseStatus.PENDING.value,
     )
 
