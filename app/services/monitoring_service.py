@@ -63,6 +63,7 @@ from app.services.notification_settings_service import NotificationSettingsServi
 from app.services.promo_offer_service import promo_offer_service
 from app.services.subscription_service import SubscriptionService, get_traffic_reset_strategy
 from app.utils.cache import cache
+from app.utils.formatters import format_username_link
 from app.utils.message_patch import caption_exceeds_telegram_limit
 from app.utils.miniapp_buttons import build_miniapp_or_callback_button
 from app.utils.promo_offer import get_user_active_promo_discount_percent
@@ -3029,8 +3030,8 @@ class MonitoringService:
                     # Детали пользователя: имя, Telegram ID и username
                     full_name = html.escape(ticket.user.full_name or '') if ticket.user else 'Unknown'
                     telegram_id_display = ticket.user.telegram_id if ticket.user else '—'
-                    username_display = html.escape(
-                        (ticket.user.username or 'отсутствует') if ticket.user else 'отсутствует'
+                    username_display = format_username_link(
+                        ticket.user.username if ticket.user else None, 'отсутствует'
                     )
                     safe_title = html.escape(title) if title else '—'
 
@@ -3039,7 +3040,7 @@ class MonitoringService:
                         f'🆔 <b>ID:</b> <code>{ticket.id}</code>\n'
                         f'👤 <b>Пользователь:</b> {full_name}\n'
                         f'🆔 <b>Telegram ID:</b> <code>{telegram_id_display}</code>\n'
-                        f'📱 <b>Username:</b> @{username_display}\n'
+                        f'📱 <b>Username:</b> {username_display}\n'
                         f'📝 <b>Заголовок:</b> {safe_title}\n'
                         f'⏱️ <b>Ожидает ответа:</b> {waited_minutes} мин\n'
                     )

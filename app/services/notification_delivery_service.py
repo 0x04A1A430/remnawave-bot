@@ -98,6 +98,20 @@ class NotificationType(Enum):
     GUEST_CABINET_CREDENTIALS = 'guest_cabinet_credentials'
 
 
+# Письма, которые почтовые провайдеры считают массовой рассылкой: только они
+# получают List-Unsubscribe и уважают отписку. Уведомления по действующей
+# подписке (оплата, истечение, блокировка) сюда не входят — это транзакционная
+# переписка, отписывать от неё нельзя.
+MARKETING_NOTIFICATION_TYPES = frozenset(
+    {
+        NotificationType.PROMO_OFFER,
+        NotificationType.WINBACK_EXPIRED_1D,
+        NotificationType.WINBACK_DISCOUNT,
+        NotificationType.WINBACK_TRIAL_ENDING,
+    }
+)
+
+
 class NotificationDeliveryService:
     """
     Service for delivering notifications to users through appropriate channels.
@@ -416,6 +430,20 @@ class NotificationDeliveryService:
             logger.debug('У пользователя нет подтверждённого email', user_id=user.id)
             return False
 
+        # Маркетинг уважает отписку; транзакционные письма — нет (иначе человек
+        # перестал бы узнавать об оплате и окончании собственной подписки).
+        unsubscribe_url = ''
+        if notification_type in MARKETING_NOTIFICATION_TYPES:
+            from app.utils.notification_prefs import is_promo_offers_enabled
+
+            if not is_promo_offers_enabled(user):
+                logger.debug('Пользователь отписан от промо-писем', user_id=user.id)
+                return False
+
+            from app.cabinet.services.email_unsubscribe import build_unsubscribe_url
+
+            unsubscribe_url = build_unsubscribe_url(user.id, user.email)
+
         try:
             # Get email template (check DB override first, then fall back to hardcoded)
             language = user.language or 'ru'
@@ -425,6 +453,7 @@ class NotificationDeliveryService:
                 'cabinet_url': getattr(settings, 'CABINET_URL', '') or '',
                 'username': user.first_name or user.username or '',
                 'email': user.email or '',
+                'unsubscribe_url': unsubscribe_url,
                 **context,
             }
 
@@ -477,6 +506,7 @@ class NotificationDeliveryService:
                 subject=template['subject'],
                 body_html=template['body_html'],
                 body_text=template.get('body_text'),
+                unsubscribe_url=unsubscribe_url or None,
             )
 
             if success:
