@@ -136,9 +136,49 @@ class TestGiftButtonFallbacks:
         cancel_btn = next(b for b in buttons if b.callback_data == 'gift_cancel')
         assert cancel_btn.text == '❌ Отмена'
 
+    def test_gift_history_buttons_fallback(self, mock_user):
+        """Test history list and pagination fallbacks in _render_history_list."""
+        from app.handlers.subscription.gift import _render_history_list
+        from app.services.gift_history_service import GiftHistoryItem
+
+        items = [
+            GiftHistoryItem(
+                purchase_id=1,
+                token='t' * 64,
+                status='PAID',
+                tariff_id=1,
+                tariff_name='Basic',
+                period_days=30,
+                traffic_limit_gb=100,
+                device_limit=2,
+                created_at=None,
+                paid_at=None,
+                delivered_at=None,
+            )
+        ]
+        _, kb = _render_history_list(mock_user, items, page=2, total_count=15)
+        buttons = [b for row in kb.inline_keyboard for b in row]
+
+        item_btn = next(b for b in buttons if b.callback_data == 'gift_my_open:1')
+        assert 'Basic — 30 дн.' in item_btn.text
+
+        prev_btn = next(b for b in buttons if b.callback_data == 'gift_my_page:1')
+        assert prev_btn.text == '⬅️ Предыдущая'
+
+        next_btn = next(b for b in buttons if b.callback_data == 'gift_my_page:3')
+        assert next_btn.text == 'Следующая ➡️'
+
+        back_btn = next(b for b in buttons if b.callback_data == 'gift_back_tariffs')
+        assert back_btn.text == '◀️ Назад'
+
     def test_reusable_button_keys_fallback_defaults(self):
         """Verify fallback strings for shared result, cart, and activation buttons."""
         texts = get_texts('ru')
+        assert texts.t('GIFT_MY_BUTTON', '🎁 Мои подарки') == '🎁 Мои подарки'
+        assert texts.t('GIFT_MY_PREV_PAGE_BUTTON', '⬅️ Предыдущая') == '⬅️ Предыдущая'
+        assert texts.t('GIFT_MY_NEXT_PAGE_BUTTON', 'Следующая ➡️') == 'Следующая ➡️'
+        assert texts.t('GIFT_MY_BACK_BUTTON', '◀️ К списку подарков') == '◀️ К списку подарков'
+        assert texts.t('GIFT_MY_BACK_TO_CATALOG_BUTTON', '◀️ Назад') == '◀️ Назад'
         assert texts.t('GIFT_SEND_BUTTON', '🎁 Отправить подарок') == '🎁 Отправить подарок'
         assert texts.t('GIFT_OPEN_BUTTON', '🔗 Открыть подарок') == '🔗 Открыть подарок'
         assert texts.t('GIFT_BACK_TO_SUBSCRIPTION_BUTTON', '◀️ К подписке') == '◀️ К подписке'

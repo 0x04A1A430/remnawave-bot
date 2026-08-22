@@ -20,6 +20,7 @@ from app.database.crud.subscription import (
 )
 from app.database.models import Subscription, SubscriptionStatus, User
 from app.localization.texts import Texts, get_texts
+from app.services.gift_history_service import has_sender_gifts
 from app.services.gift_purchase_service import is_gift_enabled
 from app.services.subscription_service import SubscriptionService
 
@@ -172,7 +173,7 @@ async def show_my_subscriptions(
         return
 
     texts = get_texts(db_user.language)
-    gift_enabled = await is_gift_enabled(db)
+    gift_enabled = (await is_gift_enabled(db)) or (await has_sender_gifts(db, db_user.id))
     subscriptions = await get_all_subscriptions_by_user_id(db, db_user.id)
 
     if not subscriptions:

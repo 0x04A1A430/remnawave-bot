@@ -31,6 +31,7 @@ if TYPE_CHECKING:
     from aiogram import Bot, types
 
     from app.database.models import User
+    from app.services.gift_history_service import GiftHistoryItem
 
 logger = structlog.get_logger(__name__)
 
@@ -200,6 +201,159 @@ def build_gift_result_presentation(
     keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
 
     return text, keyboard
+
+
+def build_gift_history_detail_presentation(
+    language: str,
+    item: GiftHistoryItem,
+    bot_username: str | None = None,
+    cabinet_url: str | None = None,
+) -> tuple[str, InlineKeyboardMarkup]:
+    """Build localized HTML text and inline keyboard for sender gift detail view.
+
+    Source-neutral: renders identical structure for gifts bought via Telegram bot,
+    web cabinet, or landing.
+    Excludes all financial details (prices, balance, discounts, transaction IDs)
+    and standalone bearer tokens. Dynamic strings are HTML escaped.
+
+    For claimable gifts:
+    - Displays canonical public code and claim link
+    - Provides share URL button and direct claim link button
+    - Back button with callback 'gift_my_back'
+
+    For delivered/activated gifts:
+    - Displays delivery status, delivery timestamp, safe recipient metadata
+    - Omits public code, claim links, and share/open buttons
+    - Back button with callback 'gift_my_back'
+    """
+    texts = get_texts(language)
+    escaped_tariff_name = html.escape(item.tariff_name or texts.t('GIFT_TARIFF_DELETED', 'Архивный тариф'))
+    traffic_str = (
+        texts.format_traffic(item.traffic_limit_gb)
+        if item.traffic_limit_gb is not None
+        else texts.t('GIFT_TRAFFIC_UNLIMITED', '∞ (безлимит)')
+    )
+    devices_str = texts.format_device_limit(item.device_limit)
+    created_str = item.created_at.strftime('%d.%m.%Y %H:%M') if item.created_at else '—'
+
+    if item.is_claimable:
+        share_text = texts.t(
+            'GIFT_SHARE_TEXT',
+            '🎁 Привет! Я дарю тебе подписку на {tariff_name} ({period_days} дн.). Нажми на ссылку, чтобы активировать!',
+        ).format(
+            tariff_name=item.tariff_name or texts.t('GIFT_TARIFF_DEFAULT_NAME', 'VPN'),
+            period_days=item.period_days,
+        )
+
+        artifacts = build_gift_claim_artifacts(
+            token=item.token,
+            bot_username=bot_username,
+            cabinet_url=cabinet_url,
+            share_text=share_text,
+        )
+
+        claim_link = artifacts.bot_claim_url or artifacts.cabinet_claim_url
+        if not claim_link:
+            raise ValueError('Cannot build gift detail presentation: neither bot deep link nor cabinet URL available')
+
+        share_url = artifacts.telegram_share_url or build_telegram_gift_share_url(claim_link, share_text)
+        status_text = texts.t('GIFT_STATUS_PENDING', '⏳ Ожидает активации')
+
+        body_template = texts.t(
+            'GIFT_MY_DETAIL_CLAIMABLE_TEXT',
+            '🎁 <b>Подарок</b>\n\n'
+            '📦 Тариф: <b>{tariff_name}</b>\n'
+            '📅 Период: <b>{period_days} дн.</b>\n'
+            '📊 Трафик: <b>{traffic}</b>\n'
+            '📱 Устройства: <b>{devices}</b>\n'
+            '📋 Статус: <b>{status_text}</b>\n'
+            '📅 Оформлен: <b>{created_at}</b>\n'
+            '🔑 Код подарка: <code>{public_code}</code>\n\n'
+            '🔗 Ссылка на подарок:\n{claim_link}\n\n'
+            'Отправьте эту ссылку или код получателю для активации подписки.',
+        )
+
+        text = body_template.format(
+            tariff_name=escaped_tariff_name,
+            period_days=item.period_days,
+            traffic=traffic_str,
+            devices=devices_str,
+            status_text=status_text,
+            created_at=created_str,
+            public_code=item.public_code,
+            claim_link=claim_link,
+        )
+
+        buttons = [
+            [
+                InlineKeyboardButton(
+                    text=texts.t('GIFT_SEND_BUTTON', '🎁 Отправить подарок'),
+                    url=share_url,
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text=texts.t('GIFT_OPEN_BUTTON', '🔗 Открыть подарок'),
+                    url=claim_link,
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text=texts.t('GIFT_MY_BACK_BUTTON', '◀️ К списку подарков'),
+                    callback_data='gift_my_back',
+                )
+            ],
+        ]
+        return text, InlineKeyboardMarkup(inline_keyboard=buttons)
+
+    # Delivered / other final state
+    status_text = texts.t('GIFT_STATUS_DELIVERED', '✅ Активирован')
+    delivered_line = ''
+    if item.delivered_at:
+        deliv_str = item.delivered_at.strftime('%d.%m.%Y %H:%M')
+        delivered_line = texts.t('GIFT_MY_DELIVERED_AT_LINE', '🎉 Активирован: <b>{delivered_at}</b>\n').format(
+            delivered_at=deliv_str
+        )
+
+    recipient_line = ''
+    if item.recipient_display:
+        escaped_recipient = html.escape(item.recipient_display)
+        recipient_line = texts.t('GIFT_MY_RECIPIENT_LINE', '👤 Получатель: <b>{recipient_display}</b>\n').format(
+            recipient_display=escaped_recipient
+        )
+
+    body_template = texts.t(
+        'GIFT_MY_DETAIL_DELIVERED_TEXT',
+        '🎁 <b>Подарок</b>\n\n'
+        '📦 Тариф: <b>{tariff_name}</b>\n'
+        '📅 Период: <b>{period_days} дн.</b>\n'
+        '📊 Трафик: <b>{traffic}</b>\n'
+        '📱 Устройства: <b>{devices}</b>\n'
+        '📋 Статус: <b>{status_text}</b>\n'
+        '📅 Оформлен: <b>{created_at}</b>\n'
+        '{delivered_line}{recipient_line}',
+    )
+
+    text = body_template.format(
+        tariff_name=escaped_tariff_name,
+        period_days=item.period_days,
+        traffic=traffic_str,
+        devices=devices_str,
+        status_text=status_text,
+        created_at=created_str,
+        delivered_line=delivered_line,
+        recipient_line=recipient_line,
+    ).rstrip()
+
+    buttons = [
+        [
+            InlineKeyboardButton(
+                text=texts.t('GIFT_MY_BACK_BUTTON', '◀️ К списку подарков'),
+                callback_data='gift_my_back',
+            )
+        ]
+    ]
+    return text, InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
 async def send_gift_result_message(

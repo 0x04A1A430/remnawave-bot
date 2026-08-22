@@ -25,7 +25,14 @@ from app.services.gift_claim_service import (
     GiftClaimSelfActivationError,
     claim_gift_for_user,
 )
+from app.services.gift_history_service import (
+    GiftHistoryItem,
+    get_sender_gift,
+    has_sender_gifts,
+    list_sender_gifts,
+)
 from app.services.gift_notification_service import (
+    build_gift_history_detail_presentation,
     build_gift_result_presentation,
     resolve_gift_claim_channel,
 )
@@ -55,6 +62,9 @@ logger = structlog.get_logger(__name__)
 # ── Render Helpers ──────────────────────────────────────────────────────────
 
 
+GIFT_HISTORY_PAGE_SIZE = 5
+
+
 def _render_tariff_catalog(db_user: User, offers: list[GiftTariffOffer]) -> tuple[str, InlineKeyboardMarkup]:
     """Render gift tariff catalog message and keyboard."""
     texts = get_texts(db_user.language)
@@ -71,12 +81,106 @@ def _render_tariff_catalog(db_user: User, offers: list[GiftTariffOffer]) -> tupl
     buttons.append(
         [
             InlineKeyboardButton(
+                text=texts.t('GIFT_MY_BUTTON', '🎁 Мои подарки'),
+                callback_data='gift_my',
+            )
+        ]
+    )
+    buttons.append(
+        [
+            InlineKeyboardButton(
                 text=texts.t('GIFT_ENTER_CODE_BUTTON', '🎁 Активировать код'),
                 callback_data='gift_enter_code',
             )
         ]
     )
     buttons.append([InlineKeyboardButton(text=texts.t('GIFT_CANCEL_BUTTON', '❌ Отмена'), callback_data='gift_cancel')])
+
+    return text, InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+def _render_history_list(
+    db_user: User,
+    items: list[GiftHistoryItem],
+    page: int,
+    total_count: int,
+) -> tuple[str, InlineKeyboardMarkup]:
+    """Render localized paginated gift history list and keyboard."""
+    texts = get_texts(db_user.language)
+    if not items or total_count == 0:
+        text = texts.t(
+            'GIFT_MY_EMPTY_TEXT',
+            '🎁 <b>Мои подарки</b>\n\nУ вас пока нет оформленных подарков.',
+        )
+        buttons = [
+            [
+                InlineKeyboardButton(
+                    text=texts.t('GIFT_ENTER_CODE_BUTTON', '🎁 Активировать код'),
+                    callback_data='gift_enter_code',
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text=texts.t('GIFT_MY_BACK_TO_CATALOG_BUTTON', '◀️ Назад'),
+                    callback_data='gift_back_tariffs',
+                )
+            ],
+        ]
+        return text, InlineKeyboardMarkup(inline_keyboard=buttons)
+
+    total_pages = max(1, (total_count + GIFT_HISTORY_PAGE_SIZE - 1) // GIFT_HISTORY_PAGE_SIZE)
+    if total_pages > 1:
+        text = texts.t(
+            'GIFT_MY_TITLE_PAGED',
+            '🎁 <b>Мои подарки</b> (стр. {page}/{total_pages})\n\nВыберите подарок для просмотра деталей:',
+        ).format(page=page, total_pages=total_pages)
+    else:
+        text = texts.t(
+            'GIFT_MY_TITLE',
+            '🎁 <b>Мои подарки</b>\n\nВыберите подарок для просмотра деталей:',
+        )
+
+    buttons: list[list[InlineKeyboardButton]] = []
+    for item in items:
+        status_emoji = '✅' if item.is_delivered else '⏳'
+        raw_name = item.tariff_name or texts.t('GIFT_TARIFF_DELETED', 'Архивный тариф')
+        tariff_name = html.escape(raw_name)
+        item_label = texts.t(
+            'GIFT_MY_ITEM_BUTTON',
+            '{status_emoji} {tariff_name} — {period_days} дн.',
+        ).format(
+            status_emoji=status_emoji,
+            tariff_name=tariff_name,
+            period_days=item.period_days,
+        )
+        buttons.append([InlineKeyboardButton(text=item_label, callback_data=f'gift_my_open:{item.purchase_id}')])
+
+    nav_row: list[InlineKeyboardButton] = []
+    if page > 1:
+        nav_row.append(
+            InlineKeyboardButton(
+                text=texts.t('GIFT_MY_PREV_PAGE_BUTTON', '⬅️ Предыдущая'),
+                callback_data=f'gift_my_page:{page - 1}',
+            )
+        )
+    if page < total_pages:
+        nav_row.append(
+            InlineKeyboardButton(
+                text=texts.t('GIFT_MY_NEXT_PAGE_BUTTON', 'Следующая ➡️'),
+                callback_data=f'gift_my_page:{page + 1}',
+            )
+        )
+    if nav_row:
+        buttons.append(nav_row)
+
+    buttons.append(
+        [
+            InlineKeyboardButton(
+                text=texts.t('GIFT_MY_BACK_TO_CATALOG_BUTTON', '◀️ Назад'),
+                callback_data='gift_back_tariffs',
+            )
+        ]
+    )
 
     return text, InlineKeyboardMarkup(inline_keyboard=buttons)
 
@@ -202,13 +306,47 @@ async def handle_gift_catalog(
     db: AsyncSession,
     state: FSMContext,
 ) -> None:
-    """Entry point for native gift catalog."""
+    """Entry point for native gift catalog and history hub."""
     if isinstance(callback.message, InaccessibleMessage):
         await callback.answer()
         return
 
     texts = get_texts(db_user.language)
-    if not await is_gift_enabled(db):
+    sales_enabled = await is_gift_enabled(db)
+    has_history = await has_sender_gifts(db, db_user.id)
+
+    if not sales_enabled:
+        if has_history:
+            text = texts.t(
+                'GIFT_FEATURE_DISABLED_WITH_HISTORY',
+                '🎁 <b>Подарки</b>\n\nПокупка новых подарков временно недоступна, но вы можете просмотреть свои подарки или активировать код.',
+            )
+            back_kb = InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [
+                        InlineKeyboardButton(
+                            text=texts.t('GIFT_MY_BUTTON', '🎁 Мои подарки'),
+                            callback_data='gift_my',
+                        )
+                    ],
+                    [
+                        InlineKeyboardButton(
+                            text=texts.t('GIFT_ENTER_CODE_BUTTON', '🎁 Активировать код'),
+                            callback_data='gift_enter_code',
+                        )
+                    ],
+                    [
+                        InlineKeyboardButton(
+                            text=texts.t('GIFT_CANCEL_BUTTON', '❌ Отмена'),
+                            callback_data='gift_cancel',
+                        )
+                    ],
+                ]
+            )
+            await callback.message.edit_text(text, reply_markup=back_kb, parse_mode='HTML')
+            await callback.answer()
+            return
+
         await callback.answer(
             texts.t('GIFT_FEATURE_DISABLED', 'Покупка подарков временно недоступна.'),
             show_alert=True,
@@ -219,6 +357,12 @@ async def handle_gift_catalog(
     if not offers:
         back_kb = InlineKeyboardMarkup(
             inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text=texts.t('GIFT_MY_BUTTON', '🎁 Мои подарки'),
+                        callback_data='gift_my',
+                    )
+                ],
                 [
                     InlineKeyboardButton(
                         text=texts.t('GIFT_ENTER_CODE_BUTTON', '🎁 Активировать код'),
@@ -236,6 +380,7 @@ async def handle_gift_catalog(
         await callback.message.edit_text(
             texts.t('GIFT_NO_TARIFFS_AVAILABLE', 'В данный момент нет доступных тарифов для подарка.'),
             reply_markup=back_kb,
+            parse_mode='HTML',
         )
         await callback.answer()
         return
@@ -1085,12 +1230,159 @@ async def handle_gift_code_input(
     await message.answer(success_text, reply_markup=success_kb, parse_mode='HTML')
 
 
+# ── Gift History Handlers ───────────────────────────────────────────────────
+
+
+async def _show_history_page(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    page: int = 1,
+) -> None:
+    """Display paginated list of sender gifts."""
+    if isinstance(callback.message, InaccessibleMessage):
+        await callback.answer()
+        return
+
+    page = max(page, 1)
+
+    items, total_count = await list_sender_gifts(
+        db,
+        buyer_id=db_user.id,
+        offset=(page - 1) * GIFT_HISTORY_PAGE_SIZE,
+        limit=GIFT_HISTORY_PAGE_SIZE,
+    )
+
+    total_pages = max(1, (total_count + GIFT_HISTORY_PAGE_SIZE - 1) // GIFT_HISTORY_PAGE_SIZE) if total_count > 0 else 1
+    if page > total_pages:
+        page = total_pages
+        items, total_count = await list_sender_gifts(
+            db,
+            buyer_id=db_user.id,
+            offset=(page - 1) * GIFT_HISTORY_PAGE_SIZE,
+            limit=GIFT_HISTORY_PAGE_SIZE,
+        )
+
+    text, keyboard = _render_history_list(
+        db_user=db_user,
+        items=items,
+        page=page,
+        total_count=total_count,
+    )
+    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='HTML')
+    await callback.answer()
+
+
+async def handle_gift_my(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext,
+) -> None:
+    """Entry handler for 'My gifts' history list (Page 1)."""
+    await _show_history_page(callback, db_user, db, page=1)
+
+
+async def handle_gift_my_page(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext,
+) -> None:
+    """Handle pagination page change in gift history."""
+    if isinstance(callback.message, InaccessibleMessage):
+        await callback.answer()
+        return
+
+    page = 1
+    if callback.data and callback.data.startswith('gift_my_page:'):
+        parts = callback.data.split(':', 1)
+        if len(parts) == 2:
+            try:
+                page = int(parts[1])
+            except ValueError:
+                page = 1
+
+    await _show_history_page(callback, db_user, db, page=page)
+
+
+async def handle_gift_my_open(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext,
+) -> None:
+    """Open detail card for a specific gift owned by the sender (IDOR protected)."""
+    if isinstance(callback.message, InaccessibleMessage):
+        await callback.answer()
+        return
+
+    texts = get_texts(db_user.language)
+    if not callback.data or not callback.data.startswith('gift_my_open:'):
+        await callback.answer(texts.t('GIFT_MY_ITEM_NOT_FOUND', 'Подарок не найден или недоступен.'), show_alert=True)
+        return
+
+    parts = callback.data.split(':', 1)
+    if len(parts) != 2:
+        await callback.answer(texts.t('GIFT_MY_ITEM_NOT_FOUND', 'Подарок не найден или недоступен.'), show_alert=True)
+        return
+
+    try:
+        purchase_id = int(parts[1])
+    except ValueError:
+        await callback.answer(texts.t('GIFT_MY_ITEM_NOT_FOUND', 'Подарок не найден или недоступен.'), show_alert=True)
+        return
+
+    item = await get_sender_gift(db, buyer_id=db_user.id, purchase_id=purchase_id)
+    if item is None:
+        await callback.answer(texts.t('GIFT_MY_ITEM_NOT_FOUND', 'Подарок не найден или недоступен.'), show_alert=True)
+        return
+
+    bot_username, cabinet_url = await resolve_gift_claim_channel(bot=callback.bot)
+    try:
+        text, keyboard = build_gift_history_detail_presentation(
+            language=db_user.language,
+            item=item,
+            bot_username=bot_username,
+            cabinet_url=cabinet_url,
+        )
+    except Exception as err:
+        logger.error(
+            'Failed to build gift history detail presentation',
+            buyer_id=db_user.id,
+            purchase_id=purchase_id,
+            error=str(err),
+        )
+        await callback.answer(
+            texts.t('GIFT_GENERIC_ERROR', 'Произошла ошибка при оформлении подарка. Попробуйте позже.'),
+            show_alert=True,
+        )
+        return
+
+    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='HTML')
+    await callback.answer()
+
+
+async def handle_gift_my_back(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext,
+) -> None:
+    """Return from gift detail card to history list."""
+    await _show_history_page(callback, db_user, db, page=1)
+
+
 # ── Handler Registration ───────────────────────────────────────────────────
 
 
 def register_gift_handlers(dp: Dispatcher) -> None:
     """Register all gift purchase, navigation, and code activation handlers."""
     dp.callback_query.register(handle_gift_catalog, F.data == 'subscription_gift')
+    dp.callback_query.register(handle_gift_my, F.data == 'gift_my')
+    dp.callback_query.register(handle_gift_my_page, F.data.startswith('gift_my_page:'))
+    dp.callback_query.register(handle_gift_my_open, F.data.startswith('gift_my_open:'))
+    dp.callback_query.register(handle_gift_my_back, F.data == 'gift_my_back')
     dp.callback_query.register(handle_gift_enter_code, F.data == 'gift_enter_code')
     dp.callback_query.register(handle_gift_activation_cancel, F.data == 'gift_activation_cancel')
     dp.callback_query.register(handle_gift_tariff_select, F.data.startswith('gift_tariff:'))

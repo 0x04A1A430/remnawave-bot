@@ -83,6 +83,11 @@ def mock_db_user() -> User:
 def mock_db() -> AsyncMock:
     db = AsyncMock(spec=AsyncSession)
     db.refresh = AsyncMock()
+    mock_result = MagicMock()
+    mock_result.scalar_one_or_none.return_value = None
+    mock_result.scalars.return_value.first.return_value = None
+    mock_result.scalars.return_value.all.return_value = []
+    db.execute.return_value = mock_result
     return db
 
 
