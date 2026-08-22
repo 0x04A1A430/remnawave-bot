@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.cabinet.routes import branding as branding_routes, gift as gift_routes
 from app.cabinet.routes.branding import GiftEnabledUpdate
@@ -727,6 +727,60 @@ async def test_purchase_gift_gateway_provider_error_rolls_back_promo_offer(monke
         ).one()
         assert row[0] == 20
         assert row[1] == 'personal_test'
+
+
+@pytest.mark.asyncio
+async def test_purchase_gift_gateway_internal_adapter_commit_is_deferred_until_url_validation(monkeypatch):
+    """An adapter commit must not persist promo consumption before the route validates its result."""
+    async with memory_session(monkeypatch, _TABLES) as db:
+        db.add(SystemSetting(key=GIFT_ENABLED_KEY, value='true'))
+        user_id = 10
+        user = User(
+            id=user_id,
+            balance_kopeks=50000,
+            username='buyer',
+            promo_offer_discount_percent=20,
+            promo_offer_discount_source='personal_test',
+        )
+        tariff = Tariff(
+            id=1,
+            name='Standard',
+            is_active=True,
+            show_in_gift=True,
+            period_prices={'30': 30000},
+        )
+        db.add_all([user, tariff])
+        await db.commit()
+
+        async def fake_adapter_with_internal_commit(**kwargs):
+            # Real provider CRUD helpers call commit after writing the local
+            # payment. The gift route must defer that commit to a flush.
+            await kwargs['db'].commit()
+            return {'payment_url': None, 'provider': 'broken-provider'}
+
+        fake_svc = MagicMock()
+        fake_svc.create_guest_payment = AsyncMock(side_effect=fake_adapter_with_internal_commit)
+        monkeypatch.setattr('app.services.payment_service.PaymentService', lambda **kw: fake_svc)
+
+        req = GiftPurchaseRequest(
+            tariff_id=1,
+            period_days=30,
+            payment_mode='gateway',
+            payment_method='yookassa',
+        )
+        with pytest.raises(HTTPException) as exc:
+            await gift_routes.create_gift_purchase(body=req, user=user, db=db)
+        assert exc.value.status_code == 502
+
+        promo_row = (
+            await db.execute(
+                select(User.promo_offer_discount_percent, User.promo_offer_discount_source).where(User.id == user_id)
+            )
+        ).one()
+        assert promo_row == (20, 'personal_test')
+
+        purchase_count = await db.scalar(select(func.count()).select_from(GuestPurchase))
+        assert purchase_count == 0
 
 
 @pytest.mark.asyncio

@@ -3,6 +3,7 @@
 import asyncio
 import re
 import uuid
+from typing import Any
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -65,6 +66,26 @@ router = APIRouter(prefix='/gift', tags=['Cabinet Gift'])
 
 _EMAIL_RE = re.compile(r'^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$')
 _TELEGRAM_RE = re.compile(r'^@?[a-zA-Z][a-zA-Z0-9_]{4,31}$')
+
+
+class _DeferredCommitSession:
+    """Delegate an AsyncSession while keeping transaction ownership in this route.
+
+    Legacy payment adapters commit after persisting their local payment row. A
+    gateway gift checkout must keep the sender lock, promo consumption, purchase,
+    and provider metadata in one transaction until the payment URL is validated.
+    Inside this proxy, adapter commits become flushes; the route performs the only
+    real commit after all validation succeeds.
+    """
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._session, name)
+
+    async def commit(self) -> None:
+        await self._session.flush()
 
 
 @router.get('/config', response_model=GiftConfigResponse)
@@ -362,8 +383,9 @@ async def create_gift_purchase(
 
         try:
             payment_service = PaymentService(bot=bot)
+            payment_db = _DeferredCommitSession(db)
             payment_result = await payment_service.create_guest_payment(
-                db=db,
+                db=payment_db,  # type: ignore[arg-type]
                 amount_kopeks=quote.final_price_kopeks,
                 payment_method=body.payment_method,
                 description=f'Gift: {quote.tariff_name} ({body.period_days}d)',

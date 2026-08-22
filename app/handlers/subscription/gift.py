@@ -243,6 +243,10 @@ async def _render_and_show_periods(
     state: FSMContext,
 ) -> None:
     """Render and display periods for a selected tariff without mutating callback data."""
+    if isinstance(callback.message, InaccessibleMessage):
+        await callback.answer()
+        return
+
     texts = get_texts(db_user.language)
     if not await is_gift_enabled(db):
         await callback.answer(
@@ -732,10 +736,10 @@ async def handle_return_to_gift_cart(
             bot_username=bot_username,
             cabinet_url=cabinet_url,
         )
+        await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='HTML')
         await user_cart_service.delete_user_cart(db_user.id)
         await user_cart_service.clear_topup_intent(db_user.id)
         await state.clear()
-        await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='HTML')
         await callback.answer()
         return
 

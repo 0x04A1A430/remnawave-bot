@@ -17,7 +17,14 @@ from app.config import settings
 from app.database.crud.subscription import extend_subscription
 from app.database.crud.transaction import create_transaction
 from app.database.crud.user import subtract_user_balance
-from app.database.models import Subscription, SubscriptionStatus, TransactionType, User
+from app.database.models import (
+    GuestPurchase,
+    GuestPurchaseStatus,
+    Subscription,
+    SubscriptionStatus,
+    TransactionType,
+    User,
+)
 from app.localization.texts import get_texts
 from app.services.admin_notification_service import AdminNotificationService
 from app.services.gift_notification_service import (
@@ -31,6 +38,7 @@ from app.services.gift_purchase_service import (
     GiftPeriodUnavailableError,
     GiftPriceChangedError,
     GiftPurchaseRestrictedError,
+    GiftPurchaseResult,
     GiftTariffUnavailableError,
     purchase_gift_from_balance,
     quote_gift_purchase,
@@ -3176,6 +3184,39 @@ async def _process_single_cart(
     return False
 
 
+async def _deliver_auto_purchased_gift(
+    *,
+    bot: Bot,
+    user: User,
+    purchase_result: GiftPurchaseResult,
+    bot_username: str | None,
+    cabinet_url: str | None,
+    checkout_id: str,
+) -> bool:
+    """Deliver a committed gift result without discarding retry state on failure."""
+    try:
+        sent_msg = await send_gift_result_message(
+            bot=bot,
+            user=user,
+            purchase_result=purchase_result,
+            bot_username=bot_username,
+            cabinet_url=cabinet_url,
+        )
+    except Exception as notify_err:
+        logger.error('Автопокупка подарка: ошибка отправки результата пользователю', error=str(notify_err))
+        sent_msg = None
+
+    if sent_msg is None:
+        logger.warning(
+            'Автопокупка подарка: подарок создан, но сообщение с ссылкой не доставлено; корзина сохранена для повтора',
+            format_user_id=_format_user_id(user),
+            checkout_id=checkout_id,
+        )
+        return False
+
+    return True
+
+
 async def _auto_purchase_gift(
     db: AsyncSession,
     user: User,
@@ -3206,6 +3247,66 @@ async def _auto_purchase_gift(
             format_user_id=_format_user_id(user),
         )
         return False
+
+    # Delivery retry must win over repricing. A committed purchase may have
+    # consumed a one-time promo, so recalculating first would make the same gift
+    # look more expensive and incorrectly block idempotent link delivery.
+    existing_stmt = select(GuestPurchase.id).where(
+        GuestPurchase.idempotency_key == checkout_id,
+        GuestPurchase.buyer_user_id == user.id,
+        GuestPurchase.tariff_id == tariff_id,
+        GuestPurchase.period_days == period_days,
+        GuestPurchase.status.in_(
+            (
+                GuestPurchaseStatus.PAID.value,
+                GuestPurchaseStatus.DELIVERED.value,
+            )
+        ),
+    )
+    existing_res = await db.execute(existing_stmt)
+    if existing_res.scalar_one_or_none() is not None:
+        bot_username, cabinet_url = await resolve_gift_claim_channel(bot=bot)
+        if not bot_username and not cabinet_url:
+            logger.warning(
+                'Автопокупка подарка: каналы повторной выдачи ссылки недоступны',
+                format_user_id=_format_user_id(user),
+            )
+            return False
+
+        try:
+            replay_result = await purchase_gift_from_balance(
+                db=db,
+                buyer_id=user.id,
+                tariff_id=tariff_id,
+                period_days=period_days,
+                expected_price_kopeks=saved_expected_price,
+                idempotency_key=checkout_id,
+                source='bot',
+            )
+        except Exception as replay_err:
+            logger.error(
+                'Автопокупка подарка: не удалось загрузить результат для повторной выдачи',
+                error=str(replay_err),
+                exc_info=True,
+            )
+            return False
+
+        delivered = await _deliver_auto_purchased_gift(
+            bot=bot,
+            user=user,
+            purchase_result=replay_result,
+            bot_username=bot_username,
+            cabinet_url=cabinet_url,
+            checkout_id=checkout_id,
+        )
+        if delivered:
+            logger.info(
+                'Автопокупка подарка: ссылка на ранее созданный подарок выдана повторно',
+                format_user_id=_format_user_id(user),
+                tariff_id=tariff_id,
+                period_days=period_days,
+            )
+        return delivered
 
     texts = get_texts(getattr(user, 'language', 'ru'))
 
@@ -3307,25 +3408,14 @@ async def _auto_purchase_gift(
         logger.error('Автопокупка подарка: неожиданная ошибка покупки', error=str(err), exc_info=True)
         return False
 
-    sent_msg = None
-    try:
-        sent_msg = await send_gift_result_message(
-            bot=bot,
-            user=user,
-            purchase_result=purchase_result,
-            bot_username=bot_username,
-            cabinet_url=cabinet_url,
-        )
-    except Exception as notify_err:
-        logger.error('Автопокупка подарка: ошибка отправки результата пользователю', error=str(notify_err))
-        sent_msg = None
-
-    if sent_msg is None:
-        logger.warning(
-            'Автопокупка подарка: подарок создан, но сообщение с ссылкой не доставлено; корзина сохранена для повтора',
-            format_user_id=_format_user_id(user),
-            checkout_id=checkout_id,
-        )
+    if not await _deliver_auto_purchased_gift(
+        bot=bot,
+        user=user,
+        purchase_result=purchase_result,
+        bot_username=bot_username,
+        cabinet_url=cabinet_url,
+        checkout_id=checkout_id,
+    ):
         return False
 
     logger.info(

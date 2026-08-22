@@ -1187,8 +1187,7 @@ class TestGiftAutoPurchaseDeliveryAndPriceChangeSafeguards:
     async def test_retry_after_failed_delivery_delivers_existing_gift_without_double_debit(
         self, mock_db_user, mock_db, mock_bot, test_cart_service, sample_quote, sample_purchase_result, monkeypatch
     ):
-        """P1 Safeguard: retry after delivery failure re-invokes purchase_gift_from_balance with same checkout_id,
-        which re是可以s existing gift, delivers result message, and clears cart/intent."""
+        """A failed delivery is retried as an idempotent replay before a new quote is calculated."""
         monkeypatch.setattr(settings, 'AUTO_PURCHASE_AFTER_TOPUP_ENABLED', True)
         monkeypatch.setattr(
             'app.services.subscription_auto_purchase_service.user_cart_service',
@@ -1210,12 +1209,17 @@ class TestGiftAutoPurchaseDeliveryAndPriceChangeSafeguards:
         )
 
         mock_sent_message = MagicMock(spec=Message)
+        no_existing_purchase = MagicMock()
+        no_existing_purchase.scalar_one_or_none.return_value = None
+        committed_purchase = MagicMock()
+        committed_purchase.scalar_one_or_none.return_value = sample_purchase_result.purchase.id
+        mock_db.execute.side_effect = [no_existing_purchase, committed_purchase]
 
         with (
             patch(
                 'app.services.subscription_auto_purchase_service.quote_gift_purchase',
                 AsyncMock(return_value=sample_quote),
-            ),
+            ) as mock_quote,
             patch(
                 'app.services.subscription_auto_purchase_service.resolve_gift_claim_channel',
                 AsyncMock(return_value=('my_bot', None)),
@@ -1226,13 +1230,20 @@ class TestGiftAutoPurchaseDeliveryAndPriceChangeSafeguards:
             ) as mock_purchase,
             patch(
                 'app.services.subscription_auto_purchase_service.send_gift_result_message',
-                AsyncMock(return_value=mock_sent_message),
+                AsyncMock(side_effect=[None, mock_sent_message]),
             ) as mock_send,
         ):
-            res = await auto_purchase_saved_cart_after_topup(mock_db, mock_db_user, bot=mock_bot)
+            first_result = await auto_purchase_saved_cart_after_topup(mock_db, mock_db_user, bot=mock_bot)
 
-            assert res is True
-            mock_purchase.assert_awaited_once_with(
+            assert first_result is False
+            assert await test_cart_service.get_user_cart(mock_db_user.id) is not None
+            assert await test_cart_service.has_topup_intent(mock_db_user.id) is True
+
+            second_result = await auto_purchase_saved_cart_after_topup(mock_db, mock_db_user, bot=mock_bot)
+
+            assert second_result is True
+            assert mock_purchase.await_count == 2
+            mock_purchase.assert_awaited_with(
                 db=mock_db,
                 buyer_id=mock_db_user.id,
                 tariff_id=1,
@@ -1241,8 +1252,8 @@ class TestGiftAutoPurchaseDeliveryAndPriceChangeSafeguards:
                 idempotency_key=checkout_id,
                 source='bot',
             )
-            mock_send.assert_awaited_once()
-            # Successfully delivered -> cart and intent are now cleaned up
+            assert mock_send.await_count == 2
+            assert mock_quote.await_count == 1
             assert await test_cart_service.get_user_cart(mock_db_user.id) is None
             assert await test_cart_service.has_topup_intent(mock_db_user.id) is False
 
@@ -1385,8 +1396,11 @@ class TestGiftAutoPurchaseDeliveryAndPriceChangeSafeguards:
                 'tariff_id': 1,
                 'period_days': 30,
                 'total_price': 30000,
+                'return_to_cart': True,
             },
         )
+        await memory_state.set_state(GiftPurchaseStates.confirming_purchase)
+        await memory_state.update_data(gift_checkout_id=checkout_id)
 
         existing_purchase = GuestPurchase(
             id=123,
@@ -1438,10 +1452,19 @@ class TestGiftAutoPurchaseDeliveryAndPriceChangeSafeguards:
                 AsyncMock(return_value=('my_bot', None)),
             ),
         ):
+            mock_callback.message.edit_text.side_effect = RuntimeError('Telegram edit failed')
+            with pytest.raises(RuntimeError, match='Telegram edit failed'):
+                await handle_return_to_gift_cart(mock_callback, mock_db_user, mock_db, memory_state)
+
+            # A failed Telegram edit must leave all retry context intact.
+            assert await test_cart_service.get_user_cart(mock_db_user.id) is not None
+            assert await test_cart_service.has_topup_intent(mock_db_user.id) is True
+            assert await memory_state.get_state() == GiftPurchaseStates.confirming_purchase.state
+
+            mock_callback.message.edit_text.side_effect = None
             await handle_return_to_gift_cart(mock_callback, mock_db_user, mock_db, memory_state)
 
-            mock_purchase.assert_awaited_once()
-            assert mock_callback.message.edit_text.called
-            # Cart and intent are deleted
+            assert mock_purchase.await_count == 2
             assert await test_cart_service.get_user_cart(mock_db_user.id) is None
             assert await test_cart_service.has_topup_intent(mock_db_user.id) is False
+            assert await memory_state.get_state() is None

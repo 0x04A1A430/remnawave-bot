@@ -23,7 +23,7 @@ import pytest
 from aiogram import Dispatcher
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.memory import MemoryStorage
-from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message, User as TgUser
+from aiogram.types import CallbackQuery, InaccessibleMessage, InlineKeyboardMarkup, Message, User as TgUser
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import Settings
@@ -510,6 +510,26 @@ class TestSubscriptionGiftCatalogFlow:
 
             assert mock_edit_text.called
             assert mock_answer.called
+
+    @pytest.mark.asyncio
+    async def test_back_to_periods_ignores_inaccessible_message(self, mock_db_user, mock_db, memory_state):
+        """Back navigation must acknowledge callbacks whose source message is inaccessible."""
+        from aiogram.types import Chat
+
+        callback = AsyncMock(spec=CallbackQuery)
+        callback.message = InaccessibleMessage(
+            chat=Chat(id=mock_db_user.telegram_id, type='private'),
+            message_id=123,
+            date=0,
+        )
+        callback.answer = AsyncMock()
+        await memory_state.update_data(gift_tariff_id=1)
+
+        with patch('app.handlers.subscription.gift.is_gift_enabled', AsyncMock()) as mock_enabled:
+            await handle_gift_back_periods(callback, mock_db_user, mock_db, memory_state)
+
+        callback.answer.assert_awaited_once_with()
+        mock_enabled.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_gift_cancel_returns_to_origin(self, mock_callback, mock_db_user, mock_db, memory_state):
