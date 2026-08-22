@@ -44,7 +44,7 @@ from app.services.gift_purchase_service import (
     GiftTariffUnavailableError,
 )
 from app.states import GiftPurchaseStates
-from app.utils.gift_links import build_bot_gift_claim_link, build_cabinet_gift_claim_link
+from app.utils.gift_links import build_bot_gift_claim_link, build_cabinet_gift_claim_link, build_gift_public_code
 
 
 # ── Helpers & Fixtures ──────────────────────────────────────────────────────
@@ -559,6 +559,7 @@ class TestGiftReplayAndPresentation:
         # 4. Standalone token must not appear outside the canonical link
         raw_token = sample_purchase_result.purchase.token
         assert raw_token not in text
+        assert f'<code>{build_gift_public_code(raw_token)}</code>' in text
         expected_claim_link = build_bot_gift_claim_link(raw_token, 'test_gift_bot')
         assert expected_claim_link in text
 
@@ -597,6 +598,44 @@ class TestGiftReplayAndPresentation:
         open_btn = next(b for b in buttons if b.callback_data is None and b.url == expected_claim_link)
         assert open_btn.url == expected_claim_link
 
+    @pytest.mark.parametrize(
+        ('language', 'bot_label', 'cabinet_label'),
+        [
+            ('ru', '🤖 В Telegram:', '🌐 В личном кабинете:'),
+            ('en', '🤖 In Telegram:', '🌐 In the cabinet:'),
+            ('ua', '🤖 У Telegram:', '🌐 В особистому кабінеті:'),
+            ('fa', '🤖 در تلگرام:', '🌐 در پنل کاربری:'),
+            ('zh', '🤖 在 Telegram 中：', '🌐 在控制台中：'),
+        ],
+    )
+    def test_presentation_localizes_dual_claim_channels(
+        self,
+        sample_purchase_result,
+        language,
+        bot_label,
+        cabinet_label,
+    ):
+        raw_token = sample_purchase_result.purchase.token
+        bot_claim_url = build_bot_gift_claim_link(raw_token, 'test_gift_bot')
+        cabinet_claim_url = build_cabinet_gift_claim_link(raw_token, 'https://cabinet.example.com')
+
+        text, keyboard = build_gift_result_presentation(
+            language=language,
+            purchase_result=sample_purchase_result,
+            bot_username='test_gift_bot',
+            cabinet_url='https://cabinet.example.com',
+        )
+
+        assert bot_label in text
+        assert cabinet_label in text
+        assert bot_claim_url in text
+        assert cabinet_claim_url in text
+        assert f'<code>{build_gift_public_code(raw_token)}</code>' in text
+        urls = _button_urls(keyboard)
+        assert bot_claim_url in urls
+        assert cabinet_claim_url in urls
+        assert any(url.startswith('https://t.me/share/url?') for url in urls)
+
     @pytest.mark.asyncio
     async def test_send_gift_result_message_service(self, mock_bot, mock_db_user, sample_purchase_result, monkeypatch):
         monkeypatch.setattr(type(settings), 'get_bot_username', lambda self: 'test_gift_bot')
@@ -632,6 +671,11 @@ class TestGiftReplayAndPresentation:
 
             mock_artifacts_builder.assert_called_once()
             assert f'https://t.me/test_gift_bot?start=GIFT_{sample_purchase_result.purchase.token[:59]}' in text
+            assert f'<code>GIFT_{sample_purchase_result.purchase.token[:59]}</code>' in text
+            assert f'https://cabinet.example.com/buy/gift/{sample_purchase_result.purchase.token}' in text
             buttons = [b for row in kb.inline_keyboard for b in row]
             send_btn = next(b for b in buttons if b.text.startswith('🎁'))
             assert send_btn.url == 'https://t.me/share/url?url=https%3A%2F%2Ft.me%2Ftest_gift_bot&text=Gift'
+            button_urls = _button_urls(kb)
+            assert f'https://t.me/test_gift_bot?start=GIFT_{sample_purchase_result.purchase.token[:59]}' in button_urls
+            assert f'https://cabinet.example.com/buy/gift/{sample_purchase_result.purchase.token}' in button_urls

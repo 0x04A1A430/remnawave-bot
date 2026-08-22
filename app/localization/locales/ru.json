@@ -2211,6 +2211,8 @@
   "GIFT_FEATURE_DISABLED_NO_HISTORY": "🎁 <b>Подарки</b>\n\nПокупка новых подарков временно недоступна, но вы можете активировать полученный подарочный код.",
   "GIFT_OPEN_BOT_BUTTON": "🤖 Открыть в боте",
   "GIFT_OPEN_CABINET_BUTTON": "🌐 Открыть в кабинете",
+  "GIFT_BOT_CLAIM_LINK_LABEL": "🤖 В Telegram:",
+  "GIFT_CABINET_CLAIM_LINK_LABEL": "🌐 В личном кабинете:",
   "GIFT_MY_DELIVERED_AT_LINE": "🎉 Активирован: <b>{delivered_at}</b>\n",
   "GIFT_MY_RECIPIENT_LINE": "👤 Получатель: <b>{recipient_display}</b>\n",
   "GIFT_TARIFF_DELETED": "Архивный тариф",

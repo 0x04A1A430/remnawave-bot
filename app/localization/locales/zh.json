@@ -2214,5 +2214,7 @@
   "GIFT_TARIFF_DEFAULT_NAME": "VPN",
   "GIFT_FEATURE_DISABLED_NO_HISTORY": "🎁 <b>礼物</b>\n\n暂时无法购买新礼物，但您可以激活已收到的礼物代码。",
   "GIFT_OPEN_BOT_BUTTON": "🤖 在机器人中打开",
-  "GIFT_OPEN_CABINET_BUTTON": "🌐 在控制台中打开"
+  "GIFT_OPEN_CABINET_BUTTON": "🌐 在控制台中打开",
+  "GIFT_BOT_CLAIM_LINK_LABEL": "🤖 在 Telegram 中：",
+  "GIFT_CABINET_CLAIM_LINK_LABEL": "🌐 在控制台中："
 }

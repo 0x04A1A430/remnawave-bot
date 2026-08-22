@@ -2,11 +2,9 @@
 
 Covers:
 - Menu visibility:
-  - Enabled sales with/without history.
-  - Disabled sales with paid history (history remains reachable).
-  - Disabled sales without history (entry hidden).
-  - No eligible tariffs with history.
-  - Single-tariff and multi-tariff subscription menu layouts.
+  - Gift entry remains reachable in single- and multi-tariff subscription layouts.
+  - Disabled sales render activation/history controls without offering a new purchase.
+  - No eligible tariffs still allows activation and available history navigation.
 - History list & pagination:
   - Localized empty history.
   - 5 items per page with stable newest-first ordering.
@@ -159,87 +157,24 @@ def _make_gift_history_item(
 
 
 class TestGiftMenuVisibilityAndEmptyHistory:
-    """Test subscription menu integration and entry gating (Step 1)."""
+    """Test persistent subscription-menu entry and in-section sales gating (Step 1)."""
 
     @pytest.mark.asyncio
-    async def test_single_tariff_menu_shows_gift_when_sales_enabled_no_history(
-        self, mock_callback, mock_db_user, mock_db, monkeypatch
-    ):
+    async def test_single_tariff_menu_always_shows_gift_entry(self, mock_callback, mock_db_user, mock_db, monkeypatch):
         mock_db_user.subscription = None
         monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: False)
-        with (
-            patch('app.handlers.subscription.purchase.is_gift_enabled', AsyncMock(return_value=True)),
-            patch('app.handlers.subscription.purchase.has_sender_gifts', AsyncMock(return_value=False)),
-        ):
-            await show_subscription_info(mock_callback, mock_db_user, mock_db)
-            assert mock_callback.message.edit_text.called
-            _, kwargs = mock_callback.message.edit_text.call_args
-            reply_markup = kwargs.get('reply_markup')
-            assert 'subscription_gift' in _callbacks(reply_markup)
+        await show_subscription_info(mock_callback, mock_db_user, mock_db)
+        assert mock_callback.message.edit_text.called
+        _, kwargs = mock_callback.message.edit_text.call_args
+        reply_markup = kwargs.get('reply_markup')
+        assert 'subscription_gift' in _callbacks(reply_markup)
 
     @pytest.mark.asyncio
-    async def test_single_tariff_menu_shows_gift_when_sales_disabled_with_history(
-        self, mock_callback, mock_db_user, mock_db, monkeypatch
-    ):
-        mock_db_user.subscription = None
-        monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: False)
-        with (
-            patch('app.handlers.subscription.purchase.is_gift_enabled', AsyncMock(return_value=False)),
-            patch('app.handlers.subscription.purchase.has_sender_gifts', AsyncMock(return_value=True)),
-        ):
-            await show_subscription_info(mock_callback, mock_db_user, mock_db)
-            assert mock_callback.message.edit_text.called
-            _, kwargs = mock_callback.message.edit_text.call_args
-            reply_markup = kwargs.get('reply_markup')
-            assert 'subscription_gift' in _callbacks(reply_markup)
-
-    @pytest.mark.asyncio
-    async def test_single_tariff_menu_shows_gift_when_sales_disabled_without_history(
-        self, mock_callback, mock_db_user, mock_db, monkeypatch
-    ):
-        mock_db_user.subscription = None
-        monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: False)
-        with (
-            patch('app.handlers.subscription.purchase.is_gift_enabled', AsyncMock(return_value=False)),
-            patch('app.handlers.subscription.purchase.has_sender_gifts', AsyncMock(return_value=False)),
-        ):
-            await show_subscription_info(mock_callback, mock_db_user, mock_db)
-            assert mock_callback.message.edit_text.called
-            _, kwargs = mock_callback.message.edit_text.call_args
-            reply_markup = kwargs.get('reply_markup')
-            assert 'subscription_gift' in _callbacks(reply_markup)
-
-    @pytest.mark.asyncio
-    async def test_multi_tariff_menu_shows_gift_when_sales_disabled_with_history(
-        self, mock_callback, mock_db_user, mock_db, monkeypatch
-    ):
+    async def test_multi_tariff_menu_always_shows_gift_entry(self, mock_callback, mock_db_user, mock_db, monkeypatch):
         monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: True)
-        with (
-            patch(
-                'app.handlers.subscription.my_subscriptions.get_all_subscriptions_by_user_id',
-                AsyncMock(return_value=[]),
-            ),
-            patch('app.handlers.subscription.my_subscriptions.is_gift_enabled', AsyncMock(return_value=False)),
-            patch('app.handlers.subscription.my_subscriptions.has_sender_gifts', AsyncMock(return_value=True)),
-        ):
-            await show_my_subscriptions(mock_callback, mock_db_user, mock_db)
-            assert mock_callback.message.edit_text.called
-            _, kwargs = mock_callback.message.edit_text.call_args
-            reply_markup = kwargs.get('reply_markup')
-            assert 'subscription_gift' in _callbacks(reply_markup)
-
-    @pytest.mark.asyncio
-    async def test_multi_tariff_menu_shows_gift_when_sales_disabled_without_history(
-        self, mock_callback, mock_db_user, mock_db, monkeypatch
-    ):
-        monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: True)
-        with (
-            patch(
-                'app.handlers.subscription.my_subscriptions.get_all_subscriptions_by_user_id',
-                AsyncMock(return_value=[]),
-            ),
-            patch('app.handlers.subscription.my_subscriptions.is_gift_enabled', AsyncMock(return_value=False)),
-            patch('app.handlers.subscription.my_subscriptions.has_sender_gifts', AsyncMock(return_value=False)),
+        with patch(
+            'app.handlers.subscription.my_subscriptions.get_all_subscriptions_by_user_id',
+            AsyncMock(return_value=[]),
         ):
             await show_my_subscriptions(mock_callback, mock_db_user, mock_db)
             assert mock_callback.message.edit_text.called
@@ -501,11 +436,13 @@ class TestSourceNeutralPresentation:
             language='ru',
             item=bot_item,
             bot_username='TestGiftBot',
+            cabinet_url='https://cabinet.example.com',
         )
         text_cab, kb_cab = build_gift_history_detail_presentation(
             language='ru',
             item=cabinet_item,
             bot_username='TestGiftBot',
+            cabinet_url='https://cabinet.example.com',
         )
 
         # Content must be identical (no mention of bot vs cabinet origin or prices)
@@ -518,6 +455,10 @@ class TestSourceNeutralPresentation:
         assert '30000' not in text_bot
         assert '300.00' not in text_bot
         assert 'руб' not in text_bot.lower()
+        assert '🤖 В Telegram:' in text_bot
+        assert '🌐 В личном кабинете:' in text_bot
+        assert any('t.me/TestGiftBot' in url for url in _urls(kb_bot))
+        assert any('cabinet.example.com/buy/gift/' in url for url in _urls(kb_bot))
 
     def test_delivered_card_omits_share_and_claim_actions(self):
         token = 'd' * 64

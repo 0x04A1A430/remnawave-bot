@@ -2214,5 +2214,7 @@
   "GIFT_TARIFF_DEFAULT_NAME": "VPN",
   "GIFT_FEATURE_DISABLED_NO_HISTORY": "🎁 <b>هدایا</b>\n\nخرید هدایای جدید موقتاً غیرفعال است، اما می‌توانید کد هدیه را فعال کنید.",
   "GIFT_OPEN_BOT_BUTTON": "🤖 باز کردن در ربات",
-  "GIFT_OPEN_CABINET_BUTTON": "🌐 باز کردن در پنل کاربری"
+  "GIFT_OPEN_CABINET_BUTTON": "🌐 باز کردن در پنل کاربری",
+  "GIFT_BOT_CLAIM_LINK_LABEL": "🤖 در تلگرام:",
+  "GIFT_CABINET_CLAIM_LINK_LABEL": "🌐 در پنل کاربری:"
 }

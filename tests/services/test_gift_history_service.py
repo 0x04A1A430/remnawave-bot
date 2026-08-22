@@ -402,6 +402,40 @@ async def test_list_sender_gifts_pagination_and_boundary_clamping(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_list_sender_gifts_returns_more_than_legacy_fifty_item_cap(monkeypatch):
+    """The cabinet's 100-item request must not be silently truncated to the old 50-item cap."""
+    async with memory_session(monkeypatch, _TABLES) as db:
+        buyer = await _create_test_user(db, telegram_id=1001)
+        tariff = await _create_test_tariff(db)
+        now = datetime.now(UTC)
+
+        purchases = [
+            GuestPurchase(
+                token=f'{i:064d}',
+                buyer_user_id=buyer.id,
+                tariff_id=tariff.id,
+                is_gift=True,
+                source='cabinet',
+                status=GuestPurchaseStatus.PAID.value,
+                period_days=30,
+                amount_kopeks=30000,
+                contact_type='telegram',
+                contact_value='@buyer',
+                created_at=now + timedelta(seconds=i),
+            )
+            for i in range(120)
+        ]
+        db.add_all(purchases)
+        await db.commit()
+
+        items, total_count = await list_sender_gifts(db, buyer_id=buyer.id, limit=100)
+
+        assert total_count == 120
+        assert len(items) == 100
+        assert items[0].token == purchases[-1].token
+
+
+@pytest.mark.asyncio
 async def test_list_sender_gifts_graceful_on_missing_deleted_tariff(monkeypatch):
     """If a tariff was deleted (ON DELETE SET NULL), the history item must load gracefully."""
     async with memory_session(monkeypatch, _TABLES) as db:

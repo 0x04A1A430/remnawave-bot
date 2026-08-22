@@ -386,24 +386,12 @@ async def fulfill_purchase(
             db,
             recipient_type,
             recipient_value,
-            landing_id=purchase.landing_id,
+            purchase=purchase,
             pre_resolved_telegram_id=pre_resolved_telegram_id,
+            tariff_id=purchase.tariff_id,
         )
 
-        # For gifts, attach the recipient user_id as well
-        if purchase.is_gift and purchase.user_id is None:
-            purchase.user_id = user.id
-
-        # Bind landing attribution if applicable
-        if purchase.landing_id and user.landing_id is None:
-            user.landing_id = purchase.landing_id
-
-        # Generate cabinet password for new email accounts (stored temporarily for email delivery)
-        if is_new_account and recipient_type == 'email':
-            raw_password = _generate_cabinet_password()
-            user.hashed_password = hash_password(raw_password)
-            purchase.cabinet_password = raw_password  # temporary, cleared after email sent
-
+        # Load tariff early — needed for both PENDING_ACTIVATION and DELIVERED paths
         tariff = await get_tariff_by_id(db, purchase.tariff_id)
         if tariff is None:
             logger.error('Tariff not found during fulfillment', tariff_id=purchase.tariff_id)

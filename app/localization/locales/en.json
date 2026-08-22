@@ -2211,6 +2211,8 @@
   "GIFT_FEATURE_DISABLED_NO_HISTORY": "🎁 <b>Gifts</b>\n\nPurchasing new gifts is temporarily unavailable, but you can activate a gift code.",
   "GIFT_OPEN_BOT_BUTTON": "🤖 Open in bot",
   "GIFT_OPEN_CABINET_BUTTON": "🌐 Open in cabinet",
+  "GIFT_BOT_CLAIM_LINK_LABEL": "🤖 In Telegram:",
+  "GIFT_CABINET_CLAIM_LINK_LABEL": "🌐 In the cabinet:",
   "GIFT_MY_DELIVERED_AT_LINE": "🎉 Activated: <b>{delivered_at}</b>\n",
   "GIFT_MY_RECIPIENT_LINE": "👤 Recipient: <b>{recipient_display}</b>\n",
   "GIFT_TARIFF_DELETED": "Archived tariff",

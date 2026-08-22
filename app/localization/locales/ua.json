@@ -2214,5 +2214,7 @@
   "GIFT_TARIFF_DEFAULT_NAME": "VPN",
   "GIFT_FEATURE_DISABLED_NO_HISTORY": "🎁 <b>Подарунки</b>\n\nКупівля нових подарунків тимчасово недоступна, але ви можете активувати отриманий подарунковий код.",
   "GIFT_OPEN_BOT_BUTTON": "🤖 Відкрити в боті",
-  "GIFT_OPEN_CABINET_BUTTON": "🌐 Відкрити в кабінеті"
+  "GIFT_OPEN_CABINET_BUTTON": "🌐 Відкрити в кабінеті",
+  "GIFT_BOT_CLAIM_LINK_LABEL": "🤖 У Telegram:",
+  "GIFT_CABINET_CLAIM_LINK_LABEL": "🌐 В особистому кабінеті:"
 }

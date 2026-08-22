@@ -1,8 +1,10 @@
 """Presentation and notification services for gift purchases (Telegram & Cabinet).
 
 Security and Privacy Constraints:
-- Standalone gift tokens must NEVER appear in message text, keyboards, callback data, logs,
-  or fallback output. A bearer token may appear ONLY as part of the canonical claim URL.
+- Full internal gift tokens must never appear as standalone credentials, in callback data,
+  logs, or fallback output. They may appear only inside a canonical Cabinet claim URL.
+- The canonical public gift code is safe to show to the authenticated sender in purchase
+  results and gift history.
 - Financial details (price, balance, discount amount, transaction id) must NEVER be included
   in recipient copy, share text, or the final gift result message.
 - Dynamic fields (e.g. tariff names) must be HTML escaped when formatting HTML messages.
@@ -17,9 +19,10 @@ import structlog
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from app.config import settings
-from app.localization.texts import get_texts
+from app.localization.texts import Texts, get_texts
 from app.services.gift_purchase_service import GiftPurchaseResult
 from app.utils.gift_links import (
+    GiftClaimArtifacts,
     _normalize_bot_username,
     _normalize_cabinet_url,
     build_gift_claim_artifacts,
@@ -85,7 +88,7 @@ async def resolve_gift_claim_channel(
 
 
 def _format_claim_link_and_action_buttons(
-    texts: Any,
+    texts: Texts,
     artifacts: GiftClaimArtifacts,
     share_url: str,
 ) -> tuple[str, list[list[InlineKeyboardButton]]]:
@@ -100,9 +103,9 @@ def _format_claim_link_and_action_buttons(
     ]
 
     if artifacts.bot_claim_url and artifacts.cabinet_claim_url:
-        claim_link_display = (
-            f'🤖 В Telegram:\n{artifacts.bot_claim_url}\n\n🌐 В личном кабинете:\n{artifacts.cabinet_claim_url}'
-        )
+        bot_label = texts.t('GIFT_BOT_CLAIM_LINK_LABEL', '🤖 В Telegram:')
+        cabinet_label = texts.t('GIFT_CABINET_CLAIM_LINK_LABEL', '🌐 В личном кабинете:')
+        claim_link_display = f'{bot_label}\n{artifacts.bot_claim_url}\n\n{cabinet_label}\n{artifacts.cabinet_claim_url}'
         buttons.append(
             [
                 InlineKeyboardButton(
@@ -150,7 +153,7 @@ def build_gift_result_presentation(
     """Build localized text and inline keyboard for gift purchase result.
 
     Excludes all financial details (prices, balance, discounts, transaction IDs)
-    and standalone bearer tokens. Dynamic strings are HTML escaped.
+    and standalone internal bearer tokens. Dynamic strings are HTML escaped.
 
     Args:
         language: User language code (e.g. 'ru', 'en', 'ua', 'fa', 'zh').
@@ -264,7 +267,7 @@ def build_gift_history_detail_presentation(
     Source-neutral: renders identical structure for gifts bought via Telegram bot,
     web cabinet, or landing.
     Excludes all financial details (prices, balance, discounts, transaction IDs)
-    and standalone bearer tokens. Dynamic strings are HTML escaped.
+    and standalone internal bearer tokens. Dynamic strings are HTML escaped.
 
     For claimable gifts:
     - Displays canonical public code and claim link

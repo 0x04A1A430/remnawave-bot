@@ -512,7 +512,7 @@ async def try_fulfill_guest_purchase(
                 'Webhook amount does not match guest purchase amount',
                 webhook_kopeks=payment_amount_kopeks,
                 purchase_kopeks=existing.amount_kopeks,
-                purchase_token_prefix=purchase_token[:5],
+                purchase_id=existing.id,
                 provider=provider_name,
             )
             await update_purchase_status(db, purchase_token, GuestPurchaseStatus.FAILED)
@@ -535,7 +535,7 @@ async def try_fulfill_guest_purchase(
         ):
             logger.info(
                 'Guest purchase already in terminal state, skipping',
-                purchase_token_prefix=purchase_token[:5],
+                purchase_id=existing.id,
                 status=existing.status,
                 provider=provider_name,
             )
@@ -561,7 +561,7 @@ async def try_fulfill_guest_purchase(
             await db.commit()
             logger.info(
                 'Gift marked as PAID, deferred until claim',
-                purchase_token_prefix=purchase_token[:5],
+                purchase_id=existing.id,
                 provider=provider_name,
             )
             # NaloGO receipt: payment received, fulfillment deferred until code activation
@@ -574,13 +574,13 @@ async def try_fulfill_guest_purchase(
                 else:
                     logger.warning(
                         'Code-only gift has no buyer, skipping NaloGO receipt',
-                        purchase_token_prefix=purchase_token[:5],
+                        purchase_id=existing.id,
                         buyer_user_id=existing.buyer_user_id,
                     )
             except Exception:
                 logger.exception(
                     'Failed to create NaloGO receipt for code-only gift',
-                    purchase_token_prefix=purchase_token[:5],
+                    purchase_id=existing.id,
                 )
             # Best-effort: send the claim link to the recipient (if email) and a
             # durable backstop copy to the buyer. Never blocks the payment flow.
@@ -597,7 +597,7 @@ async def try_fulfill_guest_purchase(
             except Exception:
                 logger.warning(
                     'Failed to send gift claim notification',
-                    purchase_token_prefix=purchase_token[:5],
+                    purchase_id=existing.id,
                 )
             return True
 
@@ -607,7 +607,7 @@ async def try_fulfill_guest_purchase(
         logger.info(
             'Guest purchase fulfilled',
             provider_payment_id=provider_payment_id,
-            purchase_token_prefix=purchase_token[:5],
+            purchase_id=existing.id if existing else None,
             provider=provider_name,
         )
         return True

@@ -169,30 +169,18 @@ class TestSubscriptionGiftEntryVisibility:
         assert 'back_to_menu' in callbacks
 
     @pytest.mark.asyncio
-    async def test_show_subscription_info_no_sub_gift_enabled(self, mock_callback, mock_db_user, mock_db, monkeypatch):
+    async def test_show_subscription_info_no_sub_keeps_gift_entry_reachable(
+        self, mock_callback, mock_db_user, mock_db, monkeypatch
+    ):
         mock_db_user.subscription = None
         monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: False)
-        with patch('app.handlers.subscription.purchase.is_gift_enabled', AsyncMock(return_value=True)):
-            await show_subscription_info(mock_callback, mock_db_user, mock_db)
+        await show_subscription_info(mock_callback, mock_db_user, mock_db)
 
-            assert mock_callback.message.edit_text.called
-            _, kwargs = mock_callback.message.edit_text.call_args
-            reply_markup = kwargs.get('reply_markup')
-            assert reply_markup is not None
-            assert 'subscription_gift' in _callbacks(reply_markup)
-
-    @pytest.mark.asyncio
-    async def test_show_subscription_info_no_sub_gift_disabled(self, mock_callback, mock_db_user, mock_db, monkeypatch):
-        mock_db_user.subscription = None
-        monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: False)
-        with patch('app.handlers.subscription.purchase.is_gift_enabled', AsyncMock(return_value=False)):
-            await show_subscription_info(mock_callback, mock_db_user, mock_db)
-
-            assert mock_callback.message.edit_text.called
-            _, kwargs = mock_callback.message.edit_text.call_args
-            reply_markup = kwargs.get('reply_markup')
-            assert reply_markup is not None
-            assert 'subscription_gift' in _callbacks(reply_markup)
+        assert mock_callback.message.edit_text.called
+        _, kwargs = mock_callback.message.edit_text.call_args
+        reply_markup = kwargs.get('reply_markup')
+        assert reply_markup is not None
+        assert 'subscription_gift' in _callbacks(reply_markup)
 
     def test_multi_mode_build_subscriptions_keyboard_gift_enabled(self):
         subs = [SimpleNamespace(id=10, tariff=SimpleNamespace(name='Basic'))]
@@ -212,33 +200,13 @@ class TestSubscriptionGiftEntryVisibility:
         assert 'menu_buy' in callbacks
 
     @pytest.mark.asyncio
-    async def test_show_my_subscriptions_empty_gift_enabled(self, mock_callback, mock_db_user, mock_db, monkeypatch):
+    async def test_show_my_subscriptions_empty_keeps_gift_entry_reachable(
+        self, mock_callback, mock_db_user, mock_db, monkeypatch
+    ):
         monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: True)
-        with (
-            patch(
-                'app.handlers.subscription.my_subscriptions.get_all_subscriptions_by_user_id',
-                AsyncMock(return_value=[]),
-            ),
-            patch('app.handlers.subscription.my_subscriptions.is_gift_enabled', AsyncMock(return_value=True)),
-        ):
-            await show_my_subscriptions(mock_callback, mock_db_user, mock_db)
-
-            assert mock_callback.message.edit_text.called
-            _, kwargs = mock_callback.message.edit_text.call_args
-            reply_markup = kwargs.get('reply_markup')
-            assert reply_markup is not None
-            assert 'subscription_gift' in _callbacks(reply_markup)
-            assert 'menu_buy' in _callbacks(reply_markup)
-
-    @pytest.mark.asyncio
-    async def test_show_my_subscriptions_empty_gift_disabled(self, mock_callback, mock_db_user, mock_db, monkeypatch):
-        monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: True)
-        with (
-            patch(
-                'app.handlers.subscription.my_subscriptions.get_all_subscriptions_by_user_id',
-                AsyncMock(return_value=[]),
-            ),
-            patch('app.handlers.subscription.my_subscriptions.is_gift_enabled', AsyncMock(return_value=False)),
+        with patch(
+            'app.handlers.subscription.my_subscriptions.get_all_subscriptions_by_user_id',
+            AsyncMock(return_value=[]),
         ):
             await show_my_subscriptions(mock_callback, mock_db_user, mock_db)
 
@@ -257,11 +225,20 @@ class TestSubscriptionGiftCatalogFlow:
     """Test catalog rendering, period choices, summary, and FSM navigation."""
 
     @pytest.mark.asyncio
-    async def test_gift_catalog_feature_disabled_shows_alert(self, mock_callback, mock_db_user, mock_db, memory_state):
-        with patch('app.handlers.subscription.gift.is_gift_enabled', AsyncMock(return_value=False)):
+    async def test_gift_catalog_feature_disabled_shows_activation_hub(
+        self, mock_callback, mock_db_user, mock_db, memory_state
+    ):
+        with (
+            patch('app.handlers.subscription.gift.is_gift_enabled', AsyncMock(return_value=False)),
+            patch('app.handlers.subscription.gift.has_sender_gifts', AsyncMock(return_value=False)),
+        ):
             await handle_gift_catalog(mock_callback, mock_db_user, mock_db, memory_state)
 
-            assert mock_callback.answer.called
+            assert mock_callback.message.edit_text.called
+            _, kwargs = mock_callback.message.edit_text.call_args
+            callbacks = _callbacks(kwargs['reply_markup'])
+            assert 'gift_enter_code' in callbacks
+            assert 'gift_my' not in callbacks
             current_state = await memory_state.get_state()
             assert current_state is None
 
