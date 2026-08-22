@@ -833,3 +833,570 @@ async def test_purchase_gift_gateway_concurrent_requests_apply_promo_at_most_onc
 
         # Verify amounts: 1st got 20% discount (24000), 2nd got full price (30000)
         assert captured_amounts == [24000, 30000]
+
+
+# ── Step 5: Canonical Gift Field Parity and Response Contract Tests ───────
+
+
+@pytest.mark.asyncio
+async def test_purchase_gift_balance_returns_canonical_fields(monkeypatch):
+    """Balance gift purchase returns additive canonical gift_code, bot_claim_url, cabinet_claim_url."""
+    from app.config import settings
+
+    monkeypatch.setattr(settings, 'CABINET_URL', 'https://cabinet.example.com')
+    monkeypatch.setattr(settings, 'BOT_USERNAME', 'test_vpn_bot')
+    async with memory_session(monkeypatch, _TABLES) as db:
+        db.add(SystemSetting(key=GIFT_ENABLED_KEY, value='true'))
+        user = User(id=10, balance_kopeks=50000, username='buyer')
+        tariff = Tariff(
+            id=1,
+            name='Standard',
+            is_active=True,
+            show_in_gift=True,
+            period_prices={'30': 30000},
+            device_limit=1,
+        )
+        db.add_all([user, tariff])
+        await db.commit()
+
+        req = GiftPurchaseRequest(
+            tariff_id=1,
+            period_days=30,
+            payment_mode='balance',
+            gift_message='Enjoy!',
+        )
+        response = await gift_routes.create_gift_purchase(body=req, user=user, db=db)
+
+        assert response.status == 'ok'
+        assert len(response.purchase_token) == 12
+
+        # Check DB to get the full token
+        res = await db.execute(select(GuestPurchase).where(GuestPurchase.buyer_user_id == 10))
+        purchase = res.scalars().first()
+        assert purchase is not None
+        assert purchase.token.startswith(response.purchase_token)
+
+        # Canonical fields match Task 1 derivations
+        expected_code = f'GIFT_{purchase.token[:59]}'
+        assert response.gift_code == expected_code
+        assert response.bot_claim_url == f'https://t.me/test_vpn_bot?start={expected_code}'
+        assert response.cabinet_claim_url == f'https://cabinet.example.com/buy/gift/{purchase.token}'
+
+
+@pytest.mark.asyncio
+async def test_purchase_gift_gateway_pending_has_no_claim_fields(monkeypatch):
+    """Gateway gift purchase returns null claim fields while in pending state."""
+    from app.config import settings
+
+    monkeypatch.setattr(settings, 'CABINET_URL', 'https://cabinet.example.com')
+    monkeypatch.setattr(settings, 'BOT_USERNAME', 'test_vpn_bot')
+    async with memory_session(monkeypatch, _TABLES) as db:
+        db.add(SystemSetting(key=GIFT_ENABLED_KEY, value='true'))
+        user = User(id=10, balance_kopeks=50000, username='buyer')
+        tariff = Tariff(
+            id=1,
+            name='Standard',
+            is_active=True,
+            show_in_gift=True,
+            period_prices={'30': 30000},
+        )
+        db.add_all([user, tariff])
+        await db.commit()
+
+        fake_svc = MagicMock()
+        fake_svc.create_guest_payment = AsyncMock(
+            return_value={'payment_url': 'https://pay.provider.example/checkout/123'}
+        )
+        monkeypatch.setattr('app.services.payment_service.PaymentService', lambda **kw: fake_svc)
+
+        req = GiftPurchaseRequest(
+            tariff_id=1,
+            period_days=30,
+            payment_mode='gateway',
+            payment_method='yookassa',
+        )
+        response = await gift_routes.create_gift_purchase(body=req, user=user, db=db)
+
+        assert response.status == 'created'
+        assert response.payment_url == 'https://pay.provider.example/checkout/123'
+        assert len(response.purchase_token) == 12
+        assert response.gift_code is None
+        assert response.bot_claim_url is None
+        assert response.cabinet_claim_url is None
+
+
+@pytest.mark.asyncio
+async def test_get_gift_purchase_status_pending_has_no_claim_fields(monkeypatch):
+    """Pending purchase status returns is_claimable=False and no claim credentials."""
+    async with memory_session(monkeypatch, _TABLES) as db:
+        user = User(id=10, username='buyer')
+        tariff = Tariff(id=1, name='Pro', device_limit=2)
+        full_token = 'p' * 64
+        purchase = GuestPurchase(
+            id=1,
+            token=full_token,
+            contact_type='email',
+            contact_value='buyer@example.com',
+            tariff_id=1,
+            period_days=30,
+            amount_kopeks=30000,
+            is_gift=True,
+            status=GuestPurchaseStatus.PENDING.value,
+            buyer_user_id=10,
+        )
+        db.add_all([user, tariff, purchase])
+        await db.commit()
+
+        res = await gift_routes.get_gift_purchase_status(token=full_token, user=user, db=db)
+        assert res.status == 'pending'
+        assert res.is_claimable is False
+        assert res.purchase_token is None
+        assert res.gift_code is None
+        assert res.bot_claim_url is None
+        assert res.cabinet_claim_url is None
+
+
+@pytest.mark.asyncio
+async def test_get_gift_purchase_status_paid_code_only(monkeypatch):
+    """Paid code-only gift status returns canonical code and links with legacy 12-char token."""
+    from app.config import settings
+
+    monkeypatch.setattr(settings, 'CABINET_URL', 'https://cabinet.example.com')
+    monkeypatch.setattr(settings, 'BOT_USERNAME', 'test_vpn_bot')
+    async with memory_session(monkeypatch, _TABLES) as db:
+        user = User(id=10, username='buyer')
+        tariff = Tariff(id=1, name='Standard', device_limit=1)
+        full_token = 'k' * 64
+        purchase = GuestPurchase(
+            id=1,
+            token=full_token,
+            contact_type='email',
+            contact_value='buyer@example.com',
+            tariff_id=1,
+            period_days=30,
+            amount_kopeks=20000,
+            is_gift=True,
+            status=GuestPurchaseStatus.PAID.value,
+            buyer_user_id=10,
+            gift_message='Happy holidays!',
+        )
+        db.add_all([user, tariff, purchase])
+        await db.commit()
+
+        # Query using 12-char prefix
+        res = await gift_routes.get_gift_purchase_status(token=full_token[:12], user=user, db=db)
+        assert res.status == 'paid'
+        assert res.is_claimable is True
+        assert res.is_code_only is True
+        assert res.purchase_token == full_token[:12]
+        assert res.gift_code == f'GIFT_{full_token[:59]}'
+        assert res.bot_claim_url == f'https://t.me/test_vpn_bot?start=GIFT_{full_token[:59]}'
+        assert res.cabinet_claim_url == f'https://cabinet.example.com/buy/gift/{full_token}'
+        assert res.gift_message == 'Happy holidays!'
+
+
+@pytest.mark.asyncio
+async def test_get_gift_purchase_status_directed_gift(monkeypatch):
+    """Directed gift status populates recipient value and claim artifacts for the buyer."""
+    from app.config import settings
+
+    monkeypatch.setattr(settings, 'CABINET_URL', 'https://cabinet.example.com')
+    monkeypatch.setattr(settings, 'BOT_USERNAME', 'test_vpn_bot')
+    async with memory_session(monkeypatch, _TABLES) as db:
+        user = User(id=10, username='buyer')
+        tariff = Tariff(id=1, name='Standard', device_limit=1)
+        full_token = 'd' * 64
+        purchase = GuestPurchase(
+            id=1,
+            token=full_token,
+            contact_type='email',
+            contact_value='buyer@example.com',
+            tariff_id=1,
+            period_days=60,
+            amount_kopeks=40000,
+            is_gift=True,
+            gift_recipient_type='email',
+            gift_recipient_value='friend@example.com',
+            status=GuestPurchaseStatus.PAID.value,
+            buyer_user_id=10,
+        )
+        db.add_all([user, tariff, purchase])
+        await db.commit()
+
+        res = await gift_routes.get_gift_purchase_status(token=full_token, user=user, db=db)
+        assert res.status == 'paid'
+        assert res.is_claimable is True
+        assert res.is_code_only is False
+        assert res.recipient_contact_value == 'friend@example.com'
+        assert res.purchase_token == full_token[:12]
+        assert res.gift_code == f'GIFT_{full_token[:59]}'
+        assert res.bot_claim_url == f'https://t.me/test_vpn_bot?start=GIFT_{full_token[:59]}'
+        assert res.cabinet_claim_url == f'https://cabinet.example.com/buy/gift/{full_token}'
+
+
+@pytest.mark.asyncio
+async def test_get_gift_purchase_status_delivered_has_no_claim_actions(monkeypatch):
+    """Delivered gift retains metadata but exposes no reusable claim actions/links."""
+    from app.config import settings
+
+    monkeypatch.setattr(settings, 'CABINET_URL', 'https://cabinet.example.com')
+    monkeypatch.setattr(settings, 'BOT_USERNAME', 'test_vpn_bot')
+    async with memory_session(monkeypatch, _TABLES) as db:
+        buyer = User(id=10, username='buyer')
+        recipient = User(id=20, username='recipient')
+        tariff = Tariff(id=1, name='Standard', device_limit=1)
+        full_token = 'x' * 64
+        purchase = GuestPurchase(
+            id=1,
+            token=full_token,
+            contact_type='email',
+            contact_value='buyer@example.com',
+            tariff_id=1,
+            period_days=30,
+            amount_kopeks=20000,
+            is_gift=True,
+            status=GuestPurchaseStatus.DELIVERED.value,
+            buyer_user_id=10,
+            user_id=20,
+        )
+        db.add_all([buyer, recipient, tariff, purchase])
+        await db.commit()
+
+        res = await gift_routes.get_gift_purchase_status(token=full_token, user=buyer, db=db)
+        assert res.status == 'delivered'
+        assert res.is_claimable is False
+        assert res.purchase_token is None
+        assert res.gift_code is None
+        assert res.bot_claim_url is None
+        assert res.cabinet_claim_url is None
+
+
+@pytest.mark.asyncio
+async def test_get_gift_purchase_status_uniform_404_for_non_buyer(monkeypatch):
+    """Querying another buyer's purchase token raises 404 to avoid token existence oracle."""
+    async with memory_session(monkeypatch, _TABLES) as db:
+        buyer = User(id=10, username='buyer')
+        stranger = User(id=99, username='stranger')
+        tariff = Tariff(id=1, name='Standard')
+        full_token = 's' * 64
+        purchase = GuestPurchase(
+            id=1,
+            token=full_token,
+            contact_type='email',
+            contact_value='buyer@example.com',
+            tariff_id=1,
+            period_days=30,
+            amount_kopeks=20000,
+            is_gift=True,
+            status=GuestPurchaseStatus.PAID.value,
+            buyer_user_id=10,
+        )
+        db.add_all([buyer, stranger, tariff, purchase])
+        await db.commit()
+
+        with pytest.raises(HTTPException) as exc:
+            await gift_routes.get_gift_purchase_status(token=full_token, user=stranger, db=db)
+        assert exc.value.status_code == 404
+        assert exc.value.detail == 'Purchase not found'
+
+
+@pytest.mark.asyncio
+async def test_get_gift_purchase_status_absent_bot_or_cabinet_config(monkeypatch):
+    """When bot username or cabinet URL is not configured, canonical code is still returned and missing URLs are None."""
+    from app.config import settings
+
+    monkeypatch.setattr(settings, 'CABINET_URL', None)
+    monkeypatch.setattr(settings, 'BOT_USERNAME', None)
+    monkeypatch.setattr(settings, 'BOT_TOKEN', None)
+    async with memory_session(monkeypatch, _TABLES) as db:
+        user = User(id=10, username='buyer')
+        tariff = Tariff(id=1, name='Standard')
+        full_token = 'c' * 64
+        purchase = GuestPurchase(
+            id=1,
+            token=full_token,
+            contact_type='email',
+            contact_value='buyer@example.com',
+            tariff_id=1,
+            period_days=30,
+            amount_kopeks=20000,
+            is_gift=True,
+            status=GuestPurchaseStatus.PAID.value,
+            buyer_user_id=10,
+        )
+        db.add_all([user, tariff, purchase])
+        await db.commit()
+
+        res = await gift_routes.get_gift_purchase_status(token=full_token, user=user, db=db)
+        assert res.gift_code == f'GIFT_{full_token[:59]}'
+        assert res.bot_claim_url is None
+        assert res.cabinet_claim_url is None
+
+
+@pytest.mark.asyncio
+async def test_get_sent_gifts_contract_and_channel_parity(monkeypatch):
+    """get_sent_gifts returns canonical claim fields for claimable gifts and omits them for delivered gifts."""
+    from app.config import settings
+
+    monkeypatch.setattr(settings, 'CABINET_URL', 'https://cabinet.example.com')
+    monkeypatch.setattr(settings, 'BOT_USERNAME', 'test_vpn_bot')
+    async with memory_session(monkeypatch, _TABLES) as db:
+        buyer = User(id=10, username='buyer')
+        recipient = User(id=20, username='alice')
+        tariff = Tariff(id=1, name='Standard', device_limit=2)
+        db.add_all([buyer, recipient, tariff])
+
+        # 1. Paid gift (claimable)
+        t1 = '1' * 64
+        p1 = GuestPurchase(
+            id=1,
+            token=t1,
+            contact_type='email',
+            contact_value='buyer@example.com',
+            tariff_id=1,
+            period_days=30,
+            amount_kopeks=20000,
+            is_gift=True,
+            status=GuestPurchaseStatus.PAID.value,
+            buyer_user_id=10,
+            source='cabinet',
+            gift_message='For you!',
+        )
+        # 2. Delivered gift (claimed)
+        t2 = '2' * 64
+        p2 = GuestPurchase(
+            id=2,
+            token=t2,
+            contact_type='email',
+            contact_value='buyer@example.com',
+            tariff_id=1,
+            period_days=60,
+            amount_kopeks=40000,
+            is_gift=True,
+            status=GuestPurchaseStatus.DELIVERED.value,
+            buyer_user_id=10,
+            user_id=20,
+            source='cabinet',
+        )
+        db.add_all([p1, p2])
+        await db.commit()
+
+        sent = await gift_routes.get_sent_gifts(user=buyer, db=db)
+        assert len(sent) == 2
+
+        # Most recent first (id 2, then id 1)
+        item_delivered = next(s for s in sent if s.status == 'delivered')
+        item_paid = next(s for s in sent if s.status == 'paid')
+
+        # Delivered item checks
+        assert item_delivered.token == t2[:12]
+        assert item_delivered.activated_by_username == '@alice'
+        assert item_delivered.gift_code is None
+        assert item_delivered.bot_claim_url is None
+        assert item_delivered.cabinet_claim_url is None
+
+        # Paid item checks
+        assert item_paid.token == t1[:12]
+        assert item_paid.gift_code == f'GIFT_{t1[:59]}'
+        assert item_paid.bot_claim_url == f'https://t.me/test_vpn_bot?start=GIFT_{t1[:59]}'
+        assert item_paid.cabinet_claim_url == f'https://cabinet.example.com/buy/gift/{t1}'
+        assert item_paid.gift_message == 'For you!'
+
+
+@pytest.mark.asyncio
+async def test_get_sent_gifts_includes_bot_origin_gifts(monkeypatch):
+    """Gifts purchased via Telegram bot appear in cabinet /gift/sent with canonical claim artifacts."""
+    from app.config import settings
+
+    monkeypatch.setattr(settings, 'CABINET_URL', 'https://cabinet.example.com')
+    monkeypatch.setattr(settings, 'BOT_USERNAME', 'test_vpn_bot')
+    async with memory_session(monkeypatch, _TABLES) as db:
+        buyer = User(id=10, telegram_id=111, username='bot_buyer')
+        tariff = Tariff(id=1, name='VIP', device_limit=3)
+        token_bot = 'b' * 64
+        p_bot = GuestPurchase(
+            id=1,
+            token=token_bot,
+            contact_type='telegram',
+            contact_value='@bot_buyer',
+            tariff_id=1,
+            period_days=90,
+            amount_kopeks=60000,
+            is_gift=True,
+            status=GuestPurchaseStatus.PAID.value,
+            buyer_user_id=10,
+            source='bot',
+        )
+        db.add_all([buyer, tariff, p_bot])
+        await db.commit()
+
+        sent = await gift_routes.get_sent_gifts(user=buyer, db=db)
+        assert len(sent) == 1
+        item = sent[0]
+        assert item.tariff_name == 'VIP'
+        assert item.device_limit == 3
+        assert item.gift_code == f'GIFT_{token_bot[:59]}'
+        assert item.bot_claim_url == f'https://t.me/test_vpn_bot?start=GIFT_{token_bot[:59]}'
+        assert item.cabinet_claim_url == f'https://cabinet.example.com/buy/gift/{token_bot}'
+
+
+@pytest.mark.asyncio
+async def test_landing_purchase_status_canonical_fields_parity(monkeypatch):
+    """_build_purchase_status_response in landing routes includes additive canonical fields."""
+    from app.cabinet.routes.landing import _build_purchase_status_response
+    from app.config import settings
+
+    monkeypatch.setattr(settings, 'CABINET_URL', 'https://cabinet.example.com')
+    monkeypatch.setattr(settings, 'BOT_USERNAME', 'test_vpn_bot')
+
+    full_token = 'l' * 64
+    tariff = Tariff(id=1, name='Standard')
+    purchase = GuestPurchase(
+        id=1,
+        token=full_token,
+        contact_type='email',
+        contact_value='buyer@example.com',
+        tariff=tariff,
+        tariff_id=1,
+        period_days=30,
+        amount_kopeks=20000,
+        is_gift=True,
+        status=GuestPurchaseStatus.PAID.value,
+    )
+
+    resp = _build_purchase_status_response(purchase)
+    assert resp.is_claimable is True
+    # Legacy fields preserved
+    assert resp.claim_url == f'https://cabinet.example.com/buy/gift/{full_token}'
+    assert resp.bot_claim_link == f'https://t.me/test_vpn_bot?start=GIFT_{full_token[:59]}'
+    # Additive canonical fields
+    assert resp.gift_code == f'GIFT_{full_token[:59]}'
+    assert resp.bot_claim_url == f'https://t.me/test_vpn_bot?start=GIFT_{full_token[:59]}'
+    assert resp.cabinet_claim_url == f'https://cabinet.example.com/buy/gift/{full_token}'
+
+
+# ── Step 6: Historical Compatibility and Activation Parity Tests ───────────
+
+
+@pytest.mark.asyncio
+async def test_historical_gifts_derive_canonical_codes_without_migration(monkeypatch):
+    """Historical gift rows in DB seamlessly derive canonical GIFT_<59> public codes without migration."""
+    from app.config import settings
+
+    monkeypatch.setattr(settings, 'CABINET_URL', 'https://cabinet.example.com')
+    monkeypatch.setattr(settings, 'BOT_USERNAME', 'test_vpn_bot')
+    async with memory_session(monkeypatch, _TABLES) as db:
+        user = User(id=10, username='buyer')
+        tariff = Tariff(id=1, name='Standard')
+        historical_token = 'historical_token_64_characters_abcdefghijklmnopqrstuvwxyz012345'
+        p = GuestPurchase(
+            id=1,
+            token=historical_token,
+            contact_type='email',
+            contact_value='buyer@example.com',
+            tariff_id=1,
+            period_days=30,
+            amount_kopeks=20000,
+            is_gift=True,
+            status=GuestPurchaseStatus.PAID.value,
+            buyer_user_id=10,
+        )
+        db.add_all([user, tariff, p])
+        await db.commit()
+
+        res = await gift_routes.get_gift_purchase_status(token=historical_token[:12], user=user, db=db)
+        assert res.gift_code == f'GIFT_{historical_token[:59]}'
+        assert res.bot_claim_url == f'https://t.me/test_vpn_bot?start=GIFT_{historical_token[:59]}'
+        assert res.cabinet_claim_url == f'https://cabinet.example.com/buy/gift/{historical_token}'
+
+
+@pytest.mark.asyncio
+async def test_activate_gift_backward_compatibility_short_codes_and_canonical(monkeypatch):
+    """Cabinet /gift/activate endpoint accepts 8-char, 12-char, GIFT- prefix, canonical GIFT_, and full URLs."""
+    from app.cabinet.schemas.gift import ActivateGiftRequest
+
+    fake_activate_svc = AsyncMock()
+    monkeypatch.setattr('app.services.guest_purchase_service.activate_purchase', fake_activate_svc)
+
+    async with memory_session(monkeypatch, _TABLES) as db:
+        buyer = User(id=10, username='buyer')
+        claimant = User(id=20, username='claimant')
+        tariff = Tariff(id=1, name='Standard')
+        token = 'abcdefghij1234567890abcdefghijklmnopqrstuvwxyz0123456789abcdef01'
+        purchase = GuestPurchase(
+            id=1,
+            token=token,
+            contact_type='email',
+            contact_value='buyer@example.com',
+            tariff_id=1,
+            period_days=30,
+            amount_kopeks=20000,
+            is_gift=True,
+            status=GuestPurchaseStatus.PAID.value,
+            buyer_user_id=10,
+        )
+        db.add_all([buyer, claimant, tariff, purchase])
+        await db.commit()
+
+        # 1. 8-char prefix
+        res1 = await gift_routes.activate_gift_by_code(
+            body=ActivateGiftRequest(code=token[:8]),
+            user=claimant,
+            db=db,
+        )
+        assert res1.status == 'activated'
+        assert res1.tariff_name == 'Standard'
+        assert res1.period_days == 30
+        fake_activate_svc.assert_awaited()
+
+        # Reset purchase for next test
+        purchase.status = GuestPurchaseStatus.PAID.value
+        purchase.user_id = None
+        await db.commit()
+
+        # 2. Legacy GIFT-<12 chars> format
+        res2 = await gift_routes.activate_gift_by_code(
+            body=ActivateGiftRequest(code=f'GIFT-{token[:12]}'),
+            user=claimant,
+            db=db,
+        )
+        assert res2.status == 'activated'
+
+        # Reset purchase
+        purchase.status = GuestPurchaseStatus.PAID.value
+        purchase.user_id = None
+        await db.commit()
+
+        # 3. Canonical GIFT_<59 chars> code
+        res3 = await gift_routes.activate_gift_by_code(
+            body=ActivateGiftRequest(code=f'GIFT_{token[:59]}'),
+            user=claimant,
+            db=db,
+        )
+        assert res3.status == 'activated'
+
+        # Reset purchase
+        purchase.status = GuestPurchaseStatus.PAID.value
+        purchase.user_id = None
+        await db.commit()
+
+        # 4. Telegram deep link URL
+        res4 = await gift_routes.activate_gift_by_code(
+            body=ActivateGiftRequest(code=f'https://t.me/test_bot?start=GIFT_{token[:59]}'),
+            user=claimant,
+            db=db,
+        )
+        assert res4.status == 'activated'
+
+        # Reset purchase
+        purchase.status = GuestPurchaseStatus.PAID.value
+        purchase.user_id = None
+        await db.commit()
+
+        # 5. Web cabinet URL
+        res5 = await gift_routes.activate_gift_by_code(
+            body=ActivateGiftRequest(code=f'https://cabinet.example.com/buy/gift/{token}'),
+            user=claimant,
+            db=db,
+        )
+        assert res5.status == 'activated'

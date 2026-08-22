@@ -19,6 +19,7 @@ from app.database.models import (
     GuestPurchaseStatus,
     User,
 )
+from app.services.gift_history_service import list_sender_gifts
 from app.services.gift_purchase_service import (
     GiftFeatureDisabledError,
     GiftIdempotencyConflictError,
@@ -40,6 +41,11 @@ from app.services.guest_purchase_service import (
 )
 from app.services.payment_method_config_service import get_enabled_methods_for_user
 from app.utils.cache import RateLimitCache
+from app.utils.gift_links import (
+    InvalidGiftTokenError,
+    build_gift_claim_artifacts,
+    parse_gift_claim_input,
+)
 from app.utils.promo_offer import get_user_active_promo_discount_percent
 
 from ..dependencies import get_cabinet_db, get_current_cabinet_user
@@ -427,6 +433,9 @@ async def create_gift_purchase(
             purchase_token=purchase.token[:12],
             payment_url=payment_url,
             warning=recipient_warning,
+            gift_code=None,
+            bot_claim_url=None,
+            cabinet_claim_url=None,
         )
 
     # Balance mode: delegate to shared purchase_gift_from_balance
@@ -490,10 +499,21 @@ async def create_gift_purchase(
         except Exception:
             logger.warning('Failed to send gift claim notification', purchase_id=result.purchase.id)
 
+    bot_username = settings.get_bot_username()
+    cabinet_url = settings.CABINET_URL
+    artifacts = build_gift_claim_artifacts(
+        result.purchase.token,
+        bot_username=bot_username,
+        cabinet_url=cabinet_url,
+    )
+
     return GiftPurchaseResponse(
         status='ok',
         purchase_token=result.purchase.token[:12],
         warning=recipient_warning,
+        gift_code=artifacts.public_code,
+        bot_claim_url=artifacts.bot_claim_url,
+        cabinet_claim_url=artifacts.cabinet_claim_url,
     )
 
 
@@ -544,10 +564,13 @@ async def get_gift_purchase_status(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Get the status of a cabinet gift purchase."""
-    if len(token) >= 64:
-        token_filter = GuestPurchase.token == token
+    clean_token = token.strip()
+    if clean_token.upper().startswith(('GIFT_', 'GIFT-')):
+        clean_token = clean_token[5:]
+    if len(clean_token) >= 64:
+        token_filter = GuestPurchase.token == clean_token
     else:
-        token_filter = GuestPurchase.token.startswith(token)
+        token_filter = GuestPurchase.token.startswith(clean_token)
 
     result = await db.execute(select(GuestPurchase).options(selectinload(GuestPurchase.tariff)).where(token_filter))
     purchase = result.scalars().first()
@@ -579,6 +602,21 @@ async def get_gift_purchase_status(
         GuestPurchaseStatus.PENDING_ACTIVATION.value,
     )
 
+    gift_code: str | None = None
+    bot_claim_url: str | None = None
+    cabinet_claim_url: str | None = None
+    if is_claimable:
+        bot_username = settings.get_bot_username()
+        cabinet_url = settings.CABINET_URL
+        artifacts = build_gift_claim_artifacts(
+            purchase.token,
+            bot_username=bot_username,
+            cabinet_url=cabinet_url,
+        )
+        gift_code = artifacts.public_code
+        bot_claim_url = artifacts.bot_claim_url
+        cabinet_claim_url = artifacts.cabinet_claim_url
+
     return GiftPurchaseStatusResponse(
         status=purchase.status,
         is_gift=True,
@@ -590,6 +628,9 @@ async def get_gift_purchase_status(
         tariff_name=tariff_name,
         period_days=purchase.period_days,
         warning=purchase.recipient_warning,
+        gift_code=gift_code,
+        bot_claim_url=bot_claim_url,
+        cabinet_claim_url=cabinet_claim_url,
     )
 
 
@@ -599,35 +640,44 @@ async def get_sent_gifts(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Get all gifts the current user has sent."""
-    result = await db.execute(
-        select(GuestPurchase)
-        .options(selectinload(GuestPurchase.tariff), selectinload(GuestPurchase.user))
-        .where(
-            GuestPurchase.buyer_user_id == user.id,
-            GuestPurchase.is_gift.is_(True),
-        )
-        .order_by(GuestPurchase.created_at.desc())
-        .limit(100)
-    )
-    purchases = result.scalars().all()
+    items, _total_count = await list_sender_gifts(db, buyer_id=user.id, offset=0, limit=100)
+
+    bot_username = settings.get_bot_username()
+    cabinet_url = settings.CABINET_URL
 
     sent: list[SentGiftResponse] = []
-    for p in purchases:
+    for item in items:
         activated_by_username = None
-        if p.status == GuestPurchaseStatus.DELIVERED.value and p.user and p.user.username:
-            activated_by_username = f'@{p.user.username}'
+        if item.is_delivered and item.recipient_display and item.recipient_display.startswith('@'):
+            activated_by_username = item.recipient_display
+
+        gift_code: str | None = None
+        bot_claim_url: str | None = None
+        cabinet_claim_url: str | None = None
+        if item.is_claimable:
+            artifacts = build_gift_claim_artifacts(
+                item.token,
+                bot_username=bot_username,
+                cabinet_url=cabinet_url,
+            )
+            gift_code = artifacts.public_code
+            bot_claim_url = artifacts.bot_claim_url
+            cabinet_claim_url = artifacts.cabinet_claim_url
 
         sent.append(
             SentGiftResponse(
-                token=p.token[:12],
-                tariff_name=p.tariff.name if p.tariff else None,
-                period_days=p.period_days,
-                device_limit=p.tariff.device_limit if p.tariff else 1,
-                status=p.status,
-                gift_recipient_value=p.gift_recipient_value,
-                gift_message=p.gift_message,
+                token=item.token[:12],
+                tariff_name=item.tariff_name,
+                period_days=item.period_days,
+                device_limit=item.device_limit,
+                status=item.status,
+                gift_recipient_value=item.gift_recipient_value,
+                gift_message=item.gift_message,
                 activated_by_username=activated_by_username,
-                created_at=p.created_at,
+                created_at=item.created_at,
+                gift_code=gift_code,
+                bot_claim_url=bot_claim_url,
+                cabinet_claim_url=cabinet_claim_url,
             )
         )
 
@@ -690,19 +740,21 @@ async def activate_gift_by_code(
     if is_limited:
         raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail='Too many requests')
 
-    code = body.code.strip()
-    if code.upper().startswith('GIFT-') or code.upper().startswith('GIFT_'):
-        code = code[5:]
-
-    if len(code) < 8:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Code too short')
+    raw_code = body.code.strip()
+    try:
+        code = parse_gift_claim_input(raw_code, allow_legacy_short=True)
+    except InvalidGiftTokenError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Code too short' if len(raw_code) < 8 else 'Invalid gift code',
+        ) from exc
 
     # Support both full token and prefix-based lookup (displayed codes are truncated)
     if len(code) >= 64:
         # Full token — exact match
         token_filter = GuestPurchase.token == code
     else:
-        # Prefix match — for short display codes like GIFT-XXXXXXXXXXXX
+        # Prefix match — for short display codes like GIFT-XXXXXXXXXXXX or canonical GIFT_<59_chars>
         token_filter = GuestPurchase.token.startswith(code)
 
     result = await db.execute(

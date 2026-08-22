@@ -27,7 +27,9 @@ from app.services.guest_purchase_service import (
 from app.services.payment_method_config_service import _get_method_defaults
 from app.services.payment_service import PaymentService
 from app.utils.cache import RateLimitCache, cache
-from app.utils.gift_links import build_bot_gift_claim_link, build_cabinet_gift_claim_link
+from app.utils.gift_links import (
+    build_gift_claim_artifacts,
+)
 
 
 logger = structlog.get_logger(__name__)
@@ -204,6 +206,9 @@ class PurchaseStatusResponse(BaseModel):
     is_claimable: bool = False
     claim_url: str | None = None
     bot_claim_link: str | None = None
+    gift_code: str | None = None
+    bot_claim_url: str | None = None
+    cabinet_claim_url: str | None = None
 
 
 class GiftClaimRequest(BaseModel):
@@ -316,18 +321,27 @@ def _build_purchase_status_response(purchase: GuestPurchase) -> PurchaseStatusRe
     )
     claim_url: str | None = None
     bot_claim_link: str | None = None
+    gift_code: str | None = None
+    bot_claim_url: str | None = None
+    cabinet_claim_url: str | None = None
+
     if is_claimable:
-        if settings.CABINET_URL:
-            try:
-                claim_url = build_cabinet_gift_claim_link(purchase.token, settings.CABINET_URL)
-            except Exception:
-                claim_url = None
         bot_username = settings.get_bot_username()
-        if bot_username:
-            try:
-                bot_claim_link = build_bot_gift_claim_link(purchase.token, bot_username)
-            except Exception:
-                bot_claim_link = None
+        cabinet_url = settings.CABINET_URL
+        try:
+            artifacts = build_gift_claim_artifacts(
+                purchase.token,
+                bot_username=bot_username,
+                cabinet_url=cabinet_url,
+            )
+            gift_code = artifacts.public_code
+            bot_claim_url = artifacts.bot_claim_url
+            cabinet_claim_url = artifacts.cabinet_claim_url
+            # Keep legacy fields populated with exact values for backwards compatibility
+            claim_url = artifacts.cabinet_claim_url
+            bot_claim_link = artifacts.bot_claim_url
+        except Exception:
+            pass
 
     return PurchaseStatusResponse(
         status=purchase.status,
@@ -348,6 +362,9 @@ def _build_purchase_status_response(purchase: GuestPurchase) -> PurchaseStatusRe
         is_claimable=is_claimable,
         claim_url=claim_url,
         bot_claim_link=bot_claim_link,
+        gift_code=gift_code,
+        bot_claim_url=bot_claim_url,
+        cabinet_claim_url=cabinet_claim_url,
     )
 
 
