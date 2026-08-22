@@ -83,6 +83,9 @@ class TestGiftButtonFallbacks:
         tariff_btn = next(b for b in buttons if b.callback_data == 'gift_tariff:1')
         assert tariff_btn.text == 'Standard'
 
+        enter_code_btn = next(b for b in buttons if b.callback_data == 'gift_enter_code')
+        assert enter_code_btn.text == '🎁 Активировать код'
+
         cancel_btn = next(b for b in buttons if b.callback_data == 'gift_cancel')
         assert cancel_btn.text == '❌ Отмена'
 
@@ -134,9 +137,11 @@ class TestGiftButtonFallbacks:
         assert cancel_btn.text == '❌ Отмена'
 
     def test_reusable_button_keys_fallback_defaults(self):
-        """Verify fallback strings for shared result and cart buttons."""
+        """Verify fallback strings for shared result, cart, and activation buttons."""
         texts = get_texts('ru')
         assert texts.t('GIFT_SEND_BUTTON', '🎁 Отправить подарок') == '🎁 Отправить подарок'
         assert texts.t('GIFT_OPEN_BUTTON', '🔗 Открыть подарок') == '🔗 Открыть подарок'
         assert texts.t('GIFT_BACK_TO_SUBSCRIPTION_BUTTON', '◀️ К подписке') == '◀️ К подписке'
         assert texts.t('GIFT_RETURN_TO_CART_BUTTON', '🎁 Вернуться к подарку') == '🎁 Вернуться к подарку'
+        assert texts.t('GIFT_ENTER_CODE_BUTTON', '🎁 Активировать код') == '🎁 Активировать код'
+        assert texts.t('GIFT_ACTIVATION_CANCEL_BUTTON', '❌ Отмена') == '❌ Отмена'

@@ -2187,5 +2187,9 @@
   "GIFT_ACTIVATION_GENERIC_ERROR": "❌ خطایی هنگام فعال‌سازی هدیه رخ داد. لطفاً از طریق پنل کاربری اقدام کنید.",
   "GIFT_ACTIVATION_NOT_FOUND": "هدیه یافت نشد یا در دسترس نیست.",
   "GIFT_ACTIVATION_IN_PROGRESS": "⏳ در حال فعال‌سازی هدیه...",
-  "GIFT_ACTIVATION_OBSOLETE_MESSAGE": "پیام منقضی شده است. /start را امتحان کنید."
+  "GIFT_ACTIVATION_OBSOLETE_MESSAGE": "پیام منقضی شده است. /start را امتحان کنید.",
+  "GIFT_ENTER_CODE_BUTTON": "🎁 فعال‌سازی کد",
+  "GIFT_ACTIVATION_CANCEL_BUTTON": "❌ لغو",
+  "GIFT_ENTER_CODE_PROMPT": "🎁 <b>فعال‌سازی هدیه</b>\n\nکد هدیه یا لینک دریافتی را ارسال کنید:",
+  "GIFT_ACTIVATION_NON_TEXT_ERROR": "⚠️ لطفاً کد یا لینک هدیه متنی را ارسال کنید."
 }

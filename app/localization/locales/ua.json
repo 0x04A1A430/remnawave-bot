@@ -2178,5 +2178,18 @@
   "GIFT_INSUFFICIENT_BALANCE_TITLE": "💰 <b>Недостатньо коштів для оформлення подарунка</b>\n\nПотрібно: <b>{required}</b>\nУ вас: <b>{balance}</b>\nНе вистачає: <b>{missing}</b>\n\n🛒 <i>Ваш кошик збережено! Після поповнення балансу ви зможете повернутися до оформлення подарунка.</i>\n\nОберіть спосіб поповнення:",
   "GIFT_CART_EXPIRED": "❌ Термін дії збереженого кошика подарунка минув.",
   "GIFT_CART_INVALID": "❌ Збережений подарунок недоступний або некоректний.",
-  "GIFT_AUTO_PURCHASE_FAILED": "❌ Не вдалося автоматично оформити подарунок: обраний тариф або послуга більше недоступні."
+  "GIFT_AUTO_PURCHASE_FAILED": "❌ Не вдалося автоматично оформити подарунок: обраний тариф або послуга більше недоступні.",
+  "GIFT_ACTIVATION_SUCCESS_TEXT": "🎁 <b>Подарунок активовано!</b>\n{tariff_name} — {period_days} дн.\n\nВашу підписку оновлено.",
+  "GIFT_ACTIVATION_CALLBACK_SUCCESS_TEXT": "✅ <b>Подарунок активовано!</b>\n{tariff_text}\n\nВашу підписку оновлено.",
+  "GIFT_ACTIVATION_SELF_CLAIM_ERROR": "⚠️ Не можна активувати свій власний подарунок.\nНадішліть код другу!",
+  "GIFT_ACTIVATION_ALREADY_OWNED_ERROR": "ℹ️ Цей подарунок вже був активований.",
+  "GIFT_ACTIVATION_NOT_ACTIVATABLE_ERROR": "❌ Цей подарунок неможливо активувати.",
+  "GIFT_ACTIVATION_GENERIC_ERROR": "❌ Сталася помилка під час активації подарунка. Спробуйте активувати через особистий кабінет.",
+  "GIFT_ACTIVATION_NOT_FOUND": "Подарунок не знайдено або недоступний.",
+  "GIFT_ACTIVATION_IN_PROGRESS": "⏳ Активуємо подарунок...",
+  "GIFT_ACTIVATION_OBSOLETE_MESSAGE": "Повідомлення застаріло. Спробуйте /start.",
+  "GIFT_ENTER_CODE_BUTTON": "🎁 Активувати код",
+  "GIFT_ACTIVATION_CANCEL_BUTTON": "❌ Скасувати",
+  "GIFT_ENTER_CODE_PROMPT": "🎁 <b>Активація подарунка</b>\n\nНадішліть код подарунка або отримане посилання:",
+  "GIFT_ACTIVATION_NON_TEXT_ERROR": "⚠️ Будь ласка, надішліть текстовий код або посилання на подарунок."
 }

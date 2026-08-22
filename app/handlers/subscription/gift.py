@@ -18,6 +18,13 @@ from app.database.models import GuestPurchase, GuestPurchaseStatus, User
 from app.handlers.subscription.purchase import show_subscription_info
 from app.keyboards.inline import get_insufficient_balance_keyboard
 from app.localization.texts import get_texts
+from app.services.gift_claim_service import (
+    GiftClaimAlreadyOwnedError,
+    GiftClaimNotActivatableError,
+    GiftClaimNotFoundError,
+    GiftClaimSelfActivationError,
+    claim_gift_for_user,
+)
 from app.services.gift_notification_service import (
     build_gift_result_presentation,
     resolve_gift_claim_channel,
@@ -37,8 +44,9 @@ from app.services.gift_purchase_service import (
     purchase_gift_from_balance,
     quote_gift_purchase,
 )
+from app.services.guest_purchase_service import GuestPurchaseError
 from app.services.user_cart_service import user_cart_service
-from app.states import GiftPurchaseStates
+from app.states import GiftActivationStates, GiftPurchaseStates
 
 
 logger = structlog.get_logger(__name__)
@@ -60,6 +68,14 @@ def _render_tariff_catalog(db_user: User, offers: list[GiftTariffOffer]) -> tupl
         tariff_label = texts.t('GIFT_TARIFF_CHOICE_BUTTON', '{tariff_name}').format(tariff_name=offer.tariff_name)
         buttons.append([InlineKeyboardButton(text=tariff_label, callback_data=f'gift_tariff:{offer.tariff_id}')])
 
+    buttons.append(
+        [
+            InlineKeyboardButton(
+                text=texts.t('GIFT_ENTER_CODE_BUTTON', '🎁 Активировать код'),
+                callback_data='gift_enter_code',
+            )
+        ]
+    )
     buttons.append([InlineKeyboardButton(text=texts.t('GIFT_CANCEL_BUTTON', '❌ Отмена'), callback_data='gift_cancel')])
 
     return text, InlineKeyboardMarkup(inline_keyboard=buttons)
@@ -205,10 +221,16 @@ async def handle_gift_catalog(
             inline_keyboard=[
                 [
                     InlineKeyboardButton(
+                        text=texts.t('GIFT_ENTER_CODE_BUTTON', '🎁 Активировать код'),
+                        callback_data='gift_enter_code',
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
                         text=texts.t('GIFT_CANCEL_BUTTON', '❌ Отмена'),
                         callback_data='gift_cancel',
                     )
-                ]
+                ],
             ]
         )
         await callback.message.edit_text(
@@ -878,12 +900,199 @@ async def handle_return_to_gift_cart(
         await callback.answer()
 
 
+async def handle_gift_enter_code(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext,
+) -> None:
+    """Prompt user to manually enter gift code or link."""
+    if isinstance(callback.message, InaccessibleMessage):
+        await callback.answer()
+        return
+
+    texts = get_texts(db_user.language)
+    await state.set_state(GiftActivationStates.waiting_for_code)
+
+    text = texts.t(
+        'GIFT_ENTER_CODE_PROMPT',
+        '🎁 <b>Активация подарка</b>\n\nОтправьте код подарка или полученную ссылку:',
+    )
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text=texts.t('GIFT_ACTIVATION_CANCEL_BUTTON', '❌ Отмена'),
+                    callback_data='gift_activation_cancel',
+                )
+            ]
+        ]
+    )
+    try:
+        await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='HTML')
+    except Exception:
+        await callback.message.answer(text, reply_markup=keyboard, parse_mode='HTML')
+    await callback.answer()
+
+
+async def handle_gift_activation_cancel(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext,
+) -> None:
+    """Cancel manual code entry and return to gift catalog view."""
+    if isinstance(callback.message, InaccessibleMessage):
+        await callback.answer()
+        return
+
+    await state.set_state(None)
+    await handle_gift_catalog(callback, db_user, db, state)
+
+
+async def handle_gift_code_input(
+    message: types.Message,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext,
+) -> None:
+    """Handle manual gift code or link input in GiftActivationStates.waiting_for_code."""
+    texts = get_texts(db_user.language)
+    cancel_kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text=texts.t('GIFT_ACTIVATION_CANCEL_BUTTON', '❌ Отмена'),
+                    callback_data='gift_activation_cancel',
+                )
+            ]
+        ]
+    )
+
+    if not message.text:
+        await message.answer(
+            texts.t(
+                'GIFT_ACTIVATION_NON_TEXT_ERROR',
+                '⚠️ Пожалуйста, отправьте текстовый код или ссылку на подарок.',
+            ),
+            reply_markup=cancel_kb,
+            parse_mode='HTML',
+        )
+        return
+
+    raw_input = message.text.strip()
+
+    try:
+        purchase = await claim_gift_for_user(
+            db,
+            claimant_user_id=db_user.id,
+            claim_input=raw_input,
+            allow_legacy_short=False,
+        )
+    except GiftClaimNotFoundError:
+        await message.answer(
+            texts.t(
+                'GIFT_ACTIVATION_NOT_FOUND',
+                'Подарок не найден или недоступен.',
+            ),
+            reply_markup=cancel_kb,
+            parse_mode='HTML',
+        )
+        return
+    except GiftClaimSelfActivationError:
+        await message.answer(
+            texts.t(
+                'GIFT_ACTIVATION_SELF_CLAIM_ERROR',
+                '⚠️ Нельзя активировать свой собственный подарок.\nОтправьте код другу!',
+            ),
+            reply_markup=cancel_kb,
+            parse_mode='HTML',
+        )
+        return
+    except GiftClaimAlreadyOwnedError:
+        await message.answer(
+            texts.t(
+                'GIFT_ACTIVATION_ALREADY_OWNED_ERROR',
+                'ℹ️ Этот подарок уже был активирован.',
+            ),
+            reply_markup=cancel_kb,
+            parse_mode='HTML',
+        )
+        return
+    except GiftClaimNotActivatableError:
+        await message.answer(
+            texts.t(
+                'GIFT_ACTIVATION_NOT_ACTIVATABLE_ERROR',
+                '❌ Этот подарок невозможно активировать.',
+            ),
+            reply_markup=cancel_kb,
+            parse_mode='HTML',
+        )
+        return
+    except GuestPurchaseError as exc:
+        logger.warning(
+            'Gift code activation failed with guest purchase error',
+            claimant_user_id=db_user.id,
+            error=exc.message,
+        )
+        if exc.status_code >= 500:
+            msg_text = texts.t(
+                'GIFT_ACTIVATION_GENERIC_ERROR',
+                '❌ Произошла ошибка при активации подарка. Попробуйте активировать через личный кабинет.',
+            )
+        else:
+            msg_text = f'Не удалось активировать подарок: {html.escape(exc.message)}'
+        await message.answer(msg_text, reply_markup=cancel_kb, parse_mode='HTML')
+        return
+    except Exception:
+        logger.exception(
+            'Unexpected error during gift code activation',
+            claimant_user_id=db_user.id,
+        )
+        await message.answer(
+            texts.t(
+                'GIFT_ACTIVATION_GENERIC_ERROR',
+                '❌ Произошла ошибка при активации подарка. Попробуйте активировать через личный кабинет.',
+            ),
+            reply_markup=cancel_kb,
+            parse_mode='HTML',
+        )
+        return
+
+    await state.clear()
+
+    tariff_name = html.escape(purchase.tariff.name) if purchase.tariff and purchase.tariff.name else ''
+    period_days = purchase.period_days or 0
+    success_text = texts.t(
+        'GIFT_ACTIVATION_SUCCESS_TEXT',
+        '🎁 <b>Подарок активирован!</b>\n{tariff_name} — {period_days} дн.\n\nВаша подписка обновлена.',
+    ).format(tariff_name=tariff_name, period_days=period_days)
+
+    success_kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text=texts.t('GIFT_BACK_TO_SUBSCRIPTION_BUTTON', '◀️ К подписке'),
+                    callback_data='menu_subscription',
+                ),
+                InlineKeyboardButton(
+                    text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '⬅️ В главное меню'),
+                    callback_data='back_to_menu',
+                ),
+            ]
+        ]
+    )
+    await message.answer(success_text, reply_markup=success_kb, parse_mode='HTML')
+
+
 # ── Handler Registration ───────────────────────────────────────────────────
 
 
 def register_gift_handlers(dp: Dispatcher) -> None:
-    """Register all gift purchase and navigation callback handlers."""
+    """Register all gift purchase, navigation, and code activation handlers."""
     dp.callback_query.register(handle_gift_catalog, F.data == 'subscription_gift')
+    dp.callback_query.register(handle_gift_enter_code, F.data == 'gift_enter_code')
+    dp.callback_query.register(handle_gift_activation_cancel, F.data == 'gift_activation_cancel')
     dp.callback_query.register(handle_gift_tariff_select, F.data.startswith('gift_tariff:'))
     dp.callback_query.register(handle_gift_period_select, F.data.startswith('gift_period:'))
     dp.callback_query.register(handle_gift_back_tariffs, F.data == 'gift_back_tariffs')
@@ -891,3 +1100,4 @@ def register_gift_handlers(dp: Dispatcher) -> None:
     dp.callback_query.register(handle_gift_cancel, F.data == 'gift_cancel')
     dp.callback_query.register(handle_gift_confirm, F.data == 'gift_confirm')
     dp.callback_query.register(handle_return_to_gift_cart, F.data == 'return_to_gift_cart')
+    dp.message.register(handle_gift_code_input, GiftActivationStates.waiting_for_code)

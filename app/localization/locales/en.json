@@ -2187,5 +2187,9 @@
   "GIFT_ACTIVATION_GENERIC_ERROR": "❌ An error occurred while activating the gift. Please try activating via the personal cabinet.",
   "GIFT_ACTIVATION_NOT_FOUND": "Gift not found or unavailable.",
   "GIFT_ACTIVATION_IN_PROGRESS": "⏳ Activating gift...",
-  "GIFT_ACTIVATION_OBSOLETE_MESSAGE": "Message is outdated. Try /start."
+  "GIFT_ACTIVATION_OBSOLETE_MESSAGE": "Message is outdated. Try /start.",
+  "GIFT_ENTER_CODE_BUTTON": "🎁 Activate code",
+  "GIFT_ACTIVATION_CANCEL_BUTTON": "❌ Cancel",
+  "GIFT_ENTER_CODE_PROMPT": "🎁 <b>Gift activation</b>\n\nSend the gift code or the link you received:",
+  "GIFT_ACTIVATION_NON_TEXT_ERROR": "⚠️ Please send a text gift code or link."
 }

@@ -2187,5 +2187,9 @@
   "GIFT_ACTIVATION_GENERIC_ERROR": "❌ 激活礼物时出错。请尝试通过个人中心激活。",
   "GIFT_ACTIVATION_NOT_FOUND": "未找到礼物或不可用。",
   "GIFT_ACTIVATION_IN_PROGRESS": "⏳ 正在激活礼物...",
-  "GIFT_ACTIVATION_OBSOLETE_MESSAGE": "消息已过期。请尝试 /start。"
+  "GIFT_ACTIVATION_OBSOLETE_MESSAGE": "消息已过期。请尝试 /start。",
+  "GIFT_ENTER_CODE_BUTTON": "🎁 激活兑换码",
+  "GIFT_ACTIVATION_CANCEL_BUTTON": "❌ 取消",
+  "GIFT_ENTER_CODE_PROMPT": "🎁 <b>激活礼物</b>\n\n请发送礼物兑换码或您收到的链接：",
+  "GIFT_ACTIVATION_NON_TEXT_ERROR": "⚠️ 请发送文本格式的兑换码或链接。"
 }

@@ -42,6 +42,10 @@ class GiftPurchaseStates(StatesGroup):
     cart_saved_for_topup = State()
 
 
+class GiftActivationStates(StatesGroup):
+    waiting_for_code = State()
+
+
 class BalanceStates(StatesGroup):
     waiting_for_amount = State()
     waiting_for_pal24_method = State()

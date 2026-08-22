@@ -271,6 +271,10 @@ class TestSubscriptionGiftCatalogFlow:
             assert mock_callback.message.edit_text.called
             text = mock_callback.message.edit_text.call_args[0][0]
             assert 'нет доступных' in text.lower() or 'unavailable' in text.lower()
+            reply_markup = mock_callback.message.edit_text.call_args[1].get('reply_markup')
+            assert reply_markup is not None
+            assert 'gift_enter_code' in _callbacks(reply_markup)
+            assert 'gift_cancel' in _callbacks(reply_markup)
 
     @pytest.mark.asyncio
     async def test_gift_catalog_renders_offers_and_sets_state(self, mock_callback, mock_db_user, mock_db, memory_state):
@@ -308,6 +312,7 @@ class TestSubscriptionGiftCatalogFlow:
             callbacks = _callbacks(reply_markup)
             assert 'gift_tariff:1' in callbacks
             assert 'gift_tariff:2' in callbacks
+            assert 'gift_enter_code' in callbacks
             assert 'gift_cancel' in callbacks
 
             # FSM state check
@@ -561,9 +566,11 @@ class TestGiftHandlerRegistrationAndCollision:
         callback_handlers = dp.callback_query.handlers
 
         # Prove exact prefix filters without collision:
-        # Gift purchase handles: 'subscription_gift', 'gift_tariff:', 'gift_period:',
-        # 'gift_back_tariffs', 'gift_back_periods', 'gift_cancel', 'gift_confirm', 'return_to_gift_cart'
+        # Gift purchase handles: 'subscription_gift', 'gift_enter_code', 'gift_activation_cancel',
+        # 'gift_tariff:', 'gift_period:', 'gift_back_tariffs', 'gift_back_periods', 'gift_cancel',
+        # 'gift_confirm', 'return_to_gift_cart'
         # Gift activation handles: 'gift_activate:'
         # There must be no handler matching a raw 'gift_' that would intercept both.
         registered_filters = [h.filters for h in callback_handlers]
-        assert len(registered_filters) >= 8
+        assert len(registered_filters) >= 10
+        assert len(dp.message.handlers) >= 1
