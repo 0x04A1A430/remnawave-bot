@@ -2168,8 +2168,8 @@
   "GIFT_INVALID_SELECTION": "选择参数无效。",
   "GIFT_GENERIC_ERROR": "处理礼物时出错，请稍后重试。",
   "GIFT_TRAFFIC_UNLIMITED": "∞ (无限制)",
-  "GIFT_PURCHASE_SUCCESS_TEXT": "🎁 <b>礼物已成功创建！</b>\n\n📦 套餐：<b>{tariff_name}</b>\n📅 时长：<b>{period_days} 天</b>\n📊 流量：<b>{traffic}</b>\n📱 设备数：<b>{devices}</b>\n\n🔗 礼物链接：\n{claim_link}\n\n将此链接发送给接收者或使用下方的“发送礼物”按钮。接收者可一键激活订阅。",
-  "GIFT_PURCHASE_REPLAY_TEXT": "🎁 <b>此礼物此前已成功创建</b>\n\n📦 套餐：<b>{tariff_name}</b>\n📅 时长：<b>{period_days} 天</b>\n📊 流量：<b>{traffic}</b>\n📱 设备数：<b>{devices}</b>\n\n🔗 礼物链接：\n{claim_link}\n\n将此链接发送给接收者或使用下方的“发送礼物”按钮。",
+  "GIFT_PURCHASE_SUCCESS_TEXT": "🎁 <b>礼物已成功创建！</b>\n\n📦 套餐：<b>{tariff_name}</b>\n📅 时长：<b>{period_days} 天</b>\n📊 流量：<b>{traffic}</b>\n📱 设备数：<b>{devices}</b>\n🔑 礼物代码：<code>{public_code}</code>\n\n🔗 礼物链接：\n{claim_link}\n\n将此链接发送给接收者或使用下方的“发送礼物”按钮。接收者可一键激活订阅。",
+  "GIFT_PURCHASE_REPLAY_TEXT": "🎁 <b>该礼物之前已创建</b>\n\n📦 套餐：<b>{tariff_name}</b>\n📅 时长：<b>{period_days} 天</b>\n📊 流量：<b>{traffic}</b>\n📱 设备数：<b>{devices}</b>\n🔑 礼物代码：<code>{public_code}</code>\n\n🔗 礼物链接：\n{claim_link}\n\n将此链接发送给接收者或使用下方的“发送礼物”按钮。",
   "GIFT_SHARE_TEXT": "🎁 嗨！我送你一份 {tariff_name}（{period_days} 天）的订阅。点击链接即可激活！",
   "GIFT_PRICE_CHANGED_ERROR": "⚠️ 所选套餐的价格已发生变动，请重新确认购买。",
   "GIFT_INSUFFICIENT_BALANCE_ERROR": "❌ 余额不足。需要：{required}，可用：{available}。",
@@ -2211,5 +2211,8 @@
   "GIFT_MY_DELIVERED_AT_LINE": "🎉 激活时间：<b>{delivered_at}</b>\n",
   "GIFT_MY_RECIPIENT_LINE": "👤 接收者：<b>{recipient_display}</b>\n",
   "GIFT_TARIFF_DELETED": "已归档套餐",
-  "GIFT_TARIFF_DEFAULT_NAME": "VPN"
+  "GIFT_TARIFF_DEFAULT_NAME": "VPN",
+  "GIFT_FEATURE_DISABLED_NO_HISTORY": "🎁 <b>礼物</b>\n\n暂时无法购买新礼物，但您可以激活已收到的礼物代码。",
+  "GIFT_OPEN_BOT_BUTTON": "🤖 在机器人中打开",
+  "GIFT_OPEN_CABINET_BUTTON": "🌐 在控制台中打开"
 }

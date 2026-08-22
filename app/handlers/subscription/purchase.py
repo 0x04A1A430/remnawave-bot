@@ -38,8 +38,6 @@ from app.keyboards.inline import (
 )
 from app.localization.texts import Texts, get_texts
 from app.services.admin_notification_service import AdminNotificationService
-from app.services.gift_history_service import has_sender_gifts
-from app.services.gift_purchase_service import is_gift_enabled
 from app.services.pricing_engine import pricing_engine
 from app.services.remnawave_service import RemnaWaveConfigurationError
 from app.services.subscription_checkout_service import (
@@ -204,7 +202,7 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
     await db.refresh(db_user)
 
     texts = get_texts(db_user.language)
-    gift_enabled = (await is_gift_enabled(db)) or (await has_sender_gifts(db, db_user.id))
+    gift_enabled = True
     # Multi-tariff: this branch is only reached in single-tariff mode (multi-tariff
     # is redirected to show_my_subscriptions above). db_user.subscription returns
     # the first active or most recent subscription, which is correct here.

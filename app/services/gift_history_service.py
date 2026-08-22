@@ -24,7 +24,7 @@ if TYPE_CHECKING:
 
 DEFAULT_HISTORY_LIMIT: int = 10
 MIN_HISTORY_LIMIT: int = 1
-MAX_HISTORY_LIMIT: int = 50
+MAX_HISTORY_LIMIT: int = 500
 
 ELIGIBLE_GIFT_HISTORY_STATUSES: tuple[str, ...] = (
     GuestPurchaseStatus.PAID.value,
@@ -48,29 +48,23 @@ def _mask_contact(value: str) -> str:
 def format_safe_recipient(user: User | None, gift_recipient_value: str | None = None) -> str | None:
     """Format a privacy-safe recipient representation for display.
 
-    For delivered gifts claimed by an authenticated user:
-    - Uses ``@username`` if available
-    - Uses first name (and optional last name) if available
-    - Uses masked email if email-only account
-    - Uses ``ID: <telegram_id>`` if no name/username is present
-
-    For directed gifts without a claimed user record:
-    - Uses masked ``gift_recipient_value`` if present
+    Only public @username or masked email are permitted.
+    Full names, first/last names, and Telegram IDs are never revealed to the sender.
+    If no safe identifier exists, returns None so only status is shown.
     """
     if user is not None:
         if user.username:
             clean_username = user.username.lstrip('@')
             return f'@{clean_username}'
-        name_parts = [p for p in (user.first_name, user.last_name) if p]
-        if name_parts:
-            return ' '.join(name_parts)
         if user.email:
             return _mask_contact(user.email)
-        if user.telegram_id:
-            return f'ID: {user.telegram_id}'
+        return None
 
     if gift_recipient_value:
-        return _mask_contact(gift_recipient_value)
+        if '@' in gift_recipient_value and not gift_recipient_value.startswith('@'):
+            return _mask_contact(gift_recipient_value)
+        if gift_recipient_value.startswith('@'):
+            return gift_recipient_value
 
     return None
 

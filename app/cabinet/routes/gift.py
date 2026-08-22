@@ -422,7 +422,7 @@ async def create_gift_purchase(
             await db.rollback()
             logger.error(
                 'Gift payment created but no payment_url returned',
-                purchase_token=purchase.token[:5],
+                purchase_id=purchase.id,
                 provider=payment_result.get('provider'),
             )
             raise HTTPException(

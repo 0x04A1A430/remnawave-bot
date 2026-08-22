@@ -389,10 +389,10 @@ async def test_list_sender_gifts_pagination_and_boundary_clamping(monkeypatch):
         clamped_low, _ = await list_sender_gifts(db, buyer_id=buyer.id, offset=0, limit=-5)
         assert len(clamped_low) == MIN_HISTORY_LIMIT
 
-        # Boundary clamping: limit > MAX_HISTORY_LIMIT (50) clamped to MAX_HISTORY_LIMIT
+        # Boundary clamping: limit > MAX_HISTORY_LIMIT (500) clamped to MAX_HISTORY_LIMIT
         clamped_high, _ = await list_sender_gifts(db, buyer_id=buyer.id, offset=0, limit=999)
         assert len(clamped_high) == 12  # returns all 12 without error
-        assert MAX_HISTORY_LIMIT == 50
+        assert MAX_HISTORY_LIMIT == 500
         assert DEFAULT_HISTORY_LIMIT == 10
 
         # Negative offset clamped to 0
@@ -436,7 +436,7 @@ async def test_list_sender_gifts_graceful_on_missing_deleted_tariff(monkeypatch)
 
 @pytest.mark.asyncio
 async def test_safe_recipient_display_formatting(monkeypatch):
-    """Safe recipient display formats username, name, or masked identifier without leaking private data."""
+    """Safe recipient display formats username or masked email without leaking private data (names, IDs)."""
     async with memory_session(monkeypatch, _TABLES) as db:
         buyer = await _create_test_user(db, telegram_id=1001)
         tariff = await _create_test_tariff(db)
@@ -460,7 +460,7 @@ async def test_safe_recipient_display_formatting(monkeypatch):
             delivered_at=now,
         )
 
-        # 2. Delivered to user with name only (no username)
+        # 2. Delivered to user with name only (no username, no email) -> must NOT reveal name!
         user_with_name = await _create_test_user(
             db, telegram_id=2002, first_name='Ivan', last_name='Petrov', username=None
         )
@@ -480,7 +480,7 @@ async def test_safe_recipient_display_formatting(monkeypatch):
             delivered_at=now,
         )
 
-        # 3. Delivered to email-only user
+        # 3. Delivered to email-only user -> masked email
         user_with_email = await _create_test_user(db, telegram_id=None, email='supersecret@domain.com', username=None)
         p3 = GuestPurchase(
             token=TOKEN_3,
@@ -530,7 +530,7 @@ async def test_safe_recipient_display_formatting(monkeypatch):
             created_at=now,
         )
 
-        # 6. Delivered to user with only telegram_id (no username, no names)
+        # 6. Delivered to user with only telegram_id (no username, no email) -> must NOT reveal ID!
         user_id_only = await _create_test_user(db, telegram_id=987654321)
         p6 = GuestPurchase(
             token=TOKEN_6,
@@ -557,7 +557,7 @@ async def test_safe_recipient_display_formatting(monkeypatch):
 
         item2 = await get_sender_gift(db, buyer_id=buyer.id, purchase_id=p2.id)
         assert item2 is not None
-        assert item2.recipient_display == 'Ivan Petrov'
+        assert item2.recipient_display is None  # No leak of Ivan Petrov!
 
         item3 = await get_sender_gift(db, buyer_id=buyer.id, purchase_id=p3.id)
         assert item3 is not None
@@ -566,7 +566,7 @@ async def test_safe_recipient_display_formatting(monkeypatch):
 
         item4 = await get_sender_gift(db, buyer_id=buyer.id, purchase_id=p4.id)
         assert item4 is not None
-        assert item4.recipient_display == '@tar***'
+        assert item4.recipient_display == '@target_friend'
 
         item5 = await get_sender_gift(db, buyer_id=buyer.id, purchase_id=p5.id)
         assert item5 is not None
@@ -574,11 +574,13 @@ async def test_safe_recipient_display_formatting(monkeypatch):
 
         item6 = await get_sender_gift(db, buyer_id=buyer.id, purchase_id=p6.id)
         assert item6 is not None
-        assert item6.recipient_display == 'ID: 987654321'
+        assert item6.recipient_display is None  # No leak of Telegram ID!
 
         # Direct helper check
         assert format_safe_recipient(None, None) is None
         assert format_safe_recipient(user_with_username) == '@cool_user'
+        assert format_safe_recipient(user_with_name) is None
+        assert format_safe_recipient(user_id_only) is None
 
 
 @pytest.mark.asyncio

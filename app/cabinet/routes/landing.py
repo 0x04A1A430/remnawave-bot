@@ -923,7 +923,7 @@ async def create_landing_purchase(
         await db.rollback()
         logger.error(
             'Payment created but no payment_url returned',
-            purchase_token=purchase.token[:5],
+            purchase_id=purchase.id,
             provider=payment_result.get('provider'),
         )
         raise HTTPException(

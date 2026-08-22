@@ -144,13 +144,12 @@ def _render_history_list(
     for item in items:
         status_emoji = '✅' if item.is_delivered else '⏳'
         raw_name = item.tariff_name or texts.t('GIFT_TARIFF_DELETED', 'Архивный тариф')
-        tariff_name = html.escape(raw_name)
         item_label = texts.t(
             'GIFT_MY_ITEM_BUTTON',
             '{status_emoji} {tariff_name} — {period_days} дн.',
         ).format(
             status_emoji=status_emoji,
-            tariff_name=tariff_name,
+            tariff_name=raw_name,
             period_days=item.period_days,
         )
         buttons.append([InlineKeyboardButton(text=item_label, callback_data=f'gift_my_open:{item.purchase_id}')])
@@ -347,10 +346,28 @@ async def handle_gift_catalog(
             await callback.answer()
             return
 
-        await callback.answer(
-            texts.t('GIFT_FEATURE_DISABLED', 'Покупка подарков временно недоступна.'),
-            show_alert=True,
+        text = texts.t(
+            'GIFT_FEATURE_DISABLED_NO_HISTORY',
+            '🎁 <b>Подарки</b>\n\nПокупка новых подарков временно недоступна, но вы можете активировать полученный подарочный код.',
         )
+        back_kb = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text=texts.t('GIFT_ENTER_CODE_BUTTON', '🎁 Активировать код'),
+                        callback_data='gift_enter_code',
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        text=texts.t('GIFT_CANCEL_BUTTON', '❌ Отмена'),
+                        callback_data='gift_cancel',
+                    )
+                ],
+            ]
+        )
+        await callback.message.edit_text(text, reply_markup=back_kb, parse_mode='HTML')
+        await callback.answer()
         return
 
     offers = await list_gift_offers(db, buyer=db_user)

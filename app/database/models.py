@@ -4541,7 +4541,7 @@ class GuestPurchase(Base):
     campaign_slug = Column(String(64), nullable=True)
     # Идемпотентность покупки (checkout id / idempotency key). Уникальный
     # индекс ux_guest_purchases_idempotency_key предотвращает повторные списания.
-    idempotency_key = Column(String(64), unique=True, nullable=True)
+    idempotency_key = Column(String(64), nullable=True)
 
     landing = relationship('LandingPage', back_populates='guest_purchases', lazy='selectin')
     tariff = relationship('Tariff', lazy='selectin')
@@ -4549,8 +4549,7 @@ class GuestPurchase(Base):
     buyer = relationship('User', foreign_keys=[buyer_user_id], lazy='selectin')
 
     def __repr__(self) -> str:
-        token_prefix = self.token[:5] if self.token else '?'
-        return f"<GuestPurchase token='{token_prefix}...' status='{self.status}'>"
+        return f"<GuestPurchase id={self.id} status='{self.status}'>"
 
 
 class NewsArticle(Base):

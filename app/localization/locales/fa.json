@@ -2168,8 +2168,8 @@
   "GIFT_INVALID_SELECTION": "پارامترهای انتخاب نامعتبر است.",
   "GIFT_GENERIC_ERROR": "هنگام پردازش هدیه خطایی رخ داد. لطفاً بعداً دوباره امتحان کنید.",
   "GIFT_TRAFFIC_UNLIMITED": "∞ (نامحدود)",
-  "GIFT_PURCHASE_SUCCESS_TEXT": "🎁 <b>هدیه با موفقیت ایجاد شد!</b>\n\n📦 پلن: <b>{tariff_name}</b>\n📅 مدت: <b>{period_days} روز</b>\n📊 ترافیک: <b>{traffic}</b>\n📱 دستگاه‌ها: <b>{devices}</b>\n\n🔗 لینک هدیه:\n{claim_link}\n\nاین لینک را برای دریافت‌کننده ارسال کنید یا از دکمه «ارسال هدیه» زیر استفاده کنید. دریافت‌کننده می‌تواند با یک کلیک اشتراک را فعال کند.",
-  "GIFT_PURCHASE_REPLAY_TEXT": "🎁 <b>این هدیه قبلاً ثبت شده است</b>\n\n📦 پلن: <b>{tariff_name}</b>\n📅 مدت: <b>{period_days} روز</b>\n📊 ترافیک: <b>{traffic}</b>\n📱 دستگاه‌ها: <b>{devices}</b>\n\n🔗 لینک هدیه:\n{claim_link}\n\nاین لینک را برای دریافت‌کننده ارسال کنید یا از دکمه «ارسال هدیه» زیر استفاده کنید.",
+  "GIFT_PURCHASE_SUCCESS_TEXT": "🎁 <b>هدیه با موفقیت ایجاد شد!</b>\n\n📦 پلن: <b>{tariff_name}</b>\n📅 مدت: <b>{period_days} روز</b>\n📊 ترافیک: <b>{traffic}</b>\n📱 دستگاه‌ها: <b>{devices}</b>\n🔑 کد هدیه: <code>{public_code}</code>\n\n🔗 لینک هدیه:\n{claim_link}\n\nاین لینک را برای دریافت‌کننده ارسال کنید یا از دکمه «ارسال هدیه» زیر استفاده کنید. دریافت‌کننده می‌تواند با یک کلیک اشتراک را فعال کند.",
+  "GIFT_PURCHASE_REPLAY_TEXT": "🎁 <b>هدیه قبلاً صادر شده است</b>\n\n📦 پلن: <b>{tariff_name}</b>\n📅 مدت: <b>{period_days} روز</b>\n📊 ترافیک: <b>{traffic}</b>\n📱 دستگاه‌ها: <b>{devices}</b>\n🔑 کد هدیه: <code>{public_code}</code>\n\n🔗 لینک هدیه:\n{claim_link}\n\nاین لینک را برای دریافت‌کننده ارسال کنید یا از دکمه «ارسال هدیه» زیر استفاده کنید.",
   "GIFT_SHARE_TEXT": "🎁 سلام! من به شما یک اشتراک {tariff_name} ({period_days} روز) هدیه می‌دهم. برای فعال‌سازی روی لینک کلیک کنید!",
   "GIFT_PRICE_CHANGED_ERROR": "⚠️ قیمت پلن انتخابی تغییر کرده است. لطفاً خرید را مجدداً تأیید کنید.",
   "GIFT_INSUFFICIENT_BALANCE_ERROR": "❌ موجودی کافی نیست. مبلغ مورد نیاز: {required}، موجودی: {available}.",
@@ -2211,5 +2211,8 @@
   "GIFT_MY_DELIVERED_AT_LINE": "🎉 فعال شده در: <b>{delivered_at}</b>\n",
   "GIFT_MY_RECIPIENT_LINE": "👤 گیرنده: <b>{recipient_display}</b>\n",
   "GIFT_TARIFF_DELETED": "تعرفه آرشیو شده",
-  "GIFT_TARIFF_DEFAULT_NAME": "VPN"
+  "GIFT_TARIFF_DEFAULT_NAME": "VPN",
+  "GIFT_FEATURE_DISABLED_NO_HISTORY": "🎁 <b>هدایا</b>\n\nخرید هدایای جدید موقتاً غیرفعال است، اما می‌توانید کد هدیه را فعال کنید.",
+  "GIFT_OPEN_BOT_BUTTON": "🤖 باز کردن در ربات",
+  "GIFT_OPEN_CABINET_BUTTON": "🌐 باز کردن در پنل کاربری"
 }

@@ -1077,7 +1077,7 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
             gift_token = parse_gift_claim_input(start_parameter, allow_legacy_short=False)
             logger.info(
                 'Gift code deep link detected',
-                token_prefix=gift_token[:5],
+                token_length=len(gift_token) if gift_token else 0,
                 telegram_id=message.from_user.id,
             )
             # For new users, gift is auto-activated via

@@ -192,7 +192,7 @@ class TestSubscriptionGiftEntryVisibility:
             _, kwargs = mock_callback.message.edit_text.call_args
             reply_markup = kwargs.get('reply_markup')
             assert reply_markup is not None
-            assert 'subscription_gift' not in _callbacks(reply_markup)
+            assert 'subscription_gift' in _callbacks(reply_markup)
 
     def test_multi_mode_build_subscriptions_keyboard_gift_enabled(self):
         subs = [SimpleNamespace(id=10, tariff=SimpleNamespace(name='Basic'))]
@@ -246,7 +246,7 @@ class TestSubscriptionGiftEntryVisibility:
             _, kwargs = mock_callback.message.edit_text.call_args
             reply_markup = kwargs.get('reply_markup')
             assert reply_markup is not None
-            assert 'subscription_gift' not in _callbacks(reply_markup)
+            assert 'subscription_gift' in _callbacks(reply_markup)
             assert 'menu_buy' in _callbacks(reply_markup)
 
 

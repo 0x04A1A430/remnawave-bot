@@ -84,6 +84,63 @@ async def resolve_gift_claim_channel(
     return resolved_bot_username, resolved_cabinet_url
 
 
+def _format_claim_link_and_action_buttons(
+    texts: Any,
+    artifacts: GiftClaimArtifacts,
+    share_url: str,
+) -> tuple[str, list[list[InlineKeyboardButton]]]:
+    """Format claim link display text and action buttons supporting both, bot-only, and cabinet-only configs."""
+    buttons: list[list[InlineKeyboardButton]] = [
+        [
+            InlineKeyboardButton(
+                text=texts.t('GIFT_SEND_BUTTON', '🎁 Отправить подарок'),
+                url=share_url,
+            )
+        ]
+    ]
+
+    if artifacts.bot_claim_url and artifacts.cabinet_claim_url:
+        claim_link_display = (
+            f'🤖 В Telegram:\n{artifacts.bot_claim_url}\n\n🌐 В личном кабинете:\n{artifacts.cabinet_claim_url}'
+        )
+        buttons.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t('GIFT_OPEN_BOT_BUTTON', '🤖 Открыть в боте'),
+                    url=artifacts.bot_claim_url,
+                ),
+                InlineKeyboardButton(
+                    text=texts.t('GIFT_OPEN_CABINET_BUTTON', '🌐 Открыть в кабинете'),
+                    url=artifacts.cabinet_claim_url,
+                ),
+            ]
+        )
+    elif artifacts.bot_claim_url:
+        claim_link_display = artifacts.bot_claim_url
+        buttons.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t('GIFT_OPEN_BUTTON', '🔗 Открыть подарок'),
+                    url=artifacts.bot_claim_url,
+                )
+            ]
+        )
+    elif artifacts.cabinet_claim_url:
+        claim_link_display = artifacts.cabinet_claim_url
+        buttons.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t('GIFT_OPEN_BUTTON', '🔗 Открыть подарок'),
+                    url=artifacts.cabinet_claim_url,
+                )
+            ]
+        )
+    else:
+        raise ValueError('Cannot build gift presentation: neither bot deep link nor cabinet URL available')
+
+    return claim_link_display, buttons
+
+
 def build_gift_result_presentation(
     language: str,
     purchase_result: GiftPurchaseResult,
@@ -132,6 +189,7 @@ def build_gift_result_presentation(
         raise ValueError('Cannot build gift result presentation: neither bot deep link nor cabinet URL available')
 
     share_url = artifacts.telegram_share_url or build_telegram_gift_share_url(claim_link, share_text)
+    claim_link_display, action_buttons = _format_claim_link_and_action_buttons(texts, artifacts, share_url)
 
     # Localized message body (HTML formatted)
     escaped_tariff_name = html.escape(quote.tariff_name)
@@ -150,6 +208,7 @@ def build_gift_result_presentation(
             '📅 Период: <b>{period_days} дн.</b>\n'
             '📊 Трафик: <b>{traffic}</b>\n'
             '📱 Устройства: <b>{devices}</b>\n\n'
+            '🔑 Код подарка: <code>{public_code}</code>\n\n'
             '🔗 Ссылка на подарок:\n{claim_link}\n\n'
             'Отправьте эту ссылку получателю или воспользуйтесь кнопкой «Отправить подарок» ниже.',
         )
@@ -161,6 +220,7 @@ def build_gift_result_presentation(
             '📅 Период: <b>{period_days} дн.</b>\n'
             '📊 Трафик: <b>{traffic}</b>\n'
             '📱 Устройства: <b>{devices}</b>\n\n'
+            '🔑 Код подарка: <code>{public_code}</code>\n\n'
             '🔗 Ссылка на подарок:\n{claim_link}\n\n'
             'Отправьте эту ссылку получателю или воспользуйтесь кнопкой «Отправить подарок» ниже. '
             'Получатель сможет активировать подписку в один клик.',
@@ -171,22 +231,12 @@ def build_gift_result_presentation(
         period_days=quote.period_days,
         traffic=traffic_str,
         devices=devices_str,
-        claim_link=claim_link,
+        public_code=artifacts.public_code,
+        claim_link=claim_link_display,
     )
 
     buttons = [
-        [
-            InlineKeyboardButton(
-                text=texts.t('GIFT_SEND_BUTTON', '🎁 Отправить подарок'),
-                url=share_url,
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                text=texts.t('GIFT_OPEN_BUTTON', '🔗 Открыть подарок'),
-                url=claim_link,
-            )
-        ],
+        *action_buttons,
         [
             InlineKeyboardButton(
                 text=texts.t('GIFT_BACK_TO_SUBSCRIPTION_BUTTON', '◀️ К подписке'),
@@ -218,7 +268,7 @@ def build_gift_history_detail_presentation(
 
     For claimable gifts:
     - Displays canonical public code and claim link
-    - Provides share URL button and direct claim link button
+    - Provides share URL button and direct claim link button(s)
     - Back button with callback 'gift_my_back'
 
     For delivered/activated gifts:
@@ -257,6 +307,7 @@ def build_gift_history_detail_presentation(
             raise ValueError('Cannot build gift detail presentation: neither bot deep link nor cabinet URL available')
 
         share_url = artifacts.telegram_share_url or build_telegram_gift_share_url(claim_link, share_text)
+        claim_link_display, action_buttons = _format_claim_link_and_action_buttons(texts, artifacts, share_url)
         status_text = texts.t('GIFT_STATUS_PENDING', '⏳ Ожидает активации')
 
         body_template = texts.t(
@@ -280,23 +331,12 @@ def build_gift_history_detail_presentation(
             devices=devices_str,
             status_text=status_text,
             created_at=created_str,
-            public_code=item.public_code,
-            claim_link=claim_link,
+            public_code=artifacts.public_code,
+            claim_link=claim_link_display,
         )
 
         buttons = [
-            [
-                InlineKeyboardButton(
-                    text=texts.t('GIFT_SEND_BUTTON', '🎁 Отправить подарок'),
-                    url=share_url,
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    text=texts.t('GIFT_OPEN_BUTTON', '🔗 Открыть подарок'),
-                    url=claim_link,
-                )
-            ],
+            *action_buttons,
             [
                 InlineKeyboardButton(
                     text=texts.t('GIFT_MY_BACK_BUTTON', '◀️ К списку подарков'),

@@ -221,7 +221,7 @@ async def create_purchase(
     logger.info(
         'Guest purchase created',
         purchase_id=purchase.id,
-        token_prefix=purchase.token[:5],
+        token_length=len(purchase.token),
         landing_slug=landing.slug if landing else None,
         tariff_id=tariff.id,
         period_days=period_days,
@@ -356,12 +356,7 @@ async def fulfill_purchase(
     purchase_token: str,
     pre_resolved_telegram_id: int | None = None,
 ) -> GuestPurchase | None:
-    """After payment: find/create user, create subscription, send notification.
-
-    Uses SELECT ... FOR UPDATE to prevent concurrent fulfillment of the same purchase.
-    The PENDING_ACTIVATION path commits early and returns (terminal for this call).
-    The DELIVERED path commits after subscription creation.
-    Returns the updated purchase or None if not found.
+    """Fulfill a paid guest purchase by creating/extending the user account and subscription.
 
     Args:
         pre_resolved_telegram_id: If caller already resolved the recipient's telegram_id
@@ -371,13 +366,13 @@ async def fulfill_purchase(
     purchase = result.scalars().first()
 
     if purchase is None:
-        logger.warning('Fulfill called for unknown purchase', token_prefix=purchase_token[:5])
+        logger.warning('Fulfill called for unknown purchase', token_length=len(purchase_token))
         return None
 
     if purchase.status != GuestPurchaseStatus.PAID.value:
         logger.warning(
             'Fulfill called for purchase not in PAID status',
-            token_prefix=purchase_token[:5],
+            purchase_id=purchase.id,
             current_status=purchase.status,
         )
         return purchase
@@ -391,12 +386,24 @@ async def fulfill_purchase(
             db,
             recipient_type,
             recipient_value,
-            purchase=purchase,
+            landing_id=purchase.landing_id,
             pre_resolved_telegram_id=pre_resolved_telegram_id,
-            tariff_id=purchase.tariff_id,
         )
 
-        # Load tariff early — needed for both PENDING_ACTIVATION and DELIVERED paths
+        # For gifts, attach the recipient user_id as well
+        if purchase.is_gift and purchase.user_id is None:
+            purchase.user_id = user.id
+
+        # Bind landing attribution if applicable
+        if purchase.landing_id and user.landing_id is None:
+            user.landing_id = purchase.landing_id
+
+        # Generate cabinet password for new email accounts (stored temporarily for email delivery)
+        if is_new_account and recipient_type == 'email':
+            raw_password = _generate_cabinet_password()
+            user.hashed_password = hash_password(raw_password)
+            purchase.cabinet_password = raw_password  # temporary, cleared after email sent
+
         tariff = await get_tariff_by_id(db, purchase.tariff_id)
         if tariff is None:
             logger.error('Tariff not found during fulfillment', tariff_id=purchase.tariff_id)
@@ -468,7 +475,6 @@ async def fulfill_purchase(
             logger.info(
                 'Guest purchase held for activation (existing subscription)',
                 purchase_id=purchase.id,
-                token_prefix=purchase_token[:5],
                 user_id=user.id,
             )
             return purchase
@@ -641,7 +647,6 @@ async def fulfill_purchase(
         logger.info(
             'Guest purchase fulfilled',
             purchase_id=purchase.id,
-            token_prefix=purchase_token[:5],
             user_id=user.id,
             recipient_type=recipient_type,
         )
@@ -653,7 +658,6 @@ async def fulfill_purchase(
         await db.rollback()
         logger.exception(
             'Failed to fulfill purchase',
-            token_prefix=purchase_token[:5],
             purchase_id=purchase.id,
         )
         raise GuestPurchaseError('Purchase fulfillment failed', status_code=500)
@@ -1476,7 +1480,6 @@ async def activate_purchase(db: AsyncSession, purchase_token: str, *, skip_notif
         logger.info(
             'Guest purchase activated',
             purchase_id=purchase.id,
-            token_prefix=purchase_token[:5],
             user_id=user.id,
         )
 
@@ -1546,9 +1549,9 @@ async def retry_stuck_paid_purchases(
                 await _increment_retry_count(retry_db, token)
                 await fulfill_purchase(retry_db, token)
                 retried += 1
-                logger.info('Retried stuck purchase successfully', token_prefix=token[:5])
+                logger.info('Retried stuck purchase successfully', token_length=len(token))
         except Exception:
-            logger.exception('Failed to retry stuck purchase', token_prefix=token[:5])
+            logger.exception('Failed to retry stuck purchase', token_length=len(token))
 
     return retried
 
@@ -1600,9 +1603,9 @@ async def retry_stuck_pending_activation(
                 await _increment_retry_count(retry_db, token)
                 await activate_purchase(retry_db, token)
                 retried += 1
-                logger.info('Retried stuck pending_activation successfully', token_prefix=token[:5])
+                logger.info('Retried stuck pending_activation successfully', token_length=len(token))
         except Exception:
-            logger.exception('Failed to retry stuck pending_activation', token_prefix=token[:5])
+            logger.exception('Failed to retry stuck pending_activation', token_length=len(token))
 
     return retried
 
@@ -1663,12 +1666,12 @@ async def _fail_exhausted_purchases_batch(
                     await update_purchase_status(fail_db, token, GuestPurchaseStatus.FAILED)
                     logger.error(
                         'Purchase exceeded max retries — marked FAILED',
-                        token_prefix=token[:5],
+                        purchase_id=purchase.id,
                         retry_count=retry_count,
                         phase=status.value,
                     )
         except Exception:
-            logger.exception('Failed to mark exhausted purchase as FAILED', token_prefix=token[:5])
+            logger.exception('Failed to mark exhausted purchase as FAILED', token_length=len(token))
 
         # Send alert OUTSIDE the session (no row lock held)
         if alert_data:
@@ -1790,7 +1793,7 @@ async def recover_stuck_pending_purchases(
                 if paid:
                     recovered += 1
         except Exception:
-            logger.exception('Failed to recover pending purchase', token_prefix=token[:5])
+            logger.exception('Failed to recover pending purchase', token_length=len(token))
 
     return recovered
 
@@ -1954,7 +1957,7 @@ async def _check_and_recover_pending_purchase(
     if provider_amount_kopeks is not None and provider_amount_kopeks != purchase.amount_kopeks:
         logger.error(
             'Amount mismatch during PENDING recovery — skipping',
-            token_prefix=purchase_token[:5],
+            purchase_id=purchase.id,
             provider_amount=provider_amount_kopeks,
             purchase_amount=purchase.amount_kopeks,
             payment_method=payment_method,
@@ -1976,7 +1979,7 @@ async def _check_and_recover_pending_purchase(
     )
     logger.info(
         'Recovered stuck PENDING purchase → PAID',
-        token_prefix=purchase_token[:5],
+        purchase_id=purchase.id,
         payment_method=payment_method,
         provider_payment_id=provider_payment_id,
     )

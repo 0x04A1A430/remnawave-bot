@@ -194,7 +194,7 @@ class TestGiftMenuVisibilityAndEmptyHistory:
             assert 'subscription_gift' in _callbacks(reply_markup)
 
     @pytest.mark.asyncio
-    async def test_single_tariff_menu_hides_gift_when_sales_disabled_without_history(
+    async def test_single_tariff_menu_shows_gift_when_sales_disabled_without_history(
         self, mock_callback, mock_db_user, mock_db, monkeypatch
     ):
         mock_db_user.subscription = None
@@ -207,7 +207,7 @@ class TestGiftMenuVisibilityAndEmptyHistory:
             assert mock_callback.message.edit_text.called
             _, kwargs = mock_callback.message.edit_text.call_args
             reply_markup = kwargs.get('reply_markup')
-            assert 'subscription_gift' not in _callbacks(reply_markup)
+            assert 'subscription_gift' in _callbacks(reply_markup)
 
     @pytest.mark.asyncio
     async def test_multi_tariff_menu_shows_gift_when_sales_disabled_with_history(
@@ -229,7 +229,7 @@ class TestGiftMenuVisibilityAndEmptyHistory:
             assert 'subscription_gift' in _callbacks(reply_markup)
 
     @pytest.mark.asyncio
-    async def test_multi_tariff_menu_hides_gift_when_sales_disabled_without_history(
+    async def test_multi_tariff_menu_shows_gift_when_sales_disabled_without_history(
         self, mock_callback, mock_db_user, mock_db, monkeypatch
     ):
         monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: True)
@@ -245,7 +245,7 @@ class TestGiftMenuVisibilityAndEmptyHistory:
             assert mock_callback.message.edit_text.called
             _, kwargs = mock_callback.message.edit_text.call_args
             reply_markup = kwargs.get('reply_markup')
-            assert 'subscription_gift' not in _callbacks(reply_markup)
+            assert 'subscription_gift' in _callbacks(reply_markup)
 
     @pytest.mark.asyncio
     async def test_gift_catalog_disabled_sales_with_history_renders_history_only_view(
@@ -266,7 +266,7 @@ class TestGiftMenuVisibilityAndEmptyHistory:
             assert 'gift_cancel' in callbacks
 
     @pytest.mark.asyncio
-    async def test_gift_catalog_disabled_sales_without_history_shows_alert(
+    async def test_gift_catalog_disabled_sales_without_history_renders_activation_hub(
         self, mock_callback, mock_db_user, mock_db, memory_state
     ):
         mock_callback.data = 'subscription_gift'
@@ -275,8 +275,12 @@ class TestGiftMenuVisibilityAndEmptyHistory:
             patch('app.handlers.subscription.gift.has_sender_gifts', AsyncMock(return_value=False)),
         ):
             await handle_gift_catalog(mock_callback, mock_db_user, mock_db, memory_state)
-            assert mock_callback.answer.called
-            assert not mock_callback.message.edit_text.called
+            assert mock_callback.message.edit_text.called
+            _, kwargs = mock_callback.message.edit_text.call_args
+            reply_markup = kwargs.get('reply_markup')
+            callbacks = _callbacks(reply_markup)
+            assert 'gift_enter_code' in callbacks
+            assert 'gift_cancel' in callbacks
 
     @pytest.mark.asyncio
     async def test_gift_catalog_no_tariffs_includes_my_gifts_button(
