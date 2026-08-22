@@ -253,6 +253,21 @@ class TestBuildTelegramGiftShareUrl:
         assert issubclass(InvalidClaimLinkError, GiftLinkError)
         assert issubclass(InvalidShareTextError, GiftLinkError)
 
+    def test_invalid_token_exception_does_not_leak_raw_token(self) -> None:
+        """P3 Security: exception message must not contain the raw token."""
+        raw_secret_token = 'secret_token_123!@#_invalid'
+        with pytest.raises(InvalidGiftTokenError) as exc:
+            build_bot_gift_claim_link(raw_secret_token, 'my_bot')
+        assert raw_secret_token not in str(exc.value)
+
+    def test_invalid_claim_link_exception_does_not_leak_raw_token(self) -> None:
+        """P3 Security: claim link validation error must not leak raw token or full url."""
+        raw_secret_token = 'secret_token_with_invalid_claim_link'
+        bad_claim_link = f'ftp://bad-link/{raw_secret_token}'
+        with pytest.raises(InvalidClaimLinkError) as exc:
+            build_telegram_gift_share_url(bad_claim_link, 'Gift text')
+        assert raw_secret_token not in str(exc.value)
+
 
 class TestLandingGiftLinkIntegration:
     """Tests for landing route purchase status link generation."""

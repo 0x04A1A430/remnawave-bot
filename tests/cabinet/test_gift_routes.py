@@ -631,3 +631,151 @@ async def test_purchase_gift_telegram_unresolvable_warning(monkeypatch):
         response = await gift_routes.create_gift_purchase(body=req, user=user, db=db)
         assert response.status == 'ok'
         assert response.warning == 'telegram_unresolvable'
+
+
+@pytest.mark.asyncio
+async def test_purchase_gift_gateway_consumes_one_time_promo_offer(monkeypatch):
+    """P1 Gateway Discount: personal one-time promo discount is applied and consumed on successful payment creation."""
+    async with memory_session(monkeypatch, _TABLES) as db:
+        db.add(SystemSetting(key=GIFT_ENABLED_KEY, value='true'))
+        user = User(
+            id=10,
+            balance_kopeks=50000,
+            username='buyer',
+            promo_offer_discount_percent=20,
+            promo_offer_discount_source='personal_test',
+        )
+        tariff = Tariff(
+            id=1,
+            name='Standard',
+            is_active=True,
+            show_in_gift=True,
+            period_prices={'30': 30000},
+        )
+        db.add_all([user, tariff])
+        await db.commit()
+
+        captured_amount = None
+
+        async def fake_create_payment(**kwargs):
+            nonlocal captured_amount
+            captured_amount = kwargs.get('amount_kopeks')
+            return {'payment_url': 'https://pay.example.com/inv_123', 'provider': 'yookassa'}
+
+        fake_svc = MagicMock()
+        fake_svc.create_guest_payment = AsyncMock(side_effect=fake_create_payment)
+        monkeypatch.setattr('app.services.payment_service.PaymentService', lambda **kw: fake_svc)
+
+        req = GiftPurchaseRequest(
+            tariff_id=1,
+            period_days=30,
+            payment_mode='gateway',
+            payment_method='yookassa',
+        )
+        response = await gift_routes.create_gift_purchase(body=req, user=user, db=db)
+        assert response.status == 'created'
+        assert captured_amount == 24000  # 30000 - 20%
+
+        # Verify promo offer is consumed in DB
+        db_user = await db.get(User, user.id)
+        assert db_user.promo_offer_discount_percent == 0
+        assert db_user.promo_offer_discount_source is None
+
+
+@pytest.mark.asyncio
+async def test_purchase_gift_gateway_provider_error_rolls_back_promo_offer(monkeypatch):
+    """P1 Gateway Discount: provider failure or exception cleanly rolls back promo offer consumption."""
+    async with memory_session(monkeypatch, _TABLES) as db:
+        db.add(SystemSetting(key=GIFT_ENABLED_KEY, value='true'))
+        user_id = 10
+        user = User(
+            id=user_id,
+            balance_kopeks=50000,
+            username='buyer',
+            promo_offer_discount_percent=20,
+            promo_offer_discount_source='personal_test',
+        )
+        tariff = Tariff(
+            id=1,
+            name='Standard',
+            is_active=True,
+            show_in_gift=True,
+            period_prices={'30': 30000},
+        )
+        db.add_all([user, tariff])
+        await db.commit()
+
+        fake_svc = MagicMock()
+        fake_svc.create_guest_payment = AsyncMock(return_value=None)  # Provider failure
+        monkeypatch.setattr('app.services.payment_service.PaymentService', lambda **kw: fake_svc)
+
+        req = GiftPurchaseRequest(
+            tariff_id=1,
+            period_days=30,
+            payment_mode='gateway',
+            payment_method='yookassa',
+        )
+        with pytest.raises(HTTPException) as exc:
+            await gift_routes.create_gift_purchase(body=req, user=user, db=db)
+        assert exc.value.status_code == 502
+
+        # Verify promo offer was NOT consumed
+        row = (
+            await db.execute(
+                select(User.promo_offer_discount_percent, User.promo_offer_discount_source).where(User.id == user_id)
+            )
+        ).one()
+        assert row[0] == 20
+        assert row[1] == 'personal_test'
+
+
+@pytest.mark.asyncio
+async def test_purchase_gift_gateway_concurrent_requests_apply_promo_at_most_once(monkeypatch):
+    """P1 Gateway Concurrency: when 2 gateway requests run with 1 personal discount,
+    discount is applied at most once (1st gets discounted, 2nd gets full price)."""
+    async with memory_session(monkeypatch, _TABLES) as db:
+        db.add(SystemSetting(key=GIFT_ENABLED_KEY, value='true'))
+        user = User(
+            id=10,
+            balance_kopeks=50000,
+            username='buyer',
+            promo_offer_discount_percent=20,
+            promo_offer_discount_source='personal_test',
+        )
+        tariff = Tariff(
+            id=1,
+            name='Standard',
+            is_active=True,
+            show_in_gift=True,
+            period_prices={'30': 30000},
+        )
+        db.add_all([user, tariff])
+        await db.commit()
+
+        captured_amounts = []
+
+        async def fake_create_payment(**kwargs):
+            captured_amounts.append(kwargs.get('amount_kopeks'))
+            return {'payment_url': f'https://pay.example.com/inv_{len(captured_amounts)}', 'provider': 'yookassa'}
+
+        fake_svc = MagicMock()
+        fake_svc.create_guest_payment = AsyncMock(side_effect=fake_create_payment)
+        monkeypatch.setattr('app.services.payment_service.PaymentService', lambda **kw: fake_svc)
+
+        req = GiftPurchaseRequest(
+            tariff_id=1,
+            period_days=30,
+            payment_mode='gateway',
+            payment_method='yookassa',
+        )
+
+        # 1st request
+        res1 = await gift_routes.create_gift_purchase(body=req, user=user, db=db)
+        assert res1.status == 'created'
+
+        # 2nd request (with same user)
+        res2 = await gift_routes.create_gift_purchase(body=req, user=user, db=db)
+        assert res2.status == 'created'
+
+        # Verify amounts: 1st got 20% discount (24000), 2nd got full price (30000)
+        assert captured_amounts == [24000, 30000]

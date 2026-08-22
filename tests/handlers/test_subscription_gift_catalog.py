@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import html
 import uuid
+from datetime import UTC
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -447,6 +448,68 @@ class TestSubscriptionGiftCatalogFlow:
         ):
             await handle_gift_back_periods(mock_callback, mock_db_user, mock_db, memory_state)
             assert await memory_state.get_state() == GiftPurchaseStates.selecting_period.state
+
+    @pytest.mark.asyncio
+    async def test_back_to_periods_with_frozen_aiogram_callback_query(self, mock_db_user, mock_db, memory_state):
+        """P2 Regression: real frozen CallbackQuery must not raise ValidationError on back navigation."""
+        from datetime import datetime
+
+        from aiogram.types import Chat
+
+        real_user = TgUser(id=mock_db_user.telegram_id, is_bot=False, first_name='Test', username=mock_db_user.username)
+        real_chat = Chat(id=mock_db_user.telegram_id, type='private')
+        real_msg = Message(
+            message_id=123,
+            date=datetime.now(UTC),
+            chat=real_chat,
+            from_user=real_user,
+            text='Confirmation',
+        )
+
+        real_callback = CallbackQuery(
+            id='query_12345',
+            from_user=real_user,
+            chat_instance='chat_instance_abc',
+            data='gift_back_periods',
+            message=real_msg,
+        )
+
+        checkout_id = 'chk_preserve_123'
+        await memory_state.set_state(GiftPurchaseStates.confirming_purchase)
+        await memory_state.update_data(
+            gift_checkout_id=checkout_id,
+            gift_tariff_id=1,
+            gift_period_days=30,
+        )
+
+        offers = [
+            GiftTariffOffer(
+                1, 'Tariff 1', None, 50, 1, 1, (GiftQuote(1, 'Tariff 1', 30, 50, 1, 10000, 10000, 0, 0, False),)
+            )
+        ]
+
+        mock_edit_text = AsyncMock()
+        mock_answer = AsyncMock()
+
+        with (
+            patch.object(Message, 'edit_text', mock_edit_text),
+            patch.object(CallbackQuery, 'answer', mock_answer),
+            patch('app.handlers.subscription.gift.is_gift_enabled', AsyncMock(return_value=True)),
+            patch('app.handlers.subscription.gift.list_gift_offers', AsyncMock(return_value=offers)),
+        ):
+            await handle_gift_back_periods(real_callback, mock_db_user, mock_db, memory_state)
+
+            # Invariant: callback.data was NOT mutated
+            assert real_callback.data == 'gift_back_periods'
+
+            # Invariant: FSM state transitioned to selecting_period and checkout_id is preserved
+            assert await memory_state.get_state() == GiftPurchaseStates.selecting_period.state
+            data = await memory_state.get_data()
+            assert data.get('gift_checkout_id') == checkout_id
+            assert data.get('gift_tariff_id') == 1
+
+            assert mock_edit_text.called
+            assert mock_answer.called
 
     @pytest.mark.asyncio
     async def test_gift_cancel_returns_to_origin(self, mock_callback, mock_db_user, mock_db, memory_state):

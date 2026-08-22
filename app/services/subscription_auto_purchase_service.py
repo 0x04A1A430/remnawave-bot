@@ -3199,6 +3199,14 @@ async def _auto_purchase_gift(
         await user_cart_service.clear_topup_intent(user.id)
         return False
 
+    # If bot is None, delivery of claim link cannot be confirmed safely
+    if not bot:
+        logger.warning(
+            'Автопокупка подарка: бот недоступен, выдача ссылки невозможна',
+            format_user_id=_format_user_id(user),
+        )
+        return False
+
     texts = get_texts(getattr(user, 'language', 'ru'))
 
     # Requote to ensure current availability and pricing
@@ -3234,15 +3242,16 @@ async def _auto_purchase_gift(
     # Check if price changed
     if quote.final_price_kopeks != saved_expected_price:
         logger.info(
-            'Автопокупка подарка: цена изменилась, требуется подтверждение пользователем',
+            'Автопокупка подарка: цена изменилась, требуется повторное подтверждение пользователем',
             format_user_id=_format_user_id(user),
             saved_price=saved_expected_price,
             fresh_price=quote.final_price_kopeks,
         )
         cart_data['total_price'] = quote.final_price_kopeks
         cart_data['missing_amount'] = max(0, quote.final_price_kopeks - user.balance_kopeks)
+        cart_data['return_to_cart'] = False
         await user_cart_service.save_user_cart(user.id, cart_data)
-        # Do not debit silently on price change, keep cart for manual resume
+        await user_cart_service.clear_topup_intent(user.id)
         return False
 
     # Check if balance is still insufficient (partial top-up)
@@ -3281,7 +3290,9 @@ async def _auto_purchase_gift(
     except GiftPriceChangedError as err:
         cart_data['total_price'] = err.fresh_quote.final_price_kopeks
         cart_data['missing_amount'] = max(0, err.fresh_quote.final_price_kopeks - user.balance_kopeks)
+        cart_data['return_to_cart'] = False
         await user_cart_service.save_user_cart(user.id, cart_data)
+        await user_cart_service.clear_topup_intent(user.id)
         return False
     except (
         GiftFeatureDisabledError,
@@ -3296,20 +3307,29 @@ async def _auto_purchase_gift(
         logger.error('Автопокупка подарка: неожиданная ошибка покупки', error=str(err), exc_info=True)
         return False
 
-    if bot:
-        try:
-            await send_gift_result_message(
-                bot=bot,
-                user=user,
-                purchase_result=purchase_result,
-                bot_username=bot_username,
-                cabinet_url=cabinet_url,
-            )
-        except Exception as notify_err:
-            logger.error('Автопокупка подарка: ошибка отправки результата пользователю', error=str(notify_err))
+    sent_msg = None
+    try:
+        sent_msg = await send_gift_result_message(
+            bot=bot,
+            user=user,
+            purchase_result=purchase_result,
+            bot_username=bot_username,
+            cabinet_url=cabinet_url,
+        )
+    except Exception as notify_err:
+        logger.error('Автопокупка подарка: ошибка отправки результата пользователю', error=str(notify_err))
+        sent_msg = None
+
+    if sent_msg is None:
+        logger.warning(
+            'Автопокупка подарка: подарок создан, но сообщение с ссылкой не доставлено; корзина сохранена для повтора',
+            format_user_id=_format_user_id(user),
+            checkout_id=checkout_id,
+        )
+        return False
 
     logger.info(
-        'Автопокупка подарка: подарок успешно оформлен после пополнения',
+        'Автопокупка подарка: подарок успешно оформлен и доставлен после пополнения',
         format_user_id=_format_user_id(user),
         tariff_id=tariff_id,
         period_days=period_days,

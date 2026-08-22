@@ -60,7 +60,7 @@ def _validate_gift_token(token: str) -> str:
         raise InvalidGiftTokenError('Gift token must be a non-empty string')
 
     if not _TOKEN_RE.match(token):
-        raise InvalidGiftTokenError(f'Gift token contains invalid characters: {token!r}')
+        raise InvalidGiftTokenError(f'Gift token contains invalid characters (length={len(token)})')
 
     if len(token) < GIFT_TOKEN_MIN_PREFIX_LENGTH:
         raise InvalidGiftTokenError(
@@ -177,7 +177,7 @@ def build_telegram_gift_share_url(claim_link: str, localized_share_text: str) ->
 
     parsed = urllib.parse.urlparse(cleaned_link)
     if parsed.scheme not in ('http', 'https') or not parsed.netloc:
-        raise InvalidClaimLinkError(f'Invalid claim link: {claim_link!r}')
+        raise InvalidClaimLinkError('Claim link must have a valid http or https scheme and netloc')
 
     if not isinstance(localized_share_text, str):
         raise InvalidShareTextError('Share text must be a string')

@@ -106,6 +106,12 @@ def mock_db_user():
 @pytest.fixture
 def mock_db():
     db = AsyncMock(spec=AsyncSession)
+    mock_res = MagicMock()
+    mock_res.scalars.return_value.first.return_value = None
+    mock_res.scalar_one_or_none.return_value = None
+    mock_res.scalar.return_value = None
+    db.execute = AsyncMock(return_value=mock_res)
+    db.refresh = AsyncMock()
     return db
 
 
@@ -1039,3 +1045,403 @@ class TestGiftAutoPurchaseAndIsolation:
             assert res is True
             mock_gift_purchase.assert_not_called()
             mock_extend.assert_awaited_once()
+
+
+class TestGiftAutoPurchaseDeliveryAndPriceChangeSafeguards:
+    """Tests for P1 safeguards: delivery confirmation, retry replay, and price change intent revocation."""
+
+    @pytest.mark.asyncio
+    async def test_bot_none_returns_false_and_retains_cart_and_intent(
+        self, mock_db_user, mock_db, test_cart_service, monkeypatch
+    ):
+        """P1 Safeguard: when bot is None, auto-purchase does not proceed or delete cart/intent."""
+        monkeypatch.setattr(settings, 'AUTO_PURCHASE_AFTER_TOPUP_ENABLED', True)
+        monkeypatch.setattr(
+            'app.services.subscription_auto_purchase_service.user_cart_service',
+            test_cart_service,
+        )
+
+        mock_db_user.balance_kopeks = 50000
+        await test_cart_service.save_user_cart(
+            mock_db_user.id,
+            {
+                'cart_mode': 'gift_purchase',
+                'gift_checkout_id': 'chk_bot_none',
+                'tariff_id': 1,
+                'period_days': 30,
+                'total_price': 30000,
+                'return_to_cart': True,
+            },
+        )
+
+        with patch(
+            'app.services.subscription_auto_purchase_service.purchase_gift_from_balance',
+            AsyncMock(),
+        ) as mock_purchase:
+            res = await auto_purchase_saved_cart_after_topup(mock_db, mock_db_user, bot=None)
+
+            assert res is False
+            mock_purchase.assert_not_called()
+            # Cart and intent are preserved!
+            assert await test_cart_service.get_user_cart(mock_db_user.id) is not None
+            assert await test_cart_service.has_topup_intent(mock_db_user.id) is True
+
+    @pytest.mark.asyncio
+    async def test_notification_returns_none_retains_cart_and_intent(
+        self, mock_db_user, mock_db, mock_bot, test_cart_service, sample_quote, sample_purchase_result, monkeypatch
+    ):
+        """P1 Safeguard: when message sender returns None, scenario is NOT completed and cart is retained."""
+        monkeypatch.setattr(settings, 'AUTO_PURCHASE_AFTER_TOPUP_ENABLED', True)
+        monkeypatch.setattr(
+            'app.services.subscription_auto_purchase_service.user_cart_service',
+            test_cart_service,
+        )
+
+        mock_db_user.balance_kopeks = 50000
+        await test_cart_service.save_user_cart(
+            mock_db_user.id,
+            {
+                'cart_mode': 'gift_purchase',
+                'gift_checkout_id': 'chk_notify_none',
+                'tariff_id': 1,
+                'period_days': 30,
+                'total_price': 30050,
+                'return_to_cart': True,
+            },
+        )
+
+        with (
+            patch(
+                'app.services.subscription_auto_purchase_service.quote_gift_purchase',
+                AsyncMock(return_value=sample_quote),
+            ),
+            patch(
+                'app.services.subscription_auto_purchase_service.resolve_gift_claim_channel',
+                AsyncMock(return_value=('my_bot', None)),
+            ),
+            patch(
+                'app.services.subscription_auto_purchase_service.purchase_gift_from_balance',
+                AsyncMock(return_value=sample_purchase_result),
+            ),
+            patch(
+                'app.services.subscription_auto_purchase_service.send_gift_result_message',
+                AsyncMock(return_value=None),  # Sending failed!
+            ),
+        ):
+            res = await auto_purchase_saved_cart_after_topup(mock_db, mock_db_user, bot=mock_bot)
+
+            assert res is False
+            # Cart and intent are NOT deleted so user/retry can restore link
+            assert await test_cart_service.get_user_cart(mock_db_user.id) is not None
+            assert await test_cart_service.has_topup_intent(mock_db_user.id) is True
+
+    @pytest.mark.asyncio
+    async def test_notification_raises_exception_retains_cart_and_intent(
+        self, mock_db_user, mock_db, mock_bot, test_cart_service, sample_quote, sample_purchase_result, monkeypatch
+    ):
+        """P1 Safeguard: when message sender raises exception, scenario is NOT completed and cart is retained."""
+        monkeypatch.setattr(settings, 'AUTO_PURCHASE_AFTER_TOPUP_ENABLED', True)
+        monkeypatch.setattr(
+            'app.services.subscription_auto_purchase_service.user_cart_service',
+            test_cart_service,
+        )
+
+        mock_db_user.balance_kopeks = 50000
+        await test_cart_service.save_user_cart(
+            mock_db_user.id,
+            {
+                'cart_mode': 'gift_purchase',
+                'gift_checkout_id': 'chk_notify_err',
+                'tariff_id': 1,
+                'period_days': 30,
+                'total_price': 30050,
+                'return_to_cart': True,
+            },
+        )
+
+        with (
+            patch(
+                'app.services.subscription_auto_purchase_service.quote_gift_purchase',
+                AsyncMock(return_value=sample_quote),
+            ),
+            patch(
+                'app.services.subscription_auto_purchase_service.resolve_gift_claim_channel',
+                AsyncMock(return_value=('my_bot', None)),
+            ),
+            patch(
+                'app.services.subscription_auto_purchase_service.purchase_gift_from_balance',
+                AsyncMock(return_value=sample_purchase_result),
+            ),
+            patch(
+                'app.services.subscription_auto_purchase_service.send_gift_result_message',
+                AsyncMock(side_effect=RuntimeError('Telegram network timeout')),
+            ),
+        ):
+            res = await auto_purchase_saved_cart_after_topup(mock_db, mock_db_user, bot=mock_bot)
+
+            assert res is False
+            assert await test_cart_service.get_user_cart(mock_db_user.id) is not None
+            assert await test_cart_service.has_topup_intent(mock_db_user.id) is True
+
+    @pytest.mark.asyncio
+    async def test_retry_after_failed_delivery_delivers_existing_gift_without_double_debit(
+        self, mock_db_user, mock_db, mock_bot, test_cart_service, sample_quote, sample_purchase_result, monkeypatch
+    ):
+        """P1 Safeguard: retry after delivery failure re-invokes purchase_gift_from_balance with same checkout_id,
+        which re是可以s existing gift, delivers result message, and clears cart/intent."""
+        monkeypatch.setattr(settings, 'AUTO_PURCHASE_AFTER_TOPUP_ENABLED', True)
+        monkeypatch.setattr(
+            'app.services.subscription_auto_purchase_service.user_cart_service',
+            test_cart_service,
+        )
+
+        mock_db_user.balance_kopeks = 50000
+        checkout_id = 'chk_retry_idempotent'
+        await test_cart_service.save_user_cart(
+            mock_db_user.id,
+            {
+                'cart_mode': 'gift_purchase',
+                'gift_checkout_id': checkout_id,
+                'tariff_id': 1,
+                'period_days': 30,
+                'total_price': 30050,
+                'return_to_cart': True,
+            },
+        )
+
+        mock_sent_message = MagicMock(spec=Message)
+
+        with (
+            patch(
+                'app.services.subscription_auto_purchase_service.quote_gift_purchase',
+                AsyncMock(return_value=sample_quote),
+            ),
+            patch(
+                'app.services.subscription_auto_purchase_service.resolve_gift_claim_channel',
+                AsyncMock(return_value=('my_bot', None)),
+            ),
+            patch(
+                'app.services.subscription_auto_purchase_service.purchase_gift_from_balance',
+                AsyncMock(return_value=sample_purchase_result),
+            ) as mock_purchase,
+            patch(
+                'app.services.subscription_auto_purchase_service.send_gift_result_message',
+                AsyncMock(return_value=mock_sent_message),
+            ) as mock_send,
+        ):
+            res = await auto_purchase_saved_cart_after_topup(mock_db, mock_db_user, bot=mock_bot)
+
+            assert res is True
+            mock_purchase.assert_awaited_once_with(
+                db=mock_db,
+                buyer_id=mock_db_user.id,
+                tariff_id=1,
+                period_days=30,
+                expected_price_kopeks=30050,
+                idempotency_key=checkout_id,
+                source='bot',
+            )
+            mock_send.assert_awaited_once()
+            # Successfully delivered -> cart and intent are now cleaned up
+            assert await test_cart_service.get_user_cart(mock_db_user.id) is None
+            assert await test_cart_service.has_topup_intent(mock_db_user.id) is False
+
+    @pytest.mark.asyncio
+    async def test_price_change_revokes_intent_until_explicit_user_confirmation(
+        self, mock_db_user, mock_db, mock_bot, test_cart_service, monkeypatch
+    ):
+        """P1 Safeguard: when price changes, top-up intent is revoked. Subsequent top-up without confirmation
+        does not auto-purchase. Only after explicit user return/confirmation is auto-purchase permitted."""
+        monkeypatch.setattr(settings, 'AUTO_PURCHASE_AFTER_TOPUP_ENABLED', True)
+        monkeypatch.setattr(
+            'app.services.subscription_auto_purchase_service.user_cart_service',
+            test_cart_service,
+        )
+
+        mock_db_user.balance_kopeks = 50000
+        # User had saved cart for 30000 kopeks with fresh intent
+        await test_cart_service.save_user_cart(
+            mock_db_user.id,
+            {
+                'cart_mode': 'gift_purchase',
+                'gift_checkout_id': 'chk_price_change',
+                'tariff_id': 1,
+                'period_days': 30,
+                'total_price': 30000,
+                'return_to_cart': True,
+            },
+        )
+        assert await test_cart_service.has_topup_intent(mock_db_user.id) is True
+
+        # Fresh quote has changed to 45000 kopeks
+        fresh_quote = GiftQuote(
+            tariff_id=1,
+            tariff_name='Standard',
+            period_days=30,
+            traffic_limit_gb=50,
+            device_limit=1,
+            original_price_kopeks=45000,
+            final_price_kopeks=45000,
+            promo_group_discount_kopeks=0,
+            promo_offer_discount_kopeks=0,
+            consumes_promo_offer=False,
+        )
+
+        # 1st Top-Up: detects price change
+        with patch(
+            'app.services.subscription_auto_purchase_service.quote_gift_purchase',
+            AsyncMock(return_value=fresh_quote),
+        ):
+            res1 = await auto_purchase_saved_cart_after_topup(mock_db, mock_db_user, bot=mock_bot)
+
+            assert res1 is False
+            # Cart was updated with new price, but return_to_cart is False and intent was REVOKED
+            cart1 = await test_cart_service.get_user_cart(mock_db_user.id)
+            assert cart1['total_price'] == 45000
+            assert cart1['return_to_cart'] is False
+            assert await test_cart_service.has_topup_intent(mock_db_user.id) is False
+
+        # 2nd Top-Up: without user confirmation, has_topup_intent is False, so nothing is debited!
+        with patch(
+            'app.services.subscription_auto_purchase_service.quote_gift_purchase',
+            AsyncMock(return_value=fresh_quote),
+        ) as mock_quote2:
+            res2 = await auto_purchase_saved_cart_after_topup(mock_db, mock_db_user, bot=mock_bot)
+
+            assert res2 is False
+            mock_quote2.assert_not_called()  # Fast-path skipped because no intent
+
+        # User now explicitly confirms new price (e.g. via UI / return_to_gift_cart -> topup)
+        # Setting return_to_cart=True restores topup intent for the new price 45000
+        cart1['return_to_cart'] = True
+        await test_cart_service.save_user_cart(mock_db_user.id, cart1)
+        assert await test_cart_service.has_topup_intent(mock_db_user.id) is True
+
+        # 3rd Top-Up: after explicit confirmation, purchase proceeds with 45000 kopeks!
+        sample_purchase = MagicMock(spec=GuestPurchase)
+        sample_purchase.id = 1
+        sample_purchase.token = 'a' * 64
+        sample_purchase.tariff = MagicMock(spec=Tariff)
+        sample_purchase.tariff.name = 'Standard'
+        sample_result = GiftPurchaseResult(
+            purchase=sample_purchase,
+            transaction=MagicMock(spec=Transaction),
+            quote=fresh_quote,
+            remaining_balance_kopeks=5000,
+            is_idempotent_replay=False,
+        )
+
+        with (
+            patch(
+                'app.services.subscription_auto_purchase_service.quote_gift_purchase',
+                AsyncMock(return_value=fresh_quote),
+            ),
+            patch(
+                'app.services.subscription_auto_purchase_service.resolve_gift_claim_channel',
+                AsyncMock(return_value=('my_bot', None)),
+            ),
+            patch(
+                'app.services.subscription_auto_purchase_service.purchase_gift_from_balance',
+                AsyncMock(return_value=sample_result),
+            ) as mock_purchase3,
+            patch(
+                'app.services.subscription_auto_purchase_service.send_gift_result_message',
+                AsyncMock(return_value=MagicMock(spec=Message)),
+            ),
+        ):
+            res3 = await auto_purchase_saved_cart_after_topup(mock_db, mock_db_user, bot=mock_bot)
+
+            assert res3 is True
+            mock_purchase3.assert_awaited_once_with(
+                db=mock_db,
+                buyer_id=mock_db_user.id,
+                tariff_id=1,
+                period_days=30,
+                expected_price_kopeks=45000,
+                idempotency_key='chk_price_change',
+                source='bot',
+            )
+            assert await test_cart_service.get_user_cart(mock_db_user.id) is None
+            assert await test_cart_service.has_topup_intent(mock_db_user.id) is False
+
+    @pytest.mark.asyncio
+    async def test_handle_return_to_gift_cart_delivers_already_paid_gift_link(
+        self, mock_db_user, mock_callback, mock_db, memory_state, test_cart_service, monkeypatch
+    ):
+        """P1 Safeguard: if a paid purchase already exists for the saved checkout_id, handle_return_to_gift_cart
+        replays the presentation, cleans up cart and intent, and delivers the link without double debit."""
+        monkeypatch.setattr(
+            'app.handlers.subscription.gift.user_cart_service',
+            test_cart_service,
+        )
+
+        checkout_id = 'chk_already_paid'
+        await test_cart_service.save_user_cart(
+            mock_db_user.id,
+            {
+                'cart_mode': 'gift_purchase',
+                'user_id': mock_db_user.id,
+                'gift_checkout_id': checkout_id,
+                'tariff_id': 1,
+                'period_days': 30,
+                'total_price': 30000,
+            },
+        )
+
+        existing_purchase = GuestPurchase(
+            id=123,
+            buyer_user_id=mock_db_user.id,
+            tariff_id=1,
+            period_days=30,
+            amount_kopeks=30000,
+            contact_type='telegram',
+            contact_value='@tester',
+            status=GuestPurchaseStatus.PAID.value,
+            token='g' * 64,
+            idempotency_key=checkout_id,
+        )
+        existing_purchase.tariff = Tariff(id=1, name='Standard')
+
+        mock_scalars = MagicMock()
+        mock_scalars.first = MagicMock(return_value=existing_purchase)
+        mock_result = MagicMock()
+        mock_result.scalars = MagicMock(return_value=mock_scalars)
+        mock_db.execute = AsyncMock(return_value=mock_result)
+
+        quote = GiftQuote(
+            tariff_id=1,
+            tariff_name='Standard',
+            period_days=30,
+            traffic_limit_gb=50,
+            device_limit=1,
+            original_price_kopeks=30000,
+            final_price_kopeks=30000,
+            promo_group_discount_kopeks=0,
+            promo_offer_discount_kopeks=0,
+            consumes_promo_offer=False,
+        )
+        purchase_result = GiftPurchaseResult(
+            purchase=existing_purchase,
+            transaction=MagicMock(spec=Transaction),
+            quote=quote,
+            remaining_balance_kopeks=20000,
+            is_idempotent_replay=True,
+        )
+
+        with (
+            patch(
+                'app.handlers.subscription.gift.purchase_gift_from_balance',
+                AsyncMock(return_value=purchase_result),
+            ) as mock_purchase,
+            patch(
+                'app.handlers.subscription.gift.resolve_gift_claim_channel',
+                AsyncMock(return_value=('my_bot', None)),
+            ),
+        ):
+            await handle_return_to_gift_cart(mock_callback, mock_db_user, mock_db, memory_state)
+
+            mock_purchase.assert_awaited_once()
+            assert mock_callback.message.edit_text.called
+            # Cart and intent are deleted
+            assert await test_cart_service.get_user_cart(mock_db_user.id) is None
+            assert await test_cart_service.has_topup_intent(mock_db_user.id) is False

@@ -12,6 +12,7 @@ from sqlalchemy.orm import selectinload
 
 from app.config import settings
 from app.database.crud.tariff import get_tariff_by_id
+from app.database.crud.user import lock_user_for_pricing
 from app.database.models import (
     GuestPurchase,
     GuestPurchaseStatus,
@@ -262,15 +263,46 @@ async def create_gift_purchase(
                 detail='payment_method is required for gateway mode',
             )
 
-        if user.email:
+        # Lock user for pricing before calculating quote to prevent concurrent promo offer reuse
+        locked_user = await lock_user_for_pricing(db, user.id)
+        if not locked_user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail='User not found',
+            )
+
+        try:
+            quote = await quote_gift_purchase(
+                db=db,
+                buyer=locked_user,
+                tariff_id=body.tariff_id,
+                period_days=body.period_days,
+            )
+        except GiftFeatureDisabledError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail='Gift feature is not enabled',
+            ) from exc
+        except GiftTariffUnavailableError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail='Tariff not found or inactive',
+            ) from exc
+        except GiftPeriodUnavailableError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail='Price is not configured for this period',
+            ) from exc
+
+        if locked_user.email:
             buyer_contact_type = 'email'
-            buyer_contact_value = user.email
-        elif user.username:
+            buyer_contact_value = locked_user.email
+        elif locked_user.username:
             buyer_contact_type = 'telegram'
-            buyer_contact_value = f'@{user.username}'
+            buyer_contact_value = f'@{locked_user.username}'
         else:
             buyer_contact_type = 'telegram'
-            buyer_contact_value = f'id:{user.telegram_id or user.id}'
+            buyer_contact_value = f'id:{locked_user.telegram_id or locked_user.id}'
 
         tariff = await get_tariff_by_id(db, body.tariff_id)
 
@@ -298,7 +330,7 @@ async def create_gift_purchase(
                 payment_method=body.payment_method,
                 is_gift=True,
                 source='cabinet',
-                buyer_user_id=user.id,
+                buyer_user_id=locked_user.id,
                 commit=False,
                 **purchase_kwargs,
             )
@@ -312,6 +344,12 @@ async def create_gift_purchase(
         # Build return URL for after payment
         cabinet_base = (settings.CABINET_URL or '').rstrip('/')
         return_url = f'{cabinet_base}/gift/result?token={purchase.token[:12]}'
+
+        # Consume promo offer discount under lock before creating external payment
+        if quote.consumes_promo_offer and getattr(locked_user, 'promo_offer_discount_percent', 0):
+            locked_user.promo_offer_discount_percent = 0
+            locked_user.promo_offer_discount_source = None
+            locked_user.promo_offer_discount_expires_at = None
 
         from app.services.payment_service import PaymentService
 
@@ -332,6 +370,9 @@ async def create_gift_purchase(
                 purchase_token=purchase.token,
                 return_url=return_url,
             )
+        except Exception:
+            await db.rollback()
+            raise
         finally:
             if bot:
                 await bot.session.close()
@@ -355,12 +396,6 @@ async def create_gift_purchase(
                 status_code=status.HTTP_502_BAD_GATEWAY,
                 detail='Payment provider returned an invalid response',
             )
-
-        # Consume promo offer discount before committing gateway purchase
-        if quote.consumes_promo_offer and getattr(user, 'promo_offer_discount_percent', 0):
-            user.promo_offer_discount_percent = 0
-            user.promo_offer_discount_source = None
-            user.promo_offer_discount_expires_at = None
 
         await db.commit()
         await db.refresh(purchase)

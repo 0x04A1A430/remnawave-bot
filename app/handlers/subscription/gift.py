@@ -9,10 +9,12 @@ import structlog
 from aiogram import Dispatcher, F, types
 from aiogram.fsm.context import FSMContext
 from aiogram.types import InaccessibleMessage, InlineKeyboardButton, InlineKeyboardMarkup
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.config import settings
-from app.database.models import User
+from app.database.models import GuestPurchase, GuestPurchaseStatus, User
 from app.handlers.subscription.purchase import show_subscription_info
 from app.keyboards.inline import get_insufficient_balance_keyboard
 from app.localization.texts import get_texts
@@ -233,33 +235,15 @@ async def handle_gift_catalog(
     await callback.answer()
 
 
-async def handle_gift_tariff_select(
+async def _render_and_show_periods(
     callback: types.CallbackQuery,
+    tariff_id: int,
     db_user: User,
     db: AsyncSession,
     state: FSMContext,
 ) -> None:
-    """Handle tariff selection in gift catalog."""
-    if isinstance(callback.message, InaccessibleMessage):
-        await callback.answer()
-        return
-
+    """Render and display periods for a selected tariff without mutating callback data."""
     texts = get_texts(db_user.language)
-    if not callback.data or not callback.data.startswith('gift_tariff:'):
-        await callback.answer(texts.t('GIFT_INVALID_SELECTION', 'Некорректные параметры выбора.'), show_alert=True)
-        return
-
-    parts = callback.data.split(':', 1)
-    if len(parts) != 2:
-        await callback.answer(texts.t('GIFT_INVALID_SELECTION', 'Некорректные параметры выбора.'), show_alert=True)
-        return
-
-    try:
-        tariff_id = int(parts[1])
-    except ValueError:
-        await callback.answer(texts.t('GIFT_INVALID_SELECTION', 'Некорректные параметры выбора.'), show_alert=True)
-        return
-
     if not await is_gift_enabled(db):
         await callback.answer(
             texts.t('GIFT_FEATURE_DISABLED', 'Покупка подарков временно недоступна.'),
@@ -298,6 +282,36 @@ async def handle_gift_tariff_select(
     text, keyboard = _render_period_selection(db_user, offer)
     await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='HTML')
     await callback.answer()
+
+
+async def handle_gift_tariff_select(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext,
+) -> None:
+    """Handle tariff selection in gift flow and render periods."""
+    if isinstance(callback.message, InaccessibleMessage):
+        await callback.answer()
+        return
+
+    texts = get_texts(db_user.language)
+    if not callback.data or not callback.data.startswith('gift_tariff:'):
+        await callback.answer(texts.t('GIFT_INVALID_SELECTION', 'Некорректные параметры выбора.'), show_alert=True)
+        return
+
+    parts = callback.data.split(':', 1)
+    if len(parts) != 2:
+        await callback.answer(texts.t('GIFT_INVALID_SELECTION', 'Некорректные параметры выбора.'), show_alert=True)
+        return
+
+    try:
+        tariff_id = int(parts[1])
+    except ValueError:
+        await callback.answer(texts.t('GIFT_INVALID_SELECTION', 'Некорректные параметры выбора.'), show_alert=True)
+        return
+
+    await _render_and_show_periods(callback, tariff_id, db_user, db, state)
 
 
 async def handle_gift_period_select(
@@ -416,8 +430,7 @@ async def handle_gift_back_periods(
         await handle_gift_catalog(callback, db_user, db, state)
         return
 
-    callback.data = f'gift_tariff:{tariff_id}'
-    await handle_gift_tariff_select(callback, db_user, db, state)
+    await _render_and_show_periods(callback, tariff_id, db_user, db, state)
 
 
 async def handle_gift_cancel(
@@ -689,6 +702,41 @@ async def handle_return_to_gift_cart(
             texts.t('GIFT_CART_INVALID', '❌ Сохраненный подарок недоступен или некорректен.'),
             show_alert=True,
         )
+        return
+
+    # Check if this gift purchase was already completed (e.g. background auto-purchase succeeded but message delivery failed)
+    existing_stmt = (
+        select(GuestPurchase)
+        .options(selectinload(GuestPurchase.tariff))
+        .where(GuestPurchase.idempotency_key == checkout_id)
+    )
+    existing_res = await db.execute(existing_stmt)
+    existing_purchase = existing_res.scalars().first()
+    if existing_purchase is not None and existing_purchase.status in (
+        GuestPurchaseStatus.PAID,
+        GuestPurchaseStatus.DELIVERED,
+    ):
+        purchase_result = await purchase_gift_from_balance(
+            db=db,
+            buyer_id=db_user.id,
+            tariff_id=existing_purchase.tariff_id,
+            period_days=existing_purchase.period_days,
+            expected_price_kopeks=existing_purchase.amount_kopeks,
+            idempotency_key=checkout_id,
+            source='bot',
+        )
+        bot_username, cabinet_url = await resolve_gift_claim_channel(bot=callback.bot)
+        text, keyboard = build_gift_result_presentation(
+            language=db_user.language,
+            purchase_result=purchase_result,
+            bot_username=bot_username,
+            cabinet_url=cabinet_url,
+        )
+        await user_cart_service.delete_user_cart(db_user.id)
+        await user_cart_service.clear_topup_intent(db_user.id)
+        await state.clear()
+        await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='HTML')
+        await callback.answer()
         return
 
     try:
