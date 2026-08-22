@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import urllib.parse
+from dataclasses import FrozenInstanceError
 
 import pytest
 
@@ -12,6 +13,7 @@ from app.utils.gift_links import (
     GIFT_TOKEN_MIN_PREFIX_LENGTH,
     TELEGRAM_GIFT_START_PREFIX,
     TELEGRAM_START_PARAM_MAX_LENGTH,
+    GiftClaimArtifacts,
     GiftLinkError,
     InvalidBotUsernameError,
     InvalidCabinetUrlError,
@@ -22,7 +24,10 @@ from app.utils.gift_links import (
     MissingCabinetUrlError,
     build_bot_gift_claim_link,
     build_cabinet_gift_claim_link,
+    build_gift_claim_artifacts,
+    build_gift_public_code,
     build_telegram_gift_share_url,
+    parse_gift_claim_input,
 )
 
 
@@ -297,3 +302,275 @@ class TestLandingGiftLinkIntegration:
         assert len(response.bot_claim_link.split('start=')[1]) == 64
         # Assert legacy 12-char slice is NOT used
         assert response.bot_claim_link != f'https://t.me/my_landing_bot?start=GIFT_{token[:12]}'
+
+
+class TestBuildGiftPublicCode:
+    """Tests for build_gift_public_code."""
+
+    def test_canonical_public_code_format_and_length(self) -> None:
+        token = generate_purchase_token()
+        assert len(token) == 64
+
+        code = build_gift_public_code(token)
+        # Exact prefix 'GIFT_' + 59-char prefix = 64 characters
+        assert code.startswith(TELEGRAM_GIFT_START_PREFIX)
+        assert len(code) == 64
+        assert code == f'GIFT_{token[:59]}'
+
+    def test_deterministic_for_same_token(self) -> None:
+        token = generate_purchase_token()
+        code1 = build_gift_public_code(token)
+        code2 = build_gift_public_code(token)
+        assert code1 == code2
+
+    def test_equal_output_for_cabinet_and_bot_origin_purchases(self) -> None:
+        # Both bot and cabinet purchases persist standard 64-char purchase tokens in GuestPurchase.token
+        shared_token = generate_purchase_token()
+        bot_purchase_code = build_gift_public_code(shared_token)
+        cabinet_purchase_code = build_gift_public_code(shared_token)
+        assert bot_purchase_code == cabinet_purchase_code
+
+    def test_contains_only_urlsafe_characters(self) -> None:
+        token = 'Abc-123_XYZ' * 5 + '123456789'
+        code = build_gift_public_code(token)
+        assert code.startswith('GIFT_')
+        # Check that characters after GIFT_ are URL safe
+        assert all(c.isalnum() or c in '-_' for c in code)
+
+    def test_fits_telegram_start_param_limit(self) -> None:
+        token = generate_purchase_token()
+        code = build_gift_public_code(token)
+        assert len(code) <= TELEGRAM_START_PARAM_MAX_LENGTH
+
+    def test_accepts_minimum_length_token(self) -> None:
+        token = 'k' * GIFT_TOKEN_MIN_PREFIX_LENGTH  # 48 chars
+        code = build_gift_public_code(token)
+        assert code == f'GIFT_{token}'
+        assert len(code) == 5 + 48
+
+    @pytest.mark.parametrize('short_token', ['', 'abc', 'X' * 8, 'X' * 47])
+    def test_rejects_token_below_security_threshold(self, short_token: str) -> None:
+        with pytest.raises(InvalidGiftTokenError):
+            build_gift_public_code(short_token)
+
+    @pytest.mark.parametrize('malformed_token', [None, 'token with space', 'token!invalid@chars'])
+    def test_rejects_malformed_token(self, malformed_token: str | None) -> None:
+        with pytest.raises(InvalidGiftTokenError):
+            build_gift_public_code(malformed_token)  # type: ignore[arg-type]
+
+    def test_exception_does_not_leak_raw_token(self) -> None:
+        secret_token = 'secret_raw_token_xyz_12345!@#'
+        with pytest.raises(InvalidGiftTokenError) as exc:
+            build_gift_public_code(secret_token)
+        assert secret_token not in str(exc.value)
+
+
+class TestParseGiftClaimInput:
+    """Tests for parse_gift_claim_input."""
+
+    def test_parses_canonical_public_code(self) -> None:
+        token = generate_purchase_token()
+        code = f'GIFT_{token[:59]}'
+        parsed = parse_gift_claim_input(code)
+        assert parsed == token[:59]
+
+    def test_parses_legacy_dash_prefix_code(self) -> None:
+        token = generate_purchase_token()
+        code = f'GIFT-{token[:59]}'
+        parsed = parse_gift_claim_input(code)
+        assert parsed == token[:59]
+
+    def test_parses_case_insensitive_prefix(self) -> None:
+        token = generate_purchase_token()
+        assert parse_gift_claim_input(f'gift_{token[:59]}') == token[:59]
+        assert parse_gift_claim_input(f'gift-{token[:59]}') == token[:59]
+        assert parse_gift_claim_input(f'giftclaim_{token[:59]}') == token[:59]
+
+    def test_parses_canonical_telegram_deep_link(self) -> None:
+        token = generate_purchase_token()
+        deep_links = [
+            f'https://t.me/my_bot?start=GIFT_{token[:59]}',
+            f'https://t.me/my_bot?start=GIFT-{token[:59]}',
+            f't.me/my_bot?start=GIFT_{token[:59]}',
+            f'tg://resolve?domain=my_bot&start=GIFT_{token[:59]}',
+            f'https://t.me/my_bot?start=giftclaim_{token[:59]}',
+        ]
+        for link in deep_links:
+            assert parse_gift_claim_input(link) == token[:59]
+
+    def test_parses_cabinet_gift_claim_url_preserving_full_token(self) -> None:
+        token = generate_purchase_token()
+        assert len(token) == 64
+        cabinet_urls = [
+            f'https://cabinet.example.com/buy/gift/{token}',
+            f'https://cabinet.example.com/buy/gift/{token}/',
+            f'http://localhost:8000/buy/gift/{token}',
+            f'https://cabinet.example.com/buy/gift/{token}?ref=123',
+        ]
+        for url in cabinet_urls:
+            assert parse_gift_claim_input(url) == token
+
+    def test_parses_raw_full_token(self) -> None:
+        token = generate_purchase_token()
+        assert parse_gift_claim_input(token) == token
+
+    def test_parses_raw_token_prefix_meeting_security_threshold(self) -> None:
+        token = generate_purchase_token()
+        fragment_48 = token[:48]
+        fragment_59 = token[:59]
+        assert parse_gift_claim_input(fragment_48) == fragment_48
+        assert parse_gift_claim_input(fragment_59) == fragment_59
+
+    def test_strips_surrounding_whitespace(self) -> None:
+        token = generate_purchase_token()
+        assert parse_gift_claim_input(f'  GIFT_{token[:59]}  \n') == token[:59]
+        assert parse_gift_claim_input(f'  https://t.me/my_bot?start=GIFT_{token[:59]}  ') == token[:59]
+
+    @pytest.mark.parametrize(
+        'malformed_url',
+        [
+            'https://example.com/unknown/path',
+            'https://t.me/my_bot?foo=bar',
+            'https://t.me/my_bot?start=',
+            'https://cabinet.example.com/buy/gift/',
+            'https://cabinet.example.com/buy/gift',
+        ],
+    )
+    def test_rejects_malformed_url_without_gift_parameter(self, malformed_url: str) -> None:
+        with pytest.raises(InvalidGiftTokenError):
+            parse_gift_claim_input(malformed_url)
+
+    @pytest.mark.parametrize(
+        'invalid_input',
+        [
+            None,
+            '',
+            '   ',
+            'https://t.me/my_bot?start=coupon_123456789012345678901234567890123456789012345678',
+            'https://t.me/my_bot?start=ref_123456789012345678901234567890123456789012345678',
+            'GIFT_contains invalid characters!@#$123456789012345678901234567890',
+            12345,
+            [],
+        ],
+    )
+    def test_rejects_invalid_inputs(self, invalid_input: str | None) -> None:
+        with pytest.raises(InvalidGiftTokenError):
+            parse_gift_claim_input(invalid_input)  # type: ignore[arg-type]
+
+    @pytest.mark.parametrize(
+        'short_input',
+        [
+            'GIFT_short',
+            'GIFT-12345678',
+            '12345678',
+            'X' * 47,
+            f'https://t.me/my_bot?start=GIFT_{"x" * 12}',
+        ],
+    )
+    def test_rejects_short_prefix_by_default(self, short_input: str) -> None:
+        """Secure default: fragments below GIFT_TOKEN_MIN_PREFIX_LENGTH are rejected."""
+        with pytest.raises(InvalidGiftTokenError):
+            parse_gift_claim_input(short_input, allow_legacy_short=False)
+
+    def test_accepts_legacy_short_code_when_explicitly_allowed(self) -> None:
+        """Backward compatibility: legacy cabinet activation allows 8-char to 47-char codes."""
+        assert parse_gift_claim_input('GIFT_12345678', allow_legacy_short=True) == '12345678'
+        assert parse_gift_claim_input('GIFT-123456789012', allow_legacy_short=True) == '123456789012'
+        assert parse_gift_claim_input('12345678', allow_legacy_short=True) == '12345678'
+        assert parse_gift_claim_input('abcdefghij12', allow_legacy_short=True) == 'abcdefghij12'
+
+    @pytest.mark.parametrize('too_short_legacy', ['', '1234567', 'GIFT_1234567', 'GIFT-'])
+    def test_rejects_below_legacy_minimum_even_when_allowed(self, too_short_legacy: str) -> None:
+        with pytest.raises(InvalidGiftTokenError):
+            parse_gift_claim_input(too_short_legacy, allow_legacy_short=True)
+
+    def test_exception_does_not_leak_raw_secret_value(self) -> None:
+        secret_value = 'my_confidential_secret_value_123!'
+        with pytest.raises(InvalidGiftTokenError) as exc:
+            parse_gift_claim_input(secret_value)
+        assert secret_value not in str(exc.value)
+
+
+class TestGiftClaimArtifacts:
+    """Tests for GiftClaimArtifacts and build_gift_claim_artifacts."""
+
+    def test_artifacts_immutable_dataclass(self) -> None:
+        artifacts = GiftClaimArtifacts(
+            public_code='GIFT_123456',
+            bot_claim_url='https://t.me/bot?start=GIFT_123456',
+            cabinet_claim_url='https://cab.com/buy/gift/123456',
+            telegram_share_url='https://t.me/share/url?url=...',
+        )
+        assert artifacts.public_code == 'GIFT_123456'
+        with pytest.raises(FrozenInstanceError):
+            artifacts.public_code = 'modified'  # type: ignore[misc]
+
+    def test_build_artifacts_with_all_channels(self) -> None:
+        token = generate_purchase_token()
+        bot_username = 'my_test_bot'
+        cabinet_url = 'https://cabinet.example.com'
+        share_text = '🎁 Подарок для тебя!'
+
+        artifacts = build_gift_claim_artifacts(
+            token=token,
+            bot_username=bot_username,
+            cabinet_url=cabinet_url,
+            share_text=share_text,
+        )
+
+        assert artifacts.public_code == f'GIFT_{token[:59]}'
+        assert artifacts.bot_claim_url == f'https://t.me/my_test_bot?start=GIFT_{token[:59]}'
+        assert artifacts.cabinet_claim_url == f'https://cabinet.example.com/buy/gift/{token}'
+        assert artifacts.telegram_share_url is not None
+        assert f'url=https%3A%2F%2Ft.me%2Fmy_test_bot%3Fstart%3DGIFT_{token[:59]}' in artifacts.telegram_share_url
+
+    def test_build_artifacts_without_bot_username_uses_cabinet_for_share(self) -> None:
+        token = generate_purchase_token()
+        cabinet_url = 'https://cabinet.example.com'
+        share_text = '🎁 Подарок для тебя!'
+
+        artifacts = build_gift_claim_artifacts(
+            token=token,
+            bot_username=None,
+            cabinet_url=cabinet_url,
+            share_text=share_text,
+        )
+
+        assert artifacts.public_code == f'GIFT_{token[:59]}'
+        assert artifacts.bot_claim_url is None
+        assert artifacts.cabinet_claim_url == f'https://cabinet.example.com/buy/gift/{token}'
+        assert artifacts.telegram_share_url is not None
+        assert f'url=https%3A%2F%2Fcabinet.example.com%2Fbuy%2Fgift%2F{token}' in artifacts.telegram_share_url
+
+    def test_build_artifacts_without_cabinet_url(self) -> None:
+        token = generate_purchase_token()
+        artifacts = build_gift_claim_artifacts(
+            token=token,
+            bot_username='my_test_bot',
+            cabinet_url=None,
+            share_text='Share text',
+        )
+
+        assert artifacts.public_code == f'GIFT_{token[:59]}'
+        assert artifacts.bot_claim_url == f'https://t.me/my_test_bot?start=GIFT_{token[:59]}'
+        assert artifacts.cabinet_claim_url is None
+        assert artifacts.telegram_share_url is not None
+
+    def test_build_artifacts_without_any_channels(self) -> None:
+        token = generate_purchase_token()
+        artifacts = build_gift_claim_artifacts(
+            token=token,
+            bot_username=None,
+            cabinet_url=None,
+            share_text=None,
+        )
+
+        # Invariant: public code is always generated, channels produce None without suppressing code
+        assert artifacts.public_code == f'GIFT_{token[:59]}'
+        assert artifacts.bot_claim_url is None
+        assert artifacts.cabinet_claim_url is None
+        assert artifacts.telegram_share_url is None
+
+    def test_build_artifacts_rejects_invalid_token(self) -> None:
+        with pytest.raises(InvalidGiftTokenError):
+            build_gift_claim_artifacts(token='too_short', bot_username='my_bot')

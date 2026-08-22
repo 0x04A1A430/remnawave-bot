@@ -606,3 +606,27 @@ class TestGiftReplayAndPresentation:
         assert call_kwargs['chat_id'] == mock_db_user.telegram_id
         assert call_kwargs['parse_mode'] == 'HTML'
         assert isinstance(call_kwargs['reply_markup'], InlineKeyboardMarkup)
+
+    def test_presentation_sources_from_gift_claim_artifacts(self, sample_purchase_result):
+        with patch('app.services.gift_notification_service.build_gift_claim_artifacts') as mock_artifacts_builder:
+            from app.utils.gift_links import GiftClaimArtifacts
+
+            mock_artifacts_builder.return_value = GiftClaimArtifacts(
+                public_code=f'GIFT_{sample_purchase_result.purchase.token[:59]}',
+                bot_claim_url=f'https://t.me/test_gift_bot?start=GIFT_{sample_purchase_result.purchase.token[:59]}',
+                cabinet_claim_url=f'https://cabinet.example.com/buy/gift/{sample_purchase_result.purchase.token}',
+                telegram_share_url='https://t.me/share/url?url=https%3A%2F%2Ft.me%2Ftest_gift_bot&text=Gift',
+            )
+
+            text, kb = build_gift_result_presentation(
+                language='ru',
+                purchase_result=sample_purchase_result,
+                bot_username='test_gift_bot',
+                cabinet_url='https://cabinet.example.com',
+            )
+
+            mock_artifacts_builder.assert_called_once()
+            assert f'https://t.me/test_gift_bot?start=GIFT_{sample_purchase_result.purchase.token[:59]}' in text
+            buttons = [b for row in kb.inline_keyboard for b in row]
+            send_btn = next(b for b in buttons if b.text.startswith('🎁'))
+            assert send_btn.url == 'https://t.me/share/url?url=https%3A%2F%2Ft.me%2Ftest_gift_bot&text=Gift'

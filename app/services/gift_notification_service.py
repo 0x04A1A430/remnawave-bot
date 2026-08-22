@@ -20,11 +20,9 @@ from app.config import settings
 from app.localization.texts import get_texts
 from app.services.gift_purchase_service import GiftPurchaseResult
 from app.utils.gift_links import (
-    GiftLinkError,
     _normalize_bot_username,
     _normalize_cabinet_url,
-    build_bot_gift_claim_link,
-    build_cabinet_gift_claim_link,
+    build_gift_claim_artifacts,
     build_telegram_gift_share_url,
 )
 
@@ -109,23 +107,6 @@ def build_gift_result_presentation(
         ValueError: If neither bot_username nor cabinet_url can form a valid claim URL.
     """
     token = purchase_result.purchase.token
-    claim_link: str | None = None
-
-    if bot_username:
-        try:
-            claim_link = build_bot_gift_claim_link(token, bot_username)
-        except GiftLinkError as err:
-            logger.debug('Failed to build bot gift claim link', error=str(err))
-
-    if not claim_link and cabinet_url:
-        try:
-            claim_link = build_cabinet_gift_claim_link(token, cabinet_url)
-        except GiftLinkError as err:
-            logger.debug('Failed to build cabinet gift claim link', error=str(err))
-
-    if not claim_link:
-        raise ValueError('Cannot build gift result presentation: neither bot deep link nor cabinet URL available')
-
     texts = get_texts(language)
     quote = purchase_result.quote
 
@@ -137,7 +118,19 @@ def build_gift_result_presentation(
         tariff_name=quote.tariff_name,
         period_days=quote.period_days,
     )
-    share_url = build_telegram_gift_share_url(claim_link, share_text)
+
+    artifacts = build_gift_claim_artifacts(
+        token=token,
+        bot_username=bot_username,
+        cabinet_url=cabinet_url,
+        share_text=share_text,
+    )
+
+    claim_link = artifacts.bot_claim_url or artifacts.cabinet_claim_url
+    if not claim_link:
+        raise ValueError('Cannot build gift result presentation: neither bot deep link nor cabinet URL available')
+
+    share_url = artifacts.telegram_share_url or build_telegram_gift_share_url(claim_link, share_text)
 
     # Localized message body (HTML formatted)
     escaped_tariff_name = html.escape(quote.tariff_name)
