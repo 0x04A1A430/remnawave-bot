@@ -2185,6 +2185,7 @@
   "GIFT_ACTIVATION_ALREADY_OWNED_ERROR": "ℹ️ This gift has already been activated.",
   "GIFT_ACTIVATION_NOT_ACTIVATABLE_ERROR": "❌ This gift cannot be activated.",
   "GIFT_ACTIVATION_GENERIC_ERROR": "❌ An error occurred while activating the gift. Please try activating via the personal cabinet.",
+  "GIFT_ACTIVATION_FAILED_PREFIX": "Failed to activate gift: {error}",
   "GIFT_ACTIVATION_NOT_FOUND": "Gift not found or unavailable.",
   "GIFT_ACTIVATION_IN_PROGRESS": "⏳ Activating gift...",
   "GIFT_ACTIVATION_OBSOLETE_MESSAGE": "Message is outdated. Try /start.",

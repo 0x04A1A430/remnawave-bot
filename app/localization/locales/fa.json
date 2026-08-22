@@ -2185,6 +2185,7 @@
   "GIFT_ACTIVATION_ALREADY_OWNED_ERROR": "ℹ️ این هدیه قبلاً فعال شده است.",
   "GIFT_ACTIVATION_NOT_ACTIVATABLE_ERROR": "❌ این هدیه قابل فعال‌سازی نیست.",
   "GIFT_ACTIVATION_GENERIC_ERROR": "❌ خطایی هنگام فعال‌سازی هدیه رخ داد. لطفاً از طریق پنل کاربری اقدام کنید.",
+  "GIFT_ACTIVATION_FAILED_PREFIX": "فعال‌سازی هدیه ناموفق بود: {error}",
   "GIFT_ACTIVATION_NOT_FOUND": "هدیه یافت نشد یا در دسترس نیست.",
   "GIFT_ACTIVATION_IN_PROGRESS": "⏳ در حال فعال‌سازی هدیه...",
   "GIFT_ACTIVATION_OBSOLETE_MESSAGE": "پیام منقضی شده است. /start را امتحان کنید.",

@@ -1400,3 +1400,44 @@ async def test_activate_gift_backward_compatibility_short_codes_and_canonical(mo
             db=db,
         )
         assert res5.status == 'activated'
+
+
+@pytest.mark.asyncio
+async def test_get_gift_purchase_status_empty_token_prefix_returns_404(monkeypatch):
+    """Passing empty or prefix-only token like 'GIFT_' returns 404 even if user owns purchases."""
+    async with memory_session(monkeypatch, _TABLES) as db:
+        user = User(id=10, username='buyer')
+        tariff = Tariff(id=1, name='Standard')
+        full_token = 'a' * 64
+        purchase = GuestPurchase(
+            id=1,
+            token=full_token,
+            contact_type='email',
+            contact_value='buyer@example.com',
+            tariff_id=1,
+            period_days=30,
+            amount_kopeks=20000,
+            is_gift=True,
+            status=GuestPurchaseStatus.PAID.value,
+            buyer_user_id=10,
+        )
+        db.add_all([user, tariff, purchase])
+        await db.commit()
+
+        # Test GIFT_
+        with pytest.raises(HTTPException) as exc_info1:
+            await gift_routes.get_gift_purchase_status(token='GIFT_', user=user, db=db)
+        assert exc_info1.value.status_code == 404
+        assert exc_info1.value.detail == 'Purchase not found'
+
+        # Test GIFT-
+        with pytest.raises(HTTPException) as exc_info2:
+            await gift_routes.get_gift_purchase_status(token='GIFT-', user=user, db=db)
+        assert exc_info2.value.status_code == 404
+        assert exc_info2.value.detail == 'Purchase not found'
+
+        # Test empty string / whitespace
+        with pytest.raises(HTTPException) as exc_info3:
+            await gift_routes.get_gift_purchase_status(token='   ', user=user, db=db)
+        assert exc_info3.value.status_code == 404
+        assert exc_info3.value.detail == 'Purchase not found'

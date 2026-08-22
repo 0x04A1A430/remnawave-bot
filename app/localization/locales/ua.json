@@ -2185,6 +2185,7 @@
   "GIFT_ACTIVATION_ALREADY_OWNED_ERROR": "ℹ️ Цей подарунок вже був активований.",
   "GIFT_ACTIVATION_NOT_ACTIVATABLE_ERROR": "❌ Цей подарунок неможливо активувати.",
   "GIFT_ACTIVATION_GENERIC_ERROR": "❌ Сталася помилка під час активації подарунка. Спробуйте активувати через особистий кабінет.",
+  "GIFT_ACTIVATION_FAILED_PREFIX": "Не вдалося активувати подарунок: {error}",
   "GIFT_ACTIVATION_NOT_FOUND": "Подарунок не знайдено або недоступний.",
   "GIFT_ACTIVATION_IN_PROGRESS": "⏳ Активуємо подарунок...",
   "GIFT_ACTIVATION_OBSOLETE_MESSAGE": "Повідомлення застаріло. Спробуйте /start.",

@@ -99,7 +99,10 @@ async def handle_gift_activate(callback: types.CallbackQuery) -> None:
                 )
             else:
                 await callback.message.edit_text(
-                    f'Не удалось активировать подарок: {html_mod.escape(exc.message)}',
+                    texts.t(
+                        'GIFT_ACTIVATION_FAILED_PREFIX',
+                        'Не удалось активировать подарок: {error}',
+                    ).format(error=html_mod.escape(exc.message)),
                     parse_mode=None,
                 )
             return

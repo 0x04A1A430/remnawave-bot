@@ -572,6 +572,11 @@ async def get_gift_purchase_status(
     clean_token = token.strip()
     if clean_token.upper().startswith(('GIFT_', 'GIFT-')):
         clean_token = clean_token[5:]
+    if not clean_token:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail='Purchase not found',
+        )
     if len(clean_token) >= 64:
         token_filter = GuestPurchase.token == clean_token
     else:

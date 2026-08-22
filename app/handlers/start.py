@@ -273,7 +273,7 @@ async def _activate_pending_gift_after_registration(
             )
             return
         except GiftClaimNotFoundError:
-            logger.warning('Gift not found for deep link token', token_prefix=gift_token[:5])
+            logger.warning('Gift not found for deep link token', token_length=len(gift_token))
             return
 
         tariff_name = html.escape(gift_purchase.tariff.name) if gift_purchase.tariff else ''
@@ -290,7 +290,7 @@ async def _activate_pending_gift_after_registration(
     except Exception:
         logger.exception(
             'Failed to auto-activate gift after registration',
-            token_prefix=(gift_token or '')[:5],
+            token_length=len(gift_token) if gift_token else 0,
         )
         try:
             texts = get_texts(user.language)

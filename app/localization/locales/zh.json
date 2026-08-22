@@ -2185,6 +2185,7 @@
   "GIFT_ACTIVATION_ALREADY_OWNED_ERROR": "ℹ️ 该礼物已被激活。",
   "GIFT_ACTIVATION_NOT_ACTIVATABLE_ERROR": "❌ 该礼物无法激活。",
   "GIFT_ACTIVATION_GENERIC_ERROR": "❌ 激活礼物时出错。请尝试通过个人中心激活。",
+  "GIFT_ACTIVATION_FAILED_PREFIX": "激活礼物失败：{error}",
   "GIFT_ACTIVATION_NOT_FOUND": "未找到礼物或不可用。",
   "GIFT_ACTIVATION_IN_PROGRESS": "⏳ 正在激活礼物...",
   "GIFT_ACTIVATION_OBSOLETE_MESSAGE": "消息已过期。请尝试 /start。",

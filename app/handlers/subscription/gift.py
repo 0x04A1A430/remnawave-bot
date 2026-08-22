@@ -1186,7 +1186,10 @@ async def handle_gift_code_input(
                 '❌ Произошла ошибка при активации подарка. Попробуйте активировать через личный кабинет.',
             )
         else:
-            msg_text = f'Не удалось активировать подарок: {html.escape(exc.message)}'
+            msg_text = texts.t(
+                'GIFT_ACTIVATION_FAILED_PREFIX',
+                'Не удалось активировать подарок: {error}',
+            ).format(error=html.escape(exc.message))
         await message.answer(msg_text, reply_markup=cancel_kb, parse_mode='HTML')
         return
     except Exception:
