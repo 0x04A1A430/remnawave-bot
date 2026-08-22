@@ -19,6 +19,13 @@ from app.database.models import (
     GuestPurchaseStatus,
     User,
 )
+from app.services.gift_claim_service import (
+    GiftClaimAlreadyOwnedError,
+    GiftClaimNotActivatableError,
+    GiftClaimNotFoundError,
+    GiftClaimSelfActivationError,
+    claim_gift_for_user,
+)
 from app.services.gift_history_service import list_sender_gifts
 from app.services.gift_purchase_service import (
     GiftFeatureDisabledError,
@@ -42,9 +49,7 @@ from app.services.guest_purchase_service import (
 from app.services.payment_method_config_service import get_enabled_methods_for_user
 from app.utils.cache import RateLimitCache
 from app.utils.gift_links import (
-    InvalidGiftTokenError,
     build_gift_claim_artifacts,
-    parse_gift_claim_input,
 )
 from app.utils.promo_offer import get_user_active_promo_discount_percent
 
@@ -733,8 +738,6 @@ async def activate_gift_by_code(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Activate a gift subscription by its code (token)."""
-    from app.services.guest_purchase_service import activate_purchase as svc_activate
-
     # Bug 2 fix: rate limit activation attempts to prevent brute-force token enumeration
     is_limited = await RateLimitCache.is_rate_limited(user.id, 'gift_activate', limit=10, window=60)
     if is_limited:
@@ -742,79 +745,33 @@ async def activate_gift_by_code(
 
     raw_code = body.code.strip()
     try:
-        code = parse_gift_claim_input(raw_code, allow_legacy_short=True)
-    except InvalidGiftTokenError as exc:
+        purchase = await claim_gift_for_user(
+            db,
+            claimant_user_id=user.id,
+            claim_input=raw_code,
+            allow_legacy_short=True,
+        )
+    except GiftClaimNotFoundError as exc:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Code too short' if len(raw_code) < 8 else 'Invalid gift code',
+            status_code=status.HTTP_400_BAD_REQUEST if len(raw_code) < 8 else status.HTTP_404_NOT_FOUND,
+            detail='Code too short' if len(raw_code) < 8 else 'Gift not found',
         ) from exc
-
-    # Support both full token and prefix-based lookup (displayed codes are truncated)
-    if len(code) >= 64:
-        # Full token — exact match
-        token_filter = GuestPurchase.token == code
-    else:
-        # Prefix match — for short display codes like GIFT-XXXXXXXXXXXX or canonical GIFT_<59_chars>
-        token_filter = GuestPurchase.token.startswith(code)
-
-    result = await db.execute(
-        select(GuestPurchase)
-        .options(selectinload(GuestPurchase.tariff))
-        .where(token_filter, GuestPurchase.is_gift.is_(True))
-        .with_for_update()
-    )
-    purchase = result.scalars().first()
-
-    if purchase is None or not purchase.is_gift:
+    except GiftClaimAlreadyOwnedError as exc:
+        # Bug 1 fix: do not disclose that a token belongs to another account
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail='Gift not found',
-        )
-
-    # Bug 1 fix: check ownership BEFORE leaking any status/tariff info
-    if purchase.user_id is not None and purchase.user_id != user.id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail='Gift not found',
-        )
-
-    # Prevent self-activation: buyer cannot activate their own gift
-    if purchase.buyer_user_id is not None and purchase.buyer_user_id == user.id:
+        ) from exc
+    except GiftClaimSelfActivationError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail='Cannot activate your own gift',
-        )
-
-    if purchase.status == GuestPurchaseStatus.DELIVERED.value:
-        return ActivateGiftResponse(
-            status='activated',
-            tariff_name=purchase.tariff.name if purchase.tariff else None,
-            period_days=purchase.period_days,
-        )
-
-    # Code-only gifts are in PAID status; directed gifts are in PENDING_ACTIVATION
-    activatable_statuses = {
-        GuestPurchaseStatus.PENDING_ACTIVATION.value,
-        GuestPurchaseStatus.PAID.value,
-    }
-    if purchase.status not in activatable_statuses:
+        ) from exc
+    except GiftClaimNotActivatableError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail='This gift cannot be activated',
-        )
-
-    # For code-only gifts (user_id is None), link the purchase to the activating user
-    if purchase.user_id is None:
-        purchase.user_id = user.id
-
-    # Transition PAID → PENDING_ACTIVATION so activate_purchase() accepts it
-    if purchase.status == GuestPurchaseStatus.PAID.value:
-        purchase.status = GuestPurchaseStatus.PENDING_ACTIVATION.value
-
-    await db.flush()
-
-    try:
-        await svc_activate(db, purchase.token, skip_notification=True)
+        ) from exc
     except GuestPurchaseError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
 

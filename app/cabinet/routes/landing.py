@@ -17,10 +17,16 @@ from app.database.crud.landing import get_active_landing_by_slug, get_purchase_b
 from app.database.crud.tariff import get_tariff_by_id
 from app.database.crud.user import get_user_by_email
 from app.database.models import GuestPurchase, GuestPurchaseStatus, LandingPage, Tariff
+from app.services.gift_claim_service import (
+    GiftClaimAlreadyOwnedError,
+    GiftClaimNotActivatableError,
+    GiftClaimNotFoundError,
+    GiftClaimSelfActivationError,
+    claim_gift_for_user,
+)
 from app.services.guest_purchase_service import (
     GuestPurchaseError,
     _find_or_create_user,
-    activate_purchase as activate_guest_purchase,
     create_purchase,
     validate_and_calculate,
 )
@@ -644,15 +650,21 @@ async def claim_gift(
     # Guards passed — now create/finalize the account the gift binds to.
     user, _is_new = await _find_or_create_user(db, 'email', body.email, purchase=purchase, tariff_id=purchase.tariff_id)
 
-    # Bind (if unbound) and move PAID → PENDING_ACTIVATION so activate accepts it.
-    if purchase.user_id is None:
-        purchase.user_id = user.id
-    if purchase.status == GuestPurchaseStatus.PAID.value:
-        purchase.status = GuestPurchaseStatus.PENDING_ACTIVATION.value
-    await db.flush()
-
     try:
-        purchase = await activate_guest_purchase(db, purchase.token, skip_notification=True)
+        purchase = await claim_gift_for_user(
+            db,
+            claimant_user_id=user.id,
+            claim_input=token,
+            allow_legacy_short=False,
+        )
+    except GiftClaimNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Gift not found') from exc
+    except GiftClaimAlreadyOwnedError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail='This gift has already been claimed') from exc
+    except GiftClaimSelfActivationError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Cannot activate your own gift') from exc
+    except GiftClaimNotActivatableError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='This gift cannot be activated') from exc
     except GuestPurchaseError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
 

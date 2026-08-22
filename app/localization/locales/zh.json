@@ -2178,5 +2178,14 @@
   "GIFT_INSUFFICIENT_BALANCE_TITLE": "💰 <b>余额不足以购买礼物</b>\n\n所需金额: <b>{required}</b>\n当前余额: <b>{balance}</b>\n缺少金额: <b>{missing}</b>\n\n🛒 <i>您的购物车已保存！充值后您可以返回继续完成礼物购买。</i>\n\n请选择充值方式:",
   "GIFT_CART_EXPIRED": "❌ 保存的礼物购物车已过期。",
   "GIFT_CART_INVALID": "❌ 保存的礼物不可用或无效。",
-  "GIFT_AUTO_PURCHASE_FAILED": "❌ 无法自动完成礼物购买：所选套餐或服务已不可用。"
+  "GIFT_AUTO_PURCHASE_FAILED": "❌ 无法自动完成礼物购买：所选套餐或服务已不可用。",
+  "GIFT_ACTIVATION_SUCCESS_TEXT": "🎁 <b>礼物已激活！</b>\n{tariff_name} — {period_days} 天\n\n您的订阅已更新。",
+  "GIFT_ACTIVATION_CALLBACK_SUCCESS_TEXT": "✅ <b>礼物已激活！</b>\n{tariff_text}\n\n您的订阅已更新。",
+  "GIFT_ACTIVATION_SELF_CLAIM_ERROR": "⚠️ 无法激活您自己购买的礼物。\n请将代码发送给朋友！",
+  "GIFT_ACTIVATION_ALREADY_OWNED_ERROR": "ℹ️ 该礼物已被激活。",
+  "GIFT_ACTIVATION_NOT_ACTIVATABLE_ERROR": "❌ 该礼物无法激活。",
+  "GIFT_ACTIVATION_GENERIC_ERROR": "❌ 激活礼物时出错。请尝试通过个人中心激活。",
+  "GIFT_ACTIVATION_NOT_FOUND": "未找到礼物或不可用。",
+  "GIFT_ACTIVATION_IN_PROGRESS": "⏳ 正在激活礼物...",
+  "GIFT_ACTIVATION_OBSOLETE_MESSAGE": "消息已过期。请尝试 /start。"
 }

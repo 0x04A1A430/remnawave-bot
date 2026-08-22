@@ -2178,5 +2178,14 @@
   "GIFT_INSUFFICIENT_BALANCE_TITLE": "💰 <b>Недостаточно средств для оформления подарка</b>\n\nТребуется: <b>{required}</b>\nУ вас: <b>{balance}</b>\nНе хватает: <b>{missing}</b>\n\n🛒 <i>Ваша корзина сохранена! После пополнения баланса вы сможете вернуться к оформлению подарка.</i>\n\nВыберите способ пополнения:",
   "GIFT_CART_EXPIRED": "❌ Срок действия сохраненной корзины подарка истек.",
   "GIFT_CART_INVALID": "❌ Сохраненный подарок недоступен или некорректен.",
-  "GIFT_AUTO_PURCHASE_FAILED": "❌ Не удалось автоматически оформить подарок: выбранный тариф или услуга более недоступны."
+  "GIFT_AUTO_PURCHASE_FAILED": "❌ Не удалось автоматически оформить подарок: выбранный тариф или услуга более недоступны.",
+  "GIFT_ACTIVATION_SUCCESS_TEXT": "🎁 <b>Подарок активирован!</b>\n{tariff_name} — {period_days} дн.\n\nВаша подписка обновлена.",
+  "GIFT_ACTIVATION_CALLBACK_SUCCESS_TEXT": "✅ <b>Подарок активирован!</b>\n{tariff_text}\n\nВаша подписка обновлена.",
+  "GIFT_ACTIVATION_SELF_CLAIM_ERROR": "⚠️ Нельзя активировать свой собственный подарок.\nОтправьте код другу!",
+  "GIFT_ACTIVATION_ALREADY_OWNED_ERROR": "ℹ️ Этот подарок уже был активирован.",
+  "GIFT_ACTIVATION_NOT_ACTIVATABLE_ERROR": "❌ Этот подарок невозможно активировать.",
+  "GIFT_ACTIVATION_GENERIC_ERROR": "❌ Произошла ошибка при активации подарка. Попробуйте активировать через личный кабинет.",
+  "GIFT_ACTIVATION_NOT_FOUND": "Подарок не найден или недоступен.",
+  "GIFT_ACTIVATION_IN_PROGRESS": "⏳ Активируем подарок...",
+  "GIFT_ACTIVATION_OBSOLETE_MESSAGE": "Сообщение устарело. Попробуйте /start."
 }

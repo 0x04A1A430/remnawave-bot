@@ -2178,5 +2178,14 @@
   "GIFT_INSUFFICIENT_BALANCE_TITLE": "💰 <b>موجودی ناکافی برای خرید هدیه</b>\n\nمبلغ مورد نیاز: <b>{required}</b>\nموجودی شما: <b>{balance}</b>\nکسری: <b>{missing}</b>\n\n🛒 <i>سبد خرید شما ذخیره شد! پس از افزایش موجودی می‌توانید خرید هدیه را تکمیل کنید.</i>\n\nروش پرداخت را انتخاب کنید:",
   "GIFT_CART_EXPIRED": "❌ مهلت سبد خرید هدیه ذخیره‌شده به پایان رسیده است.",
   "GIFT_CART_INVALID": "❌ هدیه ذخیره‌شده در دسترس نیست یا نامعتبر است.",
-  "GIFT_AUTO_PURCHASE_FAILED": "❌ خرید خودکار هدیه انجام نشد: تعرفه یا سرویس انتخاب‌شده دیگر در دسترس نیست."
+  "GIFT_AUTO_PURCHASE_FAILED": "❌ خرید خودکار هدیه انجام نشد: تعرفه یا سرویس انتخاب‌شده دیگر در دسترس نیست.",
+  "GIFT_ACTIVATION_SUCCESS_TEXT": "🎁 <b>هدیه فعال شد!</b>\n{tariff_name} — {period_days} روز\n\nاشتراک شما به‌روز شد.",
+  "GIFT_ACTIVATION_CALLBACK_SUCCESS_TEXT": "✅ <b>هدیه فعال شد!</b>\n{tariff_text}\n\nاشتراک شما به‌روز شد.",
+  "GIFT_ACTIVATION_SELF_CLAIM_ERROR": "⚠️ شما نمی‌توانید هدیه خود را فعال کنید.\nکد را برای یک دوست ارسال کنید!",
+  "GIFT_ACTIVATION_ALREADY_OWNED_ERROR": "ℹ️ این هدیه قبلاً فعال شده است.",
+  "GIFT_ACTIVATION_NOT_ACTIVATABLE_ERROR": "❌ این هدیه قابل فعال‌سازی نیست.",
+  "GIFT_ACTIVATION_GENERIC_ERROR": "❌ خطایی هنگام فعال‌سازی هدیه رخ داد. لطفاً از طریق پنل کاربری اقدام کنید.",
+  "GIFT_ACTIVATION_NOT_FOUND": "هدیه یافت نشد یا در دسترس نیست.",
+  "GIFT_ACTIVATION_IN_PROGRESS": "⏳ در حال فعال‌سازی هدیه...",
+  "GIFT_ACTIVATION_OBSOLETE_MESSAGE": "پیام منقضی شده است. /start را امتحان کنید."
 }

@@ -2178,5 +2178,14 @@
   "GIFT_INSUFFICIENT_BALANCE_TITLE": "💰 <b>Insufficient funds for gift purchase</b>\n\nRequired: <b>{required}</b>\nYour balance: <b>{balance}</b>\nMissing: <b>{missing}</b>\n\n🛒 <i>Your cart has been saved! After topping up your balance, you can return to complete your gift purchase.</i>\n\nChoose payment method:",
   "GIFT_CART_EXPIRED": "❌ Saved gift cart has expired.",
   "GIFT_CART_INVALID": "❌ Saved gift is unavailable or invalid.",
-  "GIFT_AUTO_PURCHASE_FAILED": "❌ Could not automatically complete gift purchase: selected tariff or service is no longer available."
+  "GIFT_AUTO_PURCHASE_FAILED": "❌ Could not automatically complete gift purchase: selected tariff or service is no longer available.",
+  "GIFT_ACTIVATION_SUCCESS_TEXT": "🎁 <b>Gift activated!</b>\n{tariff_name} — {period_days} days\n\nYour subscription has been updated.",
+  "GIFT_ACTIVATION_CALLBACK_SUCCESS_TEXT": "✅ <b>Gift activated!</b>\n{tariff_text}\n\nYour subscription has been updated.",
+  "GIFT_ACTIVATION_SELF_CLAIM_ERROR": "⚠️ You cannot activate your own gift.\nSend the code to a friend!",
+  "GIFT_ACTIVATION_ALREADY_OWNED_ERROR": "ℹ️ This gift has already been activated.",
+  "GIFT_ACTIVATION_NOT_ACTIVATABLE_ERROR": "❌ This gift cannot be activated.",
+  "GIFT_ACTIVATION_GENERIC_ERROR": "❌ An error occurred while activating the gift. Please try activating via the personal cabinet.",
+  "GIFT_ACTIVATION_NOT_FOUND": "Gift not found or unavailable.",
+  "GIFT_ACTIVATION_IN_PROGRESS": "⏳ Activating gift...",
+  "GIFT_ACTIVATION_OBSOLETE_MESSAGE": "Message is outdated. Try /start."
 }

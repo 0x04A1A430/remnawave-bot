@@ -399,8 +399,9 @@ class TestGiftDeeplinkActivation:
             await db.refresh(purchase)
             assert purchase.status == GuestPurchaseStatus.PENDING_ACTIVATION.value
             assert purchase.user_id == user_a.id
-            # No success answer to user B
-            answer_mock.assert_not_called()
+            # Refusal message sent to user B
+            answered_texts = [call.args[0] for call in answer_mock.call_args_list if call.args]
+            assert any('Этот подарок уже был активирован' in txt for txt in answered_texts)
 
     @pytest.mark.asyncio
     async def test_malformed_and_short_prefix_rejected(self, monkeypatch):
