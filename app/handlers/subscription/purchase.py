@@ -1507,8 +1507,6 @@ async def return_to_saved_cart(callback: types.CallbackQuery, state: FSMContext,
 
     if not settings.is_devices_selection_enabled():
         try:
-            from .pricing import _prepare_subscription_summary
-
             _, recalculated_data = await _prepare_subscription_summary(
                 db_user,
                 prepared_cart_data,
