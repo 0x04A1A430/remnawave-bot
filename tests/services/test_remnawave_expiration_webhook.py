@@ -6,6 +6,7 @@ while still accepting the old events from 2.7.x panels.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
@@ -13,6 +14,7 @@ import pytest
 
 from app.config import settings
 from app.services import remnawave_webhook_service
+from app.services.grace_access_service import GracePanelOverlay
 from app.services.remnawave_webhook_service import RemnaWaveWebhookService
 
 
