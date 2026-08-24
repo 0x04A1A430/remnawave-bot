@@ -111,6 +111,49 @@ class GracePanelUpdateLease:
         return self.subscription is not None and not self.has_open_grace
 
 
+async def _repair_missing_panel_id(db: AsyncSession, model: GraceAccessSessionModel) -> bool:
+    """Дозаполнить `remnawave_id` сессии из тех же источников, что и бэкфилл.
+
+    Сессия с пустой колонкой нечитаема: `_model_to_session` бросает
+    `GraceSnapshotError`. Такая строка бессмертна — закрыть её некому, новый
+    грейс для этой подписки не откроется из-за уникального индекса на открытую
+    сессию, а фоновой разбор пишет ошибку каждый цикл. Между тем ответ обычно
+    лежит рядом: подписка (или, в однотарифном, её владелец) уже связаны —
+    бэкфилом или самим ботом после него.
+
+    Возвращает True, если идентичность восстановлена.
+    """
+    if model.remnawave_id is not None:
+        return False
+
+    panel_id = (
+        await db.execute(select(Subscription.remnawave_id).where(Subscription.id == model.subscription_id))
+    ).scalar_one_or_none()
+
+    if panel_id is None and not settings.is_multi_tariff_enabled():
+        # В однотарифном идентичность канонически живёт на пользователе.
+        panel_id = (
+            await db.execute(
+                select(User.remnawave_id)
+                .join(Subscription, Subscription.user_id == User.id)
+                .where(Subscription.id == model.subscription_id)
+            )
+        ).scalar_one_or_none()
+
+    if panel_id is None:
+        return False
+
+    model.remnawave_id = int(panel_id)
+    model.last_error = None
+    logger.info(
+        'Идентичность grace-сессии восстановлена из подписки',
+        grace_session_id=model.id,
+        subscription_id=model.subscription_id,
+        remnawave_id=int(panel_id),
+    )
+    return True
+
+
 class SQLAlchemyGraceSessionStore:
     """SQLAlchemy adapter for the persistence-neutral grace core."""
 
@@ -130,7 +173,11 @@ class SQLAlchemyGraceSessionStore:
             .limit(1)
         )
         model = result.scalar_one_or_none()
-        return _model_to_session(model) if model else None
+        if model is None:
+            return None
+        if model.remnawave_id is None:
+            await _repair_missing_panel_id(self._db, model)
+        return _model_to_session(model)
 
     async def get_by_incident(
         self,
@@ -146,7 +193,11 @@ class SQLAlchemyGraceSessionStore:
             )
         )
         model = result.scalar_one_or_none()
-        return _model_to_session(model) if model else None
+        if model is None:
+            return None
+        if model.remnawave_id is None:
+            await _repair_missing_panel_id(self._db, model)
+        return _model_to_session(model)
 
     async def create(self, session: GraceAccessSession) -> GraceAccessSession:
         model = _session_to_model(session)
@@ -243,6 +294,8 @@ class SQLAlchemyGraceSessionStore:
         sessions: list[GraceAccessSession] = []
         for model in result.scalars().all():
             try:
+                if model.remnawave_id is None:
+                    await _repair_missing_panel_id(self._db, model)
                 sessions.append(_model_to_session(model))
             except Exception as error:
                 model.last_error = f'{type(error).__name__}: {error}'[:1000]

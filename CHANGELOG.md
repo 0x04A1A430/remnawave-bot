@@ -1,6 +1,119 @@
-# Changelog
+﻿# Changelog
 
 ## [4.1.0](https://github.com/cy7su/remnawave-bot/compare/v4.0.0...v4.1.0) (2026-08-10)
+
+## Upstream [4.1.0](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v4.0.0...v4.1.0) (2026-08-20)
+
+
+### New Features
+
+* add typed ban notification templates ([30878b1](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/30878b156ac1efe42338c28fbdfead8bcd68feb6))
+* **cabinet:** СѓРґР°Р»РµРЅРёРµ РєРѕРЅРєСЂРµС‚РЅРѕР№ РїРѕРґРїРёСЃРєРё РёР· РєР°СЂС‚РѕС‡РєРё РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ ([56a9959](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/56a9959d7738d6b646bcfd001b5de265a683b604))
+* **email:** Р·Р°РіРѕР»РѕРІРѕРє Reply-To (SMTP_REPLY_TO) ([6a26e39](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/6a26e397d3b2366d5bc24a48af3b2c6c49f5dba5))
+* **email:** РѕС‚РїРёСЃРєР° РѕС‚ РјР°СЂРєРµС‚РёРЅРіРѕРІС‹С… РїРёСЃРµРј (one-click, RFC 8058) ([4825527](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/482552705400a44e8afb83904a310875fa4261fb))
+* **landing:** Р·Р°СЃС‡РёС‚С‹РІР°С‚СЊ РіРѕСЃС‚РµРІСѓСЋ РїРѕРєСѓРїРєСѓ РІ СЂРµРєР»Р°РјРЅСѓСЋ РєР°РјРїР°РЅРёСЋ ([1c46702](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/1c46702cdf18c437c71de6d0129a65cdfa0f4794))
+* **landing:** Р·Р°СЃС‡РёС‚С‹РІР°С‚СЊ РіРѕСЃС‚РµРІС‹Рµ РїРѕРєСѓРїРєРё РІ СЂРµРєР»Р°РјРЅС‹Рµ РєР°РјРїР°РЅРёРё ([7203ca9](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/7203ca9f88cf5f37d82cdb0476f417799d621a6e))
+* **landing:** СЃРѕС…СЂР°РЅСЏС‚СЊ СЃР»Р°Рі СЂРµРєР»Р°РјРЅРѕР№ РєР°РјРїР°РЅРёРё РІ РіРѕСЃС‚РµРІРѕР№ РїРѕРєСѓРїРєРµ ([4a81705](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/4a81705d277c5e2fd92da47907e04cf8b4abb590))
+* **promocodes:** С‚СЂР°С„РёРє РІ РЅР°Р±РѕСЂРµ Р±РѕРЅСѓСЃРѕРІ РїСЂРѕРјРѕРєРѕРґР° ([93f5bff](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/93f5bff49691847284e8d8bb12650bffaef92084))
+* **remnawave:** РїСЂРѕРєСЃРёСЂРѕРІР°С‚СЊ GeoCheck РЅРѕРґС‹ РёР· РїР°РЅРµР»Рё 3.3.0 РІ РєР°Р±РёРЅРµС‚ ([134d8e4](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/134d8e4ef828d138bc74a4608af9ee64c15e6e98))
+* show payment methods directly on extend insufficient-balance screen ([45f81a8](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/45f81a89f3983441e391ebe699f0dfc34ce5bbb4))
+* skip tariff selection screen when only one tariff is available ([5c74099](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/5c7409940cf975ea4748519cf4d54bb265702209))
+* sort user list by soonest subscription expiry ([e3713ce](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/e3713ce9710dfa8d3fbfc1abf10b034378fd8978))
+
+
+### Bug Fixes
+
+* align BanHammer notification contract ([e84a9b0](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/e84a9b001a0a8d2502466a13f93e7da1d7e30c5d))
+* **bans:** СѓРІР°Р¶Р°С‚СЊ РѕР±С‰РёР№ РІС‹РєР»СЋС‡Р°С‚РµР»СЊ СѓРІРµРґРѕРјР»РµРЅРёР№ РІ С‚РёРїРёР·РёСЂРѕРІР°РЅРЅС‹С… Р±Р°РЅР°С… ([927790f](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/927790fd4d674e32a4824c9778801d63bb360393))
+* **cabinet:** id Р°РґРјРёРЅР° СЃРЅРёРјР°РµРј РґРѕ С†РёРєР»Р° РјР°СЃСЃРѕРІРѕРіРѕ РґРµР№СЃС‚РІРёСЏ ([9fba46f](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/9fba46f4e4820d6aacd3a459ff2bf6bfdab1a228))
+* **cabinet:** РЅРµ РѕС‚РґР°РІР°С‚СЊ РїСѓСЃС‚СѓСЋ СЃС‚СЂРѕРєСѓ РІРјРµСЃС‚Рѕ null РІ /info/service ([1707660](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/1707660636fdf86547a891064ad9ec4f0f6bfafc))
+* **cabinet:** РѕС‚РґР°РІР°С‚СЊ РІ /info/service СЂРµР°Р»СЊРЅС‹Рµ РЅР°СЃС‚СЂРѕР№РєРё ([0ba8fa5](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/0ba8fa56bbf778e79b4cec52cde46dcc38d5e4a4))
+* **cabinet:** РѕС‚РґР°РІР°С‚СЊ РІ /info/service СЂРµР°Р»СЊРЅС‹Рµ РЅР°СЃС‚СЂРѕР№РєРё ([3329ec3](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/3329ec33cf824cc8568f09f01a709be6cba9b3aa))
+* **cabinet:** СѓРґР°Р»РµРЅРёРµ РїРѕРґРїРёСЃРєРё Р°РґСЂРµСЃСѓРµС‚ РїР°РЅРµР»СЊРЅС‹Р№ Р°РєРєР°СѓРЅС‚ РїРѕ СЂРµР¶РёРјСѓ ([1feef2c](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/1feef2c55835de2256eb114d3814417aac23d38f))
+* **cabinet:** СѓРґР°Р»РµРЅРёРµ РїРѕРґРїРёСЃРєРё РІ РјР°СЃСЃРѕРІС‹С… РґРµР№СЃС‚РІРёСЏС… РїР°РґР°Р»Рѕ MissingGreenlet ([c99fd54](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/c99fd544fa822eec7190c8461a1179b984d2b915))
+* **channel:** РЅРµ СЃР»Р°С‚СЊ Р°РґРјРёРЅР°Рј traceback РЅР° Р·Р°Р±Р»РѕРєРёСЂРѕРІР°РІС€РёС… Р±РѕС‚Р° ([d91caee](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/d91caeeee24d6be463c5f0efb502f10e7016cac2))
+* **email:** РѕС‚РїРёСЃРєСѓ РїСЂРёРјРµРЅСЏРµС‚ С‚РѕР»СЊРєРѕ POST + РіСЂР°РЅРёС†С‹ С‚РѕРєРµРЅР° ([091e2ee](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/091e2ee95fd4709f26b521bbc4a05a750a65eb65))
+* **grace:** СЃРµСЃСЃРёСЏ Р±РµР· РїР°РЅРµР»СЊРЅРѕРіРѕ id С‡РёРЅРёС‚СЃСЏ РїСЂРё С‡С‚РµРЅРёРё, Р° РЅРµ Р¶РёРІС‘С‚ РІРµС‡РЅРѕ ([5116848](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/51168487da3f51a256e59abe9655fcc8ebee0364))
+* make BroadcastResponse.message_text Optional[str] ([9a23bc3](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/9a23bc371218c5866fedc53f219d3b3de2ec368c)), closes [#3151](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/issues/3151)
+* **migrations:** РїРµСЂРµРЅСѓРјРµСЂРѕРІР°С‚СЊ РјРёРіСЂР°С†РёСЋ РєР°РјРїР°РЅРёРё РІ 0105 ([79b17f0](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/79b17f033d5088ae36b9aea32aae2b83ba1aafb8))
+* **migrations:** СЂР°Р·РІРµСЃС‚Рё РЅРѕРјРµСЂ РјРёРіСЂР°С†РёРё РіРѕСЃС‚РµРІС‹С… РїРѕРєСѓРїРѕРє СЃ 0105 ([d4f529b](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/d4f529b70d624c209b51d37e03150a187e790597))
+* **notifications:** РЅРµ РѕС‚РїСЂР°РІР»СЏС‚СЊ РѕС‚РєР»СЋС‡С‘РЅРЅС‹Рµ СѓРІРµРґРѕРјР»РµРЅРёСЏ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏРј ([22370a8](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/22370a804114e9514d28b47ca3b55635e12b07b1))
+* **oauth:** per-origin redirect_uri so OAuth login works on mirror domains ([1f873f9](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/1f873f983476f34c6ce21ad407eb0de4756fd7fe))
+* **oauth:** РїСЂРёРІСЏР·РєР° РїСЂРѕРІР°Р№РґРµСЂР° С‚РѕР¶Рµ РІРѕР·РІСЂР°С‰Р°РµС‚СЃСЏ РЅР° РґРѕРјРµРЅ Р·Р°РїСЂРѕСЃР° ([d99ab15](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/d99ab15c9957d5e24d4ea068e34e8b0a89632cd8))
+* **payments:** РґСЂРµРЅР°Р¶ С„РѕРЅРѕРІРѕР№ РѕР±СЂР°Р±РѕС‚РєРё РІРµР±С…СѓРєРѕРІ РїСЂРё РѕСЃС‚Р°РЅРѕРІРєРµ ([531060e](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/531060e836fd25a05cfc0423cadf59f6321cd960))
+* **payments:** РЅРµ С‚РµСЂСЏС‚СЊ РІРµР±С…СѓРєРё РїР»Р°С‚С‘Р¶РµРє, РІС‹РєР»СЋС‡РµРЅРЅС‹С… РЅР° РјРѕРјРµРЅС‚ СЃС‚Р°СЂС‚Р° ([67532db](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/67532dbd50c97fc5f97b450a53a0d0c72eb64bc6))
+* **platega:** СЂР°СЃРїРѕР·РЅР°РІР°С‚СЊ camelCase-РєРѕР»Р»Р±РµРєРё СЂРµРєСѓСЂСЂРµРЅС‚РЅРѕР№ РЎР‘Рџ-РїРѕРґРїРёСЃРєРё ([4123ee8](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/4123ee8268dbe24fd5dac330b1d2f9499275aa67))
+* **promocodes:** РєРѕРґ СЃ РѕРґРЅРёРј С‚СЂР°С„РёРєРѕРј РЅРµ СЃРіРѕСЂР°РµС‚ РЅР° Р±РµР·Р»РёРјРёС‚РЅРѕР№ РїРѕРґРїРёСЃРєРµ ([7254930](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/72549306956a58aebff84111b8e0a84072675397))
+* **promocodes:** С‚СЂР°С„РёРє РґРѕРµР·Р¶Р°РµС‚ РґРѕ СЃС‚СЂРѕРєРё, Р° РЅР°С‡РёСЃР»РµРЅРёРµ РІРѕР·РІСЂР°С‰Р°РµС‚ РґРѕСЃС‚СѓРї ([0d70155](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/0d701557893e0bfd4d0d6f9797b63cfe6008df52))
+* **remnawave:** РЅРµ РїРѕРґСЃС‚Р°РІР»СЏС‚СЊ None РІРјРµСЃС‚Рѕ РєР»Р°СЃСЃР° РѕС€РёР±РєРё РїСЂРё РїСЂРѕРІР°Р»Рµ РёРјРїРѕСЂС‚Р° ([775e507](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/775e5075769bc8ff892b8b359a6f03a4f1e12d1d))
+* **rich:** make usernames clickable ([42ff65a](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/42ff65a97b14f2d6cc88408785e74d9d5ee79ff2))
+* **rich:** СЃСЃС‹Р»РєСѓ РЅР° РїСЂРѕС„РёР»СЊ СЃС‚Р°РІРёРј С‚РѕР»СЊРєРѕ РЅР°СЃС‚РѕСЏС‰РµРјСѓ Telegram-Р»РѕРіРёРЅСѓ ([accda9a](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/accda9aa0a69dc1b2fb34d0c9ab036c722020b7e))
+* **tickets:** РґР»РёРЅРЅС‹Рµ СЃРѕРѕР±С‰РµРЅРёСЏ РѕР±СЂРµР·Р°Р»РёСЃСЊ Рё РЅРµ РїРѕРєР°Р·С‹РІР°Р»РёСЃСЊ С†РµР»РёРєРѕРј ([064e067](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/064e0673b86db4195a85ec5eaf5e349e3324fef2))
+* **tickets:** РґР»РёРЅРЅС‹Рµ СЃРѕРѕР±С‰РµРЅРёСЏ РѕР±СЂРµР·Р°Р»РёСЃСЊ Рё РЅРµ РїРѕРєР°Р·С‹РІР°Р»РёСЃСЊ С†РµР»РёРєРѕРј ([3be6da7](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/3be6da7a8c6c8fc423d110850f1376207c82d2d1))
+* **tickets:** СЌРєСЂР°РЅРёСЂРѕРІР°С‚СЊ РїСЂРµРІСЊСЋ РѕС‚РІРµС‚Р° РІ СѓРІРµРґРѕРјР»РµРЅРёРё РїРѕР»СЊР·РѕРІР°С‚РµР»СЋ ([f898414](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/f898414bb4dfca6350d02242088bae44fe7fce8d))
+* **traffic:** РЅРµ С‡РёС‚Р°С‚СЊ РґР°С‚С‹ РїРµСЂРёРѕРґР° РІРЅРµ РІРµС‚РєРё, РєРѕС‚РѕСЂР°СЏ РёС… Р·Р°РґР°С‘С‚ ([993ea75](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/993ea75c90ebc769d6fe064c21f8fbf05bfc28d9))
+
+
+### Performance
+
+* **etoplatezhi:** ack webhook instantly, process callback in background ([2acea3f](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/2acea3f6c369f104c2244404474f3611afbbfe96))
+
+
+### Refactoring
+
+* **campaigns:** РІС‹РЅРµСЃС‚Рё РїСЂРёРІСЏР·РєСѓ Рє РєР°РјРїР°РЅРёРё РІ СЃРµСЂРІРёСЃ ([a813083](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/a813083c7a2140b1193c1ff10cb4a7809f5e95e3))
+
+## [4.0.0](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v3.67.0...v4.0.0) (2026-08-03)
+
+
+### вљ  BREAKING CHANGES
+
+* **config:** РјРµРЅСЏРµС‚СЃСЏ РЅРµ С‚РѕР»СЊРєРѕ РёРјСЏ РїРµСЂРµРјРµРЅРЅРѕР№, РЅРѕ Рё С„РѕСЂРјР°С‚ Р·РЅР°С‡РµРЅРёР№ вЂ” РІРјРµСЃС‚Рѕ UUID РїР°РЅРµР»СЊРЅС‹С… РїРѕР»СЊР·РѕРІР°С‚РµР»РµР№ РЅСѓР¶РЅС‹ С‡РёСЃР»РѕРІС‹Рµ id. РђРІС‚РѕРјР°С‚РёС‡РµСЃРєРё СЃРєРѕРЅРІРµСЂС‚РёСЂРѕРІР°С‚СЊ РЅРµР»СЊР·СЏ: uuid РёР· 3.0.0 РёСЃС‡РµР·, Рё РїР°РЅРµР»СЊ РёС… Р±РѕР»СЊС€Рµ РЅРµ Р·РЅР°РµС‚.
+
+### New Features
+
+* **admin:** add Bedolaga-first User Detail contracts ([57e2794](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/57e2794f55ba8cff918ff5c622bb6bbf9df9afb5))
+* **cabinet:** РїР°РЅРµР»СЊРЅР°СЏ РёРґРµРЅС‚РёС‡РЅРѕСЃС‚СЊ Рё РєРѕРЅС‚СЂР°РєС‚С‹ РїРѕРґ 3.0.0 ([2b97440](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/2b9744049dcfce6677e44442490202f08b31b0a9))
+* **config:** TRAFFIC_EXCLUDED_USER_UUIDS РїРµСЂРµРёРјРµРЅРѕРІР°РЅ РІ _USER_IDS ([88a92f7](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/88a92f794267f599bba993811119cccba72fb2f7))
+* **db:** С‡РёСЃР»РѕРІР°СЏ РїР°РЅРµР»СЊРЅР°СЏ РёРґРµРЅС‚РёС‡РЅРѕСЃС‚СЊ remnawave_id ([898bcf4](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/898bcf49bcb829e54a02808c0af1055216d81837))
+* **remnawave:** Р±СЌРєС„РёР» РїР°РЅРµР»СЊРЅРѕР№ РёРґРµРЅС‚РёС‡РЅРѕСЃС‚Рё ([b97e5f6](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/b97e5f6bbfa7bf792b06f4ac181e214cec5da96c))
+* **remnawave:** РєР»РёРµРЅС‚ API РїРѕРґ 3.0.0 ([c763514](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/c763514324c45aff3193631cc4c344873c3ebc55))
+* **remnawave:** СЃРµСЂРІРёСЃРЅС‹Р№ СЃР»РѕР№ РЅР° С‡РёСЃР»РѕРІСѓСЋ РёРґРµРЅС‚РёС‡РЅРѕСЃС‚СЊ ([6da10bc](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/6da10bcc94e2dbf37e7d646d48e3a3a018a60c4d))
+* **remnawave:** С…РµРЅРґР»РµСЂС‹, РјРёРґРґР»РІР°СЂРё Рё Web API РїРѕРґ 3.0.0 ([c897d38](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/c897d383ceb0177babc5f38ecca368899228bc0d))
+
+
+### Bug Fixes
+
+* **admin:** Р»РѕРі РїСЂРё РїСЂРѕРїСѓСЃРєРµ СЃРёРЅРєР° РїР°РЅРµР»Рё Сѓ РїРѕРґРїРёСЃРєРё Р±РµР· UUID ([3d77bc2](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/3d77bc20a621702ec2f0f3bd4f21a1f5a4a80a9e))
+* **admin:** РѕС‚РјРµРЅР° СЂРµРєСѓСЂСЂРµРЅС‚Р° Lava РїСЂРё СЃР±СЂРѕСЃРµ РІС‹Р±СЂР°РЅРЅРѕР№ РїРѕРґРїРёСЃРєРё ([2f2006a](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/2f2006a5d08289ccfb3c606d0cdb702ccd369ea7))
+* **notifications:** MissingGreenlet РїСЂРё СѓРІРµРґРѕРјР»РµРЅРёРё Рѕ СЂРµРіРёСЃС‚СЂР°С†РёРё РїРѕ РєР°РјРїР°РЅРёРё ([0f1beff](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/0f1beff51b284bae0183bb37000b860e82b4ee4e))
+* **remnawave:** grace-СЃРµСЃСЃРёСЏ СЃС‚СЂРѕРєРё-РґРѕРЅРѕСЂР° РЅРµ С‚РµСЂСЏРµС‚ РёРґРµРЅС‚РёС‡РЅРѕСЃС‚СЊ ([dc09e78](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/dc09e78077d00c02b3dc3e16a4e846bcf1cbed30))
+* **remnawave:** Р±СЌРєС„РёР» РЅРµ Р±Р»РѕРєРёСЂСѓРµС‚СЃСЏ РѕРґРЅРѕР№ РїР°СЂРѕР№ Рё РѕС‚РґР°С‘С‚ id Р¶РёРІРѕР№ СЃС‚СЂРѕРєРµ ([5cd3adb](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/5cd3adb5bd856ca54d984bb4f9f59ce33a097b0d))
+* **remnawave:** Р±СЌРєС„РёР» РЅРµ РѕС‚РєР°С‚С‹РІР°Р»СЃСЏ С†РµР»РёРєРѕРј РЅР° single-tariff ([d461784](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/d461784f3c70cb58c7dd11fc9c51b60be0190ae8))
+* **remnawave:** Р±СЌРєС„РёР»Р» РїР°РґР°Р» РЅР° СЃС‚Р°СЂС‚Рµ Рё Р±СЂР°Р» РЅРµ С‚РѕС‚ СЂРµР¶РёРј ([deeb24f](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/deeb24fbcdd235f63892b50d2ca478b2c6ac6325))
+* **remnawave:** Р±СЌРєС„РёР»Р» РїСЂРёРІСЏР·С‹РІР°Р» С‡СѓР¶РѕР№ Р°РєРєР°СѓРЅС‚, СЃРѕР·РґР°РЅРёРµ РїР°РґР°Р»Рѕ РЅР° РёРЅРґРµРєСЃРµ ([98e63b0](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/98e63b07b5c8e8c562c1e96936049f057257d2d8))
+* **remnawave:** РІРµР±С…СѓРє РЅРµ РїСЂРѕРІРµСЂСЏР» СЃРѕСЃРµРґРµР№, Рё РїРѕРґРїРёСЃРё С‚РµСЃС‚РѕРІ РІСЂР°Р»Рё ([70d35c1](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/70d35c1afee123938ce833688120dc2397855d98))
+* **remnawave:** Р·Р°С‰РёС‚Р° РѕС‚ РїСЂРѕС‚РёРІРѕСЂРµС‡РёРІС‹С… uuid РЅРµ СЂР°Р±РѕС‚Р°Р»Р° РЅР° РїРµСЂРІРѕРј РїСЂРѕРіРѕРЅРµ ([928ce20](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/928ce20a011618ee4793bc50c068eafde65e0946))
+* **remnawave:** РєР°СЂС‚Р° uuid РЅРµ РїСЂР°Р№РјРёР»Р°СЃСЊ, С…РѕР»РѕСЃС‚РѕР№ РїСЂРѕРіРѕРЅ РїРёСЃР°Р» РІ Р‘Р” ([e9445ee](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/e9445ee2f12c811965e4936687258d79152c707a))
+* **remnawave:** Р»РѕР¶РЅС‹Р№ СѓСЃРїРµС… РїСЂРё СѓРґР°Р»РµРЅРёРё СѓСЃС‚СЂРѕР№СЃС‚РІ, РѕРєРЅРѕ СЃСѓС‚РѕРє Рё happ-СЃСЃС‹Р»РєР° ([b007de8](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/b007de8f4117d4626a03fd3c54316a1e34aaaee6))
+* **remnawave:** РЅРµ С‚РµСЂСЏС‚СЊ Рё РЅРµ РїРѕРґСЃРѕРІС‹РІР°С‚СЊ РїСЂРѕС‚СѓС…С€СѓСЋ РёРґРµРЅС‚РёС‡РЅРѕСЃС‚СЊ РїРѕРґРїРёСЃРєРё ([bef6e6d](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/bef6e6d7d1db65660800b58e7fc20856f40b0751))
+* **remnawave:** РЅРµСЃРѕРІРїР°РґРµРЅРёРµ РІР»Р°РґРµР»СЊС†Р° СЃРЅРѕРІР° РІРµР»Рѕ Рє РѕС‡РёСЃС‚РєРµ, Р° РЅРµ Рє РїРµСЂРµРїСЂРёРІСЏР·РєРµ ([ea4db92](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/ea4db928b3d9dd171af3d00b8f9c706d4cc47fca))
+* **remnawave:** РїРѕРІС‚РѕСЂРЅС‹Р№ РїСЂРѕРіРѕРЅ Р±СЌРєС„РёР»Р° Рё РІС‹Р±РѕСЂ Р¶РёРІРѕР№ РїРѕРґРїРёСЃРєРё ([b515c3d](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/b515c3d30bb762f89b425069d5685d8750168ce0))
+* **remnawave:** РїРѕР»СЏ, РєРѕС‚РѕСЂС‹С… РЅРµС‚ РІ РєРѕРЅС‚СЂР°РєС‚Рµ 3.0.0, Рё СЃР»РµРґ РїСЂРѕРіРѕРЅР° Р±СЌРєС„РёР»Р° ([babf846](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/babf84634d676a71e7c2b77f03ec7aadaefb391f))
+* **remnawave:** РїРѕСЂСЏРґРѕРє UPDATE'РѕРІ РїСЂРё РїРµСЂРµРЅРѕСЃРµ РїР°РЅРµР»СЊРЅРѕРіРѕ id ([28b01f1](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/28b01f1ee71841a2d9654e357c26729f8a6f09af))
+* **remnawave:** РїСЂРѕС‚СѓС…С€РёР№ id Р±РѕР»СЊС€Рµ РЅРµ СЂРµС€Р°РµС‚ Р·Р° РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ ([83c6415](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/83c6415c11d007151dde99dfea61178382ba1e8a))
+* **remnawave:** СЃР»РµРґ РїСЂРѕРіРѕРЅР° РІСЂР°Р», Р° Р·Р°С‰РёС‚Р° РёРЅРґРµРєСЃР° РЅРµ РјРµС€Р°Р»Р° Р·Р°РїРёСЃРё РІ РїР°РЅРµР»СЊ ([fe3dc5b](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/fe3dc5bb42cef0b1becbaa56c6ad9be3076c9276))
+* **remnawave:** СЃСѓС‚РѕС‡РЅР°СЏ РїСЂРѕРІРµСЂРєР° СЃРЅРѕРІР° РЅРµ СЃСЂР°Р±РѕС‚Р°Р»Р° Р±С‹, Р° РіСЂР°РЅРёС†Р° id РѕСЃР»Р°Р±Р»Р° ([3c31285](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/3c31285a4c920b715dc57253c6525af82972a5b6))
+* **remnawave:** С‚РѕС‡РЅС‹Р№ РєР»СЋС‡ РЅРµ РґРѕР»Р¶РµРЅ РїСЂРѕРёРіСЂС‹РІР°С‚СЊ РґРѕРіР°РґРєРµ Рё СЂРѕРЅСЏС‚СЊ СЃРёРЅРє ([d2fd3d5](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/d2fd3d5db91ed82aea639b5602dc9f900aeaa18b))
+* **remnawave:** С…РѕР»РѕСЃС‚РѕР№ РїСЂРѕРіРѕРЅ Р±СЌРєС„РёР»Р° РЅР°Р·С‹РІР°Р» СЃРІРѕР№ РѕС‚С‡С‘С‚ В«conflictsВ» ([6b7204b](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/6b7204b1d5cf5a1a6e4cffa9972aef9f55995500))
+* **settings:** РѕСЃРјС‹СЃР»РµРЅРЅС‹Рµ РєР°С‚РµРіРѕСЂРёРё РґР»СЏ РЅР°СЃС‚СЂРѕРµРє, РЅР°С‡РёРЅР°СЋС‰РёС…СЃСЏ СЃ РіР»Р°РіРѕР»Р° ([e6f1505](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/e6f150537ad57b24f95f9f7024d0d329c5cd6c56))
+
+
+### Documentation
+
+* **remnawave:** С‚РѕС‡РЅРѕРµ РѕР±РѕСЃРЅРѕРІР°РЅРёРµ СЂР°Р·РґРµР»СЊРЅС‹С… flush РїСЂРё РїРµСЂРµРЅРѕСЃРµ id ([6eb80c6](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/6eb80c6957987a48098bfffe2b11701dc4267285))
+
+## [3.67.0](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v3.66.0...v3.67.0) (2026-07-29)
 
 
 ### New Features
@@ -11,7 +124,7 @@
 * add traffic top-up button and rename device top-up in subscription settings ([44d6806](https://github.com/cy7su/remnawave-bot/commit/44d680643ed59375f66d3cf4136ab26835d31f0b))
 * **admin:** backfill real Telegram names for placeholder users (User &lt;id&gt;) ([b08994c](https://github.com/cy7su/remnawave-bot/commit/b08994c60e4d8adcb6b5a5db62a098b1c1f8d9fa))
 * align codebase with upstream (Remnawave v4.0.0) ([86cfdaf](https://github.com/cy7su/remnawave-bot/commit/86cfdaf541e514ce395782fb4231f5e1922e418d))
-* drop "Тип:" line from tariff info block in subscription menu ([d4ff6d5](https://github.com/cy7su/remnawave-bot/commit/d4ff6d553f0212cf759d5fd9abaef0958822bebe))
+* drop "РўРёРї:" line from tariff info block in subscription menu ([d4ff6d5](https://github.com/cy7su/remnawave-bot/commit/d4ff6d553f0212cf759d5fd9abaef0958822bebe))
 * Enhance inline gift functionality with discounts and balance top-ups ([35ac2c8](https://github.com/cy7su/remnawave-bot/commit/35ac2c8586cfd7d502cda38d67b45baf0a28c14d))
 * enhance inline gift handling with multi-activation support ([99676dc](https://github.com/cy7su/remnawave-bot/commit/99676dc7f3c334c32837a07828603df70af90830))
 * finish Remnawave v3.0.0 userId switch + startup panel_user_id backfill ([e4f7b3a](https://github.com/cy7su/remnawave-bot/commit/e4f7b3a585c506579131d714e3556c0c6f9454c9))
@@ -35,13 +148,13 @@
 * support Remnawave 3.1.0 node id and subscription request srr fields ([6b54dde](https://github.com/cy7su/remnawave-bot/commit/6b54dde0a41f7540c97e0c6aaab434bfa966f037))
 * Update device management button and enhance info menu with emoji ([5df7477](https://github.com/cy7su/remnawave-bot/commit/5df74770f88a1ca71bdd06800ea3e1eea5c298ee))
 * Update payment method name with emoji for better visibility ([78ddddd](https://github.com/cy7su/remnawave-bot/commit/78ddddd15d963e8b47154ac99660b3612cd87542))
-* премиум-эмодзи для кнопки Настройки в подписке ([12fcf6b](https://github.com/cy7su/remnawave-bot/commit/12fcf6b4711d27bdfeaf7a87e8edc51207ecf854))
+* РїСЂРµРјРёСѓРј-СЌРјРѕРґР·Рё РґР»СЏ РєРЅРѕРїРєРё РќР°СЃС‚СЂРѕР№РєРё РІ РїРѕРґРїРёСЃРєРµ ([12fcf6b](https://github.com/cy7su/remnawave-bot/commit/12fcf6b4711d27bdfeaf7a87e8edc51207ecf854))
 
 
 ### Bug Fixes
 
-* _check_recipient for unregistered users — allow [@username](https://github.com/username) gifts via deep link ([6507af9](https://github.com/cy7su/remnawave-bot/commit/6507af9eb79fb718e5774a25592f7dcc8066b2e8))
-* 3 изменения - убрана подпись 'Скопируйте ссылку', исправлен HTML-truncate баг в устройствах, referral кнопки (зеленая/синяя) ([3a454fb](https://github.com/cy7su/remnawave-bot/commit/3a454fb47229b92bb1a8a5e2a81d4e3dc780109a))
+* _check_recipient for unregistered users вЂ” allow [@username](https://github.com/username) gifts via deep link ([6507af9](https://github.com/cy7su/remnawave-bot/commit/6507af9eb79fb718e5774a25592f7dcc8066b2e8))
+* 3 РёР·РјРµРЅРµРЅРёСЏ - СѓР±СЂР°РЅР° РїРѕРґРїРёСЃСЊ 'РЎРєРѕРїРёСЂСѓР№С‚Рµ СЃСЃС‹Р»РєСѓ', РёСЃРїСЂР°РІР»РµРЅ HTML-truncate Р±Р°Рі РІ СѓСЃС‚СЂРѕР№СЃС‚РІР°С…, referral РєРЅРѕРїРєРё (Р·РµР»РµРЅР°СЏ/СЃРёРЅСЏСЏ) ([3a454fb](https://github.com/cy7su/remnawave-bot/commit/3a454fb47229b92bb1a8a5e2a81d4e3dc780109a))
 * add debug logs for gift creation and recipient check ([0662017](https://github.com/cy7su/remnawave-bot/commit/0662017c4590de20a3995b91b4530fa02c5c6a22))
 * add macOS, Linux to _PLATFORM_EMOJI across all files ([d953c18](https://github.com/cy7su/remnawave-bot/commit/d953c18e923701341055263caae79611a36ca915))
 * add missing arrow text to pagination prev/next buttons in admin panel (bot_config, blocked_users) ([3f3392f](https://github.com/cy7su/remnawave-bot/commit/3f3392f62bb86a1a1a0fe5c58c38d09b7d55fb3d))
@@ -54,7 +167,7 @@
 * Apply alembic migrations when DB is managed but not at head ([bdfe39f](https://github.com/cy7su/remnawave-bot/commit/bdfe39f7792fc2e13452027e66321d3806b69bb2))
 * AttributeError 'Subscription' object has no attribute 'last_revoke_at' ([182b7fd](https://github.com/cy7su/remnawave-bot/commit/182b7fd76dc9b0402cca09e55f2b35a3d267994c))
 * balance/temp_traffic gift preview, activation, premium emoji, platform name in device notification ([931844f](https://github.com/cy7su/remnawave-bot/commit/931844f2648ba2c6c04be81fc2b724bd2545c62b))
-* change notification_settings JSON→JSONB for DISTINCT compat; skip migrations on managed DB if not at head ([5704b0f](https://github.com/cy7su/remnawave-bot/commit/5704b0ff32d148b0d3751e0e7fd12818b17e4866))
+* change notification_settings JSONв†’JSONB for DISTINCT compat; skip migrations on managed DB if not at head ([5704b0f](https://github.com/cy7su/remnawave-bot/commit/5704b0ff32d148b0d3751e0e7fd12818b17e4866))
 * check recipient after unregistered user check; restore sentinel logic ([4f1004d](https://github.com/cy7su/remnawave-bot/commit/4f1004d0929b703d3930abb46d26cd7f0363e202))
 * chmod fallback on bind mount dirs; whitelist entrypoint.py in gitignore ([b7d0f59](https://github.com/cy7su/remnawave-bot/commit/b7d0f594f6ad7f836c3b5362cd85915c2d3db342))
 * **config:** add PLATEGA_API_VERSION for v2 platega service (upstream parity) ([636df62](https://github.com/cy7su/remnawave-bot/commit/636df62822630e8454547f31af8e5d6c12c93a35))
@@ -81,13 +194,13 @@
 * Make migrations 0045-0098 idempotent ([1b0b0b4](https://github.com/cy7su/remnawave-bot/commit/1b0b0b4c51e7726c9c44e7848b7ac5d22ae9925d))
 * **monitoring:** use make_button with styles for notification keyboards ([78955a5](https://github.com/cy7su/remnawave-bot/commit/78955a5b679a18b6b910200c91888ba3d608d846))
 * pass real from_user to show_pending_inline_gift (callback.message.from_user is the bot) ([1815df4](https://github.com/cy7su/remnawave-bot/commit/1815df43f4837809d9703c3eedd32712e9d4e778))
-* per-month показаний через calculate_price_per_month (3.67) ([62b3ed6](https://github.com/cy7su/remnawave-bot/commit/62b3ed65ef0358051793720e6cc1ae558b4e4b71))
+* per-month РїРѕРєР°Р·Р°РЅРёР№ С‡РµСЂРµР· calculate_price_per_month (3.67) ([62b3ed6](https://github.com/cy7su/remnawave-bot/commit/62b3ed65ef0358051793720e6cc1ae558b4e4b71))
 * premium emoji in topup buttons, bs_ gift deep link handling, remove -bc flag ([077aab9](https://github.com/cy7su/remnawave-bot/commit/077aab9629397221c7afe05cde8bedffafc63582))
 * reactivate RemnaWave subscriptions on user restore ([9ecb4ac](https://github.com/cy7su/remnawave-bot/commit/9ecb4acf2d0b4e989167ca44a8734adaf260e0d4))
 * reject NaN-like uuid values from panel (400 /api/users/NaN) ([ee97f82](https://github.com/cy7su/remnawave-bot/commit/ee97f82f227be7e087a558e2702a8a14cf74276e))
 * **remnawave-v3:** update panel user by numeric id (no uuid), fallback to telegram_id in update_remnawave_user ([95ca1fb](https://github.com/cy7su/remnawave-bot/commit/95ca1fb44647d995e71b7bebeddba65d98583b7b))
 * **remnawave:** PATCH /api/users with id (uuid) instead of uuid ([4f9075b](https://github.com/cy7su/remnawave-bot/commit/4f9075b5b396e7d0f3f4d88028179de955612f75))
-* remove 'Баланс пополнен автоматически!' from payment success messages ([93d4fa7](https://github.com/cy7su/remnawave-bot/commit/93d4fa7ad06c79438b9d9e6878dfc952a135e63e))
+* remove 'Р‘Р°Р»Р°РЅСЃ РїРѕРїРѕР»РЅРµРЅ Р°РІС‚РѕРјР°С‚РёС‡РµСЃРєРё!' from payment success messages ([93d4fa7](https://github.com/cy7su/remnawave-bot/commit/93d4fa7ad06c79438b9d9e6878dfc952a135e63e))
 * remove begin_nested() from _run_safe to prevent InvalidRequestError; simplify expiring sub notification text; make extend button green ([a8e40f3](https://github.com/cy7su/remnawave-bot/commit/a8e40f3aca3b0fdcf0492a10e44517ea72881d08))
 * remove end_date/autopay/action_text placeholders from SUBSCRIPTION_EXPIRING_PAID translations ([15849cd](https://github.com/cy7su/remnawave-bot/commit/15849cdb875a21679957e67a35319a9334ce731f))
 * remove indented module-level _PLATFORM_EMOJI (dead code, broke import) ([bb18dca](https://github.com/cy7su/remnawave-bot/commit/bb18dcacd2fd38f39c23f29d39146f2252c6f4d1))
@@ -114,19 +227,19 @@
 * update Russian locale with Telegram emoji for confirm button ([262aa7b](https://github.com/cy7su/remnawave-bot/commit/262aa7b78dfad803d27ac176b5133c31162207f6))
 * webhook device notifications show readable model instead of HWID/tag ([9fe2fcf](https://github.com/cy7su/remnawave-bot/commit/9fe2fcf2f9ed6a41ec7cd579f167c5329ebfb245))
 * write NULL instead of empty string for remnawave_uuid, rollback tainted sessions ([25f7f3d](https://github.com/cy7su/remnawave-bot/commit/25f7f3d9bedede44868215f63eaee00884a4c3a0))
-* восстановлен внешний вид страницы устройств из старого бота + исправлен HTML-truncate в кнопках ([a1d15f9](https://github.com/cy7su/remnawave-bot/commit/a1d15f9ee4b4780741e702f880e83e8e342c1a75))
-* замена InlineKeyboardButton на make_button + copy_text для кнопки копирования ссылки ([a21b86e](https://github.com/cy7su/remnawave-bot/commit/a21b86e18ee1331452becadae27109cf644a6122))
-* исправление ошибки HTML в меню, замена blockquote на code, удаление сообщения с правилами, обновление текста кнопки подключения ([542121c](https://github.com/cy7su/remnawave-bot/commit/542121ca542bf53ec0c88ee2adb55816f7f5e3d7))
-* не показывать неоплаченный черновик триала как подписку (3.67) ([c242695](https://github.com/cy7su/remnawave-bot/commit/c242695b2e4b818b7fe2c44f696571b78720a0f1))
-* переносы строк в DEVICE_MANAGEMENT_OVERVIEW / CONNECTED_HEADER в locales/ru.json ([cc6a4d8](https://github.com/cy7su/remnawave-bot/commit/cc6a4d8920e738af14ddcc1df6546186601f0362))
-* премиум эмодзи и URL для кнопки Подключится в MenuLayoutService ([6924cc3](https://github.com/cy7su/remnawave-bot/commit/6924cc3dda898f67a55ae2f00333169a65f68ce1))
-* пустые кнопки пагинации (→/←), стрелки в referral, убраны emoji из SUBSCRIPTION_SETTINGS_OVERVIEW ([c11ad06](https://github.com/cy7su/remnawave-bot/commit/c11ad065d0ba0142aad6c5b8a9e37d70d3567454))
-* редизайн Настроек подписки - убраны текущие параметры, добавлена сводка (трафик/дата/устройства) и таймер до перевыпуска ([4ef7471](https://github.com/cy7su/remnawave-bot/commit/4ef7471596a53e22cfd614e7fc42333784f76c7a))
-* синие кнопки menu_subscription/subscription_manage_devices, исправлена индентация ([75f7245](https://github.com/cy7su/remnawave-bot/commit/75f7245078755a559e7d4881e48a564f00d83753))
-* убраны действия из устройств, фикс премиум-эмодзи в кнопках, red/danger для reset_all/subscription_revoke, success для connect ([a6718c4](https://github.com/cy7su/remnawave-bot/commit/a6718c4e21e60d4214121e75950a2e8a0b2d395a))
-* убраны мусорные значения deviceModel (To Be Filled By O.E.M. и т.п.) ([0aeb3d1](https://github.com/cy7su/remnawave-bot/commit/0aeb3d1b2d6f194481aabd73cdea503154c9f5f2))
-* убрать 'Выберите действие:' из главного меню ([ea6a946](https://github.com/cy7su/remnawave-bot/commit/ea6a9467ba308d03d4de4121d8d7824854b3d823))
-* убрать строку 'Тариф: ...' из главного меню ([9a3253d](https://github.com/cy7su/remnawave-bot/commit/9a3253d6b94da9334ece37062939661d18f2a6c7))
+* РІРѕСЃСЃС‚Р°РЅРѕРІР»РµРЅ РІРЅРµС€РЅРёР№ РІРёРґ СЃС‚СЂР°РЅРёС†С‹ СѓСЃС‚СЂРѕР№СЃС‚РІ РёР· СЃС‚Р°СЂРѕРіРѕ Р±РѕС‚Р° + РёСЃРїСЂР°РІР»РµРЅ HTML-truncate РІ РєРЅРѕРїРєР°С… ([a1d15f9](https://github.com/cy7su/remnawave-bot/commit/a1d15f9ee4b4780741e702f880e83e8e342c1a75))
+* Р·Р°РјРµРЅР° InlineKeyboardButton РЅР° make_button + copy_text РґР»СЏ РєРЅРѕРїРєРё РєРѕРїРёСЂРѕРІР°РЅРёСЏ СЃСЃС‹Р»РєРё ([a21b86e](https://github.com/cy7su/remnawave-bot/commit/a21b86e18ee1331452becadae27109cf644a6122))
+* РёСЃРїСЂР°РІР»РµРЅРёРµ РѕС€РёР±РєРё HTML РІ РјРµРЅСЋ, Р·Р°РјРµРЅР° blockquote РЅР° code, СѓРґР°Р»РµРЅРёРµ СЃРѕРѕР±С‰РµРЅРёСЏ СЃ РїСЂР°РІРёР»Р°РјРё, РѕР±РЅРѕРІР»РµРЅРёРµ С‚РµРєСЃС‚Р° РєРЅРѕРїРєРё РїРѕРґРєР»СЋС‡РµРЅРёСЏ ([542121c](https://github.com/cy7su/remnawave-bot/commit/542121ca542bf53ec0c88ee2adb55816f7f5e3d7))
+* РЅРµ РїРѕРєР°Р·С‹РІР°С‚СЊ РЅРµРѕРїР»Р°С‡РµРЅРЅС‹Р№ С‡РµСЂРЅРѕРІРёРє С‚СЂРёР°Р»Р° РєР°Рє РїРѕРґРїРёСЃРєСѓ (3.67) ([c242695](https://github.com/cy7su/remnawave-bot/commit/c242695b2e4b818b7fe2c44f696571b78720a0f1))
+* РїРµСЂРµРЅРѕСЃС‹ СЃС‚СЂРѕРє РІ DEVICE_MANAGEMENT_OVERVIEW / CONNECTED_HEADER РІ locales/ru.json ([cc6a4d8](https://github.com/cy7su/remnawave-bot/commit/cc6a4d8920e738af14ddcc1df6546186601f0362))
+* РїСЂРµРјРёСѓРј СЌРјРѕРґР·Рё Рё URL РґР»СЏ РєРЅРѕРїРєРё РџРѕРґРєР»СЋС‡РёС‚СЃСЏ РІ MenuLayoutService ([6924cc3](https://github.com/cy7su/remnawave-bot/commit/6924cc3dda898f67a55ae2f00333169a65f68ce1))
+* РїСѓСЃС‚С‹Рµ РєРЅРѕРїРєРё РїР°РіРёРЅР°С†РёРё (в†’/в†ђ), СЃС‚СЂРµР»РєРё РІ referral, СѓР±СЂР°РЅС‹ emoji РёР· SUBSCRIPTION_SETTINGS_OVERVIEW ([c11ad06](https://github.com/cy7su/remnawave-bot/commit/c11ad065d0ba0142aad6c5b8a9e37d70d3567454))
+* СЂРµРґРёР·Р°Р№РЅ РќР°СЃС‚СЂРѕРµРє РїРѕРґРїРёСЃРєРё - СѓР±СЂР°РЅС‹ С‚РµРєСѓС‰РёРµ РїР°СЂР°РјРµС‚СЂС‹, РґРѕР±Р°РІР»РµРЅР° СЃРІРѕРґРєР° (С‚СЂР°С„РёРє/РґР°С‚Р°/СѓСЃС‚СЂРѕР№СЃС‚РІР°) Рё С‚Р°Р№РјРµСЂ РґРѕ РїРµСЂРµРІС‹РїСѓСЃРєР° ([4ef7471](https://github.com/cy7su/remnawave-bot/commit/4ef7471596a53e22cfd614e7fc42333784f76c7a))
+* СЃРёРЅРёРµ РєРЅРѕРїРєРё menu_subscription/subscription_manage_devices, РёСЃРїСЂР°РІР»РµРЅР° РёРЅРґРµРЅС‚Р°С†РёСЏ ([75f7245](https://github.com/cy7su/remnawave-bot/commit/75f7245078755a559e7d4881e48a564f00d83753))
+* СѓР±СЂР°РЅС‹ РґРµР№СЃС‚РІРёСЏ РёР· СѓСЃС‚СЂРѕР№СЃС‚РІ, С„РёРєСЃ РїСЂРµРјРёСѓРј-СЌРјРѕРґР·Рё РІ РєРЅРѕРїРєР°С…, red/danger РґР»СЏ reset_all/subscription_revoke, success РґР»СЏ connect ([a6718c4](https://github.com/cy7su/remnawave-bot/commit/a6718c4e21e60d4214121e75950a2e8a0b2d395a))
+* СѓР±СЂР°РЅС‹ РјСѓСЃРѕСЂРЅС‹Рµ Р·РЅР°С‡РµРЅРёСЏ deviceModel (To Be Filled By O.E.M. Рё С‚.Рї.) ([0aeb3d1](https://github.com/cy7su/remnawave-bot/commit/0aeb3d1b2d6f194481aabd73cdea503154c9f5f2))
+* СѓР±СЂР°С‚СЊ 'Р’С‹Р±РµСЂРёС‚Рµ РґРµР№СЃС‚РІРёРµ:' РёР· РіР»Р°РІРЅРѕРіРѕ РјРµРЅСЋ ([ea6a946](https://github.com/cy7su/remnawave-bot/commit/ea6a9467ba308d03d4de4121d8d7824854b3d823))
+* СѓР±СЂР°С‚СЊ СЃС‚СЂРѕРєСѓ 'РўР°СЂРёС„: ...' РёР· РіР»Р°РІРЅРѕРіРѕ РјРµРЅСЋ ([9a3253d](https://github.com/cy7su/remnawave-bot/commit/9a3253d6b94da9334ece37062939661d18f2a6c7))
 
 
 ### Refactoring
@@ -140,7 +253,7 @@
 ### New Features
 
 * add traffic top-up button and rename device top-up in subscription settings ([44d6806](https://github.com/cy7su/remnawave-bot/commit/44d680643ed59375f66d3cf4136ab26835d31f0b))
-* drop "Тип:" line from tariff info block in subscription menu ([d4ff6d5](https://github.com/cy7su/remnawave-bot/commit/d4ff6d553f0212cf759d5fd9abaef0958822bebe))
+* drop "РўРёРї:" line from tariff info block in subscription menu ([d4ff6d5](https://github.com/cy7su/remnawave-bot/commit/d4ff6d553f0212cf759d5fd9abaef0958822bebe))
 * finish Remnawave v3.0.0 userId switch + startup panel_user_id backfill ([e4f7b3a](https://github.com/cy7su/remnawave-bot/commit/e4f7b3a585c506579131d714e3556c0c6f9454c9))
 * personal subscription price per user (overrides tariff price, disables promo discounts) ([2aecc49](https://github.com/cy7su/remnawave-bot/commit/2aecc495a30278a9d9b5198eff004a987c0c12f6))
 * prepare for Remnawave v3.0.0 userId switch ([857344d](https://github.com/cy7su/remnawave-bot/commit/857344dd9b8dad247aa025e663f832eef850fe99))
@@ -204,13 +317,13 @@
 * Make inline gift parameters nullable for better flexibility in handling subscriptions ([47c3a08](https://github.com/cy7su/remnawave-bot/commit/47c3a086b410e965a13f8a1b6bbbcce5e2d519ae))
 * Update device management button and enhance info menu with emoji ([5df7477](https://github.com/cy7su/remnawave-bot/commit/5df74770f88a1ca71bdd06800ea3e1eea5c298ee))
 * Update payment method name with emoji for better visibility ([78ddddd](https://github.com/cy7su/remnawave-bot/commit/78ddddd15d963e8b47154ac99660b3612cd87542))
-* премиум-эмодзи для кнопки Настройки в подписке ([12fcf6b](https://github.com/cy7su/remnawave-bot/commit/12fcf6b4711d27bdfeaf7a87e8edc51207ecf854))
+* РїСЂРµРјРёСѓРј-СЌРјРѕРґР·Рё РґР»СЏ РєРЅРѕРїРєРё РќР°СЃС‚СЂРѕР№РєРё РІ РїРѕРґРїРёСЃРєРµ ([12fcf6b](https://github.com/cy7su/remnawave-bot/commit/12fcf6b4711d27bdfeaf7a87e8edc51207ecf854))
 
 
 ### Bug Fixes
 
-* _check_recipient for unregistered users — allow [@username](https://github.com/username) gifts via deep link ([6507af9](https://github.com/cy7su/remnawave-bot/commit/6507af9eb79fb718e5774a25592f7dcc8066b2e8))
-* 3 изменения - убрана подпись 'Скопируйте ссылку', исправлен HTML-truncate баг в устройствах, referral кнопки (зеленая/синяя) ([3a454fb](https://github.com/cy7su/remnawave-bot/commit/3a454fb47229b92bb1a8a5e2a81d4e3dc780109a))
+* _check_recipient for unregistered users вЂ” allow [@username](https://github.com/username) gifts via deep link ([6507af9](https://github.com/cy7su/remnawave-bot/commit/6507af9eb79fb718e5774a25592f7dcc8066b2e8))
+* 3 РёР·РјРµРЅРµРЅРёСЏ - СѓР±СЂР°РЅР° РїРѕРґРїРёСЃСЊ 'РЎРєРѕРїРёСЂСѓР№С‚Рµ СЃСЃС‹Р»РєСѓ', РёСЃРїСЂР°РІР»РµРЅ HTML-truncate Р±Р°Рі РІ СѓСЃС‚СЂРѕР№СЃС‚РІР°С…, referral РєРЅРѕРїРєРё (Р·РµР»РµРЅР°СЏ/СЃРёРЅСЏСЏ) ([3a454fb](https://github.com/cy7su/remnawave-bot/commit/3a454fb47229b92bb1a8a5e2a81d4e3dc780109a))
 * add debug logs for gift creation and recipient check ([0662017](https://github.com/cy7su/remnawave-bot/commit/0662017c4590de20a3995b91b4530fa02c5c6a22))
 * add macOS, Linux to _PLATFORM_EMOJI across all files ([d953c18](https://github.com/cy7su/remnawave-bot/commit/d953c18e923701341055263caae79611a36ca915))
 * Add missing sqlalchemy import to migration 0047 ([991f42f](https://github.com/cy7su/remnawave-bot/commit/991f42fb99b644c520abedb89c77eb177e38234f))
@@ -218,7 +331,7 @@
 * Apply alembic migrations when DB is managed but not at head ([bdfe39f](https://github.com/cy7su/remnawave-bot/commit/bdfe39f7792fc2e13452027e66321d3806b69bb2))
 * AttributeError 'Subscription' object has no attribute 'last_revoke_at' ([182b7fd](https://github.com/cy7su/remnawave-bot/commit/182b7fd76dc9b0402cca09e55f2b35a3d267994c))
 * balance/temp_traffic gift preview, activation, premium emoji, platform name in device notification ([931844f](https://github.com/cy7su/remnawave-bot/commit/931844f2648ba2c6c04be81fc2b724bd2545c62b))
-* change notification_settings JSON→JSONB for DISTINCT compat; skip migrations on managed DB if not at head ([5704b0f](https://github.com/cy7su/remnawave-bot/commit/5704b0ff32d148b0d3751e0e7fd12818b17e4866))
+* change notification_settings JSONв†’JSONB for DISTINCT compat; skip migrations on managed DB if not at head ([5704b0f](https://github.com/cy7su/remnawave-bot/commit/5704b0ff32d148b0d3751e0e7fd12818b17e4866))
 * check recipient after unregistered user check; restore sentinel logic ([4f1004d](https://github.com/cy7su/remnawave-bot/commit/4f1004d0929b703d3930abb46d26cd7f0363e202))
 * chmod fallback on bind mount dirs; whitelist entrypoint.py in gitignore ([b7d0f59](https://github.com/cy7su/remnawave-bot/commit/b7d0f594f6ad7f836c3b5362cd85915c2d3db342))
 * correct revoke cooldown timer display and change to 3 days ([8c9a23e](https://github.com/cy7su/remnawave-bot/commit/8c9a23e6b930edf5e74cbfd5eaa275943ead45da))
@@ -232,7 +345,7 @@
 * Make migrations 0045-0098 idempotent ([1b0b0b4](https://github.com/cy7su/remnawave-bot/commit/1b0b0b4c51e7726c9c44e7848b7ac5d22ae9925d))
 * pass real from_user to show_pending_inline_gift (callback.message.from_user is the bot) ([1815df4](https://github.com/cy7su/remnawave-bot/commit/1815df43f4837809d9703c3eedd32712e9d4e778))
 * premium emoji in topup buttons, bs_ gift deep link handling, remove -bc flag ([077aab9](https://github.com/cy7su/remnawave-bot/commit/077aab9629397221c7afe05cde8bedffafc63582))
-* remove 'Баланс пополнен автоматически!' from payment success messages ([93d4fa7](https://github.com/cy7su/remnawave-bot/commit/93d4fa7ad06c79438b9d9e6878dfc952a135e63e))
+* remove 'Р‘Р°Р»Р°РЅСЃ РїРѕРїРѕР»РЅРµРЅ Р°РІС‚РѕРјР°С‚РёС‡РµСЃРєРё!' from payment success messages ([93d4fa7](https://github.com/cy7su/remnawave-bot/commit/93d4fa7ad06c79438b9d9e6878dfc952a135e63e))
 * remove begin_nested() from _run_safe to prevent InvalidRequestError; simplify expiring sub notification text; make extend button green ([a8e40f3](https://github.com/cy7su/remnawave-bot/commit/a8e40f3aca3b0fdcf0492a10e44517ea72881d08))
 * remove end_date/autopay/action_text placeholders from SUBSCRIPTION_EXPIRING_PAID translations ([15849cd](https://github.com/cy7su/remnawave-bot/commit/15849cdb875a21679957e67a35319a9334ce731f))
 * remove indented module-level _PLATFORM_EMOJI (dead code, broke import) ([bb18dca](https://github.com/cy7su/remnawave-bot/commit/bb18dcacd2fd38f39c23f29d39146f2252c6f4d1))
@@ -246,15 +359,15 @@
 * temp traffic - only create TrafficPurchase, skip traffic_limit_gb; add debug log for recipient mismatch ([2b57609](https://github.com/cy7su/remnawave-bot/commit/2b57609893c1347eec05566188c0e054537da8e1))
 * update revoke confirmation button callback for multi-tariff ([f044e91](https://github.com/cy7su/remnawave-bot/commit/f044e91ef60783b20a65ddca8eb0db7d41b55aac))
 * update Russian locale with Telegram emoji for confirm button ([262aa7b](https://github.com/cy7su/remnawave-bot/commit/262aa7b78dfad803d27ac176b5133c31162207f6))
-* восстановлен внешний вид страницы устройств из старого бота + исправлен HTML-truncate в кнопках ([a1d15f9](https://github.com/cy7su/remnawave-bot/commit/a1d15f9ee4b4780741e702f880e83e8e342c1a75))
-* замена InlineKeyboardButton на make_button + copy_text для кнопки копирования ссылки ([a21b86e](https://github.com/cy7su/remnawave-bot/commit/a21b86e18ee1331452becadae27109cf644a6122))
-* исправление ошибки HTML в меню, замена blockquote на code, удаление сообщения с правилами, обновление текста кнопки подключения ([542121c](https://github.com/cy7su/remnawave-bot/commit/542121ca542bf53ec0c88ee2adb55816f7f5e3d7))
-* переносы строк в DEVICE_MANAGEMENT_OVERVIEW / CONNECTED_HEADER в locales/ru.json ([cc6a4d8](https://github.com/cy7su/remnawave-bot/commit/cc6a4d8920e738af14ddcc1df6546186601f0362))
-* премиум эмодзи и URL для кнопки Подключится в MenuLayoutService ([6924cc3](https://github.com/cy7su/remnawave-bot/commit/6924cc3dda898f67a55ae2f00333169a65f68ce1))
-* пустые кнопки пагинации (→/←), стрелки в referral, убраны emoji из SUBSCRIPTION_SETTINGS_OVERVIEW ([c11ad06](https://github.com/cy7su/remnawave-bot/commit/c11ad065d0ba0142aad6c5b8a9e37d70d3567454))
-* редизайн Настроек подписки - убраны текущие параметры, добавлена сводка (трафик/дата/устройства) и таймер до перевыпуска ([4ef7471](https://github.com/cy7su/remnawave-bot/commit/4ef7471596a53e22cfd614e7fc42333784f76c7a))
-* синие кнопки menu_subscription/subscription_manage_devices, исправлена индентация ([75f7245](https://github.com/cy7su/remnawave-bot/commit/75f7245078755a559e7d4881e48a564f00d83753))
-* убраны действия из устройств, фикс премиум-эмодзи в кнопках, red/danger для reset_all/subscription_revoke, success для connect ([a6718c4](https://github.com/cy7su/remnawave-bot/commit/a6718c4e21e60d4214121e75950a2e8a0b2d395a))
-* убраны мусорные значения deviceModel (To Be Filled By O.E.M. и т.п.) ([0aeb3d1](https://github.com/cy7su/remnawave-bot/commit/0aeb3d1b2d6f194481aabd73cdea503154c9f5f2))
-* убрать 'Выберите действие:' из главного меню ([ea6a946](https://github.com/cy7su/remnawave-bot/commit/ea6a9467ba308d03d4de4121d8d7824854b3d823))
-* убрать строку 'Тариф: ...' из главного меню ([9a3253d](https://github.com/cy7su/remnawave-bot/commit/9a3253d6b94da9334ece37062939661d18f2a6c7))
+* РІРѕСЃСЃС‚Р°РЅРѕРІР»РµРЅ РІРЅРµС€РЅРёР№ РІРёРґ СЃС‚СЂР°РЅРёС†С‹ СѓСЃС‚СЂРѕР№СЃС‚РІ РёР· СЃС‚Р°СЂРѕРіРѕ Р±РѕС‚Р° + РёСЃРїСЂР°РІР»РµРЅ HTML-truncate РІ РєРЅРѕРїРєР°С… ([a1d15f9](https://github.com/cy7su/remnawave-bot/commit/a1d15f9ee4b4780741e702f880e83e8e342c1a75))
+* Р·Р°РјРµРЅР° InlineKeyboardButton РЅР° make_button + copy_text РґР»СЏ РєРЅРѕРїРєРё РєРѕРїРёСЂРѕРІР°РЅРёСЏ СЃСЃС‹Р»РєРё ([a21b86e](https://github.com/cy7su/remnawave-bot/commit/a21b86e18ee1331452becadae27109cf644a6122))
+* РёСЃРїСЂР°РІР»РµРЅРёРµ РѕС€РёР±РєРё HTML РІ РјРµРЅСЋ, Р·Р°РјРµРЅР° blockquote РЅР° code, СѓРґР°Р»РµРЅРёРµ СЃРѕРѕР±С‰РµРЅРёСЏ СЃ РїСЂР°РІРёР»Р°РјРё, РѕР±РЅРѕРІР»РµРЅРёРµ С‚РµРєСЃС‚Р° РєРЅРѕРїРєРё РїРѕРґРєР»СЋС‡РµРЅРёСЏ ([542121c](https://github.com/cy7su/remnawave-bot/commit/542121ca542bf53ec0c88ee2adb55816f7f5e3d7))
+* РїРµСЂРµРЅРѕСЃС‹ СЃС‚СЂРѕРє РІ DEVICE_MANAGEMENT_OVERVIEW / CONNECTED_HEADER РІ locales/ru.json ([cc6a4d8](https://github.com/cy7su/remnawave-bot/commit/cc6a4d8920e738af14ddcc1df6546186601f0362))
+* РїСЂРµРјРёСѓРј СЌРјРѕРґР·Рё Рё URL РґР»СЏ РєРЅРѕРїРєРё РџРѕРґРєР»СЋС‡РёС‚СЃСЏ РІ MenuLayoutService ([6924cc3](https://github.com/cy7su/remnawave-bot/commit/6924cc3dda898f67a55ae2f00333169a65f68ce1))
+* РїСѓСЃС‚С‹Рµ РєРЅРѕРїРєРё РїР°РіРёРЅР°С†РёРё (в†’/в†ђ), СЃС‚СЂРµР»РєРё РІ referral, СѓР±СЂР°РЅС‹ emoji РёР· SUBSCRIPTION_SETTINGS_OVERVIEW ([c11ad06](https://github.com/cy7su/remnawave-bot/commit/c11ad065d0ba0142aad6c5b8a9e37d70d3567454))
+* СЂРµРґРёР·Р°Р№РЅ РќР°СЃС‚СЂРѕРµРє РїРѕРґРїРёСЃРєРё - СѓР±СЂР°РЅС‹ С‚РµРєСѓС‰РёРµ РїР°СЂР°РјРµС‚СЂС‹, РґРѕР±Р°РІР»РµРЅР° СЃРІРѕРґРєР° (С‚СЂР°С„РёРє/РґР°С‚Р°/СѓСЃС‚СЂРѕР№СЃС‚РІР°) Рё С‚Р°Р№РјРµСЂ РґРѕ РїРµСЂРµРІС‹РїСѓСЃРєР° ([4ef7471](https://github.com/cy7su/remnawave-bot/commit/4ef7471596a53e22cfd614e7fc42333784f76c7a))
+* СЃРёРЅРёРµ РєРЅРѕРїРєРё menu_subscription/subscription_manage_devices, РёСЃРїСЂР°РІР»РµРЅР° РёРЅРґРµРЅС‚Р°С†РёСЏ ([75f7245](https://github.com/cy7su/remnawave-bot/commit/75f7245078755a559e7d4881e48a564f00d83753))
+* СѓР±СЂР°РЅС‹ РґРµР№СЃС‚РІРёСЏ РёР· СѓСЃС‚СЂРѕР№СЃС‚РІ, С„РёРєСЃ РїСЂРµРјРёСѓРј-СЌРјРѕРґР·Рё РІ РєРЅРѕРїРєР°С…, red/danger РґР»СЏ reset_all/subscription_revoke, success РґР»СЏ connect ([a6718c4](https://github.com/cy7su/remnawave-bot/commit/a6718c4e21e60d4214121e75950a2e8a0b2d395a))
+* СѓР±СЂР°РЅС‹ РјСѓСЃРѕСЂРЅС‹Рµ Р·РЅР°С‡РµРЅРёСЏ deviceModel (To Be Filled By O.E.M. Рё С‚.Рї.) ([0aeb3d1](https://github.com/cy7su/remnawave-bot/commit/0aeb3d1b2d6f194481aabd73cdea503154c9f5f2))
+* СѓР±СЂР°С‚СЊ 'Р’С‹Р±РµСЂРёС‚Рµ РґРµР№СЃС‚РІРёРµ:' РёР· РіР»Р°РІРЅРѕРіРѕ РјРµРЅСЋ ([ea6a946](https://github.com/cy7su/remnawave-bot/commit/ea6a9467ba308d03d4de4121d8d7824854b3d823))
+* СѓР±СЂР°С‚СЊ СЃС‚СЂРѕРєСѓ 'РўР°СЂРёС„: ...' РёР· РіР»Р°РІРЅРѕРіРѕ РјРµРЅСЋ ([9a3253d](https://github.com/cy7su/remnawave-bot/commit/9a3253d6b94da9334ece37062939661d18f2a6c7))

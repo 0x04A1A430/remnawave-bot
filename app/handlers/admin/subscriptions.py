@@ -393,6 +393,11 @@ async def send_expiry_reminders(callback: types.CallbackQuery, db_user: User, db
                     )
                     continue
 
+                from app.utils.notification_prefs import is_subscription_expiry_enabled
+
+                if not settings.is_notifications_enabled() or not is_subscription_expiry_enabled(user):
+                    continue
+
                 days_left = max(1, subscription.days_left)
 
                 tariff_label = ''
