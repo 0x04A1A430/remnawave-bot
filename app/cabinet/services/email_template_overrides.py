@@ -27,6 +27,7 @@ COMMON_CONTEXT_VARS = [
     'username',
     'email',
     'date',
+    'unsubscribe_url',
 ]
 
 
@@ -48,6 +49,10 @@ def build_common_context() -> dict[str, Any]:
         'username': '',
         'email': '',
         'date': format_email_datetime(datetime.now(UTC), fmt='%d.%m.%Y'),
+        # Пустая строка по умолчанию: у транзакционных писем отписки нет, но
+        # плейсхолдер обязан резолвиться — иначе админский шаблон с
+        # {unsubscribe_url} доставил бы его литералом.
+        'unsubscribe_url': '',
     }
 
 

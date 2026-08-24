@@ -14,8 +14,8 @@ from pydantic_settings import BaseSettings
 
 
 DEFAULT_DISPLAY_NAME_BANNED_KEYWORDS: list[str] = [
-    # Пустой по умолчанию - администратор может добавить ключевые слова через DISPLAY_NAME_BANNED_KEYWORDS
-    # Примеры: "tme", "joingroup", "support", "admin"
+    # РџСѓСЃС‚РѕР№ РїРѕ СѓРјРѕР»С‡Р°РЅРёСЋ - Р°РґРјРёРЅРёСЃС‚СЂР°С‚РѕСЂ РјРѕР¶РµС‚ РґРѕР±Р°РІРёС‚СЊ РєР»СЋС‡РµРІС‹Рµ СЃР»РѕРІР° С‡РµСЂРµР· DISPLAY_NAME_BANNED_KEYWORDS
+    # РџСЂРёРјРµСЂС‹: "tme", "joingroup", "support", "admin"
 ]
 
 USER_TAG_PATTERN = re.compile(r'^[A-Z0-9_]{1,16}$')
@@ -35,6 +35,11 @@ class Settings(BaseSettings):
     TEST_EMAIL_PASSWORD: str = ''  # Password for test account
 
     SUPPORT_USERNAME: str = '@support'
+    # РџСѓР±Р»РёС‡РЅС‹Рµ РєРѕРЅС‚Р°РєС‚С‹ СЃРµСЂРІРёСЃР°, РєРѕС‚РѕСЂС‹Рµ РєР°Р±РёРЅРµС‚ РѕС‚РґР°С‘С‚ РІ GET /info/service.
+    # Р”Рѕ СЌС‚РѕРіРѕ С…РµРЅРґР»РµСЂ С‡РёС‚Р°Р» SUPPORT_EMAIL Рё WEBSITE_URL С‡РµСЂРµР· getattr, РЅРѕ С‚Р°РєРёС…
+    # РїРѕР»РµР№ РІ Settings РЅРёРєРѕРіРґР° РЅРµ Р±С‹Р»Рѕ вЂ” СЌРЅРґРїРѕРёРЅС‚ РІСЃРµРіРґР° РІРѕР·РІСЂР°С‰Р°Р» None.
+    SUPPORT_EMAIL: str | None = None
+    SERVICE_WEBSITE_URL: str | None = None
     SUPPORT_MENU_ENABLED: bool = True
     SUPPORT_SYSTEM_MODE: str = 'both'  # one of: tickets, contact, both
     # SLA for support tickets
@@ -55,16 +60,16 @@ class Settings(BaseSettings):
     ADMIN_NOTIFICATIONS_TICKET_TOPIC_ID: int | None = None
     ADMIN_NOTIFICATIONS_NALOG_TOPIC_ID: int | None = None
 
-    # Раздельные топики для уведомлений (если не задано — fallback на ADMIN_NOTIFICATIONS_TOPIC_ID)
-    ADMIN_NOTIFICATIONS_PURCHASES_TOPIC_ID: int | None = None  # Покупки подписок
-    ADMIN_NOTIFICATIONS_RENEWALS_TOPIC_ID: int | None = None  # Продления
-    ADMIN_NOTIFICATIONS_TRIALS_TOPIC_ID: int | None = None  # Триалы
-    ADMIN_NOTIFICATIONS_BALANCE_TOPIC_ID: int | None = None  # Пополнение баланса
-    ADMIN_NOTIFICATIONS_ADDONS_TOPIC_ID: int | None = None  # Докупка трафика/устройств/серверов
-    ADMIN_NOTIFICATIONS_INFRASTRUCTURE_TOPIC_ID: int | None = None  # Ноды, техработы, статус панели
-    ADMIN_NOTIFICATIONS_ERRORS_TOPIC_ID: int | None = None  # Ошибки бота
-    ADMIN_NOTIFICATIONS_PROMO_TOPIC_ID: int | None = None  # Промокоды, кампании, промогруппы
-    ADMIN_NOTIFICATIONS_PARTNERS_TOPIC_ID: int | None = None  # Партнёрки, выводы, админ-действия
+    # Р Р°Р·РґРµР»СЊРЅС‹Рµ С‚РѕРїРёРєРё РґР»СЏ СѓРІРµРґРѕРјР»РµРЅРёР№ (РµСЃР»Рё РЅРµ Р·Р°РґР°РЅРѕ вЂ” fallback РЅР° ADMIN_NOTIFICATIONS_TOPIC_ID)
+    ADMIN_NOTIFICATIONS_PURCHASES_TOPIC_ID: int | None = None  # РџРѕРєСѓРїРєРё РїРѕРґРїРёСЃРѕРє
+    ADMIN_NOTIFICATIONS_RENEWALS_TOPIC_ID: int | None = None  # РџСЂРѕРґР»РµРЅРёСЏ
+    ADMIN_NOTIFICATIONS_TRIALS_TOPIC_ID: int | None = None  # РўСЂРёР°Р»С‹
+    ADMIN_NOTIFICATIONS_BALANCE_TOPIC_ID: int | None = None  # РџРѕРїРѕР»РЅРµРЅРёРµ Р±Р°Р»Р°РЅСЃР°
+    ADMIN_NOTIFICATIONS_ADDONS_TOPIC_ID: int | None = None  # Р”РѕРєСѓРїРєР° С‚СЂР°С„РёРєР°/СѓСЃС‚СЂРѕР№СЃС‚РІ/СЃРµСЂРІРµСЂРѕРІ
+    ADMIN_NOTIFICATIONS_INFRASTRUCTURE_TOPIC_ID: int | None = None  # РќРѕРґС‹, С‚РµС…СЂР°Р±РѕС‚С‹, СЃС‚Р°С‚СѓСЃ РїР°РЅРµР»Рё
+    ADMIN_NOTIFICATIONS_ERRORS_TOPIC_ID: int | None = None  # РћС€РёР±РєРё Р±РѕС‚Р°
+    ADMIN_NOTIFICATIONS_PROMO_TOPIC_ID: int | None = None  # РџСЂРѕРјРѕРєРѕРґС‹, РєР°РјРїР°РЅРёРё, РїСЂРѕРјРѕРіСЂСѓРїРїС‹
+    ADMIN_NOTIFICATIONS_PARTNERS_TOPIC_ID: int | None = None  # РџР°СЂС‚РЅС‘СЂРєРё, РІС‹РІРѕРґС‹, Р°РґРјРёРЅ-РґРµР№СЃС‚РІРёСЏ
 
     # Per-category enable/disable (default True for backwards compatibility)
     ADMIN_NOTIFICATIONS_PURCHASES_ENABLED: bool = True
@@ -78,10 +83,10 @@ class Settings(BaseSettings):
     ADMIN_NOTIFICATIONS_PARTNERS_ENABLED: bool = True
     ADMIN_NOTIFICATIONS_TICKETS_ENABLED: bool = True
 
-    # Настройки очереди чеков NaloGO
-    NALOGO_QUEUE_CHECK_INTERVAL: int = 600  # Интервал проверки очереди (секунды, 10 мин)
-    NALOGO_QUEUE_RECEIPT_DELAY: int = 3  # Задержка между отправкой чеков (секунды)
-    NALOGO_QUEUE_MAX_ATTEMPTS: int = 72  # Максимум попыток отправки чека (72 × 10мин = 12 часов)
+    # РќР°СЃС‚СЂРѕР№РєРё РѕС‡РµСЂРµРґРё С‡РµРєРѕРІ NaloGO
+    NALOGO_QUEUE_CHECK_INTERVAL: int = 600  # РРЅС‚РµСЂРІР°Р» РїСЂРѕРІРµСЂРєРё РѕС‡РµСЂРµРґРё (СЃРµРєСѓРЅРґС‹, 10 РјРёРЅ)
+    NALOGO_QUEUE_RECEIPT_DELAY: int = 3  # Р—Р°РґРµСЂР¶РєР° РјРµР¶РґСѓ РѕС‚РїСЂР°РІРєРѕР№ С‡РµРєРѕРІ (СЃРµРєСѓРЅРґС‹)
+    NALOGO_QUEUE_MAX_ATTEMPTS: int = 72  # РњР°РєСЃРёРјСѓРј РїРѕРїС‹С‚РѕРє РѕС‚РїСЂР°РІРєРё С‡РµРєР° (72 Г— 10РјРёРЅ = 12 С‡Р°СЃРѕРІ)
 
     ADMIN_REPORTS_ENABLED: bool = False
     ADMIN_REPORTS_CHAT_ID: str | None = None
@@ -111,38 +116,38 @@ class Settings(BaseSettings):
     # renders identically on every system: '20.05.2026, 10:32'.
     # Admins who run a Docker image with the matching locale package
     # installed can switch to `'%d %B %Y, %H:%M'` for month names like
-    # '20 мая 2026, 10:32', or to `'%Y-%m-%d %H:%M'` for ISO-ish.
+    # '20 РјР°СЏ 2026, 10:32', or to `'%Y-%m-%d %H:%M'` for ISO-ish.
     # See app/utils/timezone.py::format_email_datetime.
     EMAIL_DATE_FORMAT: str = '%d.%m.%Y, %H:%M'
 
     DATABASE_MODE: str = 'auto'
 
-    # Параметры пула подключений к PostgreSQL. Раньше были захардкожены в
-    # app/database/database.py — вынесены в .env, чтобы масштабировать пул под
-    # нагрузку без пересборки образа. При нескольких воркерах каждый процесс
-    # держит СВОЙ пул, поэтому суммарно ≈ WORKERS * (POOL_SIZE + MAX_OVERFLOW)
-    # соединений — держите ниже max_connections PostgreSQL. Для SQLite не
-    # применяются (там используется NullPool без пулинга).
+    # РџР°СЂР°РјРµС‚СЂС‹ РїСѓР»Р° РїРѕРґРєР»СЋС‡РµРЅРёР№ Рє PostgreSQL. Р Р°РЅСЊС€Рµ Р±С‹Р»Рё Р·Р°С…Р°СЂРґРєРѕР¶РµРЅС‹ РІ
+    # app/database/database.py вЂ” РІС‹РЅРµСЃРµРЅС‹ РІ .env, С‡С‚РѕР±С‹ РјР°СЃС€С‚Р°Р±РёСЂРѕРІР°С‚СЊ РїСѓР» РїРѕРґ
+    # РЅР°РіСЂСѓР·РєСѓ Р±РµР· РїРµСЂРµСЃР±РѕСЂРєРё РѕР±СЂР°Р·Р°. РџСЂРё РЅРµСЃРєРѕР»СЊРєРёС… РІРѕСЂРєРµСЂР°С… РєР°Р¶РґС‹Р№ РїСЂРѕС†РµСЃСЃ
+    # РґРµСЂР¶РёС‚ РЎР’РћР™ РїСѓР», РїРѕСЌС‚РѕРјСѓ СЃСѓРјРјР°СЂРЅРѕ в‰€ WORKERS * (POOL_SIZE + MAX_OVERFLOW)
+    # СЃРѕРµРґРёРЅРµРЅРёР№ вЂ” РґРµСЂР¶РёС‚Рµ РЅРёР¶Рµ max_connections PostgreSQL. Р”Р»СЏ SQLite РЅРµ
+    # РїСЂРёРјРµРЅСЏСЋС‚СЃСЏ (С‚Р°Рј РёСЃРїРѕР»СЊР·СѓРµС‚СЃСЏ NullPool Р±РµР· РїСѓР»РёРЅРіР°).
     DATABASE_POOL_SIZE: int = 20
     DATABASE_MAX_OVERFLOW: int = 20
     DATABASE_POOL_TIMEOUT: int = 30
 
     REDIS_URL: str = 'redis://localhost:6379/0'
-    CART_TTL_SECONDS: int = 3600  # Время жизни корзины пользователя в Redis (1 час)
-    # «Свежее намерение» пополнить ради сохранённой корзины. Тихая авто-покупка из
-    # корзины после пополнения срабатывает ТОЛЬКО если в течение этого окна юзер
-    # явно нажал «Корзина сохранена → выбрать оплату» (return_to_cart). Иначе
-    # пополнение ради подарка / просто денег не должно молча тратиться на подписку.
-    CART_AUTOPURCHASE_INTENT_TTL_SECONDS: int = 1800  # 30 минут (хватает на оплату, но не на «забытую» корзину)
+    CART_TTL_SECONDS: int = 3600  # Р’СЂРµРјСЏ Р¶РёР·РЅРё РєРѕСЂР·РёРЅС‹ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ РІ Redis (1 С‡Р°СЃ)
+    # В«РЎРІРµР¶РµРµ РЅР°РјРµСЂРµРЅРёРµВ» РїРѕРїРѕР»РЅРёС‚СЊ СЂР°РґРё СЃРѕС…СЂР°РЅС‘РЅРЅРѕР№ РєРѕСЂР·РёРЅС‹. РўРёС…Р°СЏ Р°РІС‚Рѕ-РїРѕРєСѓРїРєР° РёР·
+    # РєРѕСЂР·РёРЅС‹ РїРѕСЃР»Рµ РїРѕРїРѕР»РЅРµРЅРёСЏ СЃСЂР°Р±Р°С‚С‹РІР°РµС‚ РўРћР›Р¬РљРћ РµСЃР»Рё РІ С‚РµС‡РµРЅРёРµ СЌС‚РѕРіРѕ РѕРєРЅР° СЋР·РµСЂ
+    # СЏРІРЅРѕ РЅР°Р¶Р°Р» В«РљРѕСЂР·РёРЅР° СЃРѕС…СЂР°РЅРµРЅР° в†’ РІС‹Р±СЂР°С‚СЊ РѕРїР»Р°С‚СѓВ» (return_to_cart). РРЅР°С‡Рµ
+    # РїРѕРїРѕР»РЅРµРЅРёРµ СЂР°РґРё РїРѕРґР°СЂРєР° / РїСЂРѕСЃС‚Рѕ РґРµРЅРµРі РЅРµ РґРѕР»Р¶РЅРѕ РјРѕР»С‡Р° С‚СЂР°С‚РёС‚СЊСЃСЏ РЅР° РїРѕРґРїРёСЃРєСѓ.
+    CART_AUTOPURCHASE_INTENT_TTL_SECONDS: int = 1800  # 30 РјРёРЅСѓС‚ (С…РІР°С‚Р°РµС‚ РЅР° РѕРїР»Р°С‚Сѓ, РЅРѕ РЅРµ РЅР° В«Р·Р°Р±С‹С‚СѓСЋВ» РєРѕСЂР·РёРЅСѓ)
 
     REMNAWAVE_API_URL: str | None = None
     REMNAWAVE_API_KEY: str | None = None
     REMNAWAVE_SECRET_KEY: str | None = None
 
-    # HTTP-таймауты запросов к панели RemnaWave (секунды). Self-hosted панели
-    # бывают медленными на коннект: раньше connect был зашит в 10с, из-за чего
-    # на медленной панели соединение рвалось (ConnectionTimeoutError). Транзиентные
-    # таймауты логируются как WARNING, чтобы не спамить админ-чат ошибками.
+    # HTTP-С‚Р°Р№РјР°СѓС‚С‹ Р·Р°РїСЂРѕСЃРѕРІ Рє РїР°РЅРµР»Рё RemnaWave (СЃРµРєСѓРЅРґС‹). Self-hosted РїР°РЅРµР»Рё
+    # Р±С‹РІР°СЋС‚ РјРµРґР»РµРЅРЅС‹РјРё РЅР° РєРѕРЅРЅРµРєС‚: СЂР°РЅСЊС€Рµ connect Р±С‹Р» Р·Р°С€РёС‚ РІ 10СЃ, РёР·-Р·Р° С‡РµРіРѕ
+    # РЅР° РјРµРґР»РµРЅРЅРѕР№ РїР°РЅРµР»Рё СЃРѕРµРґРёРЅРµРЅРёРµ СЂРІР°Р»РѕСЃСЊ (ConnectionTimeoutError). РўСЂР°РЅР·РёРµРЅС‚РЅС‹Рµ
+    # С‚Р°Р№РјР°СѓС‚С‹ Р»РѕРіРёСЂСѓСЋС‚СЃСЏ РєР°Рє WARNING, С‡С‚РѕР±С‹ РЅРµ СЃРїР°РјРёС‚СЊ Р°РґРјРёРЅ-С‡Р°С‚ РѕС€РёР±РєР°РјРё.
     REMNAWAVE_API_CONNECT_TIMEOUT: int = 30
     REMNAWAVE_API_TOTAL_TIMEOUT: int = 60
 
@@ -152,21 +157,21 @@ class Settings(BaseSettings):
     REMNAWAVE_AUTH_TYPE: str = 'api_key'  # api_key, basic, bearer, cookies, caddy
     REMNAWAVE_USER_DESCRIPTION_TEMPLATE: str = 'Bot user: {full_name} {username}'
     REMNAWAVE_USER_USERNAME_TEMPLATE: str = 'user_{telegram_id}'
-    REMNAWAVE_USER_DELETE_MODE: str = 'delete'  # "delete" или "disable"
+    REMNAWAVE_USER_DELETE_MODE: str = 'delete'  # "delete" РёР»Рё "disable"
     REMNAWAVE_AUTO_SYNC_ENABLED: bool = False
     REMNAWAVE_AUTO_SYNC_TIMES: str = '03:00'
-    REMNAWAVE_USE_USER_ID: bool = False  # v3.0.0: переключить на True для использования userId вместо uuid
-    CABINET_REMNA_SUB_CONFIG: str | None = None  # UUID конфига страницы подписки из RemnaWave
+    REMNAWAVE_USE_USER_ID: bool = False  # v3.0.0: РїРµСЂРµРєР»СЋС‡РёС‚СЊ РЅР° True РґР»СЏ РёСЃРїРѕР»СЊР·РѕРІР°РЅРёСЏ userId РІРјРµСЃС‚Рѕ uuid
+    CABINET_REMNA_SUB_CONFIG: str | None = None  # UUID РєРѕРЅС„РёРіР° СЃС‚СЂР°РЅРёС†С‹ РїРѕРґРїРёСЃРєРё РёР· RemnaWave
 
     # RemnaWave incoming webhooks (real-time event delivery from backend)
     REMNAWAVE_WEBHOOK_ENABLED: bool = False
     REMNAWAVE_WEBHOOK_PATH: str = '/remnawave-webhook'
     REMNAWAVE_WEBHOOK_SECRET: str | None = None  # HMAC-SHA256 shared secret (min 32 chars)
     REMNAWAVE_WEBHOOK_NOTIFY_NODE_CONNECTION_STATUS: bool = True
-    # Coalescing knobs для burst'ов node.connection_lost / node.connection_restored.
-    # Окно — сколько секунд буферим события одного типа перед отправкой одной
-    # сводки. Cap — жёсткий лимит размера буфера на event_name (защита от
-    # mem-DoS при компрометации webhook-секрета). См. RemnaWaveWebhookService.
+    # Coalescing knobs РґР»СЏ burst'РѕРІ node.connection_lost / node.connection_restored.
+    # РћРєРЅРѕ вЂ” СЃРєРѕР»СЊРєРѕ СЃРµРєСѓРЅРґ Р±СѓС„РµСЂРёРј СЃРѕР±С‹С‚РёСЏ РѕРґРЅРѕРіРѕ С‚РёРїР° РїРµСЂРµРґ РѕС‚РїСЂР°РІРєРѕР№ РѕРґРЅРѕР№
+    # СЃРІРѕРґРєРё. Cap вЂ” Р¶С‘СЃС‚РєРёР№ Р»РёРјРёС‚ СЂР°Р·РјРµСЂР° Р±СѓС„РµСЂР° РЅР° event_name (Р·Р°С‰РёС‚Р° РѕС‚
+    # mem-DoS РїСЂРё РєРѕРјРїСЂРѕРјРµС‚Р°С†РёРё webhook-СЃРµРєСЂРµС‚Р°). РЎРј. RemnaWaveWebhookService.
     REMNAWAVE_WEBHOOK_NODE_COALESCE_WINDOW_SECONDS: float = 10.0
     REMNAWAVE_WEBHOOK_NODE_BUFFER_MAX: int = 500
 
@@ -201,9 +206,9 @@ class Settings(BaseSettings):
     RESET_DEVICES_ON_RENEWAL: bool = False
     TARIFF_SWITCH_UPGRADE_ENABLED: bool = True
     TARIFF_SWITCH_DOWNGRADE_ENABLED: bool = True
-    # При смене тарифа НЕ переносить остаток дней, наспамленных на бесплатном (0₽)
-    # тарифе, на новый платный тариф (иначе юзер бесплатно уносит, напр., 1000 дней).
-    # Платные подписки переносят дни как обычно. Выключите, чтобы вернуть перенос.
+    # РџСЂРё СЃРјРµРЅРµ С‚Р°СЂРёС„Р° РќР• РїРµСЂРµРЅРѕСЃРёС‚СЊ РѕСЃС‚Р°С‚РѕРє РґРЅРµР№, РЅР°СЃРїР°РјР»РµРЅРЅС‹С… РЅР° Р±РµСЃРїР»Р°С‚РЅРѕРј (0в‚Ѕ)
+    # С‚Р°СЂРёС„Рµ, РЅР° РЅРѕРІС‹Р№ РїР»Р°С‚РЅС‹Р№ С‚Р°СЂРёС„ (РёРЅР°С‡Рµ СЋР·РµСЂ Р±РµСЃРїР»Р°С‚РЅРѕ СѓРЅРѕСЃРёС‚, РЅР°РїСЂ., 1000 РґРЅРµР№).
+    # РџР»Р°С‚РЅС‹Рµ РїРѕРґРїРёСЃРєРё РїРµСЂРµРЅРѕСЃСЏС‚ РґРЅРё РєР°Рє РѕР±С‹С‡РЅРѕ. Р’С‹РєР»СЋС‡РёС‚Рµ, С‡С‚РѕР±С‹ РІРµСЂРЅСѓС‚СЊ РїРµСЂРµРЅРѕСЃ.
     TARIFF_SWITCH_RESET_FREE_DAYS: bool = True
     MAX_DEVICES_LIMIT: int = 20
 
@@ -268,17 +273,17 @@ class Settings(BaseSettings):
     BASE_PROMO_GROUP_PERIOD_DISCOUNTS_ENABLED: bool = False
     BASE_PROMO_GROUP_PERIOD_DISCOUNTS: str = ''
 
-    # Режим выбора трафика:
-    # - selectable: пользователь выбирает трафик при покупке и может докупать
-    # - fixed: фиксированный лимит, без выбора и без докупки
-    # - fixed_with_topup: фиксированный лимит при покупке, но докупка разрешена (при продлении сброс до лимита)
+    # Р РµР¶РёРј РІС‹Р±РѕСЂР° С‚СЂР°С„РёРєР°:
+    # - selectable: РїРѕР»СЊР·РѕРІР°С‚РµР»СЊ РІС‹Р±РёСЂР°РµС‚ С‚СЂР°С„РёРє РїСЂРё РїРѕРєСѓРїРєРµ Рё РјРѕР¶РµС‚ РґРѕРєСѓРїР°С‚СЊ
+    # - fixed: С„РёРєСЃРёСЂРѕРІР°РЅРЅС‹Р№ Р»РёРјРёС‚, Р±РµР· РІС‹Р±РѕСЂР° Рё Р±РµР· РґРѕРєСѓРїРєРё
+    # - fixed_with_topup: С„РёРєСЃРёСЂРѕРІР°РЅРЅС‹Р№ Р»РёРјРёС‚ РїСЂРё РїРѕРєСѓРїРєРµ, РЅРѕ РґРѕРєСѓРїРєР° СЂР°Р·СЂРµС€РµРЅР° (РїСЂРё РїСЂРѕРґР»РµРЅРёРё СЃР±СЂРѕСЃ РґРѕ Р»РёРјРёС‚Р°)
     TRAFFIC_SELECTION_MODE: str = 'selectable'
     FIXED_TRAFFIC_LIMIT_GB: int = 100
     BUY_TRAFFIC_BUTTON_VISIBLE: bool = True
 
-    # Режим продаж подписок:
-    # - classic: классический режим (выбор серверов, трафика, устройств, периода отдельно)
-    # - tariffs: режим тарифов (готовые пакеты с фиксированными параметрами)
+    # Р РµР¶РёРј РїСЂРѕРґР°Р¶ РїРѕРґРїРёСЃРѕРє:
+    # - classic: РєР»Р°СЃСЃРёС‡РµСЃРєРёР№ СЂРµР¶РёРј (РІС‹Р±РѕСЂ СЃРµСЂРІРµСЂРѕРІ, С‚СЂР°С„РёРєР°, СѓСЃС‚СЂРѕР№СЃС‚РІ, РїРµСЂРёРѕРґР° РѕС‚РґРµР»СЊРЅРѕ)
+    # - tariffs: СЂРµР¶РёРј С‚Р°СЂРёС„РѕРІ (РіРѕС‚РѕРІС‹Рµ РїР°РєРµС‚С‹ СЃ С„РёРєСЃРёСЂРѕРІР°РЅРЅС‹РјРё РїР°СЂР°РјРµС‚СЂР°РјРё)
     SALES_MODE: str = 'tariffs'
 
     # Multi-tariff mode: allows users to purchase multiple tariffs simultaneously
@@ -286,58 +291,58 @@ class Settings(BaseSettings):
     MULTI_TARIFF_ENABLED: bool = False
     MAX_ACTIVE_SUBSCRIPTIONS: int = 10
 
-    # ID тарифа для триала в режиме тарифов (0 = использовать стандартные настройки триала)
-    # Если указан ID тарифа, параметры триала берутся из тарифа (traffic_limit_gb, device_limit, allowed_squads)
-    # Длительность триала всё равно берётся из TRIAL_DURATION_DAYS
+    # ID С‚Р°СЂРёС„Р° РґР»СЏ С‚СЂРёР°Р»Р° РІ СЂРµР¶РёРјРµ С‚Р°СЂРёС„РѕРІ (0 = РёСЃРїРѕР»СЊР·РѕРІР°С‚СЊ СЃС‚Р°РЅРґР°СЂС‚РЅС‹Рµ РЅР°СЃС‚СЂРѕР№РєРё С‚СЂРёР°Р»Р°)
+    # Р•СЃР»Рё СѓРєР°Р·Р°РЅ ID С‚Р°СЂРёС„Р°, РїР°СЂР°РјРµС‚СЂС‹ С‚СЂРёР°Р»Р° Р±РµСЂСѓС‚СЃСЏ РёР· С‚Р°СЂРёС„Р° (traffic_limit_gb, device_limit, allowed_squads)
+    # Р”Р»РёС‚РµР»СЊРЅРѕСЃС‚СЊ С‚СЂРёР°Р»Р° РІСЃС‘ СЂР°РІРЅРѕ Р±РµСЂС‘С‚СЃСЏ РёР· TRIAL_DURATION_DAYS
     TRIAL_TARIFF_ID: int = 0
 
-    # Настройки докупки трафика
-    TRAFFIC_TOPUP_ENABLED: bool = True  # Включить/выключить функцию докупки трафика
-    # Пакеты для докупки трафика (формат: "гб:цена:enabled", пустая строка = использовать TRAFFIC_PACKAGES_CONFIG)
+    # РќР°СЃС‚СЂРѕР№РєРё РґРѕРєСѓРїРєРё С‚СЂР°С„РёРєР°
+    TRAFFIC_TOPUP_ENABLED: bool = True  # Р’РєР»СЋС‡РёС‚СЊ/РІС‹РєР»СЋС‡РёС‚СЊ С„СѓРЅРєС†РёСЋ РґРѕРєСѓРїРєРё С‚СЂР°С„РёРєР°
+    # РџР°РєРµС‚С‹ РґР»СЏ РґРѕРєСѓРїРєРё С‚СЂР°С„РёРєР° (С„РѕСЂРјР°С‚: "РіР±:С†РµРЅР°:enabled", РїСѓСЃС‚Р°СЏ СЃС‚СЂРѕРєР° = РёСЃРїРѕР»СЊР·РѕРІР°С‚СЊ TRAFFIC_PACKAGES_CONFIG)
     TRAFFIC_TOPUP_PACKAGES_CONFIG: str = ''
 
-    # Настройки сброса трафика
-    # Режимы расчета цены сброса:
-    # "period" - фиксированная цена = стоимость периода 30 дней (старое поведение)
-    # "traffic" - цена зависит от текущего лимита трафика (цена пакета трафика)
-    # "traffic_with_purchased" - цена = базовый трафик + докупленный трафик (рекомендуется)
+    # РќР°СЃС‚СЂРѕР№РєРё СЃР±СЂРѕСЃР° С‚СЂР°С„РёРєР°
+    # Р РµР¶РёРјС‹ СЂР°СЃС‡РµС‚Р° С†РµРЅС‹ СЃР±СЂРѕСЃР°:
+    # "period" - С„РёРєСЃРёСЂРѕРІР°РЅРЅР°СЏ С†РµРЅР° = СЃС‚РѕРёРјРѕСЃС‚СЊ РїРµСЂРёРѕРґР° 30 РґРЅРµР№ (СЃС‚Р°СЂРѕРµ РїРѕРІРµРґРµРЅРёРµ)
+    # "traffic" - С†РµРЅР° Р·Р°РІРёСЃРёС‚ РѕС‚ С‚РµРєСѓС‰РµРіРѕ Р»РёРјРёС‚Р° С‚СЂР°С„РёРєР° (С†РµРЅР° РїР°РєРµС‚Р° С‚СЂР°С„РёРєР°)
+    # "traffic_with_purchased" - С†РµРЅР° = Р±Р°Р·РѕРІС‹Р№ С‚СЂР°С„РёРє + РґРѕРєСѓРїР»РµРЅРЅС‹Р№ С‚СЂР°С„РёРє (СЂРµРєРѕРјРµРЅРґСѓРµС‚СЃСЏ)
     TRAFFIC_RESET_PRICE_MODE: str = 'traffic_with_purchased'
-    # Базовая цена сброса в копейках (используется если режим "period" или как минимальная цена)
-    TRAFFIC_RESET_BASE_PRICE: int = 0  # 0 = использовать PERIOD_PRICES[30]
+    # Р‘Р°Р·РѕРІР°СЏ С†РµРЅР° СЃР±СЂРѕСЃР° РІ РєРѕРїРµР№РєР°С… (РёСЃРїРѕР»СЊР·СѓРµС‚СЃСЏ РµСЃР»Рё СЂРµР¶РёРј "period" РёР»Рё РєР°Рє РјРёРЅРёРјР°Р»СЊРЅР°СЏ С†РµРЅР°)
+    TRAFFIC_RESET_BASE_PRICE: int = 0  # 0 = РёСЃРїРѕР»СЊР·РѕРІР°С‚СЊ PERIOD_PRICES[30]
 
     REFERRAL_MINIMUM_TOPUP_KOPEKS: int = 10000
     REFERRAL_FIRST_TOPUP_BONUS_KOPEKS: int = 10000
     REFERRAL_INVITER_BONUS_KOPEKS: int = 10000
     REFERRAL_COMMISSION_PERCENT: int = 25
     REFERRAL_FIRST_PAYMENT_COMMISSION_PERCENT: int | None = None
-    REFERRAL_RECURRING_COMMISSION_TIERS: str = ''  # Формат: "0:10,10:15,50:20,100:25"
-    REFERRAL_MAX_COMMISSION_PAYMENTS: int = 0  # Макс. кол-во платежей реферала с комиссией (0 = без лимита)
+    REFERRAL_RECURRING_COMMISSION_TIERS: str = ''  # Р¤РѕСЂРјР°С‚: "0:10,10:15,50:20,100:25"
+    REFERRAL_MAX_COMMISSION_PAYMENTS: int = 0  # РњР°РєСЃ. РєРѕР»-РІРѕ РїР»Р°С‚РµР¶РµР№ СЂРµС„РµСЂР°Р»Р° СЃ РєРѕРјРёСЃСЃРёРµР№ (0 = Р±РµР· Р»РёРјРёС‚Р°)
 
     REFERRAL_PROGRAM_ENABLED: bool = True
     REFERRAL_NOTIFICATIONS_ENABLED: bool = True
     REFERRAL_NOTIFICATION_RETRY_ATTEMPTS: int = 3
 
-    # Настройки вывода реферального баланса
-    REFERRAL_WITHDRAWAL_ENABLED: bool = False  # Включить возможность вывода
-    REFERRAL_WITHDRAWAL_MIN_AMOUNT_KOPEKS: int = 100000  # Мин. сумма вывода (1000₽)
-    REFERRAL_WITHDRAWAL_COOLDOWN_DAYS: int = 30  # Частота запросов на вывод
-    REFERRAL_WITHDRAWAL_ONLY_REFERRAL_BALANCE: bool = True  # Только реф. баланс (False = реф + свой)
-    REFERRAL_WITHDRAWAL_REQUISITES_TEXT: str = ''  # Текст-подсказка для реквизитов при выводе
-    REFERRAL_WITHDRAWAL_NOTIFICATIONS_TOPIC_ID: int | None = None  # Топик для уведомлений
-    REFERRAL_PARTNER_SECTION_VISIBLE: bool = True  # Показывать раздел партнёрки в кабинете
+    # РќР°СЃС‚СЂРѕР№РєРё РІС‹РІРѕРґР° СЂРµС„РµСЂР°Р»СЊРЅРѕРіРѕ Р±Р°Р»Р°РЅСЃР°
+    REFERRAL_WITHDRAWAL_ENABLED: bool = False  # Р’РєР»СЋС‡РёС‚СЊ РІРѕР·РјРѕР¶РЅРѕСЃС‚СЊ РІС‹РІРѕРґР°
+    REFERRAL_WITHDRAWAL_MIN_AMOUNT_KOPEKS: int = 100000  # РњРёРЅ. СЃСѓРјРјР° РІС‹РІРѕРґР° (1000в‚Ѕ)
+    REFERRAL_WITHDRAWAL_COOLDOWN_DAYS: int = 30  # Р§Р°СЃС‚РѕС‚Р° Р·Р°РїСЂРѕСЃРѕРІ РЅР° РІС‹РІРѕРґ
+    REFERRAL_WITHDRAWAL_ONLY_REFERRAL_BALANCE: bool = True  # РўРѕР»СЊРєРѕ СЂРµС„. Р±Р°Р»Р°РЅСЃ (False = СЂРµС„ + СЃРІРѕР№)
+    REFERRAL_WITHDRAWAL_REQUISITES_TEXT: str = ''  # РўРµРєСЃС‚-РїРѕРґСЃРєР°Р·РєР° РґР»СЏ СЂРµРєРІРёР·РёС‚РѕРІ РїСЂРё РІС‹РІРѕРґРµ
+    REFERRAL_WITHDRAWAL_NOTIFICATIONS_TOPIC_ID: int | None = None  # РўРѕРїРёРє РґР»СЏ СѓРІРµРґРѕРјР»РµРЅРёР№
+    REFERRAL_PARTNER_SECTION_VISIBLE: bool = True  # РџРѕРєР°Р·С‹РІР°С‚СЊ СЂР°Р·РґРµР» РїР°СЂС‚РЅС‘СЂРєРё РІ РєР°Р±РёРЅРµС‚Рµ
 
-    # Настройки анализа на подозрительность
-    REFERRAL_WITHDRAWAL_SUSPICIOUS_MIN_DEPOSIT_KOPEKS: int = 50000  # Мин. сумма от 1 реферала (500₽)
-    REFERRAL_WITHDRAWAL_SUSPICIOUS_MAX_DEPOSITS_PER_MONTH: int = 10  # Макс. пополнений от 1 реферала/мес
-    REFERRAL_WITHDRAWAL_SUSPICIOUS_NO_PURCHASES_RATIO: float = 2.0  # Пополнил в X раз больше чем потратил
+    # РќР°СЃС‚СЂРѕР№РєРё Р°РЅР°Р»РёР·Р° РЅР° РїРѕРґРѕР·СЂРёС‚РµР»СЊРЅРѕСЃС‚СЊ
+    REFERRAL_WITHDRAWAL_SUSPICIOUS_MIN_DEPOSIT_KOPEKS: int = 50000  # РњРёРЅ. СЃСѓРјРјР° РѕС‚ 1 СЂРµС„РµСЂР°Р»Р° (500в‚Ѕ)
+    REFERRAL_WITHDRAWAL_SUSPICIOUS_MAX_DEPOSITS_PER_MONTH: int = 10  # РњР°РєСЃ. РїРѕРїРѕР»РЅРµРЅРёР№ РѕС‚ 1 СЂРµС„РµСЂР°Р»Р°/РјРµСЃ
+    REFERRAL_WITHDRAWAL_SUSPICIOUS_NO_PURCHASES_RATIO: float = 2.0  # РџРѕРїРѕР»РЅРёР» РІ X СЂР°Р· Р±РѕР»СЊС€Рµ С‡РµРј РїРѕС‚СЂР°С‚РёР»
 
-    # Тестовый режим для вывода (позволяет админам вручную начислять реф. доход)
+    # РўРµСЃС‚РѕРІС‹Р№ СЂРµР¶РёРј РґР»СЏ РІС‹РІРѕРґР° (РїРѕР·РІРѕР»СЏРµС‚ Р°РґРјРёРЅР°Рј РІСЂСѓС‡РЅСѓСЋ РЅР°С‡РёСЃР»СЏС‚СЊ СЂРµС„. РґРѕС…РѕРґ)
     REFERRAL_WITHDRAWAL_TEST_MODE: bool = False
 
-    # Конкурсы (глобальный флаг, будет расширяться под разные типы)
+    # РљРѕРЅРєСѓСЂСЃС‹ (РіР»РѕР±Р°Р»СЊРЅС‹Р№ С„Р»Р°Рі, Р±СѓРґРµС‚ СЂР°СЃС€РёСЂСЏС‚СЊСЃСЏ РїРѕРґ СЂР°Р·РЅС‹Рµ С‚РёРїС‹)
     CONTESTS_ENABLED: bool = False
     CONTESTS_BUTTON_VISIBLE: bool = False
-    # Для обратной совместимости со старыми конфигами
+    # Р”Р»СЏ РѕР±СЂР°С‚РЅРѕР№ СЃРѕРІРјРµСЃС‚РёРјРѕСЃС‚Рё СЃРѕ СЃС‚Р°СЂС‹РјРё РєРѕРЅС„РёРіР°РјРё
     REFERRAL_CONTESTS_ENABLED: bool = False
 
     BLACKLIST_CHECK_ENABLED: bool = False
@@ -347,50 +352,50 @@ class Settings(BaseSettings):
 
     DISPOSABLE_EMAIL_CHECK_ENABLED: bool = True
 
-    # Настройки перевыпуска подписки (revoke + regenerate link)
+    # РќР°СЃС‚СЂРѕР№РєРё РїРµСЂРµРІС‹РїСѓСЃРєР° РїРѕРґРїРёСЃРєРё (revoke + regenerate link)
     SUBSCRIPTION_REVOKE_ENABLED: bool = True
     SUBSCRIPTION_REVOKE_COOLDOWN_SECONDS: int = 43200  # 12 hours
 
-    # Настройки простой покупки
+    # РќР°СЃС‚СЂРѕР№РєРё РїСЂРѕСЃС‚РѕР№ РїРѕРєСѓРїРєРё
     SIMPLE_SUBSCRIPTION_ENABLED: bool = False
     SIMPLE_SUBSCRIPTION_PERIOD_DAYS: int = 30
     SIMPLE_SUBSCRIPTION_DEVICE_LIMIT: int = 1
-    SIMPLE_SUBSCRIPTION_TRAFFIC_GB: int = 0  # 0 означает безлимит
+    SIMPLE_SUBSCRIPTION_TRAFFIC_GB: int = 0  # 0 РѕР·РЅР°С‡Р°РµС‚ Р±РµР·Р»РёРјРёС‚
     SIMPLE_SUBSCRIPTION_SQUAD_UUID: str | None = None
 
-    # Настройки конструктора меню (API)
-    MENU_LAYOUT_ENABLED: bool = False  # Включить управление меню через API
+    # РќР°СЃС‚СЂРѕР№РєРё РєРѕРЅСЃС‚СЂСѓРєС‚РѕСЂР° РјРµРЅСЋ (API)
+    MENU_LAYOUT_ENABLED: bool = False  # Р’РєР»СЋС‡РёС‚СЊ СѓРїСЂР°РІР»РµРЅРёРµ РјРµРЅСЋ С‡РµСЂРµР· API
 
-    # Настройки мониторинга трафика
-    TRAFFIC_MONITORING_ENABLED: bool = False  # Глобальный переключатель (для обратной совместимости)
-    TRAFFIC_THRESHOLD_GB_PER_DAY: float = 10.0  # Порог трафика в ГБ за сутки (для обратной совместимости)
-    TRAFFIC_MONITORING_INTERVAL_HOURS: int = 24  # Интервал проверки в часах (для обратной совместимости)
+    # РќР°СЃС‚СЂРѕР№РєРё РјРѕРЅРёС‚РѕСЂРёРЅРіР° С‚СЂР°С„РёРєР°
+    TRAFFIC_MONITORING_ENABLED: bool = False  # Р“Р»РѕР±Р°Р»СЊРЅС‹Р№ РїРµСЂРµРєР»СЋС‡Р°С‚РµР»СЊ (РґР»СЏ РѕР±СЂР°С‚РЅРѕР№ СЃРѕРІРјРµСЃС‚РёРјРѕСЃС‚Рё)
+    TRAFFIC_THRESHOLD_GB_PER_DAY: float = 10.0  # РџРѕСЂРѕРі С‚СЂР°С„РёРєР° РІ Р“Р‘ Р·Р° СЃСѓС‚РєРё (РґР»СЏ РѕР±СЂР°С‚РЅРѕР№ СЃРѕРІРјРµСЃС‚РёРјРѕСЃС‚Рё)
+    TRAFFIC_MONITORING_INTERVAL_HOURS: int = 24  # РРЅС‚РµСЂРІР°Р» РїСЂРѕРІРµСЂРєРё РІ С‡Р°СЃР°С… (РґР»СЏ РѕР±СЂР°С‚РЅРѕР№ СЃРѕРІРјРµСЃС‚РёРјРѕСЃС‚Рё)
     SUSPICIOUS_NOTIFICATIONS_TOPIC_ID: int | None = None
 
-    # Новый мониторинг трафика v2
-    # Быстрая проверка (текущий использованный трафик)
+    # РќРѕРІС‹Р№ РјРѕРЅРёС‚РѕСЂРёРЅРі С‚СЂР°С„РёРєР° v2
+    # Р‘С‹СЃС‚СЂР°СЏ РїСЂРѕРІРµСЂРєР° (С‚РµРєСѓС‰РёР№ РёСЃРїРѕР»СЊР·РѕРІР°РЅРЅС‹Р№ С‚СЂР°С„РёРє)
     TRAFFIC_FAST_CHECK_ENABLED: bool = False
-    TRAFFIC_FAST_CHECK_INTERVAL_MINUTES: int = 10  # Интервал проверки в минутах
-    TRAFFIC_FAST_CHECK_THRESHOLD_GB: float = 5.0  # Порог в ГБ для быстрой проверки
+    TRAFFIC_FAST_CHECK_INTERVAL_MINUTES: int = 10  # РРЅС‚РµСЂРІР°Р» РїСЂРѕРІРµСЂРєРё РІ РјРёРЅСѓС‚Р°С…
+    TRAFFIC_FAST_CHECK_THRESHOLD_GB: float = 5.0  # РџРѕСЂРѕРі РІ Р“Р‘ РґР»СЏ Р±С‹СЃС‚СЂРѕР№ РїСЂРѕРІРµСЂРєРё
 
-    # Суточная проверка (трафик за 24 часа)
+    # РЎСѓС‚РѕС‡РЅР°СЏ РїСЂРѕРІРµСЂРєР° (С‚СЂР°С„РёРє Р·Р° 24 С‡Р°СЃР°)
     TRAFFIC_DAILY_CHECK_ENABLED: bool = False
-    TRAFFIC_DAILY_CHECK_TIME: str = '00:00'  # Время суточной проверки (HH:MM)
-    TRAFFIC_DAILY_THRESHOLD_GB: float = 50.0  # Порог суточного трафика в ГБ
+    TRAFFIC_DAILY_CHECK_TIME: str = '00:00'  # Р’СЂРµРјСЏ СЃСѓС‚РѕС‡РЅРѕР№ РїСЂРѕРІРµСЂРєРё (HH:MM)
+    TRAFFIC_DAILY_THRESHOLD_GB: float = 50.0  # РџРѕСЂРѕРі СЃСѓС‚РѕС‡РЅРѕРіРѕ С‚СЂР°С„РёРєР° РІ Р“Р‘
 
-    # Фильтрация по серверам (UUID нод через запятую)
-    TRAFFIC_MONITORED_NODES: str = ''  # Только эти ноды (пусто = все)
-    TRAFFIC_IGNORED_NODES: str = ''  # Исключить эти ноды
-    TRAFFIC_EXCLUDED_USER_UUIDS: str = ''  # Исключить пользователей (UUID через запятую)
+    # Р¤РёР»СЊС‚СЂР°С†РёСЏ РїРѕ СЃРµСЂРІРµСЂР°Рј (UUID РЅРѕРґ С‡РµСЂРµР· Р·Р°РїСЏС‚СѓСЋ)
+    TRAFFIC_MONITORED_NODES: str = ''  # РўРѕР»СЊРєРѕ СЌС‚Рё РЅРѕРґС‹ (РїСѓСЃС‚Рѕ = РІСЃРµ)
+    TRAFFIC_IGNORED_NODES: str = ''  # РСЃРєР»СЋС‡РёС‚СЊ СЌС‚Рё РЅРѕРґС‹
+    TRAFFIC_EXCLUDED_USER_UUIDS: str = ''  # РСЃРєР»СЋС‡РёС‚СЊ РїРѕР»СЊР·РѕРІР°С‚РµР»РµР№ (UUID С‡РµСЂРµР· Р·Р°РїСЏС‚СѓСЋ)
 
-    # Параллельность и кулдаун
-    TRAFFIC_CHECK_BATCH_SIZE: int = 1000  # Размер батча для получения пользователей
-    TRAFFIC_CHECK_CONCURRENCY: int = 10  # Параллельных запросов
-    TRAFFIC_NOTIFICATION_COOLDOWN_MINUTES: int = 60  # Кулдаун уведомлений (минуты)
-    TRAFFIC_SNAPSHOT_TTL_HOURS: int = 24  # TTL для snapshot трафика в Redis (часы)
-    # Настройки суточных подписок
-    DAILY_SUBSCRIPTIONS_ENABLED: bool = True  # Включить автоматическое списание для суточных тарифов
-    DAILY_SUBSCRIPTIONS_CHECK_INTERVAL_MINUTES: int = 30  # Интервал проверки в минутах
+    # РџР°СЂР°Р»Р»РµР»СЊРЅРѕСЃС‚СЊ Рё РєСѓР»РґР°СѓРЅ
+    TRAFFIC_CHECK_BATCH_SIZE: int = 1000  # Р Р°Р·РјРµСЂ Р±Р°С‚С‡Р° РґР»СЏ РїРѕР»СѓС‡РµРЅРёСЏ РїРѕР»СЊР·РѕРІР°С‚РµР»РµР№
+    TRAFFIC_CHECK_CONCURRENCY: int = 10  # РџР°СЂР°Р»Р»РµР»СЊРЅС‹С… Р·Р°РїСЂРѕСЃРѕРІ
+    TRAFFIC_NOTIFICATION_COOLDOWN_MINUTES: int = 60  # РљСѓР»РґР°СѓРЅ СѓРІРµРґРѕРјР»РµРЅРёР№ (РјРёРЅСѓС‚С‹)
+    TRAFFIC_SNAPSHOT_TTL_HOURS: int = 24  # TTL РґР»СЏ snapshot С‚СЂР°С„РёРєР° РІ Redis (С‡Р°СЃС‹)
+    # РќР°СЃС‚СЂРѕР№РєРё СЃСѓС‚РѕС‡РЅС‹С… РїРѕРґРїРёСЃРѕРє
+    DAILY_SUBSCRIPTIONS_ENABLED: bool = True  # Р’РєР»СЋС‡РёС‚СЊ Р°РІС‚РѕРјР°С‚РёС‡РµСЃРєРѕРµ СЃРїРёСЃР°РЅРёРµ РґР»СЏ СЃСѓС‚РѕС‡РЅС‹С… С‚Р°СЂРёС„РѕРІ
+    DAILY_SUBSCRIPTIONS_CHECK_INTERVAL_MINUTES: int = 30  # РРЅС‚РµСЂРІР°Р» РїСЂРѕРІРµСЂРєРё РІ РјРёРЅСѓС‚Р°С…
 
     AUTOPAY_WARNING_DAYS: str = '3,1'
 
@@ -398,35 +403,35 @@ class Settings(BaseSettings):
 
     DEFAULT_AUTOPAY_ENABLED: bool = False
     DEFAULT_AUTOPAY_DAYS_BEFORE: int = 3
-    # 0 → use the tariff's shortest (cheapest) period, as before.
-    # >0 → autopay charges this many days each cycle by default (must be present in tariff/renewal periods).
+    # 0 в†’ use the tariff's shortest (cheapest) period, as before.
+    # >0 в†’ autopay charges this many days each cycle by default (must be present in tariff/renewal periods).
     # Per-subscription override lives in Subscription.autopay_period_days.
     DEFAULT_AUTOPAY_PERIOD_DAYS: int = 0
     MIN_BALANCE_FOR_AUTOPAY_KOPEKS: int = 10000
 
-    # ── Антиспам уведомлений об ошибке автоплатежа ──
-    # Максимум уведомлений об ошибке списания за ОДИН цикл подписки (до следующего end_date).
-    # 0 — не отправлять уведомления об ошибке вовсе.
+    # в”Ђв”Ђ РђРЅС‚РёСЃРїР°Рј СѓРІРµРґРѕРјР»РµРЅРёР№ РѕР± РѕС€РёР±РєРµ Р°РІС‚РѕРїР»Р°С‚РµР¶Р° в”Ђв”Ђ
+    # РњР°РєСЃРёРјСѓРј СѓРІРµРґРѕРјР»РµРЅРёР№ РѕР± РѕС€РёР±РєРµ СЃРїРёСЃР°РЅРёСЏ Р·Р° РћР”РРќ С†РёРєР» РїРѕРґРїРёСЃРєРё (РґРѕ СЃР»РµРґСѓСЋС‰РµРіРѕ end_date).
+    # 0 вЂ” РЅРµ РѕС‚РїСЂР°РІР»СЏС‚СЊ СѓРІРµРґРѕРјР»РµРЅРёСЏ РѕР± РѕС€РёР±РєРµ РІРѕРІСЃРµ.
     AUTOPAY_FAIL_MAX_NOTIFICATIONS: int = 2
-    # За сколько часов до окончания подписки слать «финальное» напоминание. 0 — без финала.
+    # Р—Р° СЃРєРѕР»СЊРєРѕ С‡Р°СЃРѕРІ РґРѕ РѕРєРѕРЅС‡Р°РЅРёСЏ РїРѕРґРїРёСЃРєРё СЃР»Р°С‚СЊ В«С„РёРЅР°Р»СЊРЅРѕРµВ» РЅР°РїРѕРјРёРЅР°РЅРёРµ. 0 вЂ” Р±РµР· С„РёРЅР°Р»Р°.
     AUTOPAY_FAIL_FINAL_REMINDER_HOURS: int = 3
-    # Периодические повторы между первым и финальным уведомлением, каждые N часов
-    # (legacy-режим). 0 — без повторов (только первое + финальное).
+    # РџРµСЂРёРѕРґРёС‡РµСЃРєРёРµ РїРѕРІС‚РѕСЂС‹ РјРµР¶РґСѓ РїРµСЂРІС‹Рј Рё С„РёРЅР°Р»СЊРЅС‹Рј СѓРІРµРґРѕРјР»РµРЅРёРµРј, РєР°Р¶РґС‹Рµ N С‡Р°СЃРѕРІ
+    # (legacy-СЂРµР¶РёРј). 0 вЂ” Р±РµР· РїРѕРІС‚РѕСЂРѕРІ (С‚РѕР»СЊРєРѕ РїРµСЂРІРѕРµ + С„РёРЅР°Р»СЊРЅРѕРµ).
     AUTOPAY_FAIL_REPEAT_INTERVAL_HOURS: int = 0
 
     SUBSCRIPTION_RENEWAL_BALANCE_THRESHOLD_KOPEKS: int = 20000
 
     MONITORING_INTERVAL: int = 60
-    # Жёсткий per-send таймаут (сек) на отправку уведомлений из MonitoringService.
-    # Дефолтный session timeout aiogram = 60s; при медленном канале до Telegram
-    # или недоступном получателе один send_photo/send_message блокирует ВЕСЬ хвост
-    # цикла мониторинга на минуты (последовательно по многим получателям, без
-    # per-send логов). Этот таймаут даёт быстрый предсказуемый предел: на TimeoutError
-    # получатель пропускается, цикл продолжается.
+    # Р–С‘СЃС‚РєРёР№ per-send С‚Р°Р№РјР°СѓС‚ (СЃРµРє) РЅР° РѕС‚РїСЂР°РІРєСѓ СѓРІРµРґРѕРјР»РµРЅРёР№ РёР· MonitoringService.
+    # Р”РµС„РѕР»С‚РЅС‹Р№ session timeout aiogram = 60s; РїСЂРё РјРµРґР»РµРЅРЅРѕРј РєР°РЅР°Р»Рµ РґРѕ Telegram
+    # РёР»Рё РЅРµРґРѕСЃС‚СѓРїРЅРѕРј РїРѕР»СѓС‡Р°С‚РµР»Рµ РѕРґРёРЅ send_photo/send_message Р±Р»РѕРєРёСЂСѓРµС‚ Р’Р•РЎР¬ С…РІРѕСЃС‚
+    # С†РёРєР»Р° РјРѕРЅРёС‚РѕСЂРёРЅРіР° РЅР° РјРёРЅСѓС‚С‹ (РїРѕСЃР»РµРґРѕРІР°С‚РµР»СЊРЅРѕ РїРѕ РјРЅРѕРіРёРј РїРѕР»СѓС‡Р°С‚РµР»СЏРј, Р±РµР·
+    # per-send Р»РѕРіРѕРІ). Р­С‚РѕС‚ С‚Р°Р№РјР°СѓС‚ РґР°С‘С‚ Р±С‹СЃС‚СЂС‹Р№ РїСЂРµРґСЃРєР°Р·СѓРµРјС‹Р№ РїСЂРµРґРµР»: РЅР° TimeoutError
+    # РїРѕР»СѓС‡Р°С‚РµР»СЊ РїСЂРѕРїСѓСЃРєР°РµС‚СЃСЏ, С†РёРєР» РїСЂРѕРґРѕР»Р¶Р°РµС‚СЃСЏ.
     MONITORING_NOTIFICATION_SEND_TIMEOUT: float = 20.0
     LOW_BALANCE_ALERT_EXPIRY_DAYS: int = 3  # Only alert when subscription expires within N days
     # Months of inactivity before a user row is soft-deleted (status=DELETED).
-    # 12 months is conservative — VPN users are highly seasonal (vacations,
+    # 12 months is conservative вЂ” VPN users are highly seasonal (vacations,
     # business trips, geo-blocking events). Aggressive defaults were
     # mass-deleting returning users; cabinet auto-revival makes the cost of
     # raising this low. See `app/services/user_revival_service.py`.
@@ -437,14 +442,14 @@ class Settings(BaseSettings):
     MAINTENANCE_AUTO_ENABLE: bool = True
     MAINTENANCE_MONITORING_ENABLED: bool = True
     MAINTENANCE_RETRY_ATTEMPTS: int = 1
-    MAINTENANCE_MESSAGE: str = 'Ведутся технические работы. Сервис временно недоступен. Попробуйте позже.'
+    MAINTENANCE_MESSAGE: str = 'Р’РµРґСѓС‚СЃСЏ С‚РµС…РЅРёС‡РµСЃРєРёРµ СЂР°Р±РѕС‚С‹. РЎРµСЂРІРёСЃ РІСЂРµРјРµРЅРЅРѕ РЅРµРґРѕСЃС‚СѓРїРµРЅ. РџРѕРїСЂРѕР±СѓР№С‚Рµ РїРѕР·Р¶Рµ.'
 
     TELEGRAM_STARS_ENABLED: bool = True
-    # ₽ per 1 ⭐. Matches Telegram's own cash-out rate (~0.95–1.0 ₽/ as of'
+    # в‚Ѕ per 1 в­ђ. Matches Telegram's own cash-out rate (~0.95вЂ“1.0 в‚Ѕ/ as of'
     # 2026-05) so an integer-ruble top-up round-trips losslessly:
-    # rubles_to_stars(150) → 150 ⭐ → stars_to_rubles(150) → 150 ₽.
-    # The previous 1.3 default undervalued stars by ~30% (bot quoted 115 ⭐
-    # for a 150 ₽ top-up, credited only 149.50 ₽ back — a built-in
+    # rubles_to_stars(150) в†’ 150 в­ђ в†’ stars_to_rubles(150) в†’ 150 в‚Ѕ.
+    # The previous 1.3 default undervalued stars by ~30% (bot quoted 115 в­ђ
+    # for a 150 в‚Ѕ top-up, credited only 149.50 в‚Ѕ back вЂ” a built-in
     # rounding loss visible on every payment).
     TELEGRAM_STARS_RATE_RUB: float = 1.0
     TELEGRAM_STARS_DISPLAY_NAME: str = 'Telegram Stars'
@@ -477,11 +482,11 @@ class Settings(BaseSettings):
     # threads are guaranteed to unstick within ``read`` seconds.
     #
     # Read=10s catches P99.9 degradation while keeping pool-slot
-    # occupancy bounded — at 4 workers, a degradation event can pin
+    # occupancy bounded вЂ” at 4 workers, a degradation event can pin
     # the pool for at most 10s instead of 15s (33% faster recovery).
-    # YK normal latency is ~500ms, so 10s read is still ~20× headroom.
+    # YK normal latency is ~500ms, so 10s read is still ~20Г— headroom.
     #
-    # Operators floor at 1s — setting either to ``0`` silently falls
+    # Operators floor at 1s вЂ” setting either to ``0`` silently falls
     # back to the default below to avoid disabling protection entirely.
     YOOKASSA_HTTP_CONNECT_TIMEOUT: int = 5
     YOOKASSA_HTTP_READ_TIMEOUT: int = 10
@@ -490,7 +495,7 @@ class Settings(BaseSettings):
     # is a balance between burst capacity (~8 req/s normal, ~2 req/s
     # under degradation per Little's law) and memory footprint (~32MB
     # per worker stack). High-volume operators can raise this to 6-8
-    # without splitting into polling vs webhook lanes — that split is
+    # without splitting into polling vs webhook lanes вЂ” that split is
     # a separate refactor.
     YOOKASSA_MAX_CONCURRENT_REQUESTS: int = 4
     YOOKASSA_SHOP_ID: str | None = None
@@ -523,13 +528,13 @@ class Settings(BaseSettings):
 
     AUTO_PURCHASE_AFTER_TOPUP_ENABLED: bool = False
 
-    # Отключение превью ссылок в сообщениях бота
+    # РћС‚РєР»СЋС‡РµРЅРёРµ РїСЂРµРІСЊСЋ СЃСЃС‹Р»РѕРє РІ СЃРѕРѕР±С‰РµРЅРёСЏС… Р±РѕС‚Р°
     DISABLE_WEB_PAGE_PREVIEW: bool = False
     ACTIVATE_BUTTON_VISIBLE: bool = False
-    ACTIVATE_BUTTON_TEXT: str = 'активировать'
-    PAYMENT_BALANCE_DESCRIPTION: str = 'Пополнение баланса'
-    PAYMENT_SUBSCRIPTION_DESCRIPTION: str = 'Оплата подписки'
-    PAYMENT_SERVICE_NAME: str = 'Интернет-сервис'
+    ACTIVATE_BUTTON_TEXT: str = 'Р°РєС‚РёРІРёСЂРѕРІР°С‚СЊ'
+    PAYMENT_BALANCE_DESCRIPTION: str = 'РџРѕРїРѕР»РЅРµРЅРёРµ Р±Р°Р»Р°РЅСЃР°'
+    PAYMENT_SUBSCRIPTION_DESCRIPTION: str = 'РћРїР»Р°С‚Р° РїРѕРґРїРёСЃРєРё'
+    PAYMENT_SERVICE_NAME: str = 'РРЅС‚РµСЂРЅРµС‚-СЃРµСЂРІРёСЃ'
     PAYMENT_BALANCE_TEMPLATE: str = '{service_name} - {description}'
     PAYMENT_SUBSCRIPTION_TEMPLATE: str = '{service_name} - {description}'
 
@@ -568,7 +573,7 @@ class Settings(BaseSettings):
     MULENPAY_BASE_URL: str = 'https://mulenpay.ru/api'
     MULENPAY_WEBHOOK_PATH: str = '/mulenpay-webhook'
     MULENPAY_DISPLAY_NAME: str = 'Mulen Pay'
-    MULENPAY_DESCRIPTION: str = 'Пополнение баланса'
+    MULENPAY_DESCRIPTION: str = 'РџРѕРїРѕР»РЅРµРЅРёРµ Р±Р°Р»Р°РЅСЃР°'
     MULENPAY_LANGUAGE: str = 'ru'
     MULENPAY_VAT_CODE: int = 0
 
@@ -588,7 +593,7 @@ class Settings(BaseSettings):
     PAL24_SIGNATURE_TOKEN: str | None = None
     PAL24_BASE_URL: str = 'https://pal24.pro/api/v1/'
     PAL24_WEBHOOK_PATH: str = '/pal24-webhook'
-    PAL24_PAYMENT_DESCRIPTION: str = 'Пополнение баланса'
+    PAL24_PAYMENT_DESCRIPTION: str = 'РџРѕРїРѕР»РЅРµРЅРёРµ Р±Р°Р»Р°РЅСЃР°'
     PAL24_MIN_AMOUNT_KOPEKS: int = 10000
     PAL24_MAX_AMOUNT_KOPEKS: int = 100000000
     PAL24_REQUEST_TIMEOUT: int = 30
@@ -602,7 +607,7 @@ class Settings(BaseSettings):
     PLATEGA_SECRET: str | None = None
     PLATEGA_DISPLAY_NAME: str = 'Platega'
     PLATEGA_BASE_URL: str = 'https://app.platega.io'
-    PLATEGA_API_VERSION: str = 'v1'  # API создания платежа: v1 | v2
+    PLATEGA_API_VERSION: str = 'v1'  # API СЃРѕР·РґР°РЅРёСЏ РїР»Р°С‚РµР¶Р°: v1 | v2
     PLATEGA_RETURN_URL: str | None = None
     PLATEGA_FAILED_URL: str | None = None
     PLATEGA_CURRENCY: str = 'RUB'
@@ -613,14 +618,14 @@ class Settings(BaseSettings):
     PLATEGA_WEBHOOK_PATH: str = '/platega-webhook'
     PLATEGA_WEBHOOK_HOST: str = '0.0.0.0'
     PLATEGA_WEBHOOK_PORT: int = 8086
-    PLATEGA_RECURRENT_ENABLED: bool = False  # Рекуррентные СБП-подписки Platega (автопродление)
+    PLATEGA_RECURRENT_ENABLED: bool = False  # Р РµРєСѓСЂСЂРµРЅС‚РЅС‹Рµ РЎР‘Рџ-РїРѕРґРїРёСЃРєРё Platega (Р°РІС‚РѕРїСЂРѕРґР»РµРЅРёРµ)
 
     WATA_ENABLED: bool = False
     WATA_DISPLAY_NAME: str = 'Wata'
     WATA_BASE_URL: str = 'https://api.wata.pro/api/h2h'
     WATA_ACCESS_TOKEN: str | None = None
     WATA_TERMINAL_PUBLIC_ID: str | None = None
-    WATA_PAYMENT_DESCRIPTION: str = 'Пополнение баланса'
+    WATA_PAYMENT_DESCRIPTION: str = 'РџРѕРїРѕР»РЅРµРЅРёРµ Р±Р°Р»Р°РЅСЃР°'
     WATA_PAYMENT_TYPE: str = 'OneTime'
     WATA_SUCCESS_REDIRECT_URL: str | None = None
     WATA_FAIL_REDIRECT_URL: str | None = None
@@ -641,7 +646,7 @@ class Settings(BaseSettings):
     CLOUDPAYMENTS_API_SECRET: str | None = None
     CLOUDPAYMENTS_API_URL: str = 'https://api.cloudpayments.ru'
     CLOUDPAYMENTS_WIDGET_URL: str = 'https://widget.cloudpayments.ru/show'
-    CLOUDPAYMENTS_DESCRIPTION: str = 'Пополнение баланса'
+    CLOUDPAYMENTS_DESCRIPTION: str = 'РџРѕРїРѕР»РЅРµРЅРёРµ Р±Р°Р»Р°РЅСЃР°'
     CLOUDPAYMENTS_CURRENCY: str = 'RUB'
     CLOUDPAYMENTS_MIN_AMOUNT_KOPEKS: int = 5000
     CLOUDPAYMENTS_MAX_AMOUNT_KOPEKS: int = 10000000
@@ -657,51 +662,51 @@ class Settings(BaseSettings):
     FREEKASSA_ENABLED: bool = False
     FREEKASSA_SHOP_ID: int | None = None
     FREEKASSA_API_KEY: str | None = None
-    FREEKASSA_SECRET_WORD_1: str | None = None  # Для формы оплаты
-    FREEKASSA_SECRET_WORD_2: str | None = None  # Для webhook
+    FREEKASSA_SECRET_WORD_1: str | None = None  # Р”Р»СЏ С„РѕСЂРјС‹ РѕРїР»Р°С‚С‹
+    FREEKASSA_SECRET_WORD_2: str | None = None  # Р”Р»СЏ webhook
     FREEKASSA_DISPLAY_NAME: str = 'Freekassa'
     FREEKASSA_CURRENCY: str = 'RUB'
-    FREEKASSA_MIN_AMOUNT_KOPEKS: int = 10000  # 100 руб
-    FREEKASSA_MAX_AMOUNT_KOPEKS: int = 100000000  # 1 000 000 руб
+    FREEKASSA_MIN_AMOUNT_KOPEKS: int = 10000  # 100 СЂСѓР±
+    FREEKASSA_MAX_AMOUNT_KOPEKS: int = 100000000  # 1 000 000 СЂСѓР±
     FREEKASSA_PAYMENT_TIMEOUT_SECONDS: int = 3600
     FREEKASSA_WEBHOOK_PATH: str = '/freekassa-webhook'
     FREEKASSA_WEBHOOK_HOST: str = '0.0.0.0'
     FREEKASSA_WEBHOOK_PORT: int = 8088
-    # Способ оплаты: None = форма выбора, 42 = обычный СБП, 44 = NSPK СБП
+    # РЎРїРѕСЃРѕР± РѕРїР»Р°С‚С‹: None = С„РѕСЂРјР° РІС‹Р±РѕСЂР°, 42 = РѕР±С‹С‡РЅС‹Р№ РЎР‘Рџ, 44 = NSPK РЎР‘Рџ
     FREEKASSA_PAYMENT_SYSTEM_ID: int | None = None
-    # Использовать API для создания заказов (нужно для NSPK СБП)
+    # РСЃРїРѕР»СЊР·РѕРІР°С‚СЊ API РґР»СЏ СЃРѕР·РґР°РЅРёСЏ Р·Р°РєР°Р·РѕРІ (РЅСѓР¶РЅРѕ РґР»СЏ NSPK РЎР‘Рџ)
     FREEKASSA_USE_API: bool = False
-    # Публичный IP сервера для Freekassa API (если не задан - определяется автоматически)
+    # РџСѓР±Р»РёС‡РЅС‹Р№ IP СЃРµСЂРІРµСЂР° РґР»СЏ Freekassa API (РµСЃР»Рё РЅРµ Р·Р°РґР°РЅ - РѕРїСЂРµРґРµР»СЏРµС‚СЃСЏ Р°РІС‚РѕРјР°С‚РёС‡РµСЃРєРё)
     SERVER_PUBLIC_IP: str | None = None
-    # Раздельные методы оплаты Freekassa (отображаются как отдельные кнопки)
-    FREEKASSA_SBP_ENABLED: bool = False  # СБП (QR код) — i=44
-    FREEKASSA_SBP_DISPLAY_NAME: str = 'СБП (QR код)'
-    FREEKASSA_CARD_ENABLED: bool = False  # Карты РФ — i=36
-    FREEKASSA_CARD_DISPLAY_NAME: str = 'Карта РФ'
+    # Р Р°Р·РґРµР»СЊРЅС‹Рµ РјРµС‚РѕРґС‹ РѕРїР»Р°С‚С‹ Freekassa (РѕС‚РѕР±СЂР°Р¶Р°СЋС‚СЃСЏ РєР°Рє РѕС‚РґРµР»СЊРЅС‹Рµ РєРЅРѕРїРєРё)
+    FREEKASSA_SBP_ENABLED: bool = False  # РЎР‘Рџ (QR РєРѕРґ) вЂ” i=44
+    FREEKASSA_SBP_DISPLAY_NAME: str = 'РЎР‘Рџ (QR РєРѕРґ)'
+    FREEKASSA_CARD_ENABLED: bool = False  # РљР°СЂС‚С‹ Р Р¤ вЂ” i=36
+    FREEKASSA_CARD_DISPLAY_NAME: str = 'РљР°СЂС‚Р° Р Р¤'
 
-    # KassaAI (api.fk.life) - отдельная платёжка
+    # KassaAI (api.fk.life) - РѕС‚РґРµР»СЊРЅР°СЏ РїР»Р°С‚С‘Р¶РєР°
     KASSA_AI_ENABLED: bool = False
     KASSA_AI_SHOP_ID: int | None = None
     KASSA_AI_API_KEY: str | None = None
-    KASSA_AI_SECRET_WORD_2: str | None = None  # Для webhook
+    KASSA_AI_SECRET_WORD_2: str | None = None  # Р”Р»СЏ webhook
     KASSA_AI_DISPLAY_NAME: str = 'KassaAI'
     KASSA_AI_CURRENCY: str = 'RUB'
-    KASSA_AI_MIN_AMOUNT_KOPEKS: int = 10000  # 100 руб
-    KASSA_AI_MAX_AMOUNT_KOPEKS: int = 100000000  # 1 000 000 руб
+    KASSA_AI_MIN_AMOUNT_KOPEKS: int = 10000  # 100 СЂСѓР±
+    KASSA_AI_MAX_AMOUNT_KOPEKS: int = 100000000  # 1 000 000 СЂСѓР±
     KASSA_AI_WEBHOOK_PATH: str = '/kassa-ai-webhook'
     KASSA_AI_WEBHOOK_HOST: str = '0.0.0.0'
     KASSA_AI_WEBHOOK_PORT: int = 8089
-    # Способ оплаты: 44 = СБП (QR код), 36 = Карты РФ, 43 = SberPay
+    # РЎРїРѕСЃРѕР± РѕРїР»Р°С‚С‹: 44 = РЎР‘Рџ (QR РєРѕРґ), 36 = РљР°СЂС‚С‹ Р Р¤, 43 = SberPay
     KASSA_AI_PAYMENT_SYSTEM_ID: int = 44
-    # Раздельные методы оплаты KassaAI (отображаются как отдельные кнопки)
-    KASSA_AI_SBP_ENABLED: bool = False  # СБП — payment_system_id=44
-    KASSA_AI_SBP_DISPLAY_NAME: str = 'СБП (KassaAI)'
-    KASSA_AI_CARD_ENABLED: bool = False  # Карты РФ — payment_system_id=36
-    KASSA_AI_CARD_DISPLAY_NAME: str = 'Карта (KassaAI)'
-    KASSA_AI_SBERPAY_ENABLED: bool = False  # SberPay — payment_system_id=43
+    # Р Р°Р·РґРµР»СЊРЅС‹Рµ РјРµС‚РѕРґС‹ РѕРїР»Р°С‚С‹ KassaAI (РѕС‚РѕР±СЂР°Р¶Р°СЋС‚СЃСЏ РєР°Рє РѕС‚РґРµР»СЊРЅС‹Рµ РєРЅРѕРїРєРё)
+    KASSA_AI_SBP_ENABLED: bool = False  # РЎР‘Рџ вЂ” payment_system_id=44
+    KASSA_AI_SBP_DISPLAY_NAME: str = 'РЎР‘Рџ (KassaAI)'
+    KASSA_AI_CARD_ENABLED: bool = False  # РљР°СЂС‚С‹ Р Р¤ вЂ” payment_system_id=36
+    KASSA_AI_CARD_DISPLAY_NAME: str = 'РљР°СЂС‚Р° (KassaAI)'
+    KASSA_AI_SBERPAY_ENABLED: bool = False  # SberPay вЂ” payment_system_id=43
     KASSA_AI_SBERPAY_DISPLAY_NAME: str = 'SberPay (KassaAI)'
 
-    # ── Yandex Metrika offline conversions (server → mc.yandex.ru/collect) ──
+    # в”Ђв”Ђ Yandex Metrika offline conversions (server в†’ mc.yandex.ru/collect) в”Ђв”Ђ
     YANDEX_OFFLINE_CONV_ENABLED: bool = False
     YANDEX_OFFLINE_CONV_COUNTER_ID: str = ''
     YANDEX_OFFLINE_CONV_MEASUREMENT_SECRET: str = ''
@@ -713,7 +718,7 @@ class Settings(BaseSettings):
     YANDEX_OFFLINE_CONV_OAUTH_TOKEN: str = ''
     YANDEX_OFFLINE_CONV_PURCHASE_GOAL_ID: str = ''
 
-    # ── S2S Postback (server-to-server affiliate notifications) ──
+    # в”Ђв”Ђ S2S Postback (server-to-server affiliate notifications) в”Ђв”Ђ
     S2S_POSTBACK_ENABLED: bool = False
     S2S_POSTBACK_REGISTRATION_URL: str = ''
     S2S_POSTBACK_TRIAL_URL: str = ''
@@ -722,11 +727,11 @@ class Settings(BaseSettings):
     # RioPay (api.riopay.online) v2.0.1
     RIOPAY_ENABLED: bool = False
     RIOPAY_API_TOKEN: str | None = None  # x-api-token header
-    RIOPAY_WEBHOOK_SECRET: str | None = None  # HMAC-SHA512 ключ для вебхуков (по умолчанию = API_TOKEN)
+    RIOPAY_WEBHOOK_SECRET: str | None = None  # HMAC-SHA512 РєР»СЋС‡ РґР»СЏ РІРµР±С…СѓРєРѕРІ (РїРѕ СѓРјРѕР»С‡Р°РЅРёСЋ = API_TOKEN)
     RIOPAY_DISPLAY_NAME: str = 'RioPay'
     RIOPAY_CURRENCY: str = 'RUB'
-    RIOPAY_MIN_AMOUNT_KOPEKS: int = 10000  # 100₽
-    RIOPAY_MAX_AMOUNT_KOPEKS: int = 100000000  # 1 000 000₽
+    RIOPAY_MIN_AMOUNT_KOPEKS: int = 10000  # 100в‚Ѕ
+    RIOPAY_MAX_AMOUNT_KOPEKS: int = 100000000  # 1 000 000в‚Ѕ
     RIOPAY_WEBHOOK_PATH: str = '/riopay-webhook'
     RIOPAY_SUCCESS_URL: str | None = None
     RIOPAY_FAIL_URL: str | None = None
@@ -737,8 +742,8 @@ class Settings(BaseSettings):
     SEVERPAY_TOKEN: str | None = None  # Secret token for HMAC-SHA256
     SEVERPAY_DISPLAY_NAME: str = 'SeverPay'
     SEVERPAY_CURRENCY: str = 'RUB'
-    SEVERPAY_MIN_AMOUNT_KOPEKS: int = 10000  # 100₽
-    SEVERPAY_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000₽
+    SEVERPAY_MIN_AMOUNT_KOPEKS: int = 10000  # 100в‚Ѕ
+    SEVERPAY_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000в‚Ѕ
     SEVERPAY_WEBHOOK_PATH: str = '/severpay-webhook'
     SEVERPAY_RETURN_URL: str | None = None
     SEVERPAY_LIFETIME: int = 1440  # minutes, 30-4320
@@ -769,8 +774,8 @@ class Settings(BaseSettings):
     PAYPEAR_SECRET_KEY: str | None = None
     PAYPEAR_DISPLAY_NAME: str = 'PayPear'
     PAYPEAR_CURRENCY: str = 'RUB'
-    PAYPEAR_MIN_AMOUNT_KOPEKS: int = 10000  # 100₽
-    PAYPEAR_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000₽
+    PAYPEAR_MIN_AMOUNT_KOPEKS: int = 10000  # 100в‚Ѕ
+    PAYPEAR_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000в‚Ѕ
     PAYPEAR_WEBHOOK_PATH: str = '/paypear-webhook'
     PAYPEAR_RETURN_URL: str | None = None
     PAYPEAR_PAYMENT_METHOD: str = 'sbp'  # bank_card, sbp, sberpay, tpay
@@ -781,8 +786,8 @@ class Settings(BaseSettings):
     ROLLYPAY_SIGNING_SECRET: str | None = None  # HMAC webhook verification
     ROLLYPAY_DISPLAY_NAME: str = 'RollyPay'
     ROLLYPAY_CURRENCY: str = 'RUB'
-    ROLLYPAY_MIN_AMOUNT_KOPEKS: int = 10000  # 100₽
-    ROLLYPAY_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000₽
+    ROLLYPAY_MIN_AMOUNT_KOPEKS: int = 10000  # 100в‚Ѕ
+    ROLLYPAY_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000в‚Ѕ
     ROLLYPAY_WEBHOOK_PATH: str = '/rollypay-webhook'
     ROLLYPAY_RETURN_URL: str | None = None
 
@@ -818,15 +823,15 @@ class Settings(BaseSettings):
     AURAPAY_SECRET_KEY: str | None = None  # Secret key #2 for webhook HMAC
     AURAPAY_DISPLAY_NAME: str = 'AuraPay'
     AURAPAY_CURRENCY: str = 'RUB'
-    AURAPAY_MIN_AMOUNT_KOPEKS: int = 10000  # 100₽
-    AURAPAY_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000₽
+    AURAPAY_MIN_AMOUNT_KOPEKS: int = 10000  # 100в‚Ѕ
+    AURAPAY_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000в‚Ѕ
     AURAPAY_WEBHOOK_PATH: str = '/aurapay-webhook'
     AURAPAY_RETURN_URL: str | None = None
     AURAPAY_PAYMENT_LIFETIME_MINUTES: int = 60
     AURAPAY_SBP_ENABLED: bool = False
-    AURAPAY_SBP_DISPLAY_NAME: str = 'СБП (AuraPay)'
+    AURAPAY_SBP_DISPLAY_NAME: str = 'РЎР‘Рџ (AuraPay)'
     AURAPAY_CARD_ENABLED: bool = False
-    AURAPAY_CARD_DISPLAY_NAME: str = 'Карта (AuraPay)'
+    AURAPAY_CARD_DISPLAY_NAME: str = 'РљР°СЂС‚Р° (AuraPay)'
 
     # Antilopay (lk.antilopay.com)
     ANTILOPAY_ENABLED: bool = False
@@ -835,24 +840,24 @@ class Settings(BaseSettings):
     ANTILOPAY_PUBLIC_KEY: str | None = None
     ANTILOPAY_PROJECT_ID: str | None = None
     ANTILOPAY_DISPLAY_NAME: str = 'Antilopay'
-    ANTILOPAY_PRODUCT_NAME: str = 'VPN подписка'
+    ANTILOPAY_PRODUCT_NAME: str = 'VPN РїРѕРґРїРёСЃРєР°'
     ANTILOPAY_PRODUCT_TYPE: str = 'services'
     ANTILOPAY_CURRENCY: str = 'RUB'
-    ANTILOPAY_MIN_AMOUNT_KOPEKS: int = 10000  # 100₽
-    ANTILOPAY_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000₽
+    ANTILOPAY_MIN_AMOUNT_KOPEKS: int = 10000  # 100в‚Ѕ
+    ANTILOPAY_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000в‚Ѕ
     ANTILOPAY_WEBHOOK_PATH: str = '/antilopay-webhook'
     ANTILOPAY_RETURN_URL: str | None = None
     ANTILOPAY_PAYMENT_LIFETIME_MINUTES: int = 60
     ANTILOPAY_SBP_ENABLED: bool = False
-    ANTILOPAY_SBP_DISPLAY_NAME: str = 'СБП (Antilopay)'
+    ANTILOPAY_SBP_DISPLAY_NAME: str = 'РЎР‘Рџ (Antilopay)'
     ANTILOPAY_CARD_ENABLED: bool = False
-    ANTILOPAY_CARD_DISPLAY_NAME: str = 'Карта (Antilopay)'
-    # Antilopay требует подтвердить владение сайтом одним из двух способов:
-    #   (1) META-тегом `<meta name="apay-tag" content="...">` в <head> главной страницы;
-    #   (2) файлом `apay-meta-file.txt` в корне сайта.
-    # Кабинет автоматически отрендерит meta-тег и отдаст текстовый файл, если
-    # сюда положить выданное Antilopay значение (см. lk.antilopay.com → Проект →
-    # Верификация). Пустая строка/None — фича отключена.
+    ANTILOPAY_CARD_DISPLAY_NAME: str = 'РљР°СЂС‚Р° (Antilopay)'
+    # Antilopay С‚СЂРµР±СѓРµС‚ РїРѕРґС‚РІРµСЂРґРёС‚СЊ РІР»Р°РґРµРЅРёРµ СЃР°Р№С‚РѕРј РѕРґРЅРёРј РёР· РґРІСѓС… СЃРїРѕСЃРѕР±РѕРІ:
+    #   (1) META-С‚РµРіРѕРј `<meta name="apay-tag" content="...">` РІ <head> РіР»Р°РІРЅРѕР№ СЃС‚СЂР°РЅРёС†С‹;
+    #   (2) С„Р°Р№Р»РѕРј `apay-meta-file.txt` РІ РєРѕСЂРЅРµ СЃР°Р№С‚Р°.
+    # РљР°Р±РёРЅРµС‚ Р°РІС‚РѕРјР°С‚РёС‡РµСЃРєРё РѕС‚СЂРµРЅРґРµСЂРёС‚ meta-С‚РµРі Рё РѕС‚РґР°СЃС‚ С‚РµРєСЃС‚РѕРІС‹Р№ С„Р°Р№Р», РµСЃР»Рё
+    # СЃСЋРґР° РїРѕР»РѕР¶РёС‚СЊ РІС‹РґР°РЅРЅРѕРµ Antilopay Р·РЅР°С‡РµРЅРёРµ (СЃРј. lk.antilopay.com в†’ РџСЂРѕРµРєС‚ в†’
+    # Р’РµСЂРёС„РёРєР°С†РёСЏ). РџСѓСЃС‚Р°СЏ СЃС‚СЂРѕРєР°/None вЂ” С„РёС‡Р° РѕС‚РєР»СЋС‡РµРЅР°.
     ANTILOPAY_APAY_VERIFICATION_TAG: str | None = None
 
     ANTILOPAY_SBERPAY_ENABLED: bool = False
@@ -867,8 +872,8 @@ class Settings(BaseSettings):
     JUPITER_METHOD_DESCRIPTION: str = 'SBP'
     JUPITER_DISPLAY_NAME: str = 'Jupiter'
     JUPITER_CURRENCY: str = 'RUB'
-    JUPITER_MIN_AMOUNT_KOPEKS: int = 10000  # 100₽
-    JUPITER_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000₽
+    JUPITER_MIN_AMOUNT_KOPEKS: int = 10000  # 100в‚Ѕ
+    JUPITER_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000в‚Ѕ
     JUPITER_WEBHOOK_PATH: str = '/jupiter-webhook'
     JUPITER_RETURN_URL: str | None = None
     JUPITER_PAYMENT_LIFETIME_MINUTES: int = 60
@@ -876,7 +881,7 @@ class Settings(BaseSettings):
     JUPITER_FALLBACK_PHONE: str = '0000000000'
     JUPITER_FALLBACK_NAME: str = 'User'
     JUPITER_SBP_ENABLED: bool = False
-    JUPITER_SBP_DISPLAY_NAME: str = 'СБП (Jupiter)'
+    JUPITER_SBP_DISPLAY_NAME: str = 'РЎР‘Рџ (Jupiter)'
 
     # Donut (Donut P2P, gw.donut.business)
     DONUT_ENABLED: bool = False
@@ -886,59 +891,59 @@ class Settings(BaseSettings):
     DONUT_METHOD_ID: str | None = None
     DONUT_DISPLAY_NAME: str = 'Donut'
     DONUT_CURRENCY: str = 'RUB'
-    DONUT_MIN_AMOUNT_KOPEKS: int = 10000  # 100₽
-    DONUT_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000₽
+    DONUT_MIN_AMOUNT_KOPEKS: int = 10000  # 100в‚Ѕ
+    DONUT_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000в‚Ѕ
     DONUT_WEBHOOK_PATH: str = '/donut-webhook'
     DONUT_RETURN_URL: str | None = None
     DONUT_PAYMENT_LIFETIME_MINUTES: int = 60
-    # Sub-методы Donut (description в PayIn запросе)
+    # Sub-РјРµС‚РѕРґС‹ Donut (description РІ PayIn Р·Р°РїСЂРѕСЃРµ)
     DONUT_CARD_ENABLED: bool = False
-    DONUT_CARD_DISPLAY_NAME: str = 'Карта (Donut)'
+    DONUT_CARD_DISPLAY_NAME: str = 'РљР°СЂС‚Р° (Donut)'
     DONUT_SBP_ENABLED: bool = False
-    DONUT_SBP_DISPLAY_NAME: str = 'СБП (Donut)'
+    DONUT_SBP_DISPLAY_NAME: str = 'РЎР‘Рџ (Donut)'
     DONUT_SBP_QR_ENABLED: bool = False
-    DONUT_SBP_QR_DISPLAY_NAME: str = 'СБП QR (Donut)'
+    DONUT_SBP_QR_DISPLAY_NAME: str = 'РЎР‘Рџ QR (Donut)'
 
     # Lava (Lava Business API, api.lava.ru)
     LAVA_ENABLED: bool = False
     LAVA_BASE_URL: str = 'https://api.lava.ru'
-    LAVA_SHOP_ID: str | None = None  # UUID проекта
-    LAVA_SECRET_KEY: str | None = None  # secret_key — для подписи запросов
-    LAVA_WEBHOOK_SECRET: str | None = None  # secret_key_2 — для проверки подписи webhook
+    LAVA_SHOP_ID: str | None = None  # UUID РїСЂРѕРµРєС‚Р°
+    LAVA_SECRET_KEY: str | None = None  # secret_key вЂ” РґР»СЏ РїРѕРґРїРёСЃРё Р·Р°РїСЂРѕСЃРѕРІ
+    LAVA_WEBHOOK_SECRET: str | None = None  # secret_key_2 вЂ” РґР»СЏ РїСЂРѕРІРµСЂРєРё РїРѕРґРїРёСЃРё webhook
 
-    # Рекуррентные подписки Lava. Подписка оформляется на ПРОДУКТ из кабинета Lava
-    # (цена и период заданы там), поэтому тарифу нужно проставить lava_product_id.
+    # Р РµРєСѓСЂСЂРµРЅС‚РЅС‹Рµ РїРѕРґРїРёСЃРєРё Lava. РџРѕРґРїРёСЃРєР° РѕС„РѕСЂРјР»СЏРµС‚СЃСЏ РЅР° РџР РћР”РЈРљРў РёР· РєР°Р±РёРЅРµС‚Р° Lava
+    # (С†РµРЅР° Рё РїРµСЂРёРѕРґ Р·Р°РґР°РЅС‹ С‚Р°Рј), РїРѕСЌС‚РѕРјСѓ С‚Р°СЂРёС„Сѓ РЅСѓР¶РЅРѕ РїСЂРѕСЃС‚Р°РІРёС‚СЊ lava_product_id.
     LAVA_RECURRENT_ENABLED: bool = False
     LAVA_DISPLAY_NAME: str = 'Lava'
     LAVA_CURRENCY: str = 'RUB'
-    LAVA_MIN_AMOUNT_KOPEKS: int = 10000  # 100₽
-    LAVA_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000₽
+    LAVA_MIN_AMOUNT_KOPEKS: int = 10000  # 100в‚Ѕ
+    LAVA_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000в‚Ѕ
     LAVA_WEBHOOK_PATH: str = '/lava-webhook'
     LAVA_RETURN_URL: str | None = None
-    LAVA_PAYMENT_LIFETIME_MINUTES: int = 60  # макс 7200 минут (5 дней)
-    # Sub-методы Lava (фильтр через includeService/excludeService на стороне Lava)
+    LAVA_PAYMENT_LIFETIME_MINUTES: int = 60  # РјР°РєСЃ 7200 РјРёРЅСѓС‚ (5 РґРЅРµР№)
+    # Sub-РјРµС‚РѕРґС‹ Lava (С„РёР»СЊС‚СЂ С‡РµСЂРµР· includeService/excludeService РЅР° СЃС‚РѕСЂРѕРЅРµ Lava)
     LAVA_CARD_ENABLED: bool = False
-    LAVA_CARD_DISPLAY_NAME: str = 'Карта (Lava)'
+    LAVA_CARD_DISPLAY_NAME: str = 'РљР°СЂС‚Р° (Lava)'
     LAVA_SBP_ENABLED: bool = False
-    LAVA_SBP_DISPLAY_NAME: str = 'СБП (Lava)'
+    LAVA_SBP_DISPLAY_NAME: str = 'РЎР‘Рџ (Lava)'
 
     # cisPay (H2H merchant API, api.cispay.app)
     CISPAY_ENABLED: bool = False
-    CISPAY_SHOP_ID: str | None = None  # X-Shop-ID — UUID магазина
-    CISPAY_API_KEY: str | None = None  # X-Api-Key — секретный ключ (cis_sec_...)
+    CISPAY_SHOP_ID: str | None = None  # X-Shop-ID вЂ” UUID РјР°РіР°Р·РёРЅР°
+    CISPAY_API_KEY: str | None = None  # X-Api-Key вЂ” СЃРµРєСЂРµС‚РЅС‹Р№ РєР»СЋС‡ (cis_sec_...)
     CISPAY_BASE_URL: str = 'https://api.cispay.app'
     CISPAY_DISPLAY_NAME: str = 'CisPay'
     CISPAY_CURRENCY: str = 'RUB'
-    CISPAY_MIN_AMOUNT_KOPEKS: int = 10000  # 100₽
-    CISPAY_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000₽
+    CISPAY_MIN_AMOUNT_KOPEKS: int = 10000  # 100в‚Ѕ
+    CISPAY_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000в‚Ѕ
     CISPAY_WEBHOOK_PATH: str = '/cispay-webhook'
-    # Счёт cisPay живёт 30 минут, после чего переходит в EXPIRED на стороне провайдера
+    # РЎС‡С‘С‚ cisPay Р¶РёРІС‘С‚ 30 РјРёРЅСѓС‚, РїРѕСЃР»Рµ С‡РµРіРѕ РїРµСЂРµС…РѕРґРёС‚ РІ EXPIRED РЅР° СЃС‚РѕСЂРѕРЅРµ РїСЂРѕРІР°Р№РґРµСЂР°
     CISPAY_PAYMENT_LIFETIME_MINUTES: int = 30
-    # Sub-методы cisPay (payment_method в запросе создания платежа)
+    # Sub-РјРµС‚РѕРґС‹ cisPay (payment_method РІ Р·Р°РїСЂРѕСЃРµ СЃРѕР·РґР°РЅРёСЏ РїР»Р°С‚РµР¶Р°)
     CISPAY_CARD_ENABLED: bool = False
-    CISPAY_CARD_DISPLAY_NAME: str = 'Карта (CisPay)'
+    CISPAY_CARD_DISPLAY_NAME: str = 'РљР°СЂС‚Р° (CisPay)'
     CISPAY_SBP_ENABLED: bool = False
-    CISPAY_SBP_DISPLAY_NAME: str = 'СБП (CisPay)'
+    CISPAY_SBP_DISPLAY_NAME: str = 'РЎР‘Рџ (CisPay)'
 
     # Etoplatezhi (paymentpage.etoplatezhi.ru)
     ETOPLATEZHI_ENABLED: bool = False
@@ -946,42 +951,42 @@ class Settings(BaseSettings):
     ETOPLATEZHI_SECRET_KEY: str | None = None
     ETOPLATEZHI_DISPLAY_NAME: str = 'Etoplatezhi'
     ETOPLATEZHI_CURRENCY: str = 'RUB'
-    ETOPLATEZHI_MIN_AMOUNT_KOPEKS: int = 10000  # 100₽
-    ETOPLATEZHI_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000₽
+    ETOPLATEZHI_MIN_AMOUNT_KOPEKS: int = 10000  # 100в‚Ѕ
+    ETOPLATEZHI_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000в‚Ѕ
     ETOPLATEZHI_WEBHOOK_PATH: str = '/etoplatezhi-webhook'
     ETOPLATEZHI_RETURN_URL: str | None = None
     ETOPLATEZHI_PAYMENT_LIFETIME_MINUTES: int = 60
     ETOPLATEZHI_SBP_ENABLED: bool = False
-    ETOPLATEZHI_SBP_DISPLAY_NAME: str = 'СБП (Etoplatezhi)'
+    ETOPLATEZHI_SBP_DISPLAY_NAME: str = 'РЎР‘Рџ (Etoplatezhi)'
     ETOPLATEZHI_CARD_ENABLED: bool = False
-    ETOPLATEZHI_CARD_DISPLAY_NAME: str = 'Карта (Etoplatezhi)'
+    ETOPLATEZHI_CARD_DISPLAY_NAME: str = 'РљР°СЂС‚Р° (Etoplatezhi)'
 
     MAIN_MENU_MODE: str = 'default'  # 'default' | 'cabinet'
-    # Rich-меню (Bot API 10.1): главное меню собирается rich-сообщением с теми же
-    # кнопками (reply_markup сохраняется). Требует Bot API 10.1+; при недоступности
-    # бот сам откатывается на классический рендер до рестарта.
+    # Rich-РјРµРЅСЋ (Bot API 10.1): РіР»Р°РІРЅРѕРµ РјРµРЅСЋ СЃРѕР±РёСЂР°РµС‚СЃСЏ rich-СЃРѕРѕР±С‰РµРЅРёРµРј СЃ С‚РµРјРё Р¶Рµ
+    # РєРЅРѕРїРєР°РјРё (reply_markup СЃРѕС…СЂР°РЅСЏРµС‚СЃСЏ). РўСЂРµР±СѓРµС‚ Bot API 10.1+; РїСЂРё РЅРµРґРѕСЃС‚СѓРїРЅРѕСЃС‚Рё
+    # Р±РѕС‚ СЃР°Рј РѕС‚РєР°С‚С‹РІР°РµС‚СЃСЏ РЅР° РєР»Р°СЃСЃРёС‡РµСЃРєРёР№ СЂРµРЅРґРµСЂ РґРѕ СЂРµСЃС‚Р°СЂС‚Р°.
     MAIN_MENU_RICH_ENABLED: bool = False
-    # Эффект сообщения при отправке rich-меню (пустая строка — без эффекта).
+    # Р­С„С„РµРєС‚ СЃРѕРѕР±С‰РµРЅРёСЏ РїСЂРё РѕС‚РїСЂР°РІРєРµ rich-РјРµРЅСЋ (РїСѓСЃС‚Р°СЏ СЃС‚СЂРѕРєР° вЂ” Р±РµР· СЌС„С„РµРєС‚Р°).
     MAIN_MENU_RICH_EFFECT_ID: str = ''
-    # Публичный HTTPS-URL логотипа в шапке rich-меню. Пусто — авто-режим (webhook+LOGO_FILE);
-    # "none" — rich-меню без логотипа.
+    # РџСѓР±Р»РёС‡РЅС‹Р№ HTTPS-URL Р»РѕРіРѕС‚РёРїР° РІ С€Р°РїРєРµ rich-РјРµРЅСЋ. РџСѓСЃС‚Рѕ вЂ” Р°РІС‚Рѕ-СЂРµР¶РёРј (webhook+LOGO_FILE);
+    # "none" вЂ” rich-РјРµРЅСЋ Р±РµР· Р»РѕРіРѕС‚РёРїР°.
     MAIN_MENU_RICH_LOGO_URL: str = ''
-    # Сворачивать таблицу подписок rich-меню в раскрываемый блок при >1 подписке.
+    # РЎРІРѕСЂР°С‡РёРІР°С‚СЊ С‚Р°Р±Р»РёС†Сѓ РїРѕРґРїРёСЃРѕРє rich-РјРµРЅСЋ РІ СЂР°СЃРєСЂС‹РІР°РµРјС‹Р№ Р±Р»РѕРє РїСЂРё >1 РїРѕРґРїРёСЃРєРµ.
     MAIN_MENU_RICH_SUBSCRIPTIONS_COLLAPSIBLE: bool = True
-    # Стиль кнопок Cabinet: primary (синий), success (зелёный), danger (красный), '' (по умолчанию для каждой секции)
+    # РЎС‚РёР»СЊ РєРЅРѕРїРѕРє Cabinet: primary (СЃРёРЅРёР№), success (Р·РµР»С‘РЅС‹Р№), danger (РєСЂР°СЃРЅС‹Р№), '' (РїРѕ СѓРјРѕР»С‡Р°РЅРёСЋ РґР»СЏ РєР°Р¶РґРѕР№ СЃРµРєС†РёРё)
     CABINET_BUTTON_STYLE: str = ''
     CONNECT_BUTTON_MODE: str = 'miniapp_subscription'
     MINIAPP_CUSTOM_URL: str = ''
-    # Кнопка «Меню» Telegram на открытие веб-кабинета (WebApp). Пустой URL —
-    # падает на MINIAPP_CUSTOM_URL; работает только с https.
+    # РљРЅРѕРїРєР° В«РњРµРЅСЋВ» Telegram РЅР° РѕС‚РєСЂС‹С‚РёРµ РІРµР±-РєР°Р±РёРЅРµС‚Р° (WebApp). РџСѓСЃС‚РѕР№ URL вЂ”
+    # РїР°РґР°РµС‚ РЅР° MINIAPP_CUSTOM_URL; СЂР°Р±РѕС‚Р°РµС‚ С‚РѕР»СЊРєРѕ СЃ https.
     MENU_BUTTON_WEBAPP_ENABLED: bool = False
     MENU_BUTTON_WEBAPP_URL: str = ''
-    MENU_BUTTON_WEBAPP_TEXT: str = 'Кабинет'
+    MENU_BUTTON_WEBAPP_TEXT: str = 'РљР°Р±РёРЅРµС‚'
     MINIAPP_STATIC_PATH: str = 'miniapp'
-    # Короткое имя Telegram Mini App (BotFather → /newapp), напр. 'cabinet'.
-    # Нужно только для диплинков t.me/<bot>/<app>?startapp=… которые открывают
-    # кабинет из ГРУППОВЫХ чатов (web_app-кнопки в группах не работают). В личке
-    # достаточно MINIAPP_CUSTOM_URL. Пусто → в группах кнопка кабинета не строится.
+    # РљРѕСЂРѕС‚РєРѕРµ РёРјСЏ Telegram Mini App (BotFather в†’ /newapp), РЅР°РїСЂ. 'cabinet'.
+    # РќСѓР¶РЅРѕ С‚РѕР»СЊРєРѕ РґР»СЏ РґРёРїР»РёРЅРєРѕРІ t.me/<bot>/<app>?startapp=вЂ¦ РєРѕС‚РѕСЂС‹Рµ РѕС‚РєСЂС‹РІР°СЋС‚
+    # РєР°Р±РёРЅРµС‚ РёР· Р“Р РЈРџРџРћР’Р«РҐ С‡Р°С‚РѕРІ (web_app-РєРЅРѕРїРєРё РІ РіСЂСѓРїРїР°С… РЅРµ СЂР°Р±РѕС‚Р°СЋС‚). Р’ Р»РёС‡РєРµ
+    # РґРѕСЃС‚Р°С‚РѕС‡РЅРѕ MINIAPP_CUSTOM_URL. РџСѓСЃС‚Рѕ в†’ РІ РіСЂСѓРїРїР°С… РєРЅРѕРїРєР° РєР°Р±РёРЅРµС‚Р° РЅРµ СЃС‚СЂРѕРёС‚СЃСЏ.
     MINIAPP_APP_SHORT_NAME: str = ''
 
     # Media upload settings (news article images/videos)
@@ -994,7 +999,7 @@ class Settings(BaseSettings):
     MINIAPP_SERVICE_NAME_EN: str = 'RemnaWave VPN'
     MINIAPP_SERVICE_NAME_RU: str = 'RemnaWave VPN'
     MINIAPP_SERVICE_DESCRIPTION_EN: str = 'Secure & Fast Connection'
-    MINIAPP_SERVICE_DESCRIPTION_RU: str = 'Безопасное и быстрое подключение'
+    MINIAPP_SERVICE_DESCRIPTION_RU: str = 'Р‘РµР·РѕРїР°СЃРЅРѕРµ Рё Р±С‹СЃС‚СЂРѕРµ РїРѕРґРєР»СЋС‡РµРЅРёРµ'
     CONNECT_BUTTON_HAPP_DOWNLOAD_ENABLED: bool = False
     HAPP_CRYPTOLINK_REDIRECT_TEMPLATE: str | None = None
     HAPP_DOWNLOAD_LINK_IOS: str | None = None
@@ -1018,31 +1023,31 @@ class Settings(BaseSettings):
     FAQ_DISPLAY_MODE: str = 'both'
     RECURRENT_PAYMENTS_DISPLAY_MODE: str = 'both'
 
-    # Требовать галочку согласия с юр. документами при первой авторизации
-    # в кабинете. Ключевое правило: галочка возможна только для документа,
-    # который пользователь способен открыть (не выключен и не скрыт из веба),
-    # иначе установка без заполненной оферты заблокировала бы вход всем.
+    # РўСЂРµР±РѕРІР°С‚СЊ РіР°Р»РѕС‡РєСѓ СЃРѕРіР»Р°СЃРёСЏ СЃ СЋСЂ. РґРѕРєСѓРјРµРЅС‚Р°РјРё РїСЂРё РїРµСЂРІРѕР№ Р°РІС‚РѕСЂРёР·Р°С†РёРё
+    # РІ РєР°Р±РёРЅРµС‚Рµ. РљР»СЋС‡РµРІРѕРµ РїСЂР°РІРёР»Рѕ: РіР°Р»РѕС‡РєР° РІРѕР·РјРѕР¶РЅР° С‚РѕР»СЊРєРѕ РґР»СЏ РґРѕРєСѓРјРµРЅС‚Р°,
+    # РєРѕС‚РѕСЂС‹Р№ РїРѕР»СЊР·РѕРІР°С‚РµР»СЊ СЃРїРѕСЃРѕР±РµРЅ РѕС‚РєСЂС‹С‚СЊ (РЅРµ РІС‹РєР»СЋС‡РµРЅ Рё РЅРµ СЃРєСЂС‹С‚ РёР· РІРµР±Р°),
+    # РёРЅР°С‡Рµ СѓСЃС‚Р°РЅРѕРІРєР° Р±РµР· Р·Р°РїРѕР»РЅРµРЅРЅРѕР№ РѕС„РµСЂС‚С‹ Р·Р°Р±Р»РѕРєРёСЂРѕРІР°Р»Р° Р±С‹ РІС…РѕРґ РІСЃРµРј.
     CABINET_REQUIRE_LEGAL_CONSENT: bool = True
-    # True - галочки показываются уже отмеченными (клиент сам подтверждает).
+    # True - РіР°Р»РѕС‡РєРё РїРѕРєР°Р·С‹РІР°СЋС‚СЃСЏ СѓР¶Рµ РѕС‚РјРµС‡РµРЅРЅС‹РјРё (РєР»РёРµРЅС‚ СЃР°Рј РїРѕРґС‚РІРµСЂР¶РґР°РµС‚).
     CABINET_LEGAL_CONSENT_PRECHECKED: bool = False
 
-    # Округление цен при отображении (≤50 коп вниз, >50 коп вверх)
+    # РћРєСЂСѓРіР»РµРЅРёРµ С†РµРЅ РїСЂРё РѕС‚РѕР±СЂР°Р¶РµРЅРёРё (в‰¤50 РєРѕРї РІРЅРёР·, >50 РєРѕРї РІРІРµСЂС…)
     PRICE_ROUNDING_ENABLED: bool = True
 
     LOG_LEVEL: str = 'INFO'
     LOG_FILE: str = 'logs/bot.log'
-    LOG_COLORS: bool = True  # ANSI-цвета в консоли (false для plain-text вывода)
+    LOG_COLORS: bool = True  # ANSI-С†РІРµС‚Р° РІ РєРѕРЅСЃРѕР»Рё (false РґР»СЏ plain-text РІС‹РІРѕРґР°)
 
     # === Log Rotation Settings ===
-    LOG_ROTATION_ENABLED: bool = False  # По умолчанию старое поведение
-    LOG_ROTATION_TIME: str = '00:00'  # Время ротации (HH:MM)
-    LOG_ROTATION_KEEP_DAYS: int = 7  # Хранить архивы N дней
-    LOG_ROTATION_COMPRESS: bool = True  # Сжимать архивы gzip
-    LOG_ROTATION_SEND_TO_TELEGRAM: bool = False  # Отправлять в канал
-    LOG_ROTATION_CHAT_ID: str | None = None  # Канал для логов (или BACKUP_SEND_CHAT_ID)
-    LOG_ROTATION_TOPIC_ID: int | None = None  # Топик в канале
+    LOG_ROTATION_ENABLED: bool = False  # РџРѕ СѓРјРѕР»С‡Р°РЅРёСЋ СЃС‚Р°СЂРѕРµ РїРѕРІРµРґРµРЅРёРµ
+    LOG_ROTATION_TIME: str = '00:00'  # Р’СЂРµРјСЏ СЂРѕС‚Р°С†РёРё (HH:MM)
+    LOG_ROTATION_KEEP_DAYS: int = 7  # РҐСЂР°РЅРёС‚СЊ Р°СЂС…РёРІС‹ N РґРЅРµР№
+    LOG_ROTATION_COMPRESS: bool = True  # РЎР¶РёРјР°С‚СЊ Р°СЂС…РёРІС‹ gzip
+    LOG_ROTATION_SEND_TO_TELEGRAM: bool = False  # РћС‚РїСЂР°РІР»СЏС‚СЊ РІ РєР°РЅР°Р»
+    LOG_ROTATION_CHAT_ID: str | None = None  # РљР°РЅР°Р» РґР»СЏ Р»РѕРіРѕРІ (РёР»Рё BACKUP_SEND_CHAT_ID)
+    LOG_ROTATION_TOPIC_ID: int | None = None  # РўРѕРїРёРє РІ РєР°РЅР°Р»Рµ
 
-    # Пути к лог-файлам (при LOG_ROTATION_ENABLED=true)
+    # РџСѓС‚Рё Рє Р»РѕРі-С„Р°Р№Р»Р°Рј (РїСЂРё LOG_ROTATION_ENABLED=true)
     LOG_DIR: str = 'logs'
     LOG_INFO_FILE: str = 'info.log'
     LOG_WARNING_FILE: str = 'warning.log'
@@ -1055,91 +1060,150 @@ class Settings(BaseSettings):
 
     # === Ban Notification Messages ===
 
-    # Сообщение о блокировке за превышение лимита устройств
-    # Переменные: {ip_count}, {limit}, {ban_minutes}, {node_info}
+    # РЎРѕРѕР±С‰РµРЅРёРµ Рѕ Р±Р»РѕРєРёСЂРѕРІРєРµ Р·Р° РїСЂРµРІС‹С€РµРЅРёРµ Р»РёРјРёС‚Р° СѓСЃС‚СЂРѕР№СЃС‚РІ
+    # РџРµСЂРµРјРµРЅРЅС‹Рµ: {ip_count}, {limit}, {ban_minutes}, {node_info}
     BAN_MSG_PUNISHMENT: str = (
-        '<b>АККАУНТ ЗАБЛОКИРОВАН</b>\n'
-        '━━━━━━━━━━━━━━━━━━━━━\n\n'
-        '<b>Причина:</b> Превышен лимит устройств\n'
+        '<b>РђРљРљРђРЈРќРў Р—РђР‘Р›РћРљРР РћР’РђРќ</b>\n'
+        'в”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓ\n\n'
+        '<b>РџСЂРёС‡РёРЅР°:</b> РџСЂРµРІС‹С€РµРЅ Р»РёРјРёС‚ СѓСЃС‚СЂРѕР№СЃС‚РІ\n'
         '{node_info}\n'
-        '<b>Детали нарушения:</b>\n'
-        '├  Устройств подключено: <b>{ip_count}</b>\n'
-        '├  Разрешено по тарифу: <b>{limit}</b>\n'
-        '└  Время блокировки: <b>{ban_minutes} мин</b>\n\n'
-        '━━━━━━━━━━━━━━━━━━━━━\n'
-        '<b>Что делать:</b>\n'
-        '1. Отключите лишние устройства от VPN\n'
-        '2. Дождитесь окончания блокировки\n'
-        '3. Подключитесь заново\n\n'
-        'Доступ восстановится автоматически'
+        '<b>Р”РµС‚Р°Р»Рё РЅР°СЂСѓС€РµРЅРёСЏ:</b>\n'
+        'в”њ  РЈСЃС‚СЂРѕР№СЃС‚РІ РїРѕРґРєР»СЋС‡РµРЅРѕ: <b>{ip_count}</b>\n'
+        'в”њ  Р Р°Р·СЂРµС€РµРЅРѕ РїРѕ С‚Р°СЂРёС„Сѓ: <b>{limit}</b>\n'
+        'в””  Р’СЂРµРјСЏ Р±Р»РѕРєРёСЂРѕРІРєРё: <b>{ban_minutes} РјРёРЅ</b>\n\n'
+        'в”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓ\n'
+        '<b>Р§С‚Рѕ РґРµР»Р°С‚СЊ:</b>\n'
+        '1. РћС‚РєР»СЋС‡РёС‚Рµ Р»РёС€РЅРёРµ СѓСЃС‚СЂРѕР№СЃС‚РІР° РѕС‚ VPN\n'
+        '2. Р”РѕР¶РґРёС‚РµСЃСЊ РѕРєРѕРЅС‡Р°РЅРёСЏ Р±Р»РѕРєРёСЂРѕРІРєРё\n'
+        '3. РџРѕРґРєР»СЋС‡РёС‚РµСЃСЊ Р·Р°РЅРѕРІРѕ\n\n'
+        'Р”РѕСЃС‚СѓРї РІРѕСЃСЃС‚Р°РЅРѕРІРёС‚СЃСЏ Р°РІС‚РѕРјР°С‚РёС‡РµСЃРєРё'
     )
 
-    # Сообщение о разблокировке
+    BAN_MSG_REVOKE: str = (
+        'рџ”‘ <b>РљР›Р®Р§Р Р”РћРЎРўРЈРџРђ РћР‘РќРћР’Р›Р•РќР«</b>\n'
+        'в”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓ\n\n'
+        'вќЊ <b>РџСЂРёС‡РёРЅР°:</b> РџСЂРµРІС‹С€РµРЅ Р»РёРјРёС‚ СѓСЃС‚СЂРѕР№СЃС‚РІ\n'
+        '{node_info}\n'
+        'рџ“Љ <b>Р”РµС‚Р°Р»Рё РЅР°СЂСѓС€РµРЅРёСЏ:</b>\n'
+        'в”њ рџ“± РЈСЃС‚СЂРѕР№СЃС‚РІ РїРѕРґРєР»СЋС‡РµРЅРѕ: <b>{ip_count}</b>\n'
+        'в”” рџ“‹ Р Р°Р·СЂРµС€РµРЅРѕ РїРѕ С‚Р°СЂРёС„Сѓ: <b>{limit}</b>\n\n'
+        'РћС‚РєР»СЋС‡РёС‚Рµ Р»РёС€РЅРёРµ СѓСЃС‚СЂРѕР№СЃС‚РІР° Рё Р·Р°РЅРѕРІРѕ РїРѕР»СѓС‡РёС‚Рµ Р°РєС‚СѓР°Р»СЊРЅС‹Р№ РєР»СЋС‡ РїРѕРґРєР»СЋС‡РµРЅРёСЏ РІ Р±РѕС‚Рµ.'
+    )
+
+    # РЎРѕРѕР±С‰РµРЅРёРµ Рѕ СЂР°Р·Р±Р»РѕРєРёСЂРѕРІРєРµ
     BAN_MSG_ENABLED: str = (
-        '<b>АККАУНТ РАЗБЛОКИРОВАН</b>\n'
-        '━━━━━━━━━━━━━━━━━━━━━\n\n'
-        'Ваш аккаунт успешно разблокирован!\n\n'
-        'Теперь вы можете снова пользоваться VPN.\n\n'
-        '━━━━━━━━━━━━━━━━━━━━━\n'
-        '<b>Рекомендации:</b>\n'
-        '• Следите за количеством устройств\n'
-        '• Отключайте VPN когда не используете\n'
-        '• Не превышайте лимит по тарифу'
+        '<b>РђРљРљРђРЈРќРў Р РђР—Р‘Р›РћРљРР РћР’РђРќ</b>\n'
+        'в”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓ\n\n'
+        'Р’Р°С€ Р°РєРєР°СѓРЅС‚ СѓСЃРїРµС€РЅРѕ СЂР°Р·Р±Р»РѕРєРёСЂРѕРІР°РЅ!\n\n'
+        'РўРµРїРµСЂСЊ РІС‹ РјРѕР¶РµС‚Рµ СЃРЅРѕРІР° РїРѕР»СЊР·РѕРІР°С‚СЊСЃСЏ VPN.\n\n'
+        'в”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓ\n'
+        '<b>Р РµРєРѕРјРµРЅРґР°С†РёРё:</b>\n'
+        'вЂў РЎР»РµРґРёС‚Рµ Р·Р° РєРѕР»РёС‡РµСЃС‚РІРѕРј СѓСЃС‚СЂРѕР№СЃС‚РІ\n'
+        'вЂў РћС‚РєР»СЋС‡Р°Р№С‚Рµ VPN РєРѕРіРґР° РЅРµ РёСЃРїРѕР»СЊР·СѓРµС‚Рµ\n'
+        'вЂў РќРµ РїСЂРµРІС‹С€Р°Р№С‚Рµ Р»РёРјРёС‚ РїРѕ С‚Р°СЂРёС„Сѓ'
     )
 
-    # Сообщение о блокировке за WiFi
-    # Переменные: {ban_minutes}, {network_info}, {node_info}
+    # РЎРѕРѕР±С‰РµРЅРёРµ Рѕ Р±Р»РѕРєРёСЂРѕРІРєРµ Р·Р° WiFi
+    # РџРµСЂРµРјРµРЅРЅС‹Рµ: {ban_minutes}, {network_info}, {node_info}
     BAN_MSG_WIFI: str = (
-        '<b>АККАУНТ ЗАБЛОКИРОВАН</b>\n'
-        '━━━━━━━━━━━━━━━━━━━━━\n\n'
-        '<b>Причина:</b> Использование WiFi сети\n'
+        '<b>РђРљРљРђРЈРќРў Р—РђР‘Р›РћРљРР РћР’РђРќ</b>\n'
+        'в”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓ\n\n'
+        '<b>РџСЂРёС‡РёРЅР°:</b> РСЃРїРѕР»СЊР·РѕРІР°РЅРёРµ WiFi СЃРµС‚Рё\n'
         '{node_info}\n'
-        '<b>Детали:</b>\n'
-        '├  Тип подключения: <b>WiFi</b>\n'
+        '<b>Р”РµС‚Р°Р»Рё:</b>\n'
+        'в”њ  РўРёРї РїРѕРґРєР»СЋС‡РµРЅРёСЏ: <b>WiFi</b>\n'
         '{network_info}'
-        '└  Время блокировки: <b>{ban_minutes} мин</b>\n\n'
-        '━━━━━━━━━━━━━━━━━━━━━\n'
-        '<b>Что делать:</b>\n'
-        '1. Отключитесь от WiFi\n'
-        '2. Используйте мобильный интернет\n'
-        '3. Дождитесь окончания блокировки\n\n'
-        'Доступ восстановится автоматически'
+        'в””  Р’СЂРµРјСЏ Р±Р»РѕРєРёСЂРѕРІРєРё: <b>{ban_minutes} РјРёРЅ</b>\n\n'
+        'в”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓ\n'
+        '<b>Р§С‚Рѕ РґРµР»Р°С‚СЊ:</b>\n'
+        '1. РћС‚РєР»СЋС‡РёС‚РµСЃСЊ РѕС‚ WiFi\n'
+        '2. РСЃРїРѕР»СЊР·СѓР№С‚Рµ РјРѕР±РёР»СЊРЅС‹Р№ РёРЅС‚РµСЂРЅРµС‚\n'
+        '3. Р”РѕР¶РґРёС‚РµСЃСЊ РѕРєРѕРЅС‡Р°РЅРёСЏ Р±Р»РѕРєРёСЂРѕРІРєРё\n\n'
+        'Р”РѕСЃС‚СѓРї РІРѕСЃСЃС‚Р°РЅРѕРІРёС‚СЃСЏ Р°РІС‚РѕРјР°С‚РёС‡РµСЃРєРё'
     )
 
-    # Сообщение о блокировке за мобильную сеть
-    # Переменные: {ban_minutes}, {network_info}, {node_info}
+    # РЎРѕРѕР±С‰РµРЅРёРµ Рѕ Р±Р»РѕРєРёСЂРѕРІРєРµ Р·Р° РјРѕР±РёР»СЊРЅСѓСЋ СЃРµС‚СЊ
+    # РџРµСЂРµРјРµРЅРЅС‹Рµ: {ban_minutes}, {network_info}, {node_info}
     BAN_MSG_MOBILE: str = (
-        '<b>АККАУНТ ЗАБЛОКИРОВАН</b>\n'
-        '━━━━━━━━━━━━━━━━━━━━━\n\n'
-        '<b>Причина:</b> Использование мобильной сети\n'
+        '<b>РђРљРљРђРЈРќРў Р—РђР‘Р›РћРљРР РћР’РђРќ</b>\n'
+        'в”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓ\n\n'
+        '<b>РџСЂРёС‡РёРЅР°:</b> РСЃРїРѕР»СЊР·РѕРІР°РЅРёРµ РјРѕР±РёР»СЊРЅРѕР№ СЃРµС‚Рё\n'
         '{node_info}\n'
-        '<b>Детали:</b>\n'
-        '├  Тип подключения: <b>Мобильная сеть</b>\n'
+        '<b>Р”РµС‚Р°Р»Рё:</b>\n'
+        'в”њ  РўРёРї РїРѕРґРєР»СЋС‡РµРЅРёСЏ: <b>РњРѕР±РёР»СЊРЅР°СЏ СЃРµС‚СЊ</b>\n'
         '{network_info}'
-        '└  Время блокировки: <b>{ban_minutes} мин</b>\n\n'
-        '━━━━━━━━━━━━━━━━━━━━━\n'
-        '<b>Что делать:</b>\n'
-        '1. Подключитесь к WiFi\n'
-        '2. Дождитесь окончания блокировки\n'
-        '3. Используйте VPN только через WiFi\n\n'
-        'Доступ восстановится автоматически'
+        'в””  Р’СЂРµРјСЏ Р±Р»РѕРєРёСЂРѕРІРєРё: <b>{ban_minutes} РјРёРЅ</b>\n\n'
+        'в”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓ\n'
+        '<b>Р§С‚Рѕ РґРµР»Р°С‚СЊ:</b>\n'
+        '1. РџРѕРґРєР»СЋС‡РёС‚РµСЃСЊ Рє WiFi\n'
+        '2. Р”РѕР¶РґРёС‚РµСЃСЊ РѕРєРѕРЅС‡Р°РЅРёСЏ Р±Р»РѕРєРёСЂРѕРІРєРё\n'
+        '3. РСЃРїРѕР»СЊР·СѓР№С‚Рµ VPN С‚РѕР»СЊРєРѕ С‡РµСЂРµР· WiFi\n\n'
+        'Р”РѕСЃС‚СѓРї РІРѕСЃСЃС‚Р°РЅРѕРІРёС‚СЃСЏ Р°РІС‚РѕРјР°С‚РёС‡РµСЃРєРё'
     )
 
-    # Сообщение-предупреждение
-    # Переменные: {warning_message}
+    # РЎРѕРѕР±С‰РµРЅРёСЏ Рѕ С‚РёРїРёР·РёСЂРѕРІР°РЅРЅС‹С… СЂСѓС‡РЅС‹С… Р±Р°РЅР°С… BanHammer.
+    # РџРµСЂРµРјРµРЅРЅС‹Рµ: {ban_minutes}, {reason}, {node_info}
+    BAN_MSG_TORRENT: str = (
+        'рџљ« <b>РђРљРљРђРЈРќРў Р—РђР‘Р›РћРљРР РћР’РђРќ</b>\n'
+        'в”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓ\n\n'
+        'вќЊ <b>РџСЂРёС‡РёРЅР°:</b> РћР±РЅР°СЂСѓР¶РµРЅР° torrent-Р°РєС‚РёРІРЅРѕСЃС‚СЊ\n'
+        '{node_info}\n'
+        'рџ“ќ <b>Р”РµС‚Р°Р»Рё:</b> {reason}\n'
+        'вЏ± <b>Р’СЂРµРјСЏ Р±Р»РѕРєРёСЂРѕРІРєРё:</b> {ban_minutes} РјРёРЅ\n\n'
+        'рџ”„ Р”РѕСЃС‚СѓРї РІРѕСЃСЃС‚Р°РЅРѕРІРёС‚СЃСЏ Р°РІС‚РѕРјР°С‚РёС‡РµСЃРєРё РїРѕСЃР»Рµ РѕРєРѕРЅС‡Р°РЅРёСЏ Р±Р»РѕРєРёСЂРѕРІРєРё.'
+    )
+    BAN_MSG_HWID_LIMIT: str = (
+        'рџљ« <b>РђРљРљРђРЈРќРў Р—РђР‘Р›РћРљРР РћР’РђРќ</b>\n'
+        'в”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓ\n\n'
+        'вќЊ <b>РџСЂРёС‡РёРЅР°:</b> РџСЂРµРІС‹С€РµРЅ Р»РёРјРёС‚ СѓСЃС‚СЂРѕР№СЃС‚РІ\n'
+        '{node_info}\n'
+        'рџ“ќ <b>Р”РµС‚Р°Р»Рё:</b> {reason}\n'
+        'вЏ± <b>Р’СЂРµРјСЏ Р±Р»РѕРєРёСЂРѕРІРєРё:</b> {ban_minutes} РјРёРЅ\n\n'
+        'рџ”„ Р”РѕСЃС‚СѓРї РІРѕСЃСЃС‚Р°РЅРѕРІРёС‚СЃСЏ Р°РІС‚РѕРјР°С‚РёС‡РµСЃРєРё РїРѕСЃР»Рµ РѕРєРѕРЅС‡Р°РЅРёСЏ Р±Р»РѕРєРёСЂРѕРІРєРё.'
+    )
+    BAN_MSG_SUSPICIOUS_DESTINATION: str = (
+        'рџљ« <b>РђРљРљРђРЈРќРў Р—РђР‘Р›РћРљРР РћР’РђРќ</b>\n'
+        'в”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓ\n\n'
+        'вќЊ <b>РџСЂРёС‡РёРЅР°:</b> РџРѕРґРєР»СЋС‡РµРЅРёРµ Рє Р·Р°РїСЂРµС‰С‘РЅРЅРѕРјСѓ СЂРµСЃСѓСЂСЃСѓ\n'
+        '{node_info}\n'
+        'рџ“ќ <b>Р”РµС‚Р°Р»Рё:</b> {reason}\n'
+        'вЏ± <b>Р’СЂРµРјСЏ Р±Р»РѕРєРёСЂРѕРІРєРё:</b> {ban_minutes} РјРёРЅ\n\n'
+        'рџ”„ Р”РѕСЃС‚СѓРї РІРѕСЃСЃС‚Р°РЅРѕРІРёС‚СЃСЏ Р°РІС‚РѕРјР°С‚РёС‡РµСЃРєРё РїРѕСЃР»Рµ РѕРєРѕРЅС‡Р°РЅРёСЏ Р±Р»РѕРєРёСЂРѕРІРєРё.'
+    )
+    BAN_MSG_TRAFFIC_LIMIT: str = (
+        'рџљ« <b>РђРљРљРђРЈРќРў Р—РђР‘Р›РћРљРР РћР’РђРќ</b>\n'
+        'в”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓ\n\n'
+        'вќЊ <b>РџСЂРёС‡РёРЅР°:</b> РџСЂРµРІС‹С€РµРЅ РґРѕРїСѓСЃС‚РёРјС‹Р№ РѕР±СЉС‘Рј С‚СЂР°С„РёРєР°\n'
+        '{node_info}\n'
+        'рџ“ќ <b>Р”РµС‚Р°Р»Рё:</b> {reason}\n'
+        'вЏ± <b>Р’СЂРµРјСЏ Р±Р»РѕРєРёСЂРѕРІРєРё:</b> {ban_minutes} РјРёРЅ\n\n'
+        'рџ”„ Р”РѕСЃС‚СѓРї РІРѕСЃСЃС‚Р°РЅРѕРІРёС‚СЃСЏ Р°РІС‚РѕРјР°С‚РёС‡РµСЃРєРё РїРѕСЃР»Рµ РѕРєРѕРЅС‡Р°РЅРёСЏ Р±Р»РѕРєРёСЂРѕРІРєРё.'
+    )
+    BAN_MSG_MANUAL: str = (
+        'рџљ« <b>РђРљРљРђРЈРќРў Р—РђР‘Р›РћРљРР РћР’РђРќ</b>\n'
+        'в”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓ\n\n'
+        'вќЊ <b>РџСЂРёС‡РёРЅР°:</b> РќР°СЂСѓС€РµРЅРёРµ РїСЂР°РІРёР» СЃРµСЂРІРёСЃР°\n'
+        '{node_info}\n'
+        'рџ“ќ <b>Р”РµС‚Р°Р»Рё:</b> {reason}\n'
+        'вЏ± <b>Р’СЂРµРјСЏ Р±Р»РѕРєРёСЂРѕРІРєРё:</b> {ban_minutes} РјРёРЅ\n\n'
+        'рџ”„ Р”РѕСЃС‚СѓРї РІРѕСЃСЃС‚Р°РЅРѕРІРёС‚СЃСЏ Р°РІС‚РѕРјР°С‚РёС‡РµСЃРєРё РїРѕСЃР»Рµ РѕРєРѕРЅС‡Р°РЅРёСЏ Р±Р»РѕРєРёСЂРѕРІРєРё.'
+    )
+
+    # РЎРѕРѕР±С‰РµРЅРёРµ-РїСЂРµРґСѓРїСЂРµР¶РґРµРЅРёРµ
+    # РџРµСЂРµРјРµРЅРЅС‹Рµ: {warning_message}
     BAN_MSG_WARNING: str = (
-        '<b>ПРЕДУПРЕЖДЕНИЕ</b>\n'
-        '━━━━━━━━━━━━━━━━━━━━━\n\n'
+        '<b>РџР Р•Р”РЈРџР Р•Р–Р”Р•РќРР•</b>\n'
+        'в”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓ\n\n'
         '{warning_message}\n\n'
-        '━━━━━━━━━━━━━━━━━━━━━\n'
-        'При повторном нарушении аккаунт будет заблокирован'
+        'в”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓ\n'
+        'РџСЂРё РїРѕРІС‚РѕСЂРЅРѕРј РЅР°СЂСѓС€РµРЅРёРё Р°РєРєР°СѓРЅС‚ Р±СѓРґРµС‚ Р·Р°Р±Р»РѕРєРёСЂРѕРІР°РЅ'
     )
 
     DEBUG: bool = False
     WEBHOOK_URL: str | None = None
     WEBHOOK_PATH: str = '/webhook'
     WEBHOOK_SECRET_TOKEN: str | None = None
-    WEBHOOK_IP: str | None = None  # IP адрес для setWebhook, чтобы Telegram не резолвил домен
+    WEBHOOK_IP: str | None = None  # IP Р°РґСЂРµСЃ РґР»СЏ setWebhook, С‡С‚РѕР±С‹ Telegram РЅРµ СЂРµР·РѕР»РІРёР» РґРѕРјРµРЅ
     WEBHOOK_DROP_PENDING_UPDATES: bool = True
     WEBHOOK_MAX_QUEUE_SIZE: int = 1024
     WEBHOOK_WORKERS: int = 4
@@ -1160,10 +1224,10 @@ class Settings(BaseSettings):
     WEB_API_TOKEN_HASH_ALGORITHM: str = 'sha256'
     WEB_API_TOKEN_HMAC_SECRET: str | None = None
     WEB_API_REQUEST_LOGGING: bool = True
-    # Потолок ОДНОЙ операции ручного пополнения через POST /users/{id}/deposit.
-    # Эндпоинт рассчитан на автоматизацию (AI-агент поддержки), поэтому у него есть
-    # предохранитель: агент, ошибшийся на два нуля, упрётся в лимит, а не подарит
-    # человеку годовую подписку. 0 — без ограничения.
+    # РџРѕС‚РѕР»РѕРє РћР”РќРћР™ РѕРїРµСЂР°С†РёРё СЂСѓС‡РЅРѕРіРѕ РїРѕРїРѕР»РЅРµРЅРёСЏ С‡РµСЂРµР· POST /users/{id}/deposit.
+    # Р­РЅРґРїРѕРёРЅС‚ СЂР°СЃСЃС‡РёС‚Р°РЅ РЅР° Р°РІС‚РѕРјР°С‚РёР·Р°С†РёСЋ (AI-Р°РіРµРЅС‚ РїРѕРґРґРµСЂР¶РєРё), РїРѕСЌС‚РѕРјСѓ Сѓ РЅРµРіРѕ РµСЃС‚СЊ
+    # РїСЂРµРґРѕС…СЂР°РЅРёС‚РµР»СЊ: Р°РіРµРЅС‚, РѕС€РёР±С€РёР№СЃСЏ РЅР° РґРІР° РЅСѓР»СЏ, СѓРїСЂС‘С‚СЃСЏ РІ Р»РёРјРёС‚, Р° РЅРµ РїРѕРґР°СЂРёС‚
+    # С‡РµР»РѕРІРµРєСѓ РіРѕРґРѕРІСѓСЋ РїРѕРґРїРёСЃРєСѓ. 0 вЂ” Р±РµР· РѕРіСЂР°РЅРёС‡РµРЅРёСЏ.
     WEB_API_MANUAL_DEPOSIT_MAX_KOPEKS: int = 1_000_000
 
     ENABLE_DEEP_LINKS: bool = True
@@ -1225,11 +1289,25 @@ class Settings(BaseSettings):
     SMTP_PASSWORD: str | None = None
     SMTP_FROM_EMAIL: str | None = None
     SMTP_FROM_NAME: str = 'VPN Service'
+    # РљСѓРґР° РґРѕР»Р¶РЅС‹ РїР°РґР°С‚СЊ РѕС‚РІРµС‚С‹ РєР»РёРµРЅС‚РѕРІ. РћС‚РїСЂР°РІРёС‚РµР»СЊ С‡Р°СЃС‚Рѕ Р¶РёРІС‘С‚ РЅР° РїРѕРґРґРѕРјРµРЅРµ
+    # Р±РµР· MX (noreply@mail.example.com Сѓ Resend/SES) вЂ” РѕС‚РІРµС‚ РЅР° С‚Р°РєРѕРµ РїРёСЃСЊРјРѕ
+    # РѕС‚Р±РёРІР°РµС‚СЃСЏ, Рё С‡РµР»РѕРІРµРє, РЅР°Р¶Р°РІС€РёР№ В«РћС‚РІРµС‚РёС‚СЊВ», СѓС…РѕРґРёС‚ РІ РЅРёРєСѓРґР°.
+    SMTP_REPLY_TO: str = ''
     SMTP_USE_TLS: bool = True
-    # Implicit TLS (SMTPS) — required for port 465. Auto-enabled when SMTP_PORT == 465.
+    # Implicit TLS (SMTPS) вЂ” required for port 465. Auto-enabled when SMTP_PORT == 465.
     SMTP_USE_SSL: bool = False
 
-    # Ban System Integration (ban monitoring)
+    # РћС‚РїРёСЃРєР° РѕС‚ РјР°СЂРєРµС‚РёРЅРіРѕРІС‹С… РїРёСЃРµРј (winback, РїСЂРѕРјРѕРїСЂРµРґР»РѕР¶РµРЅРёСЏ, email-СЂР°СЃСЃС‹Р»РєРё).
+    # Gmail/Yahoo РґР»СЏ bulk-РѕС‚РїСЂР°РІРёС‚РµР»РµР№ С‚СЂРµР±СѓСЋС‚ one-click unsubscribe (RFC 8058),
+    # Р° Р¶Р°Р»РѕР±С‹ В«РЎРїР°РјВ» РІРјРµСЃС‚Рѕ РѕС‚РїРёСЃРєРё Р±СЊСЋС‚ РїРѕ СЂРµРїСѓС‚Р°С†РёРё РґРѕРјРµРЅР°.
+    EMAIL_UNSUBSCRIBE_ENABLED: bool = True
+    # РџСѓР±Р»РёС‡РЅС‹Р№ URL СЌРЅРґРїРѕРёРЅС‚Р° РѕС‚РїРёСЃРєРё. РџСѓСЃС‚Рѕ в†’ CABINET_URL + /api/cabinet/public/unsubscribe.
+    # Р—Р°РґР°РІР°С‚СЊ СЏРІРЅРѕ, РµСЃР»Рё API РєР°Р±РёРЅРµС‚Р° РїСЂРѕРєСЃРёСЂСѓРµС‚СЃСЏ РЅРµ С‡РµСЂРµР· /api.
+    EMAIL_UNSUBSCRIBE_BASE_URL: str = ''
+    # РќРµРѕР±СЏР·Р°С‚РµР»СЊРЅС‹Р№ mailto-РІР°СЂРёР°РЅС‚ РІ List-Unsubscribe РґР»СЏ РєР»РёРµРЅС‚РѕРІ Р±РµР· HTTP one-click.
+    EMAIL_UNSUBSCRIBE_MAILTO: str = ''
+
+    # Ban System Integration (BedolagaBan monitoring)
     BAN_SYSTEM_ENABLED: bool = False
     BAN_SYSTEM_API_URL: str | None = None  # e.g., http://ban-server:8000
     BAN_SYSTEM_API_TOKEN: str | None = None
@@ -1372,8 +1450,8 @@ class Settings(BaseSettings):
     @field_validator('DATABASE_POOL_SIZE', mode='before')
     @classmethod
     def ensure_positive_database_pool_size(cls, value: int | None) -> int:
-        # pool_size=0 в SQLAlchemy QueuePool означает «без лимита» — это footgun,
-        # который легко исчерпает max_connections PostgreSQL, поэтому держим >= 1.
+        # pool_size=0 РІ SQLAlchemy QueuePool РѕР·РЅР°С‡Р°РµС‚ В«Р±РµР· Р»РёРјРёС‚Р°В» вЂ” СЌС‚Рѕ footgun,
+        # РєРѕС‚РѕСЂС‹Р№ Р»РµРіРєРѕ РёСЃС‡РµСЂРїР°РµС‚ max_connections PostgreSQL, РїРѕСЌС‚РѕРјСѓ РґРµСЂР¶РёРј >= 1.
         try:
             if value is None or value == '':
                 return 20
@@ -1441,11 +1519,11 @@ class Settings(BaseSettings):
         return self._get_sqlite_url()
 
     def is_postgresql(self) -> bool:
-        """Проверяет, используется ли PostgreSQL"""
+        """РџСЂРѕРІРµСЂСЏРµС‚, РёСЃРїРѕР»СЊР·СѓРµС‚СЃСЏ Р»Рё PostgreSQL"""
         return 'postgresql' in self.get_database_url()
 
     def is_sqlite(self) -> bool:
-        """Проверяет, используется ли SQLite"""
+        """РџСЂРѕРІРµСЂСЏРµС‚, РёСЃРїРѕР»СЊР·СѓРµС‚СЃСЏ Р»Рё SQLite"""
         return 'sqlite' in self.get_database_url()
 
     def get_proxy_url(self) -> str | None:
@@ -1561,7 +1639,7 @@ class Settings(BaseSettings):
         return self.PAL24_CARD_BUTTON_VISIBLE
 
     def get_remnawave_user_delete_mode(self) -> str:
-        """Возвращает режим удаления пользователей: 'delete' или 'disable'"""
+        """Р’РѕР·РІСЂР°С‰Р°РµС‚ СЂРµР¶РёРј СѓРґР°Р»РµРЅРёСЏ РїРѕР»СЊР·РѕРІР°С‚РµР»РµР№: 'delete' РёР»Рё 'disable'"""
         mode = self.REMNAWAVE_USER_DELETE_MODE.lower().strip()
         return mode if mode in ['delete', 'disable'] else 'delete'
 
@@ -1575,16 +1653,16 @@ class Settings(BaseSettings):
         user_id: int | None = None,
     ) -> str:
         """
-        Форматирует описание пользователя для RemnaWave.
+        Р¤РѕСЂРјР°С‚РёСЂСѓРµС‚ РѕРїРёСЃР°РЅРёРµ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ РґР»СЏ RemnaWave.
 
-        Поддерживает как Telegram-пользователей, так и email-only пользователей.
+        РџРѕРґРґРµСЂР¶РёРІР°РµС‚ РєР°Рє Telegram-РїРѕР»СЊР·РѕРІР°С‚РµР»РµР№, С‚Р°Рє Рё email-only РїРѕР»СЊР·РѕРІР°С‚РµР»РµР№.
         """
         template = self.REMNAWAVE_USER_DESCRIPTION_TEMPLATE or 'Bot user: {full_name} {username}'
         template_for_formatting = template.replace('@{username}', '{username}')
 
         username_clean = (username or '').lstrip('@')
 
-        # Формируем идентификатор для description
+        # Р¤РѕСЂРјРёСЂСѓРµРј РёРґРµРЅС‚РёС„РёРєР°С‚РѕСЂ РґР»СЏ description
         identifier_parts = []
         if telegram_id:
             identifier_parts.append(f'TG: {telegram_id}')
@@ -1616,7 +1694,7 @@ class Settings(BaseSettings):
         return description
 
     # RemnaWave API enforces `username` length: 3..36 chars inclusive.
-    # ClassVar — это константы кода, а не env-tunable поля Settings.
+    # ClassVar вЂ” СЌС‚Рѕ РєРѕРЅСЃС‚Р°РЅС‚С‹ РєРѕРґР°, Р° РЅРµ env-tunable РїРѕР»СЏ Settings.
     REMNAWAVE_USERNAME_MAX_LENGTH: ClassVar[int] = 36
     REMNAWAVE_USERNAME_MIN_LENGTH: ClassVar[int] = 3
 
@@ -1631,26 +1709,26 @@ class Settings(BaseSettings):
         reserve_suffix_chars: int = 0,
     ) -> str:
         """
-        Форматирует username для RemnaWave.
+        Р¤РѕСЂРјР°С‚РёСЂСѓРµС‚ username РґР»СЏ RemnaWave.
 
-        Для email-пользователей (telegram_id=None) использует email prefix + user_id.
+        Р”Р»СЏ email-РїРѕР»СЊР·РѕРІР°С‚РµР»РµР№ (telegram_id=None) РёСЃРїРѕР»СЊР·СѓРµС‚ email prefix + user_id.
 
-        ``reserve_suffix_chars`` резервирует место для суффикса, который caller
-        собирается приклеить (например, `_<remnawave_short_id>`). Truncate
-        происходит ДО конкатенации, чтобы итоговая строка точно влезала в
-        REMNAWAVE_USERNAME_MAX_LENGTH. Дефолт 0 — обратная совместимость.
+        ``reserve_suffix_chars`` СЂРµР·РµСЂРІРёСЂСѓРµС‚ РјРµСЃС‚Рѕ РґР»СЏ СЃСѓС„С„РёРєСЃР°, РєРѕС‚РѕСЂС‹Р№ caller
+        СЃРѕР±РёСЂР°РµС‚СЃСЏ РїСЂРёРєР»РµРёС‚СЊ (РЅР°РїСЂРёРјРµСЂ, `_<remnawave_short_id>`). Truncate
+        РїСЂРѕРёСЃС…РѕРґРёС‚ Р”Рћ РєРѕРЅРєР°С‚РµРЅР°С†РёРё, С‡С‚РѕР±С‹ РёС‚РѕРіРѕРІР°СЏ СЃС‚СЂРѕРєР° С‚РѕС‡РЅРѕ РІР»РµР·Р°Р»Р° РІ
+        REMNAWAVE_USERNAME_MAX_LENGTH. Р”РµС„РѕР»С‚ 0 вЂ” РѕР±СЂР°С‚РЅР°СЏ СЃРѕРІРјРµСЃС‚РёРјРѕСЃС‚СЊ.
         """
         template = self.REMNAWAVE_USER_USERNAME_TEMPLATE or 'user_{telegram_id}'
 
         username_clean = (username or '').lstrip('@')
         full_name_value = full_name or ''
 
-        # Remnawave разрешает только буквы, цифры, подчёркивания и дефисы
+        # Remnawave СЂР°Р·СЂРµС€Р°РµС‚ С‚РѕР»СЊРєРѕ Р±СѓРєРІС‹, С†РёС„СЂС‹, РїРѕРґС‡С‘СЂРєРёРІР°РЅРёСЏ Рё РґРµС„РёСЃС‹
         def _sanitize(value: str) -> str:
             result = re.sub(r'[^0-9A-Za-z_-]+', '_', value)
             return re.sub(r'_+', '_', result).strip('_-')
 
-        # Для email-пользователей формируем уникальный identifier
+        # Р”Р»СЏ email-РїРѕР»СЊР·РѕРІР°С‚РµР»РµР№ С„РѕСЂРјРёСЂСѓРµРј СѓРЅРёРєР°Р»СЊРЅС‹Р№ identifier
         if telegram_id:
             identifier = str(telegram_id)
         elif email:
@@ -1661,12 +1739,12 @@ class Settings(BaseSettings):
         else:
             identifier = 'unknown'
 
-        # NB: для email-only users слот {telegram_id} заполняется identifier'ом
-        # (legacy fallback для шаблонов, не использующих {identifier}). Это
-        # может приводить к дублированию email-префикса, если шаблон ссылается
-        # одновременно на {email} И {telegram_id} — финальный length cap ниже
-        # обрезает строку, но семантическая дупликация остаётся. Рекомендуемый
-        # шаблон для смешанных деплоев: `{username_clean}_{identifier}`.
+        # NB: РґР»СЏ email-only users СЃР»РѕС‚ {telegram_id} Р·Р°РїРѕР»РЅСЏРµС‚СЃСЏ identifier'РѕРј
+        # (legacy fallback РґР»СЏ С€Р°Р±Р»РѕРЅРѕРІ, РЅРµ РёСЃРїРѕР»СЊР·СѓСЋС‰РёС… {identifier}). Р­С‚Рѕ
+        # РјРѕР¶РµС‚ РїСЂРёРІРѕРґРёС‚СЊ Рє РґСѓР±Р»РёСЂРѕРІР°РЅРёСЋ email-РїСЂРµС„РёРєСЃР°, РµСЃР»Рё С€Р°Р±Р»РѕРЅ СЃСЃС‹Р»Р°РµС‚СЃСЏ
+        # РѕРґРЅРѕРІСЂРµРјРµРЅРЅРѕ РЅР° {email} Р {telegram_id} вЂ” С„РёРЅР°Р»СЊРЅС‹Р№ length cap РЅРёР¶Рµ
+        # РѕР±СЂРµР·Р°РµС‚ СЃС‚СЂРѕРєСѓ, РЅРѕ СЃРµРјР°РЅС‚РёС‡РµСЃРєР°СЏ РґСѓРїР»РёРєР°С†РёСЏ РѕСЃС‚Р°С‘С‚СЃСЏ. Р РµРєРѕРјРµРЅРґСѓРµРјС‹Р№
+        # С€Р°Р±Р»РѕРЅ РґР»СЏ СЃРјРµС€Р°РЅРЅС‹С… РґРµРїР»РѕРµРІ: `{username_clean}_{identifier}`.
         values = defaultdict(
             str,
             {
@@ -1683,24 +1761,24 @@ class Settings(BaseSettings):
         raw_username = template.format_map(values).strip()
         sanitized_username = _sanitize(raw_username)
 
-        # Degenerate render: ни одна переменная шаблона не дала уникального
-        # значения. Напр. шаблон `user_{username}` для email-only юзера (у
-        # которого нет Telegram-username) рендерится в `user` — одинаково для
-        # ВСЕХ таких юзеров → RemnaWave отвечает 409 "username already exists"
-        # на каждую регистрацию после первой. `skeleton` — тот же шаблон с
-        # пустыми переменными; равенство ему значит «шаблон ничего не дал».
+        # Degenerate render: РЅРё РѕРґРЅР° РїРµСЂРµРјРµРЅРЅР°СЏ С€Р°Р±Р»РѕРЅР° РЅРµ РґР°Р»Р° СѓРЅРёРєР°Р»СЊРЅРѕРіРѕ
+        # Р·РЅР°С‡РµРЅРёСЏ. РќР°РїСЂ. С€Р°Р±Р»РѕРЅ `user_{username}` РґР»СЏ email-only СЋР·РµСЂР° (Сѓ
+        # РєРѕС‚РѕСЂРѕРіРѕ РЅРµС‚ Telegram-username) СЂРµРЅРґРµСЂРёС‚СЃСЏ РІ `user` вЂ” РѕРґРёРЅР°РєРѕРІРѕ РґР»СЏ
+        # Р’РЎР•РҐ С‚Р°РєРёС… СЋР·РµСЂРѕРІ в†’ RemnaWave РѕС‚РІРµС‡Р°РµС‚ 409 "username already exists"
+        # РЅР° РєР°Р¶РґСѓСЋ СЂРµРіРёСЃС‚СЂР°С†РёСЋ РїРѕСЃР»Рµ РїРµСЂРІРѕР№. `skeleton` вЂ” С‚РѕС‚ Р¶Рµ С€Р°Р±Р»РѕРЅ СЃ
+        # РїСѓСЃС‚С‹РјРё РїРµСЂРµРјРµРЅРЅС‹РјРё; СЂР°РІРµРЅСЃС‚РІРѕ РµРјСѓ Р·РЅР°С‡РёС‚ В«С€Р°Р±Р»РѕРЅ РЅРёС‡РµРіРѕ РЅРµ РґР°Р»В».
         skeleton = _sanitize(template.format_map(defaultdict(str)))
         if not sanitized_username or sanitized_username == skeleton:
             sanitized_username = _sanitize(f'user_{identifier}')
 
-        # Резервируем место под caller-suffix, не опускаясь ниже минимальной длины.
+        # Р РµР·РµСЂРІРёСЂСѓРµРј РјРµСЃС‚Рѕ РїРѕРґ caller-suffix, РЅРµ РѕРїСѓСЃРєР°СЏСЃСЊ РЅРёР¶Рµ РјРёРЅРёРјР°Р»СЊРЅРѕР№ РґР»РёРЅС‹.
         max_len = max(
             self.REMNAWAVE_USERNAME_MIN_LENGTH,
             self.REMNAWAVE_USERNAME_MAX_LENGTH - max(0, reserve_suffix_chars),
         )
         result = sanitized_username[:max_len].strip('_-') or 'user'
 
-        # RemnaWave требует username минимум 3 символа
+        # RemnaWave С‚СЂРµР±СѓРµС‚ username РјРёРЅРёРјСѓРј 3 СЃРёРјРІРѕР»Р°
         if len(result) < self.REMNAWAVE_USERNAME_MIN_LENGTH:
             result = f'{result}_{identifier}'[:max_len].strip('_-')
 
@@ -1719,9 +1797,9 @@ class Settings(BaseSettings):
         """Build a RemnaWave username with a known suffix, guaranteed within the API limit.
 
         `suffix` is expected pre-formatted with its separator (e.g. '_49883b').
-        Резервируем место под suffix в base, делаем belt-and-suspenders финальное
-        ограничение длины. Используется в multi-tariff create-paths, где к base
-        приклеивается `_<remnawave_short_id>`.
+        Р РµР·РµСЂРІРёСЂСѓРµРј РјРµСЃС‚Рѕ РїРѕРґ suffix РІ base, РґРµР»Р°РµРј belt-and-suspenders С„РёРЅР°Р»СЊРЅРѕРµ
+        РѕРіСЂР°РЅРёС‡РµРЅРёРµ РґР»РёРЅС‹. РСЃРїРѕР»СЊР·СѓРµС‚СЃСЏ РІ multi-tariff create-paths, РіРґРµ Рє base
+        РїСЂРёРєР»РµРёРІР°РµС‚СЃСЏ `_<remnawave_short_id>`.
         """
         base = self.format_remnawave_username(
             full_name=full_name,
@@ -1733,12 +1811,12 @@ class Settings(BaseSettings):
         )
         result = f'{base}{suffix}'
         if len(result) > self.REMNAWAVE_USERNAME_MAX_LENGTH:
-            # Suffix критичен (уникален per-subscription) — режем base.
-            # max(0, ...) защищает от ситуации, когда suffix сам длиннее лимита:
-            # без флора base[:-N] молча возвращал бы хвост строки.
+            # Suffix РєСЂРёС‚РёС‡РµРЅ (СѓРЅРёРєР°Р»РµРЅ per-subscription) вЂ” СЂРµР¶РµРј base.
+            # max(0, ...) Р·Р°С‰РёС‰Р°РµС‚ РѕС‚ СЃРёС‚СѓР°С†РёРё, РєРѕРіРґР° suffix СЃР°Рј РґР»РёРЅРЅРµРµ Р»РёРјРёС‚Р°:
+            # Р±РµР· С„Р»РѕСЂР° base[:-N] РјРѕР»С‡Р° РІРѕР·РІСЂР°С‰Р°Р» Р±С‹ С…РІРѕСЃС‚ СЃС‚СЂРѕРєРё.
             keep_for_base = max(0, self.REMNAWAVE_USERNAME_MAX_LENGTH - len(suffix))
             result = f'{base[:keep_for_base].rstrip("_-")}{suffix}'
-            # Final clamp на случай, когда suffix всё-таки превышает лимит.
+            # Final clamp РЅР° СЃР»СѓС‡Р°Р№, РєРѕРіРґР° suffix РІСЃС‘-С‚Р°РєРё РїСЂРµРІС‹С€Р°РµС‚ Р»РёРјРёС‚.
             result = result[: self.REMNAWAVE_USERNAME_MAX_LENGTH]
         return result
 
@@ -1786,37 +1864,37 @@ class Settings(BaseSettings):
         )
 
     def get_traffic_monitored_nodes(self) -> list[str]:
-        """Возвращает список UUID нод для мониторинга (пусто = все)"""
+        """Р’РѕР·РІСЂР°С‰Р°РµС‚ СЃРїРёСЃРѕРє UUID РЅРѕРґ РґР»СЏ РјРѕРЅРёС‚РѕСЂРёРЅРіР° (РїСѓСЃС‚Рѕ = РІСЃРµ)"""
         if not self.TRAFFIC_MONITORED_NODES:
             return []
-        # Убираем комментарии (все после #)
+        # РЈР±РёСЂР°РµРј РєРѕРјРјРµРЅС‚Р°СЂРёРё (РІСЃРµ РїРѕСЃР»Рµ #)
         value = self.TRAFFIC_MONITORED_NODES.split('#')[0].strip()
         if not value:
             return []
         return [n.strip() for n in value.split(',') if n.strip()]
 
     def get_traffic_ignored_nodes(self) -> list[str]:
-        """Возвращает список UUID нод для исключения из мониторинга"""
+        """Р’РѕР·РІСЂР°С‰Р°РµС‚ СЃРїРёСЃРѕРє UUID РЅРѕРґ РґР»СЏ РёСЃРєР»СЋС‡РµРЅРёСЏ РёР· РјРѕРЅРёС‚РѕСЂРёРЅРіР°"""
         if not self.TRAFFIC_IGNORED_NODES:
             return []
-        # Убираем комментарии (все после #)
+        # РЈР±РёСЂР°РµРј РєРѕРјРјРµРЅС‚Р°СЂРёРё (РІСЃРµ РїРѕСЃР»Рµ #)
         value = self.TRAFFIC_IGNORED_NODES.split('#')[0].strip()
         if not value:
             return []
         return [n.strip() for n in value.split(',') if n.strip()]
 
     def get_traffic_excluded_user_uuids(self) -> list[str]:
-        """Возвращает список UUID пользователей для исключения из мониторинга (например, тунельные/служебные)"""
+        """Р’РѕР·РІСЂР°С‰Р°РµС‚ СЃРїРёСЃРѕРє UUID РїРѕР»СЊР·РѕРІР°С‚РµР»РµР№ РґР»СЏ РёСЃРєР»СЋС‡РµРЅРёСЏ РёР· РјРѕРЅРёС‚РѕСЂРёРЅРіР° (РЅР°РїСЂРёРјРµСЂ, С‚СѓРЅРµР»СЊРЅС‹Рµ/СЃР»СѓР¶РµР±РЅС‹Рµ)"""
         if not self.TRAFFIC_EXCLUDED_USER_UUIDS:
             return []
-        # Убираем комментарии (все после #)
+        # РЈР±РёСЂР°РµРј РєРѕРјРјРµРЅС‚Р°СЂРёРё (РІСЃРµ РїРѕСЃР»Рµ #)
         value = self.TRAFFIC_EXCLUDED_USER_UUIDS.split('#')[0].strip()
         if not value:
             return []
         return [uuid.strip().lower() for uuid in value.split(',') if uuid.strip()]
 
     def get_traffic_daily_check_time(self) -> time | None:
-        """Возвращает время суточной проверки трафика"""
+        """Р’РѕР·РІСЂР°С‰Р°РµС‚ РІСЂРµРјСЏ СЃСѓС‚РѕС‡РЅРѕР№ РїСЂРѕРІРµСЂРєРё С‚СЂР°С„РёРєР°"""
         times = self.parse_daily_time_list(self.TRAFFIC_DAILY_CHECK_TIME)
         return times[0] if times else None
 
@@ -1913,17 +1991,17 @@ class Settings(BaseSettings):
 
     def format_price(self, price_kopeks: int, round_kopeks: bool | None = None) -> str:
         """
-        Форматирует цену в копейках для отображения пользователю.
+        Р¤РѕСЂРјР°С‚РёСЂСѓРµС‚ С†РµРЅСѓ РІ РєРѕРїРµР№РєР°С… РґР»СЏ РѕС‚РѕР±СЂР°Р¶РµРЅРёСЏ РїРѕР»СЊР·РѕРІР°С‚РµР»СЋ.
 
         Args:
-            price_kopeks: Сумма в копейках
-            round_kopeks: Если True, округляет копейки (≤50 вниз, >50 вверх).
-                         Если None, использует настройку PRICE_ROUNDING_ENABLED.
+            price_kopeks: РЎСѓРјРјР° РІ РєРѕРїРµР№РєР°С…
+            round_kopeks: Р•СЃР»Рё True, РѕРєСЂСѓРіР»СЏРµС‚ РєРѕРїРµР№РєРё (в‰¤50 РІРЅРёР·, >50 РІРІРµСЂС…).
+                         Р•СЃР»Рё None, РёСЃРїРѕР»СЊР·СѓРµС‚ РЅР°СЃС‚СЂРѕР№РєСѓ PRICE_ROUNDING_ENABLED.
 
         Returns:
-            Отформатированная строка цены (например, "150 ₽")
+            РћС‚С„РѕСЂРјР°С‚РёСЂРѕРІР°РЅРЅР°СЏ СЃС‚СЂРѕРєР° С†РµРЅС‹ (РЅР°РїСЂРёРјРµСЂ, "150 в‚Ѕ")
         """
-        # Используем настройку если не передано явно
+        # РСЃРїРѕР»СЊР·СѓРµРј РЅР°СЃС‚СЂРѕР№РєСѓ РµСЃР»Рё РЅРµ РїРµСЂРµРґР°РЅРѕ СЏРІРЅРѕ
         should_round = round_kopeks if round_kopeks is not None else self.PRICE_ROUNDING_ENABLED
 
         sign = '-' if price_kopeks < 0 else ''
@@ -1931,17 +2009,17 @@ class Settings(BaseSettings):
         rubles, kopeks = divmod(abs_kopeks, 100)
 
         if should_round:
-            # Округление: ≤50 коп вниз, >50 коп вверх
+            # РћРєСЂСѓРіР»РµРЅРёРµ: в‰¤50 РєРѕРї РІРЅРёР·, >50 РєРѕРї РІРІРµСЂС…
             if kopeks > 50:
                 rubles += 1
-            return f'{sign}{rubles} ₽'
+            return f'{sign}{rubles} в‚Ѕ'
 
-        # Без округления - показываем точное значение
+        # Р‘РµР· РѕРєСЂСѓРіР»РµРЅРёСЏ - РїРѕРєР°Р·С‹РІР°РµРј С‚РѕС‡РЅРѕРµ Р·РЅР°С‡РµРЅРёРµ
         if kopeks:
             value = f'{sign}{rubles}.{kopeks:02d}'.rstrip('0').rstrip('.')
-            return f'{value} ₽'
+            return f'{value} в‚Ѕ'
 
-        return f'{sign}{rubles} ₽'
+        return f'{sign}{rubles} в‚Ѕ'
 
     def get_reports_chat_id(self) -> str | None:
         if self.ADMIN_REPORTS_CHAT_ID:
@@ -1964,7 +2042,7 @@ class Settings(BaseSettings):
                 raise ValueError
             return time(hour=hours, minute=minutes)
         except (ValueError, AttributeError):
-            logger.warning('Некорректное значение ADMIN_REPORTS_SEND_TIME', send_time_value=value)
+            logger.warning('РќРµРєРѕСЂСЂРµРєС‚РЅРѕРµ Р·РЅР°С‡РµРЅРёРµ ADMIN_REPORTS_SEND_TIME', send_time_value=value)
             return None
 
     def kopeks_to_rubles(self, kopeks: int) -> float:
@@ -1984,7 +2062,7 @@ class Settings(BaseSettings):
 
         if len(cleaned) > 16:
             logger.warning(
-                'Некорректная длина : максимум 16 символов, получено',
+                'РќРµРєРѕСЂСЂРµРєС‚РЅР°СЏ РґР»РёРЅР° : РјР°РєСЃРёРјСѓРј 16 СЃРёРјРІРѕР»РѕРІ, РїРѕР»СѓС‡РµРЅРѕ',
                 setting_name=setting_name,
                 cleaned_count=len(cleaned),
             )
@@ -1992,7 +2070,7 @@ class Settings(BaseSettings):
 
         if not USER_TAG_PATTERN.fullmatch(cleaned):
             logger.warning(
-                'Некорректный формат : допустимы только A-Z, 0-9 и подчёркивание',
+                'РќРµРєРѕСЂСЂРµРєС‚РЅС‹Р№ С„РѕСЂРјР°С‚ : РґРѕРїСѓСЃС‚РёРјС‹ С‚РѕР»СЊРєРѕ A-Z, 0-9 Рё РїРѕРґС‡С‘СЂРєРёРІР°РЅРёРµ',
                 setting_name=setting_name,
             )
             return None
@@ -2130,11 +2208,11 @@ class Settings(BaseSettings):
         return self.TRAFFIC_SELECTION_MODE.lower() == 'selectable'
 
     def is_traffic_fixed(self) -> bool:
-        """Возвращает True если выбор трафика отключён (fixed или fixed_with_topup)"""
+        """Р’РѕР·РІСЂР°С‰Р°РµС‚ True РµСЃР»Рё РІС‹Р±РѕСЂ С‚СЂР°С„РёРєР° РѕС‚РєР»СЋС‡С‘РЅ (fixed РёР»Рё fixed_with_topup)"""
         return self.TRAFFIC_SELECTION_MODE.lower() in ('fixed', 'fixed_with_topup')
 
     def is_traffic_topup_blocked(self) -> bool:
-        """Возвращает True если докупка трафика полностью заблокирована (только fixed)"""
+        """Р’РѕР·РІСЂР°С‰Р°РµС‚ True РµСЃР»Рё РґРѕРєСѓРїРєР° С‚СЂР°С„РёРєР° РїРѕР»РЅРѕСЃС‚СЊСЋ Р·Р°Р±Р»РѕРєРёСЂРѕРІР°РЅР° (С‚РѕР»СЊРєРѕ fixed)"""
         return self.TRAFFIC_SELECTION_MODE.lower() == 'fixed'
 
     def get_fixed_traffic_limit(self) -> int:
@@ -2144,11 +2222,11 @@ class Settings(BaseSettings):
         return self.TRAFFIC_TOPUP_ENABLED
 
     def get_traffic_topup_packages(self) -> list[dict]:
-        """Возвращает пакеты для докупки трафика. Если не настроены - использует TRAFFIC_PACKAGES_CONFIG."""
+        """Р’РѕР·РІСЂР°С‰Р°РµС‚ РїР°РєРµС‚С‹ РґР»СЏ РґРѕРєСѓРїРєРё С‚СЂР°С„РёРєР°. Р•СЃР»Рё РЅРµ РЅР°СЃС‚СЂРѕРµРЅС‹ - РёСЃРїРѕР»СЊР·СѓРµС‚ TRAFFIC_PACKAGES_CONFIG."""
         config_str = self.TRAFFIC_TOPUP_PACKAGES_CONFIG.strip()
 
         if not config_str:
-            # Если не настроены отдельные пакеты для докупки - используем основные
+            # Р•СЃР»Рё РЅРµ РЅР°СЃС‚СЂРѕРµРЅС‹ РѕС‚РґРµР»СЊРЅС‹Рµ РїР°РєРµС‚С‹ РґР»СЏ РґРѕРєСѓРїРєРё - РёСЃРїРѕР»СЊР·СѓРµРј РѕСЃРЅРѕРІРЅС‹Рµ
             return self.get_traffic_packages()
 
         packages = []
@@ -2170,19 +2248,19 @@ class Settings(BaseSettings):
         return packages or self.get_traffic_packages()
 
     def get_traffic_topup_price(self, gb: int | None) -> int:
-        """Возвращает цену докупки для указанного количества ГБ."""
+        """Р’РѕР·РІСЂР°С‰Р°РµС‚ С†РµРЅСѓ РґРѕРєСѓРїРєРё РґР»СЏ СѓРєР°Р·Р°РЅРЅРѕРіРѕ РєРѕР»РёС‡РµСЃС‚РІР° Р“Р‘."""
         packages = self.get_traffic_topup_packages()
         enabled_packages = [pkg for pkg in packages if pkg['enabled']]
 
         if not enabled_packages:
             return 0
 
-        # Ищем точное совпадение
+        # РС‰РµРј С‚РѕС‡РЅРѕРµ СЃРѕРІРїР°РґРµРЅРёРµ
         for pkg in enabled_packages:
             if pkg['gb'] == gb:
                 return pkg['price']
 
-        # Если не нашли - возвращаем 0
+        # Р•СЃР»Рё РЅРµ РЅР°С€Р»Рё - РІРѕР·РІСЂР°С‰Р°РµРј 0
         return 0
 
     def get_traffic_reset_price_mode(self) -> str:
@@ -2204,7 +2282,7 @@ class Settings(BaseSettings):
             value = int(raw_value)
         except (TypeError, ValueError):
             logger.warning(
-                'Некорректное значение DEVICES_SELECTION_DISABLED_AMOUNT',
+                'РќРµРєРѕСЂСЂРµРєС‚РЅРѕРµ Р·РЅР°С‡РµРЅРёРµ DEVICES_SELECTION_DISABLED_AMOUNT',
                 raw_value=raw_value,
             )
             return None
@@ -2218,39 +2296,39 @@ class Settings(BaseSettings):
         return self.get_devices_selection_disabled_amount()
 
     def is_subscription_revoke_enabled(self) -> bool:
-        """Проверяет, включен ли перевыпуск подписки."""
+        """РџСЂРѕРІРµСЂСЏРµС‚, РІРєР»СЋС‡РµРЅ Р»Рё РїРµСЂРµРІС‹РїСѓСЃРє РїРѕРґРїРёСЃРєРё."""
         return self.SUBSCRIPTION_REVOKE_ENABLED
 
     def is_multi_tariff_enabled(self) -> bool:
-        """Проверяет, включен ли мультитарифный режим."""
+        """РџСЂРѕРІРµСЂСЏРµС‚, РІРєР»СЋС‡РµРЅ Р»Рё РјСѓР»СЊС‚РёС‚Р°СЂРёС„РЅС‹Р№ СЂРµР¶РёРј."""
         return self.MULTI_TARIFF_ENABLED and self.SALES_MODE == 'tariffs'
 
     def get_max_active_subscriptions(self) -> int:
-        """Максимальное число одновременных подписок (>1 только в multi-tariff)."""
+        """РњР°РєСЃРёРјР°Р»СЊРЅРѕРµ С‡РёСЃР»Рѕ РѕРґРЅРѕРІСЂРµРјРµРЅРЅС‹С… РїРѕРґРїРёСЃРѕРє (>1 С‚РѕР»СЊРєРѕ РІ multi-tariff)."""
         return self.MAX_ACTIVE_SUBSCRIPTIONS if self.is_multi_tariff_enabled() else 1
 
     def is_tariffs_mode(self) -> bool:
-        """Проверяет, включен ли режим продаж 'Тарифы'."""
+        """РџСЂРѕРІРµСЂСЏРµС‚, РІРєР»СЋС‡РµРЅ Р»Рё СЂРµР¶РёРј РїСЂРѕРґР°Р¶ 'РўР°СЂРёС„С‹'."""
         return self.SALES_MODE == 'tariffs'
 
     def is_classic_mode(self) -> bool:
-        """Проверяет, включен ли классический режим продаж."""
+        """РџСЂРѕРІРµСЂСЏРµС‚, РІРєР»СЋС‡РµРЅ Р»Рё РєР»Р°СЃСЃРёС‡РµСЃРєРёР№ СЂРµР¶РёРј РїСЂРѕРґР°Р¶."""
         return self.SALES_MODE != 'tariffs'
 
     def get_sales_mode(self) -> str:
-        """Возвращает текущий режим продаж."""
+        """Р’РѕР·РІСЂР°С‰Р°РµС‚ С‚РµРєСѓС‰РёР№ СЂРµР¶РёРј РїСЂРѕРґР°Р¶."""
         return self.SALES_MODE if self.SALES_MODE in ('classic', 'tariffs') else 'tariffs'
 
     def get_trial_tariff_id(self) -> int:
-        """Возвращает ID тарифа для триала (0 = использовать стандартные настройки)."""
+        """Р’РѕР·РІСЂР°С‰Р°РµС‚ ID С‚Р°СЂРёС„Р° РґР»СЏ С‚СЂРёР°Р»Р° (0 = РёСЃРїРѕР»СЊР·РѕРІР°С‚СЊ СЃС‚Р°РЅРґР°СЂС‚РЅС‹Рµ РЅР°СЃС‚СЂРѕР№РєРё)."""
         return max(0, self.TRIAL_TARIFF_ID)
 
     def is_trial_paid_activation_enabled(self) -> bool:
-        # TRIAL_PAYMENT_ENABLED - главный переключатель платной активации
-        # Если выключен - триал бесплатный, независимо от цены
+        # TRIAL_PAYMENT_ENABLED - РіР»Р°РІРЅС‹Р№ РїРµСЂРµРєР»СЋС‡Р°С‚РµР»СЊ РїР»Р°С‚РЅРѕР№ Р°РєС‚РёРІР°С†РёРё
+        # Р•СЃР»Рё РІС‹РєР»СЋС‡РµРЅ - С‚СЂРёР°Р» Р±РµСЃРїР»Р°С‚РЅС‹Р№, РЅРµР·Р°РІРёСЃРёРјРѕ РѕС‚ С†РµРЅС‹
         if not self.TRIAL_PAYMENT_ENABLED:
             return False
-        # Если включен - проверяем что цена > 0
+        # Р•СЃР»Рё РІРєР»СЋС‡РµРЅ - РїСЂРѕРІРµСЂСЏРµРј С‡С‚Рѕ С†РµРЅР° > 0
         return self.TRIAL_ACTIVATION_PRICE > 0
 
     def get_trial_activation_price(self) -> int:
@@ -2258,7 +2336,7 @@ class Settings(BaseSettings):
             value = int(self.TRIAL_ACTIVATION_PRICE)
         except (TypeError, ValueError):
             logger.warning(
-                'Некорректное значение TRIAL_ACTIVATION_PRICE',
+                'РќРµРєРѕСЂСЂРµРєС‚РЅРѕРµ Р·РЅР°С‡РµРЅРёРµ TRIAL_ACTIVATION_PRICE',
                 TRIAL_ACTIVATION_PRICE=self.TRIAL_ACTIVATION_PRICE,
             )
             return 0
@@ -2267,6 +2345,10 @@ class Settings(BaseSettings):
             return 0
 
         return value
+
+    def is_yookassa_configured(self) -> bool:
+        """Р•СЃС‚СЊ Р»Рё СѓС‡С‘С‚РЅС‹Рµ РґР°РЅРЅС‹Рµ РїСЂРѕРІР°Р№РґРµСЂР° вЂ” Р±РµР· СѓС‡С‘С‚Р° С„Р»Р°РіР° РІРєР»СЋС‡РµРЅРёСЏ."""
+        return self.YOOKASSA_SHOP_ID is not None and self.YOOKASSA_SECRET_KEY is not None
 
     def is_yookassa_enabled(self) -> bool:
         return self.YOOKASSA_ENABLED and self.YOOKASSA_SHOP_ID is not None and self.YOOKASSA_SECRET_KEY is not None
@@ -2288,6 +2370,10 @@ class Settings(BaseSettings):
             return f'{self.WEBHOOK_URL}/payment-success'
         return 'https://t.me/'
 
+    def is_cryptobot_configured(self) -> bool:
+        """Р•СЃС‚СЊ Р»Рё СѓС‡С‘С‚РЅС‹Рµ РґР°РЅРЅС‹Рµ РїСЂРѕРІР°Р№РґРµСЂР° вЂ” Р±РµР· СѓС‡С‘С‚Р° С„Р»Р°РіР° РІРєР»СЋС‡РµРЅРёСЏ."""
+        return self.CRYPTOBOT_API_TOKEN is not None
+
     def is_cryptobot_enabled(self) -> bool:
         return self.CRYPTOBOT_ENABLED and self.CRYPTOBOT_API_TOKEN is not None
 
@@ -2295,12 +2381,28 @@ class Settings(BaseSettings):
         name = (self.CRYPTOBOT_DISPLAY_NAME or '').strip()
         return name or 'CryptoBot'
 
+    def is_heleket_configured(self) -> bool:
+        """Р•СЃС‚СЊ Р»Рё СѓС‡С‘С‚РЅС‹Рµ РґР°РЅРЅС‹Рµ РїСЂРѕРІР°Р№РґРµСЂР° вЂ” Р±РµР· СѓС‡С‘С‚Р° С„Р»Р°РіР° РІРєР»СЋС‡РµРЅРёСЏ."""
+        return self.HELEKET_MERCHANT_ID is not None and self.HELEKET_API_KEY is not None
+
     def is_heleket_enabled(self) -> bool:
         return self.HELEKET_ENABLED and self.HELEKET_MERCHANT_ID is not None and self.HELEKET_API_KEY is not None
 
     def get_heleket_display_name(self) -> str:
         name = (self.HELEKET_DISPLAY_NAME or '').strip()
         return name or 'Heleket Crypto'
+
+    def is_mulenpay_configured(self) -> bool:
+        """Р•СЃС‚СЊ Р»Рё СѓС‡С‘С‚РЅС‹Рµ РґР°РЅРЅС‹Рµ РїСЂРѕРІР°Р№РґРµСЂР° вЂ” Р±РµР· СѓС‡С‘С‚Р° С„Р»Р°РіР° РІРєР»СЋС‡РµРЅРёСЏ."""
+        return (
+            self.MULENPAY_API_KEY is not None
+            and self.MULENPAY_SECRET_KEY is not None
+            and self.MULENPAY_SHOP_ID is not None
+        )
+
+    def is_tribute_configured(self) -> bool:
+        """Р•СЃС‚СЊ Р»Рё СѓС‡С‘С‚РЅС‹Рµ РґР°РЅРЅС‹Рµ РїСЂРѕРІР°Р№РґРµСЂР° вЂ” Р±РµР· СѓС‡С‘С‚Р° С„Р»Р°РіР° РІРєР»СЋС‡РµРЅРёСЏ."""
+        return bool(self.TRIBUTE_API_KEY)
 
     def is_mulenpay_enabled(self) -> bool:
         return (
@@ -2333,12 +2435,20 @@ class Settings(BaseSettings):
             return f'{parsed.scheme}://{parsed.netloc}'
         return None
 
+    def is_pal24_configured(self) -> bool:
+        """Р•СЃС‚СЊ Р»Рё СѓС‡С‘С‚РЅС‹Рµ РґР°РЅРЅС‹Рµ РїСЂРѕРІР°Р№РґРµСЂР° вЂ” Р±РµР· СѓС‡С‘С‚Р° С„Р»Р°РіР° РІРєР»СЋС‡РµРЅРёСЏ."""
+        return self.PAL24_API_TOKEN is not None and self.PAL24_SHOP_ID is not None
+
     def is_pal24_enabled(self) -> bool:
         return self.PAL24_ENABLED and self.PAL24_API_TOKEN is not None and self.PAL24_SHOP_ID is not None
 
     def get_pal24_display_name(self) -> str:
         name = (self.PAL24_DISPLAY_NAME or '').strip()
         return name or 'PAL24'
+
+    def is_platega_configured(self) -> bool:
+        """Р•СЃС‚СЊ Р»Рё СѓС‡С‘С‚РЅС‹Рµ РґР°РЅРЅС‹Рµ РїСЂРѕРІР°Р№РґРµСЂР° вЂ” Р±РµР· СѓС‡С‘С‚Р° С„Р»Р°РіР° РІРєР»СЋС‡РµРЅРёСЏ."""
+        return self.PLATEGA_MERCHANT_ID is not None and self.PLATEGA_SECRET is not None
 
     def is_platega_enabled(self) -> bool:
         return self.PLATEGA_ENABLED and self.PLATEGA_MERCHANT_ID is not None and self.PLATEGA_SECRET is not None
@@ -2381,7 +2491,7 @@ class Settings(BaseSettings):
             try:
                 method_code = int(part)
             except ValueError:
-                logger.warning('Некорректный код метода Platega', part=part)
+                logger.warning('РќРµРєРѕСЂСЂРµРєС‚РЅС‹Р№ РєРѕРґ РјРµС‚РѕРґР° Platega', part=part)
                 continue
             if method_code in {2, 11, 12, 13} and method_code not in seen:
                 methods.append(method_code)
@@ -2396,24 +2506,24 @@ class Settings(BaseSettings):
     def get_platega_method_definitions() -> dict[int, dict[str, str]]:
         return {
             2: {
-                'name': 'СБП (QR)',
-                'title': "<tg-emoji emoji-id='5886306834410640699'>🆕</tg-emoji> СБП (QR)",
+                'name': 'РЎР‘Рџ (QR)',
+                'title': "<tg-emoji emoji-id='5886306834410640699'>рџ†•</tg-emoji> РЎР‘Рџ (QR)",
             },
             10: {
-                'name': 'Банковские карты (RUB)',
-                'title': "<tg-emoji emoji-id='5927169041595634481'>💳</tg-emoji> Карты (RUB)",
+                'name': 'Р‘Р°РЅРєРѕРІСЃРєРёРµ РєР°СЂС‚С‹ (RUB)',
+                'title': "<tg-emoji emoji-id='5927169041595634481'>рџ’і</tg-emoji> РљР°СЂС‚С‹ (RUB)",
             },
             11: {
-                'name': 'Карты (RUB)',
-                'title': "<tg-emoji emoji-id='5927169041595634481'>💳</tg-emoji> Карты (RUB)",
+                'name': 'РљР°СЂС‚С‹ (RUB)',
+                'title': "<tg-emoji emoji-id='5927169041595634481'>рџ’і</tg-emoji> РљР°СЂС‚С‹ (RUB)",
             },
             12: {
-                'name': 'Международные карты',
-                'title': "<tg-emoji emoji-id='5927169041595634481'>💳</tg-emoji> Международные карты",
+                'name': 'РњРµР¶РґСѓРЅР°СЂРѕРґРЅС‹Рµ РєР°СЂС‚С‹',
+                'title': "<tg-emoji emoji-id='5927169041595634481'>рџ’і</tg-emoji> РњРµР¶РґСѓРЅР°СЂРѕРґРЅС‹Рµ РєР°СЂС‚С‹",
             },
             13: {
-                'name': 'Криптовалюта',
-                'title': "<tg-emoji emoji-id='5771755323572359189'>💎</tg-emoji> Криптовалюта",
+                'name': 'РљСЂРёРїС‚РѕРІР°Р»СЋС‚Р°',
+                'title': "<tg-emoji emoji-id='5771755323572359189'>рџ’Ћ</tg-emoji> РљСЂРёРїС‚РѕРІР°Р»СЋС‚Р°",
             },
         }
 
@@ -2422,7 +2532,7 @@ class Settings(BaseSettings):
         info = definitions.get(method_code)
         if info and info.get('name'):
             return info['name']
-        return f'Метод {method_code}'
+        return f'РњРµС‚РѕРґ {method_code}'
 
     def get_platega_method_display_title(self, method_code: int) -> str:
         definitions = self.get_platega_method_definitions()
@@ -2431,12 +2541,20 @@ class Settings(BaseSettings):
             return f'Platega {method_code}'
         return info.get('title') or info.get('name') or f'Platega {method_code}'
 
+    def is_wata_configured(self) -> bool:
+        """Р•СЃС‚СЊ Р»Рё СѓС‡С‘С‚РЅС‹Рµ РґР°РЅРЅС‹Рµ РїСЂРѕРІР°Р№РґРµСЂР° вЂ” Р±РµР· СѓС‡С‘С‚Р° С„Р»Р°РіР° РІРєР»СЋС‡РµРЅРёСЏ."""
+        return self.WATA_ACCESS_TOKEN is not None
+
     def is_wata_enabled(self) -> bool:
         return self.WATA_ENABLED and self.WATA_ACCESS_TOKEN is not None
 
     def get_wata_display_name(self) -> str:
         name = (self.WATA_DISPLAY_NAME or '').strip()
         return name or 'Wata'
+
+    def is_cloudpayments_configured(self) -> bool:
+        """Р•СЃС‚СЊ Р»Рё СѓС‡С‘С‚РЅС‹Рµ РґР°РЅРЅС‹Рµ РїСЂРѕРІР°Р№РґРµСЂР° вЂ” Р±РµР· СѓС‡С‘С‚Р° С„Р»Р°РіР° РІРєР»СЋС‡РµРЅРёСЏ."""
+        return self.CLOUDPAYMENTS_PUBLIC_ID is not None and self.CLOUDPAYMENTS_API_SECRET is not None
 
     def is_cloudpayments_enabled(self) -> bool:
         return (
@@ -2448,6 +2566,15 @@ class Settings(BaseSettings):
     def get_cloudpayments_display_name(self) -> str:
         name = (self.CLOUDPAYMENTS_DISPLAY_NAME or '').strip()
         return name or 'CloudPayments'
+
+    def is_freekassa_configured(self) -> bool:
+        """Р•СЃС‚СЊ Р»Рё СѓС‡С‘С‚РЅС‹Рµ РґР°РЅРЅС‹Рµ РїСЂРѕРІР°Р№РґРµСЂР° вЂ” Р±РµР· СѓС‡С‘С‚Р° С„Р»Р°РіР° РІРєР»СЋС‡РµРЅРёСЏ."""
+        return (
+            self.FREEKASSA_SHOP_ID is not None
+            and self.FREEKASSA_API_KEY is not None
+            and self.FREEKASSA_SECRET_WORD_1 is not None
+            and self.FREEKASSA_SECRET_WORD_2 is not None
+        )
 
     def is_freekassa_enabled(self) -> bool:
         return (
@@ -2470,7 +2597,7 @@ class Settings(BaseSettings):
 
     def get_freekassa_sbp_display_name(self) -> str:
         name = (self.FREEKASSA_SBP_DISPLAY_NAME or '').strip()
-        return name or 'СБП (QR код)'
+        return name or 'РЎР‘Рџ (QR РєРѕРґ)'
 
     def get_freekassa_sbp_display_name_html(self) -> str:
         return html.escape(self.get_freekassa_sbp_display_name())
@@ -2480,10 +2607,18 @@ class Settings(BaseSettings):
 
     def get_freekassa_card_display_name(self) -> str:
         name = (self.FREEKASSA_CARD_DISPLAY_NAME or '').strip()
-        return name or 'Карта РФ'
+        return name or 'РљР°СЂС‚Р° Р Р¤'
 
     def get_freekassa_card_display_name_html(self) -> str:
         return html.escape(self.get_freekassa_card_display_name())
+
+    def is_kassa_ai_configured(self) -> bool:
+        """Р•СЃС‚СЊ Р»Рё СѓС‡С‘С‚РЅС‹Рµ РґР°РЅРЅС‹Рµ РїСЂРѕРІР°Р№РґРµСЂР° вЂ” Р±РµР· СѓС‡С‘С‚Р° С„Р»Р°РіР° РІРєР»СЋС‡РµРЅРёСЏ."""
+        return (
+            self.KASSA_AI_SHOP_ID is not None
+            and self.KASSA_AI_API_KEY is not None
+            and self.KASSA_AI_SECRET_WORD_2 is not None
+        )
 
     def is_kassa_ai_enabled(self) -> bool:
         return (
@@ -2500,6 +2635,10 @@ class Settings(BaseSettings):
     def get_kassa_ai_display_name_html(self) -> str:
         return html.escape(self.get_kassa_ai_display_name())
 
+    def is_riopay_configured(self) -> bool:
+        """Р•СЃС‚СЊ Р»Рё СѓС‡С‘С‚РЅС‹Рµ РґР°РЅРЅС‹Рµ РїСЂРѕРІР°Р№РґРµСЂР° вЂ” Р±РµР· СѓС‡С‘С‚Р° С„Р»Р°РіР° РІРєР»СЋС‡РµРЅРёСЏ."""
+        return self.RIOPAY_API_TOKEN is not None
+
     def is_riopay_enabled(self) -> bool:
         return self.RIOPAY_ENABLED and self.RIOPAY_API_TOKEN is not None
 
@@ -2510,6 +2649,10 @@ class Settings(BaseSettings):
     def get_riopay_display_name_html(self) -> str:
         return html.escape(self.get_riopay_display_name())
 
+    def is_severpay_configured(self) -> bool:
+        """Р•СЃС‚СЊ Р»Рё СѓС‡С‘С‚РЅС‹Рµ РґР°РЅРЅС‹Рµ РїСЂРѕРІР°Р№РґРµСЂР° вЂ” Р±РµР· СѓС‡С‘С‚Р° С„Р»Р°РіР° РІРєР»СЋС‡РµРЅРёСЏ."""
+        return self.SEVERPAY_MID is not None and self.SEVERPAY_TOKEN is not None
+
     def is_severpay_enabled(self) -> bool:
         return self.SEVERPAY_ENABLED and self.SEVERPAY_MID is not None and self.SEVERPAY_TOKEN is not None
 
@@ -2519,6 +2662,19 @@ class Settings(BaseSettings):
 
     def get_severpay_display_name_html(self) -> str:
         return html.escape(self.get_severpay_display_name())
+
+    def is_apple_iap_configured(self) -> bool:
+        """Р•СЃС‚СЊ Р»Рё СѓС‡С‘С‚РЅС‹Рµ РґР°РЅРЅС‹Рµ РїСЂРѕРІР°Р№РґРµСЂР° вЂ” Р±РµР· СѓС‡С‘С‚Р° С„Р»Р°РіР° РІРєР»СЋС‡РµРЅРёСЏ."""
+        environment = self.get_apple_iap_environment()
+        return (
+            bool((self.APPLE_IAP_KEY_ID or '').strip())
+            and bool((self.APPLE_IAP_ISSUER_ID or '').strip())
+            and bool((self.APPLE_IAP_BUNDLE_ID or '').strip())
+            and environment in {'Sandbox', 'Production'}
+            and (environment != 'Production' or self.APPLE_IAP_APP_APPLE_ID is not None)
+            and bool(self.get_apple_iap_root_cert_paths())
+            and bool(self.get_apple_iap_private_key())
+        )
 
     def is_apple_iap_enabled(self) -> bool:
         environment = self.get_apple_iap_environment()
@@ -2581,6 +2737,10 @@ class Settings(BaseSettings):
                 return None
         return None
 
+    def is_paypear_configured(self) -> bool:
+        """Р•СЃС‚СЊ Р»Рё СѓС‡С‘С‚РЅС‹Рµ РґР°РЅРЅС‹Рµ РїСЂРѕРІР°Р№РґРµСЂР° вЂ” Р±РµР· СѓС‡С‘С‚Р° С„Р»Р°РіР° РІРєР»СЋС‡РµРЅРёСЏ."""
+        return self.PAYPEAR_SHOP_ID is not None and self.PAYPEAR_SECRET_KEY is not None
+
     def is_paypear_enabled(self) -> bool:
         return self.PAYPEAR_ENABLED and self.PAYPEAR_SHOP_ID is not None and self.PAYPEAR_SECRET_KEY is not None
 
@@ -2591,6 +2751,10 @@ class Settings(BaseSettings):
     def get_paypear_display_name_html(self) -> str:
         return html.escape(self.get_paypear_display_name())
 
+    def is_rollypay_configured(self) -> bool:
+        """Р•СЃС‚СЊ Р»Рё СѓС‡С‘С‚РЅС‹Рµ РґР°РЅРЅС‹Рµ РїСЂРѕРІР°Р№РґРµСЂР° вЂ” Р±РµР· СѓС‡С‘С‚Р° С„Р»Р°РіР° РІРєР»СЋС‡РµРЅРёСЏ."""
+        return self.ROLLYPAY_API_KEY is not None and self.ROLLYPAY_SIGNING_SECRET is not None
+
     def is_rollypay_enabled(self) -> bool:
         return self.ROLLYPAY_ENABLED and self.ROLLYPAY_API_KEY is not None and self.ROLLYPAY_SIGNING_SECRET is not None
 
@@ -2600,6 +2764,14 @@ class Settings(BaseSettings):
 
     def get_rollypay_display_name_html(self) -> str:
         return html.escape(self.get_rollypay_display_name())
+
+    def is_overpay_configured(self) -> bool:
+        """Р•СЃС‚СЊ Р»Рё СѓС‡С‘С‚РЅС‹Рµ РґР°РЅРЅС‹Рµ РїСЂРѕРІР°Р№РґРµСЂР° вЂ” Р±РµР· СѓС‡С‘С‚Р° С„Р»Р°РіР° РІРєР»СЋС‡РµРЅРёСЏ."""
+        return (
+            self.OVERPAY_USERNAME is not None
+            and self.OVERPAY_PASSWORD is not None
+            and self.OVERPAY_PROJECT_ID is not None
+        )
 
     def is_overpay_enabled(self) -> bool:
         return (
@@ -2630,6 +2802,14 @@ class Settings(BaseSettings):
     def is_overpay_sbp_direct_qr_enabled(self) -> bool:
         return self.OVERPAY_SBP_DIRECT_QR and bool((self.OVERPAY_SERVER_IP or '').strip())
 
+    def is_aurapay_configured(self) -> bool:
+        """Р•СЃС‚СЊ Р»Рё СѓС‡С‘С‚РЅС‹Рµ РґР°РЅРЅС‹Рµ РїСЂРѕРІР°Р№РґРµСЂР° вЂ” Р±РµР· СѓС‡С‘С‚Р° С„Р»Р°РіР° РІРєР»СЋС‡РµРЅРёСЏ."""
+        return (
+            self.AURAPAY_API_KEY is not None
+            and self.AURAPAY_SHOP_ID is not None
+            and self.AURAPAY_SECRET_KEY is not None
+        )
+
     def is_aurapay_enabled(self) -> bool:
         return (
             self.AURAPAY_ENABLED
@@ -2650,7 +2830,7 @@ class Settings(BaseSettings):
 
     def get_aurapay_sbp_display_name(self) -> str:
         name = (self.AURAPAY_SBP_DISPLAY_NAME or '').strip()
-        return name or 'СБП (AuraPay)'
+        return name or 'РЎР‘Рџ (AuraPay)'
 
     def get_aurapay_sbp_display_name_html(self) -> str:
         return html.escape(self.get_aurapay_sbp_display_name())
@@ -2660,10 +2840,19 @@ class Settings(BaseSettings):
 
     def get_aurapay_card_display_name(self) -> str:
         name = (self.AURAPAY_CARD_DISPLAY_NAME or '').strip()
-        return name or 'Карта (AuraPay)'
+        return name or 'РљР°СЂС‚Р° (AuraPay)'
 
     def get_aurapay_card_display_name_html(self) -> str:
         return html.escape(self.get_aurapay_card_display_name())
+
+    def is_antilopay_configured(self) -> bool:
+        """Р•СЃС‚СЊ Р»Рё СѓС‡С‘С‚РЅС‹Рµ РґР°РЅРЅС‹Рµ РїСЂРѕРІР°Р№РґРµСЂР° вЂ” Р±РµР· СѓС‡С‘С‚Р° С„Р»Р°РіР° РІРєР»СЋС‡РµРЅРёСЏ."""
+        return (
+            self.ANTILOPAY_SECRET_ID is not None
+            and self.ANTILOPAY_PRIVATE_KEY is not None
+            and self.ANTILOPAY_PUBLIC_KEY is not None
+            and self.ANTILOPAY_PROJECT_ID is not None
+        )
 
     def is_antilopay_enabled(self) -> bool:
         return (
@@ -2686,7 +2875,7 @@ class Settings(BaseSettings):
 
     def get_antilopay_sbp_display_name(self) -> str:
         name = (self.ANTILOPAY_SBP_DISPLAY_NAME or '').strip()
-        return name or 'СБП (Antilopay)'
+        return name or 'РЎР‘Рџ (Antilopay)'
 
     def get_antilopay_sbp_display_name_html(self) -> str:
         return html.escape(self.get_antilopay_sbp_display_name())
@@ -2696,7 +2885,7 @@ class Settings(BaseSettings):
 
     def get_antilopay_card_display_name(self) -> str:
         name = (self.ANTILOPAY_CARD_DISPLAY_NAME or '').strip()
-        return name or 'Карта (Antilopay)'
+        return name or 'РљР°СЂС‚Р° (Antilopay)'
 
     def get_antilopay_card_display_name_html(self) -> str:
         return html.escape(self.get_antilopay_card_display_name())
@@ -2710,6 +2899,10 @@ class Settings(BaseSettings):
 
     def get_antilopay_sberpay_display_name_html(self) -> str:
         return html.escape(self.get_antilopay_sberpay_display_name())
+
+    def is_jupiter_configured(self) -> bool:
+        """Р•СЃС‚СЊ Р»Рё СѓС‡С‘С‚РЅС‹Рµ РґР°РЅРЅС‹Рµ РїСЂРѕРІР°Р№РґРµСЂР° вЂ” Р±РµР· СѓС‡С‘С‚Р° С„Р»Р°РіР° РІРєР»СЋС‡РµРЅРёСЏ."""
+        return self.JUPITER_TOKEN is not None and self.JUPITER_SECRET is not None
 
     def is_jupiter_enabled(self) -> bool:
         return self.JUPITER_ENABLED and self.JUPITER_TOKEN is not None and self.JUPITER_SECRET is not None
@@ -2726,10 +2919,50 @@ class Settings(BaseSettings):
 
     def get_jupiter_sbp_display_name(self) -> str:
         name = (self.JUPITER_SBP_DISPLAY_NAME or '').strip()
-        return name or 'СБП (Jupiter)'
+        return name or 'РЎР‘Рџ (Jupiter)'
 
     def get_jupiter_sbp_display_name_html(self) -> str:
         return html.escape(self.get_jupiter_sbp_display_name())
+
+    def is_cispay_configured(self) -> bool:
+        """Р•СЃС‚СЊ Р»Рё СѓС‡С‘С‚РЅС‹Рµ РґР°РЅРЅС‹Рµ РїСЂРѕРІР°Р№РґРµСЂР° вЂ” Р±РµР· СѓС‡С‘С‚Р° С„Р»Р°РіР° РІРєР»СЋС‡РµРЅРёСЏ."""
+        return bool(self.CISPAY_SHOP_ID and self.CISPAY_API_KEY)
+
+    def is_cispay_enabled(self) -> bool:
+        # РџСѓСЃС‚Р°СЏ СЃС‚СЂРѕРєР° С‚Р°Рє Р¶Рµ РЅРµРїСЂРёРіРѕРґРЅР°, РєР°Рє None: СЃ РїСѓСЃС‚С‹Рј РєР»СЋС‡РѕРј HMAC РІРµР±С…СѓРєР°
+        # С‚СЂРёРІРёР°Р»СЊРЅРѕ РїРѕРґРґРµР»С‹РІР°РµС‚СЃСЏ, РїРѕСЌС‚РѕРјСѓ РІРєР»СЋС‡Р°РµРј С‚РѕР»СЊРєРѕ РїСЂРё РЅРµРїСѓСЃС‚С‹С… Р·РЅР°С‡РµРЅРёСЏС….
+        return bool(self.CISPAY_ENABLED and self.CISPAY_SHOP_ID and self.CISPAY_API_KEY)
+
+    def get_cispay_display_name(self) -> str:
+        name = (self.CISPAY_DISPLAY_NAME or '').strip()
+        return name or 'CisPay'
+
+    def get_cispay_display_name_html(self) -> str:
+        return html.escape(self.get_cispay_display_name())
+
+    def is_cispay_card_enabled(self) -> bool:
+        return self.CISPAY_CARD_ENABLED and self.is_cispay_enabled()
+
+    def get_cispay_card_display_name(self) -> str:
+        name = (self.CISPAY_CARD_DISPLAY_NAME or '').strip()
+        return name or 'РљР°СЂС‚Р° (CisPay)'
+
+    def get_cispay_card_display_name_html(self) -> str:
+        return html.escape(self.get_cispay_card_display_name())
+
+    def is_cispay_sbp_enabled(self) -> bool:
+        return self.CISPAY_SBP_ENABLED and self.is_cispay_enabled()
+
+    def get_cispay_sbp_display_name(self) -> str:
+        name = (self.CISPAY_SBP_DISPLAY_NAME or '').strip()
+        return name or 'РЎР‘Рџ (CisPay)'
+
+    def get_cispay_sbp_display_name_html(self) -> str:
+        return html.escape(self.get_cispay_sbp_display_name())
+
+    def is_donut_configured(self) -> bool:
+        """Р•СЃС‚СЊ Р»Рё СѓС‡С‘С‚РЅС‹Рµ РґР°РЅРЅС‹Рµ РїСЂРѕРІР°Р№РґРµСЂР° вЂ” Р±РµР· СѓС‡С‘С‚Р° С„Р»Р°РіР° РІРєР»СЋС‡РµРЅРёСЏ."""
+        return self.DONUT_TOKEN is not None and self.DONUT_SECRET is not None
 
     def is_donut_enabled(self) -> bool:
         return self.DONUT_ENABLED and self.DONUT_TOKEN is not None and self.DONUT_SECRET is not None
@@ -2746,7 +2979,7 @@ class Settings(BaseSettings):
 
     def get_donut_card_display_name(self) -> str:
         name = (self.DONUT_CARD_DISPLAY_NAME or '').strip()
-        return name or 'Карта (Donut)'
+        return name or 'РљР°СЂС‚Р° (Donut)'
 
     def get_donut_card_display_name_html(self) -> str:
         return html.escape(self.get_donut_card_display_name())
@@ -2756,7 +2989,7 @@ class Settings(BaseSettings):
 
     def get_donut_sbp_display_name(self) -> str:
         name = (self.DONUT_SBP_DISPLAY_NAME or '').strip()
-        return name or 'СБП (Donut)'
+        return name or 'РЎР‘Рџ (Donut)'
 
     def get_donut_sbp_display_name_html(self) -> str:
         return html.escape(self.get_donut_sbp_display_name())
@@ -2766,10 +2999,16 @@ class Settings(BaseSettings):
 
     def get_donut_sbp_qr_display_name(self) -> str:
         name = (self.DONUT_SBP_QR_DISPLAY_NAME or '').strip()
-        return name or 'СБП QR (Donut)'
+        return name or 'РЎР‘Рџ QR (Donut)'
 
     def get_donut_sbp_qr_display_name_html(self) -> str:
         return html.escape(self.get_donut_sbp_qr_display_name())
+
+    def is_lava_configured(self) -> bool:
+        """Р•СЃС‚СЊ Р»Рё СѓС‡С‘С‚РЅС‹Рµ РґР°РЅРЅС‹Рµ РїСЂРѕРІР°Р№РґРµСЂР° вЂ” Р±РµР· СѓС‡С‘С‚Р° С„Р»Р°РіР° РІРєР»СЋС‡РµРЅРёСЏ."""
+        return (
+            self.LAVA_SHOP_ID is not None and self.LAVA_SECRET_KEY is not None and self.LAVA_WEBHOOK_SECRET is not None
+        )
 
     def is_lava_enabled(self) -> bool:
         return (
@@ -2794,7 +3033,7 @@ class Settings(BaseSettings):
 
     def get_lava_card_display_name(self) -> str:
         name = (self.LAVA_CARD_DISPLAY_NAME or '').strip()
-        return name or 'Карта (Lava)'
+        return name or 'РљР°СЂС‚Р° (Lava)'
 
     def get_lava_card_display_name_html(self) -> str:
         return html.escape(self.get_lava_card_display_name())
@@ -2804,7 +3043,7 @@ class Settings(BaseSettings):
 
     def get_lava_sbp_display_name(self) -> str:
         name = (self.LAVA_SBP_DISPLAY_NAME or '').strip()
-        return name or 'СБП (Lava)'
+        return name or 'РЎР‘Рџ (Lava)'
 
     def get_lava_sbp_display_name_html(self) -> str:
         return html.escape(self.get_lava_sbp_display_name())
@@ -2824,7 +3063,7 @@ class Settings(BaseSettings):
 
     def get_cispay_card_display_name(self) -> str:
         name = (self.CISPAY_CARD_DISPLAY_NAME or '').strip()
-        return name or 'Карта (CisPay)'
+        return name or 'РљР°СЂС‚Р° (CisPay)'
 
     def get_cispay_card_display_name_html(self) -> str:
         return html.escape(self.get_cispay_card_display_name())
@@ -2834,10 +3073,14 @@ class Settings(BaseSettings):
 
     def get_cispay_sbp_display_name(self) -> str:
         name = (self.CISPAY_SBP_DISPLAY_NAME or '').strip()
-        return name or 'СБП (CisPay)'
+        return name or 'РЎР‘Рџ (CisPay)'
 
     def get_cispay_sbp_display_name_html(self) -> str:
         return html.escape(self.get_cispay_sbp_display_name())
+
+    def is_etoplatezhi_configured(self) -> bool:
+        """Р•СЃС‚СЊ Р»Рё СѓС‡С‘С‚РЅС‹Рµ РґР°РЅРЅС‹Рµ РїСЂРѕРІР°Р№РґРµСЂР° вЂ” Р±РµР· СѓС‡С‘С‚Р° С„Р»Р°РіР° РІРєР»СЋС‡РµРЅРёСЏ."""
+        return self.ETOPLATEZHI_PROJECT_ID is not None and self.ETOPLATEZHI_SECRET_KEY is not None
 
     def is_etoplatezhi_enabled(self) -> bool:
         return (
@@ -2858,7 +3101,7 @@ class Settings(BaseSettings):
 
     def get_etoplatezhi_sbp_display_name(self) -> str:
         name = (self.ETOPLATEZHI_SBP_DISPLAY_NAME or '').strip()
-        return name or 'СБП (Etoplatezhi)'
+        return name or 'РЎР‘Рџ (Etoplatezhi)'
 
     def get_etoplatezhi_sbp_display_name_html(self) -> str:
         return html.escape(self.get_etoplatezhi_sbp_display_name())
@@ -2868,7 +3111,7 @@ class Settings(BaseSettings):
 
     def get_etoplatezhi_card_display_name(self) -> str:
         name = (self.ETOPLATEZHI_CARD_DISPLAY_NAME or '').strip()
-        return name or 'Карта (Etoplatezhi)'
+        return name or 'РљР°СЂС‚Р° (Etoplatezhi)'
 
     def get_etoplatezhi_card_display_name_html(self) -> str:
         return html.escape(self.get_etoplatezhi_card_display_name())
@@ -2878,7 +3121,7 @@ class Settings(BaseSettings):
 
     def get_kassa_ai_sbp_display_name(self) -> str:
         name = (self.KASSA_AI_SBP_DISPLAY_NAME or '').strip()
-        return name or 'СБП (KassaAI)'
+        return name or 'РЎР‘Рџ (KassaAI)'
 
     def get_kassa_ai_sbp_display_name_html(self) -> str:
         return html.escape(self.get_kassa_ai_sbp_display_name())
@@ -2888,7 +3131,7 @@ class Settings(BaseSettings):
 
     def get_kassa_ai_card_display_name(self) -> str:
         name = (self.KASSA_AI_CARD_DISPLAY_NAME or '').strip()
-        return name or 'Карта (KassaAI)'
+        return name or 'РљР°СЂС‚Р° (KassaAI)'
 
     def get_kassa_ai_card_display_name_html(self) -> str:
         return html.escape(self.get_kassa_ai_card_display_name())
@@ -2912,12 +3155,12 @@ class Settings(BaseSettings):
         except (
             TypeError,
             ValueError,
-        ):  # pragma: no cover - защитная проверка конфигурации
+        ):  # pragma: no cover - Р·Р°С‰РёС‚РЅР°СЏ РїСЂРѕРІРµСЂРєР° РєРѕРЅС„РёРіСѓСЂР°С†РёРё
             minutes = 10
 
         if minutes <= 0:
             logger.warning(
-                'Некорректный интервал автопроверки платежей: . Используется значение по умолчанию 10 минут.',
+                'РќРµРєРѕСЂСЂРµРєС‚РЅС‹Р№ РёРЅС‚РµСЂРІР°Р» Р°РІС‚РѕРїСЂРѕРІРµСЂРєРё РїР»Р°С‚РµР¶РµР№: . РСЃРїРѕР»СЊР·СѓРµС‚СЃСЏ Р·РЅР°С‡РµРЅРёРµ РїРѕ СѓРјРѕР»С‡Р°РЅРёСЋ 10 РјРёРЅСѓС‚.',
                 PAYMENT_VERIFICATION_AUTO_CHECK_INTERVAL_MINUTES=self.PAYMENT_VERIFICATION_AUTO_CHECK_INTERVAL_MINUTES,
             )
             return 10
@@ -3066,12 +3309,12 @@ class Settings(BaseSettings):
 
     def get_available_subscription_periods(self) -> list[int]:
         """
-        Возвращает доступные периоды подписки.
-        Использует AVAILABLE_SUBSCRIPTION_PERIODS для фильтрации.
-        Не фильтрует по цене, т.к. в режиме classic базовая цена может быть 0.
+        Р’РѕР·РІСЂР°С‰Р°РµС‚ РґРѕСЃС‚СѓРїРЅС‹Рµ РїРµСЂРёРѕРґС‹ РїРѕРґРїРёСЃРєРё.
+        РСЃРїРѕР»СЊР·СѓРµС‚ AVAILABLE_SUBSCRIPTION_PERIODS РґР»СЏ С„РёР»СЊС‚СЂР°С†РёРё.
+        РќРµ С„РёР»СЊС‚СЂСѓРµС‚ РїРѕ С†РµРЅРµ, С‚.Рє. РІ СЂРµР¶РёРјРµ classic Р±Р°Р·РѕРІР°СЏ С†РµРЅР° РјРѕР¶РµС‚ Р±С‹С‚СЊ 0.
         """
 
-        # Получаем разрешённые периоды из настройки
+        # РџРѕР»СѓС‡Р°РµРј СЂР°Р·СЂРµС€С‘РЅРЅС‹Рµ РїРµСЂРёРѕРґС‹ РёР· РЅР°СЃС‚СЂРѕР№РєРё
         try:
             periods_str = self.AVAILABLE_SUBSCRIPTION_PERIODS
             if not periods_str or not periods_str.strip():
@@ -3085,19 +3328,19 @@ class Settings(BaseSettings):
         except (ValueError, AttributeError):
             allowed_periods = {14, 30, 60, 90, 180, 360}
 
-        # Возвращаем только разрешённые периоды (без фильтрации по цене,
-        # т.к. в режиме classic цена складывается из серверов/трафика/устройств)
+        # Р’РѕР·РІСЂР°С‰Р°РµРј С‚РѕР»СЊРєРѕ СЂР°Р·СЂРµС€С‘РЅРЅС‹Рµ РїРµСЂРёРѕРґС‹ (Р±РµР· С„РёР»СЊС‚СЂР°С†РёРё РїРѕ С†РµРЅРµ,
+        # С‚.Рє. РІ СЂРµР¶РёРјРµ classic С†РµРЅР° СЃРєР»Р°РґС‹РІР°РµС‚СЃСЏ РёР· СЃРµСЂРІРµСЂРѕРІ/С‚СЂР°С„РёРєР°/СѓСЃС‚СЂРѕР№СЃС‚РІ)
         periods = sorted(allowed_periods)
 
         return periods or [30, 90, 180]
 
     def get_available_renewal_periods(self) -> list[int]:
         """
-        Возвращает доступные периоды продления.
-        Использует AVAILABLE_RENEWAL_PERIODS для фильтрации.
-        Не фильтрует по цене, т.к. в режиме classic базовая цена может быть 0.
+        Р’РѕР·РІСЂР°С‰Р°РµС‚ РґРѕСЃС‚СѓРїРЅС‹Рµ РїРµСЂРёРѕРґС‹ РїСЂРѕРґР»РµРЅРёСЏ.
+        РСЃРїРѕР»СЊР·СѓРµС‚ AVAILABLE_RENEWAL_PERIODS РґР»СЏ С„РёР»СЊС‚СЂР°С†РёРё.
+        РќРµ С„РёР»СЊС‚СЂСѓРµС‚ РїРѕ С†РµРЅРµ, С‚.Рє. РІ СЂРµР¶РёРјРµ classic Р±Р°Р·РѕРІР°СЏ С†РµРЅР° РјРѕР¶РµС‚ Р±С‹С‚СЊ 0.
         """
-        # Получаем разрешённые периоды из настройки
+        # РџРѕР»СѓС‡Р°РµРј СЂР°Р·СЂРµС€С‘РЅРЅС‹Рµ РїРµСЂРёРѕРґС‹ РёР· РЅР°СЃС‚СЂРѕР№РєРё
         try:
             periods_str = self.AVAILABLE_RENEWAL_PERIODS
             if not periods_str or not periods_str.strip():
@@ -3111,15 +3354,15 @@ class Settings(BaseSettings):
         except (ValueError, AttributeError):
             allowed_periods = {30, 60, 90, 180, 360}
 
-        # Возвращаем только разрешённые периоды (без фильтрации по цене)
+        # Р’РѕР·РІСЂР°С‰Р°РµРј С‚РѕР»СЊРєРѕ СЂР°Р·СЂРµС€С‘РЅРЅС‹Рµ РїРµСЂРёРѕРґС‹ (Р±РµР· С„РёР»СЊС‚СЂР°С†РёРё РїРѕ С†РµРЅРµ)
         periods = sorted(allowed_periods)
 
         return periods or [30, 90, 180]
 
     def get_configured_subscription_periods(self) -> list[int]:
         """
-        Возвращает настроенные периоды подписки из AVAILABLE_SUBSCRIPTION_PERIODS.
-        БЕЗ фильтрации по ценам - используется для админки.
+        Р’РѕР·РІСЂР°С‰Р°РµС‚ РЅР°СЃС‚СЂРѕРµРЅРЅС‹Рµ РїРµСЂРёРѕРґС‹ РїРѕРґРїРёСЃРєРё РёР· AVAILABLE_SUBSCRIPTION_PERIODS.
+        Р‘Р•Р— С„РёР»СЊС‚СЂР°С†РёРё РїРѕ С†РµРЅР°Рј - РёСЃРїРѕР»СЊР·СѓРµС‚СЃСЏ РґР»СЏ Р°РґРјРёРЅРєРё.
         """
         try:
             periods_str = self.AVAILABLE_SUBSCRIPTION_PERIODS
@@ -3137,8 +3380,8 @@ class Settings(BaseSettings):
 
     def get_configured_renewal_periods(self) -> list[int]:
         """
-        Возвращает настроенные периоды продления из AVAILABLE_RENEWAL_PERIODS.
-        БЕЗ фильтрации по ценам - используется для админки.
+        Р’РѕР·РІСЂР°С‰Р°РµС‚ РЅР°СЃС‚СЂРѕРµРЅРЅС‹Рµ РїРµСЂРёРѕРґС‹ РїСЂРѕРґР»РµРЅРёСЏ РёР· AVAILABLE_RENEWAL_PERIODS.
+        Р‘Р•Р— С„РёР»СЊС‚СЂР°С†РёРё РїРѕ С†РµРЅР°Рј - РёСЃРїРѕР»СЊР·СѓРµС‚СЃСЏ РґР»СЏ Р°РґРјРёРЅРєРё.
         """
         try:
             periods_str = self.AVAILABLE_RENEWAL_PERIODS
@@ -3160,22 +3403,22 @@ class Settings(BaseSettings):
         telegram_user_id: int | None = None,
         user_db_id: int | None = None,
     ) -> str:
-        # Базовое описание
-        description = f'{self.PAYMENT_BALANCE_DESCRIPTION} на {self.format_price(amount_kopeks)}'
+        # Р‘Р°Р·РѕРІРѕРµ РѕРїРёСЃР°РЅРёРµ
+        description = f'{self.PAYMENT_BALANCE_DESCRIPTION} РЅР° {self.format_price(amount_kopeks)}'
 
-        # Добавляем идентификатор пользователя (TG ID приоритет, fallback на DB ID)
+        # Р”РѕР±Р°РІР»СЏРµРј РёРґРµРЅС‚РёС„РёРєР°С‚РѕСЂ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ (TG ID РїСЂРёРѕСЂРёС‚РµС‚, fallback РЅР° DB ID)
         if telegram_user_id is not None:
             description += f' (ID {telegram_user_id})'
         elif user_db_id is not None:
             description += f' (U{user_db_id})'
 
-        # Формируем финальную строку по шаблону
+        # Р¤РѕСЂРјРёСЂСѓРµРј С„РёРЅР°Р»СЊРЅСѓСЋ СЃС‚СЂРѕРєСѓ РїРѕ С€Р°Р±Р»РѕРЅСѓ
         return self.PAYMENT_BALANCE_TEMPLATE.format(service_name=self.PAYMENT_SERVICE_NAME, description=description)
 
     def get_subscription_payment_description(self, period_days: int, amount_kopeks: int) -> str:
         return self.PAYMENT_SUBSCRIPTION_TEMPLATE.format(
             service_name=self.PAYMENT_SERVICE_NAME,
-            description=f'{self.PAYMENT_SUBSCRIPTION_DESCRIPTION} на {period_days} дней',
+            description=f'{self.PAYMENT_SUBSCRIPTION_DESCRIPTION} РЅР° {period_days} РґРЅРµР№',
         )
 
     def get_custom_payment_description(self, description: str) -> str:
@@ -3228,13 +3471,13 @@ class Settings(BaseSettings):
     # === Log Rotation Methods ===
 
     def is_log_rotation_enabled(self) -> bool:
-        """Проверить, включена ли новая система ротации логов."""
+        """РџСЂРѕРІРµСЂРёС‚СЊ, РІРєР»СЋС‡РµРЅР° Р»Рё РЅРѕРІР°СЏ СЃРёСЃС‚РµРјР° СЂРѕС‚Р°С†РёРё Р»РѕРіРѕРІ."""
         return self.LOG_ROTATION_ENABLED
 
     def get_log_rotation_chat_id(self) -> int | None:
-        """Получить ID канала для отправки логов.
+        """РџРѕР»СѓС‡РёС‚СЊ ID РєР°РЅР°Р»Р° РґР»СЏ РѕС‚РїСЂР°РІРєРё Р»РѕРіРѕРІ.
 
-        Если LOG_ROTATION_CHAT_ID не задан, использует BACKUP_SEND_CHAT_ID.
+        Р•СЃР»Рё LOG_ROTATION_CHAT_ID РЅРµ Р·Р°РґР°РЅ, РёСЃРїРѕР»СЊР·СѓРµС‚ BACKUP_SEND_CHAT_ID.
         """
         chat_id = self.LOG_ROTATION_CHAT_ID or self.BACKUP_SEND_CHAT_ID
         if not chat_id:
@@ -3246,9 +3489,9 @@ class Settings(BaseSettings):
             return None
 
     def get_log_rotation_topic_id(self) -> int | None:
-        """Получить ID топика для отправки логов.
+        """РџРѕР»СѓС‡РёС‚СЊ ID С‚РѕРїРёРєР° РґР»СЏ РѕС‚РїСЂР°РІРєРё Р»РѕРіРѕРІ.
 
-        Если LOG_ROTATION_TOPIC_ID не задан, использует BACKUP_SEND_TOPIC_ID.
+        Р•СЃР»Рё LOG_ROTATION_TOPIC_ID РЅРµ Р·Р°РґР°РЅ, РёСЃРїРѕР»СЊР·СѓРµС‚ BACKUP_SEND_TOPIC_ID.
         """
         topic_id = self.LOG_ROTATION_TOPIC_ID
         if topic_id is not None:
@@ -3271,7 +3514,7 @@ class Settings(BaseSettings):
         }
 
     def is_referral_withdrawal_enabled(self) -> bool:
-        """Проверяет, включена ли функция вывода реферального баланса."""
+        """РџСЂРѕРІРµСЂСЏРµС‚, РІРєР»СЋС‡РµРЅР° Р»Рё С„СѓРЅРєС†РёСЏ РІС‹РІРѕРґР° СЂРµС„РµСЂР°Р»СЊРЅРѕРіРѕ Р±Р°Р»Р°РЅСЃР°."""
         return self.is_referral_program_enabled() and self.REFERRAL_WITHDRAWAL_ENABLED
 
     def is_referral_program_enabled(self) -> bool:
@@ -3619,7 +3862,7 @@ class Settings(BaseSettings):
 
         if self.is_cabinet_enabled() and not self.CABINET_JWT_SECRET:
             messages.append(
-                'CABINET_JWT_SECRET is not set — cabinet JWTs are signed with BOT_TOKEN, which is '
+                'CABINET_JWT_SECRET is not set вЂ” cabinet JWTs are signed with BOT_TOKEN, which is '
                 'widely exposed (Telegram API, payment-provider configs). A BOT_TOKEN leak would let '
                 'anyone forge cabinet sessions. Set CABINET_JWT_SECRET to a unique value: '
                 'python -c "import secrets; print(secrets.token_urlsafe(64))"'
@@ -3729,7 +3972,7 @@ class Settings(BaseSettings):
         try:
             ZoneInfo(value)
         except Exception as exc:  # pragma: no cover - defensive validation
-            raise ValueError(f'Некорректный идентификатор часового пояса: {value}') from exc
+            raise ValueError(f'РќРµРєРѕСЂСЂРµРєС‚РЅС‹Р№ РёРґРµРЅС‚РёС„РёРєР°С‚РѕСЂ С‡Р°СЃРѕРІРѕРіРѕ РїРѕСЏСЃР°: {value}') from exc
         return value
 
 
@@ -3745,14 +3988,14 @@ _PERIOD_PRICE_FIELDS: dict[int, str] = {
     360: 'PRICE_360_DAYS',
 }
 
-# Хранилище периодов/цен из БД (приоритет над .env)
+# РҐСЂР°РЅРёР»РёС‰Рµ РїРµСЂРёРѕРґРѕРІ/С†РµРЅ РёР· Р‘Р” (РїСЂРёРѕСЂРёС‚РµС‚ РЅР°Рґ .env)
 _DB_PERIOD_PRICES: dict[int, int] | None = None
 
 
 def set_period_prices_from_db(period_prices: dict[int, int]) -> None:
     """
-    Устанавливает периоды/цены из БД.
-    Вызывается после синхронизации тарифов при запуске бота.
+    РЈСЃС‚Р°РЅР°РІР»РёРІР°РµС‚ РїРµСЂРёРѕРґС‹/С†РµРЅС‹ РёР· Р‘Р”.
+    Р’С‹Р·С‹РІР°РµС‚СЃСЏ РїРѕСЃР»Рµ СЃРёРЅС…СЂРѕРЅРёР·Р°С†РёРё С‚Р°СЂРёС„РѕРІ РїСЂРё Р·Р°РїСѓСЃРєРµ Р±РѕС‚Р°.
     """
     global _DB_PERIOD_PRICES
     _DB_PERIOD_PRICES = period_prices.copy() if period_prices else None
@@ -3760,12 +4003,12 @@ def set_period_prices_from_db(period_prices: dict[int, int]) -> None:
 
 
 def get_db_period_prices() -> dict[int, int] | None:
-    """Возвращает периоды/цены из БД если они загружены."""
+    """Р’РѕР·РІСЂР°С‰Р°РµС‚ РїРµСЂРёРѕРґС‹/С†РµРЅС‹ РёР· Р‘Р” РµСЃР»Рё РѕРЅРё Р·Р°РіСЂСѓР¶РµРЅС‹."""
     return _DB_PERIOD_PRICES
 
 
 def clear_db_period_prices() -> None:
-    """Очищает кеш цен из тарифов (при переключении в classic mode)."""
+    """РћС‡РёС‰Р°РµС‚ РєРµС€ С†РµРЅ РёР· С‚Р°СЂРёС„РѕРІ (РїСЂРё РїРµСЂРµРєР»СЋС‡РµРЅРёРё РІ classic mode)."""
     global _DB_PERIOD_PRICES
     _DB_PERIOD_PRICES = None
 
@@ -3773,16 +4016,16 @@ def clear_db_period_prices() -> None:
 def refresh_period_prices() -> None:
     """
     Rebuild cached period price mapping.
-    В режиме tariffs: приоритет у _DB_PERIOD_PRICES (из таблицы Tariff).
-    В режиме classic: ВСЕГДА используются settings.PRICE_*_DAYS.
+    Р’ СЂРµР¶РёРјРµ tariffs: РїСЂРёРѕСЂРёС‚РµС‚ Сѓ _DB_PERIOD_PRICES (РёР· С‚Р°Р±Р»РёС†С‹ Tariff).
+    Р’ СЂРµР¶РёРјРµ classic: Р’РЎР•Р“Р”Рђ РёСЃРїРѕР»СЊР·СѓСЋС‚СЃСЏ settings.PRICE_*_DAYS.
     """
     PERIOD_PRICES.clear()
 
     if _DB_PERIOD_PRICES and settings.is_tariffs_mode():
-        # Используем цены из БД тарифов (только в режиме tariffs)
+        # РСЃРїРѕР»СЊР·СѓРµРј С†РµРЅС‹ РёР· Р‘Р” С‚Р°СЂРёС„РѕРІ (С‚РѕР»СЊРєРѕ РІ СЂРµР¶РёРјРµ tariffs)
         PERIOD_PRICES.update(_DB_PERIOD_PRICES)
     else:
-        # Classic mode или нет цен в БД — берём из settings
+        # Classic mode РёР»Рё РЅРµС‚ С†РµРЅ РІ Р‘Р” вЂ” Р±РµСЂС‘Рј РёР· settings
         PERIOD_PRICES.update(
             {days: getattr(settings, field_name, 0) for days, field_name in _PERIOD_PRICE_FIELDS.items()}
         )
@@ -3796,7 +4039,7 @@ def _build_classic_period_prices() -> dict[int, int]:
     """Build classic-mode period prices directly from PRICE_*_DAYS settings.
 
     Unlike PERIOD_PRICES (which may use DB tariff prices in tariffs mode),
-    this always reflects the env/settings values — the canonical prices for
+    this always reflects the env/settings values вЂ” the canonical prices for
     classic (non-tariff) subscriptions.
     """
     return {days: getattr(settings, field_name, 0) for days, field_name in _PERIOD_PRICE_FIELDS.items()}

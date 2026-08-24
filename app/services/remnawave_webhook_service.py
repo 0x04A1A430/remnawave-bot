@@ -1025,6 +1025,22 @@ class RemnaWaveWebhookService:
             )
             return
 
+        expiry_days_by_text_key = {
+            'WEBHOOK_SUB_EXPIRES_72H': 3,
+            'WEBHOOK_SUB_EXPIRES_48H': 2,
+            'WEBHOOK_SUB_EXPIRES_24H': 1,
+        }
+        if text_key in expiry_days_by_text_key:
+            from app.utils.notification_prefs import get_subscription_expiry_days
+
+            if expiry_days_by_text_key[text_key] > get_subscription_expiry_days(user):
+                logger.debug(
+                    'Webhook expiry notification is earlier than user preference',
+                    user_id=user.id,
+                    text_key=text_key,
+                )
+                return
+
         texts = get_texts(user.language)
         message = texts.get(text_key)
         if not message:
