@@ -547,9 +547,9 @@ class ChannelCheckerMiddleware(BaseMiddleware):
                 service = SubscriptionService()
                 for subscription in deactivated_subs:
                     panel_uuid = (
-                        subscription.remnawave_uuid
-                        if settings.is_multi_tariff_enabled() and subscription.remnawave_uuid
-                        else user.remnawave_uuid
+                        subscription.remnawave_id
+                        if settings.is_multi_tariff_enabled() and subscription.remnawave_id
+                        else user.remnawave_id
                     )
                     if panel_uuid:
                         try:
@@ -557,7 +557,7 @@ class ChannelCheckerMiddleware(BaseMiddleware):
                         except Exception as api_error:
                             logger.error(
                                 'Failed to disable RemnaWave user',
-                                remnawave_uuid=panel_uuid,
+                                remnawave_id=panel_uuid,
                                 api_error=api_error,
                             )
 
@@ -645,9 +645,9 @@ class ChannelCheckerMiddleware(BaseMiddleware):
                 service = SubscriptionService()
                 for subscription in disabled_subs:
                     panel_uuid = (
-                        subscription.remnawave_uuid
-                        if settings.is_multi_tariff_enabled() and subscription.remnawave_uuid
-                        else user.remnawave_uuid
+                        subscription.remnawave_id
+                        if settings.is_multi_tariff_enabled() and subscription.remnawave_id
+                        else user.remnawave_id
                     )
                     if panel_uuid:
                         try:
@@ -655,7 +655,7 @@ class ChannelCheckerMiddleware(BaseMiddleware):
                         except Exception as api_error:
                             logger.error(
                                 'Failed to enable RemnaWave user',
-                                remnawave_uuid=panel_uuid,
+                                remnawave_id=panel_uuid,
                                 api_error=api_error,
                             )
 
