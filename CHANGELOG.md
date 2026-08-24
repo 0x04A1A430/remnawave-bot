@@ -1,4 +1,4 @@
-﻿# Changelog
+# Changelog
 
 ## [4.1.0](https://github.com/cy7su/remnawave-bot/compare/v4.0.0...v4.1.0) (2026-08-10)
 
