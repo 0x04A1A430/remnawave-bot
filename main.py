@@ -298,6 +298,12 @@ async def main():
                 stage.warning(f'Не удалось загрузить конфигурацию: {error}')
                 logger.error('❌ Не удалось загрузить конфигурацию', error=error)
 
+        # Предупреждения о небезопасных дефолтах (дефолтный пароль Postgres,
+        # пустой CABINET_JWT_SECRET и т.п.) — один раз при старте, чтобы
+        # оператор заметил до выхода в прод.
+        for insecure_warning in settings.collect_insecure_default_warnings():
+            logger.warning('⚠️ INSECURE DEFAULT', warning=insecure_warning)
+
         bot = None
         dp = None
         async with timeline.stage('Настройка бота', '🤖', success_message='Бот настроен') as stage:
