@@ -2,8 +2,11 @@
 Модуль для массовой блокировки и разблокировки пользователей
 """
 
+import asyncio
+
 import structlog
 from aiogram import Bot
+from aiogram.exceptions import TelegramRetryAfter
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -77,25 +80,45 @@ class BulkBanService:
                     successfully_banned += 1
                     logger.info('Пользователь успешно заблокирован', telegram_id=telegram_id)
 
-                    # Отправляем уведомление пользователю, если возможно
+                    # Отправляем уведомление пользователю, если возможно.
+                    # Массовая рассылка: уважаем RetryAfter и слегка разряжаем
+                    # темп, иначе ловим серию Flood control / Too Many Requests.
                     if bot and settings.is_notifications_enabled():
+                        _notice_text = (
+                            f'<b>Ваш аккаунт заблокирован</b>\n\n'
+                            f'Причина: {reason}\n\n'
+                            f'Если вы считаете, что блокировка произошла ошибочно, '
+                            f'обратитесь в поддержку.'
+                        )
                         try:
                             await bot.send_message(
                                 chat_id=telegram_id,
-                                text=(
-                                    f'<b>Ваш аккаунт заблокирован</b>\n\n'
-                                    f'Причина: {reason}\n\n'
-                                    f'Если вы считаете, что блокировка произошла ошибочно, '
-                                    f'обратитесь в поддержку.'
-                                ),
+                                text=_notice_text,
                                 parse_mode='HTML',
                             )
+                        except TelegramRetryAfter as e:
+                            await asyncio.sleep(e.retry_after + 1)
+                            try:
+                                await bot.send_message(
+                                    chat_id=telegram_id,
+                                    text=_notice_text,
+                                    parse_mode='HTML',
+                                )
+                            except Exception as e2:
+                                logger.warning(
+                                    'Не удалось отправить уведомление пользователю после ожидания флуда',
+                                    telegram_id=telegram_id,
+                                    error=e2,
+                                )
                         except Exception as e:
                             logger.warning(
                                 'Не удалось отправить уведомление пользователю',
                                 telegram_id=telegram_id,
                                 error=e,
                             )
+                        else:
+                            # ~20 msg/сек — с запасом ниже лимита бота
+                            await asyncio.sleep(0.05)
                 else:
                     logger.error('Не удалось заблокировать пользователя', telegram_id=telegram_id)
                     error_ids.append(telegram_id)
