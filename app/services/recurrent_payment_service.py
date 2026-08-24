@@ -387,7 +387,7 @@ async def _process_single_subscription(
             logger.warning('Ошибка создания локальной записи рекуррентного платежа', error=e)
 
         # Уведомляем пользователя
-        if bot and user.telegram_id:
+        if bot and user.telegram_id and settings.is_notifications_enabled():
             try:
                 from app.localization.texts import get_texts
 
@@ -419,7 +419,7 @@ async def _process_single_subscription(
         return 'created'
 
     # Все карты не сработали — уведомляем пользователя
-    if bot and user.telegram_id:
+    if bot and user.telegram_id and settings.is_notifications_enabled():
         try:
             from app.localization.texts import get_texts
 

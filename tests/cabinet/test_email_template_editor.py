@@ -255,6 +255,7 @@ def test_common_vars_exposed_to_editor():
         'username',
         'email',
         'date',
+        'unsubscribe_url',
     ]
     common = build_common_context()
     assert set(common) == set(COMMON_CONTEXT_VARS)
@@ -264,6 +265,8 @@ def test_common_vars_exposed_to_editor():
     assert common['date']
     assert common['username'] == ''
     assert common['email'] == ''
+    # Ссылку отписки подставляет отправляющий код и только маркетинговым письмам.
+    assert common['unsubscribe_url'] == ''
 
 
 @pytest.mark.asyncio

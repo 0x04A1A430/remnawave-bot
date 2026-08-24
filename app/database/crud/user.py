@@ -21,6 +21,7 @@ from app.database.models import (
     PromoGroup,
     Subscription,
     SubscriptionStatus,
+    Tariff,
     Transaction,
     TransactionType,
     User,
@@ -991,6 +992,7 @@ async def get_users_list(
     order_by_last_activity: bool = False,
     order_by_total_spent: bool = False,
     order_by_purchase_count: bool = False,
+    order_by_subscription_end: bool = False,
 ) -> list[User]:
     query = select(User).options(
         selectinload(User.subscriptions).selectinload(Subscription.tariff),
@@ -1059,10 +1061,11 @@ async def get_users_list(
         order_by_last_activity,
         order_by_total_spent,
         order_by_purchase_count,
+        order_by_subscription_end,
     ]
     if sum(int(flag) for flag in sort_flags) > 1:
         logger.debug(
-            'Выбрано несколько сортировок пользователей — применяется приоритет: трафик > траты > покупки > баланс > активность'
+            'Выбрано несколько сортировок пользователей — применяется приоритет: трафик > траты > покупки > баланс > активность > окончание подписки'
         )
 
     transactions_stats = None
@@ -1091,6 +1094,37 @@ async def get_users_list(
         query = query.order_by(User.balance_kopeks.desc(), User.created_at.desc())
     elif order_by_last_activity:
         query = query.order_by(nullslast(User.last_activity.desc()), User.created_at.desc())
+    elif order_by_subscription_end:
+        # MIN(end_date) среди подписок пользователя; без outerjoin — иначе дубли
+        # строк при нескольких подписках (мультитариф).
+        #
+        # Статус берём тот же, по которому фильтруется список: иначе связка
+        # «покажи истёкших, отсортируй по дате окончания» давала бы у ВСЕХ строк
+        # пустой ключ и молча схлопывалась в сортировку по дате регистрации.
+        _sort_status = subscription_status or SubscriptionStatus.ACTIVE.value
+        soonest_end_conditions = [
+            Subscription.user_id == User.id,
+            Subscription.status == _sort_status,
+        ]
+        if _sort_status == SubscriptionStatus.ACTIVE.value:
+            # Суточные тарифы исключаем ровно как `get_expiring_subscriptions`:
+            # у активной суточной подписки end_date всегда +24ч, поэтому иначе
+            # они навсегда занимают верх списка и хоронят тех, ради кого
+            # сортировка и делалась. Комментарий там же, subscription.py:1749.
+            soonest_end_conditions.append(
+                ~and_(
+                    Tariff.is_daily.is_(True),
+                    Subscription.is_daily_paused.is_(False),
+                )
+            )
+        soonest_end = (
+            select(func.min(Subscription.end_date))
+            .select_from(Subscription)
+            .outerjoin(Tariff, Subscription.tariff_id == Tariff.id)
+            .where(*soonest_end_conditions)
+            .scalar_subquery()
+        )
+        query = query.order_by(nullslast(soonest_end.asc()), User.created_at.desc())
     else:
         query = query.order_by(User.created_at.desc())
 

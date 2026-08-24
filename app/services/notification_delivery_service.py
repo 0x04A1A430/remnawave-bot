@@ -94,6 +94,20 @@ class NotificationType(Enum):
     GUEST_CABINET_CREDENTIALS = 'guest_cabinet_credentials'
 
 
+# Письма, которые почтовые провайдеры считают массовой рассылкой: только они
+# получают List-Unsubscribe и уважают отписку. Уведомления по действующей
+# подписке (оплата, истечение, блокировка) сюда не входят — это транзакционная
+# переписка, отписывать от неё нельзя.
+MARKETING_NOTIFICATION_TYPES = frozenset(
+    {
+        NotificationType.PROMO_OFFER,
+        NotificationType.WINBACK_EXPIRED_1D,
+        NotificationType.WINBACK_DISCOUNT,
+        NotificationType.WINBACK_TRIAL_ENDING,
+    }
+)
+
+
 class NotificationDeliveryService:
     """
     Service for delivering notifications to users through appropriate channels.
@@ -106,6 +120,67 @@ class NotificationDeliveryService:
         self._email_service = None
         self._email_templates = None
         self._ws_manager = None
+
+    @staticmethod
+    def _is_allowed_by_preferences(user: User, notification_type: NotificationType) -> bool:
+        """Apply global, category and per-user notification switches centrally."""
+        global_switch_exempt_types = {
+            NotificationType.EMAIL_VERIFICATION,
+            NotificationType.PASSWORD_RESET,
+            NotificationType.EMAIL_CHANGE_CODE,
+            NotificationType.GUEST_SUBSCRIPTION_DELIVERED,
+            NotificationType.GUEST_ACTIVATION_REQUIRED,
+            NotificationType.GUEST_GIFT_RECEIVED,
+            NotificationType.GUEST_CABINET_CREDENTIALS,
+        }
+        if notification_type not in global_switch_exempt_types and not settings.is_notifications_enabled():
+            logger.debug(
+                'Уведомление отключено глобальным переключателем',
+                user_id=user.id,
+                notification_type_value=notification_type.value,
+            )
+            return False
+
+        referral_types = {
+            NotificationType.REFERRAL_BONUS,
+            NotificationType.REFERRAL_REGISTERED,
+        }
+        if notification_type in referral_types and not settings.is_referral_notifications_enabled():
+            logger.debug(
+                'Реферальное уведомление отключено',
+                user_id=user.id,
+                notification_type_value=notification_type.value,
+            )
+            return False
+
+        from app.utils.notification_prefs import (
+            is_balance_low_enabled,
+            is_promo_offers_enabled,
+            is_subscription_expiry_enabled,
+            is_traffic_warning_enabled,
+        )
+
+        expiry_types = {
+            NotificationType.SUBSCRIPTION_EXPIRING,
+            NotificationType.SUBSCRIPTION_EXPIRED,
+            NotificationType.WINBACK_EXPIRED_1D,
+            NotificationType.WINBACK_DISCOUNT,
+            NotificationType.WINBACK_TRIAL_ENDING,
+            NotificationType.WEBHOOK_SUB_EXPIRING,
+            NotificationType.WEBHOOK_SUB_EXPIRED,
+        }
+        if notification_type in expiry_types and not is_subscription_expiry_enabled(user):
+            return False
+        if notification_type is NotificationType.BALANCE_LOW and not is_balance_low_enabled(user):
+            return False
+        if notification_type is NotificationType.WEBHOOK_SUB_BANDWIDTH_THRESHOLD and not is_traffic_warning_enabled(
+            user
+        ):
+            return False
+        if notification_type is NotificationType.PROMO_OFFER and not is_promo_offers_enabled(user):
+            return False
+
+        return True
 
     @property
     def email_service(self):
@@ -157,11 +232,19 @@ class NotificationDeliveryService:
         Returns:
             True if notification was sent successfully through at least one channel
         """
-        if user.status in (UserStatus.BLOCKED.value, UserStatus.DELETED.value):
+        is_deleted = user.status == UserStatus.DELETED.value
+        is_blocked_without_ban_notice = (
+            user.status == UserStatus.BLOCKED.value and notification_type is not NotificationType.BAN_NOTIFICATION
+        )
+        if is_deleted or is_blocked_without_ban_notice:
+            logger.debug('Пропускаем уведомление для неактивного пользователя', user_id=user.id, status=user.status)
+            return False
+
+        if not self._is_allowed_by_preferences(user, notification_type):
             logger.debug(
-                'Пропускаем уведомление для неактивного пользователя',
+                'Уведомление отключено настройками пользователя',
                 user_id=user.id,
-                status=user.status,
+                notification_type_value=notification_type.value,
             )
             return False
 
@@ -349,6 +432,20 @@ class NotificationDeliveryService:
             logger.debug('У пользователя нет подтверждённого email', user_id=user.id)
             return False
 
+        # Маркетинг уважает отписку; транзакционные письма — нет (иначе человек
+        # перестал бы узнавать об оплате и окончании собственной подписки).
+        unsubscribe_url = ''
+        if notification_type in MARKETING_NOTIFICATION_TYPES:
+            from app.utils.notification_prefs import is_promo_offers_enabled
+
+            if not is_promo_offers_enabled(user):
+                logger.debug('Пользователь отписан от промо-писем', user_id=user.id)
+                return False
+
+            from app.cabinet.services.email_unsubscribe import build_unsubscribe_url
+
+            unsubscribe_url = build_unsubscribe_url(user.id, user.email)
+
         try:
             # Get email template (check DB override first, then fall back to hardcoded)
             language = user.language or 'ru'
@@ -358,6 +455,7 @@ class NotificationDeliveryService:
                 'cabinet_url': getattr(settings, 'CABINET_URL', '') or '',
                 'username': user.first_name or user.username or '',
                 'email': user.email or '',
+                'unsubscribe_url': unsubscribe_url,
                 **context,
             }
 
@@ -413,6 +511,7 @@ class NotificationDeliveryService:
                 subject=template['subject'],
                 body_html=template['body_html'],
                 body_text=template.get('body_text'),
+                unsubscribe_url=unsubscribe_url or None,
             )
 
             if success:

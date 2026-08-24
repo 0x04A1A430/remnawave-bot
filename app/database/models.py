@@ -2040,6 +2040,9 @@ class PromoCode(Base):
 
     balance_bonus_kopeks = Column(Integer, default=0)
     subscription_days = Column(Integer, default=0)
+    # Гигабайты к подписке. Часть набора бонусов наравне с балансом и днями;
+    # 0 — трафик не начисляется.
+    traffic_gb = Column(Integer, default=0, server_default='0', nullable=False)
 
     max_uses = Column(Integer, default=1)
     current_uses = Column(Integer, default=0)
@@ -3787,6 +3790,14 @@ class GuestPurchase(Base):
     retry_count = Column(Integer, nullable=False, default=0, server_default='0')
     receipt_uuid = Column(String(255), nullable=True, index=True)
     receipt_created_at = Column(AwareDateTime(), nullable=True)
+    # Yandex Metrika offline conversions: client identifier + traffic source tags
+    yandex_cid = Column(String(128), nullable=True)
+    subid = Column(String(255), nullable=True)
+    referrer = Column(String(500), nullable=True)
+    # Слаг рекламной кампании (``advertising_campaigns.start_parameter``).
+    # Оплату подтверждает вебхук платёжки, где куки и сессии покупателя уже
+    # нет, поэтому источник атрибуции хранится в самой покупке.
+    campaign_slug = Column(String(64), nullable=True)
 
     landing = relationship('LandingPage', back_populates='guest_purchases', lazy='selectin')
     tariff = relationship('Tariff', lazy='selectin')
