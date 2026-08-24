@@ -1028,6 +1028,7 @@ async def show_devices_page(
         devices_text += '<blockquote>'
         for device in pagination.items:
             local_name = (device.get('local_name') or '').strip()
+            emoji_tag = ''
             if local_name:
                 device_info = html_mod.escape(local_name)
             else:
