@@ -3137,7 +3137,7 @@ class MonitoringService:
                         f'<b>ID:</b> <code>{ticket.id}</code>\n'
                         f'<b>Пользователь:</b> {full_name}\n'
                         f'<b>Telegram ID:</b> <code>{telegram_id_display}</code>\n'
-                        f'<b>Username:</b> @{username_display}\n'
+                        f'<b>Username:</b> {username_display}\n'
                         f'<b>Заголовок:</b> {safe_title}\n'
                         f'<b>Ожидает ответа:</b> {waited_minutes} мин\n'
                     )
