@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from app.config import settings
 from app.database.models import GraceAccessSessionModel
 from app.external.remnawave_api import UserStatus
 from app.services.grace_access_runtime import (
@@ -448,6 +449,10 @@ async def test_apply_limited_billing_does_not_overwrite_manual_or_unrelated_pane
 async def test_apply_limited_billing_updates_device_limit_even_when_other_fields_already_match(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    # Канонический тег существует только когда оператор настроил его в конфиге;
+    # без настройки target.tag is None и фаза восстановления тега не выполняется.
+    monkeypatch.setattr(settings, 'PAID_SUBSCRIPTION_USER_TAG', 'PAID', raising=False)
+    monkeypatch.setattr(settings, 'TRIAL_USER_TAG', 'TRIAL', raising=False)
     billing = make_limited_billing()
     api = FakeRemnawaveApi(
         make_panel_user(
