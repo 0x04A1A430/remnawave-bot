@@ -9,6 +9,8 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
+
 from app.config import settings
 from app.services import remnawave_webhook_service
 from app.services.remnawave_webhook_service import RemnaWaveWebhookService
