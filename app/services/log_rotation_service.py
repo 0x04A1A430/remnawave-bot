@@ -132,10 +132,15 @@ class LogRotationService:
 
         # Парсим время ротации
         time_str = settings.LOG_ROTATION_TIME
+        hours, minutes = 0, 0
         try:
-            hours, minutes = map(int, time_str.split(':'))
+            parsed_hours, parsed_minutes = map(int, time_str.split(':'))
+            # Диапазон обязателен: '24:00' парсится как int, но падает в
+            # now.replace(hour=...) ValueError'ом и роняет весь старт бота.
+            if not (0 <= parsed_hours <= 23 and 0 <= parsed_minutes <= 59):
+                raise ValueError(f'hours/minutes out of range: {parsed_hours}:{parsed_minutes}')
+            hours, minutes = parsed_hours, parsed_minutes
         except ValueError:
-            hours, minutes = 0, 0
             logger.warning("Некорректное LOG_ROTATION_TIME='', используем 00:00", time_str=time_str)
 
         next_rotation = now.replace(hour=hours, minute=minutes, second=0, microsecond=0)
