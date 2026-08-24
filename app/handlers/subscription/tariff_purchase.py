@@ -673,6 +673,22 @@ async def show_tariffs_list(
     """Показывает список тарифов для покупки."""
     texts = get_texts(db_user.language)
     await state.clear()
+    # Единственный доступный тариф — сразу к периоду/подтверждению, без экрана
+    # списка. Исключение: пользователь уже владеет этим тарифом (мульти-тариф) —
+    # тогда показываем список: тариф помечен и понятно, почему купить нельзя.
+    tariffs = await get_tariffs_for_user(db_user)
+    if len(tariffs) == 1:
+        _already_owned = False
+        if settings.is_multi_tariff_enabled():
+            from app.database.crud.subscription import get_active_subscriptions_by_user_id
+
+            _active = await get_active_subscriptions_by_user_id(db, db_user.id)
+            _already_owned = any(sub.tariff_id == tariffs[0].id and not sub.is_trial for sub in _active)
+        if not _already_owned:
+            await _proceed_with_selected_tariff(callback, db_user, db, state, tariffs[0].id, skip_selection=True)
+            return
+
+
 
     # Получаем доступные тарифы
     promo_group_id = getattr(db_user, 'promo_group_id', None)
@@ -752,9 +768,15 @@ async def _proceed_with_selected_tariff(
     db_user: User,
     db: AsyncSession,
     state: FSMContext,
+    tariff_id: int,
+    *,
+    skip_selection: bool = False,
 ):
-    """Обрабатывает выбор тарифа."""
-    tariff_id = int(callback.data.split(':')[1])
+    """Обрабатывает выбор тарифа.
+
+    ``skip_selection=True``: экран списка тарифов был пропущен (единственный
+    доступный тариф), поэтому «Назад» ведёт в главное меню.
+    """
     tariff = await get_tariff_by_id(db, tariff_id)
 
     if not tariff or not tariff.is_active:
@@ -774,6 +796,10 @@ async def _proceed_with_selected_tariff(
                 show_alert=True,
             )
             return
+
+    back_callback = 'back_to_menu' if skip_selection else 'menu_buy'
+    # Признак нужен последующим перерисовкам в других хендлерах.
+    await state.update_data(tariff_selection_skipped=skip_selection)
 
     # Проверяем, суточный ли это тариф
     is_daily = getattr(tariff, 'is_daily', False)
@@ -933,6 +959,18 @@ async def select_tariff(
     await _proceed_with_selected_tariff(callback, db_user, db, state, tariff_id)
 
 
+async def _tariff_back_callback(state: FSMContext) -> str:
+    """Куда ведёт «Назад» на экранах покупки тарифа.
+
+    Экран списка мог быть пропущен (единственный доступный тариф) — тогда
+    возвращать надо в главное меню. Признак живёт в состоянии, потому что
+    перерисовки (изменение дней, трафика, выбор периода) происходят в других
+    хендлерах, у которых этого контекста нет.
+    """
+    data = await state.get_data()
+    return 'back_to_menu' if data.get('tariff_selection_skipped') else 'menu_buy'
+
+
 @error_handler
 async def handle_custom_days_change(
     callback: types.CallbackQuery,
@@ -941,6 +979,7 @@ async def handle_custom_days_change(
     state: FSMContext,
 ):
     """Обрабатывает изменение количества дней."""
+    back_callback = await _tariff_back_callback(state)
     parts = callback.data.split(':')
     tariff_id = int(parts[1])
     delta = int(parts[2])
@@ -1007,6 +1046,7 @@ async def handle_custom_traffic_change(
     state: FSMContext,
 ):
     """Обрабатывает изменение количества трафика."""
+    back_callback = await _tariff_back_callback(state)
     parts = callback.data.split(':')
     tariff_id = int(parts[1])
     delta = int(parts[2])
@@ -1356,6 +1396,7 @@ async def select_tariff_period_with_traffic(
     state: FSMContext,
 ):
     """Обрабатывает выбор периода для тарифа с кастомным трафиком - показывает экран настройки трафика."""
+    back_callback = await _tariff_back_callback(state)
     parts = callback.data.split(':')
     tariff_id = int(parts[1])
     period = int(parts[2])
