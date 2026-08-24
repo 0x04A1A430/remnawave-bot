@@ -387,6 +387,17 @@ class RemnaWaveWebhookService:
         """Resolve user and execute user-scoped handler."""
         user, subscription = await self._resolve_user_and_subscription(db, data)
         if not user:
+            if not self._payload_has_user_identifiers(data):
+                # Панель прислала событие вовсе без идентификаторов
+                # (telegramId/uuid/userId пусты и на верхнем уровне, и в nested
+                # user) — сопоставить с пользователем невозможно в принципе.
+                # Это шум панели, а не проблема бота: debug вместо warning,
+                # чтобы не засорять логи и не будить алерты.
+                logger.debug(
+                    'RemnaWave webhook: event carries no user identifiers — skipped',
+                    event_name=event_name,
+                )
+                return False
             logger.warning(
                 'RemnaWave webhook: user not found for event , data telegramId= uuid',
                 event_name=event_name,
@@ -773,6 +784,26 @@ class RemnaWaveWebhookService:
     # ------------------------------------------------------------------
     # User resolution
     # ------------------------------------------------------------------
+
+    @staticmethod
+    def _payload_has_user_identifiers(data: dict) -> bool:
+        """Есть ли в payload хоть один идентификатор пользователя.
+
+        Проверяет верхний уровень (telegramId/uuid/userId/userUuid) и вложенный
+        ``user`` — ровно те ключи, которые читает _resolve_user_and_subscription.
+        """
+        if any(
+            data.get(key) not in (None, '')
+            for key in ('telegramId', 'uuid', 'userId', 'userUuid')
+        ):
+            return True
+        nested = data.get('user')
+        if isinstance(nested, dict):
+            return any(
+                nested.get(key) not in (None, '')
+                for key in ('telegramId', 'uuid', 'userId')
+            )
+        return False
 
     async def _resolve_user_and_subscription(
         self, db: AsyncSession, data: dict
