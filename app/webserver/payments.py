@@ -22,6 +22,8 @@ from app.services.payment_service import PaymentService
 from app.services.tribute_service import TributeService
 
 
+import asyncio
+
 logger = structlog.get_logger(__name__)
 
 # Strong refs to fire-and-forget webhook background tasks so they are not
