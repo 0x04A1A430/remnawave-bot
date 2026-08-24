@@ -1,25 +1,25 @@
 # Основные зависимости
-aiogram==3.29.1
-aiohttp==3.12.15
+aiogram==3.30.0
+aiohttp==3.14.3
 aiohttp-socks>=0.10.1
 asyncpg==0.31.0
-SQLAlchemy==2.0.46
-alembic==1.18.4
+SQLAlchemy==2.0.52
+alembic==1.19.1
 aiosqlite==0.22.1
 
 # Дополнительные зависимости
-pydantic==2.11.9
-pydantic-settings==2.10.1
-python-dotenv==1.2.2
+pydantic==2.13.4
+pydantic-settings==2.15.0
+python-dotenv==1.2.3
 redis==7.1.1
 PyYAML==6.0.3
-fastapi==0.129.0
-uvicorn==0.32.1
+fastapi==0.141.1
+uvicorn==0.52.4
 websockets>=12.0
-python-multipart==0.0.18
+python-multipart==0.0.32
 
 # YooKassa SDK
-yookassa==3.10.0
+yookassa==3.12.1
 
 # NaloGO для чеков в налоговую
 # nalogo - используем локальную исправленную версию в app/lib/nalogo/
@@ -30,25 +30,25 @@ structlog>=25.1.0,<26
 rich>=14.0
 
 # Планировщик задач для техработ
-APScheduler==3.11.0
+APScheduler==3.11.3
 
 # Утилиты
 python-dateutil==2.9.0.post0
 pytz==2023.4
 cryptography>=44.0.1
 pycryptodome>=3.21.0  # Crypto.Cipher в app/external/remnawave_api.py (есть в pyproject.toml, здесь отсутствовал)
-qrcode[pil]==8.0
+qrcode[pil]==8.2
 
 # Личный кабинет (Cabinet)
 bcrypt==5.0.0
 PyJWT>=2.11.0
-email-validator==2.1.0
+email-validator==2.3.0
 
 # Apple App Store Server API / Notifications
 app-store-server-library[async]>=3.1.1
 
 # Для работы с версиями
-packaging==26.0
+packaging==26.3
 
 aiofiles==23.2.1
 
