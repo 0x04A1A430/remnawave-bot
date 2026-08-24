@@ -76,10 +76,20 @@ class BlacklistService:
                     session.get(raw_url) as response,
                 ):
                     if response.status != 200:
-                        logger.error(
-                            'Ошибка при получении черного списка',
-                            status=response.status,
-                        )
+                        if response.status == 404:
+                            # Файл источника переехал/удалён — это проблема
+                            # конфигурации URL, а не сети. Работаем на стейл-
+                            # данных, если они есть; не спамим error'ом.
+                            logger.warning(
+                                'Чёрный список недоступен по заданному URL (404). '
+                                'Проверьте BLACKLIST_GITHUB_URL — используем ранее загруженные данные',
+                                url=raw_url,
+                            )
+                        else:
+                            logger.error(
+                                'Ошибка при получении черного списка',
+                                status=response.status,
+                            )
                         return False
 
                     content = await response.text()
