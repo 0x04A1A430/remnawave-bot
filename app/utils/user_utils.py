@@ -16,6 +16,7 @@ from app.database.models import (
     TransactionType,
     User,
 )
+from app.utils.formatters import format_username_link
 
 
 logger = structlog.get_logger(__name__)
@@ -44,7 +45,9 @@ def format_referrer_info(user: User) -> str:
         referrer_telegram_id = getattr(referrer, 'telegram_id', None)
 
         if referrer_username:
-            return f'@{referrer_username} (ID: {referred_by_id})'
+            # Тот же вид, что и у близнеца AdminNotificationService._get_referrer_info:
+            # иначе в одном уведомлении о пополнении плательщик кликабелен, а реферер нет.
+            return f'{format_username_link(referrer_username)} (ID: {referred_by_id})'
 
         return f'ID {referrer_telegram_id or referred_by_id}'
 

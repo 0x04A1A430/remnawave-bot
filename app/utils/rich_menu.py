@@ -46,6 +46,7 @@ from app.database.crud.tariff import get_tariff_by_id
 from app.database.crud.user_message import get_random_active_message
 from app.database.models import User
 from app.localization.texts import Texts
+from app.utils.formatters import format_username_link
 from app.utils.miniapp_buttons import build_miniapp_startapp_url
 from app.utils.promo_offer import build_promo_offer_hint, build_test_access_hint
 from app.utils.subscription_utils import get_happ_cryptolink_redirect_link
@@ -504,7 +505,11 @@ async def build_main_menu_rich_html(user: User, texts, db: AsyncSession) -> str:
     if logo_url:
         blocks.append(f'<img src="{html.escape(logo_url, quote=True)}"/>')
 
-    user_name = html.escape(user.full_name or '')
+    # full_name подставляет username, когда имени нет (см. User.full_name), — только
+    # в этом случае показываем логин ссылкой на профиль, а не голым текстом.
+    username = getattr(user, 'username', None)
+    has_name = bool(getattr(user, 'first_name', None) or getattr(user, 'last_name', None))
+    user_name = format_username_link(username) if username and not has_name else html.escape(user.full_name or '')
     blocks.append(f'<h4>👤 {user_name}</h4>')
     blocks.append('<hr/>')
 

@@ -4212,6 +4212,7 @@ async def activate_promo_code(
         'daily_limit': status.HTTP_429_TOO_MANY_REQUESTS,
         'trial_subscription_exists': status.HTTP_409_CONFLICT,
         'trial_provisioning_failed': status.HTTP_503_SERVICE_UNAVAILABLE,
+        'traffic_not_applicable': status.HTTP_409_CONFLICT,
         'server_error': status.HTTP_500_INTERNAL_SERVER_ERROR,
     }
     message_map = {
@@ -4229,6 +4230,7 @@ async def activate_promo_code(
         'daily_limit': 'Too many promo code activations today',
         'trial_subscription_exists': 'You already have a subscription, so this trial code cannot be applied',
         'trial_provisioning_failed': 'Could not provision the trial right now, please try again later',
+        'traffic_not_applicable': 'This promo code only grants traffic, and your subscription is already unlimited',
         'user_not_found': 'User not found',
         'server_error': 'Failed to activate promo code',
     }

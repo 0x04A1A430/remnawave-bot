@@ -168,6 +168,9 @@ class PaymentCommonMixin:
         payment_method_title: str | None = None,
     ) -> None:
         """Отправляет пользователю уведомление об успешном платеже."""
+        if not settings.is_notifications_enabled():
+            return
+
         # Lazy import to avoid circular dependency
         from app.cabinet.routes.websocket import notify_user_balance_topup
 
