@@ -419,6 +419,13 @@ class CryptoBotPaymentMixin:
 
         except Exception as error:
             logger.error('Ошибка обработки CryptoBot webhook', error=error, exc_info=True)
+            # Сессия могла остаться в failed-state после сбойного flush/commit —
+            # без отката все последующие операции каскадно падают с
+            # PendingRollbackError (уведомления, корзина и т.д.).
+            try:
+                await db.rollback()
+            except Exception:
+                pass
             return False
 
     async def _process_subscription_renewal_payment(
