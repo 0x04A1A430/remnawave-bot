@@ -57,6 +57,7 @@ from app.database.models import (
 )
 from app.services.faq_service import FaqService
 from app.services.maintenance_service import maintenance_service
+from app.services.payment_method_config_service import strip_tg_emoji
 from app.services.payment_service import PaymentService, get_wata_payment_by_link_id
 from app.services.pricing_engine import PricingEngine
 from app.services.privacy_policy_service import PrivacyPolicyService
@@ -799,8 +800,8 @@ async def get_payment_methods(
                     icon=info.get('icon') or ('' if method_code == 2 else ''),
                     title_key=f'topup.method.platega.option.{method_code}.title',
                     description_key=f'topup.method.platega.option.{method_code}.description',
-                    title=info.get('title') or info.get('name') or f'Platega {method_code}',
-                    description=info.get('description') or info.get('name'),
+                    title=strip_tg_emoji(info.get('name') or info.get('title')) or f'Platega {method_code}',
+                    description=strip_tg_emoji(info.get('description') or info.get('name')),
                 )
             )
 
@@ -4211,6 +4212,7 @@ async def activate_promo_code(
         'daily_limit': status.HTTP_429_TOO_MANY_REQUESTS,
         'trial_subscription_exists': status.HTTP_409_CONFLICT,
         'trial_provisioning_failed': status.HTTP_503_SERVICE_UNAVAILABLE,
+        'traffic_not_applicable': status.HTTP_409_CONFLICT,
         'server_error': status.HTTP_500_INTERNAL_SERVER_ERROR,
     }
     message_map = {
@@ -4228,6 +4230,7 @@ async def activate_promo_code(
         'daily_limit': 'Too many promo code activations today',
         'trial_subscription_exists': 'You already have a subscription, so this trial code cannot be applied',
         'trial_provisioning_failed': 'Could not provision the trial right now, please try again later',
+        'traffic_not_applicable': 'This promo code only grants traffic, and your subscription is already unlimited',
         'user_not_found': 'User not found',
         'server_error': 'Failed to activate promo code',
     }

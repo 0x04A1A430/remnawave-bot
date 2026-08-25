@@ -761,15 +761,6 @@ def get_main_menu_keyboard(
     if simple_purchase_button:
         paired_buttons.append(simple_purchase_button)
 
-    if show_resume_checkout or has_saved_cart:
-        resume_callback = 'return_to_saved_cart' if has_saved_cart else 'subscription_resume_checkout'
-        paired_buttons.append(
-            make_button(
-                text=texts.RETURN_TO_SUBSCRIPTION_CHECKOUT,
-                callback_data=resume_callback,
-            )
-        )
-
     if custom_buttons:
         for button in custom_buttons:
             if isinstance(button, InlineKeyboardButton):
@@ -1728,7 +1719,10 @@ def get_subscription_confirm_keyboard(
     )
 
 
-def get_balance_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
+def get_balance_keyboard(
+    language: str = DEFAULT_LANGUAGE,
+    has_saved_cart: bool = False,
+) -> InlineKeyboardMarkup:
     texts = get_texts(language)
 
     keyboard = [
@@ -1751,6 +1745,15 @@ def get_balance_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMark
                 make_button(
                     text=texts.t('SAVED_CARDS_BUTTON', 'Привязанные карты'),
                     callback_data='saved_cards_list',
+                )
+            ]
+        )
+    if has_saved_cart:
+        keyboard.append(
+            [
+                make_button(
+                    text=texts.RETURN_TO_SUBSCRIPTION_CHECKOUT,
+                    callback_data='return_to_saved_cart',
                 )
             ]
         )

@@ -145,6 +145,7 @@ class PromoCodeType(Enum):
     TRIAL_SUBSCRIPTION = 'trial_subscription'
     PROMO_GROUP = 'promo_group'
     DISCOUNT = 'discount'  # Одноразовая процентная скидка (balance_bonus_kopeks = процент, subscription_days = часы)
+    BALANCE_AND_DAYS = 'balance_and_days'  # Комбинированный: и бонус на баланс, и дни подписки одним кодом
 
 
 class PaymentMethod(Enum):
@@ -2040,6 +2041,9 @@ class PromoCode(Base):
 
     balance_bonus_kopeks = Column(Integer, default=0)
     subscription_days = Column(Integer, default=0)
+    # Гигабайты к подписке. Часть набора бонусов наравне с балансом и днями;
+    # 0 — трафик не начисляется.
+    traffic_gb = Column(Integer, default=0, server_default='0', nullable=False)
 
     max_uses = Column(Integer, default=1)
     current_uses = Column(Integer, default=0)
@@ -3490,6 +3494,9 @@ class PaymentMethodConfig(Base):
     # Переопределение отображаемого имени (null = использовать из env)
     display_name = Column(String(255), nullable=True)
 
+    # Кастомное описание метода (null = дефолтное описание из кабинета)
+    description = Column(Text, nullable=True)
+
     # Под-опции включения/выключения (JSON): {"card": true, "sbp": false}
     # Для методов с вариантами: yookassa, pal24, platega
     sub_options = Column(JSON, nullable=True, default=None)
@@ -3500,6 +3507,9 @@ class PaymentMethodConfig(Base):
     # Переопределение мин/макс сумм (null = из env)
     min_amount_kopeks = Column(Integer, nullable=True)
     max_amount_kopeks = Column(Integer, nullable=True)
+
+    # Открывать страницу оплаты сразу (window.location.href) вместо панели со ссылкой
+    open_url_direct = Column(Boolean, nullable=False, default=False, server_default='false')
 
     # --- Условия отображения ---
 
@@ -3781,6 +3791,14 @@ class GuestPurchase(Base):
     retry_count = Column(Integer, nullable=False, default=0, server_default='0')
     receipt_uuid = Column(String(255), nullable=True, index=True)
     receipt_created_at = Column(AwareDateTime(), nullable=True)
+    # Yandex Metrika offline conversions: client identifier + traffic source tags
+    yandex_cid = Column(String(128), nullable=True)
+    subid = Column(String(255), nullable=True)
+    referrer = Column(String(500), nullable=True)
+    # Слаг рекламной кампании (``advertising_campaigns.start_parameter``).
+    # Оплату подтверждает вебхук платёжки, где куки и сессии покупателя уже
+    # нет, поэтому источник атрибуции хранится в самой покупке.
+    campaign_slug = Column(String(64), nullable=True)
 
     landing = relationship('LandingPage', back_populates='guest_purchases', lazy='selectin')
     tariff = relationship('Tariff', lazy='selectin')

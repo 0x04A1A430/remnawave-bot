@@ -379,14 +379,15 @@ class CryptoBotPaymentMixin:
                             f'Курс: 1 USD = {conversion_rate:.2f}₽\n'
                             f'Транзакция: {invoice_id[:8]}...'
                         )
-                        user_notification = _UserNotificationPayload(
-                            telegram_id=user.telegram_id,
-                            text=message_text,
-                            parse_mode='HTML',
-                            reply_markup=keyboard,
-                            amount_rubles=amount_rubles_rounded,
-                            asset=updated_payment.asset,
-                        )
+                        if settings.is_notifications_enabled():
+                            user_notification = _UserNotificationPayload(
+                                telegram_id=user.telegram_id,
+                                text=message_text,
+                                parse_mode='HTML',
+                                reply_markup=keyboard,
+                                amount_rubles=amount_rubles_rounded,
+                                asset=updated_payment.asset,
+                            )
                     except Exception as error:
                         logger.error(
                             'Ошибка подготовки уведомления о пополнении CryptoBot',
@@ -418,6 +419,13 @@ class CryptoBotPaymentMixin:
 
         except Exception as error:
             logger.error('Ошибка обработки CryptoBot webhook', error=error, exc_info=True)
+            # Сессия могла остаться в failed-state после сбойного flush/commit —
+            # без отката все последующие операции каскадно падают с
+            # PendingRollbackError (уведомления, корзина и т.д.).
+            try:
+                await db.rollback()
+            except Exception:
+                pass
             return False
 
     async def _process_subscription_renewal_payment(
@@ -662,6 +670,9 @@ class CryptoBotPaymentMixin:
                 )
 
     async def _deliver_user_topup_notification(self, payload: _UserNotificationPayload) -> None:
+        if not settings.is_notifications_enabled():
+            return
+
         bot_instance = getattr(self, 'bot', None)
         if not bot_instance:
             return

@@ -4,7 +4,7 @@ import json
 import math
 import re
 import ssl
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from typing import Any
@@ -175,6 +175,9 @@ class RemnaWaveNode:
     active_plugin_uuid: str | None = None
     # v3.1.0: панель возвращает числовой id рядом с uuid (additive; роуты по-прежнему принимают {uuid})
     id: int | None = None
+    # Адреса узла: [{ip, status}], status ∈ INBOUND/OUTBOUND/MANAGEMENT/...
+    # Нужны, чтобы предложить выбор исходного адреса в GeoCheck (3.3.0).
+    ips: list[dict[str, Any]] = field(default_factory=list)
 
     @property
     def is_node_online(self) -> bool:
@@ -399,7 +402,10 @@ class RemnaWaveAPI:
             try:
                 kwargs = {'url': url, 'params': params}
 
-                if data:
+                # `is not None`, а не truthy: у части команд панели (например
+                # POST /api/connections/geocheck) requestBody помечен required,
+                # и режим «по умолчанию» — это именно пустой объект `{}`.
+                if data is not None:
                     kwargs['json'] = data
 
                 async with self.session.request(method, **kwargs) as response:
@@ -1328,6 +1334,49 @@ class RemnaWaveAPI:
     ) -> dict[str, Any]:
         return await self.get_bandwidth_stats_user_legacy(user_uuid, start_date, end_date, user_id=user_id)
 
+    # ============== Connections API (GeoCheck, 3.3.0) ==============
+
+    async def request_node_geocheck(
+        self,
+        node_uuid: str,
+        ip: str | None = None,
+        interface: str | None = None,
+    ) -> str:
+        """Ставит проверку геоданных ноды в очередь и возвращает ``jobId``.
+
+        Проверка асинхронная: панель отдаёт идентификатор задачи, результат
+        забирается через :meth:`get_node_geocheck_result` (нода отвечает до
+        минуты). Требует Panel 3.3.0 и Node 3.3.0 — на более старой панели
+        эндпоинта нет и запрос вернёт 404.
+
+        Маршрут выбирается ровно один: либо исходный ``ip``, либо сетевой
+        ``interface``, либо ничего (маршрут узла по умолчанию).
+        """
+        if ip and interface:
+            raise RemnaWaveAPIError('geocheck accepts either ip or interface, not both')
+
+        data: dict[str, Any] = {}
+        if ip and ip.strip():
+            data['ip'] = ip.strip()
+        elif interface and interface.strip():
+            data['interface'] = interface.strip()
+
+        response = await self._make_request('POST', f'/api/connections/geocheck/{node_uuid}', data)
+        job_id = (response.get('response') or {}).get('jobId')
+        if not job_id:
+            raise RemnaWaveAPIError('geocheck response has no jobId', response_data=response)
+        return job_id
+
+    async def get_node_geocheck_result(self, job_id: str) -> dict[str, Any]:
+        """Статус задачи GeoCheck: ``{isCompleted, isFailed, result}``.
+
+        Пока задача в работе ``result`` равен ``None``. В готовом результате
+        лежат ``success``, ``image`` (SVG-отчёт в base64) и ``rawReport``
+        (тот же отчёт в JSON, без картинки).
+        """
+        response = await self._make_request('GET', f'/api/connections/geocheck/{job_id}')
+        return response['response']
+
     # ============== Bandwidth Stats API ==============
 
     async def get_bandwidth_stats_nodes(self, start_date: str, end_date: str) -> dict[str, Any]:
@@ -1781,6 +1830,7 @@ class RemnaWaveAPI:
             system=node_data.get('system'),
             active_plugin_uuid=node_data.get('activePluginUuid'),
             id=self._sanitize_user_id(node_data.get('id')),  # v3.1.0
+            ips=node_data.get('ips') or [],
         )
 
     def _parse_subscription_info(self, data: dict) -> SubscriptionInfo:

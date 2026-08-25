@@ -55,6 +55,47 @@ GIFT_TOKEN_MIN_PREFIX_LENGTH = 48
 _TELEGRAM_USERNAME_RE = re.compile(r'^[a-zA-Z][a-zA-Z0-9_]{4,31}$')
 
 
+async def _attribute_purchase_campaign(
+    db: AsyncSession,
+    purchase: GuestPurchase,
+    user: User,
+) -> None:
+    """Attribute a delivered guest purchase to its advertising campaign.
+
+    MUST be called only after the caller's final ``commit()``. The balance
+    bonus commits on its own (``add_user_balance``), which would otherwise
+    release the ``FOR UPDATE`` lock ``fulfill_purchase`` holds on the purchase
+    row halfway through delivery.
+
+    Gifts are deliberately skipped: the user created on this path is the
+    recipient, while the campaign brought in the buyer. A guest buyer has no
+    account at all, so there is nobody to attribute — the slug still stays on
+    the purchase row for reporting.
+    """
+    if not purchase.campaign_slug or purchase.is_gift:
+        return
+
+    try:
+        from app.services.campaign_service import AdvertisingCampaignService
+
+        service = AdvertisingCampaignService()
+        result = await service.attribute_campaign(db, user, purchase.campaign_slug)
+        if result and result.success:
+            logger.info(
+                'Guest purchase attributed to campaign',
+                purchase_id=purchase.id,
+                user_id=user.id,
+                campaign_slug=purchase.campaign_slug,
+                bonus_type=result.bonus_type,
+            )
+    except Exception:
+        logger.exception(
+            'Failed to attribute guest purchase to campaign',
+            purchase_id=purchase.id,
+            campaign_slug=purchase.campaign_slug,
+        )
+
+
 async def _send_admin_notification(
     purchase: GuestPurchase,
     tariff_name: str,
@@ -163,6 +204,7 @@ async def create_purchase(
     source: str = 'landing',
     subid: str | None = None,
     referrer: str | None = None,
+    campaign_slug: str | None = None,
     buyer_user_id: int | None = None,
     commit: bool = True,
 ) -> GuestPurchase:
@@ -172,6 +214,7 @@ async def create_purchase(
         commit=commit,
         subid=subid,
         referrer=referrer,
+        campaign_slug=campaign_slug,
         landing_id=landing.id if landing else None,
         tariff_id=tariff.id,
         period_days=period_days,
@@ -438,6 +481,8 @@ async def fulfill_purchase(
                 purchase.cabinet_password = None
                 await db.commit()
 
+            await _attribute_purchase_campaign(db, purchase, user)
+
             logger.info(
                 'Guest purchase held for activation (existing subscription)',
                 purchase_id=purchase.id,
@@ -616,6 +661,8 @@ async def fulfill_purchase(
         if purchase.cabinet_password:
             purchase.cabinet_password = None
             await db.commit()
+
+        await _attribute_purchase_campaign(db, purchase, user)
 
         logger.info(
             'Guest purchase fulfilled',

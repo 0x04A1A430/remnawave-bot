@@ -298,6 +298,12 @@ async def main():
                 stage.warning(f'Не удалось загрузить конфигурацию: {error}')
                 logger.error('❌ Не удалось загрузить конфигурацию', error=error)
 
+        # Предупреждения о небезопасных дефолтах (дефолтный пароль Postgres,
+        # пустой CABINET_JWT_SECRET и т.п.) — один раз при старте, чтобы
+        # оператор заметил до выхода в прод.
+        for insecure_warning in settings.collect_insecure_default_warnings():
+            logger.warning('⚠️ INSECURE DEFAULT', warning=insecure_warning)
+
         bot = None
         dp = None
         async with timeline.stage('Настройка бота', '🤖', success_message='Бот настроен') as stage:
@@ -860,8 +866,16 @@ async def main():
                                 daily_subscription_service.start_traffic_reset_monitoring()
                             )
 
-                if auto_verification_active and not auto_payment_verification_service.is_running():
-                    logger.warning('Сервис автопроверки пополнений остановился, пробуем перезапустить...')
+                # Не завязываемся на auto_verification_active: он защёлкивал
+                # результат ПЕРВОЙ попытки. Если на старте ни один поддерживаемый
+                # провайдер не был включён, start() выходил не создав задачу, и
+                # сторож её больше никогда не поднимал — включённая позже платёжка
+                # оставалась и без вебхука (до этого фикса), и без опроса статусов.
+                if (
+                    settings.is_payment_verification_auto_check_enabled()
+                    and not auto_payment_verification_service.is_running()
+                ):
+                    logger.warning('Сервис автопроверки пополнений не запущен, пробуем поднять...')
                     await auto_payment_verification_service.start()
                     auto_verification_active = auto_payment_verification_service.is_running()
 

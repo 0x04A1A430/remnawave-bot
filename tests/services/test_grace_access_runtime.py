@@ -5,9 +5,11 @@ from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from typing import Any
+from unittest.mock import AsyncMock
 
 import pytest
 
+from app.config import settings
 from app.database.models import GraceAccessSessionModel
 from app.external.remnawave_api import UserStatus
 from app.services.grace_access_runtime import (
@@ -447,6 +449,10 @@ async def test_apply_limited_billing_does_not_overwrite_manual_or_unrelated_pane
 async def test_apply_limited_billing_updates_device_limit_even_when_other_fields_already_match(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    # Канонический тег существует только когда оператор настроил его в конфиге;
+    # без настройки target.tag is None и фаза восстановления тега не выполняется.
+    monkeypatch.setattr(settings, 'PAID_SUBSCRIPTION_USER_TAG', 'PAID', raising=False)
+    monkeypatch.setattr(settings, 'TRIAL_USER_TAG', 'TRIAL', raising=False)
     billing = make_limited_billing()
     api = FakeRemnawaveApi(
         make_panel_user(
@@ -649,3 +655,172 @@ def test_saving_a_v2_row_upgrades_it_to_v3_without_erasing_the_identity() -> Non
 
     assert upgraded.remnawave_id == PANEL_ID
     assert upgraded.panel_before.remnawave_id == PANEL_ID
+
+
+# ---- create_panel_user_grace_safe: подхват обязан ПРИМЕНИТЬ payload ----
+
+
+@pytest.mark.asyncio
+async def test_adopt_or_create_patches_the_adopted_panel_user(monkeypatch):
+    """Подхватить аккаунт мало — вызывающий просил привести панель к состоянию.
+
+    Регрессия: хелпер возвращал найденного пользователя без PATCH, поэтому
+    админское «продлить»/«синхронизировать в панель» рапортовало успех, а в
+    панели оставались старые статус, дата и лимиты.
+    """
+    from app.services.grace_access_runtime import _adopt_or_create
+
+    adopted = SimpleNamespace(id=8812)
+    patched = SimpleNamespace(id=8812)
+    api = AsyncMock()
+    api.get_user_by_short_uuid.return_value = adopted
+    api.update_user.return_value = patched
+
+    result = await _adopt_or_create(
+        api, 'aBcD12', {'username': 'user_1_abc', 'status': 'ACTIVE', 'traffic_limit_bytes': 42}
+    )
+
+    assert result is patched
+    api.create_user.assert_not_awaited()
+    kwargs = api.update_user.await_args.kwargs
+    assert kwargs['user_id'] == 8812
+    assert kwargs['traffic_limit_bytes'] == 42
+    assert 'username' not in kwargs, 'username — create-only, переименовывать аккаунт нельзя'
+
+
+@pytest.mark.asyncio
+async def test_adopt_or_create_creates_when_panel_denies_the_short_uuid(monkeypatch):
+    from app.services.grace_access_runtime import _adopt_or_create
+
+    created = SimpleNamespace(id=9001)
+    api = AsyncMock()
+    api.get_user_by_short_uuid.return_value = None
+    api.create_user.return_value = created
+
+    result = await _adopt_or_create(api, 'gone', {'username': 'u', 'status': 'ACTIVE'})
+
+    assert result is created
+    api.update_user.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_adopt_or_create_propagates_a_non_404_panel_error(monkeypatch):
+    """Проглотить 5xx и создать нового — это и есть дубль рядом с живым аккаунтом."""
+    from app.external.remnawave_api import RemnaWaveAPIError
+    from app.services.grace_access_runtime import _adopt_or_create
+
+    api = AsyncMock()
+    api.get_user_by_short_uuid.side_effect = RemnaWaveAPIError('Bad Gateway', 502, {})
+
+    with pytest.raises(RemnaWaveAPIError):
+        await _adopt_or_create(api, 'aBcD12', {'username': 'u'})
+
+    api.create_user.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_adopt_does_not_wipe_squads_when_the_local_list_is_empty():
+    """Пустой список сквадов НЕ должен уходить в PATCH.
+
+    `create_user` пропускает пустой список, `update_user` — только None, а в
+    контракте «не прислать» = не трогать, «прислать []» = снять все сквады.
+    Переслав create-тело как есть, подхват снимал у живого оплаченного
+    аккаунта все инбаунды: он оставался ACTIVE, но ссылка на подписку отдавала
+    ноль конфигов. Состояние достижимо после «сброса подписки» и после
+    удаления сквада из панели.
+    """
+    from app.services.grace_access_runtime import _adopt_or_create
+
+    api = AsyncMock()
+    api.get_user_by_short_uuid.return_value = SimpleNamespace(id=8812)
+    api.update_user.return_value = SimpleNamespace(id=8812)
+
+    await _adopt_or_create(api, 'aBcD12', {'username': 'u', 'status': 'ACTIVE', 'active_internal_squads': []})
+
+    kwargs = api.update_user.await_args.kwargs
+    assert 'active_internal_squads' not in kwargs
+
+
+@pytest.mark.asyncio
+async def test_adopt_forwards_a_non_empty_squad_list():
+    """Обратная сторона: реальный список обязан доехать."""
+    from app.services.grace_access_runtime import _adopt_or_create
+
+    api = AsyncMock()
+    api.get_user_by_short_uuid.return_value = SimpleNamespace(id=8812)
+    api.update_user.return_value = SimpleNamespace(id=8812)
+
+    await _adopt_or_create(api, 'aBcD12', {'username': 'u', 'active_internal_squads': ['squad-1', 'squad-2']})
+
+    assert api.update_user.await_args.kwargs['active_internal_squads'] == ['squad-1', 'squad-2']
+
+
+@pytest.mark.asyncio
+async def test_open_session_without_panel_id_is_repaired_from_the_subscription(monkeypatch):
+    """Сессия с пустым `remnawave_id` должна чиниться, а не жить вечно.
+
+    Такую строку оставил старый код: колонки тогда не было. Читать её нельзя —
+    `_model_to_session` бросает `GraceSnapshotError`, `get_open` роняет продление
+    и разбор платежа, фоновой цикл пишет ошибку каждый проход, а уникальный
+    индекс на открытую сессию не даёт открыть новую. При этом ответ лежит рядом:
+    подписка уже связана бэкфилом.
+    """
+    from app.database.models import Subscription as SubModel, User as UserModel
+    from app.services.grace_access_runtime import SQLAlchemyGraceSessionStore
+    from tests.fixtures.sqlite_memory import memory_session
+
+    tables = [UserModel.__table__, SubModel.__table__, GraceAccessSessionModel.__table__]
+    async with memory_session(monkeypatch, tables) as db:
+        db.add(UserModel(id=1, telegram_id=100, remnawave_id=None))
+        db.add(
+            SubModel(
+                id=42,
+                user_id=1,
+                status='expired',
+                end_date=NOW - timedelta(days=1),
+                remnawave_id=PANEL_ID,
+                remnawave_short_id='sid42',
+            )
+        )
+        # Ровно то, что оставил старый код: валидный снапшот, но колонка пуста.
+        db.add(make_v2_session_row(remnawave_id=None))
+        await db.commit()
+
+        store = SQLAlchemyGraceSessionStore(db)
+        sessions = await store.list_open(limit=10)
+
+        assert len(sessions) == 1, 'сессия должна стать читаемой, а не пропускаться каждый цикл'
+        assert sessions[0].remnawave_id == PANEL_ID
+
+        db.expunge_all()
+        row = await db.get(GraceAccessSessionModel, '11111111-2222-3333-4444-555555555555')
+        assert row.remnawave_id == PANEL_ID, 'починка должна сохраниться, а не повторяться каждый проход'
+
+
+@pytest.mark.asyncio
+async def test_get_open_no_longer_explodes_on_a_session_without_panel_id(monkeypatch):
+    """`get_open` вызывают продление и разбор платежа — он не должен падать."""
+    from app.database.models import Subscription as SubModel, User as UserModel
+    from app.services.grace_access_runtime import SQLAlchemyGraceSessionStore
+    from tests.fixtures.sqlite_memory import memory_session
+
+    tables = [UserModel.__table__, SubModel.__table__, GraceAccessSessionModel.__table__]
+    async with memory_session(monkeypatch, tables) as db:
+        db.add(UserModel(id=1, telegram_id=100, remnawave_id=None))
+        db.add(
+            SubModel(
+                id=42,
+                user_id=1,
+                status='expired',
+                end_date=NOW - timedelta(days=1),
+                remnawave_id=PANEL_ID,
+                remnawave_short_id='sid42',
+            )
+        )
+        db.add(make_v2_session_row(remnawave_id=None))
+        await db.commit()
+
+        session = await SQLAlchemyGraceSessionStore(db).get_open(42)
+
+        assert session is not None
+        assert session.remnawave_id == PANEL_ID

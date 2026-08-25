@@ -60,6 +60,56 @@ from app.services.grace_access_service import (
 )
 
 
+def _create_payload_as_patch(create_kwargs: dict[str, Any]) -> dict[str, Any]:
+    """Превратить payload создания в безопасный payload обновления.
+
+    Две ловушки, из-за которых нельзя просто переслать create-тело в PATCH:
+
+    * ``username`` — в 3.0.0 это альтернативный идентификатор записи, а команда
+      требует ровно один; вместе с ``id`` он лишний.
+    * ``active_internal_squads`` — ``create_user`` пропускает пустой список
+      (``if active_internal_squads:``), а ``update_user`` — только ``None``
+      (``if ... is not None``). В контракте поле опционально: не прислать =
+      «не трогать», прислать ``[]`` = «снять все сквады». Переслав пустой
+      список, мы бы сняли у живого оплаченного аккаунта все инбаунды — он
+      остался бы ACTIVE, но ссылка на подписку отдавала бы ноль конфигов.
+      Ровно поэтому все остальные update-ветки в проекте гейтят это поле
+      через ``if subscription.connected_squads:``.
+    """
+    patch = {key: value for key, value in create_kwargs.items() if key != 'username'}
+    if not patch.get('active_internal_squads'):
+        patch.pop('active_internal_squads', None)
+    return patch
+
+
+async def _adopt_or_create(api: Any, adopt_short_uuid: str | None, create_kwargs: dict[str, Any]) -> Any:
+    """Опознать существующего панельного пользователя по shortUuid, иначе создать.
+
+    У строки, привязанной до апгрейда на Remnawave 3.0.0, числового id нет (его
+    проставляет бэкфил), но shortUuid панель по-прежнему знает. Без этой проверки
+    любое админское «создать/синхронизировать» заводит ВТОРОЙ панельный аккаунт,
+    затирает shortUuid новым — и оплаченный оригинал становится ненаходимым.
+
+    Проверка живёт здесь, потому что через этот хелпер проходят все админские
+    пути создания; дублировать её по call-site значит однажды забыть.
+    """
+    short_uuid = (adopt_short_uuid or '').strip()
+    if short_uuid:
+        # Только 404 (→ None) доказывает, что аккаунта нет. Любая другая ошибка
+        # пробрасывается: создать нового «на всякий случай» — это и есть дубль.
+        adopted = await api.get_user_by_short_uuid(short_uuid)
+        if adopted is not None:
+            # Подхватить аккаунт мало — вызывающий просил ПРИВЕСТИ панель к
+            # переданному состоянию и трактует результат как «панель теперь
+            # такая». Без PATCH админское «продлить» отрапортовало бы успех,
+            # оставив в панели старые статус/дату/лимиты, а у клиента —
+            # нерабочий VPN. `username` в PATCH не идёт: это create-only поле,
+            # переименовывать существующий аккаунт мы не собираемся.
+            update_kwargs = _create_payload_as_patch(create_kwargs)
+            return await api.update_user(user_id=adopted.id, **update_kwargs)
+    return await api.create_user(**create_kwargs)
+
+
 logger = structlog.get_logger(__name__)
 
 _OPEN_STATES = (
@@ -111,6 +161,49 @@ class GracePanelUpdateLease:
         return self.subscription is not None and not self.has_open_grace
 
 
+async def _repair_missing_panel_id(db: AsyncSession, model: GraceAccessSessionModel) -> bool:
+    """Дозаполнить `remnawave_id` сессии из тех же источников, что и бэкфилл.
+
+    Сессия с пустой колонкой нечитаема: `_model_to_session` бросает
+    `GraceSnapshotError`. Такая строка бессмертна — закрыть её некому, новый
+    грейс для этой подписки не откроется из-за уникального индекса на открытую
+    сессию, а фоновой разбор пишет ошибку каждый цикл. Между тем ответ обычно
+    лежит рядом: подписка (или, в однотарифном, её владелец) уже связаны —
+    бэкфилом или самим ботом после него.
+
+    Возвращает True, если идентичность восстановлена.
+    """
+    if model.remnawave_id is not None:
+        return False
+
+    panel_id = (
+        await db.execute(select(Subscription.remnawave_id).where(Subscription.id == model.subscription_id))
+    ).scalar_one_or_none()
+
+    if panel_id is None and not settings.is_multi_tariff_enabled():
+        # В однотарифном идентичность канонически живёт на пользователе.
+        panel_id = (
+            await db.execute(
+                select(User.remnawave_id)
+                .join(Subscription, Subscription.user_id == User.id)
+                .where(Subscription.id == model.subscription_id)
+            )
+        ).scalar_one_or_none()
+
+    if panel_id is None:
+        return False
+
+    model.remnawave_id = int(panel_id)
+    model.last_error = None
+    logger.info(
+        'Идентичность grace-сессии восстановлена из подписки',
+        grace_session_id=model.id,
+        subscription_id=model.subscription_id,
+        remnawave_id=int(panel_id),
+    )
+    return True
+
+
 class SQLAlchemyGraceSessionStore:
     """SQLAlchemy adapter for the persistence-neutral grace core."""
 
@@ -130,7 +223,11 @@ class SQLAlchemyGraceSessionStore:
             .limit(1)
         )
         model = result.scalar_one_or_none()
-        return _model_to_session(model) if model else None
+        if model is None:
+            return None
+        if model.remnawave_id is None:
+            await _repair_missing_panel_id(self._db, model)
+        return _model_to_session(model)
 
     async def get_by_incident(
         self,
@@ -146,7 +243,11 @@ class SQLAlchemyGraceSessionStore:
             )
         )
         model = result.scalar_one_or_none()
-        return _model_to_session(model) if model else None
+        if model is None:
+            return None
+        if model.remnawave_id is None:
+            await _repair_missing_panel_id(self._db, model)
+        return _model_to_session(model)
 
     async def create(self, session: GraceAccessSession) -> GraceAccessSession:
         model = _session_to_model(session)
@@ -243,6 +344,8 @@ class SQLAlchemyGraceSessionStore:
         sessions: list[GraceAccessSession] = []
         for model in result.scalars().all():
             try:
+                if model.remnawave_id is None:
+                    await _repair_missing_panel_id(self._db, model)
                 sessions.append(_model_to_session(model))
             except Exception as error:
                 model.last_error = f'{type(error).__name__}: {error}'[:1000]
@@ -1099,11 +1202,13 @@ async def update_panel_user_grace_safe(
 async def create_panel_user_grace_safe(
     api: Any,
     subscription_id: int,
+    *,
+    adopt_short_uuid: str | None = None,
     **create_kwargs: Any,
 ) -> Any:
     """Create a panel user only while the subscription cannot have an overlay."""
     if grace_access_runtime.mode in (GraceAccessMode.DISABLED, GraceAccessMode.OBSERVE):
-        return await api.create_user(**create_kwargs)
+        return await _adopt_or_create(api, adopt_short_uuid, create_kwargs)
     async with grace_sensitive_panel_update(subscription_id) as lease:
         if lease.subscription is None:
             raise GracePanelError(f'Subscription {subscription_id} disappeared before Remnawave user creation')
@@ -1111,7 +1216,7 @@ async def create_panel_user_grace_safe(
             raise GracePanelError(
                 f'Remnawave user creation deferred while subscription {subscription_id} has open grace'
             )
-        return await api.create_user(**create_kwargs)
+        return await _adopt_or_create(api, adopt_short_uuid, create_kwargs)
 
 
 @asynccontextmanager
