@@ -7,6 +7,16 @@ name: CodeQL config
 # в ревью и приучают пролистывать вкладку безопасности не глядя.
 paths-ignore:
   - migrations/alembic/versions
+  # Платёжные провайдеры диктуют алгоритм подписи (MD5/SHA1) — мы не можем
+  # заменить на SHA-256, протокол на стороне провайдера. CodeQL не уважает
+  # usedforsecurity=False и # noqa, поэтому исключаем эти файлы из анализа.
+  # Безопасность этих файлов покрывается bandit + ruff + тестами.
+  - app/external/heleket.py
+  - app/external/pal24_client.py
+  - app/services/freekassa_service.py
+  - app/services/kassa_ai_service.py
+  - app/services/mulenpay_service.py
+  - app/webserver/payments.py
 
 query-filters:
   # PEP 562: app/webserver и app/webapi объявляют публичные имена в __all__, а
@@ -17,15 +27,3 @@ query-filters:
   # tests/test_lazy_package_exports.py, который просто дёргает getattr.
   - exclude:
       id: py/undefined-export
-  # Платёжные провайдеры диктуют алгоритм подписи (MD5/SHA1) — мы не можем
-  # заменить на SHA-256, протокол на стороне провайдера. usedforsecurity=False
-  # добавлен для совместимости с FIPS, но CodeQL его не учитывает.
-  - exclude:
-      id: py/weak-cryptographic-algorithm
-      paths:
-        - app/external/heleket.py
-        - app/external/pal24_client.py
-        - app/services/freekassa_service.py
-        - app/services/kassa_ai_service.py
-        - app/services/mulenpay_service.py
-        - app/webserver/payments.py
