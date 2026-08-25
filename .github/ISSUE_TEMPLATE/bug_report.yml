@@ -1,0 +1,61 @@
+name: 🐞 Bug report
+description: Сообщить об ошибке в работе бота
+labels: ['bug']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Спасибо, что сообщаете о проблеме! Заполните, пожалуйста, шаблон — так баг будет найден быстрее.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Что произошло?
+      description: Опишите проблему понятно и кратко.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Шаги воспроизведения
+      placeholder: |
+        1. Отправить команду '...'
+        2. Нажать '...'
+        3. Увидеть ошибку
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Ожидаемое поведение
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Логи
+      description: Фрагмент logs/error.log или вывод docker logs (удалите токены и персональные данные!)
+      render: shell
+
+  - type: input
+    id: version
+    attributes:
+      label: Версия
+      description: Версия бота (release tag, коммит или образ Docker)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: deploy
+    attributes:
+      label: Способ развёртывания
+      options:
+        - Docker Compose
+        - Docker (образ из registry)
+        - Локально (python/uv)
+        - Другое
+    validations:
+      required: true
