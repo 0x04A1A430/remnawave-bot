@@ -41,6 +41,7 @@ for dir_path in runtime_dirs:
                         follow_symlinks=False,
                     )
                 except PermissionError:
+                    # Bind-mount: chown may fail, ignore and continue
                     pass
             for name in files:
                 try:
@@ -51,22 +52,27 @@ for dir_path in runtime_dirs:
                         follow_symlinks=False,
                     )
                 except PermissionError:
+                    # Bind-mount: chown may fail, ignore and continue
                     pass
     except PermissionError:
+        # Fallback: chmod if chown failed (e.g. read-only bind mount)
         try:
-            os.chmod(p, 0o777)  # noqa: PTH101, S103
+            os.chmod(p, 0o755)  # noqa: PTH101, S103
             for root, dirs, files in os.walk(dir_path):
                 for name in dirs:
                     try:
-                        os.chmod(os.path.join(root, name), 0o777)  # noqa: PTH101, PTH118, S103
+                        os.chmod(os.path.join(root, name), 0o755)  # noqa: PTH101, PTH118, S103
                     except PermissionError:
+                        # Read-only filesystem, skip
                         pass
                 for name in files:
                     try:
-                        os.chmod(os.path.join(root, name), 0o777)  # noqa: PTH101, PTH118, S103
+                        os.chmod(os.path.join(root, name), 0o755)  # noqa: PTH101, PTH118, S103
                     except PermissionError:
+                        # Read-only filesystem, skip
                         pass
         except PermissionError:
+            # Cannot change permissions, give up gracefully
             pass
 
 os.setgid(APP_GID)
