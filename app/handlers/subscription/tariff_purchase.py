@@ -688,8 +688,6 @@ async def show_tariffs_list(
             await _proceed_with_selected_tariff(callback, db_user, db, state, tariffs[0].id, skip_selection=True)
             return
 
-
-
     # Получаем доступные тарифы
     promo_group_id = getattr(db_user, 'promo_group_id', None)
     tariffs = await get_tariffs_for_user(db, promo_group_id)
