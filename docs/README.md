@@ -1,5 +1,5 @@
 <div>
-  <img src="https://raw.githubusercontent.com/cy7su/remnawave-bot/main/.github/assets/logo.png" width="250" height="250" align="left"">
+  <img src="https://raw.githubusercontent.com/cy7su/remnawave-bot/main/.github/assets/logo.png" width="200" height="200" align="left"">
   <h1>
    <p align="left">xilarobot</p>
   <a href="https://www.github.com/cy7su/remnawave-bot/releases/"><img alt="downloads"
