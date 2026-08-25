@@ -4,11 +4,10 @@ import json
 import math
 import re
 import ssl
-import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, ClassVar
+from typing import Any
 from urllib.parse import urlparse
 
 import aiohttp
