@@ -82,3 +82,59 @@ def test_legacy_guest_find_or_create_wrapper_cannot_reappear_in_public_routes() 
                 offenders.append(f'{relative}:{function.name}')
 
     assert not offenders, 'Legacy find-or-create used without an explicit gate:\n' + '\n'.join(offenders)
+
+
+# The two registration-completion twins (message- and callback-driven) admit a user
+# through the same three branches: DELETED restore, phantom claim, existing-user
+# reactivation. Each branch must bind the locked gift exactly once before mutating
+# the account, or the FOR UPDATE lock taken by the gate is released by the commit
+# with the gift still unbound — a concurrent claimer can then take it.
+REGISTRATION_TWINS = ('complete_registration', 'complete_registration_from_callback')
+
+
+def _bind_call_counts_by_function(path: Path) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for function in _functions(path):
+        counts[function.name] = sum(
+            1 for node in ast.walk(function) if isinstance(node, ast.Call) and _call_name(node) == 'bind_locked_gift'
+        )
+    return counts
+
+
+def test_registration_twins_bind_the_locked_gift_symmetrically() -> None:
+    counts = _bind_call_counts_by_function(ROOT / 'app/handlers/start.py')
+    missing = [name for name in REGISTRATION_TWINS if name not in counts]
+    assert not missing, f'Registration twin disappeared from start.py: {missing}'
+
+    observed = {name: counts[name] for name in REGISTRATION_TWINS}
+    assert len(set(observed.values())) == 1, (
+        'Registration twins bind the locked gift a different number of times — one of the '
+        f'admission branches is missing its bind_locked_gift call: {observed}'
+    )
+    assert observed[REGISTRATION_TWINS[0]] == 3, (
+        'Expected one bind_locked_gift per admission branch (DELETED restore, phantom claim, '
+        f'existing-user reactivation): {observed}'
+    )
+
+
+def test_no_admission_branch_binds_the_locked_gift_twice() -> None:
+    tree = ast.parse((ROOT / 'app/handlers/start.py').read_text(encoding='utf-8'))
+    offenders: list[str] = []
+
+    for node in ast.walk(tree):
+        body = getattr(node, 'body', None)
+        if not isinstance(body, list):
+            continue
+        previous: str | None = None
+        for statement in body:
+            current = ast.dump(statement) if isinstance(statement, ast.Expr) else None
+            calls = (
+                {_call_name(call) for call in ast.walk(statement) if isinstance(call, ast.Call)}
+                if current is not None
+                else set()
+            )
+            if current is not None and current == previous and 'bind_locked_gift' in calls:
+                offenders.append(ast.unparse(statement))
+            previous = current
+
+    assert not offenders, 'Duplicated bind_locked_gift statement:\n' + '\n'.join(offenders)

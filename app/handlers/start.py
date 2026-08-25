@@ -2288,8 +2288,6 @@ async def complete_registration_from_callback(callback: types.CallbackQuery, sta
 
         await _registration_invite_service.bind_locked_gift(db, evidence=access_decision.evidence, user=existing_user)
 
-        await _registration_invite_service.bind_locked_gift(db, evidence=access_decision.evidence, user=existing_user)
-
         if existing_user.balance_kopeks > 0:
             logger.warning(
                 '⚠️ DELETED-восстановление: обнуляем ненулевой баланс',
@@ -2629,6 +2627,8 @@ async def complete_registration(message: types.Message, state: FSMContext, db: A
 
         # Prevent self-referral when partner re-registers via own campaign link
         safe_referrer_id = referrer_id if referrer_id != existing_user.id else None
+
+        await _registration_invite_service.bind_locked_gift(db, evidence=access_decision.evidence, user=existing_user)
 
         if existing_user.balance_kopeks > 0:
             logger.warning(
