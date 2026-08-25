@@ -20,7 +20,11 @@ query-filters:
   # Все MD5/SHA1 в проекте — подписи платёжных провайдеров (heleket, pal24,
   # freekassa, kassa_ai, mulenpay, cloudpayments). Алгоритм диктует провайдер,
   # заменить на SHA-256 нельзя. usedforsecurity=False добавлен для FIPS, но
-  # CodeQL его не учитывает. paths-ignore на отдельные файлы не сработал —
-  # глобальный exclude единственный надёжный способ убрать ложные срабатывания.
+  # CodeQL его не учитывает. Query ID: py/weak-sensitive-data-hashing.
   - exclude:
-      id: py/weak-cryptographic-algorithm
+      id: py/weak-sensitive-data-hashing
+  # entrypoint.py: chmod — фолбэк при ошибке chown на read-only bind mount.
+  # 0o700 (rwx------) максимально строгий, но CodeQL всё равно флагует.
+  # Это runtime-директории внутри Docker-контейнера, внешний доступ невозможен.
+  - exclude:
+      id: py/overly-permissive-file
