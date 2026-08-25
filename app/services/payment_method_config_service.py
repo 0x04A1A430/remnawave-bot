@@ -474,6 +474,24 @@ async def ensure_payment_method_configs(db: AsyncSession) -> None:
             missing_methods_count=len(missing_methods),
         )
 
+    # Re-sync enabled flags from env vars on every startup: конфиг бота
+    # (CRYPTOBOT_ENABLED, PLATEGA_ENABLED, TELEGRAM_STARS_ENABLED, ...) — единый
+    # источник того, какие способы оплаты видны в кабинете. Чинит кейс, когда
+    # методы были засеяны ДО включения провайдера в .env (is_enabled=false).
+    defaults = _get_method_defaults()
+    all_result = await db.execute(select(PaymentMethodConfig))
+    all_configs = list(all_result.scalars().all())
+    changed = 0
+    for config in all_configs:
+        method_def = defaults.get(config.method_id, {})
+        desired = bool(method_def.get('is_configured', False))
+        if config.is_enabled != desired:
+            config.is_enabled = desired
+            changed += 1
+    if changed:
+        await db.commit()
+        logger.info('Re-synced payment method enabled flags from env', changed=changed)
+
 
 # ============ CRUD ============
 

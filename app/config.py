@@ -1252,6 +1252,7 @@ class Settings(BaseSettings):
     # Cabinet (Personal Account) settings
     CABINET_ENABLED: bool = False
     CABINET_JWT_SECRET: str | None = None
+    CABINET_BRANDING_NAME: str = ''  # Название кабинета в шапке (если не задано — 'Cabinet')
     CABINET_ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
     CABINET_REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     CABINET_ALLOWED_ORIGINS: str = ''
