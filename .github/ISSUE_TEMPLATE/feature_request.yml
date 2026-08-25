@@ -1,0 +1,37 @@
+name: ✨ Feature request
+description: Предложить новую функцию или улучшение
+labels: ['enhancement']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Опишите вашу идею — чем конкретнее, тем проще оценить и реализовать.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Какую проблему решает?
+      description: Например, «непонятно как...», «приходится вручную...»
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Предлагаемое решение
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Альтернативы
+      description: Другие варианты решения, которые вы рассматривали
+
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Подтверждаю
+      options:
+        - label: Я проверил, что похожей идеи нет в существующих issues
+          required: true
