@@ -1274,7 +1274,6 @@ class EmailNotificationTemplates:
             'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
         }
 
-
     def _referral_registered_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
         """Template for new referral registered notification."""
         referral_name = html.escape(context.get('referral_name', ''))

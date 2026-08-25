@@ -792,17 +792,11 @@ class RemnaWaveWebhookService:
         Проверяет верхний уровень (telegramId/uuid/userId/userUuid) и вложенный
         ``user`` — ровно те ключи, которые читает _resolve_user_and_subscription.
         """
-        if any(
-            data.get(key) not in (None, '')
-            for key in ('telegramId', 'uuid', 'userId', 'userUuid')
-        ):
+        if any(data.get(key) not in (None, '') for key in ('telegramId', 'uuid', 'userId', 'userUuid')):
             return True
         nested = data.get('user')
         if isinstance(nested, dict):
-            return any(
-                nested.get(key) not in (None, '')
-                for key in ('telegramId', 'uuid', 'userId')
-            )
+            return any(nested.get(key) not in (None, '') for key in ('telegramId', 'uuid', 'userId'))
         return False
 
     async def _resolve_user_and_subscription(
