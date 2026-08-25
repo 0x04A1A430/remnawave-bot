@@ -232,7 +232,8 @@ class TelegramNotifierProcessor:
             exc_type = exc_info[0].__name__
 
         raw = f'{logger_name}:{event_msg}:{exc_type}'
-        return hashlib.md5(raw.encode('utf-8', errors='replace')).hexdigest()
+        # Non-security: dedup key only.
+        return hashlib.md5(raw.encode('utf-8', errors='replace'), usedforsecurity=False).hexdigest()
 
     def _evict_stale(self, now: float) -> None:
         """Remove expired entries from the hash cache. Must be called under self._lock."""

@@ -500,7 +500,11 @@ async def sync_postgres_sequences() -> bool:
                 q_schema = _quote_ident(table_schema)
                 q_table = _quote_ident(table_name)
 
-                max_result = await conn.execute(text(f'SELECT COALESCE(MAX({q_col}), 0) FROM {q_schema}.{q_table}'))
+                max_result = await conn.execute(
+                    text(f'SELECT COALESCE(MAX({q_col}), 0) FROM {q_schema}.{q_table}')  # nosec B608
+                    # Идентификаторы нельзя параметризовать; они экранируются _quote_ident,
+                    # а источник — information_schema, а не пользовательский ввод.
+                )
                 max_value = max_result.scalar() or 0
 
                 # pg_get_serial_sequence returns e.g. '"public"."users_id_seq"'.
@@ -518,7 +522,9 @@ async def sync_postgres_sequences() -> bool:
                 q_seq_schema = _quote_ident(seq_schema)
                 q_seq_name = _quote_ident(seq_name)
                 current_result = await conn.execute(
-                    text(f'SELECT last_value, is_called FROM {q_seq_schema}.{q_seq_name}')
+                    # Идентификаторы нельзя параметризовать; они экранируются _quote_ident,
+                    # а источник — pg_get_serial_sequence, а не пользовательский ввод.
+                    text(f'SELECT last_value, is_called FROM {q_seq_schema}.{q_seq_name}')  # nosec B608
                 )
                 current_row = current_result.fetchone()
 
