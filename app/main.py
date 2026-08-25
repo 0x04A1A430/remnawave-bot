@@ -917,6 +917,7 @@ async def main():
             try:
                 await monitoring_task
             except asyncio.CancelledError:
+                # Expected: task was cancelled above
                 pass
 
         if maintenance_task and not maintenance_task.done():
@@ -926,6 +927,7 @@ async def main():
             try:
                 await maintenance_task
             except asyncio.CancelledError:
+                # Expected: task was cancelled above
                 pass
 
         if version_check_task and not version_check_task.done():
@@ -934,6 +936,7 @@ async def main():
             try:
                 await version_check_task
             except asyncio.CancelledError:
+                # Expected: task was cancelled above
                 pass
 
         if traffic_monitoring_task and not traffic_monitoring_task.done():
@@ -943,6 +946,7 @@ async def main():
             try:
                 await traffic_monitoring_task
             except asyncio.CancelledError:
+                # Expected: task was cancelled above
                 pass
 
         if daily_subscription_task and not daily_subscription_task.done():
@@ -952,6 +956,7 @@ async def main():
             try:
                 await daily_subscription_task
             except asyncio.CancelledError:
+                # Expected: task was cancelled above
                 pass
 
         logger.info('ℹ️ Остановка сервиса отчетов...')
@@ -1003,6 +1008,7 @@ async def main():
             try:
                 await polling_task
             except asyncio.CancelledError:
+                # Expected: task was cancelled above
                 pass
 
         if telegram_webhook_enabled and 'bot' in locals():
@@ -1072,5 +1078,6 @@ if __name__ == '__main__':
         try:
             asyncio.run(_send_crash_notification_on_error(e))
         except Exception:
+            # Best-effort notification; ignore failures during shutdown
             pass
         sys.exit(1)
