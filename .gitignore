@@ -5,24 +5,23 @@
 
 # Конфигурация проекта
 !.dockerignore
-!.env.example
 !.gitignore
 !.python-version
 !Dockerfile
 !docker-compose.yml
-!docker-compose.local.yml
 !Makefile
 !pyproject.toml
 !uv.lock
 !requirements.txt
 !alembic.ini
 !release-please-config.json
-!release-please-manifest.json
 !.release-please-manifest.json
 !.pre-commit-config.yaml
 !bot_logo.png
 
 # Документация
+!docs/
+!docs/**
 !README.md
 !CODE_OF_CONDUCT.md
 !LICENSE

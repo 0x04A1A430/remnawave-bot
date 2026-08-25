@@ -148,7 +148,9 @@ def _verify_mulenpay_signature(request: Request, raw_body: bytes) -> bool:
     # Iterate insertion order (json.loads preserves wire order since Python 3.7),
     # excluding the 'sign' field itself. Matches official SDK exactly.
     data_str = ''.join(str(value) for key, value in payload.items() if key != 'sign')
-    expected = hashlib.sha1((data_str + secret_key).encode('utf-8')).hexdigest()  # provider-defined algorithm
+    expected = hashlib.sha1(
+        (data_str + secret_key).encode('utf-8'), usedforsecurity=False
+    ).hexdigest()  # provider-defined algorithm
 
     if hmac.compare_digest(received_sign.lower(), expected.lower()):
         return True
