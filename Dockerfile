@@ -56,9 +56,9 @@ LABEL org.opencontainers.image.title="RemnaWaveBot" \
       org.opencontainers.image.url="https://github.com/cy7su/remnawave-bot" \
       org.opencontainers.image.vendor="cy6su"
 
-ENTRYPOINT ["python", "entrypoint.py"]
+ENTRYPOINT ["python", "-m", "app.entrypoint"]
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')" || exit 1
 
-CMD ["python", "main.py"]
+CMD ["python", "-m", "app.main"]
