@@ -57,17 +57,17 @@ for dir_path in runtime_dirs:
     except PermissionError:
         # Fallback: chmod if chown failed (e.g. read-only bind mount)
         try:
-            os.chmod(p, 0o750)  # noqa: PTH101, S103
+            os.chmod(p, 0o700)  # noqa: PTH101
             for root, dirs, files in os.walk(dir_path):
                 for name in dirs:
                     try:
-                        os.chmod(os.path.join(root, name), 0o750)  # noqa: PTH101, PTH118, S103
+                        os.chmod(os.path.join(root, name), 0o700)  # noqa: PTH101, PTH118
                     except PermissionError:
                         # Read-only filesystem, skip
                         pass
                 for name in files:
                     try:
-                        os.chmod(os.path.join(root, name), 0o750)  # noqa: PTH101, PTH118, S103
+                        os.chmod(os.path.join(root, name), 0o700)  # noqa: PTH101, PTH118
                     except PermissionError:
                         # Read-only filesystem, skip
                         pass
