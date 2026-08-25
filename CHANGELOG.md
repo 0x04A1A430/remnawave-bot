@@ -1,5 +1,65 @@
 # Changelog
 
+## [4.2.0](https://github.com/cy7su/remnawave-bot/compare/v4.1.0...v4.2.0) (2026-08-25)
+
+
+### New Features
+
+* **grace:** mark panel user with GRACE tag while grace access is active ([970e570](https://github.com/cy7su/remnawave-bot/commit/970e57091a37d071046ed6d2378fcc3e2c4abbdb))
+* **grace:** port upstream _adopt_or_create (shortUuid adoption) into grace-safe panel creation ([f8e6a5a](https://github.com/cy7su/remnawave-bot/commit/f8e6a5afb70c8916176ac74384766b0aa99a441a))
+* **landing:** засчитывать гостевую покупку в рекламную кампанию ([1c46702](https://github.com/cy7su/remnawave-bot/commit/1c46702cdf18c437c71de6d0129a65cdfa0f4794))
+* **landing:** засчитывать гостевые покупки в рекламные кампании ([7203ca9](https://github.com/cy7su/remnawave-bot/commit/7203ca9f88cf5f37d82cdb0476f417799d621a6e))
+* **landing:** сохранять слаг рекламной кампании в гостевой покупке ([4a81705](https://github.com/cy7su/remnawave-bot/commit/4a81705d277c5e2fd92da47907e04cf8b4abb590))
+* **menu:** move resume-checkout button from main menu to balance menu ([4ec2fbb](https://github.com/cy7su/remnawave-bot/commit/4ec2fbba6648a41b579def6229f5cc3aec1a3ff0))
+* **remnawave:** проксировать GeoCheck ноды из панели 3.3.0 в кабинет ([134d8e4](https://github.com/cy7su/remnawave-bot/commit/134d8e4ef828d138bc74a4608af9ee64c15e6e98))
+* **startup:** surface insecure-default warnings (POSTGRES_PASSWORD etc.) — method existed but was never called ([f46f822](https://github.com/cy7su/remnawave-bot/commit/f46f8227e3a410996b546c38471156f7392f3993))
+
+
+### Bug Fixes
+
+* **backup:** send backup file to Telegram chat with caption ([66c7731](https://github.com/cy7su/remnawave-bot/commit/66c7731e0ccf552f57dbaed591ee875137e83a84))
+* **bans:** уважать общий выключатель уведомлений в типизированных банах ([927790f](https://github.com/cy7su/remnawave-bot/commit/927790fd4d674e32a4824c9778801d63bb360393))
+* **blacklist:** 404 from source URL logged as warning with hint, keep serving stale data ([cd73773](https://github.com/cy7su/remnawave-bot/commit/cd737738a95941140ae72640fbecb8e189162be5))
+* **bulk_ban:** respect RetryAfter and pace mass user notifications (~20 msg/s) ([1f8d7ea](https://github.com/cy7su/remnawave-bot/commit/1f8d7ea298b8ca8bf1653bbc277617e5e79538cc))
+* **cabinet:** strip tg-emoji tags from payment method names in web responses ([f5f03d0](https://github.com/cy7su/remnawave-bot/commit/f5f03d06cec8e67024b559a2b26ce8e8743b3404))
+* **cabinet:** не отдавать пустую строку вместо null в /info/service ([1707660](https://github.com/cy7su/remnawave-bot/commit/1707660636fdf86547a891064ad9ec4f0f6bfafc))
+* **cabinet:** отдавать в /info/service реальные настройки ([0ba8fa5](https://github.com/cy7su/remnawave-bot/commit/0ba8fa56bbf778e79b4cec52cde46dcc38d5e4a4))
+* **cabinet:** отдавать в /info/service реальные настройки ([3329ec3](https://github.com/cy7su/remnawave-bot/commit/3329ec33cf824cc8568f09f01a709be6cba9b3aa))
+* **channel_checker:** align panel id field with model (remnawave_id), fixes AttributeError before deactivation notice ([c1ffd7b](https://github.com/cy7su/remnawave-bot/commit/c1ffd7b23262990cd325ea35e4472656a5414b4b))
+* **channel:** не слать админам traceback на заблокировавших бота ([d91caee](https://github.com/cy7su/remnawave-bot/commit/d91caeeee24d6be463c5f0efb502f10e7016cac2))
+* **config:** rebuild config.py lost in cp1251 re-encoding during merge resolution ([5e24860](https://github.com/cy7su/remnawave-bot/commit/5e2486089c4163ea9624cf6c6862ed1ef74f1db7))
+* **cryptobot:** rollback session in webhook error path — prevents PendingRollbackError cascade into topup notifications ([94555ca](https://github.com/cy7su/remnawave-bot/commit/94555ca1738800b65e8ced6c719a8bb1400c374a))
+* **devices:** init emoji_tag per device — UnboundLocalError when device has local_name ([b417d6e](https://github.com/cy7su/remnawave-bot/commit/b417d6ea47c60165bac1f47b62b18599cc38f7c6))
+* **email:** restore PROMO_OFFER template lost in auto-merge ([18904a1](https://github.com/cy7su/remnawave-bot/commit/18904a10daa65e3926060999245c84fe4a5845bf))
+* **email:** отписку применяет только POST + границы токена ([091e2ee](https://github.com/cy7su/remnawave-bot/commit/091e2ee95fd4709f26b521bbc4a05a750a65eb65))
+* **gift:** gifted subscription exits grace as active instead of being revoked ([61025f8](https://github.com/cy7su/remnawave-bot/commit/61025f867ee30e7ddd0a319a6864afa81de4ce4b))
+* **grace:** suppress subscription-expiring notifications during grace access ([101a64b](https://github.com/cy7su/remnawave-bot/commit/101a64b0063cb919b22422d13d76e68ece1f9ccb))
+* **locales:** reword traffic-limit and expired messages to mention grace access in all locales ([8968400](https://github.com/cy7su/remnawave-bot/commit/89684006df192115ef45d342dd923754390cd7da))
+* **locales:** reword traffic-limit message to mention grace access ([b541ecf](https://github.com/cy7su/remnawave-bot/commit/b541ecffdbe61e7c0cbcd732fc20237c516ce82c))
+* **log_rotation:** validate LOG_ROTATION_TIME range — '24:00' crashed bot startup with ValueError(hour must be in 0..23) ([465cab0](https://github.com/cy7su/remnawave-bot/commit/465cab07e7390a258df77fae5399842be23dbdc1))
+* **merge:** restore NotificationType winback/promo members, PromoCodeType.BALANCE_AND_DAYS, pytest import ([63439df](https://github.com/cy7su/remnawave-bot/commit/63439df016017f2cf6c5b03824b99303f77c720d))
+* **migrations:** перенумеровать миграцию кампании в 0105 ([79b17f0](https://github.com/cy7su/remnawave-bot/commit/79b17f033d5088ae36b9aea32aae2b83ba1aafb8))
+* **migrations:** развести номер миграции гостевых покупок с 0105 ([d4f529b](https://github.com/cy7su/remnawave-bot/commit/d4f529b70d624c209b51d37e03150a187e790597))
+* **payment:** add missing description and open_url_direct columns to PaymentMethodConfig model ([1b366a1](https://github.com/cy7su/remnawave-bot/commit/1b366a1c5ccfa54991532b27c37df80bc8e4c094))
+* **payments:** add missing asyncio import for webhook bg-task helpers ([4c063a8](https://github.com/cy7su/remnawave-bot/commit/4c063a873f7919e79c7176b59e9709299589ec4f))
+* **payments:** не терять вебхуки платёжек, выключенных на момент старта ([67532db](https://github.com/cy7su/remnawave-bot/commit/67532dbd50c97fc5f97b450a53a0d0c72eb64bc6))
+* **platega:** распознавать camelCase-коллбеки рекуррентной СБП-подписки ([4123ee8](https://github.com/cy7su/remnawave-bot/commit/4123ee8268dbe24fd5dac330b1d2f9499275aa67))
+* **remnawave:** не подставлять None вместо класса ошибки при провале импорта ([775e507](https://github.com/cy7su/remnawave-bot/commit/775e5075769bc8ff892b8b359a6f03a4f1e12d1d))
+* strip UTF-8 BOM from pyproject.toml and CHANGELOG.md ([489f1f0](https://github.com/cy7su/remnawave-bot/commit/489f1f09251aee62944103484b87363cc2213798))
+* **tariffs:** port upstream single-tariff skip + back_callback threading; fix UnboundLocalError in redraw handlers ([c6c1327](https://github.com/cy7su/remnawave-bot/commit/c6c1327fb2d5a0adf1d94711092e69254d757384))
+* **tickets,monitoring:** drop stray @ before format_username_link output ([dc3989a](https://github.com/cy7su/remnawave-bot/commit/dc3989aba1fa2ae2e9752e5fca08c239fa44fe25))
+* **tickets:** длинные сообщения обрезались и не показывались целиком ([064e067](https://github.com/cy7su/remnawave-bot/commit/064e0673b86db4195a85ec5eaf5e349e3324fef2))
+* **tickets:** длинные сообщения обрезались и не показывались целиком ([3be6da7](https://github.com/cy7su/remnawave-bot/commit/3be6da7a8c6c8fc423d110850f1376207c82d2d1))
+* **tickets:** экранировать превью ответа в уведомлении пользователю ([f898414](https://github.com/cy7su/remnawave-bot/commit/f898414bb4dfca6350d02242088bae44fe7fce8d))
+* **traffic:** не читать даты периода вне ветки, которая их задаёт ([993ea75](https://github.com/cy7su/remnawave-bot/commit/993ea75c90ebc769d6fe064c21f8fbf05bfc28d9))
+* **webhooks:** identifier-less panel events logged as debug, not 'user not found' warnings ([52fa0f7](https://github.com/cy7su/remnawave-bot/commit/52fa0f795ff5f6f652d4c54e1a63a1e793b3cbc5))
+
+
+### Refactoring
+
+* **campaigns:** вынести привязку к кампании в сервис ([a813083](https://github.com/cy7su/remnawave-bot/commit/a813083c7a2140b1193c1ff10cb4a7809f5e95e3))
+* **grace:** drop GRACE_ACCESS_EXTERNAL_SQUAD_UUID configurable external squad ([18afe5f](https://github.com/cy7su/remnawave-bot/commit/18afe5f6fe466e810a1a811b631de10147c427a3))
+
 ## [4.1.0](https://github.com/cy7su/remnawave-bot/compare/v4.0.0...v4.1.0) (2026-08-10)
 
 ## Upstream [4.1.0](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v4.0.0...v4.1.0) (2026-08-20)
