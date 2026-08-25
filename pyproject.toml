@@ -248,6 +248,10 @@ ignore = [
     'E402',
     'PLC0415',
 ]
+'app/main.py' = [
+    'E402',
+    'PLC0415',
+]
 'app/bot.py' = [
     'E402',
     'PLC0415',

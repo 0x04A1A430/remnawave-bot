@@ -126,7 +126,7 @@ cp .env.example .env
 5. **Запустите через Docker (рекомендуется):**
 ```bash
 docker compose up -d postgres redis
-python main.py
+python -m app.main
 ```
 
 ### Структура проекта
@@ -324,7 +324,7 @@ git checkout -b feature/new-payment-method
 # Запуск с тестовой базой
 export DATABASE_URL="sqlite:///test.db"
 export BOT_TOKEN="test_token"
-python main.py
+python -m app.main
 ```
 
 ### Тестирование компонентов

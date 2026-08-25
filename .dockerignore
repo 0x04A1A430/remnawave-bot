@@ -44,6 +44,12 @@ dist/
 .DS_Store
 Thumbs.db
 
+# Root symlinks — реальные файлы лежат в app/ / assets/ / scripts/
+/main.py
+/entrypoint.py
+/bot_logo.png
+/Makefile
+
 # Temporary files
 *.tmp
 *.temp
