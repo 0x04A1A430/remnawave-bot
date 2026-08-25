@@ -20,6 +20,17 @@ jobs:
 
       - run: uv sync --group dev
 
+      - name: Auto-format
+        run: |
+          uv run ruff format .
+          uv run ruff check --fix .
+
+      - name: Commit auto-fixes
+        if: github.event_name == 'push'
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: 'style: auto-format with ruff [skip ci]'
+
       - name: Check formatting
         run: uv run ruff format --check .
 

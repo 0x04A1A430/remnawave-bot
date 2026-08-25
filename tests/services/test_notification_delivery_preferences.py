@@ -57,5 +57,3 @@ async def test_transactional_messages_bypass_global_switch(monkeypatch, notifica
 
     assert result is True
     service._send_telegram_notification.assert_awaited_once()
-
-
