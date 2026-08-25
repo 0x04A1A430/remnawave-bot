@@ -17,3 +17,10 @@ query-filters:
   # tests/test_lazy_package_exports.py, который просто дёргает getattr.
   - exclude:
       id: py/undefined-export
+  # Все MD5/SHA1 в проекте — подписи платёжных провайдеров (heleket, pal24,
+  # freekassa, kassa_ai, mulenpay, cloudpayments). Алгоритм диктует провайдер,
+  # заменить на SHA-256 нельзя. usedforsecurity=False добавлен для FIPS, но
+  # CodeQL его не учитывает. paths-ignore на отдельные файлы не сработал —
+  # глобальный exclude единственный надёжный способ убрать ложные срабатывания.
+  - exclude:
+      id: py/weak-cryptographic-algorithm

@@ -599,7 +599,8 @@ class BackupService:
 
                 for table_name in table_names:
                     try:
-                        result = await conn.execute(text(f'SELECT COUNT(*) FROM {table_name}'))
+                        # Имя таблицы получено из inspect() этой же БД, не из пользовательского ввода.
+                        result = await conn.execute(text(f'SELECT COUNT(*) FROM {table_name}'))  # nosec B608
                         count = result.scalar_one()
                     except Exception:
                         count = 0
