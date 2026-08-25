@@ -89,7 +89,7 @@ def _prepare_logo_for_send(path: Path) -> Path:
             # original raised "[Errno 13] Permission denied" and every send fell back to the
             # oversized original. Hash the resolved source path so distinct logos don't
             # collide or reuse a stale temp file.
-            cache_key = hashlib.sha1(str(path.resolve()).encode()).hexdigest()[:10]
+            cache_key = hashlib.sha1(str(path.resolve()).encode(), usedforsecurity=False).hexdigest()[:10]
             resized_path = Path(tempfile.gettempdir()) / f'{path.stem}.{cache_key}{_LOGO_RESIZED_SUFFIX}'
             # If the cached resized copy exists and is newer than the source, reuse it.
             if (

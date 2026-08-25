@@ -160,7 +160,7 @@ class MulenPayService:
 
     def _build_signature(self, currency: str, amount_str: str) -> str:
         raw_string = f'{currency}{amount_str}{self.shop_id}{self.secret_key}'.encode()
-        return hashlib.sha1(raw_string).hexdigest()
+        return hashlib.sha1(raw_string, usedforsecurity=False).hexdigest()  # provider-defined algorithm
 
     async def create_payment(
         self,

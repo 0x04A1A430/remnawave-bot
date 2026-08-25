@@ -186,7 +186,7 @@ class FreekassaService:
         # Приводим amount к int, если это целое число
         final_amount = int(amount) if float(amount).is_integer() else amount
         sign_string = f'{self.shop_id}:{final_amount}:{self.secret1}:{currency}:{order_id}'
-        return hashlib.md5(sign_string.encode()).hexdigest()  # provider-defined algorithm
+        return hashlib.md5(sign_string.encode(), usedforsecurity=False).hexdigest()  # provider-defined algorithm
 
     def verify_webhook_signature(self, shop_id: int, amount: float, order_id: str, sign: str) -> bool:
         """
@@ -196,7 +196,7 @@ class FreekassaService:
         # Приводим amount к int, если это целое число
         final_amount = int(amount) if float(amount).is_integer() else amount
         expected_sign = hashlib.md5(
-            f'{shop_id}:{final_amount}:{self.secret2}:{order_id}'.encode()
+            f'{shop_id}:{final_amount}:{self.secret2}:{order_id}'.encode(), usedforsecurity=False
         ).hexdigest()  # provider-defined algorithm
         return hmac.compare_digest(sign.lower(), expected_sign.lower())
 
@@ -256,7 +256,9 @@ class FreekassaService:
                     headers={'Content-Type': 'application/json'},
                 )
 
-                with urllib.request.urlopen(req, timeout=30) as response:
+                # Схема зафиксирована константой API_BASE_URL ('https://...'), пользовательский
+                # ввод попадает только в JSON-тело запроса, а не в URL.
+                with urllib.request.urlopen(req, timeout=30) as response:  # nosec B310
                     resp_body = response.read().decode('utf-8')
                     data = json.loads(resp_body)
 
