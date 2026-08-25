@@ -71,7 +71,7 @@ from app.services.registration_access_service import (
     RegistrationChannel,
     VerifiedRegistrationIdentity,
 )
-from app.services.registration_invite_service import RegistrationInviteService
+from app.services.registration_invite_service import RegistrationInviteConflict, RegistrationInviteService
 from app.services.subscription_service import SubscriptionService
 from app.services.support_settings_service import SupportSettingsService
 from app.services.web_auth_service import WEB_AUTH_TOKEN_MIN_LENGTH, link_web_auth_token
@@ -166,6 +166,52 @@ async def _answer_registration_denial(
             ]
         )
     await answer_func(_registration_denial_text(texts, decision), reply_markup=reply_markup)
+
+
+async def _withdraw_admission_after_invite_conflict(
+    error: RegistrationInviteConflict,
+    *,
+    telegram_id: int | None,
+    answer_func: Callable[..., Any],
+    texts: Any,
+) -> None:
+    """Answer the ordinary denial after an invite stopped being valid mid-registration."""
+    logger.warning(
+        'Приглашение перестало быть действительным до записи — регистрация отклонена',
+        telegram_id=telegram_id,
+        conflict=str(error),
+    )
+    await _answer_registration_denial(
+        answer_func,
+        texts,
+        RegistrationAccessDecision(False, RegistrationAccessReason.INVITE_REQUIRED),
+    )
+
+
+async def _bind_registration_invite(
+    db: AsyncSession,
+    *,
+    decision: RegistrationAccessDecision,
+    user: Any,
+    answer_func: Callable[..., Any],
+    texts: Any,
+) -> bool:
+    """Bind the locked invite to ``user``. Returns False when admission is withdrawn.
+
+    The gate locks the gift row, but an intervening commit releases that lock, so the
+    gift can still be claimed elsewhere before the write lands. Losing that race is an
+    ordinary denial, not a server error — the caller must stop, not crash.
+    """
+    try:
+        await _registration_invite_service.bind_locked_gift(db, evidence=decision.evidence, user=user)
+    except RegistrationInviteConflict as error:
+        telegram_id = getattr(user, 'telegram_id', None)
+        await db.rollback()
+        await _withdraw_admission_after_invite_conflict(
+            error, telegram_id=telegram_id, answer_func=answer_func, texts=texts
+        )
+        return False
+    return True
 
 
 async def _create_user_with_registration_invite(
@@ -379,10 +425,13 @@ async def _activate_pending_gift_after_registration(
 
         from app.services.guest_purchase_service import (
             activate_purchase as svc_activate,
-            get_claimable_gift_for_update,
+            get_gift_for_update,
         )
 
-        gift_purchase = await get_claimable_gift_for_update(db, gift_token)
+        # Deliberately NOT status-filtered: the branches below tell the user that a
+        # gift is already activated or no longer activatable, which a claimable-only
+        # lookup would collapse into a silent "not found".
+        gift_purchase = await get_gift_for_update(db, gift_token)
 
         if not gift_purchase or not gift_purchase.is_gift:
             logger.warning('Gift not found for deep link token', token_prefix=gift_token[:5])
@@ -2286,7 +2335,10 @@ async def complete_registration_from_callback(callback: types.CallbackQuery, sta
         # Prevent self-referral when partner re-registers via own campaign link
         safe_referrer_id = referrer_id if referrer_id != existing_user.id else None
 
-        await _registration_invite_service.bind_locked_gift(db, evidence=access_decision.evidence, user=existing_user)
+        if not await _bind_registration_invite(
+            db, decision=access_decision, user=existing_user, answer_func=callback.message.answer, texts=texts
+        ):
+            return
 
         if existing_user.balance_kopeks > 0:
             logger.warning(
@@ -2316,7 +2368,10 @@ async def complete_registration_from_callback(callback: types.CallbackQuery, sta
     elif not existing_user:
         # Check for phantom user created by guest purchase (gift by @username)
         if phantom:
-            await _registration_invite_service.bind_locked_gift(db, evidence=access_decision.evidence, user=phantom)
+            if not await _bind_registration_invite(
+                db, decision=access_decision, user=phantom, answer_func=callback.message.answer, texts=texts
+            ):
+                return
             claimed, user = await claim_phantom(
                 db,
                 phantom,
@@ -2356,21 +2411,31 @@ async def complete_registration_from_callback(callback: types.CallbackQuery, sta
 
             referral_code = await generate_unique_referral_code(db, callback.from_user.id)
 
-            user = await _create_user_with_registration_invite(
-                db,
-                decision=access_decision,
-                telegram_id=callback.from_user.id,
-                username=callback.from_user.username,
-                first_name=callback.from_user.first_name,
-                last_name=callback.from_user.last_name,
-                language=language,
-                referred_by_id=referrer_id,
-                referral_code=referral_code,
-            )
+            try:
+                user = await _create_user_with_registration_invite(
+                    db,
+                    decision=access_decision,
+                    telegram_id=callback.from_user.id,
+                    username=callback.from_user.username,
+                    first_name=callback.from_user.first_name,
+                    last_name=callback.from_user.last_name,
+                    language=language,
+                    referred_by_id=referrer_id,
+                    referral_code=referral_code,
+                )
+            except RegistrationInviteConflict as error:
+                # The helper already rolled back, so no half-created user survives.
+                await _withdraw_admission_after_invite_conflict(
+                    error, telegram_id=callback.from_user.id, answer_func=callback.message.answer, texts=texts
+                )
+                return
             await db.refresh(user, ['subscriptions'])
     else:
         logger.info('🔄 Обновляем существующего пользователя', from_user_id=callback.from_user.id)
-        await _registration_invite_service.bind_locked_gift(db, evidence=access_decision.evidence, user=existing_user)
+        if not await _bind_registration_invite(
+            db, decision=access_decision, user=existing_user, answer_func=callback.message.answer, texts=texts
+        ):
+            return
         existing_user.status = UserStatus.ACTIVE.value
         existing_user.language = language
         if referrer_id and referrer_id != existing_user.id and not existing_user.referred_by_id:
@@ -2628,7 +2693,10 @@ async def complete_registration(message: types.Message, state: FSMContext, db: A
         # Prevent self-referral when partner re-registers via own campaign link
         safe_referrer_id = referrer_id if referrer_id != existing_user.id else None
 
-        await _registration_invite_service.bind_locked_gift(db, evidence=access_decision.evidence, user=existing_user)
+        if not await _bind_registration_invite(
+            db, decision=access_decision, user=existing_user, answer_func=message.answer, texts=texts
+        ):
+            return
 
         if existing_user.balance_kopeks > 0:
             logger.warning(
@@ -2658,7 +2726,10 @@ async def complete_registration(message: types.Message, state: FSMContext, db: A
     elif not existing_user:
         # Check for phantom user created by guest purchase (gift by @username)
         if phantom:
-            await _registration_invite_service.bind_locked_gift(db, evidence=access_decision.evidence, user=phantom)
+            if not await _bind_registration_invite(
+                db, decision=access_decision, user=phantom, answer_func=message.answer, texts=texts
+            ):
+                return
             claimed, user = await claim_phantom(
                 db,
                 phantom,
@@ -2698,21 +2769,31 @@ async def complete_registration(message: types.Message, state: FSMContext, db: A
 
             referral_code = await generate_unique_referral_code(db, message.from_user.id)
 
-            user = await _create_user_with_registration_invite(
-                db,
-                decision=access_decision,
-                telegram_id=message.from_user.id,
-                username=message.from_user.username,
-                first_name=message.from_user.first_name,
-                last_name=message.from_user.last_name,
-                language=language,
-                referred_by_id=referrer_id,
-                referral_code=referral_code,
-            )
+            try:
+                user = await _create_user_with_registration_invite(
+                    db,
+                    decision=access_decision,
+                    telegram_id=message.from_user.id,
+                    username=message.from_user.username,
+                    first_name=message.from_user.first_name,
+                    last_name=message.from_user.last_name,
+                    language=language,
+                    referred_by_id=referrer_id,
+                    referral_code=referral_code,
+                )
+            except RegistrationInviteConflict as error:
+                # The helper already rolled back, so no half-created user survives.
+                await _withdraw_admission_after_invite_conflict(
+                    error, telegram_id=message.from_user.id, answer_func=message.answer, texts=texts
+                )
+                return
             await db.refresh(user, ['subscriptions'])
     else:
         logger.info('🔄 Обновляем существующего пользователя', from_user_id=message.from_user.id)
-        await _registration_invite_service.bind_locked_gift(db, evidence=access_decision.evidence, user=existing_user)
+        if not await _bind_registration_invite(
+            db, decision=access_decision, user=existing_user, answer_func=message.answer, texts=texts
+        ):
+            return
         existing_user.status = UserStatus.ACTIVE.value
         existing_user.language = language
         if referrer_id and referrer_id != existing_user.id and not existing_user.referred_by_id:

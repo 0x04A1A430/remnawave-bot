@@ -146,6 +146,16 @@ async def _recover_cabinet_user_after_gate(
     *,
     source: str,
 ) -> None:
+    """Restore the account the caller just proved they own, after the gate admitted them.
+
+    All three Telegram arms reach this helper — initData, login widget and OIDC — and a
+    DELETED account is revived on each. That is deliberate: every arm verifies a Telegram
+    signature (initData and widget by HMAC over the bot token, OIDC by the provider's
+    signature), so all three are the same proof of identity as a fresh ``/start``, and the
+    account they revive is the caller's own. Only initData revived before invite-only; the
+    widget and OIDC endpoints answered 403 and left the user with a cabinet they could log
+    into but never use. BLOCKED never reaches revival — the gate denies it upstream.
+    """
     if user.status == UserStatus.ACTIVE.value:
         return
     if user.status == UserStatus.DELETED.value:

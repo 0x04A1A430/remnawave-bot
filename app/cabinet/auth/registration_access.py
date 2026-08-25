@@ -27,6 +27,7 @@ async def evaluate_public_registration(
     email: str | None = None,
     email_verified: bool = False,
     verified_admin: bool = False,
+    start_parameter: str | None = None,
 ) -> RegistrationAccessDecision:
     if not settings.INVITE_ONLY_ENABLED:
         return RegistrationAccessDecision(
@@ -46,7 +47,7 @@ async def evaluate_public_registration(
                 verified_admin=verified_admin,
             ),
             existing_user=existing_user,
-            start_parameter=None,
+            start_parameter=start_parameter,
             lock_limited_invite=False,
         ),
     )

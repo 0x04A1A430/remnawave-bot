@@ -1,18 +1,23 @@
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
 
 
-def test_blocked_admin_is_not_stopped_before_registration_gate(monkeypatch):
+def test_middleware_has_no_admin_exemption_from_the_block_check():
+    """A BLOCKED account stays blocked in the bot even when it is in ADMIN_IDS.
+
+    The invite-only admin recovery path exists so an operator cannot be locked out
+    of a missing or soft-deleted account. A block is a deliberate administrative
+    action, so exempting ADMIN_IDS here would make such accounts unblockable.
+    """
     from app.middlewares import auth
 
-    monkeypatch.setattr(type(auth.settings), 'is_admin', lambda self, telegram_id: telegram_id == 42)
-    blocked = SimpleNamespace(status='blocked', telegram_id=42)
-    ordinary = SimpleNamespace(status='blocked', telegram_id=43)
+    source = Path(auth.__file__).read_text(encoding='utf-8')
 
-    assert auth._is_blocked_non_admin(blocked) is False
-    assert auth._is_blocked_non_admin(ordinary) is True
+    assert 'if db_user.status == UserStatus.BLOCKED.value:' in source
+    assert not hasattr(auth, '_is_blocked_non_admin')
 
 
 @pytest.mark.asyncio

@@ -127,13 +127,25 @@ async def _send_admin_notification(
         logger.warning('Failed to send admin notification for guest purchase', purchase_id=purchase.id, exc_info=True)
 
 
-async def get_claimable_gift(
+CLAIMABLE_GIFT_STATUSES = (
+    GuestPurchaseStatus.PAID.value,
+    GuestPurchaseStatus.PENDING_ACTIVATION.value,
+)
+
+
+async def get_gift_by_token(
     db: AsyncSession,
     token_or_prefix: str,
     *,
     for_update: bool,
+    claimable_only: bool,
 ) -> GuestPurchase | None:
-    """Resolve one claimable gift, optionally locking it, without committing."""
+    """Resolve one gift by full token or deep-link prefix, optionally locking it.
+
+    ``claimable_only`` narrows the result to gifts that can still be activated. Pass
+    ``False`` when the caller needs to tell "no such gift" apart from "already used",
+    so it can say so instead of silently doing nothing.
+    """
     token = (token_or_prefix or '').strip()
     if len(token) >= 64:
         token_filter = GuestPurchase.token == token
@@ -142,32 +154,33 @@ async def get_claimable_gift(
     else:
         return None
 
-    query = (
-        select(GuestPurchase)
-        .options(selectinload(GuestPurchase.tariff))
-        .where(
-            token_filter,
-            GuestPurchase.is_gift.is_(True),
-            GuestPurchase.status.in_(
-                (
-                    GuestPurchaseStatus.PAID.value,
-                    GuestPurchaseStatus.PENDING_ACTIVATION.value,
-                )
-            ),
-        )
-    )
+    filters = [token_filter, GuestPurchase.is_gift.is_(True)]
+    if claimable_only:
+        filters.append(GuestPurchase.status.in_(CLAIMABLE_GIFT_STATUSES))
+
+    query = select(GuestPurchase).options(selectinload(GuestPurchase.tariff)).where(*filters)
     if for_update:
         query = query.with_for_update()
     result = await db.execute(query)
     return result.scalars().first()
 
 
-async def get_claimable_gift_for_update(
+async def get_claimable_gift(
+    db: AsyncSession,
+    token_or_prefix: str,
+    *,
+    for_update: bool,
+) -> GuestPurchase | None:
+    """Resolve one claimable gift, optionally locking it, without committing."""
+    return await get_gift_by_token(db, token_or_prefix, for_update=for_update, claimable_only=True)
+
+
+async def get_gift_for_update(
     db: AsyncSession,
     token_or_prefix: str,
 ) -> GuestPurchase | None:
-    """Resolve one claimable gift under SELECT FOR UPDATE without committing."""
-    return await get_claimable_gift(db, token_or_prefix, for_update=True)
+    """Resolve one gift under SELECT FOR UPDATE regardless of its current status."""
+    return await get_gift_by_token(db, token_or_prefix, for_update=True, claimable_only=False)
 
 
 class GuestPurchaseError(Exception):

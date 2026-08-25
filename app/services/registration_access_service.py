@@ -41,6 +41,19 @@ class RegistrationAccessReason(StrEnum):
     CHANNEL_NOT_ALLOWED = 'channel_not_allowed'
 
 
+# Channels that can carry invite evidence in the request itself. Telegram /start
+# carries the start parameter; the web gift claim carries the full 64-char gift
+# token, which is the same bearer secret the ``GIFT_`` deep link wraps. Every other
+# channel offers no proof of an invitation and can never create or revive a user
+# while invite-only is on.
+INVITE_BEARING_CHANNELS = frozenset(
+    {
+        RegistrationChannel.TELEGRAM_START,
+        RegistrationChannel.LANDING_GIFT_CLAIM,
+    }
+)
+
+
 class RegistrationInviteKind(StrEnum):
     REFERRAL = 'referral'
     CAMPAIGN = 'campaign'
@@ -130,14 +143,19 @@ class RegistrationAccessService:
         user = context.existing_user
         status = getattr(user, 'status', None)
 
+        # A deliberate administrative block outranks every admission path below,
+        # including the admin emergency recovery. Invite-only can lock an operator
+        # out of an account that does not exist yet or was soft-deleted — it can
+        # never be the reason an account is BLOCKED, so being listed in ADMIN_IDS
+        # must not silently undo an explicit block.
+        if status == UserStatus.BLOCKED.value:
+            return self._decision(False, RegistrationAccessReason.BLOCKED, context)
+
         if context.identity.verified_admin:
             return self._decision(True, RegistrationAccessReason.VERIFIED_ADMIN, context)
 
         if status == UserStatus.ACTIVE.value:
             return self._decision(True, RegistrationAccessReason.EXISTING_ACTIVE, context)
-
-        if status == UserStatus.BLOCKED.value:
-            return self._decision(False, RegistrationAccessReason.BLOCKED, context)
 
         try:
             enabled = await self._settings_reader(db, 'INVITE_ONLY_ENABLED', False)
@@ -153,7 +171,7 @@ class RegistrationAccessService:
         if not enabled:
             return self._decision(True, RegistrationAccessReason.INVITE_ONLY_DISABLED, context)
 
-        if context.channel is not RegistrationChannel.TELEGRAM_START:
+        if context.channel not in INVITE_BEARING_CHANNELS:
             return self._decision(False, RegistrationAccessReason.CHANNEL_NOT_ALLOWED, context)
 
         if self._invite_validator is None:

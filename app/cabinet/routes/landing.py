@@ -628,7 +628,10 @@ async def claim_gift(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail='This gift has already been claimed')
 
     # Public web claim cannot create or revive an account while invite-only is
-    # enabled. The typed email is not proof of an administrative identity.
+    # enabled — the typed email is not proof of an administrative identity. The
+    # full 64-char gift token required above IS the invitation, though: it is the
+    # same bearer secret the Telegram ``GIFT_`` deep link carries, so the claim is
+    # admitted whenever gift links are an accepted invite (INVITE_ONLY_ALLOW_GIFT_LINKS).
     decision = await evaluate_public_registration(
         db,
         channel=RegistrationChannel.LANDING_GIFT_CLAIM,
@@ -636,6 +639,7 @@ async def claim_gift(
         email=body.email,
         email_verified=False,
         verified_admin=False,
+        start_parameter=f'GIFT_{token}',
     )
     raise_for_registration_decision(decision)
 

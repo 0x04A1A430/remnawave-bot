@@ -167,7 +167,7 @@ async def test_pending_gift_drain_uses_canonical_locked_lookup(monkeypatch):
     )
     lookup = AsyncMock(return_value=gift)
     activate = AsyncMock(return_value=gift)
-    monkeypatch.setattr(guest_purchase_service, 'get_claimable_gift_for_update', lookup)
+    monkeypatch.setattr(guest_purchase_service, 'get_gift_for_update', lookup)
     monkeypatch.setattr(guest_purchase_service, 'activate_purchase', activate)
 
     state = SimpleNamespace(get_data=AsyncMock(return_value={'pending_gift_token': 'T' * 48}))
@@ -181,3 +181,68 @@ async def test_pending_gift_drain_uses_canonical_locked_lookup(monkeypatch):
     assert gift.user_id == user.id
     assert gift.status == 'pending_activation'
     activate.assert_awaited_once_with(db, gift.token, skip_notification=True)
+
+
+@pytest.mark.asyncio
+async def test_lost_race_for_the_gift_denies_instead_of_raising(monkeypatch):
+    """The gate's row lock is released by an intervening commit, so the gift can vanish."""
+    from unittest.mock import AsyncMock
+
+    from app.handlers import start
+    from app.services.registration_invite_service import RegistrationInviteConflict
+
+    async def conflict(db, *, evidence, user):
+        raise RegistrationInviteConflict('gift is already bound to another user')
+
+    monkeypatch.setattr(start._registration_invite_service, 'bind_locked_gift', conflict)
+    monkeypatch.setattr(start, 'settings', SimpleNamespace(get_support_contact_url=lambda: None))
+
+    db = SimpleNamespace(rollback=AsyncMock())
+    answer = AsyncMock()
+    texts = SimpleNamespace(language='ru', t=lambda key, default=None: default)
+    evidence = RegistrationInviteEvidence(RegistrationInviteKind.GIFT, locked_gift=object())
+
+    bound = await start._bind_registration_invite(
+        db,
+        decision=RegistrationAccessDecision(True, RegistrationAccessReason.INVITE_GRANTED, evidence),
+        user=SimpleNamespace(id=5, telegram_id=42),
+        answer_func=answer,
+        texts=texts,
+    )
+
+    assert bound is False
+    db.rollback.assert_awaited_once()
+    assert 'приглашению' in answer.await_args.args[0]
+
+
+@pytest.mark.asyncio
+async def test_already_delivered_gift_is_reported_instead_of_ignored(monkeypatch):
+    """A used gift link must say so — a claimable-only lookup would answer nothing at all."""
+    from unittest.mock import AsyncMock
+
+    from app.handlers import start
+    from app.services import guest_purchase_service
+
+    gift = SimpleNamespace(
+        id=1,
+        token='T' * 64,
+        is_gift=True,
+        buyer_user_id=None,
+        user_id=None,
+        status='delivered',
+        tariff=SimpleNamespace(name='Gift'),
+        period_days=30,
+    )
+    activate = AsyncMock()
+    monkeypatch.setattr(guest_purchase_service, 'get_gift_for_update', AsyncMock(return_value=gift))
+    monkeypatch.setattr(guest_purchase_service, 'activate_purchase', activate)
+
+    state = SimpleNamespace(get_data=AsyncMock(return_value={'pending_gift_token': 'T' * 48}))
+    answer = AsyncMock()
+
+    await start._activate_pending_gift_after_registration(
+        SimpleNamespace(flush=AsyncMock()), state, SimpleNamespace(id=22), answer
+    )
+
+    assert 'уже был активирован' in answer.await_args.args[0]
+    activate.assert_not_awaited()

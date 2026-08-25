@@ -90,13 +90,16 @@ def test_legacy_guest_find_or_create_wrapper_cannot_reappear_in_public_routes() 
 # the account, or the FOR UPDATE lock taken by the gate is released by the commit
 # with the gift still unbound — a concurrent claimer can then take it.
 REGISTRATION_TWINS = ('complete_registration', 'complete_registration_from_callback')
+# The twins never call bind_locked_gift directly — the guarded wrapper turns a lost
+# race for the gift into an ordinary denial instead of an unhandled exception.
+BIND_CALL = '_bind_registration_invite'
 
 
 def _bind_call_counts_by_function(path: Path) -> dict[str, int]:
     counts: dict[str, int] = {}
     for function in _functions(path):
         counts[function.name] = sum(
-            1 for node in ast.walk(function) if isinstance(node, ast.Call) and _call_name(node) == 'bind_locked_gift'
+            1 for node in ast.walk(function) if isinstance(node, ast.Call) and _call_name(node) == BIND_CALL
         )
     return counts
 
@@ -109,10 +112,10 @@ def test_registration_twins_bind_the_locked_gift_symmetrically() -> None:
     observed = {name: counts[name] for name in REGISTRATION_TWINS}
     assert len(set(observed.values())) == 1, (
         'Registration twins bind the locked gift a different number of times — one of the '
-        f'admission branches is missing its bind_locked_gift call: {observed}'
+        f'admission branches is missing its invite binding: {observed}'
     )
     assert observed[REGISTRATION_TWINS[0]] == 3, (
-        'Expected one bind_locked_gift per admission branch (DELETED restore, phantom claim, '
+        'Expected one invite binding per admission branch (DELETED restore, phantom claim, '
         f'existing-user reactivation): {observed}'
     )
 
@@ -133,8 +136,21 @@ def test_no_admission_branch_binds_the_locked_gift_twice() -> None:
                 if current is not None
                 else set()
             )
-            if current is not None and current == previous and 'bind_locked_gift' in calls:
+            if current is not None and current == previous and BIND_CALL in calls:
                 offenders.append(ast.unparse(statement))
             previous = current
 
-    assert not offenders, 'Duplicated bind_locked_gift statement:\n' + '\n'.join(offenders)
+    assert not offenders, 'Duplicated invite-binding statement:\n' + '\n'.join(offenders)
+
+
+def test_registration_twins_never_bind_the_gift_unguarded() -> None:
+    """A raw bind_locked_gift in a twin would surface a lost race as a 500, not a denial."""
+    counts = {}
+    for function in _functions(ROOT / 'app/handlers/start.py'):
+        if function.name not in REGISTRATION_TWINS:
+            continue
+        counts[function.name] = sum(
+            1 for node in ast.walk(function) if isinstance(node, ast.Call) and _call_name(node) == 'bind_locked_gift'
+        )
+
+    assert counts and not any(counts.values()), f'Unguarded bind_locked_gift in a registration twin: {counts}'

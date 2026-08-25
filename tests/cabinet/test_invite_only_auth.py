@@ -72,3 +72,38 @@ async def test_cabinet_gate_forwards_verified_admin_identity(monkeypatch):
     assert decision.allowed is True
     assert calls[0].identity.user_id == 7
     assert calls[0].identity.verified_admin is True
+
+
+@pytest.mark.asyncio
+async def test_every_signed_telegram_arm_revives_its_own_deleted_account(monkeypatch):
+    """initData, widget and OIDC all prove the same identity, so all three must revive."""
+    from unittest.mock import AsyncMock
+
+    from app.cabinet.routes import auth
+
+    revive = AsyncMock()
+    monkeypatch.setattr('app.services.user_revival_service.revive_deleted_user', revive)
+
+    sources = (
+        'cabinet_telegram_login',
+        'cabinet_telegram_widget_login',
+        'cabinet_telegram_oidc_login',
+    )
+    for source in sources:
+        user = SimpleNamespace(status='deleted')
+        await auth._recover_cabinet_user_after_gate(object(), user, None, source=source)
+
+    assert [call.kwargs['source'] for call in revive.await_args_list] == list(sources)
+
+
+@pytest.mark.asyncio
+async def test_non_deleted_inactive_account_without_admin_proof_is_refused():
+    from app.cabinet.routes import auth
+
+    user = SimpleNamespace(status='blocked')
+
+    with pytest.raises(HTTPException) as refused:
+        await auth._recover_cabinet_user_after_gate(object(), user, None, source='cabinet_telegram_widget_login')
+
+    assert refused.value.status_code == 403
+    assert user.status == 'blocked'

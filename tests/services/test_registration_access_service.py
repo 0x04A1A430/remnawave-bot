@@ -64,7 +64,10 @@ def context(status=None, *, admin=False, channel=RegistrationChannel.TELEGRAM_ST
         ),
         (True, UserStatus.DELETED.value, False, None, False, RegistrationAccessReason.INVITE_REQUIRED),
         (True, None, False, None, False, RegistrationAccessReason.INVITE_REQUIRED),
-        (True, UserStatus.BLOCKED.value, True, None, True, RegistrationAccessReason.VERIFIED_ADMIN),
+        # An explicit block outranks the admin emergency recovery — otherwise an
+        # account listed in ADMIN_IDS could never be blocked at all.
+        (True, UserStatus.BLOCKED.value, True, None, False, RegistrationAccessReason.BLOCKED),
+        (False, UserStatus.BLOCKED.value, True, None, False, RegistrationAccessReason.BLOCKED),
         (True, UserStatus.DELETED.value, True, None, True, RegistrationAccessReason.VERIFIED_ADMIN),
         (
             True,
@@ -99,6 +102,49 @@ async def test_non_telegram_channel_cannot_create_or_revive_when_enabled():
 
     assert decision.allowed is False
     assert decision.reason is RegistrationAccessReason.CHANNEL_NOT_ALLOWED
+
+
+async def test_web_gift_claim_is_admitted_by_the_gift_token_it_carries():
+    """The 64-char token the web claim requires is the same bearer invite the deep link wraps."""
+    validator = FakeValidator(RegistrationInviteEvidence(RegistrationInviteKind.GIFT))
+    service = RegistrationAccessService(invite_validator=validator, settings_reader=reader(True))
+
+    decision = await service.evaluate(
+        object(),
+        context(None, channel=RegistrationChannel.LANDING_GIFT_CLAIM, payload='GIFT_' + 'T' * 64),
+    )
+
+    assert decision.allowed is True
+    assert decision.reason is RegistrationAccessReason.INVITE_GRANTED
+    assert validator.calls[0][1] == 'GIFT_' + 'T' * 64
+
+
+async def test_web_gift_claim_without_resolvable_gift_stays_denied():
+    validator = FakeValidator(evidence=None)
+    service = RegistrationAccessService(invite_validator=validator, settings_reader=reader(True))
+
+    decision = await service.evaluate(
+        object(),
+        context(None, channel=RegistrationChannel.LANDING_GIFT_CLAIM, payload='GIFT_' + 'T' * 64),
+    )
+
+    assert decision.allowed is False
+    assert decision.reason is RegistrationAccessReason.INVITE_REQUIRED
+
+
+async def test_web_gift_claim_respects_disabled_gift_invites():
+    validator = FakeValidator(RegistrationInviteEvidence(RegistrationInviteKind.GIFT))
+    service = RegistrationAccessService(
+        invite_validator=validator,
+        settings_reader=reader(True, allow_gift=False),
+    )
+
+    await service.evaluate(
+        object(),
+        context(None, channel=RegistrationChannel.LANDING_GIFT_CLAIM, payload='GIFT_' + 'T' * 64),
+    )
+
+    assert validator.calls[0][3] is False
 
 
 async def test_active_user_does_not_touch_settings_or_validator():
