@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.cabinet.auth.registration_access import (
     evaluate_public_registration,
+    is_env_admin_recovery,
     raise_for_registration_decision,
 )
 from app.config import settings
@@ -25,7 +26,7 @@ from app.services.rbac_bootstrap_service import (
     is_user_admin_by_env,
     normalize_admin_email,
 )
-from app.services.registration_access_service import RegistrationAccessReason, RegistrationChannel
+from app.services.registration_access_service import RegistrationChannel
 from app.services.user_revival_service import revive_deleted_user
 
 from ..auth.oauth_providers import (
@@ -80,7 +81,7 @@ async def _gate_oauth_identity(
     if user is not None and user.status != UserStatus.ACTIVE.value:
         if user.status == UserStatus.DELETED.value:
             await revive_deleted_user(db, user, source=f'oauth_{provider}_invite_gate')
-        elif decision.reason is RegistrationAccessReason.VERIFIED_ADMIN:
+        elif is_env_admin_recovery(user, decision):
             user.status = UserStatus.ACTIVE.value
             user.updated_at = datetime.now(UTC)
     return decision

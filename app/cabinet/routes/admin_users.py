@@ -3233,6 +3233,15 @@ async def disable_user(
             detail='User not found',
         )
 
+    from app.services.rbac_bootstrap_service import is_protected_from_blocking
+
+    if is_protected_from_blocking(user):
+        logger.warning('Refused to block an env-configured admin', admin_id=admin.id, user_id=user_id)
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail='This account is listed in ADMIN_IDS/ADMIN_EMAILS and cannot be blocked',
+        )
+
     subscription_deactivated = False
     panel_deactivated = False
     panel_error: str | None = None

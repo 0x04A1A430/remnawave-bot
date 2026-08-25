@@ -143,19 +143,19 @@ class RegistrationAccessService:
         user = context.existing_user
         status = getattr(user, 'status', None)
 
-        # A deliberate administrative block outranks every admission path below,
-        # including the admin emergency recovery. Invite-only can lock an operator
-        # out of an account that does not exist yet or was soft-deleted — it can
-        # never be the reason an account is BLOCKED, so being listed in ADMIN_IDS
-        # must not silently undo an explicit block.
-        if status == UserStatus.BLOCKED.value:
-            return self._decision(False, RegistrationAccessReason.BLOCKED, context)
-
+        # The env config is the root of trust and outranks BLOCKED. Blocking is refused
+        # for these accounts at every write site (see is_protected_from_blocking), so a
+        # BLOCKED admin can only be a row predating that guard — most likely written by
+        # the broadcast auto-block after the owner muted the bot, never an intentional
+        # ban. Recovering here is what keeps that from being a permanent lockout.
         if context.identity.verified_admin:
             return self._decision(True, RegistrationAccessReason.VERIFIED_ADMIN, context)
 
         if status == UserStatus.ACTIVE.value:
             return self._decision(True, RegistrationAccessReason.EXISTING_ACTIVE, context)
+
+        if status == UserStatus.BLOCKED.value:
+            return self._decision(False, RegistrationAccessReason.BLOCKED, context)
 
         try:
             enabled = await self._settings_reader(db, 'INVITE_ONLY_ENABLED', False)

@@ -403,18 +403,22 @@ async def _apply_cabinet_account_guards(
 
     status_value = _user_status_value(user)
     access_decision = None
-    if status_value != UserStatus.ACTIVE.value and not settings.INVITE_ONLY_ENABLED:
-        access_decision = RegistrationAccessDecision(True, RegistrationAccessReason.INVITE_ONLY_DISABLED)
-    elif status_value != UserStatus.ACTIVE.value:
-        access_decision = await evaluate_public_registration(
-            db,
-            channel=RegistrationChannel.CABINET_SUPPORT_WS,
-            existing_user=user,
-            telegram_id=user.telegram_id,
-            email=user.email,
-            email_verified=bool(user.email_verified),
-            verified_admin=is_user_admin_by_env(user).is_admin,
-        )
+    if status_value != UserStatus.ACTIVE.value:
+        if is_user_admin_by_env(user).is_admin:
+            # Env config outranks any status flag — see get_current_cabinet_user.
+            access_decision = RegistrationAccessDecision(True, RegistrationAccessReason.VERIFIED_ADMIN)
+        elif not settings.INVITE_ONLY_ENABLED:
+            access_decision = RegistrationAccessDecision(True, RegistrationAccessReason.INVITE_ONLY_DISABLED)
+        else:
+            access_decision = await evaluate_public_registration(
+                db,
+                channel=RegistrationChannel.CABINET_SUPPORT_WS,
+                existing_user=user,
+                telegram_id=user.telegram_id,
+                email=user.email,
+                email_verified=bool(user.email_verified),
+                verified_admin=False,
+            )
     if status_value != UserStatus.ACTIVE.value:
         can_auto_revive = (
             status_value == UserStatus.DELETED.value

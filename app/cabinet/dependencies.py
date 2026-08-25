@@ -154,18 +154,26 @@ async def get_current_cabinet_user(
             )
 
     access_decision = None
-    if user.status != UserStatus.ACTIVE.value and not settings.INVITE_ONLY_ENABLED:
-        access_decision = RegistrationAccessDecision(True, RegistrationAccessReason.INVITE_ONLY_DISABLED)
-    elif user.status != UserStatus.ACTIVE.value:
-        access_decision = await evaluate_public_registration(
-            db,
-            channel=RegistrationChannel.CABINET_SESSION,
-            existing_user=user,
-            telegram_id=user.telegram_id,
-            email=user.email,
-            email_verified=bool(user.email_verified),
-            verified_admin=is_user_admin_by_env(user).is_admin,
-        )
+    if user.status != UserStatus.ACTIVE.value:
+        if is_user_admin_by_env(user).is_admin:
+            # Same precedence as RegistrationAccessService: the env config is the root
+            # of trust and outranks any status flag, whether or not invite-only is on.
+            # Blocking such an account is refused at every write site, so a non-ACTIVE
+            # admin here is a stale row — usually the broadcast auto-block after the
+            # owner muted the bot — and must not cost them the cabinet.
+            access_decision = RegistrationAccessDecision(True, RegistrationAccessReason.VERIFIED_ADMIN)
+        elif not settings.INVITE_ONLY_ENABLED:
+            access_decision = RegistrationAccessDecision(True, RegistrationAccessReason.INVITE_ONLY_DISABLED)
+        else:
+            access_decision = await evaluate_public_registration(
+                db,
+                channel=RegistrationChannel.CABINET_SESSION,
+                existing_user=user,
+                telegram_id=user.telegram_id,
+                email=user.email,
+                email_verified=bool(user.email_verified),
+                verified_admin=False,
+            )
 
     if user.status != UserStatus.ACTIVE.value:
         # DELETED users with a cryptographically-valid Telegram initData

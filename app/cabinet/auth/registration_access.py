@@ -4,6 +4,7 @@ from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.services.rbac_bootstrap_service import is_user_admin_by_env
 from app.services.registration_access_service import (
     RegistrationAccessContext,
     RegistrationAccessDecision,
@@ -70,3 +71,18 @@ def raise_for_registration_decision(decision: RegistrationAccessDecision) -> Non
         status_code=status.HTTP_403_FORBIDDEN,
         detail={'code': 'registration_invite_required'},
     )
+
+
+def is_env_admin_recovery(user, decision: RegistrationAccessDecision | None = None) -> bool:
+    """True when a non-ACTIVE account must be restored because env names it as admin.
+
+    The gate only produces a VERIFIED_ADMIN decision while invite-only is on, but the
+    env config outranks a status flag either way: blocking such an account is refused at
+    every write site, so a non-ACTIVE admin row is stale — usually the broadcast
+    auto-block after the owner muted the bot — and must not cost them the cabinet.
+    """
+    if user is None:
+        return False
+    if decision is not None and decision.reason is RegistrationAccessReason.VERIFIED_ADMIN:
+        return True
+    return is_user_admin_by_env(user).is_admin

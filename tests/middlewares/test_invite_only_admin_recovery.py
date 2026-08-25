@@ -1,23 +1,21 @@
-from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
 
 
-def test_middleware_has_no_admin_exemption_from_the_block_check():
-    """A BLOCKED account stays blocked in the bot even when it is in ADMIN_IDS.
-
-    The invite-only admin recovery path exists so an operator cannot be locked out
-    of a missing or soft-deleted account. A block is a deliberate administrative
-    action, so exempting ADMIN_IDS here would make such accounts unblockable.
-    """
+def test_blocked_env_admin_still_reaches_the_bot(monkeypatch):
+    """BLOCKED is set automatically when a user mutes the bot — it must not lock the owner out."""
     from app.middlewares import auth
 
-    source = Path(auth.__file__).read_text(encoding='utf-8')
+    monkeypatch.setattr(type(auth.settings), 'get_admin_ids', lambda self: [42])
+    monkeypatch.setattr(type(auth.settings), 'get_admin_emails', lambda self: [])
 
-    assert 'if db_user.status == UserStatus.BLOCKED.value:' in source
-    assert not hasattr(auth, '_is_blocked_non_admin')
+    blocked_admin = SimpleNamespace(status='blocked', telegram_id=42, email=None, email_verified=False)
+    blocked_user = SimpleNamespace(status='blocked', telegram_id=43, email=None, email_verified=False)
+
+    assert auth._is_blocked_non_admin(blocked_admin) is False
+    assert auth._is_blocked_non_admin(blocked_user) is True
 
 
 @pytest.mark.asyncio

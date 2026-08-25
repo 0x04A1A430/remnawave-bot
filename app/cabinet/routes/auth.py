@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.cabinet.auth.registration_access import (
     evaluate_public_registration,
+    is_env_admin_recovery,
     raise_for_registration_decision,
 )
 from app.config import settings
@@ -40,7 +41,6 @@ from app.services.rbac_bootstrap_service import (
 from app.services.referral_service import process_referral_registration
 from app.services.registration_access_service import (
     RegistrationAccessDecision,
-    RegistrationAccessReason,
     RegistrationChannel,
 )
 from app.services.web_auth_service import (
@@ -163,7 +163,7 @@ async def _recover_cabinet_user_after_gate(
 
         await revive_deleted_user(db, user, source=source)
         return
-    if decision and decision.reason is RegistrationAccessReason.VERIFIED_ADMIN:
+    if is_env_admin_recovery(user, decision):
         user.status = UserStatus.ACTIVE.value
         user.updated_at = datetime.now(UTC)
         return

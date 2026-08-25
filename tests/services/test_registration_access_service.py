@@ -64,10 +64,11 @@ def context(status=None, *, admin=False, channel=RegistrationChannel.TELEGRAM_ST
         ),
         (True, UserStatus.DELETED.value, False, None, False, RegistrationAccessReason.INVITE_REQUIRED),
         (True, None, False, None, False, RegistrationAccessReason.INVITE_REQUIRED),
-        # An explicit block outranks the admin emergency recovery — otherwise an
-        # account listed in ADMIN_IDS could never be blocked at all.
-        (True, UserStatus.BLOCKED.value, True, None, False, RegistrationAccessReason.BLOCKED),
-        (False, UserStatus.BLOCKED.value, True, None, False, RegistrationAccessReason.BLOCKED),
+        # An env-configured admin outranks BLOCKED: blocking such an account is refused
+        # at every write site, so the flag can only come from the broadcast auto-block
+        # after the owner muted the bot — honouring it would lock the owner out for good.
+        (True, UserStatus.BLOCKED.value, True, None, True, RegistrationAccessReason.VERIFIED_ADMIN),
+        (False, UserStatus.BLOCKED.value, True, None, True, RegistrationAccessReason.VERIFIED_ADMIN),
         (True, UserStatus.DELETED.value, True, None, True, RegistrationAccessReason.VERIFIED_ADMIN),
         (
             True,

@@ -100,7 +100,7 @@ async def test_every_signed_telegram_arm_revives_its_own_deleted_account(monkeyp
 async def test_non_deleted_inactive_account_without_admin_proof_is_refused():
     from app.cabinet.routes import auth
 
-    user = SimpleNamespace(status='blocked')
+    user = SimpleNamespace(status='blocked', telegram_id=None, email=None, email_verified=False)
 
     with pytest.raises(HTTPException) as refused:
         await auth._recover_cabinet_user_after_gate(object(), user, None, source='cabinet_telegram_widget_login')

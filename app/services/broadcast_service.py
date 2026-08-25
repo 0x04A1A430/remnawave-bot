@@ -592,6 +592,13 @@ async def cleanup_blocked_broadcast_users(blocked_telegram_ids: list[int]) -> No
                 if not user or user.status == UserStatus.BLOCKED.value:
                     continue
 
+                from app.services.rbac_bootstrap_service import is_protected_from_blocking
+
+                if is_protected_from_blocking(user):
+                    # An admin who muted the bot must not lose access to it.
+                    logger.info('Пропуск авто-блокировки: аккаунт админа из env', telegram_id=telegram_id)
+                    continue
+
                 user.status = UserStatus.BLOCKED.value
 
                 # Проверяем, есть ли активная оплаченная подписка
