@@ -268,3 +268,63 @@ class TestTariffSelection:
         callback = _callback('admin_ref_lvl_settariff:1:referee:42')
         await _raw(editor.set_level_tariff)(callback, db_user=SimpleNamespace(id=1), db=None)
         assert wired['saved'][-1] == {'level': 1, 'referee_tariff_id': 42}
+
+
+class TestCallbackRouting:
+    """Каждый callback обязан попасть в свой хендлер.
+
+    Сегодня префиксы не пересекаются: `admin_ref_lvl:` и `admin_ref_lvl_active:`
+    расходятся на четырнадцатом символе, поэтому порядок регистрации не важен.
+    Опасен не он, а новый префикс без разделителя — `admin_ref_lvl` поглощает
+    сразу все соседние строки, и кнопка «Дни» молча открывает карточку уровня.
+    Проверка гоняет реальные фильтры в реальном порядке и ловит именно это.
+    """
+
+    EXPECTED = {
+        'admin_ref_levels': 'show_reward_levels',
+        'admin_ref_lvl_scheme': 'toggle_reward_scheme',
+        'admin_ref_lvl_add': 'add_reward_level',
+        'admin_ref_lvl_import': 'import_legacy_settings',
+        'admin_ref_lvl:2': 'show_reward_level',
+        'admin_ref_lvl_active:2': 'toggle_level_active',
+        'admin_ref_lvl_mode:2': 'cycle_level_mode',
+        'admin_ref_lvl_trigger:2': 'cycle_level_trigger',
+        'admin_ref_lvl_del:2': 'delete_level',
+        'admin_ref_lvl_tariff:2:referrer': 'choose_level_tariff',
+        'admin_ref_lvl_settariff:2:referrer:9': 'set_level_tariff',
+        'admin_ref_lvl_edit:2:referrer_days': 'start_level_value_edit',
+    }
+
+    @staticmethod
+    def _registrations():
+        """Пары (фильтр, имя хендлера) в порядке регистрации."""
+        registered = []
+
+        class _Registry:
+            def register(self, handler, condition):
+                registered.append((condition, handler.__name__))
+
+        class _Dispatcher:
+            callback_query = _Registry()
+            message = _Registry()
+
+        editor.register_handlers(_Dispatcher())
+        return registered
+
+    def test_every_callback_reaches_its_handler(self):
+        registrations = self._registrations()
+
+        for callback_data, expected in self.EXPECTED.items():
+            winner = None
+            for condition, name in registrations:
+                probe = SimpleNamespace(data=callback_data)
+                try:
+                    # MagicFilter вычисляется через resolve; .callback у него —
+                    # обращение к несуществующему атрибуту, оно правдиво всегда.
+                    matched = bool(condition.resolve(probe))
+                except Exception:
+                    matched = False
+                if matched:
+                    winner = name
+                    break
+            assert winner == expected, f'{callback_data} ушёл в {winner}, а не в {expected}'

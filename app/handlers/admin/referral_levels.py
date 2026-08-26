@@ -570,8 +570,10 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(toggle_reward_scheme, F.data == 'admin_ref_lvl_scheme')
     dp.callback_query.register(add_reward_level, F.data == 'admin_ref_lvl_add')
     dp.callback_query.register(import_legacy_settings, F.data == 'admin_ref_lvl_import')
-    # Порядок важен: более длинные префиксы регистрируются раньше 'admin_ref_lvl:',
-    # иначе он перехватил бы их своим startswith.
+    # Двоеточие в 'admin_ref_lvl:' обязательно: без него префикс поглотил бы все
+    # соседние строки, и любая кнопка уровня открывала бы его карточку. Порядок
+    # регистрации при таком разделителе значения не имеет — маршрутизацию
+    # целиком проверяет TestCallbackRouting.
     dp.callback_query.register(toggle_level_active, F.data.startswith('admin_ref_lvl_active:'))
     dp.callback_query.register(cycle_level_mode, F.data.startswith('admin_ref_lvl_mode:'))
     dp.callback_query.register(cycle_level_trigger, F.data.startswith('admin_ref_lvl_trigger:'))
