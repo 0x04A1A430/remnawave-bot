@@ -96,30 +96,26 @@ class UserService:
         if has_active_subscription:
             # У пользователя есть активная подписка - обычное сообщение
             message = (
-                f'<b>Баланс пополнен на {settings.format_price(amount_kopeks)}!</b>\n\n'
-                f'Текущий баланс: {settings.format_price(user.balance_kopeks)}'
+                '<b>Баланс пополнен!</b>\n\n'
+                '<blockquote>\n'
+                f'<b>Сумма:</b> +{settings.format_price(amount_kopeks)}\n'
+                f'<b>Текущий баланс:</b> {settings.format_price(user.balance_kopeks)}\n'
+                '</blockquote>'
             )
             keyboard = types.InlineKeyboardMarkup(
-                inline_keyboard=[
-                    [
-                        types.InlineKeyboardButton(
-                            text=texts.t('BACK_TO_MENU', 'В главное меню'),
-                            callback_data='back_to_menu',
-                            style='danger',
-                        )
-                    ]
-                ]
+                inline_keyboard=[[types.InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu', style='danger')]]
             )
         else:
             # НЕТ активной подписки - БОЛЬШОЕ ПРЕДУПРЕЖДЕНИЕ
             message = (
-                f'<b>Баланс пополнен на {settings.format_price(amount_kopeks)}!</b>\n\n'
-                f'Текущий баланс: {settings.format_price(user.balance_kopeks)}\n\n'
-                f'{"─" * 25}\n\n'
-                f'<b>ВАЖНО!</b> \n\n'
-                f'<b>ПОДПИСКА НЕ АКТИВНА!</b>\n\n'
-                f'Пополнение баланса НЕ активирует подписку автоматически!\n\n'
-                f'<b>Выберите действие:</b>'
+                '<b>Баланс пополнен!</b>\n\n'
+                '<blockquote>\n'
+                f'<b>Сумма:</b> +{settings.format_price(amount_kopeks)}\n'
+                f'<b>Текущий баланс:</b> {settings.format_price(user.balance_kopeks)}\n'
+                '</blockquote>\n\n'
+                '<b>⚠️ ВАЖНО! Подписка не активна!</b>\n'
+                'Пополнение баланса НЕ активирует подписку автоматически.\n\n'
+                '<b>Выберите действие:</b>'
             )
             extend_callback = 'menu_subscription' if settings.is_multi_tariff_enabled() else 'subscription_extend'
             keyboard = types.InlineKeyboardMarkup(
@@ -157,34 +153,29 @@ class UserService:
         """
         if amount_kopeks > 0:
             # Пополнение
-            emoji = ''
             amount_text = f'+{settings.format_price(amount_kopeks)}'
             message = (
-                f'{emoji} <b>Баланс пополнен!</b>\n\n'
+                "<tg-emoji emoji-id='5776375003280838798'>✅</tg-emoji> <b>Баланс пополнен!</b>\n\n"
+                '<blockquote>\n'
                 f'<b>Сумма:</b> {amount_text}\n'
-                f'<b>Текущий баланс:</b> {settings.format_price(user.balance_kopeks)}'
+                f'<b>Текущий баланс:</b> {settings.format_price(user.balance_kopeks)}\n'
+                '</blockquote>'
             )
         else:
             # Списание
-            emoji = ''
             amount_text = f'-{settings.format_price(abs(amount_kopeks))}'
             message = (
-                f'{emoji} <b>Средства списаны с баланса</b>\n\n'
+                "<tg-emoji emoji-id='5877413297170419326'>💸</tg-emoji> <b>Средства списаны с баланса</b>\n\n"
+                '<blockquote>\n'
                 f'<b>Сумма:</b> {amount_text}\n'
-                f'<b>Текущий баланс:</b> {settings.format_price(user.balance_kopeks)}\n\n'
-                f'Если у вас есть вопросы, обратитесь в поддержку.'
+                f'<b>Текущий баланс:</b> {settings.format_price(user.balance_kopeks)}\n'
+                '</blockquote>\n\n'
+                'Если у вас есть вопросы, обратитесь в поддержку.'
             )
 
         keyboard_rows = [
-            [
-                types.InlineKeyboardButton(
-                    text=get_texts(user.language).t('BACK_TO_MENU', 'В главное меню'),
-                    callback_data='back_to_menu',
-                    style='danger',
-                )
-            ]
+            [types.InlineKeyboardButton(text=get_texts(user.language).BACK, callback_data='back_to_menu', style='danger')]
         ]
-
         reply_markup = types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
 
         # Use unified notification delivery service

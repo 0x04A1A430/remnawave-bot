@@ -121,7 +121,7 @@ async def _create_freekassa_payment_and_respond(
                     {'icon_custom_emoji_id': _pay_parsed.icon_custom_emoji_id}
                     if _pay_parsed.icon_custom_emoji_id
                     else {}
-                ),
+                ), style='success',
             )
         ],
     ]
@@ -144,7 +144,7 @@ async def _create_freekassa_payment_and_respond(
             ]
         )
 
-    keyboard_rows.append([InlineKeyboardButton(text=texts.t('BACK_BUTTON', 'Назад'), callback_data='menu_balance')])
+    keyboard_rows.append([InlineKeyboardButton(text=texts.t('BACK_BUTTON', 'Назад'), callback_data='menu_balance', style='danger')])
 
     keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
 
@@ -195,7 +195,7 @@ async def process_freekassa_payment_amount(
         keyboard = []
         if support_url:
             keyboard.append([InlineKeyboardButton(text='Обжаловать', url=support_url)])
-        keyboard.append([InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance')])
+        keyboard.append([InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance', style='danger')])
 
         await message.answer(
             f'<b>Пополнение ограничено</b>\n\n{reason}',
@@ -284,7 +284,7 @@ async def _start_freekassa_topup_impl(
         keyboard = []
         if support_url:
             keyboard.append([InlineKeyboardButton(text='Обжаловать', url=support_url)])
-        keyboard.append([InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance')])
+        keyboard.append([InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance', style='danger')])
 
         await callback.message.edit_text(
             f'<b>Пополнение ограничено</b>\n\n{reason}',

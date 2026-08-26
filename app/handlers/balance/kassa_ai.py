@@ -58,7 +58,7 @@ async def _check_topup_restriction(callback: types.CallbackQuery, db_user: User)
     keyboard = []
     if support_url:
         keyboard.append([InlineKeyboardButton(text='Обжаловать', url=support_url)])
-    keyboard.append([InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance')])
+    keyboard.append([InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance', style='danger')])
     await callback.message.edit_text(
         f'<b>Пополнение ограничено</b>\n\n{reason}',
         parse_mode='HTML',
@@ -131,13 +131,13 @@ async def _create_kassa_ai_payment_and_respond(
                         'PAY_BUTTON',
                         'Оплатить {amount}₽',
                     ).format(amount=f'{amount_rub:.0f}'),
-                    url=payment_url,
+                    url=payment_url, style='success',
                 )
             ],
             [
                 InlineKeyboardButton(
                     text=texts.t('BACK_BUTTON', 'Назад'),
-                    callback_data='menu_balance',
+                    callback_data='menu_balance', style='danger',
                 )
             ],
         ]
@@ -190,7 +190,7 @@ async def process_kassa_ai_payment_amount(
         keyboard = []
         if support_url:
             keyboard.append([InlineKeyboardButton(text='Обжаловать', url=support_url)])
-        keyboard.append([InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance')])
+        keyboard.append([InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance', style='danger')])
 
         await message.answer(
             f'<b>Пополнение ограничено</b>\n\n{reason}',

@@ -1,4 +1,5 @@
 import math
+import random
 from datetime import UTC, datetime
 
 import structlog
@@ -2418,6 +2419,12 @@ def get_payment_methods_keyboard(amount_kopeks: int, language: str = DEFAULT_LAN
     keyboard.append([make_button(text=texts.BACK, style='danger', callback_data='menu_balance')])
 
     _apply_payment_name_overrides(keyboard)
+
+    # Случайная раскраска способов оплаты: синий/зелёный (красный — для «Назад»)
+    for row in keyboard:
+        for idx, btn in enumerate(row):
+            if btn.callback_data and btn.callback_data.startswith('topup_'):
+                row[idx] = btn.model_copy(update={'style': random.choice(('primary', 'success'))})
 
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 

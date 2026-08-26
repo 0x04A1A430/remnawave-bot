@@ -30,7 +30,7 @@ def _check_topup_restriction(db_user: User, texts) -> InlineKeyboardMarkup | Non
     support_url = settings.get_support_contact_url()
     if support_url:
         keyboard.append([InlineKeyboardButton(text='Обжаловать', url=support_url)])
-    keyboard.append([InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance')])
+    keyboard.append([InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance', style='danger')])
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
@@ -94,13 +94,13 @@ async def _create_riopay_payment_and_respond(
                         'PAY_BUTTON',
                         'Оплатить {amount}₽',
                     ).format(amount=f'{amount_rub:.0f}'),
-                    url=payment_url,
+                    url=payment_url, style='success',
                 )
             ],
             [
                 InlineKeyboardButton(
                     text=texts.t('BACK_BUTTON', 'Назад'),
-                    callback_data='menu_balance',
+                    callback_data='menu_balance', style='danger',
                 )
             ],
         ]

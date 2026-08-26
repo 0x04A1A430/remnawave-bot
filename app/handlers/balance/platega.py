@@ -106,7 +106,7 @@ async def start_platega_payment(
         keyboard = []
         if support_url:
             keyboard.append([types.InlineKeyboardButton(text='Обжаловать', url=support_url)])
-        keyboard.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance')])
+        keyboard.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance', style='danger')])
 
         await callback.message.edit_text(
             f'<b>Пополнение ограничено</b>\n\n{reason}\n\nЕсли вы считаете это ошибкой, вы можете обжаловать решение.',
@@ -157,7 +157,7 @@ async def start_platega_payment(
             ]
         )
 
-    method_buttons.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='balance_topup')])
+    method_buttons.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='balance_topup', style='danger')])
 
     await callback.message.edit_text(
         texts.t(
@@ -212,7 +212,7 @@ async def start_platega_direct_method(
         keyboard = []
         if support_url:
             keyboard.append([types.InlineKeyboardButton(text='Обжаловать', url=support_url)])
-        keyboard.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance')])
+        keyboard.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance', style='danger')])
 
         await callback.message.edit_text(
             f'<b>Пополнение ограничено</b>\n\n{reason}\n\nЕсли вы считаете это ошибкой, вы можете обжаловать решение.',
@@ -256,7 +256,7 @@ async def process_platega_payment_amount(
         keyboard = []
         if support_url:
             keyboard.append([types.InlineKeyboardButton(text='Обжаловать', url=support_url)])
-        keyboard.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance')])
+        keyboard.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance', style='danger')])
 
         await message.answer(
             f'<b>Пополнение ограничено</b>\n\n{reason}\n\nЕсли вы считаете это ошибкой, вы можете обжаловать решение.',
@@ -358,12 +358,12 @@ async def process_platega_payment_amount(
         [
             types.InlineKeyboardButton(
                 text=texts.t('CHECK_STATUS_BUTTON', 'Проверить статус'),
-                callback_data=f'check_platega_{local_payment_id}',
+                callback_data=f'check_platega_{local_payment_id}', style='primary',
             )
         ],
     ]
 
-    keyboard_rows.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='balance_topup')])
+    keyboard_rows.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='balance_topup', style='danger')])
 
     keyboard = types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
 
