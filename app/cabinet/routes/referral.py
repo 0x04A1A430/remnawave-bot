@@ -59,12 +59,17 @@ async def get_referral_info(
     active_result = await db.execute(active_query)
     active_referrals = active_result.scalar() or 0
 
-    # Get total earnings
-    earnings_query = select(func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0)).where(
-        ReferralEarning.user_id == user.id
-    )
+    # Get total earnings.
+    #
+    # Дни считаются отдельной суммой и НЕ входят в расчёт доступного к выводу
+    # баланса ниже: дни нельзя вывести деньгами, и подмешать их в entitlement
+    # означало бы разрешить вывод сумм, которых пользователь не зарабатывал.
+    earnings_query = select(
+        func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0),
+        func.coalesce(func.sum(ReferralEarning.days_granted), 0),
+    ).where(ReferralEarning.user_id == user.id)
     earnings_result = await db.execute(earnings_query)
-    total_earnings = earnings_result.scalar() or 0
+    total_earnings, total_earning_days = earnings_result.one()
 
     # Get user's commission percent
     commission_percent = user.referral_commission_percent
@@ -103,6 +108,7 @@ async def get_referral_info(
         active_referrals=active_referrals,
         total_earnings_kopeks=total_earnings,
         total_earnings_rubles=total_earnings / 100,
+        total_earnings_days=int(total_earning_days or 0),
         commission_percent=commission_percent,
         available_balance_kopeks=available_balance,
         available_balance_rubles=available_balance / 100,
@@ -176,11 +182,14 @@ async def get_referral_earnings(
     total_result = await db.execute(count_query)
     total = total_result.scalar() or 0
 
-    sum_query = select(func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0)).where(
-        ReferralEarning.user_id == user.id
-    )
+    # Дни суммируются рядом с деньгами: награда днями пишется с amount_kopeks == 0,
+    # и без своего итога история показывает «всего 0 ₽» при непустом списке.
+    sum_query = select(
+        func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0),
+        func.coalesce(func.sum(ReferralEarning.days_granted), 0),
+    ).where(ReferralEarning.user_id == user.id)
     sum_result = await db.execute(sum_query)
-    total_amount = sum_result.scalar() or 0
+    total_amount, total_days = sum_result.one()
 
     # Paginate
     offset = (page - 1) * per_page
@@ -196,6 +205,17 @@ async def get_referral_earnings(
         referral_users_map = {u.id: u for u in referral_users_result.scalars().all()}
     else:
         referral_users_map = {}
+
+    # Тариф дневной награды хранится только идентификатором: без этого запроса
+    # история не может сказать, в какую подписку легли дни.
+    tariff_ids = list({e.tariff_id for e in earnings if e.tariff_id})
+    if tariff_ids:
+        from app.database.models import Tariff
+
+        tariffs_result = await db.execute(select(Tariff.id, Tariff.name).where(Tariff.id.in_(tariff_ids)))
+        tariff_names_map = {row.id: row.name for row in tariffs_result.all()}
+    else:
+        tariff_names_map = {}
 
     # Batch-fetch campaigns to avoid N+1
     campaign_ids = list({e.campaign_id for e in earnings if e.campaign_id})
@@ -216,6 +236,11 @@ async def get_referral_earnings(
                 amount_kopeks=e.amount_kopeks,
                 amount_rubles=e.amount_kopeks / 100,
                 reason=e.reason or 'Referral commission',
+                reward_type=getattr(e, 'reward_type', 'money') or 'money',
+                level=int(getattr(e, 'level', 1) or 1),
+                days_granted=int(getattr(e, 'days_granted', 0) or 0),
+                tariff_id=e.tariff_id,
+                tariff_name=tariff_names_map.get(e.tariff_id) if e.tariff_id else None,
                 referral_username=referral_user.username if referral_user else None,
                 referral_first_name=referral_user.first_name if referral_user else None,
                 campaign_name=campaign.name if campaign else None,
@@ -230,6 +255,7 @@ async def get_referral_earnings(
         total=total,
         total_amount_kopeks=total_amount,
         total_amount_rubles=total_amount / 100,
+        total_days_granted=int(total_days or 0),
         page=page,
         per_page=per_page,
         pages=pages,
@@ -237,9 +263,40 @@ async def get_referral_earnings(
 
 
 @router.get('/terms', response_model=ReferralTermsResponse)
-async def get_referral_terms():
-    """Get referral program terms."""
+async def get_referral_terms(db: AsyncSession = Depends(get_cabinet_db)):
+    """Get referral program terms.
+
+    В многоуровневой схеме описание берётся из таблицы уровней — из того же
+    источника, из которого считает движок наград. Иначе кабинет публикует одни
+    условия, бот платит по другим, и расходятся они молча.
+    """
+    level_descriptions: list[str] = []
+    referee_bonus: str | None = None
+
+    if settings.is_referral_levels_scheme():
+        from app.database.models import Tariff
+        from app.services.referral_reward_service import (
+            ReferralRewardLevelService,
+            describe_active_levels,
+            describe_referee_bonus,
+        )
+
+        configs = await ReferralRewardLevelService.get_all(db)
+        tariff_ids = {cfg.referrer_tariff_id for cfg in configs.values() if cfg.referrer_tariff_id}
+        tariff_ids |= {cfg.referee_tariff_id for cfg in configs.values() if cfg.referee_tariff_id}
+        tariff_names: dict[int, str] = {}
+        if tariff_ids:
+            tariffs_result = await db.execute(select(Tariff.id, Tariff.name).where(Tariff.id.in_(tariff_ids)))
+            tariff_names = {row.id: row.name for row in tariffs_result.all()}
+
+        level_descriptions = await describe_active_levels(db, tariff_names=tariff_names)
+        referee_bonus = await describe_referee_bonus(db, tariff_names=tariff_names)
+
     return ReferralTermsResponse(
+        scheme='levels' if settings.is_referral_levels_scheme() else 'legacy',
+        level_descriptions=level_descriptions,
+        referee_bonus_description=referee_bonus,
+        max_level_depth=settings.get_referral_max_level_depth() if settings.is_referral_levels_scheme() else 1,
         is_enabled=settings.is_referral_program_enabled(),
         commission_percent=settings.REFERRAL_COMMISSION_PERCENT,
         first_payment_commission_percent=settings.REFERRAL_FIRST_PAYMENT_COMMISSION_PERCENT,

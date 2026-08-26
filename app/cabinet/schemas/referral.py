@@ -15,6 +15,9 @@ class ReferralInfoResponse(BaseModel):
     active_referrals: int
     total_earnings_kopeks: int
     total_earnings_rubles: float
+    # Награда днями имеет amount_kopeks == 0: без своего поля партнёр на
+    # «дневной» программе видит нулевой доход при работающих начислениях.
+    total_earnings_days: int = 0
     commission_percent: int
     available_balance_kopeks: int = 0
     available_balance_rubles: float = 0
@@ -43,12 +46,23 @@ class ReferralListResponse(BaseModel):
 
 
 class ReferralEarningResponse(BaseModel):
-    """Referral earning history item."""
+    """Referral earning history item.
+
+    ``reward_type`` разделяет деньги и дни: строка с ``amount_kopeks == 0`` и
+    ``days_granted > 0`` — это реальная награда, а не пустое начисление, и
+    рисовать её как «0 ₽» неверно. ``level`` — единственное, что отличает
+    в остальном одинаковые строки от разных звеньев цепочки.
+    """
 
     id: int
     amount_kopeks: int
     amount_rubles: float
     reason: str
+    reward_type: str = 'money'
+    level: int = 1
+    days_granted: int = 0
+    tariff_id: int | None = None
+    tariff_name: str | None = None
     referral_username: str | None = None
     referral_first_name: str | None = None
     campaign_name: str | None = None
@@ -65,6 +79,7 @@ class ReferralEarningsListResponse(BaseModel):
     total: int
     total_amount_kopeks: int
     total_amount_rubles: float
+    total_days_granted: int = 0
     page: int
     per_page: int
     pages: int
@@ -85,3 +100,67 @@ class ReferralTermsResponse(BaseModel):
     inviter_bonus_rubles: float
     max_commission_payments: int = 0
     partner_section_visible: bool = True
+    # Под многоуровневой схемой поля выше ничем не управляют: начисления идут по
+    # таблице уровней. Публиковать их как «условия программы» значило бы обещать
+    # пользователю то, чего бот не платит.
+    scheme: str = 'legacy'
+    level_descriptions: list[str] = []
+    referee_bonus_description: str | None = None
+    max_level_depth: int = 1
+
+
+class ReferralRewardLevelResponse(BaseModel):
+    """Правило награды одного уровня цепочки."""
+
+    level: int
+    is_active: bool
+    reward_mode: str
+    trigger: str
+    referrer_percent: int | None = None
+    referrer_fixed_kopeks: int | None = None
+    referrer_days: int = 0
+    referrer_tariff_id: int | None = None
+    referrer_tariff_name: str | None = None
+    referee_fixed_kopeks: int | None = None
+    referee_days: int = 0
+    referee_tariff_id: int | None = None
+    referee_tariff_name: str | None = None
+    max_payments: int = 0
+
+    class Config:
+        from_attributes = True
+
+
+class ReferralRewardLevelsResponse(BaseModel):
+    """Схема наград целиком: флаг режима и правила уровней."""
+
+    scheme: str
+    scheme_locked_by_env: bool = False
+    max_level_depth: int
+    levels: list[ReferralRewardLevelResponse]
+
+
+class ReferralRewardLevelUpdateRequest(BaseModel):
+    """Правка уровня.
+
+    Все поля необязательны: экран правит их по одному, и присылать весь объект
+    ради одной галочки значило бы затирать чужую правку, сделанную из бота.
+    """
+
+    is_active: bool | None = None
+    reward_mode: str | None = None
+    trigger: str | None = None
+    referrer_percent: int | None = None
+    referrer_fixed_kopeks: int | None = None
+    referrer_days: int | None = None
+    referrer_tariff_id: int | None = None
+    referee_fixed_kopeks: int | None = None
+    referee_days: int | None = None
+    referee_tariff_id: int | None = None
+    max_payments: int | None = None
+
+
+class ReferralSchemeUpdateRequest(BaseModel):
+    """Переключение схемы наград целиком."""
+
+    scheme: str

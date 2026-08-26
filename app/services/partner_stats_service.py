@@ -90,7 +90,10 @@ class PartnerStatsService:
         else:
             active_referrals = 0
 
-        # Заработки по периодам - один запрос с CASE WHEN
+        # Заработки по периодам - один запрос с CASE WHEN.
+        # Дни считаются рядом с деньгами: награда днями имеет amount_kopeks == 0,
+        # и без своей суммы партнёр на «дневной» программе видит нули по всем
+        # периодам при регулярно приходящих наградах.
         earnings_result = await db.execute(
             select(
                 func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0).label('all_time'),
@@ -107,6 +110,10 @@ class PartnerStatsService:
                 func.coalesce(
                     func.sum(case((ReferralEarning.created_at >= year_ago, ReferralEarning.amount_kopeks), else_=0)), 0
                 ).label('year'),
+                func.coalesce(func.sum(ReferralEarning.days_granted), 0).label('all_time_days'),
+                func.coalesce(
+                    func.sum(case((ReferralEarning.created_at >= month_ago, ReferralEarning.days_granted), else_=0)), 0
+                ).label('month_days'),
             ).where(ReferralEarning.user_id == user_id)
         )
         earnings_row = earnings_result.one()
@@ -115,13 +122,40 @@ class PartnerStatsService:
         earnings_week = int(earnings_row.week)
         earnings_month = int(earnings_row.month)
         earnings_year = int(earnings_row.year)
+        days_all_time = int(earnings_row.all_time_days)
+        days_month = int(earnings_row.month_days)
+
+        # Разбивка по уровням: партнёру важно понимать, какую часть дохода даёт
+        # глубина его сети, а не только прямые приглашённые.
+        levels_result = await db.execute(
+            select(
+                ReferralEarning.level,
+                func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0).label('money'),
+                func.coalesce(func.sum(ReferralEarning.days_granted), 0).label('days'),
+            )
+            .where(ReferralEarning.user_id == user_id)
+            .group_by(ReferralEarning.level)
+            .order_by(ReferralEarning.level.asc())
+        )
+        earnings_by_level = [
+            {'level': int(row.level or 1), 'money_kopeks': int(row.money), 'days': int(row.days)}
+            for row in levels_result.all()
+        ]
 
         # Конверсии
         conversion_to_paid = round((paid_referrals / total_referrals * 100), 2) if total_referrals > 0 else 0
         conversion_to_active = round((active_referrals / total_referrals * 100), 2) if total_referrals > 0 else 0
 
-        # Средний доход с реферала
-        avg_earnings_per_referral = round(earnings_all_time / paid_referrals, 2) if paid_referrals > 0 else 0
+        # Средний доход с реферала.
+        #
+        # Числитель охватывает ВСЕ уровни, знаменатель — только прямых приглашённых,
+        # поэтому в многоуровневой схеме «средний доход с реферала» завышался бы
+        # тем сильнее, чем глубже сеть. Считаем от дохода первого уровня: он
+        # относится ровно к тем рефералам, что стоят в знаменателе.
+        direct_earnings = next(
+            (row['money_kopeks'] for row in earnings_by_level if row['level'] == 1), earnings_all_time
+        )
+        avg_earnings_per_referral = round(direct_earnings / paid_referrals, 2) if paid_referrals > 0 else 0
 
         return {
             'user_id': user_id,
@@ -139,7 +173,10 @@ class PartnerStatsService:
                 'month_kopeks': earnings_month,
                 'week_kopeks': earnings_week,
                 'today_kopeks': earnings_today,
+                'all_time_days': days_all_time,
+                'month_days': days_month,
             },
+            'earnings_by_level': earnings_by_level,
             'referrals_count': {
                 'all_time': total_referrals,
                 'year': referrals_year,
@@ -421,6 +458,10 @@ class PartnerStatsService:
                 func.coalesce(
                     func.sum(case((ReferralEarning.created_at >= year_ago, ReferralEarning.amount_kopeks), else_=0)), 0
                 ).label('year'),
+                func.coalesce(func.sum(ReferralEarning.days_granted), 0).label('all_time_days'),
+                func.coalesce(
+                    func.sum(case((ReferralEarning.created_at >= month_ago, ReferralEarning.days_granted), else_=0)), 0
+                ).label('month_days'),
             )
         )
         payouts_row = payouts_result.one()
@@ -429,6 +470,24 @@ class PartnerStatsService:
         week_paid = int(payouts_row.week)
         month_paid = int(payouts_row.month)
         year_paid = int(payouts_row.year)
+        total_paid_days = int(payouts_row.all_time_days)
+        month_paid_days = int(payouts_row.month_days)
+
+        # Разбивка по уровням: без неё «сколько стоила партнёрка» не отвечает на
+        # вопрос, окупается ли глубина цепочки.
+        global_levels_result = await db.execute(
+            select(
+                ReferralEarning.level,
+                func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0).label('money'),
+                func.coalesce(func.sum(ReferralEarning.days_granted), 0).label('days'),
+            )
+            .group_by(ReferralEarning.level)
+            .order_by(ReferralEarning.level.asc())
+        )
+        payouts_by_level = [
+            {'level': int(row.level or 1), 'money_kopeks': int(row.money), 'days': int(row.days)}
+            for row in global_levels_result.all()
+        ]
 
         # Новые рефералы по периодам - один запрос с CASE WHEN
         new_referrals_result = await db.execute(
@@ -448,8 +507,11 @@ class PartnerStatsService:
             round((paid_referrals_count / total_referrals_count * 100), 2) if total_referrals_count > 0 else 0
         )
 
-        # Средний доход с реферала
-        avg_per_referral = round(total_paid / paid_referrals_count, 2) if paid_referrals_count > 0 else 0
+        # Средний доход с реферала: числитель — только первый уровень, знаменатель —
+        # прямые приглашённые. Смешивать все уровни с прямыми рефералами значит
+        # завышать среднее тем сильнее, чем глубже сети у партнёров.
+        direct_paid = next((row['money_kopeks'] for row in payouts_by_level if row['level'] == 1), total_paid)
+        avg_per_referral = round(direct_paid / paid_referrals_count, 2) if paid_referrals_count > 0 else 0
 
         return {
             'summary': {
@@ -465,7 +527,10 @@ class PartnerStatsService:
                 'month_kopeks': month_paid,
                 'week_kopeks': week_paid,
                 'today_kopeks': today_paid,
+                'all_time_days': total_paid_days,
+                'month_days': month_paid_days,
             },
+            'payouts_by_level': payouts_by_level,
             'new_referrals': {
                 'today': new_referrals_today_count,
                 'week': new_referrals_week_count,
@@ -539,12 +604,15 @@ class PartnerStatsService:
         earnings_query = select(
             ReferralEarning.user_id,
             func.sum(ReferralEarning.amount_kopeks).label('total_earnings'),
+            func.sum(ReferralEarning.days_granted).label('total_days'),
         ).group_by(ReferralEarning.user_id)
         if start_date:
             earnings_query = earnings_query.where(ReferralEarning.created_at >= start_date)
 
         earnings_result = await db.execute(earnings_query)
-        earnings_dict = {row.user_id: int(row.total_earnings or 0) for row in earnings_result.all()}
+        earnings_dict = {
+            row.user_id: (int(row.total_earnings or 0), int(row.total_days or 0)) for row in earnings_result.all()
+        }
 
         # Подсчёт рефералов
         referrals_query = (
@@ -566,16 +634,19 @@ class PartnerStatsService:
         referrers_data = []
 
         for referrer_id in all_referrer_ids:
+            money, days = earnings_dict.get(referrer_id, (0, 0))
             referrers_data.append(
                 {
                     'user_id': referrer_id,
                     'referrals_count': referrals_dict.get(referrer_id, 0),
-                    'total_earnings': earnings_dict.get(referrer_id, 0),
+                    'total_earnings': money,
+                    'total_days': days,
                 }
             )
 
-        # Сортируем по заработку
-        referrers_data.sort(key=lambda x: x['total_earnings'], reverse=True)
+        # Сортировка учитывает дни: иначе партнёр «дневной» программы стоит с нулём
+        # и обрезается лимитом до того, как попадёт в топ, каким бы он ни был.
+        referrers_data.sort(key=lambda x: (x['total_earnings'], x['total_days']), reverse=True)
         top_referrers = referrers_data[:limit]
 
         if not top_referrers:
@@ -605,6 +676,7 @@ class PartnerStatsService:
                         'referral_code': user.referral_code,
                         'referrals_count': data['referrals_count'],
                         'total_earnings_kopeks': data['total_earnings'],
+                        'total_earnings_days': data.get('total_days', 0),
                     }
                 )
 
