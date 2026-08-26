@@ -760,6 +760,7 @@
   "ADMIN_USER_REFERRALS_TITLE": "🤝<b>用户推荐</b>",
   "ADMIN_USER_REFERRALS_SUMMARY": "👤{name}(ID:<code>{telegram_id}</code>)\n👥总推荐数：{count}",
   "ADMIN_USER_REFERRAL_COMMISSION_DEFAULT": "• 佣金比例：{percent}%（默认值）",
+  "ADMIN_USER_REFERRAL_COMMISSION_LEVELS": "•佣金比例：按推荐等级设置",
   "ADMIN_USER_REFERRAL_COMMISSION_CUSTOM": "• 自定义比例：{percent}%（默认：{default_percent}%）",
   "ADMIN_USER_REFERRAL_COMMISSION_EDIT_BUTTON": "📈 修改比例",
   "ADMIN_USER_REFERRAL_COMMISSION_PROMPT": "📈 <b>自定义推荐佣金比例</b>\n\n当前值：{current}%\n默认值：{default}%\n\n发送0到100之间的数值或输入“标准”以恢复默认。",

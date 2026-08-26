@@ -762,6 +762,7 @@
   "ADMIN_USER_REFERRALS_TITLE": "🤝 <b>Реферали користувача</b>",
   "ADMIN_USER_REFERRALS_SUMMARY": "👤 {name} (ID: <code>{telegram_id}</code>)\n👥 Всього рефералів: {count}",
   "ADMIN_USER_REFERRAL_COMMISSION_DEFAULT": "• Відсоток комісії: {percent}% (стандартне значення)",
+  "ADMIN_USER_REFERRAL_COMMISSION_LEVELS": "• Відсоток комісії: за рівнями реферальної схеми",
   "ADMIN_USER_REFERRAL_COMMISSION_CUSTOM": "• Індивідуальний відсоток: {percent}% (стандарт: {default_percent}%)",
   "ADMIN_USER_REFERRAL_COMMISSION_EDIT_BUTTON": "📈 Змінити відсоток",
   "ADMIN_USER_REFERRAL_COMMISSION_PROMPT": "📈 <b>Індивідуальний відсоток реферальної комісії</b>\n\nПоточне значення: {current}%\nСтандартне значення: {default}%\n\nНадішліть нове значення від 0 до 100 або слово 'стандарт' для скидання.",

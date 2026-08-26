@@ -840,6 +840,7 @@
   "ADMIN_USER_REFERRALS_TITLE": "🤝 <b>ریفرال‌های کاربر</b>",
   "ADMIN_USER_REFERRALS_SUMMARY": "👤 {name} (ID: <code>{telegram_id}</code>)\n👥 کل ریفرال‌ها: {count}",
   "ADMIN_USER_REFERRAL_COMMISSION_DEFAULT": "• درصد کمیسیون: {percent}% (پیش‌فرض)",
+  "ADMIN_USER_REFERRAL_COMMISSION_LEVELS": "• درصد کمیسیون: بر اساس سطوح معرفی",
   "ADMIN_USER_REFERRAL_COMMISSION_CUSTOM": "• درصد اختصاصی: {percent}% (پیش‌فرض: {default_percent}%)",
   "ADMIN_USER_REFERRAL_COMMISSION_EDIT_BUTTON": "📈 تغییر درصد",
   "ADMIN_USER_REFERRAL_COMMISSION_PROMPT": "📈 <b>درصد کمیسیون ریفرال</b>\n\nفعلی: {current}%\nپیش‌فرض: {default}%\n\nمقدار جدید (0-100) یا 'استاندارد':",

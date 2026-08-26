@@ -328,3 +328,53 @@ class TestCallbackRouting:
                     winner = name
                     break
             assert winner == expected, f'{callback_data} ушёл в {winner}, а не в {expected}'
+
+
+class TestPendingInputIsCancelled:
+    """Возврат на экран уровней обязан снимать ожидание ввода.
+
+    «Отмена» ведёт на карточку уровня. Пока состояние оставалось взведённым,
+    следующее произвольное сообщение админа попадало в редактор поля: набранное
+    позже «100» превращалось в «процент пригласившему = 100%» без вопросов.
+    Глобальный фоллбек неизвестных сообщений здесь не срабатывает — он навешен
+    с StateFilter(None).
+    """
+
+    @staticmethod
+    def _state(current):
+        store = {'state': current, 'cleared': False}
+
+        async def get_state():
+            return store['state']
+
+        async def clear():
+            store['cleared'] = True
+            store['state'] = None
+
+        return SimpleNamespace(get_state=get_state, clear=clear, store=store)
+
+    @pytest.mark.asyncio
+    async def test_level_card_clears_pending_input(self, wired):
+        from app.states import AdminStates
+
+        state = self._state(AdminStates.referral_level_value_input.state)
+        callback = _callback('admin_ref_lvl:1')
+        await _raw(editor.show_reward_level)(callback, db_user=SimpleNamespace(id=1), db=None, state=state)
+        assert state.store['cleared'] is True
+
+    @pytest.mark.asyncio
+    async def test_levels_list_clears_pending_input(self, wired):
+        from app.states import AdminStates
+
+        state = self._state(AdminStates.referral_level_value_input.state)
+        callback = _callback('admin_ref_levels')
+        await _raw(editor.show_reward_levels)(callback, db_user=SimpleNamespace(id=1), db=None, state=state)
+        assert state.store['cleared'] is True
+
+    @pytest.mark.asyncio
+    async def test_other_states_are_left_alone(self, wired):
+        """Чужое состояние сбрасывать нельзя — оно принадлежит другому сценарию."""
+        state = self._state('AdminStates:editing_user_balance')
+        callback = _callback('admin_ref_lvl:1')
+        await _raw(editor.show_reward_level)(callback, db_user=SimpleNamespace(id=1), db=None, state=state)
+        assert state.store['cleared'] is False

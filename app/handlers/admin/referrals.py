@@ -281,7 +281,7 @@ async def _show_top_referrers_filtered(callback: types.CallbackQuery, db: AsyncS
 
         if top_referrers:
             for i, referrer in enumerate(top_referrers[:20], 1):
-                earned = referrer.get('earnings_kopeks', 0)
+                earned = _paid_line(referrer.get('earnings_kopeks', 0), referrer.get('earnings_days', 0))
                 count = referrer.get('invited_count', 0)
                 display_name = referrer.get('display_name', 'N/A')
                 username = referrer.get('username', '')
@@ -308,10 +308,10 @@ async def _show_top_referrers_filtered(callback: types.CallbackQuery, db: AsyncS
                 # Выделяем основную метрику в зависимости от сортировки
                 if sort_by == 'invited':
                     text += f'{emoji}{i}. {display_text}\n'
-                    text += f'   👥 <b>{count} приглашённых</b> | 💰 {settings.format_price(earned)}\n\n'
+                    text += f'   👥 <b>{count} приглашённых</b> | 💰 {earned}\n\n'
                 else:
                     text += f'{emoji}{i}. {display_text}\n'
-                    text += f'   💰 <b>{settings.format_price(earned)}</b> | 👥 {count} приглашённых\n\n'
+                    text += f'   💰 <b>{earned}</b> | 👥 {count} приглашённых\n\n'
         else:
             text += 'Нет данных за выбранный период\n'
 
@@ -1170,6 +1170,33 @@ async def check_missing_bonuses(callback: types.CallbackQuery, db_user: User, db
 
     try:
         report = await referral_diagnostics_service.check_missing_bonuses(db)
+
+        # Проверка неприменима к многоуровневой схеме: она ищет отсутствие строки
+        # с легаси-причиной и считает суммы по ключам REFERRAL_*. Нули в отчёте
+        # означают «не проверяли», и показать вместо этого «✅ Все бонусы
+        # начислены!» — выдать админу заведомо ложное «всё в порядке» по аудиту,
+        # который не выполнялся.
+        if report.unsupported_scheme:
+            await callback.message.edit_text(
+                '🔍 <b>Проверка бонусов по БД</b>\n\n'
+                '⚠️ Проверка недоступна: включена многоуровневая схема наград.\n\n'
+                'Детектор ищет пропущенные бонусы по правилам классической схемы и '
+                'считает суммы по настройкам REFERRAL_*. В многоуровневой схеме '
+                'награда могла быть выдана по другому поводу или днями подписки — '
+                'такая пара выглядела бы «пропущенной», и доначисление заплатило бы '
+                'второй раз поверх уже выданного.',
+                reply_markup=types.InlineKeyboardMarkup(
+                    inline_keyboard=[
+                        [types.InlineKeyboardButton(text='🪜 Уровни наград', callback_data='admin_ref_levels')],
+                        [
+                            types.InlineKeyboardButton(
+                                text='⬅️ К диагностике', callback_data='admin_referral_diagnostics'
+                            )
+                        ],
+                    ]
+                ),
+            )
+            return
 
         # Сохраняем отчёт в state для последующего применения
         await state.update_data(missing_bonuses_report=report.to_dict())

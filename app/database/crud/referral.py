@@ -27,8 +27,10 @@ def not_referee_directed():
     такие строки отбросить — иначе пользователь увидит в своих рефералах
     собственного пригласившего.
 
-    Выборкам, которые просто суммируют ``amount_kopeks`` по ``user_id``, предикат
-    не нужен: у дневных строк сумма нулевая.
+    Предикат нужен и суммам по ``user_id`` — всем, где считаются ДНИ. Для денег
+    он был бы избыточен (у дневных строк сумма нулевая), но ``SUM(days_granted)``
+    без него приписывает пригласившему дни, выданные приглашённому, а самому
+    приглашённому — «заработок» при нуле приглашённых.
     """
     from app.services.referral_reward_service import REFEREE_DIRECTED_REASONS
 
@@ -352,14 +354,26 @@ async def get_top_referrers_by_period(
         for row in referrals_result:
             # Получаем заработок за период для этого реферера
             earnings_result = await db.execute(
-                select(func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0)).where(
-                    and_(ReferralEarning.user_id == row.referrer_id, ReferralEarning.created_at >= start_date)
+                select(
+                    func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0),
+                    func.coalesce(func.sum(ReferralEarning.days_granted), 0),
+                ).where(
+                    and_(
+                        ReferralEarning.user_id == row.referrer_id,
+                        ReferralEarning.created_at >= start_date,
+                        not_referee_directed(),
+                    )
                 )
             )
-            earnings = earnings_result.scalar() or 0
+            earnings, earned_days = earnings_result.one()
 
             top_data.append(
-                {'referrer_id': row.referrer_id, 'invited_count': row.invited_count, 'earnings_kopeks': earnings}
+                {
+                    'referrer_id': row.referrer_id,
+                    'invited_count': row.invited_count,
+                    'earnings_kopeks': earnings or 0,
+                    'earnings_days': int(earned_days or 0),
+                }
             )
     else:
         # Топ по заработку за период
@@ -368,17 +382,22 @@ async def get_top_referrers_by_period(
             select(
                 ReferralEarning.user_id.label('referrer_id'),
                 func.sum(ReferralEarning.amount_kopeks).label('ref_earnings'),
+                func.sum(ReferralEarning.days_granted).label('ref_days'),
             )
-            .where(ReferralEarning.created_at >= start_date)
+            .where(ReferralEarning.created_at >= start_date, not_referee_directed())
             .group_by(ReferralEarning.user_id)
         )
-        referral_earnings = {row.referrer_id: row.ref_earnings for row in referral_earnings_result}
+        referral_earnings = {
+            row.referrer_id: (row.ref_earnings or 0, int(row.ref_days or 0)) for row in referral_earnings_result
+        }
 
-        # Сортируем и берём топ
+        # Сортируем и берём топ. Дни участвуют в сортировке: иначе реферер
+        # «дневной» программы стоит с нулём и обрезается лимитом до того, как
+        # попадёт в список, каким бы он ни был.
         sorted_referrers = sorted(referral_earnings.items(), key=lambda x: x[1], reverse=True)[:limit]
 
         top_data = []
-        for referrer_id, earnings in sorted_referrers:
+        for referrer_id, (earnings, earned_days) in sorted_referrers:
             # Получаем количество приглашённых за период
             invited_result = await db.execute(
                 select(func.count(User.id)).where(
@@ -387,7 +406,14 @@ async def get_top_referrers_by_period(
             )
             invited_count = invited_result.scalar() or 0
 
-            top_data.append({'referrer_id': referrer_id, 'invited_count': invited_count, 'earnings_kopeks': earnings})
+            top_data.append(
+                {
+                    'referrer_id': referrer_id,
+                    'invited_count': invited_count,
+                    'earnings_kopeks': earnings,
+                    'earnings_days': earned_days,
+                }
+            )
 
     # Добавляем информацию о пользователях
     result = []
@@ -420,6 +446,7 @@ async def get_top_referrers_by_period(
                     'display_name': display_name,
                     'invited_count': data['invited_count'],
                     'earnings_kopeks': data['earnings_kopeks'],
+                    'earnings_days': data.get('earnings_days', 0),
                 }
             )
 

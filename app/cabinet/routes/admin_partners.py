@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.crud.referral_reward_level import (
+    MAX_SUPPORTED_LEVEL,
     delete_reward_level,
     get_all_reward_levels,
     upsert_reward_level,
@@ -45,6 +46,7 @@ from ..schemas.referral import (
     ReferralRewardLevelResponse,
     ReferralRewardLevelsResponse,
     ReferralRewardLevelUpdateRequest,
+    ReferralRewardTariffOption,
     ReferralSchemeUpdateRequest,
 )
 
@@ -663,10 +665,16 @@ async def _levels_payload(db: AsyncSession) -> ReferralRewardLevelsResponse:
         result = await db.execute(select(Tariff.id, Tariff.name).where(Tariff.id.in_(tariff_ids)))
         tariff_names = {row.id: row.name for row in result.all()}
 
+    tariff_options = await db.execute(
+        select(Tariff.id, Tariff.name).where(Tariff.is_active.is_(True)).order_by(Tariff.display_order, Tariff.id)
+    )
+
     return ReferralRewardLevelsResponse(
         scheme='levels' if settings.is_referral_levels_scheme() else 'legacy',
         scheme_locked_by_env=bot_configuration_service.is_env_locked('REFERRAL_REWARD_SCHEME'),
         max_level_depth=settings.get_referral_max_level_depth(),
+        max_supported_level=MAX_SUPPORTED_LEVEL,
+        available_tariffs=[ReferralRewardTariffOption(id=row.id, name=row.name) for row in tariff_options.all()],
         levels=[
             ReferralRewardLevelResponse(
                 level=lvl.level,

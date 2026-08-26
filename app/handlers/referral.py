@@ -419,7 +419,7 @@ async def show_detailed_referral_list(callback: types.CallbackQuery, db_user: Us
             texts.t(
                 'REFERRAL_LIST_ITEM_EARNED',
                 '   💎 Заработано с него: {amount}',
-            ).format(amount=texts.format_price(referral['total_earned_kopeks']))
+            ).format(amount=format_reward_total(referral['total_earned_kopeks'], referral.get('days_earned', 0)))
             + '\n'
         )
         text += (
@@ -497,28 +497,48 @@ async def show_referral_analytics(callback: types.CallbackQuery, db_user: User, 
         texts.t(
             'REFERRAL_ANALYTICS_EARNINGS_TODAY',
             '• Сегодня: {amount}',
-        ).format(amount=texts.format_price(analytics['earnings_by_period']['today']))
+        ).format(
+            amount=format_reward_total(
+                analytics['earnings_by_period']['today'],
+                (analytics.get('days_by_period') or {}).get('today', 0),
+            )
+        )
         + '\n'
     )
     text += (
         texts.t(
             'REFERRAL_ANALYTICS_EARNINGS_WEEK',
             '• За неделю: {amount}',
-        ).format(amount=texts.format_price(analytics['earnings_by_period']['week']))
+        ).format(
+            amount=format_reward_total(
+                analytics['earnings_by_period']['week'],
+                (analytics.get('days_by_period') or {}).get('week', 0),
+            )
+        )
         + '\n'
     )
     text += (
         texts.t(
             'REFERRAL_ANALYTICS_EARNINGS_MONTH',
             '• За месяц: {amount}',
-        ).format(amount=texts.format_price(analytics['earnings_by_period']['month']))
+        ).format(
+            amount=format_reward_total(
+                analytics['earnings_by_period']['month'],
+                (analytics.get('days_by_period') or {}).get('month', 0),
+            )
+        )
         + '\n'
     )
     text += (
         texts.t(
             'REFERRAL_ANALYTICS_EARNINGS_QUARTER',
             '• За квартал: {amount}',
-        ).format(amount=texts.format_price(analytics['earnings_by_period']['quarter']))
+        ).format(
+            amount=format_reward_total(
+                analytics['earnings_by_period']['quarter'],
+                (analytics.get('days_by_period') or {}).get('quarter', 0),
+            )
+        )
         + '\n\n'
     )
 
@@ -538,7 +558,7 @@ async def show_referral_analytics(callback: types.CallbackQuery, db_user: User, 
                 ).format(
                     index=i,
                     name=html_escape(str(ref['referral_name'] or '')),
-                    amount=texts.format_price(ref['total_earned_kopeks']),
+                    amount=format_reward_total(ref['total_earned_kopeks'], ref.get('total_earned_days', 0)),
                     count=ref['earnings_count'],
                 )
                 + '\n'

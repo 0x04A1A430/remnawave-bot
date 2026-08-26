@@ -63,6 +63,7 @@ from app.services.privacy_policy_service import PrivacyPolicyService
 from app.services.promo_offer_service import promo_offer_service
 from app.services.promocode_service import PromoCodeService
 from app.services.public_offer_service import PublicOfferService
+from app.services.referral_reward_service import format_reward_total
 from app.services.remnawave_service import (
     RemnaWaveConfigurationError,
     RemnaWaveService,
@@ -2931,6 +2932,17 @@ async def _build_referral_info(
         get_effective_referral_commission_percent(user) if user else referral_settings.get('commission_percent') or 0
     )
 
+    # Под многоуровневой схемой плоские поля выше не управляют ни одним начислением.
+    # Описание берётся из того же источника, что и расчёт, — иначе миниапп обещает
+    # проценты и бонусы, которых бот не платит.
+    level_descriptions: list[str] = []
+    referee_bonus: str | None = None
+    if settings.is_referral_levels_scheme():
+        from app.services.referral_reward_service import describe_active_levels, describe_referee_bonus
+
+        level_descriptions = await describe_active_levels(db)
+        referee_bonus = await describe_referee_bonus(db)
+
     terms = MiniAppReferralTerms(
         minimum_topup_kopeks=minimum_topup_kopeks,
         minimum_topup_label=settings.format_price(minimum_topup_kopeks),
@@ -2939,6 +2951,9 @@ async def _build_referral_info(
         inviter_bonus_kopeks=inviter_bonus_kopeks,
         inviter_bonus_label=settings.format_price(inviter_bonus_kopeks),
         commission_percent=commission_percent,
+        scheme='levels' if settings.is_referral_levels_scheme() else 'legacy',
+        level_descriptions=level_descriptions,
+        referee_bonus_description=referee_bonus,
     )
 
     summary = await get_user_referral_summary(db, user.id)
@@ -2954,18 +2969,24 @@ async def _build_referral_info(
             paid_referrals_count=int(summary.get('paid_referrals_count') or 0),
             active_referrals_count=int(summary.get('active_referrals_count') or 0),
             total_earned_kopeks=total_earned_kopeks,
-            total_earned_label=settings.format_price(total_earned_kopeks),
+            total_earned_label=format_reward_total(total_earned_kopeks, int(summary.get('total_earned_days') or 0)),
+            total_earned_days=int(summary.get('total_earned_days') or 0),
             month_earned_kopeks=month_earned_kopeks,
-            month_earned_label=settings.format_price(month_earned_kopeks),
+            month_earned_label=format_reward_total(month_earned_kopeks, int(summary.get('month_earned_days') or 0)),
+            month_earned_days=int(summary.get('month_earned_days') or 0),
             conversion_rate=float(summary.get('conversion_rate') or 0.0),
         )
 
         for earning in summary.get('recent_earnings', []) or []:
             amount = int(earning.get('amount_kopeks') or 0)
+            earned_days = int(earning.get('days_granted') or 0)
             recent_earnings.append(
                 MiniAppReferralRecentEarning(
                     amount_kopeks=amount,
-                    amount_label=settings.format_price(amount),
+                    amount_label=format_reward_total(amount, earned_days),
+                    days_granted=earned_days,
+                    reward_type=str(earning.get('reward_type') or 'money'),
+                    level=int(earning.get('level') or 1),
                     reason=earning.get('reason'),
                     referral_name=earning.get('referral_name'),
                     created_at=earning.get('created_at'),
@@ -2977,6 +2998,7 @@ async def _build_referral_info(
     if detailed:
         for item in detailed.get('referrals', []) or []:
             total_earned = int(item.get('total_earned_kopeks') or 0)
+            item_days = int(item.get('days_earned') or 0)
             balance = int(item.get('balance_kopeks') or 0)
             referral_items.append(
                 MiniAppReferralItem(
@@ -2990,7 +3012,8 @@ async def _build_referral_info(
                     balance_kopeks=balance,
                     balance_label=settings.format_price(balance),
                     total_earned_kopeks=total_earned,
-                    total_earned_label=settings.format_price(total_earned),
+                    total_earned_days=item_days,
+                    total_earned_label=format_reward_total(total_earned, item_days),
                     topups_count=int(item.get('topups_count') or 0),
                     days_since_registration=item.get('days_since_registration'),
                     days_since_activity=item.get('days_since_activity'),

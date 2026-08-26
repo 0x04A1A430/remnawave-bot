@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.config import settings
+from app.database.crud.referral import not_referee_directed
 from app.database.models import (
     AdvertisingCampaign,
     ReferralEarning,
@@ -67,7 +68,7 @@ async def get_referral_info(
     earnings_query = select(
         func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0),
         func.coalesce(func.sum(ReferralEarning.days_granted), 0),
-    ).where(ReferralEarning.user_id == user.id)
+    ).where(ReferralEarning.user_id == user.id, not_referee_directed())
     earnings_result = await db.execute(earnings_query)
     total_earnings, total_earning_days = earnings_result.one()
 
@@ -175,10 +176,14 @@ async def get_referral_earnings(
 ):
     """Get referral earnings history."""
     # Base query
-    query = select(ReferralEarning).where(ReferralEarning.user_id == user.id)
+    query = select(ReferralEarning).where(ReferralEarning.user_id == user.id, not_referee_directed())
 
     # Get total count and sum
-    count_query = select(func.count()).select_from(ReferralEarning).where(ReferralEarning.user_id == user.id)
+    count_query = (
+        select(func.count())
+        .select_from(ReferralEarning)
+        .where(ReferralEarning.user_id == user.id, not_referee_directed())
+    )
     total_result = await db.execute(count_query)
     total = total_result.scalar() or 0
 
@@ -187,7 +192,7 @@ async def get_referral_earnings(
     sum_query = select(
         func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0),
         func.coalesce(func.sum(ReferralEarning.days_granted), 0),
-    ).where(ReferralEarning.user_id == user.id)
+    ).where(ReferralEarning.user_id == user.id, not_referee_directed())
     sum_result = await db.execute(sum_query)
     total_amount, total_days = sum_result.one()
 

@@ -131,13 +131,28 @@ class ReferralRewardLevelResponse(BaseModel):
         from_attributes = True
 
 
+class ReferralRewardTariffOption(BaseModel):
+    """Тариф, в который могут лечь дни награды."""
+
+    id: int
+    name: str
+
+
 class ReferralRewardLevelsResponse(BaseModel):
-    """Схема наград целиком: флаг режима и правила уровней."""
+    """Схема наград целиком: флаг режима, правила уровней и выбор тарифов.
+
+    Список тарифов отдаётся здесь, а не берётся с ``/admin/tariffs``: тот
+    эндпоинт требует права ``tariffs:read``, и админ с одним лишь
+    ``partners:settings`` увидел бы экран без единого тарифа на выбор — то есть
+    ровно ту конфигурацию, при которой дни теряются.
+    """
 
     scheme: str
     scheme_locked_by_env: bool = False
     max_level_depth: int
+    max_supported_level: int
     levels: list[ReferralRewardLevelResponse]
+    available_tariffs: list[ReferralRewardTariffOption] = []
 
 
 class ReferralRewardLevelUpdateRequest(BaseModel):

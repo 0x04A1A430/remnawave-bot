@@ -810,3 +810,72 @@ class TestDepthHonesty:
         monkeypatch.setattr(settings, 'REFERRAL_MAX_LEVEL_DEPTH', 2)
 
         assert await describe_referee_bonus(None) is None
+
+
+class TestUngrantablePromises:
+    """Обещать награду, которая не может быть выдана, хуже, чем не обещать."""
+
+    @staticmethod
+    def _levels(monkeypatch, configs):
+        async def fake_all(_db):
+            return configs
+
+        monkeypatch.setattr(ReferralRewardLevelService, 'get_all', classmethod(lambda cls, db: fake_all(db)))
+
+    @pytest.mark.asyncio
+    async def test_registration_days_without_tariff_are_not_promised(self, chain, monkeypatch):
+        """У только что созданного пользователя подписки нет: без тарифа дни не лягут никуда."""
+        from app.services.referral_reward_service import describe_referee_bonus
+
+        self._levels(
+            monkeypatch,
+            {1: _level(1, reward_mode='days', trigger='registration', referee_days=7, referee_tariff_id=None)},
+        )
+        assert await describe_referee_bonus(None) is None
+
+    @pytest.mark.asyncio
+    async def test_registration_days_with_tariff_are_promised(self, chain, monkeypatch):
+        """С тарифом подписка будет создана — обещание честное."""
+        from app.services.referral_reward_service import describe_referee_bonus
+
+        self._levels(
+            monkeypatch,
+            {1: _level(1, reward_mode='days', trigger='registration', referee_days=7, referee_tariff_id=9)},
+        )
+        described = await describe_referee_bonus(None, tariff_names={9: 'Про'})
+        assert described is not None
+        assert 'Про' in described
+
+    @pytest.mark.asyncio
+    async def test_topup_days_without_tariff_stay_promised(self, chain, monkeypatch):
+        """На пополнении подписка у получателя обычно уже есть — обещание остаётся."""
+        from app.services.referral_reward_service import describe_active_levels
+
+        self._levels(
+            monkeypatch,
+            {1: _level(1, reward_mode='days', trigger='every_topup', referrer_days=3, referrer_tariff_id=None)},
+        )
+        lines = await describe_active_levels(None)
+        assert lines and '3 дн.' in lines[0]
+
+
+class TestRefereeRowsStayOutOfReferrerTotals:
+    """Строка награды приглашённому принадлежит ему, а не пригласившему.
+
+    Для денег это было неважно — их сумма нулевая. С появлением SUM(days_granted)
+    отсутствие фильтра даёт пользователю, не пригласившему никого,
+    «Приглашено: 0 · Заработано: 7 дн.», где вторая сторона пары — его же
+    пригласивший.
+    """
+
+    def test_summary_queries_filter_referee_rows(self):
+        import inspect
+
+        from app.utils.user_utils import get_user_referral_summary
+
+        source = inspect.getsource(get_user_referral_summary)
+        # Каждая выборка по user_id в сводке обязана нести предикат.
+        assert source.count('not_referee_directed()') >= 4, (
+            'сводка заработка должна отбрасывать строки наград приглашённому '
+            'во всех выборках: итог, месяц, последние начисления, разбивка по типам'
+        )

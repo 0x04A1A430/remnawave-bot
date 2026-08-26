@@ -339,6 +339,12 @@ class MiniAppReferralTerms(BaseModel):
     inviter_bonus_kopeks: int = 0
     inviter_bonus_label: str | None = None
     commission_percent: float = 0.0
+    # Под схемой 'levels' поля выше ничем не управляют: начисления идут по таблице
+    # уровней. Клиент обязан показывать level_descriptions, иначе миниапп рекламирует
+    # проценты и бонусы, которых программа не платит.
+    scheme: str = 'legacy'
+    level_descriptions: list[str] = []
+    referee_bonus_description: str | None = None
 
 
 class MiniAppReferralStats(BaseModel):
@@ -347,14 +353,20 @@ class MiniAppReferralStats(BaseModel):
     active_referrals_count: int = 0
     total_earned_kopeks: int = 0
     total_earned_label: str | None = None
+    total_earned_days: int = 0
     month_earned_kopeks: int = 0
     month_earned_label: str | None = None
+    month_earned_days: int = 0
     conversion_rate: float = 0.0
 
 
 class MiniAppReferralRecentEarning(BaseModel):
     amount_kopeks: int = 0
     amount_label: str | None = None
+    # Награда днями имеет amount_kopeks == 0: без этих полей она рисуется как «0 ₽».
+    days_granted: int = 0
+    reward_type: str = 'money'
+    level: int = 1
     reason: str | None = None
     referral_name: str | None = None
     created_at: datetime | None = None

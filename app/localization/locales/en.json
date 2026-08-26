@@ -831,6 +831,7 @@
   "ADMIN_USER_REFERRALS_TITLE": "🤝 <b>User referrals</b>",
   "ADMIN_USER_REFERRALS_SUMMARY": "👤 {name} (ID: <code>{telegram_id}</code>)\n👥 Total referrals: {count}",
   "ADMIN_USER_REFERRAL_COMMISSION_DEFAULT": "• Commission percent: {percent}% (default)",
+  "ADMIN_USER_REFERRAL_COMMISSION_LEVELS": "• Commission rate: set per referral level",
   "ADMIN_USER_REFERRAL_COMMISSION_CUSTOM": "• Custom percent: {percent}% (default: {default_percent}%)",
   "ADMIN_USER_REFERRAL_COMMISSION_EDIT_BUTTON": "📈 Change percent",
   "ADMIN_USER_REFERRAL_COMMISSION_PROMPT": "📈 <b>Custom referral commission</b>\n\nCurrent value: {current}%\nDefault value: {default}%\n\nSend a value from 0 to 100 or the word 'standard' to reset.",

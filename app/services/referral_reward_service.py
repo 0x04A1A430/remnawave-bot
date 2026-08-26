@@ -723,6 +723,22 @@ _TRIGGER_LABELS = {
 }
 
 
+def _days_can_be_granted(config: LevelConfig, *, tariff_id: int | None) -> bool:
+    """Могут ли дни этого правила вообще куда-то лечь.
+
+    При поводе «регистрация» получатель — только что созданный пользователь: у
+    него нет ни одной подписки. Без указанного тарифа продлевать нечего, а
+    создать подписку не из чего — параметры взять неоткуда, и награда не
+    начисляется НИКОГДА, а не иногда. Обещать её в приветствии и в тексте
+    приглашения значит гарантированно обмануть каждого нового пользователя.
+
+    С указанным тарифом подписка будет создана, поэтому обещание честное.
+    """
+    if config.trigger != ReferralRewardTrigger.REGISTRATION.value:
+        return True
+    return tariff_id is not None
+
+
 async def describe_active_levels(db: AsyncSession, *, tariff_names: dict[int, str] | None = None) -> list[str]:
     """Человекочитаемое описание активных уровней.
 
@@ -751,7 +767,11 @@ async def describe_active_levels(db: AsyncSession, *, tariff_names: dict[int, st
                 rewards.append(f'{config.referrer_percent}% от суммы')
             if config.referrer_fixed_kopeks:
                 rewards.append(settings.format_price(config.referrer_fixed_kopeks))
-        if config.days_enabled and config.referrer_days:
+        if (
+            config.days_enabled
+            and config.referrer_days
+            and _days_can_be_granted(config, tariff_id=config.referrer_tariff_id)
+        ):
             tariff_suffix = ''
             if config.referrer_tariff_id and config.referrer_tariff_id in names:
                 tariff_suffix = f' ({names[config.referrer_tariff_id]})'
@@ -784,7 +804,11 @@ async def describe_referee_bonus(db: AsyncSession, *, tariff_names: dict[int, st
         parts: list[str] = []
         if config.money_enabled and config.referee_fixed_kopeks:
             parts.append(settings.format_price(config.referee_fixed_kopeks))
-        if config.days_enabled and config.referee_days:
+        if (
+            config.days_enabled
+            and config.referee_days
+            and _days_can_be_granted(config, tariff_id=config.referee_tariff_id)
+        ):
             tariff_suffix = ''
             if config.referee_tariff_id and config.referee_tariff_id in names:
                 tariff_suffix = f' ({names[config.referee_tariff_id]})'

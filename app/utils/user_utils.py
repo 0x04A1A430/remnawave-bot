@@ -124,11 +124,15 @@ async def get_user_referral_summary(db: AsyncSession, user_id: int) -> dict:
         # Дни идут отдельной суммой: в копейках такая награда равна нулю, и без
         # своего итога пользователь, которому программа платит днями, видит на
         # экране «заработано 0 ₽» при регулярно приходящих начислениях.
+        # not_referee_directed() обязателен именно из-за дней. Строка награды
+        # ПРИГЛАШЁННОМУ принадлежит ему самому, и без фильтра пользователь,
+        # не пригласивший никого, видит «Приглашено: 0 · Заработано: 7 дн.»,
+        # где вторая сторона пары — его собственный пригласивший.
         total_earnings_result = await db.execute(
             select(
                 func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0),
                 func.coalesce(func.sum(ReferralEarning.days_granted), 0),
-            ).where(ReferralEarning.user_id == user_id)
+            ).where(ReferralEarning.user_id == user_id, not_referee_directed())
         )
         total_earned_kopeks, total_earned_days = total_earnings_result.one()
 
@@ -137,14 +141,20 @@ async def get_user_referral_summary(db: AsyncSession, user_id: int) -> dict:
             select(
                 func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0),
                 func.coalesce(func.sum(ReferralEarning.days_granted), 0),
-            ).where(and_(ReferralEarning.user_id == user_id, ReferralEarning.created_at >= month_ago))
+            ).where(
+                and_(
+                    ReferralEarning.user_id == user_id,
+                    ReferralEarning.created_at >= month_ago,
+                    not_referee_directed(),
+                )
+            )
         )
         month_earned_kopeks, month_earned_days = month_earnings_result.one()
 
         recent_earnings_result = await db.execute(
             select(ReferralEarning)
             .options(selectinload(ReferralEarning.referral))
-            .where(ReferralEarning.user_id == user_id)
+            .where(ReferralEarning.user_id == user_id, not_referee_directed())
             .order_by(ReferralEarning.created_at.desc())
             .limit(5)
         )
@@ -174,7 +184,7 @@ async def get_user_referral_summary(db: AsyncSession, user_id: int) -> dict:
                 func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0).label('total_amount'),
                 func.coalesce(func.sum(ReferralEarning.days_granted), 0).label('total_days'),
             )
-            .where(ReferralEarning.user_id == user_id)
+            .where(ReferralEarning.user_id == user_id, not_referee_directed())
             .group_by(ReferralEarning.reason)
         )
 
@@ -242,11 +252,18 @@ async def get_detailed_referral_list(db: AsyncSession, user_id: int, limit: int 
         detailed_referrals = []
         for referral in referrals:
             earnings_result = await db.execute(
-                select(func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0)).where(
-                    and_(ReferralEarning.user_id == user_id, ReferralEarning.referral_id == referral.id)
+                select(
+                    func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0),
+                    func.coalesce(func.sum(ReferralEarning.days_granted), 0),
+                ).where(
+                    and_(
+                        ReferralEarning.user_id == user_id,
+                        ReferralEarning.referral_id == referral.id,
+                        not_referee_directed(),
+                    )
                 )
             )
-            total_earned_from_referral = earnings_result.scalar() or 0
+            total_earned_from_referral, days_earned_from_referral = earnings_result.one()
 
             topups_result = await db.execute(
                 select(func.count(Transaction.id)).where(
@@ -272,6 +289,7 @@ async def get_detailed_referral_list(db: AsyncSession, user_id: int, limit: int 
                     'full_name': referral.full_name,
                     'username': referral.username,
                     'created_at': referral.created_at,
+                    'days_earned': int(days_earned_from_referral or 0),
                     'last_activity': referral.last_activity,
                     'has_made_first_topup': referral.has_made_first_topup,
                     'balance_kopeks': referral.balance_kopeks,
@@ -314,19 +332,32 @@ async def get_referral_analytics(db: AsyncSession, user_id: int) -> dict:
             'quarter': now - timedelta(days=90),
         }
 
+        # Дни считаются рядом с деньгами: на «дневной» программе все периоды
+        # показывали ноль при регулярно приходящих начислениях.
         earnings_by_period = {}
+        days_by_period = {}
         for period_name, start_date in periods.items():
             result = await db.execute(
-                select(func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0)).where(
-                    and_(ReferralEarning.user_id == user_id, ReferralEarning.created_at >= start_date)
+                select(
+                    func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0),
+                    func.coalesce(func.sum(ReferralEarning.days_granted), 0),
+                ).where(
+                    and_(
+                        ReferralEarning.user_id == user_id,
+                        ReferralEarning.created_at >= start_date,
+                        not_referee_directed(),
+                    )
                 )
             )
-            earnings_by_period[period_name] = result.scalar() or 0
+            period_money, period_days = result.one()
+            earnings_by_period[period_name] = period_money or 0
+            days_by_period[period_name] = int(period_days or 0)
 
         top_referrals_result = await db.execute(
             select(
                 ReferralEarning.referral_id,
                 func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0).label('total_earned'),
+                func.coalesce(func.sum(ReferralEarning.days_granted), 0).label('total_days'),
                 func.count(ReferralEarning.id).label('earnings_count'),
             )
             .where(ReferralEarning.user_id == user_id, not_referee_directed())
@@ -344,12 +375,21 @@ async def get_referral_analytics(db: AsyncSession, user_id: int) -> dict:
                     {
                         'referral_name': referral.full_name,
                         'total_earned_kopeks': row.total_earned,
+                        'total_earned_days': int(row.total_days or 0),
                         'earnings_count': row.earnings_count,
                     }
                 )
 
-        return {'earnings_by_period': earnings_by_period, 'top_referrals': top_referrals}
+        return {
+            'earnings_by_period': earnings_by_period,
+            'days_by_period': days_by_period,
+            'top_referrals': top_referrals,
+        }
 
     except Exception as e:
         logger.error('Ошибка получения аналитики рефералов для пользователя', user_id=user_id, error=e)
-        return {'earnings_by_period': {'today': 0, 'week': 0, 'month': 0, 'quarter': 0}, 'top_referrals': []}
+        return {
+            'earnings_by_period': {'today': 0, 'week': 0, 'month': 0, 'quarter': 0},
+            'days_by_period': {'today': 0, 'week': 0, 'month': 0, 'quarter': 0},
+            'top_referrals': [],
+        }

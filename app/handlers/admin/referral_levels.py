@@ -176,9 +176,29 @@ async def _render_levels(callback: types.CallbackQuery, db: AsyncSession) -> Non
     )
 
 
+async def _cancel_pending_input(state: FSMContext | None) -> None:
+    """Снять ожидание ввода значения при возврате на любой экран уровней.
+
+    «Отмена» в редакторе поля ведёт на карточку уровня, а состояние оставалось
+    взведённым: следующее произвольное сообщение админа в чат попадало в
+    ``process_level_value`` и переписывало денежное поле. Набранное позже «100»
+    превращалось в «процент пригласившему = 100%» без единого вопроса.
+
+    Глобальный фоллбек неизвестных сообщений сюда не помогает: он навешен с
+    ``StateFilter(None)`` и такое сообщение не перехватывает.
+    """
+    if state is None:
+        return
+    if await state.get_state() == AdminStates.referral_level_value_input.state:
+        await state.clear()
+
+
 @admin_required
 @error_handler
-async def show_reward_levels(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+async def show_reward_levels(
+    callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext | None = None
+):
+    await _cancel_pending_input(state)
     await _render_levels(callback, db)
     await callback.answer()
 
@@ -311,11 +331,31 @@ async def _render_level(callback: types.CallbackQuery, db: AsyncSession, level_n
         lines.append('')
         lines.append('<i>На первом уровне личный процент партнёра перебивает процент уровня.</i>')
 
-    if days_on and not level.referrer_tariff_id and not level.referee_tariff_id:
+    # Предупреждение — по каждой стороне отдельно. Общее условие через `and`
+    # молчало при половинчатой настройке: тариф выбран пригласившему, а дни
+    # приглашённому всё равно теряются у всех, кто без подписки.
+    warnings = []
+    if days_on and level.referrer_days and not level.referrer_tariff_id:
+        warnings.append('пригласившему')
+    if days_on and level.referee_days and not level.referee_tariff_id:
+        warnings.append('приглашённому')
+
+    if warnings:
         lines.append('')
         lines.append(
-            '<i>⚠️ Тариф не выбран: дни лягут в основную подписку получателя, а если '
-            'подписки нет — не начислятся вовсе.</i>'
+            f'<i>⚠️ Тариф не выбран для дней {" и ".join(warnings)}: они лягут в основную '
+            'подписку получателя, а если подписки нет — не начислятся вовсе.</i>'
+        )
+
+    if (
+        days_on
+        and level.trigger == ReferralRewardTrigger.REGISTRATION.value
+        and level.referee_days
+        and not level.referee_tariff_id
+    ):
+        lines.append(
+            '<i>❗️ При поводе «за регистрацию» у приглашённого подписки ещё нет: '
+            'без тарифа дни не начислятся никому и никогда.</i>'
         )
 
     prefix = f'admin_ref_lvl_edit:{level.level}'
@@ -372,7 +412,10 @@ async def _render_level(callback: types.CallbackQuery, db: AsyncSession, level_n
 
 @admin_required
 @error_handler
-async def show_reward_level(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+async def show_reward_level(
+    callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext | None = None
+):
+    await _cancel_pending_input(state)
     level_number = int(callback.data.split(':')[1])
     if not await _render_level(callback, db, level_number):
         await callback.answer('Уровень не найден', show_alert=True)
