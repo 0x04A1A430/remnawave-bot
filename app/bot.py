@@ -45,6 +45,7 @@ from app.handlers.admin import (
     promocodes as admin_promocodes,
     public_offer as admin_public_offer,
     quick_amounts as admin_quick_amounts,
+    referral_levels as admin_referral_levels,
     referrals as admin_referrals,
     remnawave as admin_remnawave,
     reports as admin_reports,
@@ -199,6 +200,7 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
     admin_messages.register_handlers(dp)
     admin_monitoring.register_handlers(dp)
     admin_referrals.register_handlers(dp)
+    admin_referral_levels.register_handlers(dp)
     admin_rules.register_handlers(dp)
     admin_remnawave.register_handlers(dp)
     admin_statistics.register_handlers(dp)

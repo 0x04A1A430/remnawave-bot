@@ -353,6 +353,29 @@ def _settings_hint() -> str:
 @admin_required
 @error_handler
 async def show_referral_settings(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+    if settings.is_referral_levels_scheme():
+        text = f"""
+⚙️ <b>Настройки реферальной системы</b>
+
+{await _program_rules_block(db)}
+
+<b>Уведомления:</b>
+• Статус: {'✅ Включены' if settings.REFERRAL_NOTIFICATIONS_ENABLED else '❌ Отключены'}
+
+{_settings_hint()}
+"""
+        await callback.message.edit_text(
+            text,
+            reply_markup=types.InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [types.InlineKeyboardButton(text='🪜 Уровни наград', callback_data='admin_ref_levels')],
+                    [types.InlineKeyboardButton(text='⬅️ К статистике', callback_data='admin_referrals')],
+                ]
+            ),
+        )
+        await callback.answer()
+        return
+
     text = f"""
 ⚙️ <b>Настройки реферальной системы</b>
 
@@ -372,7 +395,10 @@ async def show_referral_settings(callback: types.CallbackQuery, db_user: User, d
 """
 
     keyboard = types.InlineKeyboardMarkup(
-        inline_keyboard=[[types.InlineKeyboardButton(text='⬅️ К статистике', callback_data='admin_referrals')]]
+        inline_keyboard=[
+            [types.InlineKeyboardButton(text='🪜 Уровни наград', callback_data='admin_ref_levels')],
+            [types.InlineKeyboardButton(text='⬅️ К статистике', callback_data='admin_referrals')],
+        ]
     )
 
     await callback.message.edit_text(text, reply_markup=keyboard)
