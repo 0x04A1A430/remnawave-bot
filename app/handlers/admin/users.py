@@ -4159,9 +4159,7 @@ async def _show_servers_for_user(
                 ]
             )
 
-        keyboard.append(
-            [types.InlineKeyboardButton(text='Назад', callback_data=back_cb)]
-        )
+        keyboard.append([types.InlineKeyboardButton(text='Назад', callback_data=back_cb)])
 
         await callback.message.edit_text(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
 
