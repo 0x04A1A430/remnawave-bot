@@ -70,6 +70,10 @@ _NUMERIC_FIELDS = {
 
 _MONEY_FIELDS = frozenset({'referrer_fixed_kopeks', 'referee_fixed_kopeks'})
 
+# Сколько тарифов помещается в одно сообщение с кнопками. Превышение не молчит:
+# «показаны первые N из M» честнее, чем список, из которого тариф просто исчез.
+_TARIFF_PICKER_LIMIT = 40
+
 
 def _fmt_optional_percent(value: int | None) -> str:
     """Пустой процент — это ноль, и так и надо писать.
@@ -135,6 +139,20 @@ async def _render_levels(callback: types.CallbackQuery, db: AsyncSession) -> Non
                 if level.referrer_days:
                     referrer_parts.append(_fmt_days(level.referrer_days, names.get(level.referrer_tariff_id)))
             lines.append(f'   Пригласившему: {" + ".join(referrer_parts) or "ничего"}')
+
+            referee_parts = []
+            if level.reward_mode in (ReferralRewardMode.MONEY.value, ReferralRewardMode.BOTH.value):
+                if level.referee_fixed_kopeks:
+                    referee_parts.append(settings.format_price(level.referee_fixed_kopeks))
+            if level.reward_mode in (ReferralRewardMode.DAYS.value, ReferralRewardMode.BOTH.value):
+                if level.referee_days:
+                    referee_parts.append(_fmt_days(level.referee_days, names.get(level.referee_tariff_id)))
+            # Показывается только когда есть что показать: у большинства правил
+            # приглашённому не платят, и пустая строка была бы шумом. Но правило
+            # «только приглашённому» без неё читалось как «не платит ничего».
+            if referee_parts:
+                lines.append(f'   Приглашённому: {" + ".join(referee_parts)}')
+
             lines.append('')
 
     lines.append(
@@ -156,7 +174,7 @@ async def _render_levels(callback: types.CallbackQuery, db: AsyncSession) -> Non
             ]
         )
 
-    next_level = (max((lvl.level for lvl in levels), default=0)) + 1
+    next_level = _next_free_level(levels)
     if next_level <= MAX_SUPPORTED_LEVEL:
         keyboard_rows.append(
             [types.InlineKeyboardButton(text=f'➕ Добавить уровень {next_level}', callback_data='admin_ref_lvl_add')]
@@ -197,6 +215,23 @@ async def _cancel_pending_input(state: FSMContext | None) -> None:
         await state.clear()
 
 
+def _next_free_level(levels) -> int:
+    """Наименьший свободный номер уровня, а не «последний плюс один».
+
+    Уровни — это звенья цепочки, а не очередь. Взяв максимум, редактор после
+    удаления второго из трёх предлагал бы только четвёртый, и дыра в середине
+    становилась невосстановимой ни из одного интерфейса.
+
+    Сам обход отсутствующий уровень переживает — он его просто пропускает и идёт
+    дальше, — но админ остаётся с конфигурацией, которую больше не может починить.
+    """
+    taken = {lvl.level for lvl in levels}
+    candidate = 1
+    while candidate in taken:
+        candidate += 1
+    return candidate
+
+
 @admin_required
 @error_handler
 async def show_reward_levels(
@@ -229,11 +264,26 @@ async def toggle_reward_scheme(
     new_value = 'legacy' if settings.is_referral_levels_scheme() else 'levels'
     await bot_configuration_service.set_value(db, 'REFERRAL_REWARD_SCHEME', new_value)
 
-    if new_value == 'levels' and not await get_all_reward_levels(db, only_active=True):
-        await callback.answer(
-            'Схема включена, но активных уровней нет — награды начисляться не будут.',
-            show_alert=True,
-        )
+    if new_value == 'levels':
+        active = await get_all_reward_levels(db, only_active=True)
+        max_depth = settings.get_referral_max_level_depth()
+        reachable = [lvl for lvl in active if lvl.level <= max_depth]
+        if not active:
+            await callback.answer(
+                'Схема включена, но активных уровней нет — награды начисляться не будут.',
+                show_alert=True,
+            )
+        elif not reachable:
+            # Активные уровни есть, но все глубже предела обхода: цепочка до них
+            # не доходит, и «схема включена» без этой оговорки означало бы, что
+            # награды пошли, хотя не пойдёт ни одна.
+            await callback.answer(
+                f'Схема включена, но все активные уровни глубже {max_depth} — '
+                'цепочка до них не доходит, награды начисляться не будут.',
+                show_alert=True,
+            )
+        else:
+            await callback.answer(f'Схема наград: {new_value}')
     else:
         await callback.answer(f'Схема наград: {new_value}')
 
@@ -247,7 +297,7 @@ async def add_reward_level(
 ):
     await _cancel_pending_input(state)
     levels = await get_all_reward_levels(db)
-    next_level = (max((lvl.level for lvl in levels), default=0)) + 1
+    next_level = _next_free_level(levels)
     if next_level > MAX_SUPPORTED_LEVEL:
         await callback.answer(f'Максимум {MAX_SUPPORTED_LEVEL} уровней', show_alert=True)
         return
@@ -361,9 +411,19 @@ async def _render_level(callback: types.CallbackQuery, db: AsyncSession, level_n
             'выбирается с самым поздним сроком; триал берётся, только если платной нет.</i>'
         )
 
+    if not settings.is_referral_levels_scheme():
+        lines.append('')
+        lines.append(
+            '<i>⚠️ Схема наград — классическая: это правило настроено, но НЕ применяется. '
+            'Включите многоуровневую схему на экране уровней.</i>'
+        )
+
     if level.level == 1:
         lines.append('')
-        lines.append('<i>На первом уровне личный процент партнёра перебивает процент уровня.</i>')
+        lines.append(
+            '<i>На первом уровне личный процент партнёра перебивает процент уровня — '
+            'в том числе когда процент уровня не задан.</i>'
+        )
 
     # Предупреждение — по каждой стороне отдельно. Общее условие через `and`
     # молчало при половинчатой настройке: тариф выбран пригласившему, а дни
@@ -446,7 +506,7 @@ async def _render_level(callback: types.CallbackQuery, db: AsyncSession, level_n
 
     rows.append([types.InlineKeyboardButton(text='🔢 Лимит комиссий', callback_data=f'{prefix}:max_payments')])
     rows.append(
-        [types.InlineKeyboardButton(text='🗑 Удалить уровень', callback_data=f'admin_ref_lvl_del:{level.level}')]
+        [types.InlineKeyboardButton(text='🗑 Удалить уровень', callback_data=f'admin_ref_lvl_delask:{level.level}')]
     )
     rows.append([types.InlineKeyboardButton(text='⬅️ К уровням', callback_data='admin_ref_levels')])
 
@@ -529,6 +589,33 @@ async def cycle_level_trigger(
 
 @admin_required
 @error_handler
+async def confirm_delete_level(
+    callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext | None = None
+):
+    """Спросить перед удалением.
+
+    Правило уровня собирают руками, и восстановить его можно только заново набрав
+    все поля. Удаление с одного касания, рядом с остальными кнопками карточки,
+    слишком легко нажать мимо.
+    """
+    await _cancel_pending_input(state)
+    level_number = int(callback.data.split(':')[1])
+
+    await callback.message.edit_text(
+        f'🗑 <b>Удалить уровень {level_number}?</b>\n\n'
+        'Настройки правила будут потеряны: восстановить их можно только заново.',
+        reply_markup=types.InlineKeyboardMarkup(
+            inline_keyboard=[
+                [types.InlineKeyboardButton(text='🗑 Да, удалить', callback_data=f'admin_ref_lvl_del:{level_number}')],
+                [types.InlineKeyboardButton(text='⬅️ Отмена', callback_data=f'admin_ref_lvl:{level_number}')],
+            ]
+        ),
+    )
+    await callback.answer()
+
+
+@admin_required
+@error_handler
 async def delete_level(callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext | None = None):
     await _cancel_pending_input(state)
     level_number = int(callback.data.split(':')[1])
@@ -545,35 +632,59 @@ async def choose_level_tariff(
     await _cancel_pending_input(state)
     _, level_raw, side = callback.data.split(':')
     level_number = int(level_raw)
-    tariffs = await get_all_tariffs(db, include_inactive=False)
+    level = await get_reward_level(db, level_number)
+    current_id = None
+    if level is not None:
+        current_id = level.referrer_tariff_id if side == 'referrer' else level.referee_tariff_id
+
+    tariffs = list(await get_all_tariffs(db, include_inactive=False))
+
+    # Уже назначенный тариф мог стать неактивным. Список активных его не вернёт, и
+    # выбор выглядел бы как «тариф не выбран» — при том, что он выбран и работает.
+    # Дописываем его отдельно и помечаем, иначе админ снял бы его не глядя.
+    if current_id and all(tariff.id != current_id for tariff in tariffs):
+        from app.database.crud.tariff import get_tariff_by_id
+
+        assigned = await get_tariff_by_id(db, current_id)
+        if assigned is not None:
+            tariffs.insert(0, assigned)
 
     side_label = 'пригласившему' if side == 'referrer' else 'приглашённому'
     rows = [
         [
             types.InlineKeyboardButton(
-                text='➖ Без тарифа (основная подписка)',
+                text=('✅ ' if not current_id else '') + '➖ Без тарифа (основная подписка)',
                 callback_data=f'admin_ref_lvl_settariff:{level_number}:{side}:0',
             )
         ]
     ]
-    for tariff in tariffs[:40]:
+
+    shown = tariffs[:_TARIFF_PICKER_LIMIT]
+    for tariff in shown:
+        mark = '✅ ' if tariff.id == current_id else '🎯 '
+        suffix = '' if tariff.is_active else ' (неактивен)'
         rows.append(
             [
                 types.InlineKeyboardButton(
-                    text=f'🎯 {tariff.name}',
+                    text=f'{mark}{tariff.name}{suffix}',
                     callback_data=f'admin_ref_lvl_settariff:{level_number}:{side}:{tariff.id}',
                 )
             ]
         )
     rows.append([types.InlineKeyboardButton(text='⬅️ Назад', callback_data=f'admin_ref_lvl:{level_number}')])
 
-    await callback.message.edit_text(
+    text = (
         f'🎯 <b>Тариф для дней {side_label}</b>\n\n'
         'Дни лягут в подписку выбранного тарифа. Если такой подписки у получателя нет, '
-        'она будет создана — но только когда других подписок у него тоже нет.\n\n'
-        '<i>Без тарифа дни идут в основную подписку, а при её отсутствии не начисляются.</i>',
-        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=rows),
+        'она будет создана — но только когда у него нет живого триала.\n\n'
+        '<i>Без тарифа дни идут в оплаченную подписку получателя; при нескольких '
+        'выбирается с самым поздним сроком.</i>'
     )
+    # Молчаливое обрезание списка означало бы «такого тарифа нет», хотя он есть.
+    if len(tariffs) > len(shown):
+        text += f'\n\n<i>⚠️ Показаны первые {len(shown)} из {len(tariffs)} тарифов.</i>'
+
+    await callback.message.edit_text(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=rows))
     await callback.answer()
 
 
@@ -684,6 +795,9 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(toggle_level_active, F.data.startswith('admin_ref_lvl_active:'))
     dp.callback_query.register(cycle_level_mode, F.data.startswith('admin_ref_lvl_mode:'))
     dp.callback_query.register(cycle_level_trigger, F.data.startswith('admin_ref_lvl_trigger:'))
+    # Более длинный префикс регистрируется раньше: 'admin_ref_lvl_del:' —
+    # начало строки 'admin_ref_lvl_delask:', и порядок здесь важен.
+    dp.callback_query.register(confirm_delete_level, F.data.startswith('admin_ref_lvl_delask:'))
     dp.callback_query.register(delete_level, F.data.startswith('admin_ref_lvl_del:'))
     dp.callback_query.register(set_level_tariff, F.data.startswith('admin_ref_lvl_settariff:'))
     dp.callback_query.register(choose_level_tariff, F.data.startswith('admin_ref_lvl_tariff:'))

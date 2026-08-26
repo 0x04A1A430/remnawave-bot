@@ -303,6 +303,7 @@ class TestCallbackRouting:
         'admin_ref_lvl_mode:2': 'cycle_level_mode',
         'admin_ref_lvl_trigger:2': 'cycle_level_trigger',
         'admin_ref_lvl_del:2': 'delete_level',
+        'admin_ref_lvl_delask:2': 'confirm_delete_level',
         'admin_ref_lvl_tariff:2:referrer': 'choose_level_tariff',
         'admin_ref_lvl_settariff:2:referrer:9': 'set_level_tariff',
         'admin_ref_lvl_edit:2:referrer_days': 'start_level_value_edit',
@@ -430,3 +431,86 @@ class TestDeletedLevelDoesNotResurrectActive:
         await crud.upsert_reward_level(db, 2, referrer_tariff_id=7)
 
         assert created['is_active'] is False
+
+
+class TestEditorTraps:
+    """Ситуации, из которых админ не мог выбраться или видел неправду."""
+
+    def test_gap_in_levels_is_offered_again(self):
+        """«Последний плюс один» делал удалённый средний уровень невосстановимым."""
+        levels = [SimpleNamespace(level=1), SimpleNamespace(level=3)]
+        assert editor._next_free_level(levels) == 2
+
+        assert editor._next_free_level([]) == 1
+        assert editor._next_free_level([SimpleNamespace(level=1), SimpleNamespace(level=2)]) == 3
+
+    @pytest.mark.asyncio
+    async def test_add_fills_the_gap(self, wired):
+        wired['levels'] = [_level(1), _level(3)]
+        callback = _callback('admin_ref_lvl_add')
+        await _raw(editor.add_reward_level)(callback, db_user=SimpleNamespace(id=1), db=None)
+        assert wired['saved'][-1]['level'] == 2
+
+    @pytest.mark.asyncio
+    async def test_delete_asks_before_removing(self, wired):
+        """Удаление правила с одного касания слишком легко нажать мимо."""
+        callback = _callback('admin_ref_lvl_delask:1')
+        await _raw(editor.confirm_delete_level)(callback, db_user=SimpleNamespace(id=1), db=None)
+
+        assert wired['levels'], 'подтверждение не должно ничего удалять'
+        markup = callback.message.edit_text.await_args.kwargs['reply_markup']
+        actions = [b.callback_data for row in markup.inline_keyboard for b in row]
+        assert 'admin_ref_lvl_del:1' in actions
+        assert 'admin_ref_lvl:1' in actions, 'должен быть путь отмены'
+
+    @pytest.mark.asyncio
+    async def test_levels_list_shows_the_referee_side(self, wired):
+        """Правило «только приглашённому» читалось как «не платит ничего»."""
+        wired['levels'] = [_level(1, referrer_percent=None, referee_fixed_kopeks=50_000, reward_mode='money')]
+        callback = _callback('admin_ref_levels')
+        await _raw(editor.show_reward_levels)(callback, db_user=SimpleNamespace(id=1), db=None)
+
+        text = callback.message.edit_text.await_args.args[0]
+        assert 'Приглашённому' in text
+        assert 'Пригласившему: ничего' in text
+
+    @pytest.mark.asyncio
+    async def test_level_card_warns_when_the_scheme_is_off(self, wired, monkeypatch):
+        """Настроенное правило под классической схемой не применяется вовсе."""
+        monkeypatch.setattr(settings, 'REFERRAL_REWARD_SCHEME', 'legacy')
+        callback = _callback('admin_ref_lvl:1')
+        await _raw(editor.show_reward_level)(callback, db_user=SimpleNamespace(id=1), db=None)
+
+        text = callback.message.edit_text.await_args.args[0]
+        assert 'НЕ применяется' in text
+
+    @pytest.mark.asyncio
+    async def test_level_card_is_quiet_when_the_scheme_is_on(self, wired, monkeypatch):
+        monkeypatch.setattr(settings, 'REFERRAL_REWARD_SCHEME', 'levels')
+        callback = _callback('admin_ref_lvl:1')
+        await _raw(editor.show_reward_level)(callback, db_user=SimpleNamespace(id=1), db=None)
+
+        assert 'НЕ применяется' not in callback.message.edit_text.await_args.args[0]
+
+    @pytest.mark.asyncio
+    async def test_tariff_picker_keeps_the_assigned_inactive_tariff(self, wired, monkeypatch):
+        """Назначенный тариф мог стать неактивным — из списка он просто исчезал."""
+        wired['levels'] = [_level(1, reward_mode='days', referrer_days=7, referrer_tariff_id=99)]
+
+        async def only_active(_db, include_inactive=False):
+            return [SimpleNamespace(id=42, name='Активный', is_active=True)]
+
+        async def by_id(_db, tariff_id):
+            return SimpleNamespace(id=99, name='Снятый', is_active=False)
+
+        monkeypatch.setattr(editor, 'get_all_tariffs', only_active)
+        monkeypatch.setattr('app.database.crud.tariff.get_tariff_by_id', by_id)
+
+        callback = _callback('admin_ref_lvl_tariff:1:referrer')
+        await _raw(editor.choose_level_tariff)(callback, db_user=SimpleNamespace(id=1), db=None)
+
+        markup = callback.message.edit_text.await_args.kwargs['reply_markup']
+        labels = [b.text for row in markup.inline_keyboard for b in row]
+        assert any('Снятый' in label for label in labels), 'назначенный тариф обязан остаться в списке'
+        assert any('✅' in label and 'Снятый' in label for label in labels), 'и быть помечен как выбранный'
+        assert any('неактивен' in label for label in labels)
