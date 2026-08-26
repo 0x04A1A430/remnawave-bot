@@ -264,3 +264,47 @@ class TestTermsEndpointUnderLevels:
         monkeypatch.setattr(settings, 'REFERRAL_REWARD_SCHEME', 'legacy')
         response = await route.get_referral_terms(db=AsyncMock(), user=None)
         assert response.scheme == 'legacy'
+
+
+class TestLegacyImportEndpoint:
+    """Перенос старых настроек в уровень 1 — паритет с админкой бота."""
+
+    @pytest.mark.asyncio
+    async def test_creates_level_one_disabled_on_first_topup(self, wired, monkeypatch):
+        from app.cabinet.routes import admin_partners
+
+        monkeypatch.setattr(settings, 'REFERRAL_COMMISSION_PERCENT', 25)
+        monkeypatch.setattr(settings, 'REFERRAL_INVITER_BONUS_KOPEKS', 100_00)
+        monkeypatch.setattr(settings, 'REFERRAL_FIRST_TOPUP_BONUS_KOPEKS', 50_00)
+        monkeypatch.setattr(settings, 'REFERRAL_MAX_COMMISSION_PAYMENTS', 3)
+
+        async def no_level(_db, _level):
+            return None
+
+        monkeypatch.setattr(admin_partners, 'get_reward_level', no_level)
+
+        await admin_partners.import_legacy_referral_settings(admin=SimpleNamespace(id=1), db=_db_returning(None))
+
+        imported = wired['saved'][-1]
+        assert imported['is_active'] is False, 'перенос не должен молча начать платить'
+        # Фиксированные бонусы классической схемы разовые: повод «каждое
+        # пополнение» превратил бы их в регулярную выплату.
+        assert imported['trigger'] == 'first_topup'
+        assert imported['referrer_percent'] == 25
+        assert imported['referrer_fixed_kopeks'] == 100_00
+        assert imported['referee_fixed_kopeks'] == 50_00
+        assert imported['max_payments'] == 3
+
+    @pytest.mark.asyncio
+    async def test_refuses_when_level_one_exists(self, wired, monkeypatch):
+        from app.cabinet.routes import admin_partners
+
+        async def existing(_db, _level):
+            return SimpleNamespace(level=1)
+
+        monkeypatch.setattr(admin_partners, 'get_reward_level', existing)
+
+        with pytest.raises(HTTPException) as excinfo:
+            await admin_partners.import_legacy_referral_settings(admin=SimpleNamespace(id=1), db=_db_returning(None))
+        assert excinfo.value.status_code == 409
+        assert not wired['saved'], 'существующее правило не должно затираться переносом'

@@ -14,6 +14,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
+from app.config import settings
 from app.database.models import Base, Subscription, SubscriptionStatus, Tariff, User
 from app.services import referral_reward_service as engine
 from tests.fixtures.sqlite_memory import memory_session
@@ -240,3 +241,56 @@ class TestPanelSyncFailure:
 
             assert grant.days == 7, 'сбой панели не отменяет выданные дни'
             assert (await _reload(db, target.id)).end_date == before + timedelta(days=7)
+
+
+class TestSubscriptionOnAnotherTariff:
+    """Подписка есть, но не того тарифа, который задан в правиле.
+
+    Прежнее условие «нет ни одной подписки» было шире реальной опасности: человек
+    с платной подпиской на другом тарифе молча не получал настроенные админом дни.
+    Опасность — только живой триал: его ``create_paid_subscription`` конвертирует
+    в платную подписку, бесплатно сняв триальный статус.
+    """
+
+    @pytest.mark.asyncio
+    async def test_paid_subscription_elsewhere_does_not_block_the_reward(self, monkeypatch):
+        monkeypatch.setattr(type(settings), 'is_multi_tariff_enabled', lambda self: True)
+
+        async with memory_session(monkeypatch, TABLES) as db:
+            other = _subscription(1, tariff_id=OTHER_TARIFF_ID)
+            await _seed(db, [other])
+
+            grant = await engine.grant_reward_days(db, await db.get(User, 1), 7, PRO_TARIFF_ID)
+
+            assert grant.days == 7, 'дни настроенного тарифа не должны теряться'
+            created = await _reload(db, grant.subscription_id)
+            assert created.tariff_id == PRO_TARIFF_ID
+            assert created.id != other.id
+            assert created.is_trial is False
+
+    @pytest.mark.asyncio
+    async def test_alive_trial_elsewhere_still_blocks_creation(self, monkeypatch):
+        monkeypatch.setattr(type(settings), 'is_multi_tariff_enabled', lambda self: True)
+
+        async with memory_session(monkeypatch, TABLES) as db:
+            trial = _subscription(1, tariff_id=OTHER_TARIFF_ID, is_trial=True)
+            await _seed(db, [trial])
+
+            grant = await engine.grant_reward_days(db, await db.get(User, 1), 7, PRO_TARIFF_ID)
+
+            assert grant.days == 0
+            assert (await _reload(db, trial.id)).is_trial is True
+
+    @pytest.mark.asyncio
+    async def test_classic_mode_does_not_create_a_second_subscription(self, monkeypatch):
+        """Вне мультитарифа подписка одна — вторая сломала бы инварианты режима."""
+        monkeypatch.setattr(type(settings), 'is_multi_tariff_enabled', lambda self: False)
+
+        async with memory_session(monkeypatch, TABLES) as db:
+            other = _subscription(1, tariff_id=OTHER_TARIFF_ID)
+            await _seed(db, [other])
+
+            grant = await engine.grant_reward_days(db, await db.get(User, 1), 7, PRO_TARIFF_ID)
+
+            assert grant.days == 0
+            assert grant.failure == 'no_subscription'

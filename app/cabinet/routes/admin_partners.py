@@ -14,6 +14,7 @@ from app.database.crud.referral_reward_level import (
     MAX_SUPPORTED_LEVEL,
     delete_reward_level,
     get_all_reward_levels,
+    get_reward_level,
     upsert_reward_level,
 )
 from app.database.models import (
@@ -753,6 +754,40 @@ async def remove_referral_level(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Level not found')
 
     logger.info('Правило реферального уровня удалено из кабинета', admin_id=admin.id, level=level)
+    return await _levels_payload(db)
+
+
+@router.post('/referral-levels/import-legacy', response_model=ReferralRewardLevelsResponse)
+async def import_legacy_referral_settings(
+    admin: User = Depends(require_permission('partners:settings')),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Перенести действующие настройки ``REFERRAL_*`` в уровень 1.
+
+    Отката к ``REFERRAL_COMMISSION_PERCENT`` в расчёте нет, поэтому включение
+    схемы на пустой таблице не платит ничего. Это действие делает переход явным:
+    прежняя конфигурация становится видимым правилом, которое можно прочитать.
+
+    Повод — «первое пополнение»: в классической схеме фиксированные бонусы
+    разовые, а повод у уровня один на всё правило. Перенос с «каждым пополнением»
+    превратил бы оба разовых бонуса в регулярную выплату. Правило создаётся
+    ВЫКЛЮЧЕННЫМ — включает его админ, прочитав.
+    """
+    if await get_reward_level(db, 1) is not None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail='Level 1 already exists')
+
+    await upsert_reward_level(
+        db,
+        1,
+        is_active=False,
+        reward_mode=ReferralRewardMode.MONEY.value,
+        trigger=ReferralRewardTrigger.FIRST_TOPUP.value,
+        referrer_percent=settings.REFERRAL_COMMISSION_PERCENT,
+        referrer_fixed_kopeks=settings.REFERRAL_INVITER_BONUS_KOPEKS or None,
+        referee_fixed_kopeks=settings.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS or None,
+        max_payments=settings.REFERRAL_MAX_COMMISSION_PAYMENTS,
+    )
+    logger.info('Легаси-настройки перенесены в уровень 1 из кабинета', admin_id=admin.id)
     return await _levels_payload(db)
 
 

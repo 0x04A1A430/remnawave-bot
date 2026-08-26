@@ -412,20 +412,46 @@ async def _resolve_days_target(db: AsyncSession, user: User, tariff_id: int | No
     return await get_subscription_by_user_id(db, user.id)
 
 
-async def _create_subscription_for_days(db: AsyncSession, user: User, days: int, tariff_id: int):
-    """Завести подписку под награду, когда своей у пользователя нет.
+# Статусы, при которых подписка считается живой. Живой ТРИАЛ — единственное, из-за
+# чего нельзя звать create_paid_subscription: он конвертирует такой триал в платную
+# подписку, то есть бесплатно снимает триальный статус и выключает человека из
+# авто-продления (класс бага #629889).
+_ALIVE_SUBSCRIPTION_STATUSES = frozenset({'active', 'trial', 'limited'})
 
-    Вызывается ТОЛЬКО когда подписок нет вовсе, и только при явно указанном тарифе.
-    Это важно: ``create_paid_subscription`` умеет конвертировать живой триал в
-    платную подписку, и вызвать его у человека с триалом означало бы бесплатно
-    снять с него триальный статус — то есть выключить его из авто-продления
-    (класс бага #629889). Проверка «подписок нет» это исключает.
+
+async def _create_subscription_for_days(db: AsyncSession, user: User, days: int, tariff_id: int):
+    """Завести подписку под награду, когда подписки нужного тарифа у него нет.
+
+    Условие «нет ни одной подписки» было бы шире реальной опасности: человек с
+    платной подпиской на другом тарифе молча не получал бы настроенные админом дни,
+    хотя завести ему подписку нужного тарифа в мультитарифе совершенно законно.
+    Отказываем ровно в двух случаях:
+
+    * есть ЖИВОЙ ТРИАЛ — ``create_paid_subscription`` конвертировал бы его в
+      платную подписку;
+    * мультитариф выключен, а подписка уже есть — в этом режиме она одна, и вторая
+      сломала бы его инварианты.
     """
     from app.database.crud.subscription import create_paid_subscription, get_all_subscriptions_by_user_id
     from app.database.crud.tariff import get_tariff_by_id
 
     existing = await get_all_subscriptions_by_user_id(db, user.id)
-    if existing:
+
+    alive_trial = any(sub.is_trial and (sub.status or '') in _ALIVE_SUBSCRIPTION_STATUSES for sub in existing)
+    if alive_trial:
+        logger.info(
+            'Дни не выданы: у получателя живой триал, конвертировать его наградой нельзя',
+            user_id=user.id,
+            tariff_id=tariff_id,
+        )
+        return None
+
+    if existing and not settings.is_multi_tariff_enabled():
+        logger.info(
+            'Дни не выданы: вне мультитарифа вторая подписка не заводится',
+            user_id=user.id,
+            tariff_id=tariff_id,
+        )
         return None
 
     tariff = await get_tariff_by_id(db, tariff_id)
