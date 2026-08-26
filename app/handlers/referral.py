@@ -238,8 +238,8 @@ async def show_referral_info(callback: types.CallbackQuery, db_user: User, db: A
                 texts.t('REFERRAL_EARNINGS_BY_TYPE_HEADER', '<b>Доходы по типам:</b>')
                 + '\n<blockquote>'
                 + '\n'.join(type_lines)
-                 + '</blockquote>\n\n'
-             )
+                + '</blockquote>\n\n'
+            )
 
     referral_text += texts.t(
         'REFERRAL_INVITE_FOOTER',
@@ -484,10 +484,10 @@ async def show_referral_analytics(callback: types.CallbackQuery, db_user: User, 
     text += (
         '<b>Доходы по периодам:</b>\n'
         '<blockquote>'
-        f"Сегодня: {texts.format_price(ep['today'])}\n"
-        f"Неделя: {texts.format_price(ep['week'])}\n"
-        f"Месяц: {texts.format_price(ep['month'])}\n"
-        f"Квартал: {texts.format_price(ep['quarter'])}"
+        f'Сегодня: {texts.format_price(ep["today"])}\n'
+        f'Неделя: {texts.format_price(ep["week"])}\n'
+        f'Месяц: {texts.format_price(ep["month"])}\n'
+        f'Квартал: {texts.format_price(ep["quarter"])}'
         '</blockquote>\n\n'
     )
 
