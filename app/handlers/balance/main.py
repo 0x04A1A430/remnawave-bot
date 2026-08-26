@@ -409,7 +409,9 @@ async def show_transaction_category(
         await callback.message.edit_text(
             f'<b>{title}</b>\n\nОпераций пока нет',
             reply_markup=types.InlineKeyboardMarkup(
-                inline_keyboard=[[types.InlineKeyboardButton(text=texts.BACK, callback_data='balance_history', style='danger')]]
+                inline_keyboard=[
+                    [types.InlineKeyboardButton(text=texts.BACK, callback_data='balance_history', style='danger')]
+                ]
             ),
             parse_mode='HTML',
         )
@@ -425,7 +427,7 @@ async def show_transaction_category(
             [
                 make_button(
                     label,
-                    callback_data=f"bh_view_{'d' if deposits else 'w'}_{transaction.id}",
+                    callback_data=f'bh_view_{"d" if deposits else "w"}_{transaction.id}',
                     style=random.choice(_TRANSACTION_ITEM_STYLES),
                 )
             ]
@@ -478,7 +480,7 @@ async def show_transaction_detail(callback: types.CallbackQuery, db_user: User, 
         lines.append(f'<b>Способ:</b> {html.escape(str(transaction.payment_method))}')
     status_text = 'Выполнена' if transaction.is_completed else 'В обработке'
     lines.append(f'<b>Статус:</b> {status_text}')
-    lines.append(f"<b>Дата:</b> {transaction.created_at.strftime('%d.%m.%Y %H:%M')}")
+    lines.append(f'<b>Дата:</b> {transaction.created_at.strftime("%d.%m.%Y %H:%M")}')
 
     back_to_list = 'balance_history_deposits' if deposits else 'balance_history_withdrawals'
     keyboard = [
