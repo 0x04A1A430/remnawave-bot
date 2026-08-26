@@ -9,6 +9,7 @@ import structlog
 from sqlalchemy import and_, case, desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.database.crud.referral import not_referee_directed
 from app.database.crud.transaction import REAL_PAYMENT_METHODS
 from app.database.models import (
     AdvertisingCampaignRegistration,
@@ -229,7 +230,19 @@ class PartnerStatsService:
                 User.has_made_first_topup,
                 func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0).label('total_earnings'),
             )
-            .outerjoin(ReferralEarning, ReferralEarning.referral_id == User.id)
+            # user_id в условии соединения обязателен. Без него сюда попадают
+            # начисления ЛЮБОГО реферера с этого же реферала: при одном уровне
+            # такой был ровно один и запрос был верен случайно, а с цепочкой
+            # уровней партнёру приписывался бы доход вышестоящих. Заодно отсекает
+            # зеркалированные строки наград приглашённому.
+            .outerjoin(
+                ReferralEarning,
+                and_(
+                    ReferralEarning.referral_id == User.id,
+                    ReferralEarning.user_id == user_id,
+                    not_referee_directed(),
+                ),
+            )
             .where(User.referred_by_id == user_id)
             .group_by(User.id)
             .order_by(desc(func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0)))
@@ -640,6 +653,7 @@ class PartnerStatsService:
                 and_(
                     ReferralEarning.user_id == user_id,
                     ReferralEarning.campaign_id.in_(campaign_ids),
+                    not_referee_directed(),
                 )
             )
             .group_by(ReferralEarning.campaign_id)
@@ -835,6 +849,7 @@ class PartnerStatsService:
                     ReferralEarning.referral_id == User.id,
                     ReferralEarning.user_id == user_id,
                     ReferralEarning.campaign_id == campaign_id,
+                    not_referee_directed(),
                 ),
             )
             .where(

@@ -406,21 +406,32 @@ class TestGranting:
         assert granting.earnings == []
 
     @pytest.mark.asyncio
-    async def test_referee_days_row_keeps_pair_orientation(self, granting, monkeypatch):
-        """user_id — всегда пригласивший, referral_id — всегда приглашённый.
+    async def test_referee_days_row_belongs_to_referee(self, granting, monkeypatch):
+        """Строка принадлежит ПОЛУЧАТЕЛЮ дней, иначе дни припишутся пригласившему.
 
-        Иначе запрос «сколько у пользователя рефералов» через DISTINCT referral_id
-        засчитал бы приглашённому его собственного пригласившего.
+        Полсотни выборок фильтруют ledger по ``user_id = :я``. Оставь строку за
+        пригласившим — и каждая из них покажет ему дни, выданные другому человеку.
         """
         _install_levels(monkeypatch, {1: _level(1, reward_mode='days', referee_days=5, referee_tariff_id=9)})
         await engine.award_referral_rewards(
             _FakeSession(), granting.users[4], event=RewardEvent.REPEAT_TOPUP, topup_amount_kopeks=1000_00
         )
         row = granting.earnings[0]
-        assert (row['user_id'], row['referral_id']) == (3, 4)
+        assert (row['user_id'], row['referral_id']) == (4, 3)
         assert row['reason'] == engine.REASON_DAYS_REFEREE
         assert engine.is_referee_directed(row['reason']) is True
         assert granting.day_grants == [{'user_id': 4, 'days': 5, 'tariff_id': 9}]
+
+    @pytest.mark.asyncio
+    async def test_referrer_days_row_keeps_classic_orientation(self, granting, monkeypatch):
+        """Награда пригласившему обязана лечь ровно как раньше: ничего не чинится."""
+        _install_levels(monkeypatch, {1: _level(1, reward_mode='days', referrer_days=3)})
+        await engine.award_referral_rewards(
+            _FakeSession(), granting.users[4], event=RewardEvent.REPEAT_TOPUP, topup_amount_kopeks=1000_00
+        )
+        row = granting.earnings[0]
+        assert (row['user_id'], row['referral_id']) == (3, 4)
+        assert engine.is_referee_directed(row['reason']) is False
 
     @pytest.mark.asyncio
     async def test_days_granted_before_money(self, granting, monkeypatch):
@@ -497,3 +508,97 @@ class TestNullPercentIsZero:
             None, chain[4], event=RewardEvent.REPEAT_TOPUP, topup_amount_kopeks=1000_00
         )
         assert [(c.recipient_id, c.money_kopeks) for c in components] == [(3, 400_00)]
+
+
+class TestLevelNotifications:
+    """Текст уведомления обязан описывать то, что произошло на самом деле."""
+
+    def test_registration_trigger_does_not_claim_a_topup(self):
+        from app.services.referral_service import _level_event_phrase
+
+        phrase = _level_event_phrase(RewardEvent.REGISTRATION, 1, 'Иван')
+        assert 'пополн' not in phrase.lower(), 'при триггере регистрации пополнения не было'
+        assert 'зарегистрировал' in phrase
+
+    def test_deep_level_does_not_call_payer_your_referral(self):
+        """На уровне 2 платит реферал реферала — получатель его не приглашал."""
+        from app.services.referral_service import _level_event_phrase
+
+        phrase = _level_event_phrase(RewardEvent.REPEAT_TOPUP, 2, 'Иван')
+        assert 'Иван' not in phrase
+        assert 'уровень 2' in phrase
+
+    def test_first_level_names_the_referral(self):
+        from app.services.referral_service import _level_event_phrase
+
+        phrase = _level_event_phrase(RewardEvent.FIRST_TOPUP, 1, 'Иван')
+        assert 'Иван' in phrase
+        assert 'первое пополнение' in phrase
+
+    @pytest.mark.asyncio
+    async def test_days_only_reward_reaches_email_channel(self, monkeypatch):
+        """Иначе письмо о семи выданных днях уходит как «+0.00 ₽»."""
+        from app.services import referral_service
+
+        captured = {}
+
+        async def fake_notify(**kwargs):
+            captured.update(kwargs)
+            return True
+
+        monkeypatch.setattr(referral_service.notification_delivery_service, 'notify_referral_bonus', fake_notify)
+        monkeypatch.setattr(settings, 'REFERRAL_NOTIFICATIONS_ENABLED', True)
+
+        email_user = SimpleNamespace(id=9, telegram_id=None, full_name='Почтовый', language='ru')
+        await referral_service.send_referral_notification(
+            None, None, 'текст', user=email_user, bonus_kopeks=0, bonus_days=7, tariff_name='Про', level=2
+        )
+
+        assert captured.get('bonus_days') == 7
+        assert captured.get('tariff_name') == 'Про'
+        assert captured.get('level') == 2
+
+    @pytest.mark.asyncio
+    async def test_email_context_describes_days_not_zero_rubles(self, monkeypatch):
+        """formatted_reward — единственное поле, верное и для денег, и для дней."""
+        from app.services.notification_delivery_service import notification_delivery_service as svc
+
+        captured = {}
+
+        async def fake_send(**kwargs):
+            captured.update(kwargs)
+            return True
+
+        monkeypatch.setattr(svc, 'send_notification', fake_send)
+        await svc.notify_referral_bonus(
+            user=SimpleNamespace(id=1, language='ru'),
+            bonus_kopeks=0,
+            referral_name='Иван',
+            bonus_days=7,
+            tariff_name='Про',
+        )
+
+        context = captured['context']
+        assert context['bonus_days'] == 7
+        assert '7 дн.' in context['formatted_reward']
+        assert 'Про' in context['formatted_reward']
+        # Денежное поле остаётся нулевым — дни в сумму не подмешиваются.
+        assert context['bonus_kopeks'] == 0
+
+    @pytest.mark.asyncio
+    async def test_email_context_keeps_money_wording_for_money_reward(self, monkeypatch):
+        from app.services.notification_delivery_service import notification_delivery_service as svc
+
+        captured = {}
+
+        async def fake_send(**kwargs):
+            captured.update(kwargs)
+            return True
+
+        monkeypatch.setattr(svc, 'send_notification', fake_send)
+        await svc.notify_referral_bonus(
+            user=SimpleNamespace(id=1, language='ru'), bonus_kopeks=250_00, referral_name='Иван'
+        )
+
+        context = captured['context']
+        assert context['formatted_reward'] == context['formatted_bonus']

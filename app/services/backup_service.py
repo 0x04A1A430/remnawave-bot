@@ -86,6 +86,7 @@ from app.database.models import (
     ReferralContestEvent,
     ReferralContestVirtualParticipant,
     ReferralEarning,
+    ReferralRewardLevel,
     RequiredChannel,
     RioPayPayment,
     RollyPayPayment,
@@ -224,6 +225,12 @@ class BackupService:
             MulenPayPayment,
             Pal24Payment,
             PromoCodeUse,
+            # Правила уровней — конфигурация, а не история, и без них восстановленный
+            # бот встаёт с включённой схемой 'levels' (она лежит в SystemSetting и
+            # переживает восстановление) и пустой таблицей правил: цепочка не находит
+            # ни одного уровня и молча не платит НИЧЕГО, без ошибки в логах.
+            # Идёт после Tariff: ссылается на него через referrer/referee_tariff_id.
+            ReferralRewardLevel,
             ReferralEarning,
             SentNotification,
             DiscountOffer,

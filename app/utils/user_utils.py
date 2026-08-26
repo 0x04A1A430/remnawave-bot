@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.config import settings
+from app.database.crud.referral import not_referee_directed
 from app.database.models import ReferralEarning, Subscription, SubscriptionStatus, Transaction, TransactionType, User
 from app.utils.formatters import format_username_link
 
@@ -308,7 +309,7 @@ async def get_referral_analytics(db: AsyncSession, user_id: int) -> dict:
                 func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0).label('total_earned'),
                 func.count(ReferralEarning.id).label('earnings_count'),
             )
-            .where(ReferralEarning.user_id == user_id)
+            .where(ReferralEarning.user_id == user_id, not_referee_directed())
             .group_by(ReferralEarning.referral_id)
             .order_by(func.sum(ReferralEarning.amount_kopeks).desc())
             .limit(5)

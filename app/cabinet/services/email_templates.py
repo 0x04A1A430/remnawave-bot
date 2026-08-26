@@ -1261,9 +1261,28 @@ class EmailNotificationTemplates:
     # ============================================================================
 
     def _referral_bonus_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
-        """Template for referral bonus notification."""
-        bonus = context.get('formatted_bonus', f'{context.get("bonus_rubles", 0):.2f} ₽')
+        """Template for referral bonus notification.
+
+        Награда может быть выдана днями подписки, а не деньгами. В копейках такая
+        награда честно нулевая, поэтому текст строится по ``formatted_reward`` —
+        единственному полю, верному и для денег, и для дней, и для их сочетания.
+        Без него письмо о выданных семи днях уходит как «Реферальный бонус: +0.00 ₽».
+        """
+        bonus = context.get('formatted_reward') or context.get(
+            'formatted_bonus', f'{context.get("bonus_rubles", 0):.2f} ₽'
+        )
         referral_name = html.escape(context.get('referral_name', ''))
+        raw_level = context.get('level', 1)
+        try:
+            show_level = int(raw_level or 1) > 1
+        except (TypeError, ValueError):
+            # Редактор шаблонов рендерит их с токенами вида '{level}'. Уровень там
+            # неизвестен, но блок обязан попасть в payload — иначе админ его просто
+            # не увидит и не сможет отредактировать.
+            show_level = True
+        level_label = html.escape(str(raw_level))
+        level_note_ru = f'<p>Уровень вашей сети: {level_label}</p>' if show_level else ''
+        level_note_en = f'<p>Network level: {level_label}</p>' if show_level else ''
 
         subjects = {
             'ru': f'Реферальный бонус: +{bonus}',
@@ -1278,6 +1297,7 @@ class EmailNotificationTemplates:
                 <div class="highlight success">
                     <p>Вы получили реферальный бонус: <span class="amount">+{bonus}</span></p>
                     {f'<p>Благодаря пользователю: {referral_name}</p>' if referral_name else ''}
+                    {level_note_ru}
                 </div>
                 <p>Продолжайте приглашать друзей и зарабатывайте больше!</p>
                 {self._get_cabinet_button(language)}
@@ -1287,6 +1307,7 @@ class EmailNotificationTemplates:
                 <div class="highlight success">
                     <p>You received a referral bonus: <span class="amount">+{bonus}</span></p>
                     {f'<p>Thanks to: {referral_name}</p>' if referral_name else ''}
+                    {level_note_en}
                 </div>
                 <p>Keep inviting friends and earn more!</p>
                 {self._get_cabinet_button(language)}

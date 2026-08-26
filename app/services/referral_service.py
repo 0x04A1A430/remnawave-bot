@@ -506,6 +506,9 @@ async def send_referral_notification(
     user: User | None = None,
     bonus_kopeks: int = 0,
     referral_name: str = '',
+    bonus_days: int = 0,
+    tariff_name: str = '',
+    level: int = 1,
 ):
     """
     Отправляет реферальное уведомление в Telegram или по email.
@@ -517,6 +520,13 @@ async def send_referral_notification(
         user: User object (для email-only пользователей)
         bonus_kopeks: Сумма бонуса в копейках
         referral_name: Имя реферала
+        bonus_days: Начисленные дни подписки
+        tariff_name: Тариф, в который легли дни
+        level: Уровень цепочки, на котором заработана награда
+
+    Дни обязаны доехать до email-канала отдельным аргументом: в копейках они
+    равны нулю, и без них письмо о выданных семи днях уходит как
+    «Реферальный бонус: +0.00 ₽».
     """
     if not settings.is_notifications_enabled():
         logger.debug(
@@ -542,6 +552,9 @@ async def send_referral_notification(
                 bonus_kopeks=bonus_kopeks,
                 referral_name=referral_name,
                 telegram_message=message,
+                bonus_days=bonus_days,
+                tariff_name=tariff_name,
+                level=level,
             )
             if success:
                 logger.info('✅ Email уведомление о реферале отправлено пользователю', user_id=user.id)
@@ -650,7 +663,7 @@ async def process_referral_registration(db: AsyncSession, new_user_id: int, refe
                     db, new_user, event=RewardEvent.REGISTRATION, bot=bot
                 )
                 for outcome in registration_outcomes:
-                    await _notify_level_outcome(bot, db, new_user, outcome)
+                    await _notify_level_outcome(bot, db, new_user, outcome, event=RewardEvent.REGISTRATION)
             except Exception as error:
                 # Награда за регистрацию не должна ронять саму регистрацию:
                 # привязка реферала уже записана и важнее бонуса.
@@ -753,7 +766,30 @@ def _format_reward_line(outcome) -> str:
     return ' + '.join(parts)
 
 
-async def _notify_level_outcome(bot, db: AsyncSession, referee, outcome) -> None:
+def _level_event_phrase(event: str, level: int, referee_name: str) -> str:
+    """Из-за чего пришла награда — своими словами.
+
+    Две вещи, которые нельзя писать наугад. Первое: при триггере «регистрация»
+    пополнения не было, и сообщать о нём — прямая ложь в денежном уведомлении.
+    Второе: на уровне 2+ платит не тот, кого получатель приглашал, а реферал его
+    реферала — называть этого человека «вашим рефералом» неверно, да и его имени
+    получатель раньше не видел.
+    """
+    from app.services.referral_reward_service import RewardEvent
+
+    if level > 1:
+        source = f'участник вашей сети (уровень {level})'
+    else:
+        source = f'ваш реферал <b>{html.escape(referee_name)}</b>'
+
+    if event == RewardEvent.REGISTRATION:
+        return f'По вашей ссылке зарегистрировался {source}.'
+    if event == RewardEvent.FIRST_TOPUP:
+        return f'{source[0].upper()}{source[1:]} сделал первое пополнение.'
+    return f'{source[0].upper()}{source[1:]} пополнил баланс.'
+
+
+async def _notify_level_outcome(bot, db: AsyncSession, referee, outcome, *, event: str) -> None:
     from app.database.crud.user import get_user_by_id as _get_user
 
     if not bot or not outcome.granted_anything:
@@ -767,10 +803,9 @@ async def _notify_level_outcome(bot, db: AsyncSession, referee, outcome) -> None
 
     reward_line = _format_reward_line(outcome)
     if outcome.component.is_referrer:
-        level_suffix = f' (уровень {outcome.component.level})' if outcome.component.level > 1 else ''
         text = (
-            f'💰 <b>Реферальная награда!</b>{level_suffix}\n\n'
-            f'Ваш реферал <b>{html.escape(referee.full_name)}</b> пополнил баланс.\n\n'
+            f'💰 <b>Реферальная награда!</b>\n\n'
+            f'{_level_event_phrase(event, outcome.component.level, referee.full_name)}\n\n'
             f'🎁 Начислено: {reward_line}'
         )
     else:
@@ -783,6 +818,9 @@ async def _notify_level_outcome(bot, db: AsyncSession, referee, outcome) -> None
         user=recipient,
         bonus_kopeks=outcome.money_credited,
         referral_name=referee.full_name,
+        bonus_days=outcome.days_credited,
+        tariff_name=outcome.tariff_name or '',
+        level=outcome.component.level,
     )
 
 
@@ -818,7 +856,7 @@ async def _process_topup_levels(db: AsyncSession, user, topup_amount_kopeks: int
 
     for outcome in outcomes:
         try:
-            await _notify_level_outcome(bot, db, user, outcome)
+            await _notify_level_outcome(bot, db, user, outcome, event=event)
         except Exception as error:
             # Уведомление не должно откатывать уже выданное.
             logger.error('Не удалось уведомить о реферальной награде', error=str(error))

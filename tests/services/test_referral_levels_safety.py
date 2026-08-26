@@ -118,3 +118,75 @@ class TestDiagnosticsGuard:
 
         assert reached, 'на legacy-схеме детектор обязан работать как раньше'
         assert report.unsupported_scheme is False
+
+
+class TestBackupCoverage:
+    """Правила уровней обязаны попадать в бэкап.
+
+    Флаг схемы живёт в SystemSetting и восстановление переживает. Если правила
+    не восстановятся, бот встанет с включённой многоуровневой схемой и пустой
+    таблицей уровней: цепочка не найдёт ни одного правила и не заплатит НИЧЕГО —
+    без ошибки, без записи в логе, при живой истории начислений в ledger'е.
+    """
+
+    def test_reward_levels_are_backed_up(self, tmp_path, monkeypatch):
+        monkeypatch.setenv('BACKUP_LOCATION', str(tmp_path))
+        from app.database.models import ReferralRewardLevel, Tariff
+        from app.services.backup_service import backup_service
+
+        models = backup_service._base_backup_models
+        assert ReferralRewardLevel in models, 'referral_reward_levels отсутствует в бэкапе'
+        # FK на tariffs: тариф обязан восстановиться раньше правила уровня.
+        assert models.index(Tariff) < models.index(ReferralRewardLevel)
+
+
+class TestMergeChainRepair:
+    @pytest.mark.asyncio
+    async def test_two_hop_cycle_is_broken(self, monkeypatch):
+        """primary → X → primary: проверки self-referral такую петлю не видят."""
+        from app.services import account_merge_service as merge
+
+        primary = SimpleNamespace(id=1, referred_by_id=7)
+        chain = {7: 1}  # X приглашён primary
+
+        class _Result:
+            def __init__(self, value):
+                self._value = value
+
+            def scalar_one_or_none(self):
+                return self._value
+
+        async def fake_execute(query):
+            # Единственный SELECT в обходе — «кто пригласил current_id».
+            compiled = str(query.compile(compile_kwargs={'literal_binds': True}))
+            uid = int(compiled.rsplit('=', 1)[-1].strip())
+            return _Result(chain.get(uid))
+
+        db = SimpleNamespace(execute=fake_execute)
+        broken = await merge._break_referral_cycle_through(db, primary)
+
+        assert broken is True
+        assert primary.referred_by_id is None
+
+    @pytest.mark.asyncio
+    async def test_healthy_chain_is_left_alone(self, monkeypatch):
+        from app.services import account_merge_service as merge
+
+        primary = SimpleNamespace(id=1, referred_by_id=7)
+        chain = {7: 8, 8: None}
+
+        class _Result:
+            def __init__(self, value):
+                self._value = value
+
+            def scalar_one_or_none(self):
+                return self._value
+
+        async def fake_execute(query):
+            compiled = str(query.compile(compile_kwargs={'literal_binds': True}))
+            uid = int(compiled.rsplit('=', 1)[-1].strip())
+            return _Result(chain.get(uid))
+
+        db = SimpleNamespace(execute=fake_execute)
+        assert await merge._break_referral_cycle_through(db, primary) is False
+        assert primary.referred_by_id == 7

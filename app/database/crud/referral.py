@@ -18,6 +18,23 @@ from app.database.models import (
 logger = structlog.get_logger(__name__)
 
 
+def not_referee_directed():
+    """Предикат «строка описывает МОЕГО реферала».
+
+    В строке награды приглашённому колонки зеркалятся: ``user_id`` — сам
+    приглашённый, ``referral_id`` — его пригласивший. Любая выборка, трактующая
+    ``referral_id`` как «приглашённый мной» (GROUP BY, COUNT DISTINCT), обязана
+    такие строки отбросить — иначе пользователь увидит в своих рефералах
+    собственного пригласившего.
+
+    Выборкам, которые просто суммируют ``amount_kopeks`` по ``user_id``, предикат
+    не нужен: у дневных строк сумма нулевая.
+    """
+    from app.services.referral_reward_service import REFEREE_DIRECTED_REASONS
+
+    return ReferralEarning.reason.notin_(tuple(REFEREE_DIRECTED_REASONS))
+
+
 async def get_user_campaign_id(db: AsyncSession, user_id: int) -> int | None:
     """Получить campaign_id первой регистрации пользователя."""
     result = await db.execute(
