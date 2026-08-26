@@ -150,9 +150,14 @@ def test_bot_gift_claim_link_uses_safe_prefix_threshold() -> None:
     ):
         response = _build_purchase_status_response(purchase)
 
-    assert response.bot_claim_link == (
-        f'https://t.me/ExampleBot?start=GIFT_{purchase.token[: service.GIFT_TOKEN_MIN_PREFIX_LENGTH]}'
-    )
+    # Ссылка строится каноническим билдером: GIFT_ + 59 символов, ровно 64 —
+    # предел start_param у Telegram. Порог GIFT_TOKEN_MIN_PREFIX_LENGTH (48) остаётся
+    # нижней границей поиска по префиксу, а не длиной, которую кладут в ссылку.
+    fragment = response.bot_claim_link.split('?start=GIFT_', 1)[1]
+    assert response.bot_claim_link == f'https://t.me/ExampleBot?start=GIFT_{fragment}'
+    assert purchase.token.startswith(fragment)
+    assert len(fragment) >= service.GIFT_TOKEN_MIN_PREFIX_LENGTH
+    assert len(f'GIFT_{fragment}') <= 64
 
 
 @pytest.mark.asyncio
