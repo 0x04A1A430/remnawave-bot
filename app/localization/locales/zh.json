@@ -1429,6 +1429,7 @@
   "SUBSCRIPTION_WARNING_TOMORROW": "\n️明天过期！",
   "SUB_STATUS_ACTIVE_FEW_DAYS": "活跃\n️{days}天后过期",
   "SUB_STATUS_ACTIVE_LONG": "活跃\n至{end_date}({days}天)",
+  "SUB_STATUS_ACTIVE_FOREVER": "活跃（永久）",
   "SUB_STATUS_ACTIVE_TODAY": "活跃\n️今天过期！",
   "SUB_STATUS_ACTIVE_TOMORROW": "活跃\n️明天过期！",
   "SUB_STATUS_DAILY_ACTIVE": "活跃",

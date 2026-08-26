@@ -1433,6 +1433,7 @@
   "SUBSCRIPTION_WARNING_TOMORROW": "\n️ закінчується завтра!",
   "SUB_STATUS_ACTIVE_FEW_DAYS": "Активна\n️ закінчується через {days} дн.",
   "SUB_STATUS_ACTIVE_LONG": "Активна\nдо {end_date} ({days} дн.)",
+  "SUB_STATUS_ACTIVE_FOREVER": "Активна (назавжди)",
   "SUB_STATUS_ACTIVE_TODAY": "Активна\n️ закінчується сьогодні!",
   "SUB_STATUS_ACTIVE_TOMORROW": "Активна\n️ закінчується завтра!",
   "SUB_STATUS_DAILY_ACTIVE": "Активна",

@@ -122,6 +122,17 @@ def test_format_boolean_uses_english_fallback_for_fa() -> None:
     assert formatters.format_boolean(False, language='fa') == 'No'
 
 
+def test_format_subscription_status_marks_long_subscriptions_as_forever() -> None:
+    """Остаток больше INFINITY_DAYS_THRESHOLD («вечные» до 2099) — без числа дней."""
+    far_future = datetime.now(UTC) + timedelta(days=26648)
+    assert (
+        formatters.format_subscription_status(True, False, far_future, language='ru') == 'Активна (навсегда)'
+    )
+    assert (
+        formatters.format_subscription_status(True, False, far_future, language='en') == 'Active (forever)'
+    )
+
+
 def test_format_username_link_wraps_telegram_handle_in_anchor() -> None:
     """Rich-сообщения идут со skip_entity_detection=True — ссылка нужна явная."""
     assert formatters.format_username_link('durov') == '<a href="https://t.me/durov">@durov</a>'

@@ -7,6 +7,10 @@ from datetime import UTC, datetime
 # в app/services/guest_purchase_service.py при приёме логина от пользователя.
 _TELEGRAM_USERNAME_RE = re.compile(r'^[a-zA-Z][a-zA-Z0-9_]{4,31}$')
 
+# «Вечные» подписки (например, выданные до 2099 года) дают остаток больше этого
+# порога — считаем их бессрочными и показываем «(навсегда)» вместо числа дней.
+INFINITY_DAYS_THRESHOLD = 25000
+
 
 def format_datetime(dt: datetime | str, format_str: str = '%d.%m.%Y %H:%M') -> str:
     if isinstance(dt, str):
@@ -228,7 +232,9 @@ def format_subscription_status(is_active: bool, is_trial: bool, end_date: dateti
     now = datetime.now(UTC)
     if end_date > now:
         days_left = (end_date - now).days
-        if days_left > 0:
+        if days_left > INFINITY_DAYS_THRESHOLD:
+            status += ' (навсегда)' if use_russian_fallback else ' (forever)'
+        elif days_left > 0:
             status += f' ({days_left} дн.)' if use_russian_fallback else f' ({days_left} days)'
         else:
             hours_left = (end_date - now).seconds // 3600
