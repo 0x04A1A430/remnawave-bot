@@ -23,6 +23,7 @@ from .message_patch import (
     is_qr_message,
     prepare_privacy_safe_kwargs,
 )
+from .rich_menu import mark_rich_menu_taken_over
 
 
 logger = structlog.get_logger(__name__)
@@ -75,6 +76,8 @@ async def safe_edit_or_resend(
         text: Текст для отправки/редактирования.
         reply_markup: Клавиатура (опционально).
     """
+    # Этот рендер поглощает прежний экран (в т.ч. rich-меню) — не удалять его мидлварью
+    mark_rich_menu_taken_over(message.chat.id)
     try:
         await message.edit_text(text, reply_markup=reply_markup)
     except TelegramBadRequest as error:
@@ -119,6 +122,10 @@ async def edit_or_answer_photo(
     *,
     force_text: bool = False,
 ) -> None:
+    # Этот рендер поглощает прежний экран (в т.ч. rich-меню) — не удалять его мидлварью
+    if callback.message:
+        mark_rich_menu_taken_over(callback.message.chat.id)
+
     resolved_parse_mode = parse_mode or 'HTML'
 
     # Если сообщение недоступно, отправляем новое сообщение
