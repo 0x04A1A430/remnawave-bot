@@ -487,7 +487,7 @@ async def show_transaction_detail(callback: types.CallbackQuery, db_user: User, 
     else:
         status_emoji = "<tg-emoji emoji-id='5778605968208170641'>🕒</tg-emoji>"
     details.append(f'<b>Статус:</b> {status_emoji} {status_text}')
-    details.append(f"<b>Дата:</b> {format_local_datetime(transaction.created_at, '%d.%m.%Y %H:%M')}")
+    details.append(f'<b>Дата:</b> {format_local_datetime(transaction.created_at, "%d.%m.%Y %H:%M")}')
 
     lines = [
         f'{emoji_html} <b>{op_type}</b>',
