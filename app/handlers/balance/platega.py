@@ -336,25 +336,13 @@ async def process_platega_payment_amount(
     redirect_url = payment_result.get('redirect_url')
     local_payment_id = payment_result.get('local_payment_id')
     transaction_id = payment_result.get('transaction_id')
-    method_title = settings.get_platega_method_display_title(method_code)
 
-    from app.utils.button_emoji import parse_button_label
-
-    _pay_raw = texts.t('PLATEGA_PAY_BUTTON', 'Оплатить через {method}').format(method=method_title)
-    _pay_parsed = parse_button_label(_pay_raw)
+    pay_label = texts.t('PLATEGA_PAY_BUTTON', 'Пополнить на {amount}').format(
+        amount=settings.format_price(amount_kopeks)
+    )
 
     keyboard_rows = [
-        [
-            types.InlineKeyboardButton(
-                text=_pay_parsed.text,
-                url=redirect_url,
-                **(
-                    {'icon_custom_emoji_id': _pay_parsed.icon_custom_emoji_id}
-                    if _pay_parsed.icon_custom_emoji_id
-                    else {}
-                ),
-            )
-        ],
+        [types.InlineKeyboardButton(text=pay_label, url=redirect_url, style='success')],
         [
             types.InlineKeyboardButton(
                 text=texts.t('CHECK_STATUS_BUTTON', 'Проверить статус'),
@@ -371,9 +359,11 @@ async def process_platega_payment_amount(
     instructions_template = texts.t(
         'PLATEGA_PAYMENT_INSTRUCTIONS',
         (
-            '<b>Оплата через Platega ({method})</b>\n\n'
-            'Сумма: <code>{amount}</code>\n'
-            'ID транзакции: <tg-spoiler>{transaction}</tg-spoiler>'
+            '<b>Пополнение баланса</b>\n\n'
+            '<blockquote>'
+            '<b>Сумма:</b> {amount}\n'
+            '<b>ID транзакции:</b> <code>{transaction}</code>\n'
+            '</blockquote>'
         ),
     )
 
@@ -397,7 +387,6 @@ async def process_platega_payment_amount(
 
     invoice_message = await message.answer(
         instructions_template.format(
-            method=method_title,
             amount=settings.format_price(amount_kopeks),
             transaction=transaction_id or local_payment_id,
         ),
