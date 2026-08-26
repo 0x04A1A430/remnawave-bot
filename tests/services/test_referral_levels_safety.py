@@ -67,6 +67,62 @@ class TestCacheInvalidation:
         assert ReferralRewardLevelService._cache is None
 
 
+class TestCacheReload:
+    """Сброса кэша мало — важно, что следующее чтение вернёт НОВОЕ значение.
+
+    Проверка «_cache стал None» показывает лишь половину: если бы перезагрузка
+    была сломана, правило продолжало бы отдаваться старым, а тест на сброс всё
+    равно был бы зелёным.
+    """
+
+    @pytest.mark.asyncio
+    async def test_next_read_returns_the_new_rule(self, monkeypatch):
+        from app.database.models import ReferralRewardLevel
+
+        stored = {'percent': 10}
+        reads = []
+
+        class _Result:
+            def scalars(self):
+                return self
+
+            def all(self):
+                reads.append(stored['percent'])
+                row = ReferralRewardLevel(
+                    level=1,
+                    is_active=True,
+                    reward_mode='money',
+                    trigger='every_topup',
+                    referrer_percent=stored['percent'],
+                    referrer_days=0,
+                    referee_days=0,
+                    max_payments=0,
+                )
+                return [row]
+
+        async def fake_execute(_query):
+            return _Result()
+
+        db = SimpleNamespace(execute=fake_execute)
+
+        ReferralRewardLevelService.invalidate_cache()
+        first = await ReferralRewardLevelService.get_level(db, 1)
+        assert first.referrer_percent == 10
+
+        # Повторное чтение обязано идти из кэша, а не в базу.
+        await ReferralRewardLevelService.get_level(db, 1)
+        assert len(reads) == 1, 'второе чтение должно обслуживаться кэшем'
+
+        stored['percent'] = 25
+        ReferralRewardLevelService.invalidate_cache()
+        second = await ReferralRewardLevelService.get_level(db, 1)
+
+        assert second.referrer_percent == 25, 'после сброса должно читаться новое правило'
+        assert len(reads) == 2
+
+        ReferralRewardLevelService.invalidate_cache()
+
+
 class TestDiagnosticsGuard:
     @pytest.mark.asyncio
     async def test_detector_refuses_on_levels_scheme(self, monkeypatch):

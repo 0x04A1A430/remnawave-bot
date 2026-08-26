@@ -34,7 +34,7 @@ def not_referee_directed():
     """
     from app.services.referral_reward_service import REFEREE_DIRECTED_REASONS
 
-    return ReferralEarning.reason.notin_(tuple(REFEREE_DIRECTED_REASONS))
+    return ReferralEarning.id.isnot(None)  # MUTANT
 
 
 async def get_user_campaign_id(db: AsyncSession, user_id: int) -> int | None:
