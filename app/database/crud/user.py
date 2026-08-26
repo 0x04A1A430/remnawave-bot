@@ -1488,7 +1488,12 @@ async def get_user_by_email(db: AsyncSession, email: str) -> User | None:
     return result.scalar_one_or_none()
 
 
-async def get_user_by_email_alias(db: AsyncSession, email: str) -> User | None:
+async def get_user_by_email_alias(
+    db: AsyncSession,
+    email: str,
+    *,
+    exclude_user_id: int | None = None,
+) -> User | None:
     """Найти пользователя, чей адрес ведёт в тот же ящик, что и ``email``.
 
     ``user+1@gmail.com`` и ``u.ser@gmail.com`` — разные строки, но один ящик:
@@ -1496,38 +1501,28 @@ async def get_user_by_email_alias(db: AsyncSession, email: str) -> User | None:
     Сравнение по одному лишь регистру этого не видит, и на каждом таком алиасе
     заводится отдельный аккаунт со своей пробной подпиской.
 
-    Точное совпадение остаётся за ``get_user_by_email`` — здесь ищем именно
-    другую запись адреса. Для доменов без алиасов (корпоративных и незнакомых)
-    запрос не выполняется вовсе.
-    """
-    from app.utils.email_alias import (
-        canonical_email,
-        canonical_local_sql,
-        email_domain,
-        has_alias_forms,
-        sibling_domains,
-    )
+    Совпадение считается по каноническому виду, поэтому точный дубль сюда тоже
+    попадает — вызывающий код проверяет его отдельно и раньше. Для доменов без
+    алиасов (корпоративных и незнакомых) запрос не выполняется вовсе.
 
-    if not email or not email.strip() or not has_alias_forms(email):
+    ``exclude_user_id`` обязателен там, где свой собственный адрес занятым не
+    считается: фильтровать после выборки нельзя — ``LIMIT 1`` вернул бы своего
+    же юзера и скрыл чужой аккаунт на том же ящике.
+    """
+    from app.utils.email_alias import alias_match_clause
+
+    if not email or not email.strip():
         return None
 
-    domain = email_domain(email)
-    canonical = canonical_email(email)
-    local = canonical.split('@', 1)[0]
+    clause = alias_match_clause(User.email, email)
+    if clause is None:
+        return None
 
-    # Домен в базе может быть записан любым из близнецов (ya.ru / yandex.ru),
-    # поэтому канон локальной части считаем для каждого написания отдельно
-    conditions = [
-        and_(
-            func.lower(func.split_part(User.email, '@', 2)) == sibling,
-            canonical_local_sql(User.email, domain) == local,
-        )
-        for sibling in sorted(sibling_domains(domain))
-    ]
+    query = select(User).where(User.email.isnot(None), clause)
+    if exclude_user_id is not None:
+        query = query.where(User.id != exclude_user_id)
 
-    result = await db.execute(
-        select(User).where(User.email.isnot(None), or_(*conditions)).limit(1)
-    )
+    result = await db.execute(query.limit(1))
     return result.scalar_one_or_none()
 
 
@@ -1554,8 +1549,8 @@ async def is_email_taken(db: AsyncSession, email: str, exclude_user_id: int | No
         return True
 
     # Другая запись того же ящика занимает его не меньше, чем точное совпадение
-    alias_owner = await get_user_by_email_alias(db, email)
-    return alias_owner is not None and alias_owner.id != exclude_user_id
+    alias_owner = await get_user_by_email_alias(db, email, exclude_user_id=exclude_user_id)
+    return alias_owner is not None
 
 
 async def set_email_change_pending(

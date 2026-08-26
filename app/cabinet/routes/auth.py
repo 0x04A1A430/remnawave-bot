@@ -2183,7 +2183,6 @@ async def request_email_change(
             detail='Disposable email addresses are not allowed',
         )
 
-
     # Check if new email is already taken
     if await is_email_taken(db, request.new_email, exclude_user_id=user.id):
         raise HTTPException(

@@ -25,6 +25,8 @@
 
 from __future__ import annotations
 
+from sqlalchemy import func, or_
+
 
 # Провайдеры, у которых всё после «+» — пользовательская метка, а не часть адреса
 PLUS_ADDRESSING_DOMAINS = frozenset(
@@ -59,15 +61,16 @@ DOMAIN_ALIASES = {
 }
 
 
-def canonical_email(email: str | None) -> str:
-    """Вид адреса для сравнения: тот же ящик — та же строка.
+def _canonical_parts(email: str | None) -> tuple[str, str] | None:
+    """Канонические (локальная часть, домен) или ``None``, если канонизировать нечего.
 
-    Адрес без «@» (или пустой) возвращается просто в нижнем регистре: спорные
-    входные данные лучше не трогать, их отвергнет валидация выше.
+    Единственное место, где живёт порядок преобразований: сначала отрезается
+    субадрес, потом убираются точки. Иначе «u.s+ta.g@gmail.com» свернулся бы
+    по-разному в python и в SQL.
     """
     normalized = (email or '').strip().lower()
     if normalized.count('@') != 1:
-        return normalized
+        return None
 
     local, domain = normalized.split('@', 1)
     domain = DOMAIN_ALIASES.get(domain, domain)
@@ -79,9 +82,23 @@ def canonical_email(email: str | None) -> str:
 
     if not local:
         # «+tag@gmail.com» и подобное — локальной части не осталось, сравнивать
-        # такое с чем-либо нельзя, отдаём исходный адрес
-        return normalized
+        # такое с чем-либо нельзя
+        return None
 
+    return local, domain
+
+
+def canonical_email(email: str | None) -> str:
+    """Вид адреса для сравнения: тот же ящик — та же строка.
+
+    Адрес, который не поддаётся канонизации (без «@», пустой, без локальной
+    части), возвращается просто в нижнем регистре: спорные входные данные лучше
+    не трогать, их отвергнет валидация выше.
+    """
+    parts = _canonical_parts(email)
+    if parts is None:
+        return (email or '').strip().lower()
+    local, domain = parts
     return f'{local}@{domain}'
 
 
@@ -116,19 +133,53 @@ def sibling_domains(domain: str) -> set[str]:
     return {domain} | {src for src, dst in DOMAIN_ALIASES.items() if dst == domain}
 
 
-def canonical_local_sql(column, domain: str):
-    """SQL-выражение канонической локальной части — зеркало ``canonical_email``.
+_LIKE_ESCAPE = '\\'
+
+
+def _escape_like(value: str) -> str:
+    """Экранирование для LIKE: в локальной части легко встречается «_»."""
+    for char in (_LIKE_ESCAPE, '%', '_'):
+        value = value.replace(char, _LIKE_ESCAPE + char)
+    return value
+
+
+def alias_match_clause(column, email: str | None):
+    """SQLAlchemy-условие: колонка хранит адрес того же ящика, что и ``email``.
 
     Считается на стороне БД, чтобы не вычитывать всех пользователей домена ради
-    одной регистрации. Порядок операций обязан совпадать с python-версией:
-    сначала отрезаем субадрес, потом убираем точки — иначе «u.s+ta.g@gmail.com»
-    свернётся здесь и там по-разному.
-    """
-    from sqlalchemy import func
+    одной регистрации, и намеренно обходится только ``lower``/``replace``/``LIKE``:
+    ``split_part`` есть в PostgreSQL, но не в SQLite, а он здесь полноценный
+    режим работы (``DATABASE_MODE=sqlite``, и ``auto`` скатывается в него без
+    настроенного PostgreSQL).
 
-    expr = func.split_part(func.lower(column), '@', 1)
-    if domain in PLUS_ADDRESSING_DOMAINS:
-        expr = func.split_part(expr, '+', 1)
-    if domain in DOT_INSENSITIVE_DOMAINS:
+    Условие точное, а не приблизительное. После тех же преобразований, что и в
+    ``canonical_email``, хранимый адрес либо совпадает с каноническим целиком,
+    либо отличается ровно субадресом — то есть начинается с ``канон + '+'``.
+    Разбор адреса общий с ``canonical_email`` — см. ``_canonical_parts``.
+    """
+    parts = _canonical_parts(email)
+    if parts is None:
+        return None
+    local, domain = parts
+
+    strips_dots = domain in DOT_INSENSITIVE_DOMAINS
+    strips_subaddress = domain in PLUS_ADDRESSING_DOMAINS
+    if not (strips_dots or strips_subaddress):
+        # У домена нет алиасов — искать нечего, а точный дубль и так ловится
+        # обычным поиском по адресу. Лишний запрос на каждую регистрацию не нужен.
+        return None
+
+    expr = func.lower(column)
+    if strips_dots:
+        # Точки уходят и из домена тоже — сравниваемая сторона строится так же
         expr = func.replace(expr, '.', '')
-    return expr
+
+    clauses = []
+    for sibling in sorted(sibling_domains(domain)):
+        stored_domain = sibling.replace('.', '') if strips_dots else sibling
+        clauses.append(expr == f'{local}@{stored_domain}')
+        if strips_subaddress:
+            pattern = f'{_escape_like(local)}+%@{_escape_like(stored_domain)}'
+            clauses.append(expr.like(pattern, escape=_LIKE_ESCAPE))
+
+    return or_(*clauses)
