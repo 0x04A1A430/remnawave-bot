@@ -9,7 +9,7 @@ from aiogram.fsm.context import FSMContext
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import settings
+from app.config import ENV_OVERRIDE_KEYS, settings
 from app.database.crud.referral import (
     get_referral_statistics,
     get_top_referrers_by_period,
@@ -259,6 +259,25 @@ async def _show_top_referrers_filtered(callback: types.CallbackQuery, db: AsyncS
         await callback.answer('Ошибка загрузки топа рефереров')
 
 
+def _settings_hint() -> str:
+    """Подсказка о том, ГДЕ настройка реально меняется.
+
+    Реферальные ключи редактируются из админки и кабинета — но только если они не
+    заданы в .env: такой ключ попадает в ENV_OVERRIDE_KEYS, и запись из UI ложится
+    в БД, не применяясь к настройкам. Прежний текст звал править .env всегда, из-за
+    чего залоченность выглядела нормой, а не следствием конфигурации.
+    """
+    locked = sorted(key for key in ENV_OVERRIDE_KEYS if key.startswith('REFERRAL_'))
+    if not locked:
+        return '<i>💡 Настройки меняются здесь и в кабинете, раздел «Реферальная программа».</i>'
+    listed = ', '.join(locked[:5]) + ('…' if len(locked) > 5 else '')
+    return (
+        '<i>⚠️ Часть настроек задана в .env и поэтому не меняется из админки: '
+        f'{listed}. Уберите эти строки из .env и перезапустите бота, '
+        'чтобы управлять программой отсюда.</i>'
+    )
+
+
 @admin_required
 @error_handler
 async def show_referral_settings(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
@@ -277,7 +296,7 @@ async def show_referral_settings(callback: types.CallbackQuery, db_user: User, d
 • Статус: {'✅ Включены' if settings.REFERRAL_NOTIFICATIONS_ENABLED else '❌ Отключены'}
 • Попытки отправки: {getattr(settings, 'REFERRAL_NOTIFICATION_RETRY_ATTEMPTS', 3)}
 
-<i>💡 Для изменения настроек отредактируйте файл .env и перезапустите бота</i>
+{_settings_hint()}
 """
 
     keyboard = types.InlineKeyboardMarkup(

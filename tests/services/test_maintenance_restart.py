@@ -105,3 +105,34 @@ class TestPanelWarnsWhenEnvLocked:
 
         assert '.env' in _ENV_LOCKED_WARNING
         assert 'перезапуск' in _ENV_LOCKED_WARNING
+
+
+class TestReferralKeysAreEditable:
+    """Та же ловушка, что и с техработами: пиннинг в .env отключает редактирование.
+
+    Реферальные настройки — предмет отдельной задачи «настраиваемая реферальная
+    система», и она невыполнима, пока ключи заданы в окружении: запись из админки
+    ложится в БД, но к settings не применяется.
+    """
+
+    def test_env_example_does_not_pin_referral_keys(self):
+        from pathlib import Path
+
+        root = Path(__file__).resolve().parents[2]
+        lines = (root / '.env.example').read_text(encoding='utf-8').splitlines()
+
+        pinned = [line for line in lines if line.strip().startswith('REFERRAL_')]
+
+        assert pinned == [], f'Эти ключи перестанут редактироваться из админки: {pinned}'
+
+    def test_settings_screen_names_locked_keys_instead_of_blaming_env(self, monkeypatch):
+        """Экран обязан отличать «залочено окружением» от «правьте .env всегда»."""
+        from app.handlers.admin import referrals
+
+        monkeypatch.setattr(referrals, 'ENV_OVERRIDE_KEYS', set())
+        assert 'кабинете' in referrals._settings_hint()
+
+        monkeypatch.setattr(referrals, 'ENV_OVERRIDE_KEYS', {'REFERRAL_COMMISSION_PERCENT'})
+        hint = referrals._settings_hint()
+        assert 'REFERRAL_COMMISSION_PERCENT' in hint
+        assert '.env' in hint
