@@ -2225,5 +2225,12 @@
   "GIFT_MY_DELIVERED_AT_LINE": "🎉 Activated: <b>{delivered_at}</b>\n",
   "GIFT_MY_RECIPIENT_LINE": "👤 Recipient: <b>{recipient_display}</b>\n",
   "GIFT_TARIFF_DELETED": "Archived tariff",
-  "GIFT_TARIFF_DEFAULT_NAME": "VPN"
+  "GIFT_TARIFF_DEFAULT_NAME": "VPN",
+  "REFERRAL_TRIGGER_REGISTRATION": "on sign-up",
+  "REFERRAL_TRIGGER_FIRST_TOPUP": "on the first top-up",
+  "REFERRAL_TRIGGER_EVERY_TOPUP": "on every top-up",
+  "REFERRAL_REWARD_PERCENT_OF_SUM": "{percent}% of the amount",
+  "REFERRAL_REWARD_DAYS": "{days} subscription days",
+  "REFERRAL_DAYS_SHORT": "{days} days",
+  "REFERRAL_LEVEL_LINE": "Level {level}: {rewards} {trigger}"
 }

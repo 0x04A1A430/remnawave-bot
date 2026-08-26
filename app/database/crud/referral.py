@@ -145,7 +145,24 @@ async def get_referral_earnings_by_referral(db: AsyncSession, referral_id: int) 
 async def get_referral_earnings_sum(
     db: AsyncSession, user_id: int, start_date: datetime | None = None, end_date: datetime | None = None
 ) -> int:
-    query = select(func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0)).where(ReferralEarning.user_id == user_id)
+    """Денежный заработок пригласившего за период."""
+    money, _days = await get_referral_earnings_totals(db, user_id, start_date=start_date, end_date=end_date)
+    return money
+
+
+async def get_referral_earnings_totals(
+    db: AsyncSession, user_id: int, start_date: datetime | None = None, end_date: datetime | None = None
+) -> tuple[int, int]:
+    """Заработок пригласившего: (копейки, дни).
+
+    Дни — вторая валюта программы, и без них потребитель показывает ноль на
+    установке, где начисления идут днями подписки. Награды приглашённому
+    исключаются: строка принадлежит ему самому, а не владельцу ``user_id``.
+    """
+    query = select(
+        func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0),
+        func.coalesce(func.sum(ReferralEarning.days_granted), 0),
+    ).where(ReferralEarning.user_id == user_id, not_referee_directed())
 
     if start_date:
         query = query.where(ReferralEarning.created_at >= start_date)
@@ -154,7 +171,8 @@ async def get_referral_earnings_sum(
         query = query.where(ReferralEarning.created_at <= end_date)
 
     result = await db.execute(query)
-    return result.scalar() or 0
+    money, days = result.one()
+    return int(money or 0), int(days or 0)
 
 
 async def get_referral_statistics(db: AsyncSession) -> dict:
@@ -457,10 +475,10 @@ async def get_user_referral_stats(db: AsyncSession, user_id: int) -> dict:
     invited_count_result = await db.execute(select(func.count(User.id)).where(User.referred_by_id == user_id))
     invited_count = invited_count_result.scalar()
 
-    total_earned = await get_referral_earnings_sum(db, user_id)
+    total_earned, total_earned_days = await get_referral_earnings_totals(db, user_id)
 
     month_ago = datetime.now(UTC) - timedelta(days=30)
-    month_earned = await get_referral_earnings_sum(db, user_id, start_date=month_ago)
+    month_earned, month_earned_days = await get_referral_earnings_totals(db, user_id, start_date=month_ago)
 
     active_referrals_result = await db.execute(
         select(func.count(func.distinct(User.id)))
@@ -479,5 +497,7 @@ async def get_user_referral_stats(db: AsyncSession, user_id: int) -> dict:
         'invited_count': invited_count,
         'active_referrals': active_referrals,
         'total_earned_kopeks': total_earned,
+        'total_earned_days': total_earned_days,
         'month_earned_kopeks': month_earned,
+        'month_earned_days': month_earned_days,
     }

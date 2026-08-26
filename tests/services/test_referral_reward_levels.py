@@ -723,7 +723,7 @@ class TestInvitePromise:
         )
         monkeypatch.setattr(type(screen.settings), 'get_cabinet_referral_link', lambda self, code: '')
 
-        async def fake_referee_bonus(_db, tariff_names=None):
+        async def fake_referee_bonus(_db, tariff_names=None, language=None):
             return '7 дн. подписки (Про) за регистрацию'
 
         async def fake_tariffs(_db):
@@ -879,3 +879,44 @@ class TestRefereeRowsStayOutOfReferrerTotals:
             'сводка заработка должна отбрасывать строки наград приглашённому '
             'во всех выборках: итог, месяц, последние начисления, разбивка по типам'
         )
+
+
+class TestGeneratedTextIsLocalized:
+    """Сгенерированное описание вставляется в локализованные экраны.
+
+    Русская вставка внутри английского экрана — не косметика: этим же текстом
+    пользователь приглашает друга, то есть отправляет его от своего имени.
+    """
+
+    @pytest.fixture
+    def one_level(self, monkeypatch):
+        config = _level(1, reward_mode='both', trigger='every_topup', referrer_percent=10, referrer_days=7)
+
+        async def fake_all(_db):
+            return {1: config}
+
+        monkeypatch.setattr(ReferralRewardLevelService, 'get_all', classmethod(lambda cls, db: fake_all(db)))
+        monkeypatch.setattr(settings, 'REFERRAL_MAX_LEVEL_DEPTH', 3)
+
+    @pytest.mark.asyncio
+    async def test_english_description_has_no_russian(self, one_level):
+        from app.services.referral_reward_service import describe_active_levels
+
+        line = (await describe_active_levels(None, language='en'))[0]
+        assert 'Level 1' in line
+        assert 'on every top-up' in line
+        assert not any('Ѐ' <= ch <= 'ӿ' for ch in line), f'кириллица в английском описании: {line}'
+
+    @pytest.mark.asyncio
+    async def test_russian_description_is_unchanged(self, one_level):
+        from app.services.referral_reward_service import describe_active_levels
+
+        line = (await describe_active_levels(None, language='ru'))[0]
+        assert line.startswith('Уровень 1')
+        assert 'с каждого пополнения' in line
+
+    def test_reward_total_days_label_is_localized(self):
+        from app.services.referral_reward_service import format_reward_total
+
+        assert 'days' in format_reward_total(0, 7, 'en')
+        assert 'дн.' in format_reward_total(0, 7, 'ru')

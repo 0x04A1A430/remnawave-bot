@@ -99,12 +99,20 @@ async def show_referral_info(callback: types.CallbackQuery, db_user: User, db: A
         + texts.t(
             'REFERRAL_STATS_TOTAL_EARNED',
             '• Заработано всего: <b>{amount}</b>',
-        ).format(amount=format_reward_total(summary['total_earned_kopeks'], summary.get('total_earned_days', 0)))
+        ).format(
+            amount=format_reward_total(
+                summary['total_earned_kopeks'], summary.get('total_earned_days', 0), db_user.language
+            )
+        )
         + '\n'
         + texts.t(
             'REFERRAL_STATS_MONTH_EARNED',
             '• За последний месяц: <b>{amount}</b>',
-        ).format(amount=format_reward_total(summary['month_earned_kopeks'], summary.get('month_earned_days', 0)))
+        ).format(
+            amount=format_reward_total(
+                summary['month_earned_kopeks'], summary.get('month_earned_days', 0), db_user.language
+            )
+        )
         + '\n\n'
         + texts.t('REFERRAL_REWARDS_HEADER', '🎁 <b>Как работают награды:</b>')
     )
@@ -118,9 +126,9 @@ async def show_referral_info(callback: types.CallbackQuery, db_user: User, db: A
         from app.services.referral_reward_service import describe_active_levels, describe_referee_bonus
 
         tariff_names = await _reward_tariff_names(db)
-        for line in await describe_active_levels(db, tariff_names=tariff_names):
+        for line in await describe_active_levels(db, tariff_names=tariff_names, language=db_user.language):
             referral_text += f'\n• {line}'
-        referee_bonus = await describe_referee_bonus(db, tariff_names=tariff_names)
+        referee_bonus = await describe_referee_bonus(db, tariff_names=tariff_names, language=db_user.language)
         if referee_bonus:
             referral_text += '\n' + texts.t(
                 'REFERRAL_REWARD_NEW_USER_LEVELS',
@@ -237,7 +245,9 @@ async def show_referral_info(callback: types.CallbackQuery, db_user: User, db: A
                         '• {reason}: <b>{amount}</b> от {referral_name}',
                     ).format(
                         reason=reason_text,
-                        amount=format_reward_total(earning['amount_kopeks'], earning.get('days_granted', 0)),
+                        amount=format_reward_total(
+                            earning['amount_kopeks'], earning.get('days_granted', 0), db_user.language
+                        ),
                         referral_name=html_escape(str(earning['referral_name'] or '')),
                     )
                     + '\n'
@@ -262,7 +272,9 @@ async def show_referral_info(callback: types.CallbackQuery, db_user: User, db: A
                         '• Бонусы за первые пополнения: <b>{count}</b> ({amount})',
                     ).format(
                         count=data['count'],
-                        amount=format_reward_total(data['total_amount_kopeks'], data.get('total_days', 0)),
+                        amount=format_reward_total(
+                            data['total_amount_kopeks'], data.get('total_days', 0), db_user.language
+                        ),
                     )
                     + '\n'
                 )
@@ -276,7 +288,9 @@ async def show_referral_info(callback: types.CallbackQuery, db_user: User, db: A
                         '• Комиссии с пополнений: <b>{count}</b> ({amount})',
                     ).format(
                         count=data['count'],
-                        amount=format_reward_total(data['total_amount_kopeks'], data.get('total_days', 0)),
+                        amount=format_reward_total(
+                            data['total_amount_kopeks'], data.get('total_days', 0), db_user.language
+                        ),
                     )
                     + '\n'
                 )
@@ -290,7 +304,9 @@ async def show_referral_info(callback: types.CallbackQuery, db_user: User, db: A
                         '• Комиссии с покупок: <b>{count}</b> ({amount})',
                     ).format(
                         count=data['count'],
-                        amount=format_reward_total(data['total_amount_kopeks'], data.get('total_days', 0)),
+                        amount=format_reward_total(
+                            data['total_amount_kopeks'], data.get('total_days', 0), db_user.language
+                        ),
                     )
                     + '\n'
                 )
@@ -419,7 +435,11 @@ async def show_detailed_referral_list(callback: types.CallbackQuery, db_user: Us
             texts.t(
                 'REFERRAL_LIST_ITEM_EARNED',
                 '   💎 Заработано с него: {amount}',
-            ).format(amount=format_reward_total(referral['total_earned_kopeks'], referral.get('days_earned', 0)))
+            ).format(
+                amount=format_reward_total(
+                    referral['total_earned_kopeks'], referral.get('days_earned', 0), db_user.language
+                )
+            )
             + '\n'
         )
         text += (
@@ -501,6 +521,7 @@ async def show_referral_analytics(callback: types.CallbackQuery, db_user: User, 
             amount=format_reward_total(
                 analytics['earnings_by_period']['today'],
                 (analytics.get('days_by_period') or {}).get('today', 0),
+                db_user.language,
             )
         )
         + '\n'
@@ -513,6 +534,7 @@ async def show_referral_analytics(callback: types.CallbackQuery, db_user: User, 
             amount=format_reward_total(
                 analytics['earnings_by_period']['week'],
                 (analytics.get('days_by_period') or {}).get('week', 0),
+                db_user.language,
             )
         )
         + '\n'
@@ -525,6 +547,7 @@ async def show_referral_analytics(callback: types.CallbackQuery, db_user: User, 
             amount=format_reward_total(
                 analytics['earnings_by_period']['month'],
                 (analytics.get('days_by_period') or {}).get('month', 0),
+                db_user.language,
             )
         )
         + '\n'
@@ -537,6 +560,7 @@ async def show_referral_analytics(callback: types.CallbackQuery, db_user: User, 
             amount=format_reward_total(
                 analytics['earnings_by_period']['quarter'],
                 (analytics.get('days_by_period') or {}).get('quarter', 0),
+                db_user.language,
             )
         )
         + '\n\n'
@@ -558,7 +582,9 @@ async def show_referral_analytics(callback: types.CallbackQuery, db_user: User, 
                 ).format(
                     index=i,
                     name=html_escape(str(ref['referral_name'] or '')),
-                    amount=format_reward_total(ref['total_earned_kopeks'], ref.get('total_earned_days', 0)),
+                    amount=format_reward_total(
+                        ref['total_earned_kopeks'], ref.get('total_earned_days', 0), db_user.language
+                    ),
                     count=ref['earnings_count'],
                 )
                 + '\n'
@@ -598,7 +624,9 @@ async def create_invite_message(callback: types.CallbackQuery, db_user: User, db
     if settings.is_referral_levels_scheme():
         from app.services.referral_reward_service import describe_referee_bonus
 
-        referee_bonus = await describe_referee_bonus(db, tariff_names=await _reward_tariff_names(db))
+        referee_bonus = await describe_referee_bonus(
+            db, tariff_names=await _reward_tariff_names(db), language=db_user.language
+        )
         if referee_bonus:
             bonus_block = '\n\n' + texts.t(
                 'REFERRAL_INVITE_BONUS_LEVELS',

@@ -141,13 +141,17 @@ async def _render_levels(callback: types.CallbackQuery, db: AsyncSession) -> Non
         '<i>Правила хранятся в базе, а не в .env, поэтому меняются отсюда и из кабинета и переживают перезапуск.</i>'
     )
 
+    max_depth = settings.get_referral_max_level_depth()
     keyboard_rows = []
     for level in levels:
+        # Уровень глубже предела обхода не платит вовсе: помечаем прямо на кнопке,
+        # иначе «✅ Уровень 4» неотличим от работающего.
         mark = '✅' if level.is_active else '⛔️'
+        suffix = ' (не платит)' if level.level > max_depth else ''
         keyboard_rows.append(
             [
                 types.InlineKeyboardButton(
-                    text=f'{mark} Уровень {level.level}', callback_data=f'admin_ref_lvl:{level.level}'
+                    text=f'{mark} Уровень {level.level}{suffix}', callback_data=f'admin_ref_lvl:{level.level}'
                 )
             ]
         )
@@ -308,6 +312,7 @@ async def _render_level(callback: types.CallbackQuery, db: AsyncSession, level_n
     money_on = level.reward_mode in (ReferralRewardMode.MONEY.value, ReferralRewardMode.BOTH.value)
     days_on = level.reward_mode in (ReferralRewardMode.DAYS.value, ReferralRewardMode.BOTH.value)
 
+    beyond_depth = level.level > settings.get_referral_max_level_depth()
     lines = [
         f'🪜 <b>Уровень {level.level}</b>',
         '',
@@ -326,6 +331,14 @@ async def _render_level(callback: types.CallbackQuery, db: AsyncSession, level_n
         '',
         f'Лимит оплаченных комиссий: {level.max_payments or "без лимита"}',
     ]
+
+    if beyond_depth:
+        lines.append('')
+        lines.append(
+            f'<i>❗️ Цепочка обходится только до {settings.get_referral_max_level_depth()} уровней '
+            '(REFERRAL_MAX_LEVEL_DEPTH), поэтому этот уровень не начисляет ничего, '
+            'сколько бы ни был настроен.</i>'
+        )
 
     if level.level == 1:
         lines.append('')
@@ -474,8 +487,8 @@ async def cycle_level_trigger(callback: types.CallbackQuery, db_user: User, db: 
 @error_handler
 async def delete_level(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
     level_number = int(callback.data.split(':')[1])
-    await delete_reward_level(db, level_number)
-    await callback.answer(f'Уровень {level_number} удалён')
+    removed = await delete_reward_level(db, level_number)
+    await callback.answer(f'Уровень {level_number} удалён' if removed else 'Уровень уже удалён')
     await _render_levels(callback, db)
 
 

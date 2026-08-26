@@ -2225,5 +2225,12 @@
   "GIFT_OPEN_BOT_BUTTON": "🤖 باز کردن در ربات",
   "GIFT_OPEN_CABINET_BUTTON": "🌐 باز کردن در پنل کاربری",
   "GIFT_BOT_CLAIM_LINK_LABEL": "🤖 در تلگرام:",
-  "GIFT_CABINET_CLAIM_LINK_LABEL": "🌐 در پنل کاربری:"
+  "GIFT_CABINET_CLAIM_LINK_LABEL": "🌐 در پنل کاربری:",
+  "REFERRAL_TRIGGER_REGISTRATION": "هنگام ثبت‌نام",
+  "REFERRAL_TRIGGER_FIRST_TOPUP": "هنگام اولین شارژ",
+  "REFERRAL_TRIGGER_EVERY_TOPUP": "هنگام هر شارژ",
+  "REFERRAL_REWARD_PERCENT_OF_SUM": "{percent}٪ از مبلغ",
+  "REFERRAL_REWARD_DAYS": "{days} روز اشتراک",
+  "REFERRAL_DAYS_SHORT": "{days} روز",
+  "REFERRAL_LEVEL_LINE": "سطح {level}: {rewards} {trigger}"
 }

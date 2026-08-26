@@ -2940,8 +2940,8 @@ async def _build_referral_info(
     if settings.is_referral_levels_scheme():
         from app.services.referral_reward_service import describe_active_levels, describe_referee_bonus
 
-        level_descriptions = await describe_active_levels(db)
-        referee_bonus = await describe_referee_bonus(db)
+        level_descriptions = await describe_active_levels(db, language=user.language)
+        referee_bonus = await describe_referee_bonus(db, language=user.language)
 
     terms = MiniAppReferralTerms(
         minimum_topup_kopeks=minimum_topup_kopeks,
@@ -2969,10 +2969,14 @@ async def _build_referral_info(
             paid_referrals_count=int(summary.get('paid_referrals_count') or 0),
             active_referrals_count=int(summary.get('active_referrals_count') or 0),
             total_earned_kopeks=total_earned_kopeks,
-            total_earned_label=format_reward_total(total_earned_kopeks, int(summary.get('total_earned_days') or 0)),
+            total_earned_label=format_reward_total(
+                total_earned_kopeks, int(summary.get('total_earned_days') or 0), user.language
+            ),
             total_earned_days=int(summary.get('total_earned_days') or 0),
             month_earned_kopeks=month_earned_kopeks,
-            month_earned_label=format_reward_total(month_earned_kopeks, int(summary.get('month_earned_days') or 0)),
+            month_earned_label=format_reward_total(
+                month_earned_kopeks, int(summary.get('month_earned_days') or 0), user.language
+            ),
             month_earned_days=int(summary.get('month_earned_days') or 0),
             conversion_rate=float(summary.get('conversion_rate') or 0.0),
         )
@@ -2983,7 +2987,7 @@ async def _build_referral_info(
             recent_earnings.append(
                 MiniAppReferralRecentEarning(
                     amount_kopeks=amount,
-                    amount_label=format_reward_total(amount, earned_days),
+                    amount_label=format_reward_total(amount, earned_days, user.language),
                     days_granted=earned_days,
                     reward_type=str(earning.get('reward_type') or 'money'),
                     level=int(earning.get('level') or 1),
@@ -3013,7 +3017,7 @@ async def _build_referral_info(
                     balance_label=settings.format_price(balance),
                     total_earned_kopeks=total_earned,
                     total_earned_days=item_days,
-                    total_earned_label=format_reward_total(total_earned, item_days),
+                    total_earned_label=format_reward_total(total_earned, item_days, user.language),
                     topups_count=int(item.get('topups_count') or 0),
                     days_since_registration=item.get('days_since_registration'),
                     days_since_activity=item.get('days_since_activity'),

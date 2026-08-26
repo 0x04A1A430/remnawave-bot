@@ -294,8 +294,8 @@ async def get_referral_terms(db: AsyncSession = Depends(get_cabinet_db)):
             tariffs_result = await db.execute(select(Tariff.id, Tariff.name).where(Tariff.id.in_(tariff_ids)))
             tariff_names = {row.id: row.name for row in tariffs_result.all()}
 
-        level_descriptions = await describe_active_levels(db, tariff_names=tariff_names)
-        referee_bonus = await describe_referee_bonus(db, tariff_names=tariff_names)
+        level_descriptions = await describe_active_levels(db, tariff_names=tariff_names, language=user.language)
+        referee_bonus = await describe_referee_bonus(db, tariff_names=tariff_names, language=user.language)
 
     return ReferralTermsResponse(
         scheme='levels' if settings.is_referral_levels_scheme() else 'legacy',

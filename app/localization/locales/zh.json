@@ -2225,5 +2225,12 @@
   "GIFT_OPEN_BOT_BUTTON": "🤖 在机器人中打开",
   "GIFT_OPEN_CABINET_BUTTON": "🌐 在控制台中打开",
   "GIFT_BOT_CLAIM_LINK_LABEL": "🤖 在 Telegram 中：",
-  "GIFT_CABINET_CLAIM_LINK_LABEL": "🌐 在控制台中："
+  "GIFT_CABINET_CLAIM_LINK_LABEL": "🌐 在控制台中：",
+  "REFERRAL_TRIGGER_REGISTRATION": "注册时",
+  "REFERRAL_TRIGGER_FIRST_TOPUP": "首次充值时",
+  "REFERRAL_TRIGGER_EVERY_TOPUP": "每次充值时",
+  "REFERRAL_REWARD_PERCENT_OF_SUM": "金额的 {percent}%",
+  "REFERRAL_REWARD_DAYS": "{days} 天订阅",
+  "REFERRAL_DAYS_SHORT": "{days} 天",
+  "REFERRAL_LEVEL_LINE": "第 {level} 级：{rewards}{trigger}"
 }

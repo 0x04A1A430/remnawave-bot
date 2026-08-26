@@ -716,11 +716,20 @@ async def _grant_one(
     return outcome
 
 
-_TRIGGER_LABELS = {
-    ReferralRewardTrigger.REGISTRATION.value: 'за регистрацию',
-    ReferralRewardTrigger.FIRST_TOPUP.value: 'за первое пополнение',
-    ReferralRewardTrigger.EVERY_TOPUP.value: 'с каждого пополнения',
+# Ключи локализации для сгенерированных описаний. Строки собираются здесь, а
+# попадают в полностью локализованные экраны — приветствие, «Как работают
+# награды», копируемый текст приглашения. Захардкоженная русская вставка внутри
+# английского экрана — не косметика: приглашение пользователь отправляет другу.
+_TRIGGER_KEYS = {
+    ReferralRewardTrigger.REGISTRATION.value: ('REFERRAL_TRIGGER_REGISTRATION', 'за регистрацию'),
+    ReferralRewardTrigger.FIRST_TOPUP.value: ('REFERRAL_TRIGGER_FIRST_TOPUP', 'за первое пополнение'),
+    ReferralRewardTrigger.EVERY_TOPUP.value: ('REFERRAL_TRIGGER_EVERY_TOPUP', 'с каждого пополнения'),
 }
+
+
+def _trigger_label(trigger: str, texts) -> str:
+    key, default = _TRIGGER_KEYS.get(trigger, ('', trigger))
+    return texts.t(key, default) if key else trigger
 
 
 def _days_can_be_granted(config: LevelConfig, *, tariff_id: int | None) -> bool:
@@ -739,7 +748,9 @@ def _days_can_be_granted(config: LevelConfig, *, tariff_id: int | None) -> bool:
     return tariff_id is not None
 
 
-async def describe_active_levels(db: AsyncSession, *, tariff_names: dict[int, str] | None = None) -> list[str]:
+async def describe_active_levels(
+    db: AsyncSession, *, tariff_names: dict[int, str] | None = None, language: str | None = None
+) -> list[str]:
     """Человекочитаемое описание активных уровней.
 
     Один источник и для приветственного текста, и для экрана «Партнёрская
@@ -747,6 +758,9 @@ async def describe_active_levels(db: AsyncSession, *, tariff_names: dict[int, st
     самый дорогой класс ошибок в реферальных программах, а он ровно из того и
     берётся, что описание пишут отдельно от расчёта.
     """
+    from app.localization.texts import get_texts
+
+    texts = get_texts(language) if language else get_texts()
     configs = await ReferralRewardLevelService.get_all(db)
     names = tariff_names or {}
     lines: list[str] = []
@@ -764,7 +778,11 @@ async def describe_active_levels(db: AsyncSession, *, tariff_names: dict[int, st
         rewards: list[str] = []
         if config.money_enabled:
             if config.referrer_percent:
-                rewards.append(f'{config.referrer_percent}% от суммы')
+                rewards.append(
+                    texts.t('REFERRAL_REWARD_PERCENT_OF_SUM', '{percent}% от суммы').format(
+                        percent=config.referrer_percent
+                    )
+                )
             if config.referrer_fixed_kopeks:
                 rewards.append(settings.format_price(config.referrer_fixed_kopeks))
         if (
@@ -775,23 +793,33 @@ async def describe_active_levels(db: AsyncSession, *, tariff_names: dict[int, st
             tariff_suffix = ''
             if config.referrer_tariff_id and config.referrer_tariff_id in names:
                 tariff_suffix = f' ({names[config.referrer_tariff_id]})'
-            rewards.append(f'{config.referrer_days} дн. подписки{tariff_suffix}')
+            rewards.append(
+                texts.t('REFERRAL_REWARD_DAYS', '{days} дн. подписки').format(days=config.referrer_days) + tariff_suffix
+            )
 
         if not rewards:
             continue
 
-        trigger_label = _TRIGGER_LABELS.get(config.trigger, config.trigger)
-        lines.append(f'Уровень {level}: {" + ".join(rewards)} {trigger_label}')
+        lines.append(
+            texts.t('REFERRAL_LEVEL_LINE', 'Уровень {level}: {rewards} {trigger}').format(
+                level=level, rewards=' + '.join(rewards), trigger=_trigger_label(config.trigger, texts)
+            )
+        )
 
     return lines
 
 
-async def describe_referee_bonus(db: AsyncSession, *, tariff_names: dict[int, str] | None = None) -> str | None:
+async def describe_referee_bonus(
+    db: AsyncSession, *, tariff_names: dict[int, str] | None = None, language: str | None = None
+) -> str | None:
     """Что получит сам приглашённый. ``None`` — ничего не настроено.
 
     Берётся с первого сработавшего уровня — ровно так же, как это делает расчёт:
     приглашённому платят один раз за событие, а не по разу на каждом уровне.
     """
+    from app.localization.texts import get_texts
+
+    texts = get_texts(language) if language else get_texts()
     configs = await ReferralRewardLevelService.get_all(db)
     names = tariff_names or {}
     max_depth = settings.get_referral_max_level_depth()
@@ -812,16 +840,17 @@ async def describe_referee_bonus(db: AsyncSession, *, tariff_names: dict[int, st
             tariff_suffix = ''
             if config.referee_tariff_id and config.referee_tariff_id in names:
                 tariff_suffix = f' ({names[config.referee_tariff_id]})'
-            parts.append(f'{config.referee_days} дн. подписки{tariff_suffix}')
+            parts.append(
+                texts.t('REFERRAL_REWARD_DAYS', '{days} дн. подписки').format(days=config.referee_days) + tariff_suffix
+            )
 
         if parts:
-            trigger_label = _TRIGGER_LABELS.get(config.trigger, config.trigger)
-            return f'{" + ".join(parts)} {trigger_label}'
+            return f'{" + ".join(parts)} {_trigger_label(config.trigger, texts)}'
 
     return None
 
 
-def format_reward_total(money_kopeks: int, days: int) -> str:
+def format_reward_total(money_kopeks: int, days: int, language: str | None = None) -> str:
     """Выплаченное одной строкой: деньги, дни или и то и другое.
 
     Дни называются отдельно, а не через денежную сумму: на ней считается
@@ -834,8 +863,13 @@ def format_reward_total(money_kopeks: int, days: int) -> str:
     money = int(money_kopeks or 0)
     days = int(days or 0)
 
+    from app.localization.texts import get_texts
+
+    texts = get_texts(language) if language else get_texts()
+    days_label = texts.t('REFERRAL_DAYS_SHORT', '{days} дн.').format(days=days)
+
     if days and not money:
-        return f'{days} дн.'
+        return days_label
     if days:
-        return f'{settings.format_price(money)} + {days} дн.'
+        return f'{settings.format_price(money)} + {days_label}'
     return settings.format_price(money)

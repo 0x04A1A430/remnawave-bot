@@ -2225,5 +2225,12 @@
   "GIFT_OPEN_BOT_BUTTON": "🤖 Відкрити в боті",
   "GIFT_OPEN_CABINET_BUTTON": "🌐 Відкрити в кабінеті",
   "GIFT_BOT_CLAIM_LINK_LABEL": "🤖 У Telegram:",
-  "GIFT_CABINET_CLAIM_LINK_LABEL": "🌐 В особистому кабінеті:"
+  "GIFT_CABINET_CLAIM_LINK_LABEL": "🌐 В особистому кабінеті:",
+  "REFERRAL_TRIGGER_REGISTRATION": "за реєстрацію",
+  "REFERRAL_TRIGGER_FIRST_TOPUP": "за перше поповнення",
+  "REFERRAL_TRIGGER_EVERY_TOPUP": "з кожного поповнення",
+  "REFERRAL_REWARD_PERCENT_OF_SUM": "{percent}% від суми",
+  "REFERRAL_REWARD_DAYS": "{days} дн. підписки",
+  "REFERRAL_DAYS_SHORT": "{days} дн.",
+  "REFERRAL_LEVEL_LINE": "Рівень {level}: {rewards} {trigger}"
 }

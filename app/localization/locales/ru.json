@@ -2225,5 +2225,12 @@
   "GIFT_MY_DELIVERED_AT_LINE": "🎉 Активирован: <b>{delivered_at}</b>\n",
   "GIFT_MY_RECIPIENT_LINE": "👤 Получатель: <b>{recipient_display}</b>\n",
   "GIFT_TARIFF_DELETED": "Архивный тариф",
-  "GIFT_TARIFF_DEFAULT_NAME": "VPN"
+  "GIFT_TARIFF_DEFAULT_NAME": "VPN",
+  "REFERRAL_TRIGGER_REGISTRATION": "за регистрацию",
+  "REFERRAL_TRIGGER_FIRST_TOPUP": "за первое пополнение",
+  "REFERRAL_TRIGGER_EVERY_TOPUP": "с каждого пополнения",
+  "REFERRAL_REWARD_PERCENT_OF_SUM": "{percent}% от суммы",
+  "REFERRAL_REWARD_DAYS": "{days} дн. подписки",
+  "REFERRAL_DAYS_SHORT": "{days} дн.",
+  "REFERRAL_LEVEL_LINE": "Уровень {level}: {rewards} {trigger}"
 }
