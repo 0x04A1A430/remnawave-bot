@@ -412,6 +412,7 @@ class BotConfigurationService:
         'MAIN_MENU_RICH_EFFECT_ID': 'INTERFACE',
         'MAIN_MENU_RICH_LOGO_URL': 'INTERFACE',
         'MAIN_MENU_RICH_SUBSCRIPTIONS_COLLAPSIBLE': 'INTERFACE',
+        'MAIN_MENU_RICH_INLINE_BUTTONS': 'INTERFACE',
         'USER_ACTION_LOG_ENABLED': 'MONITORING',
         'USER_ACTION_LOG_RETENTION_DAYS': 'MONITORING',
         'CABINET_BUTTON_STYLE': 'INTERFACE',
@@ -773,6 +774,21 @@ class BotConfigurationService:
             'example': 'true',
             'warning': 'Действует только при MAIN_MENU_RICH_ENABLED и включённом мультитарифе.',
             'dependencies': 'MAIN_MENU_RICH_ENABLED, MULTI_TARIFF_ENABLED',
+        },
+        'MAIN_MENU_RICH_INLINE_BUTTONS': {
+            'description': (
+                'Показывать кнопки ВНУТРИ полотна rich-сообщения (Bot API 10.3), а не отдельной '
+                'клавиатурой под ним. Действует и в главном меню, и в rich-уведомлениях админ-чата. '
+                'Клавиатура не дублируется: кнопки либо внутри, либо под сообщением.'
+            ),
+            'format': 'Булево значение.',
+            'example': 'false',
+            'warning': (
+                'Требует Bot API 10.3 на сервере. Если хотя бы одну кнопку сообщения нельзя '
+                'перенести (оплата, игра, а в групповом админ-чате — Mini App), клавиатура этого '
+                'сообщения целиком остаётся под ним: половина кнопок внутри — это потерянные кнопки.'
+            ),
+            'dependencies': 'MAIN_MENU_RICH_ENABLED, ADMIN_NOTIFICATIONS_RICH_ENABLED',
         },
         'USER_ACTION_LOG_ENABLED': {
             'description': (

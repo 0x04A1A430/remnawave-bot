@@ -1348,3 +1348,92 @@ async def test_try_edit_decode_error_falls_back_to_classic(monkeypatch):
     )
 
     assert edited is False
+
+
+async def test_inline_buttons_setting_moves_keyboard_into_canvas(monkeypatch):
+    """Bot API 10.3: кнопки уезжают в полотно, клавиатуры под сообщением не остаётся."""
+
+    async def fake_build(user, texts, db):
+        return '<p>menu</p>'
+
+    monkeypatch.setattr(rich_menu, 'build_main_menu_rich_html', fake_build)
+    monkeypatch.setattr(settings, 'MAIN_MENU_RICH_INLINE_BUTTONS', True, raising=False)
+
+    bot = AsyncMock()
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[[InlineKeyboardButton(text='Подписка', callback_data='menu_subscription')]]
+    )
+
+    sent = await rich_menu.try_send_rich_main_menu(bot, 1, _make_user(None), DummyTexts(), AsyncMock(), keyboard)
+
+    assert sent is True
+    kwargs = bot.send_rich_message.await_args.kwargs
+    assert '<tg-button type="callback_data" data="menu_subscription">' in kwargs['rich_message'].html
+    # Дублировать кнопки незачем: либо внутри, либо под сообщением.
+    assert kwargs['reply_markup'] is None
+
+
+async def test_inline_buttons_setting_off_keeps_classic_keyboard(monkeypatch):
+    async def fake_build(user, texts, db):
+        return '<p>menu</p>'
+
+    monkeypatch.setattr(rich_menu, 'build_main_menu_rich_html', fake_build)
+    monkeypatch.setattr(settings, 'MAIN_MENU_RICH_INLINE_BUTTONS', False, raising=False)
+
+    bot = AsyncMock()
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text='a', callback_data='a')]])
+
+    await rich_menu.try_send_rich_main_menu(bot, 1, _make_user(None), DummyTexts(), AsyncMock(), keyboard)
+
+    kwargs = bot.send_rich_message.await_args.kwargs
+    assert '<tg-button' not in kwargs['rich_message'].html
+    assert kwargs['reply_markup'] is keyboard
+
+
+async def test_unmovable_button_keeps_keyboard_outside(monkeypatch):
+    """Если перенести можно не всё — клавиатура остаётся под сообщением целиком."""
+
+    async def fake_build(user, texts, db):
+        return '<p>menu</p>'
+
+    monkeypatch.setattr(rich_menu, 'build_main_menu_rich_html', fake_build)
+    monkeypatch.setattr(settings, 'MAIN_MENU_RICH_INLINE_BUTTONS', True, raising=False)
+
+    bot = AsyncMock()
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text='ok', callback_data='ok')],
+            [InlineKeyboardButton(text='Оплатить', pay=True)],
+        ]
+    )
+
+    await rich_menu.try_send_rich_main_menu(bot, 1, _make_user(None), DummyTexts(), AsyncMock(), keyboard)
+
+    kwargs = bot.send_rich_message.await_args.kwargs
+    assert '<tg-button' not in kwargs['rich_message'].html
+    assert kwargs['reply_markup'] is keyboard
+
+
+async def test_edit_clears_old_keyboard_when_buttons_move_inside(monkeypatch):
+    """У editMessageText отсутствующий reply_markup означает «не трогать».
+
+    Без явной пустой клавиатуры прежние кнопки остались бы висеть рядом с новыми,
+    перенесёнными в полотно.
+    """
+
+    async def fake_build(user, texts, db):
+        return '<p>menu</p>'
+
+    monkeypatch.setattr(rich_menu, 'build_main_menu_rich_html', fake_build)
+    monkeypatch.setattr(settings, 'MAIN_MENU_RICH_INLINE_BUTTONS', True, raising=False)
+
+    callback = _make_callback()
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text='a', callback_data='a')]])
+
+    edited = await rich_menu.try_edit_rich_main_menu(callback, _make_user(None), DummyTexts(), AsyncMock(), keyboard)
+
+    assert edited is True
+    request = callback.bot.await_args.args[0]
+    assert '<tg-button' in request.rich_message.html
+    assert request.reply_markup is not None
+    assert request.reply_markup.inline_keyboard == []

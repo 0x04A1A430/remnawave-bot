@@ -1059,6 +1059,9 @@ class Settings(BaseSettings):
     # Сворачивать таблицу подписок в раскрываемый details-блок, когда у юзера
     # больше одной подписки (мультитариф) — меню компактнее.
     MAIN_MENU_RICH_SUBSCRIPTIONS_COLLAPSIBLE: bool = True
+    # Bot API 10.3: кнопки живут внутри полотна rich-сообщения (<tg-button-row>),
+    # а не отдельной клавиатурой под ним. Клавиатура при этом не дублируется.
+    MAIN_MENU_RICH_INLINE_BUTTONS: bool = False
     # Публичный HTTPS-URL картинки-логотипа в шапке rich-меню. Пусто — авто-режим:
     # при заданном WEBHOOK_URL и существующем LOGO_FILE логотип отдаётся своим
     # эндпоинтом {origin WEBHOOK_URL}/cabinet/branding/bot-logo. Если Telegram не
