@@ -13,7 +13,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database.models import PaymentMethod, Subscription, TransactionType
 from app.services.lava_service import lava_service
-from app.utils.message_effects import TOPUP_SUCCESS_EFFECT_ID
 from app.utils.payment_logger import payment_logger as logger
 from app.utils.user_utils import format_referrer_info
 
@@ -550,7 +549,6 @@ class LavaPaymentMixin:
                     ),
                     parse_mode='HTML',
                     reply_markup=keyboard,
-                    message_effect_id=TOPUP_SUCCESS_EFFECT_ID,
                 )
             except Exception as error:
                 logger.error('Ошибка отправки уведомления пользователю Lava', error=error)

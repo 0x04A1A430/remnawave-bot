@@ -21,7 +21,6 @@ from app.database.crud.transaction import create_transaction
 from app.database.crud.user import get_user_by_id
 from app.database.models import PaymentMethod, TransactionType, User as UserModel
 from app.services.riopay_service import riopay_service
-from app.utils.message_effects import TOPUP_SUCCESS_EFFECT_ID
 from app.utils.payment_logger import payment_logger as logger
 from app.utils.user_utils import format_referrer_info
 
@@ -437,7 +436,6 @@ class RioPayPaymentMixin:
                     message,
                     parse_mode='HTML',
                     reply_markup=keyboard,
-                    message_effect_id=TOPUP_SUCCESS_EFFECT_ID,
                 )
             except Exception as error:
                 logger.error('Ошибка отправки уведомления пользователю RioPay', error=error)

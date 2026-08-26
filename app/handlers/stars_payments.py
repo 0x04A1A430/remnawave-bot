@@ -12,7 +12,6 @@ from app.external.telegram_stars import TelegramStarsService
 from app.localization.loader import DEFAULT_LANGUAGE
 from app.localization.texts import get_texts
 from app.services.payment_service import PaymentService
-from app.utils.message_effects import TOPUP_SUCCESS_EFFECT_ID
 
 
 logger = structlog.get_logger(__name__)
@@ -652,7 +651,6 @@ async def handle_successful_payment(message: types.Message, db: AsyncSession, st
                 ),
                 parse_mode='HTML',
                 reply_markup=keyboard,
-                message_effect_id=TOPUP_SUCCESS_EFFECT_ID,
             )
 
             logger.info(

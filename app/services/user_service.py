@@ -58,7 +58,6 @@ from app.services.notification_delivery_service import (
     NotificationType,
     notification_delivery_service,
 )
-from app.utils.message_effects import TOPUP_SUCCESS_EFFECT_ID
 
 
 logger = structlog.get_logger(__name__)
@@ -150,7 +149,6 @@ class UserService:
             bot=bot,
             telegram_message=message,
             telegram_markup=keyboard,
-            message_effect_id=TOPUP_SUCCESS_EFFECT_ID,
         )
 
     async def _send_balance_notification(self, bot: Bot, user: User, amount_kopeks: int, admin_name: str) -> bool:

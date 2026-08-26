@@ -52,7 +52,6 @@ from app.services.notification_delivery_service import (
     NotificationType,
     notification_delivery_service,
 )
-from app.utils.message_effects import DEVICE_ADDED_EFFECT_ID
 from app.utils.miniapp_buttons import build_miniapp_or_callback_button
 
 
@@ -1025,7 +1024,6 @@ class RemnaWaveWebhookService:
         reply_markup: InlineKeyboardMarkup | None = None,
         format_kwargs: dict[str, Any] | None = None,
         subscription: Subscription | None = None,
-        message_effect_id: str | None = None,
     ) -> None:
         """Send a notification to user via appropriate channel.
 
@@ -1129,7 +1127,6 @@ class RemnaWaveWebhookService:
                 bot=self.bot,
                 telegram_message=message,
                 telegram_markup=reply_markup,
-                message_effect_id=message_effect_id,
             )
         except Exception:
             logger.exception(
@@ -2158,7 +2155,6 @@ class RemnaWaveWebhookService:
                 'platform': platform_display or '—',
             },
             subscription=subscription,
-            message_effect_id=DEVICE_ADDED_EFFECT_ID,
         )
 
     async def _handle_device_deleted(

@@ -16,7 +16,6 @@ from app.database.database import get_db
 from app.database.models import PaymentMethod, TransactionType
 from app.external.tribute import TributeService as TributeAPI
 from app.services.payment_service import PaymentService
-from app.utils.message_effects import TOPUP_SUCCESS_EFFECT_ID
 from app.utils.user_utils import format_referrer_info
 
 
@@ -358,13 +357,7 @@ class TributeService:
                     f'Спасибо за оплату! '
                 )
 
-                await self.bot.send_message(
-                    user_id,
-                    text,
-                    reply_markup=keyboard,
-                    parse_mode='Markdown',
-                    message_effect_id=TOPUP_SUCCESS_EFFECT_ID,
-                )
+                await self.bot.send_message(user_id, text, reply_markup=keyboard, parse_mode='Markdown')
 
                 # Проверяем наличие сохраненной корзины для возврата к оформлению подписки
                 from app.services.payment.common import (
