@@ -702,23 +702,13 @@ async def get_server_squads_by_uuids(db: AsyncSession, squad_uuids: list[str]) -
 
 async def ensure_servers_synced(db: AsyncSession) -> None:
     """
-    Проверяет и синхронизирует серверы при запуске.
-    Если серверов нет в БД, загружает их из RemnaWave.
-    Вызывается при старте бота.
+    Синхронизация серверов со списком из панели.
+    Вызывается один раз при старте бота и обновляет список ВСЕГДА
+    (создаёт новые, обновляет существующие, удаляет исчезнувшие),
+    чтобы админка видела актуальные сквады без ручных действий.
     """
     try:
-        # Проверяем есть ли серверы в БД
-        result = await db.execute(select(func.count(ServerSquad.id)))
-        server_count = result.scalar() or 0
-
-        if server_count > 0:
-            logger.info(
-                'В базе уже есть серверов, пропускаем синхронизацию',
-                server_count=server_count,
-            )
-            return
-
-        logger.info('Серверов в БД нет, начинаем синхронизацию с RemnaWave...')
+        logger.info('Синхронизация серверов с RemnaWave...')
 
         # Импортируем сервис здесь чтобы избежать циклических импортов
         from app.services.subscription_service import SubscriptionService
