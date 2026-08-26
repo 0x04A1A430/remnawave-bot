@@ -11,7 +11,6 @@ from app.database.crud.user import add_user_balance, get_user_by_id
 from app.database.database import AsyncSessionLocal
 from app.database.models import PaymentMethod, TransactionType
 from app.external.tribute import TributeService
-from app.utils.message_effects import TOPUP_SUCCESS_EFFECT_ID
 
 
 logger = structlog.get_logger(__name__)
@@ -156,8 +155,7 @@ async def handle_successful_payment(message: types.Message):
 
                         await message.answer(
                             f'Баланс успешно пополнен на {settings.format_price(amount_kopeks)}!\n\n'
-                            'Средства зачислены на ваш баланс!',
-                            message_effect_id=TOPUP_SUCCESS_EFFECT_ID,
+                            'Средства зачислены на ваш баланс!'
                         )
 
                         logger.info(

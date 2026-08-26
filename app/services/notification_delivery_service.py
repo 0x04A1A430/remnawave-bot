@@ -221,7 +221,6 @@ class NotificationDeliveryService:
         bot: Bot | None = None,
         telegram_message: str | None = None,
         telegram_markup: Any | None = None,
-        message_effect_id: str | None = None,
     ) -> bool:
         """
         Send notification to user through appropriate channel.
@@ -233,7 +232,6 @@ class NotificationDeliveryService:
             bot: Telegram bot instance (required for Telegram users)
             telegram_message: Pre-formatted Telegram message (optional)
             telegram_markup: Telegram keyboard markup (optional)
-            message_effect_id: Telegram message effect for the push (optional)
 
         Returns:
             True if notification was sent successfully through at least one channel
@@ -263,7 +261,6 @@ class NotificationDeliveryService:
                 bot=bot,
                 message=telegram_message,
                 markup=telegram_markup,
-                effect_id=message_effect_id,
             )
         if user.email and user.email_verified:
             # Email-only user - send via email and WebSocket
@@ -305,7 +302,6 @@ class NotificationDeliveryService:
         bot: Bot | None,
         message: str | None,
         markup: Any | None,
-        effect_id: str | None = None,
     ) -> bool:
         """Send notification via Telegram bot."""
         if not bot:
@@ -346,7 +342,6 @@ class NotificationDeliveryService:
                         text=message,
                         reply_markup=markup,
                         parse_mode='HTML',
-                        message_effect_id=effect_id,
                     ),
                     timeout=15.0,
                 )
@@ -369,30 +364,6 @@ class NotificationDeliveryService:
                 return False
 
             except TelegramBadRequest as e:
-                # Старый bot-api может не знать про эффекты сообщений —
-                # повторяем без эффекта, уведомление важнее анимации.
-                if effect_id and 'effect' in str(e).lower():
-                    logger.warning(
-                        'Сервер отклонил message_effect_id — повтор без эффекта',
-                        telegram_id=user.telegram_id,
-                        effect_id=effect_id,
-                    )
-                    try:
-                        await bot.send_message(
-                            chat_id=user.telegram_id,
-                            text=message,
-                            reply_markup=markup,
-                            parse_mode='HTML',
-                        )
-                        return True
-                    except TelegramBadRequest as retry_error:
-                        logger.warning(
-                            'Ошибка отправки Telegram уведомления пользователю',
-                            telegram_id=user.telegram_id,
-                            error=str(retry_error),
-                        )
-                        return False
-
                 logger.warning(
                     'Ошибка отправки Telegram уведомления пользователю',
                     telegram_id=user.telegram_id,
@@ -593,7 +564,6 @@ class NotificationDeliveryService:
         bot: Bot | None = None,
         telegram_message: str | None = None,
         telegram_markup: Any | None = None,
-        message_effect_id: str | None = None,
     ) -> bool:
         """Notify user about balance top-up."""
         context = {
@@ -612,7 +582,6 @@ class NotificationDeliveryService:
             bot=bot,
             telegram_message=telegram_message,
             telegram_markup=telegram_markup,
-            message_effect_id=message_effect_id,
         )
 
     async def notify_subscription_expiring(
