@@ -57,6 +57,45 @@ _rich_unavailable = False
 # дальше шлём меню без эффекта, не роняя rich-рендер в классику.
 _effect_unavailable = False
 
+# Трекинг последнего rich-меню: chat_id -> message_id. Позволяет удалить меню,
+# когда нажатие кнопки открыло экран ОТДЕЛЬНЫМ сообщением (иначе меню копится в чате).
+_tracked_rich_menus: dict[int, int] = {}
+
+# chat_id'ы текущего события, где меню было переиспользовано (отредактировано на месте,
+# заменено новым rich или удалено самим rich-флоу). Сбрасывается мидлварью перед хендлером.
+_taken_over_chats: set[int] = set()
+
+
+def mark_rich_menu_taken_over(chat_id: int | None) -> None:
+    """Отмечает, что при этом нажатии прежнее rich-меню было поглощено/заменено."""
+    if chat_id is not None:
+        _taken_over_chats.add(chat_id)
+
+
+def reset_rich_menu_takeover(chat_id: int | None) -> None:
+    """Сбрасывает флаг «переиспользовано» перед обработкой нового события."""
+    if chat_id is not None:
+        _taken_over_chats.discard(chat_id)
+
+
+def _track_rich_menu(chat_id: int, result: object) -> None:
+    """Запоминает message_id отправленного rich-меню (объект может не вернуться)."""
+    mark_rich_menu_taken_over(chat_id)
+    message_id = getattr(result, 'message_id', None)
+    if isinstance(message_id, int):
+        _tracked_rich_menus[chat_id] = message_id
+
+
+async def cleanup_stale_rich_menu(bot: Bot, chat_id: int) -> None:
+    """Удаляет прежнее rich-меню, если это нажатие кнопки его не переиспользовало."""
+    message_id = _tracked_rich_menus.pop(chat_id, None)
+    if message_id is None or chat_id in _taken_over_chats:
+        return
+    try:
+        await bot.delete_message(chat_id=chat_id, message_id=message_id)
+    except (TelegramBadRequest, TelegramForbiddenError, TelegramNotFound):
+        pass
+
 # Telegram не смог скачать логотип по URL (нет публичного доступа, битый файл) —
 # дальше собираем меню без логотипа, не роняя rich-рендер в классику.
 _logo_unavailable = False
@@ -328,12 +367,14 @@ async def _send_rich_menu(
         effect_id = None
 
     try:
-        await bot.send_rich_message(
+        result = await bot.send_rich_message(
             chat_id=chat_id,
             rich_message=_input_rich_message(rich_html, language),
             reply_markup=keyboard,
             message_effect_id=effect_id,
         )
+        _track_rich_menu(chat_id, result)
+        return
     except TelegramBadRequest as error:
         if _is_rich_date_error(error):
             logger.warning(
@@ -341,12 +382,13 @@ async def _send_rich_menu(
                 error=str(error),
                 chat_id=chat_id,
             )
-            await bot.send_rich_message(
+            result = await bot.send_rich_message(
                 chat_id=chat_id,
                 rich_message=_input_rich_message(_strip_tg_time(rich_html), language),
                 reply_markup=keyboard,
                 message_effect_id=effect_id,
             )
+            _track_rich_menu(chat_id, result)
             return
         # Невалидный/отключённый эффект не должен ронять rich-меню в классику —
         # повторяем без эффекта и больше его не шлём до рестарта.
@@ -357,11 +399,12 @@ async def _send_rich_menu(
                 effect_id=effect_id,
                 error=str(error),
             )
-            await bot.send_rich_message(
+            result = await bot.send_rich_message(
                 chat_id=chat_id,
                 rich_message=_input_rich_message(rich_html, language),
                 reply_markup=keyboard,
             )
+            _track_rich_menu(chat_id, result)
         else:
             raise
 
@@ -463,6 +506,7 @@ async def try_edit_rich_main_menu(
                     parse_mode=None,
                 )
             )
+            mark_rich_menu_taken_over(chat_id)
         else:
             # Фото/медиа-сообщение (логотип) или недоступное (>48ч) нельзя превратить
             # в rich редактированием — пересоздаём, как это делает edit_or_answer_photo
@@ -483,6 +527,7 @@ async def try_edit_rich_main_menu(
         return True
     except (TelegramNotFound, TelegramBadRequest) as error:
         if 'message is not modified' in str(error).lower():
+            mark_rich_menu_taken_over(chat_id)
             return True
         if _is_rich_date_error(error) and is_editable_as_rich:
             # Та же страховка, что и в _send_rich_menu: дата вне диапазона роняет
@@ -498,6 +543,7 @@ async def try_edit_rich_main_menu(
                         parse_mode=None,
                     )
                 )
+                mark_rich_menu_taken_over(chat_id)
                 return True
             except TelegramBadRequest as retry_error:
                 logger.warning('Повтор rich-меню без tg-time не удался', error=str(retry_error))

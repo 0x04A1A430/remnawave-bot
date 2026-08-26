@@ -83,6 +83,7 @@ from app.middlewares.display_name_restriction import DisplayNameRestrictionMiddl
 from app.middlewares.global_error import GlobalErrorMiddleware
 from app.middlewares.logging import LoggingMiddleware
 from app.middlewares.maintenance import MaintenanceMiddleware
+from app.middlewares.rich_menu_cleanup import RichMenuCleanupMiddleware
 from app.middlewares.subscription_checker import SubscriptionStatusMiddleware
 from app.middlewares.throttling import ThrottlingMiddleware
 from app.services.maintenance_service import maintenance_service
@@ -192,6 +193,12 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
     dp.message.middleware(SubscriptionStatusMiddleware())
     dp.callback_query.middleware(SubscriptionStatusMiddleware())
     dp.pre_checkout_query.middleware(SubscriptionStatusMiddleware())
+
+    # Удаление прежнего rich-меню, когда кнопка открыла экран новым сообщением
+    if settings.MAIN_MENU_RICH_ENABLED:
+        dp.callback_query.middleware(RichMenuCleanupMiddleware())
+        logger.info('RichMenuCleanupMiddleware активирован')
+
     start.register_handlers(dp)
     menu.register_handlers(dp)
     subscription.register_handlers(dp)
