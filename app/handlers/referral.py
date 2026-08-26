@@ -337,12 +337,12 @@ async def show_detailed_referral_list(callback: types.CallbackQuery, db_user: Us
         await callback.answer()
         return
 
-    text = '<b>Ваши рефералы</b>\n\n' + f"Всего: <b>{referrals_data['total_count']}</b>"
+    text = '<b>Ваши рефералы</b>\n\n' + f'Всего: <b>{referrals_data["total_count"]}</b>'
 
     keyboard: list[list[types.InlineKeyboardButton]] = []
     for referral in referrals_data['referrals']:
         is_active = referral['status'] == 'active'
-        name = str(referral['full_name'] or '').strip() or f"ID {referral['telegram_id']}"
+        name = str(referral['full_name'] or '').strip() or f'ID {referral["telegram_id"]}'
         if len(name) > 20:
             name = name[:19] + '…'
         earned = texts.format_price(referral['total_earned_kopeks'])
@@ -350,7 +350,7 @@ async def show_detailed_referral_list(callback: types.CallbackQuery, db_user: Us
             [
                 make_button(
                     text=f'{name} · {earned}',
-                    callback_data=f"referral_view_{page}_{referral['id']}",
+                    callback_data=f'referral_view_{page}_{referral["id"]}',
                     style='success' if is_active else 'danger',
                 )
             ]
@@ -435,9 +435,7 @@ async def show_referral_detail(callback: types.CallbackQuery, db_user: User, db:
         await callback.answer('Реферал не найден')
         return
 
-    result = await db.execute(
-        select(User).where(User.id == referral_id, User.referred_by_id == db_user.id)
-    )
+    result = await db.execute(select(User).where(User.id == referral_id, User.referred_by_id == db_user.id))
     referral = result.scalar_one_or_none()
     if not referral:
         await callback.answer('Реферал не найден')
@@ -447,25 +445,21 @@ async def show_referral_detail(callback: types.CallbackQuery, db_user: User, db:
 
     status_text = 'Активен' if details['is_active'] else 'Неактивен'
     activity_text = (
-        f"{details['days_since_activity']} дн. назад"
-        if details['days_since_activity'] is not None
-        else 'давно'
+        f'{details["days_since_activity"]} дн. назад' if details['days_since_activity'] is not None else 'давно'
     )
 
     detail_lines = [
-        f"<b>Имя:</b> {html_escape(str(referral.full_name or ''))}",
+        f'<b>Имя:</b> {html_escape(str(referral.full_name or ""))}',
     ]
     if referral.username:
         detail_lines.append(f'<b>Username:</b> @{html_escape(referral.username)}')
     detail_lines.append(f'<b>Статус:</b> {status_text}')
-    detail_lines.append(f"<b>Пополнений:</b> {details['topups_count']}")
-    detail_lines.append(
-        f"<b>Заработано:</b> {texts.format_price(details['total_earned_kopeks'])}"
-    )
+    detail_lines.append(f'<b>Пополнений:</b> {details["topups_count"]}')
+    detail_lines.append(f'<b>Заработано:</b> {texts.format_price(details["total_earned_kopeks"])}')
     detail_lines.append(f'<b>Баланс:</b> {texts.format_price(referral.balance_kopeks)}')
     detail_lines.append(
-        f"<b>Регистрация:</b> {format_local_datetime(referral.created_at, '%d.%m.%Y')}"
-        f" · {details['days_since_registration']} дн. назад"
+        f'<b>Регистрация:</b> {format_local_datetime(referral.created_at, "%d.%m.%Y")}'
+        f' · {details["days_since_registration"]} дн. назад'
     )
     detail_lines.append(f'<b>Активность:</b> {activity_text}')
 
