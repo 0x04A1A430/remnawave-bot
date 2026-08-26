@@ -1,5 +1,6 @@
 import hashlib
 import json
+from datetime import UTC, datetime
 from html import escape as html_escape
 from pathlib import Path
 
@@ -9,10 +10,11 @@ from aiogram import Dispatcher, F, types
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import FSInputFile
+from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.database.models import User
+from app.database.models import ReferralEarning, Transaction, TransactionType, User
 from app.keyboards.inline import get_referral_keyboard
 from app.localization.texts import get_texts
 from app.services.admin_notification_service import (
@@ -23,6 +25,7 @@ from app.services.referral_withdrawal_service import referral_withdrawal_service
 from app.states import ReferralWithdrawalStates
 from app.utils.button_emoji import make_button
 from app.utils.photo_message import edit_or_answer_photo
+from app.utils.timezone import format_local_datetime
 from app.utils.user_utils import (
     get_detailed_referral_list,
     get_effective_referral_commission_percent,
@@ -327,109 +330,156 @@ async def show_detailed_referral_list(callback: types.CallbackQuery, db_user: Us
                 'У вас пока нет рефералов.\n\nПоделитесь своей реферальной ссылкой, чтобы начать зарабатывать!',
             ),
             types.InlineKeyboardMarkup(
-                inline_keyboard=[[make_button(text=texts.BACK, callback_data='menu_referrals')]]
+                inline_keyboard=[[make_button(text=texts.BACK, callback_data='menu_referrals', style='danger')]]
             ),
-            parse_mode=None,
+            parse_mode='HTML',
         )
         await callback.answer()
         return
 
-    text = (
-        texts.t(
-            'REFERRAL_LIST_HEADER',
-            '<b>Ваши рефералы</b> (стр. {current}/{total})',
-        ).format(
-            current=referrals_data['current_page'],
-            total=referrals_data['total_pages'],
-        )
-        + '\n\n'
-    )
+    text = '<b>Ваши рефералы</b>\n\n' + f"Всего: <b>{referrals_data['total_count']}</b>"
 
-    for i, referral in enumerate(referrals_data['referrals'], 1):
-        status_emoji = '🟢' if referral['status'] == 'active' else '🔴'
-
-        topup_emoji = '💰' if referral['has_made_first_topup'] else '⏳'
-
-        text += (
-            texts.t(
-                'REFERRAL_LIST_ITEM_HEADER',
-                '{index}. {status} <b>{name}</b>',
-            ).format(
-                index=i,
-                status=status_emoji,
-                name=html_escape(str(referral['full_name'] or '')),
-            )
-            + '\n'
-        )
-        text += (
-            texts.t(
-                'REFERRAL_LIST_ITEM_TOPUPS',
-                '   {emoji} Пополнений: {count}',
-            ).format(emoji=topup_emoji, count=referral['topups_count'])
-            + '\n'
-        )
-        text += (
-            texts.t(
-                'REFERRAL_LIST_ITEM_EARNED',
-                'Заработано с него: {amount}',
-            ).format(amount=texts.format_price(referral['total_earned_kopeks']))
-            + '\n'
-        )
-        text += (
-            texts.t(
-                'REFERRAL_LIST_ITEM_REGISTERED',
-                'Регистрация: {days} дн. назад',
-            ).format(days=referral['days_since_registration'])
-            + '\n'
-        )
-
-        if referral['days_since_activity'] is not None:
-            text += (
-                texts.t(
-                    'REFERRAL_LIST_ITEM_ACTIVITY',
-                    'Активность: {days} дн. назад',
-                ).format(days=referral['days_since_activity'])
-                + '\n'
-            )
-        else:
-            text += (
-                texts.t(
-                    'REFERRAL_LIST_ITEM_ACTIVITY_LONG_AGO',
-                    'Активность: давно',
+    keyboard: list[list[types.InlineKeyboardButton]] = []
+    for referral in referrals_data['referrals']:
+        is_active = referral['status'] == 'active'
+        name = str(referral['full_name'] or '').strip() or f"ID {referral['telegram_id']}"
+        if len(name) > 20:
+            name = name[:19] + '…'
+        earned = texts.format_price(referral['total_earned_kopeks'])
+        keyboard.append(
+            [
+                make_button(
+                    text=f'{name} · {earned}',
+                    callback_data=f"referral_view_{page}_{referral['id']}",
+                    style='success' if is_active else 'danger',
                 )
-                + '\n'
-            )
+            ]
+        )
 
-        text += '\n'
-
-    keyboard = []
-    nav_buttons = []
-
-    if referrals_data['has_prev']:
-        nav_buttons.append(
-            types.InlineKeyboardButton(
-                text=texts.t('REFERRAL_LIST_PREV_PAGE', 'Назад'),
+    total_pages = max(1, int(referrals_data['total_pages']))
+    nav_row: list[types.InlineKeyboardButton] = []
+    if page > 1:
+        nav_row.append(
+            make_button(
+                texts.t('PAGINATION_PREV', '◀'),
                 callback_data=f'referral_list_page_{page - 1}',
+                style='primary',
             )
         )
-
-    if referrals_data['has_next']:
-        nav_buttons.append(
-            types.InlineKeyboardButton(
-                text=texts.t('REFERRAL_LIST_NEXT_PAGE', '→ Вперед'),
+    nav_row.append(types.InlineKeyboardButton(text=f'{page}/{total_pages}', callback_data='current_page'))
+    if page < total_pages:
+        nav_row.append(
+            make_button(
+                texts.t('PAGINATION_NEXT', '▶'),
                 callback_data=f'referral_list_page_{page + 1}',
+                style='primary',
             )
         )
+    keyboard.append(nav_row)
 
-    if nav_buttons:
-        keyboard.append(nav_buttons)
-
-    keyboard.append([make_button(text=texts.BACK, callback_data='menu_referrals')])
+    keyboard.append([make_button(text=texts.BACK, callback_data='menu_referrals', style='danger')])
 
     await edit_or_answer_photo(
         callback,
         text,
         types.InlineKeyboardMarkup(inline_keyboard=keyboard),
+        parse_mode='HTML',
+    )
+    await callback.answer()
+
+
+async def _load_referral_details(db: AsyncSession, referrer_id: int, referral: User) -> dict:
+    """Считает метрики конкретного реферала (как в get_detailed_referral_list)."""
+    earnings_result = await db.execute(
+        select(func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0)).where(
+            and_(
+                ReferralEarning.user_id == referrer_id,
+                ReferralEarning.referral_id == referral.id,
+            )
+        )
+    )
+    topups_result = await db.execute(
+        select(func.count(Transaction.id)).where(
+            and_(
+                Transaction.user_id == referral.id,
+                Transaction.type == TransactionType.DEPOSIT.value,
+                Transaction.is_completed.is_(True),
+            )
+        )
+    )
+    now = datetime.now(UTC)
+    days_since_registration = (now - referral.created_at).days
+    days_since_activity = (now - referral.last_activity).days if referral.last_activity else None
+
+    return {
+        'total_earned_kopeks': earnings_result.scalar() or 0,
+        'topups_count': topups_result.scalar() or 0,
+        'days_since_registration': days_since_registration,
+        'days_since_activity': days_since_activity,
+        'is_active': days_since_activity is not None and days_since_activity <= 30,
+    }
+
+
+async def show_referral_detail(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+    texts = get_texts(db_user.language)
+
+    parts = callback.data.split('_')
+    if len(parts) != 4:
+        await callback.answer('Реферал не найден')
+        return
+    _, _, page_raw, referral_id_raw = parts
+    try:
+        page = max(1, int(page_raw))
+        referral_id = int(referral_id_raw)
+    except ValueError:
+        await callback.answer('Реферал не найден')
+        return
+
+    result = await db.execute(
+        select(User).where(User.id == referral_id, User.referred_by_id == db_user.id)
+    )
+    referral = result.scalar_one_or_none()
+    if not referral:
+        await callback.answer('Реферал не найден')
+        return
+
+    details = await _load_referral_details(db, db_user.id, referral)
+
+    status_text = 'Активен' if details['is_active'] else 'Неактивен'
+    activity_text = (
+        f"{details['days_since_activity']} дн. назад"
+        if details['days_since_activity'] is not None
+        else 'давно'
+    )
+
+    detail_lines = [
+        f"<b>Имя:</b> {html_escape(str(referral.full_name or ''))}",
+    ]
+    if referral.username:
+        detail_lines.append(f'<b>Username:</b> @{html_escape(referral.username)}')
+    detail_lines.append(f'<b>Статус:</b> {status_text}')
+    detail_lines.append(f"<b>Пополнений:</b> {details['topups_count']}")
+    detail_lines.append(
+        f"<b>Заработано:</b> {texts.format_price(details['total_earned_kopeks'])}"
+    )
+    detail_lines.append(f'<b>Баланс:</b> {texts.format_price(referral.balance_kopeks)}')
+    detail_lines.append(
+        f"<b>Регистрация:</b> {format_local_datetime(referral.created_at, '%d.%m.%Y')}"
+        f" · {details['days_since_registration']} дн. назад"
+    )
+    detail_lines.append(f'<b>Активность:</b> {activity_text}')
+
+    text = '<b>Реферал</b>\n\n<blockquote>' + '\n'.join(detail_lines) + '</blockquote>'
+
+    keyboard = [
+        [make_button(text='← К списку', callback_data=f'referral_list_page_{page}', style='danger')],
+    ]
+
+    await edit_or_answer_photo(
+        callback,
+        text,
+        types.InlineKeyboardMarkup(inline_keyboard=keyboard),
+        parse_mode='HTML',
     )
     await callback.answer()
 
@@ -954,6 +1004,8 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(show_referral_qr, F.data == 'referral_show_qr')
 
     dp.callback_query.register(show_detailed_referral_list, F.data == 'referral_list')
+
+    dp.callback_query.register(show_referral_detail, F.data.startswith('referral_view_'))
 
     dp.callback_query.register(show_referral_analytics, F.data == 'referral_analytics')
 
