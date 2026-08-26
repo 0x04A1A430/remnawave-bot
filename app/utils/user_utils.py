@@ -362,7 +362,13 @@ async def get_referral_analytics(db: AsyncSession, user_id: int) -> dict:
             )
             .where(ReferralEarning.user_id == user_id, not_referee_directed())
             .group_by(ReferralEarning.referral_id)
-            .order_by(func.sum(ReferralEarning.amount_kopeks).desc())
+            # Дни участвуют в сортировке: на «дневной» программе все суммы равны
+            # нулю, и в топ-5 попадали случайные пятеро, а реферал, принёсший
+            # больше всех дней, из списка выпадал.
+            .order_by(
+                func.sum(ReferralEarning.amount_kopeks).desc(),
+                func.sum(ReferralEarning.days_granted).desc(),
+            )
             .limit(5)
         )
 

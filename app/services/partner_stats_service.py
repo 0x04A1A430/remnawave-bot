@@ -266,6 +266,7 @@ class PartnerStatsService:
                 User.created_at,
                 User.has_made_first_topup,
                 func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0).label('total_earnings'),
+                func.coalesce(func.sum(ReferralEarning.days_granted), 0).label('total_days'),
             )
             # user_id в условии соединения обязателен. Без него сюда попадают
             # начисления ЛЮБОГО реферера с этого же реферала: при одном уровне
@@ -282,7 +283,12 @@ class PartnerStatsService:
             )
             .where(User.referred_by_id == user_id)
             .group_by(User.id)
-            .order_by(desc(func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0)))
+            # Дни в сортировке: иначе на «дневной» программе порядок случаен, а
+            # лучший реферал обрезается лимитом до того, как попадёт в список.
+            .order_by(
+                desc(func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0)),
+                desc(func.coalesce(func.sum(ReferralEarning.days_granted), 0)),
+            )
             .limit(limit)
         )
         rows = result.all()
@@ -321,6 +327,7 @@ class PartnerStatsService:
                     'has_made_first_topup': row.has_made_first_topup,
                     'is_active': row.id in active_user_ids,
                     'total_earnings_kopeks': int(row.total_earnings),
+                    'total_earnings_days': int(row.total_days or 0),
                 }
             )
 

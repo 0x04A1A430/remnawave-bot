@@ -294,3 +294,78 @@ class TestSubscriptionOnAnotherTariff:
 
             assert grant.days == 0
             assert grant.failure == 'no_subscription'
+
+
+class TestStatesWhereDaysMustNotLand:
+    """Не всякая найденная подписка годится для награды."""
+
+    @pytest.mark.asyncio
+    async def test_pending_draft_never_receives_days(self, monkeypatch):
+        """Активация черновика перепишет срок — выданные дни исчезнут.
+
+        Хуже потери самих дней то, что в ledger'е останется запись о доставленной
+        награде: пользователь числится получившим то, чего у него нет.
+        """
+        async with memory_session(monkeypatch, TABLES) as db:
+            draft = _subscription(1, tariff_id=PRO_TARIFF_ID)
+            draft.status = SubscriptionStatus.PENDING.value
+            await _seed(db, [draft])
+            before = draft.end_date
+
+            grant = await engine.grant_reward_days(db, await db.get(User, 1), 7, None)
+
+            assert grant.days == 0
+            assert grant.failure == 'pending_draft'
+            assert (await _reload(db, draft.id)).end_date == before
+
+    @pytest.mark.asyncio
+    async def test_pending_draft_of_the_tariff_blocks_creating_a_duplicate(self, monkeypatch):
+        """Вторая подписка того же тарифа сломает пользователю оплату черновика."""
+        monkeypatch.setattr(type(settings), 'is_multi_tariff_enabled', lambda self: True)
+
+        async with memory_session(monkeypatch, TABLES) as db:
+            draft = _subscription(1, tariff_id=PRO_TARIFF_ID)
+            draft.status = SubscriptionStatus.PENDING.value
+            await _seed(db, [draft])
+
+            grant = await engine.grant_reward_days(db, await db.get(User, 1), 7, PRO_TARIFF_ID)
+
+            assert grant.days == 0
+            from sqlalchemy import func, select
+
+            count = await db.execute(select(func.count(Subscription.id)).where(Subscription.tariff_id == PRO_TARIFF_ID))
+            assert count.scalar() == 1, 'дубликат подписки того же тарифа создавать нельзя'
+
+    @pytest.mark.asyncio
+    async def test_disabled_subscription_is_not_resurrected(self, monkeypatch):
+        """extend_subscription поднимает DISABLED в ACTIVE.
+
+        Подписку отключили осознанно — бесплатная награда не должна отменять
+        чужое решение и возвращать доступ.
+        """
+        async with memory_session(monkeypatch, TABLES) as db:
+            disabled = _subscription(1, tariff_id=PRO_TARIFF_ID)
+            disabled.status = SubscriptionStatus.DISABLED.value
+            await _seed(db, [disabled])
+            before = disabled.end_date
+
+            grant = await engine.grant_reward_days(db, await db.get(User, 1), 7, PRO_TARIFF_ID)
+
+            assert grant.days == 0
+            assert grant.failure == 'subscription_disabled'
+            reloaded = await _reload(db, disabled.id)
+            assert reloaded.status == SubscriptionStatus.DISABLED.value
+            assert reloaded.end_date == before
+
+    @pytest.mark.asyncio
+    async def test_expired_subscription_is_still_revived(self, monkeypatch):
+        """Истёкшая — обычный случай «подписка кончилась, вот дни»; её оживляем."""
+        async with memory_session(monkeypatch, TABLES) as db:
+            expired = _subscription(1, tariff_id=PRO_TARIFF_ID, days_left=-5)
+            expired.status = SubscriptionStatus.EXPIRED.value
+            await _seed(db, [expired])
+
+            grant = await engine.grant_reward_days(db, await db.get(User, 1), 7, PRO_TARIFF_ID)
+
+            assert grant.days == 7
+            assert (await _reload(db, expired.id)).status == SubscriptionStatus.ACTIVE.value

@@ -48,6 +48,7 @@ from app.database.models import (
     ReferralRewardMode,
     ReferralRewardTrigger,
     ReferralRewardType,
+    SubscriptionStatus,
     User,
 )
 
@@ -397,8 +398,25 @@ class GrantOutcome:
         return self.money_credited > 0 or self.days_credited > 0
 
 
-async def _resolve_days_target(db: AsyncSession, user: User, tariff_id: int | None):
-    """Подписка, в которую лягут дни. ``None`` — подходящей нет.
+# Статусы, в подписку с которыми нельзя класть награду.
+#
+# PENDING — неоплаченный черновик: активация переписывает его срок, и выданные
+# дни исчезают, оставив в ledger'е запись о доставленной награде.
+# DISABLED — подписку отключили осознанно (бан, действие админа), а
+# ``extend_subscription`` поднимает EXPIRED/DISABLED обратно в ACTIVE. Бесплатная
+# награда не должна отменять чужое решение и возвращать человеку доступ.
+_DAYS_TARGET_BLOCKED_STATUSES = {
+    SubscriptionStatus.PENDING.value: 'pending_draft',
+    SubscriptionStatus.DISABLED.value: 'subscription_disabled',
+}
+
+
+async def _resolve_days_target(db: AsyncSession, user: User, tariff_id: int | None) -> tuple[object | None, str | None]:
+    """Подписка, в которую лягут дни, и причина отказа.
+
+    Возвращает ``(подписка, None)`` либо ``(None, причина)``. Разделение важно:
+    «подписки нет» разрешает завести новую, а «подписка есть, но трогать её
+    нельзя» — запрещает и это тоже.
 
     Тариф в правиле уровня — это и есть ответ на вопрос «куда попадут дни».
     Он важен именно в мультитарифе: там подписок несколько, а спросить пользователя
@@ -408,8 +426,25 @@ async def _resolve_days_target(db: AsyncSession, user: User, tariff_id: int | No
     from app.database.crud.subscription import get_subscription_by_user_and_tariff, get_subscription_by_user_id
 
     if tariff_id is not None:
-        return await get_subscription_by_user_and_tariff(db, user.id, tariff_id, include_inactive=True)
-    return await get_subscription_by_user_id(db, user.id)
+        subscription = await get_subscription_by_user_and_tariff(db, user.id, tariff_id, include_inactive=True)
+    else:
+        subscription = await get_subscription_by_user_id(db, user.id)
+
+    if subscription is None:
+        return None, None
+
+    blocked = _DAYS_TARGET_BLOCKED_STATUSES.get((subscription.status or '').lower())
+    if blocked:
+        logger.info(
+            'Дни не выданы: подписка в состоянии, куда награду класть нельзя',
+            user_id=user.id,
+            subscription_id=subscription.id,
+            status=subscription.status,
+            reason=blocked,
+        )
+        return None, blocked
+
+    return subscription, None
 
 
 # Статусы, при которых подписка считается живой. Живой ТРИАЛ — единственное, из-за
@@ -436,6 +471,22 @@ async def _create_subscription_for_days(db: AsyncSession, user: User, days: int,
     from app.database.crud.tariff import get_tariff_by_id
 
     existing = await get_all_subscriptions_by_user_id(db, user.id)
+
+    # Неоплаченный черновик этого же тарифа выборка выше не видит: она не смотрит
+    # PENDING. Создать рядом вторую подписку того же тарифа означает сломать
+    # пользователю оплату — активировать черновик уже не выйдет, партиальный
+    # уникальный индекс не даст.
+    pending_draft = any(
+        sub.tariff_id == tariff_id and (sub.status or '').lower() == SubscriptionStatus.PENDING.value
+        for sub in existing
+    )
+    if pending_draft:
+        logger.info(
+            'Дни не выданы: этот тариф занят неоплаченным черновиком подписки',
+            user_id=user.id,
+            tariff_id=tariff_id,
+        )
+        return None
 
     alive_trial = any(sub.is_trial and (sub.status or '') in _ALIVE_SUBSCRIPTION_STATUSES for sub in existing)
     if alive_trial:
@@ -485,7 +536,11 @@ async def grant_reward_days(db: AsyncSession, user: User, days: int, tariff_id: 
     if days <= 0:
         return DaysGrant()
 
-    subscription = await _resolve_days_target(db, user, tariff_id)
+    subscription, blocked = await _resolve_days_target(db, user, tariff_id)
+    if blocked:
+        # Подписка есть, но трогать её нельзя — заводить вторую тем более.
+        return DaysGrant(failure=blocked)
+
     created = False
     if subscription is None:
         if tariff_id is None:

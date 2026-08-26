@@ -158,6 +158,7 @@ class TopReferralItem(BaseModel):
     has_made_first_topup: bool
     is_active: bool
     total_earnings_kopeks: int
+    total_earnings_days: int = 0
 
 
 class TopReferralsResponse(BaseModel):
@@ -260,6 +261,7 @@ class TopReferrerItem(BaseModel):
     referral_code: str | None = None
     referrals_count: int
     total_earnings_kopeks: int
+    total_earnings_days: int = 0
 
 
 class TopReferrersResponse(BaseModel):

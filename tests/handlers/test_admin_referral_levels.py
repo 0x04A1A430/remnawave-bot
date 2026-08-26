@@ -391,3 +391,42 @@ class TestPendingInputIsCancelled:
         callback = _callback('admin_ref_lvl:1')
         await _raw(editor.show_reward_level)(callback, db_user=SimpleNamespace(id=1), db=None, state=state)
         assert state.store['cleared'] is False
+
+
+class TestDeletedLevelDoesNotResurrectActive:
+    """Правка поля у удалённого уровня не должна включать его обратно.
+
+    upsert вставляет новую строку, когда прежней нет, а колоночный default для
+    is_active — True. Устаревшая кнопка «тариф» или ввод суммы после удаления
+    воскрешали бы уровень СРАЗУ АКТИВНЫМ, с одним заполненным полем, и он начинал
+    бы платить с ближайшего пополнения.
+    """
+
+    @pytest.mark.asyncio
+    async def test_upsert_of_a_missing_level_creates_it_disabled(self, monkeypatch):
+        from app.database.crud import referral_reward_level as crud
+
+        created = {}
+
+        class _FakeLevel:
+            def __init__(self, level, is_active=True):
+                created['is_active'] = is_active
+                self.level = level
+                self.is_active = is_active
+
+        async def no_level(_db, _level):
+            return None
+
+        monkeypatch.setattr(crud, 'get_reward_level', no_level)
+        monkeypatch.setattr(crud, 'ReferralRewardLevel', _FakeLevel)
+
+        async def noop():
+            return None
+
+        async def noop_refresh(_obj):
+            return None
+
+        db = SimpleNamespace(commit=noop, refresh=noop_refresh, add=lambda _o: None)
+        await crud.upsert_reward_level(db, 2, referrer_tariff_id=7)
+
+        assert created['is_active'] is False

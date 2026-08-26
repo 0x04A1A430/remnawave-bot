@@ -100,7 +100,11 @@ async def upsert_reward_level(db: AsyncSession, level: int, **values) -> Referra
 
     existing = await get_reward_level(db, level)
     if existing is None:
-        existing = ReferralRewardLevel(level=level)
+        # Новая строка заводится ВЫКЛЮЧЕННОЙ, даже когда её создаёт правка одного
+        # поля. Колоночный default — True, и без этого правка тарифа или суммы у
+        # только что удалённого уровня воскрешала бы его сразу активным: он начал
+        # бы платить с ближайшего пополнения по одному заполненному полю.
+        existing = ReferralRewardLevel(level=level, is_active=False)
         db.add(existing)
 
     for key, value in values.items():

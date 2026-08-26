@@ -173,6 +173,9 @@ class TopReferrerItem(BaseModel):
     earnings_week_kopeks: int = 0
     earnings_month_kopeks: int = 0
     earnings_total_kopeks: int = 0
+    # Дни — вторая валюта программы: без них лидерборд «дневной» установки
+    # состоит из нулей, а лучший реферер не отличим от неактивного.
+    earnings_total_days: int = 0
 
 
 class TopReferrersResponse(BaseModel):
@@ -652,14 +655,22 @@ async def get_top_referrers(
 
         # Get earnings from ReferralEarning table
         # Total earnings
+        # Подушевой агрегат: not_referee_directed() отбрасывает награды, полученные
+        # человеком КАК ПРИГЛАШЁННЫМ — они не его партнёрский доход. Дни считаются
+        # рядом с деньгами: без них лидерборд «дневной» программы состоит из нулей.
         total_earnings_query = await db.execute(
             select(
-                ReferralEarning.user_id.label('referrer_id'), func.sum(ReferralEarning.amount_kopeks).label('total')
-            ).group_by(ReferralEarning.user_id)
+                ReferralEarning.user_id.label('referrer_id'),
+                func.sum(ReferralEarning.amount_kopeks).label('total'),
+                func.sum(ReferralEarning.days_granted).label('total_days'),
+            )
+            .where(not_referee_directed())
+            .group_by(ReferralEarning.user_id)
         )
         for row in total_earnings_query:
             if row.referrer_id in referrers_data:
                 referrers_data[row.referrer_id]['earnings_total'] = row.total or 0
+                referrers_data[row.referrer_id]['earnings_total_days'] = int(row.total_days or 0)
 
         # Today earnings
         today_earnings_query = await db.execute(
@@ -739,11 +750,14 @@ async def get_top_referrers(
                     earnings_week_kopeks=data.get('earnings_week', 0),
                     earnings_month_kopeks=data.get('earnings_month', 0),
                     earnings_total_kopeks=data.get('earnings_total', 0),
+                    earnings_total_days=data.get('earnings_total_days', 0),
                 )
             )
 
         # Sort by earnings and by invited
-        by_earnings = sorted(referrer_items, key=lambda x: x.earnings_total_kopeks, reverse=True)[:limit]
+        by_earnings = sorted(
+            referrer_items, key=lambda x: (x.earnings_total_kopeks, x.earnings_total_days), reverse=True
+        )[:limit]
         by_invited = sorted(referrer_items, key=lambda x: x.invited_count, reverse=True)[:limit]
 
         # Calculate totals

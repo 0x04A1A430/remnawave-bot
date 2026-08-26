@@ -209,12 +209,15 @@ async def show_reward_levels(
 
 @admin_required
 @error_handler
-async def toggle_reward_scheme(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+async def toggle_reward_scheme(
+    callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext | None = None
+):
     """Переключить схему наград.
 
     Смена схемы меняет то, что бот платит живым людям, поэтому она сознательно
     сделана отдельным действием, а не побочным эффектом создания уровня.
     """
+    await _cancel_pending_input(state)
     if bot_configuration_service.is_env_locked('REFERRAL_REWARD_SCHEME'):
         await callback.answer(
             'REFERRAL_REWARD_SCHEME задан в .env и не меняется из админки. '
@@ -239,7 +242,10 @@ async def toggle_reward_scheme(callback: types.CallbackQuery, db_user: User, db:
 
 @admin_required
 @error_handler
-async def add_reward_level(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+async def add_reward_level(
+    callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext | None = None
+):
+    await _cancel_pending_input(state)
     levels = await get_all_reward_levels(db)
     next_level = (max((lvl.level for lvl in levels), default=0)) + 1
     if next_level > MAX_SUPPORTED_LEVEL:
@@ -261,7 +267,9 @@ async def add_reward_level(callback: types.CallbackQuery, db_user: User, db: Asy
 
 @admin_required
 @error_handler
-async def import_legacy_settings(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+async def import_legacy_settings(
+    callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext | None = None
+):
     """Перенести действующие настройки ``REFERRAL_*`` в уровень 1.
 
     Явное действие вместо неявного отката: отката к ``REFERRAL_COMMISSION_PERCENT``
@@ -278,6 +286,7 @@ async def import_legacy_settings(callback: types.CallbackQuery, db_user: User, d
     попросить админа осознанно поменять повод безопаснее, чем переплатить молча;
     правило создаётся выключенным и подписано ровно этим текстом.
     """
+    await _cancel_pending_input(state)
     if await get_reward_level(db, 1) is not None:
         await callback.answer('Уровень 1 уже существует', show_alert=True)
         return
@@ -438,7 +447,10 @@ async def show_reward_level(
 
 @admin_required
 @error_handler
-async def toggle_level_active(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+async def toggle_level_active(
+    callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext | None = None
+):
+    await _cancel_pending_input(state)
     level_number = int(callback.data.split(':')[1])
     level = await get_reward_level(db, level_number)
     if level is None:
@@ -456,8 +468,11 @@ async def toggle_level_active(callback: types.CallbackQuery, db_user: User, db: 
 
 @admin_required
 @error_handler
-async def cycle_level_mode(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+async def cycle_level_mode(
+    callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext | None = None
+):
     """Перебрать активные бонусы уровня: деньги → дни → оба."""
+    await _cancel_pending_input(state)
     level_number = int(callback.data.split(':')[1])
     level = await get_reward_level(db, level_number)
     if level is None:
@@ -473,7 +488,10 @@ async def cycle_level_mode(callback: types.CallbackQuery, db_user: User, db: Asy
 
 @admin_required
 @error_handler
-async def cycle_level_trigger(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+async def cycle_level_trigger(
+    callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext | None = None
+):
+    await _cancel_pending_input(state)
     level_number = int(callback.data.split(':')[1])
     level = await get_reward_level(db, level_number)
     if level is None:
@@ -489,7 +507,8 @@ async def cycle_level_trigger(callback: types.CallbackQuery, db_user: User, db: 
 
 @admin_required
 @error_handler
-async def delete_level(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+async def delete_level(callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext | None = None):
+    await _cancel_pending_input(state)
     level_number = int(callback.data.split(':')[1])
     removed = await delete_reward_level(db, level_number)
     await callback.answer(f'Уровень {level_number} удалён' if removed else 'Уровень уже удалён')
@@ -498,7 +517,10 @@ async def delete_level(callback: types.CallbackQuery, db_user: User, db: AsyncSe
 
 @admin_required
 @error_handler
-async def choose_level_tariff(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+async def choose_level_tariff(
+    callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext | None = None
+):
+    await _cancel_pending_input(state)
     _, level_raw, side = callback.data.split(':')
     level_number = int(level_raw)
     tariffs = await get_all_tariffs(db, include_inactive=False)
@@ -535,7 +557,10 @@ async def choose_level_tariff(callback: types.CallbackQuery, db_user: User, db: 
 
 @admin_required
 @error_handler
-async def set_level_tariff(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+async def set_level_tariff(
+    callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext | None = None
+):
+    await _cancel_pending_input(state)
     _, level_raw, side, tariff_raw = callback.data.split(':')
     level_number = int(level_raw)
     tariff_id = int(tariff_raw) or None
