@@ -145,14 +145,6 @@ async def show_referral_info(callback: types.CallbackQuery, db_user: User, db: A
             + f'\n<code>{html_escape(cabinet_referral_link)}</code>\n'
         )
 
-    referral_text += (
-        '\n'
-        + texts.t('REFERRAL_CODE_TITLE', '<b>Ваш код:</b> <code>{code}</code>').format(
-            code=html_escape(str(db_user.referral_code or ''))
-        )
-        + '\n\n'
-    )
-
     if summary['recent_earnings']:
         meaningful_earnings = [earning for earning in summary['recent_earnings'][:5] if earning['amount_kopeks'] > 0]
 
@@ -240,11 +232,6 @@ async def show_referral_info(callback: types.CallbackQuery, db_user: User, db: A
                 + '\n'.join(type_lines)
                 + '</blockquote>\n\n'
             )
-
-    referral_text += texts.t(
-        'REFERRAL_INVITE_FOOTER',
-        'Приглашайте друзей и зарабатывайте!',
-    )
 
     await edit_or_answer_photo(
         callback,
@@ -514,11 +501,6 @@ async def show_referral_analytics(callback: types.CallbackQuery, db_user: User, 
             + '\n'.join(top_lines)
             + '</blockquote>\n\n'
         )
-
-    text += texts.t(
-        'REFERRAL_ANALYTICS_FOOTER',
-        'Продолжайте развивать свою реферальную сеть!',
-    )
 
     await edit_or_answer_photo(
         callback,
