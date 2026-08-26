@@ -1,4 +1,5 @@
 import html
+import random
 
 import structlog
 from aiogram import Dispatcher, F, types
@@ -8,7 +9,11 @@ from aiogram.types import InaccessibleMessage
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.database.crud.transaction import get_user_transactions
+from app.database.crud.transaction import (
+    get_transaction_by_id,
+    get_user_transactions,
+    get_user_transactions_count,
+)
 from app.database.models import TransactionType, User
 from app.handlers.subscription.autopay import (
     handle_confirm_unlink,
@@ -23,12 +28,20 @@ from app.keyboards.inline import (
 )
 from app.localization.texts import get_texts
 from app.states import BalanceStates
+from app.utils.button_emoji import make_button
 from app.utils.decorators import error_handler
 
 
 logger = structlog.get_logger(__name__)
 
 TRANSACTIONS_PER_PAGE = 10
+
+# Премиум-эмодзи для типов операций (рендерятся только в HTML-сообщениях)
+CREDIT_EMOJI_HTML = "<tg-emoji emoji-id='5775937998948404844'>💰</tg-emoji>"
+DEBIT_EMOJI_HTML = "<tg-emoji emoji-id='5877413297170419326'>💸</tg-emoji>"
+
+# Цвета кнопок транзакций: рандом, кроме красного (danger зарезервирован для «Назад»)
+_TRANSACTION_ITEM_STYLES: tuple[str, ...] = ('primary', 'success')
 
 CREDIT_TRANSACTION_TYPES: frozenset[str] = frozenset(
     {
@@ -299,74 +312,132 @@ async def show_balance_menu(callback: types.CallbackQuery, db_user: User, db: As
 async def show_balance_history(callback: types.CallbackQuery, db_user: User, db: AsyncSession, page: int = 1):
     texts = get_texts(db_user.language)
 
+    keyboard = [
+        [
+            make_button(
+                texts.t('BALANCE_HISTORY_DEPOSITS', 'Пополнения'),
+                callback_data='balance_history_deposits',
+                style='success',
+            )
+        ],
+        [
+            make_button(
+                texts.t('BALANCE_HISTORY_WITHDRAWALS', 'Списания'),
+                callback_data='balance_history_withdrawals',
+                style='primary',
+            )
+        ],
+        [types.InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance', style='danger')],
+    ]
+
+    text = '<b>История операций</b>\n\nВыберите тип операций:'
+
+    try:
+        await callback.message.edit_text(
+            text,
+            reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
+            parse_mode='HTML',
+        )
+    except TelegramBadRequest as error:
+        logger.warning('Не удалось отредактировать историю операций', error=str(error))
+    await callback.answer()
+
+
+def _transaction_button_label(transaction, *, is_credit: bool, texts) -> str:
+    emoji_html = CREDIT_EMOJI_HTML if is_credit else DEBIT_EMOJI_HTML
+    sign = '+' if is_credit else '-'
+    amount = texts.format_price(abs(transaction.amount_kopeks))
+    date_part = transaction.created_at.strftime('%d.%m %H:%M')
+    description = (transaction.description or '').strip()
+    label = f'{emoji_html} {sign}{amount} · {date_part}'
+    if description:
+        label += f' · {description}'
+    return label
+
+
+@error_handler
+async def show_balance_history_deposits(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+    await show_transaction_category(callback, db_user, db, category='deposits')
+
+
+@error_handler
+async def show_balance_history_withdrawals(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+    await show_transaction_category(callback, db_user, db, category='withdrawals')
+
+
+@error_handler
+async def show_balance_history_deposits_page(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+    page = int(callback.data.rsplit('_', 1)[-1])
+    await show_transaction_category(callback, db_user, db, category='deposits', page=page)
+
+
+@error_handler
+async def show_balance_history_withdrawals_page(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+    page = int(callback.data.rsplit('_', 1)[-1])
+    await show_transaction_category(callback, db_user, db, category='withdrawals', page=page)
+
+
+async def show_transaction_category(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    *,
+    category: str,
+    page: int = 1,
+):
+    texts = get_texts(db_user.language)
+    deposits = category == 'deposits'
+
     offset = (page - 1) * TRANSACTIONS_PER_PAGE
 
-    raw_transactions = await get_user_transactions(db, db_user.id, limit=TRANSACTIONS_PER_PAGE * 3, offset=offset)
-
-    seen_transactions = set()
-    unique_transactions = []
-
-    for transaction in raw_transactions:
-        rounded_time = transaction.created_at.replace(second=0, microsecond=0)
-        transaction_key = (
-            transaction.amount_kopeks,
-            transaction.description,
-            rounded_time,
+    if deposits:
+        transactions = await get_user_transactions(
+            db, db_user.id, limit=TRANSACTIONS_PER_PAGE, offset=offset, type_values=CREDIT_TRANSACTION_TYPES
         )
-
-        if transaction_key not in seen_transactions:
-            seen_transactions.add(transaction_key)
-            unique_transactions.append(transaction)
-
-            if len(unique_transactions) >= TRANSACTIONS_PER_PAGE:
-                break
-
-    all_transactions = await get_user_transactions(db, db_user.id, limit=1000)
-    seen_all = set()
-    total_unique = 0
-
-    for transaction in all_transactions:
-        rounded_time = transaction.created_at.replace(second=0, microsecond=0)
-        transaction_key = (
-            transaction.amount_kopeks,
-            transaction.description,
-            rounded_time,
+        total = await get_user_transactions_count(db, db_user.id, type_values=CREDIT_TRANSACTION_TYPES)
+        title = '💰 Пополнения'
+        list_callback = 'balance_history_deposits'
+    else:
+        transactions = await get_user_transactions(
+            db, db_user.id, limit=TRANSACTIONS_PER_PAGE, offset=offset, exclude_type_values=CREDIT_TRANSACTION_TYPES
         )
-        if transaction_key not in seen_all:
-            seen_all.add(transaction_key)
-            total_unique += 1
+        total = await get_user_transactions_count(db, db_user.id, exclude_type_values=CREDIT_TRANSACTION_TYPES)
+        title = '💸 Списания'
+        list_callback = 'balance_history_withdrawals'
 
-    if not unique_transactions:
-        await callback.message.edit_text('История операций пуста', reply_markup=get_back_keyboard(db_user.language))
+    if not transactions:
+        await callback.message.edit_text(
+            f'<b>{title}</b>\n\nОпераций пока нет',
+            reply_markup=types.InlineKeyboardMarkup(
+                inline_keyboard=[[types.InlineKeyboardButton(text=texts.BACK, callback_data='balance_history', style='danger')]]
+            ),
+            parse_mode='HTML',
+        )
         await callback.answer()
         return
 
-    text = '<b>История операций</b>\n\n'
-
-    for transaction in unique_transactions:
-        is_credit = transaction.type in CREDIT_TRANSACTION_TYPES
-        emoji = '💰' if is_credit else '💸'
-        amount_text = (
-            f'+{texts.format_price(transaction.amount_kopeks)}'
-            if is_credit
-            else f'-{texts.format_price(abs(transaction.amount_kopeks))}'
-        )
-
-        text += f'{emoji} {amount_text}\n'
-        text += f'{html.escape(transaction.description or "")}\n'
-        text += f'{transaction.created_at.strftime("%d.%m.%Y %H:%M")}\n\n'
+    total_pages = (total + TRANSACTIONS_PER_PAGE - 1) // TRANSACTIONS_PER_PAGE
 
     keyboard = []
-    total_pages = (total_unique + TRANSACTIONS_PER_PAGE - 1) // TRANSACTIONS_PER_PAGE
+    for transaction in transactions:
+        label = _transaction_button_label(transaction, is_credit=deposits, texts=texts)
+        keyboard.append(
+            [
+                make_button(
+                    label,
+                    callback_data=f"bh_view_{'d' if deposits else 'w'}_{transaction.id}",
+                    style=random.choice(_TRANSACTION_ITEM_STYLES),
+                )
+            ]
+        )
 
     if total_pages > 1:
-        pagination_row = get_pagination_keyboard(page, total_pages, 'balance_history', db_user.language)
-        keyboard.extend(pagination_row)
+        keyboard.extend(get_pagination_keyboard(page, total_pages, list_callback, db_user.language))
 
-    keyboard.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance')])
+    keyboard.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='balance_history', style='danger')])
 
     await callback.message.edit_text(
-        text,
+        f'<b>{title}</b>\n\nВсего операций: {total}',
         reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
         parse_mode='HTML',
     )
@@ -374,9 +445,53 @@ async def show_balance_history(callback: types.CallbackQuery, db_user: User, db:
 
 
 @error_handler
-async def handle_balance_history_pagination(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
-    page = int(callback.data.split('_')[-1])
-    await show_balance_history(callback, db_user, db, page)
+async def show_transaction_detail(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+    texts = get_texts(db_user.language)
+
+    prefix, _, tx_id_raw = callback.data.rpartition('_')
+    deposits = prefix.endswith('_d')
+    try:
+        transaction_id = int(tx_id_raw)
+    except ValueError:
+        await callback.answer('Операция не найдена')
+        return
+
+    transaction = await get_transaction_by_id(db, transaction_id)
+    if not transaction or transaction.user_id != db_user.id:
+        await callback.answer('Операция не найдена')
+        return
+
+    is_credit = transaction.type in CREDIT_TRANSACTION_TYPES
+    emoji_html = CREDIT_EMOJI_HTML if is_credit else DEBIT_EMOJI_HTML
+    sign = '+' if is_credit else '-'
+    amount_text = f'{sign}{texts.format_price(abs(transaction.amount_kopeks))}'
+    op_type = 'Пополнение' if is_credit else 'Списание'
+
+    lines = [
+        f'{emoji_html} <b>{op_type}</b>',
+        '',
+        f'<b>Сумма:</b> {amount_text}',
+    ]
+    if transaction.description:
+        lines.append(f'<b>Описание:</b> {html.escape(transaction.description)}')
+    if transaction.payment_method:
+        lines.append(f'<b>Способ:</b> {html.escape(str(transaction.payment_method))}')
+    status_text = 'Выполнена' if transaction.is_completed else 'В обработке'
+    lines.append(f'<b>Статус:</b> {status_text}')
+    lines.append(f"<b>Дата:</b> {transaction.created_at.strftime('%d.%m.%Y %H:%M')}")
+
+    back_to_list = 'balance_history_deposits' if deposits else 'balance_history_withdrawals'
+    keyboard = [
+        [types.InlineKeyboardButton(text=texts.BACK, callback_data=back_to_list, style='danger')],
+        [types.InlineKeyboardButton(text=texts.BACK, callback_data='balance_history', style='danger')],
+    ]
+
+    await callback.message.edit_text(
+        '\n'.join(lines),
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
+        parse_mode='HTML',
+    )
+    await callback.answer()
 
 
 @error_handler
@@ -744,7 +859,21 @@ def register_balance_handlers(dp: Dispatcher):
 
     dp.callback_query.register(show_balance_history, F.data == 'balance_history')
 
-    dp.callback_query.register(handle_balance_history_pagination, F.data.startswith('balance_history_page_'))
+    dp.callback_query.register(show_balance_history_deposits, F.data == 'balance_history_deposits')
+
+    dp.callback_query.register(show_balance_history_withdrawals, F.data == 'balance_history_withdrawals')
+
+    dp.callback_query.register(
+        show_balance_history_deposits_page,
+        F.data.startswith('balance_history_deposits_page_'),
+    )
+
+    dp.callback_query.register(
+        show_balance_history_withdrawals_page,
+        F.data.startswith('balance_history_withdrawals_page_'),
+    )
+
+    dp.callback_query.register(show_transaction_detail, F.data.startswith('bh_view_'))
 
     dp.callback_query.register(show_payment_methods, F.data == 'balance_topup')
 

@@ -1,3 +1,4 @@
+from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
 
 import structlog
@@ -295,27 +296,47 @@ async def get_transaction_by_external_id(
     return result.scalar_one_or_none()
 
 
-async def get_user_transactions(db: AsyncSession, user_id: int, limit: int = 50, offset: int = 0) -> list[Transaction]:
+async def get_user_transactions(
+    db: AsyncSession,
+    user_id: int,
+    limit: int = 50,
+    offset: int = 0,
+    *,
+    type_values: Sequence[str] | None = None,
+    exclude_type_values: Sequence[str] | None = None,
+) -> list[Transaction]:
+    query = select(Transaction).where(Transaction.user_id == user_id)
+
+    if type_values is not None:
+        query = query.where(Transaction.type.in_(type_values))
+    if exclude_type_values is not None:
+        query = query.where(Transaction.type.not_in(exclude_type_values))
+
     result = await db.execute(
-        select(Transaction)
-        .where(Transaction.user_id == user_id)
-        .order_by(Transaction.created_at.desc())
-        .offset(offset)
-        .limit(limit)
+        query.order_by(Transaction.created_at.desc()).offset(offset).limit(limit)
     )
-    return result.scalars().all()
+    return list(result.scalars().all())
 
 
 async def get_user_transactions_count(
-    db: AsyncSession, user_id: int, transaction_type: TransactionType | None = None
+    db: AsyncSession,
+    user_id: int,
+    transaction_type: TransactionType | None = None,
+    *,
+    type_values: Sequence[str] | None = None,
+    exclude_type_values: Sequence[str] | None = None,
 ) -> int:
     query = select(func.count(Transaction.id)).where(Transaction.user_id == user_id)
 
     if transaction_type:
         query = query.where(Transaction.type == transaction_type.value)
+    if type_values is not None:
+        query = query.where(Transaction.type.in_(type_values))
+    if exclude_type_values is not None:
+        query = query.where(Transaction.type.not_in(exclude_type_values))
 
     result = await db.execute(query)
-    return result.scalar()
+    return int(result.scalar())
 
 
 async def get_user_total_spent_kopeks(db: AsyncSession, user_id: int) -> int:

@@ -97,16 +97,15 @@ class UserService:
             # У пользователя есть активная подписка - обычное сообщение
             message = (
                 f'<b>Баланс пополнен на {settings.format_price(amount_kopeks)}!</b>\n\n'
-                f'Текущий баланс: {settings.format_price(user.balance_kopeks)}\n\n'
-                f'Спасибо за использование нашего сервиса! '
+                f'Текущий баланс: {settings.format_price(user.balance_kopeks)}'
             )
-            extend_callback = 'menu_subscription' if settings.is_multi_tariff_enabled() else 'subscription_extend'
             keyboard = types.InlineKeyboardMarkup(
                 inline_keyboard=[
                     [
                         types.InlineKeyboardButton(
-                            text=texts.t('SUBSCRIPTION_EXTEND', 'Продлить подписку'),
-                            callback_data=extend_callback,
+                            text=texts.t('BACK_TO_MENU', 'В главное меню'),
+                            callback_data='back_to_menu',
+                            style='danger',
                         )
                     ]
                 ]
@@ -163,8 +162,7 @@ class UserService:
             message = (
                 f'{emoji} <b>Баланс пополнен!</b>\n\n'
                 f'<b>Сумма:</b> {amount_text}\n'
-                f'<b>Текущий баланс:</b> {settings.format_price(user.balance_kopeks)}\n\n'
-                f'Спасибо за использование нашего сервиса! '
+                f'<b>Текущий баланс:</b> {settings.format_price(user.balance_kopeks)}'
             )
         else:
             # Списание
@@ -177,21 +175,17 @@ class UserService:
                 f'Если у вас есть вопросы, обратитесь в поддержку.'
             )
 
-        keyboard_rows = []
-        subs = getattr(user, 'subscriptions', None) or []
-        has_extendable = any(sub.status in {'active', 'expired', 'trial'} for sub in subs)
-        if has_extendable:
-            extend_callback = 'menu_subscription' if settings.is_multi_tariff_enabled() else 'subscription_extend'
-            keyboard_rows.append(
-                [
-                    types.InlineKeyboardButton(
-                        text=get_texts(user.language).t('SUBSCRIPTION_EXTEND', 'Продлить подписку'),
-                        callback_data=extend_callback,
-                    )
-                ]
-            )
+        keyboard_rows = [
+            [
+                types.InlineKeyboardButton(
+                    text=get_texts(user.language).t('BACK_TO_MENU', 'В главное меню'),
+                    callback_data='back_to_menu',
+                    style='danger',
+                )
+            ]
+        ]
 
-        reply_markup = types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows) if keyboard_rows else None
+        reply_markup = types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
 
         # Use unified notification delivery service
         context = {
