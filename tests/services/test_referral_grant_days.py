@@ -1,0 +1,242 @@
+"""Выдача дней подписки за реферала — на настоящих подписках в базе.
+
+До этого файла у ``grant_reward_days`` не было ни одного поведенческого теста:
+проверялось лишь, что вызывающий код её дёргает. Между тем именно здесь награда
+превращается во что-то, что видит пользователь, и здесь же живут два дорогих
+класса ошибок — дни, ушедшие не в ту подписку, и триал, случайно ставший платным.
+
+Работа идёт на SQLite в памяти: подмены здесь бесполезны, вопрос ровно в том, что
+окажется в строках после вызова.
+"""
+
+import itertools
+from datetime import UTC, datetime, timedelta
+
+import pytest
+
+from app.database.models import Base, Subscription, SubscriptionStatus, Tariff, User
+from app.services import referral_reward_service as engine
+from tests.fixtures.sqlite_memory import memory_session
+
+
+# Всё дерево таблиц целиком: extend_subscription попутно чистит пакеты трафика,
+# гасит уведомления и трогает автоплатёж, а create_paid_subscription — сквады и
+# промогруппы. Перечислять их поимённо значит ловить «no such table» по одной на
+# каждый вызов; с зарегистрированным компилятором JSONB создаётся вся схема.
+TABLES = list(Base.metadata.sorted_tables)
+
+PRO_TARIFF_ID = 1
+OTHER_TARIFF_ID = 2
+
+
+@pytest.fixture(autouse=True)
+def no_panel_sync(monkeypatch):
+    """Remnawave в тестах не поднимается — синхронизация подменяется."""
+
+    async def noop(self, db, subscription, **kwargs):
+        return None
+
+    monkeypatch.setattr('app.services.subscription_service.SubscriptionService.update_remnawave_user', noop)
+
+
+def _tariff(tariff_id: int, name: str) -> Tariff:
+    return Tariff(
+        id=tariff_id,
+        name=name,
+        description='',
+        is_active=True,
+        traffic_limit_gb=100,
+        device_limit=3,
+        allowed_squads=[],
+        display_order=tariff_id,
+    )
+
+
+def _user(user_id: int) -> User:
+    return User(
+        id=user_id,
+        telegram_id=1000 + user_id,
+        first_name=f'User {user_id}',
+        language='ru',
+        status='active',
+        balance_kopeks=0,
+    )
+
+
+_short_ids = itertools.count(1)
+
+
+def _subscription(user_id: int, *, tariff_id: int | None, is_trial: bool = False, days_left: int = 10) -> Subscription:
+    now = datetime.now(UTC)
+    return Subscription(
+        # remnawave_short_id уникален; в проде его выдаёт generate_unique_short_id.
+        remnawave_short_id=f'test{next(_short_ids)}',
+        user_id=user_id,
+        status=SubscriptionStatus.ACTIVE.value,
+        is_trial=is_trial,
+        start_date=now,
+        end_date=now + timedelta(days=days_left),
+        traffic_limit_gb=100,
+        device_limit=3,
+        tariff_id=tariff_id,
+        connected_squads=[],
+    )
+
+
+async def _seed(db, subscriptions):
+    db.add(_user(1))
+    db.add_all([_tariff(PRO_TARIFF_ID, 'Pro'), _tariff(OTHER_TARIFF_ID, 'Lite')])
+    db.add_all(subscriptions)
+    await db.commit()
+
+
+async def _reload(db, subscription_id):
+    from sqlalchemy import select
+
+    result = await db.execute(select(Subscription).where(Subscription.id == subscription_id))
+    return result.scalar_one()
+
+
+class TestDaysLandWhereConfigured:
+    @pytest.mark.asyncio
+    async def test_extends_the_subscription_of_the_named_tariff(self, monkeypatch):
+        async with memory_session(monkeypatch, TABLES) as db:
+            target = _subscription(1, tariff_id=PRO_TARIFF_ID)
+            other = _subscription(1, tariff_id=OTHER_TARIFF_ID)
+            await _seed(db, [target, other])
+            before_target = target.end_date
+            before_other = other.end_date
+
+            grant = await engine.grant_reward_days(db, await db.get(User, 1), 7, PRO_TARIFF_ID)
+
+            assert grant.days == 7
+            assert grant.tariff_name == 'Pro'
+            assert (await _reload(db, target.id)).end_date == before_target + timedelta(days=7)
+            assert (await _reload(db, other.id)).end_date == before_other, 'чужая подписка не должна двигаться'
+
+    @pytest.mark.asyncio
+    async def test_without_tariff_extends_the_primary_subscription(self, monkeypatch):
+        async with memory_session(monkeypatch, TABLES) as db:
+            primary = _subscription(1, tariff_id=PRO_TARIFF_ID)
+            await _seed(db, [primary])
+            before = primary.end_date
+
+            grant = await engine.grant_reward_days(db, await db.get(User, 1), 5, None)
+
+            assert grant.days == 5
+            assert (await _reload(db, primary.id)).end_date == before + timedelta(days=5)
+
+    @pytest.mark.asyncio
+    async def test_zero_days_is_a_no_op(self, monkeypatch):
+        async with memory_session(monkeypatch, TABLES) as db:
+            primary = _subscription(1, tariff_id=PRO_TARIFF_ID)
+            await _seed(db, [primary])
+            before = primary.end_date
+
+            grant = await engine.grant_reward_days(db, await db.get(User, 1), 0, PRO_TARIFF_ID)
+
+            assert grant.days == 0
+            assert (await _reload(db, primary.id)).end_date == before
+
+
+class TestMissingSubscription:
+    @pytest.mark.asyncio
+    async def test_no_subscription_and_no_tariff_grants_nothing(self, monkeypatch):
+        """Продлевать нечего, а создать подписку не из чего — параметры взять неоткуда."""
+        async with memory_session(monkeypatch, TABLES) as db:
+            await _seed(db, [])
+
+            grant = await engine.grant_reward_days(db, await db.get(User, 1), 7, None)
+
+            assert grant.days == 0
+            assert grant.failure == 'no_subscription'
+
+    @pytest.mark.asyncio
+    async def test_no_subscription_with_tariff_creates_one(self, monkeypatch):
+        """Тариф в правиле и есть ответ на вопрос «куда попадут дни»."""
+        async with memory_session(monkeypatch, TABLES) as db:
+            await _seed(db, [])
+
+            grant = await engine.grant_reward_days(db, await db.get(User, 1), 7, PRO_TARIFF_ID)
+
+            assert grant.days == 7
+            created = await _reload(db, grant.subscription_id)
+            assert created.tariff_id == PRO_TARIFF_ID
+            assert created.is_trial is False, 'бесплатная награда не должна создавать триал'
+            assert created.traffic_limit_gb == 100, 'лимиты берутся из тарифа'
+            assert created.device_limit == 3
+            # Срок ровно на выданные дни, а не на период тарифа.
+            assert (created.end_date - datetime.now(UTC)).days == 6
+
+    @pytest.mark.asyncio
+    async def test_unknown_tariff_grants_nothing(self, monkeypatch):
+        """Тариф-призрак означал бы дни, которым некуда лечь."""
+        async with memory_session(monkeypatch, TABLES) as db:
+            await _seed(db, [])
+
+            grant = await engine.grant_reward_days(db, await db.get(User, 1), 7, 999)
+
+            assert grant.days == 0
+            assert grant.failure == 'no_subscription'
+
+
+class TestTrialIsNeverConverted:
+    """Награда за реферала — не покупка.
+
+    Снятие триального флага без оплаты выключает подписку из авто-продления и
+    превращает её в фантомную платную (класс бага #629889). Проверяется на обоих
+    путях: продление существующего триала и «нет подписки нужного тарифа».
+    """
+
+    @pytest.mark.asyncio
+    async def test_extending_a_trial_keeps_it_a_trial(self, monkeypatch):
+        async with memory_session(monkeypatch, TABLES) as db:
+            trial = _subscription(1, tariff_id=PRO_TARIFF_ID, is_trial=True)
+            await _seed(db, [trial])
+            before = trial.end_date
+
+            grant = await engine.grant_reward_days(db, await db.get(User, 1), 7, PRO_TARIFF_ID)
+
+            assert grant.days == 7
+            reloaded = await _reload(db, trial.id)
+            assert reloaded.is_trial is True, 'триал обязан остаться триалом'
+            assert reloaded.tariff_id == PRO_TARIFF_ID
+            assert reloaded.end_date == before + timedelta(days=7)
+
+    @pytest.mark.asyncio
+    async def test_alive_trial_of_another_tariff_is_not_converted(self, monkeypatch):
+        """Подписки нужного тарифа нет, но живой триал есть — создавать нельзя.
+
+        ``create_paid_subscription`` умеет конвертировать живой триал в платную
+        подписку. Вызвать его здесь означало бы бесплатно снять с человека
+        триальный статус.
+        """
+        async with memory_session(monkeypatch, TABLES) as db:
+            trial = _subscription(1, tariff_id=OTHER_TARIFF_ID, is_trial=True)
+            await _seed(db, [trial])
+
+            await engine.grant_reward_days(db, await db.get(User, 1), 7, PRO_TARIFF_ID)
+
+            reloaded = await _reload(db, trial.id)
+            assert reloaded.is_trial is True, 'живой триал не должен стать платной подпиской'
+            assert reloaded.tariff_id == OTHER_TARIFF_ID
+
+
+class TestPanelSyncFailure:
+    @pytest.mark.asyncio
+    async def test_days_survive_a_panel_error(self, monkeypatch):
+        """Расхождение с панелью чинится следующей синхронизацией, потеря дней — нет."""
+        async with memory_session(monkeypatch, TABLES) as db:
+            target = _subscription(1, tariff_id=PRO_TARIFF_ID)
+            await _seed(db, [target])
+            before = target.end_date
+
+            async def boom(self, db_, subscription, **kwargs):
+                raise RuntimeError('panel is down')
+
+            monkeypatch.setattr('app.services.subscription_service.SubscriptionService.update_remnawave_user', boom)
+
+            grant = await engine.grant_reward_days(db, await db.get(User, 1), 7, PRO_TARIFF_ID)
+
+            assert grant.days == 7, 'сбой панели не отменяет выданные дни'
+            assert (await _reload(db, target.id)).end_date == before + timedelta(days=7)
