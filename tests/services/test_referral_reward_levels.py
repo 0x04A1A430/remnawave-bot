@@ -868,13 +868,19 @@ class TestRefereeRowsStayOutOfReferrerTotals:
     пригласивший.
     """
 
-    def test_summary_queries_filter_referee_rows(self):
+    def test_every_summary_query_calls_the_predicate(self):
+        """Проверка ВЫЗОВА, не поведения.
+
+        Поведение самого предиката проверяется на реальных строках в
+        tests/crud/test_referral_earnings_filter.py — подсчёт вхождений в
+        исходнике этого не умеет и однажды уже пропустил подменённое тело.
+        Здесь же ловится другое: забытый предикат в одной из четырёх выборок.
+        """
         import inspect
 
         from app.utils.user_utils import get_user_referral_summary
 
         source = inspect.getsource(get_user_referral_summary)
-        # Каждая выборка по user_id в сводке обязана нести предикат.
         assert source.count('not_referee_directed()') >= 4, (
             'сводка заработка должна отбрасывать строки наград приглашённому '
             'во всех выборках: итог, месяц, последние начисления, разбивка по типам'
@@ -920,3 +926,21 @@ class TestGeneratedTextIsLocalized:
 
         assert 'days' in format_reward_total(0, 7, 'en')
         assert 'дн.' in format_reward_total(0, 7, 'ru')
+
+    @pytest.mark.asyncio
+    async def test_referrer_registration_days_stay_promised(self, chain, monkeypatch):
+        """Пригласивший в системе давно — его дни лягут в основную подписку.
+
+        Глушить его описание по тому же признаку, что и приглашённого, значит
+        умолчать о награде, которая реально приходит.
+        """
+        from app.services.referral_reward_service import describe_active_levels
+
+        configs = {1: _level(1, reward_mode='days', trigger='registration', referrer_days=5, referrer_tariff_id=None)}
+
+        async def fake_all(_db):
+            return configs
+
+        monkeypatch.setattr(ReferralRewardLevelService, 'get_all', classmethod(lambda cls, db: fake_all(db)))
+        lines = await describe_active_levels(None)
+        assert lines and '5 дн.' in lines[0]

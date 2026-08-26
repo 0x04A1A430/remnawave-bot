@@ -205,3 +205,62 @@ class TestDeletion:
         with pytest.raises(HTTPException) as excinfo:
             await admin_partners.remove_referral_level(7, admin=SimpleNamespace(id=1), db=_db_returning(None))
         assert excinfo.value.status_code == 404
+
+
+class TestTermsEndpointUnderLevels:
+    """Публичные условия программы обязаны отвечать при включённой схеме.
+
+    Ветка levels выполняется только когда схема переключена, поэтому опечатка в
+    ней невидима на обычной установке и проявляется ровно в момент включения
+    фичи — то есть у того, кто её включил, страница условий отдаёт 500.
+    Линтер здесь не помощник: F821 в проекте отключён глобально.
+    """
+
+    @pytest.mark.asyncio
+    async def test_levels_scheme_returns_terms(self, monkeypatch):
+        from app.cabinet.routes import referral as route
+
+        monkeypatch.setattr(settings, 'REFERRAL_REWARD_SCHEME', 'levels')
+
+        async def fake_all(_db):
+            return {}
+
+        monkeypatch.setattr(
+            'app.services.referral_reward_service.ReferralRewardLevelService.get_all',
+            classmethod(lambda cls, db: fake_all(db)),
+        )
+
+        response = await route.get_referral_terms(db=AsyncMock(), user=None)
+        assert response.scheme == 'levels'
+        assert response.level_descriptions == []
+
+    @pytest.mark.asyncio
+    async def test_language_follows_the_caller_when_known(self, monkeypatch):
+        from app.cabinet.routes import referral as route
+
+        monkeypatch.setattr(settings, 'REFERRAL_REWARD_SCHEME', 'levels')
+        captured = {}
+
+        async def fake_all(_db):
+            return {}
+
+        async def fake_describe(_db, tariff_names=None, language=None):
+            captured['language'] = language
+            return []
+
+        monkeypatch.setattr(
+            'app.services.referral_reward_service.ReferralRewardLevelService.get_all',
+            classmethod(lambda cls, db: fake_all(db)),
+        )
+        monkeypatch.setattr('app.services.referral_reward_service.describe_active_levels', fake_describe)
+
+        await route.get_referral_terms(db=AsyncMock(), user=SimpleNamespace(language='en'))
+        assert captured['language'] == 'en'
+
+    @pytest.mark.asyncio
+    async def test_legacy_scheme_still_public(self, monkeypatch):
+        from app.cabinet.routes import referral as route
+
+        monkeypatch.setattr(settings, 'REFERRAL_REWARD_SCHEME', 'legacy')
+        response = await route.get_referral_terms(db=AsyncMock(), user=None)
+        assert response.scheme == 'legacy'

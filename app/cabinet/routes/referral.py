@@ -20,7 +20,7 @@ from app.database.models import (
     WithdrawalRequestStatus,
 )
 
-from ..dependencies import get_cabinet_db, get_current_cabinet_user
+from ..dependencies import get_cabinet_db, get_current_cabinet_user, get_optional_cabinet_user
 from ..schemas.referral import (
     ReferralEarningResponse,
     ReferralEarningsListResponse,
@@ -268,12 +268,19 @@ async def get_referral_earnings(
 
 
 @router.get('/terms', response_model=ReferralTermsResponse)
-async def get_referral_terms(db: AsyncSession = Depends(get_cabinet_db)):
+async def get_referral_terms(
+    db: AsyncSession = Depends(get_cabinet_db),
+    user: User | None = Depends(get_optional_cabinet_user),
+):
     """Get referral program terms.
 
     В многоуровневой схеме описание берётся из таблицы уровней — из того же
     источника, из которого считает движок наград. Иначе кабинет публикует одни
     условия, бот платит по другим, и расходятся они молча.
+
+    Пользователь ОПЦИОНАЛЕН: эндпоинт условий публичный, и требовать здесь токен
+    значило бы закрыть его для неавторизованных. Язык берётся, когда пользователь
+    известен, иначе описание отдаётся на языке по умолчанию.
     """
     level_descriptions: list[str] = []
     referee_bonus: str | None = None
@@ -294,8 +301,9 @@ async def get_referral_terms(db: AsyncSession = Depends(get_cabinet_db)):
             tariffs_result = await db.execute(select(Tariff.id, Tariff.name).where(Tariff.id.in_(tariff_ids)))
             tariff_names = {row.id: row.name for row in tariffs_result.all()}
 
-        level_descriptions = await describe_active_levels(db, tariff_names=tariff_names, language=user.language)
-        referee_bonus = await describe_referee_bonus(db, tariff_names=tariff_names, language=user.language)
+        language = user.language if user else None
+        level_descriptions = await describe_active_levels(db, tariff_names=tariff_names, language=language)
+        referee_bonus = await describe_referee_bonus(db, tariff_names=tariff_names, language=language)
 
     return ReferralTermsResponse(
         scheme='levels' if settings.is_referral_levels_scheme() else 'legacy',

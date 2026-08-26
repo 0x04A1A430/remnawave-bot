@@ -225,6 +225,34 @@ class TestMergeChainRepair:
         assert primary.referred_by_id is None
 
     @pytest.mark.asyncio
+    async def test_cycle_above_primary_is_left_alone(self, monkeypatch):
+        """Петля B→C→B к слиянию отношения не имеет.
+
+        Снять там привязку primary значит уничтожить его связь с законным
+        реферером и при этом оставить настоящую петлю нетронутой.
+        """
+        from app.services import account_merge_service as merge
+
+        primary = SimpleNamespace(id=1, referred_by_id=2)
+        chain = {2: 3, 3: 4, 4: 3}  # 1 → 2 → 3 → 4 → 3: петля целиком выше primary
+
+        class _Result:
+            def __init__(self, value):
+                self._value = value
+
+            def scalar_one_or_none(self):
+                return self._value
+
+        async def fake_execute(query):
+            compiled = str(query.compile(compile_kwargs={'literal_binds': True}))
+            uid = int(compiled.rsplit('=', 1)[-1].strip())
+            return _Result(chain.get(uid))
+
+        db = SimpleNamespace(execute=fake_execute)
+        assert await merge._break_referral_cycle_through(db, primary) is False
+        assert primary.referred_by_id == 2, 'законная связь primary с его реферером обязана уцелеть'
+
+    @pytest.mark.asyncio
     async def test_healthy_chain_is_left_alone(self, monkeypatch):
         from app.services import account_merge_service as merge
 

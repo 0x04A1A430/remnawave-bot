@@ -445,8 +445,12 @@ async def toggle_level_active(callback: types.CallbackQuery, db_user: User, db: 
         await callback.answer('Уровень не найден', show_alert=True)
         return
 
-    await upsert_reward_level(db, level_number, is_active=not level.is_active)
-    await callback.answer('Уровень включён' if not level.is_active else 'Уровень выключен')
+    # Новое состояние вычисляется ДО записи. upsert правит тот же ORM-объект, и
+    # чтение level.is_active после него возвращает уже новое значение — тост
+    # сообщал ровно противоположное тому, что произошло.
+    now_active = not level.is_active
+    await upsert_reward_level(db, level_number, is_active=now_active)
+    await callback.answer('Уровень включён' if now_active else 'Уровень выключен')
     await _render_level(callback, db, level_number)
 
 

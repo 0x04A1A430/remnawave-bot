@@ -331,6 +331,16 @@ async def _break_referral_cycle_through(db: AsyncSession, primary: User) -> bool
     множеством посещённых, — но молча обрезает всю ветку до первого уровня:
     уровни 2+ перестают платить, и никто об этом не узнает.
 
+    Рвётся ТОЛЬКО петля, проходящая через самого primary, — та, которую и создало
+    слияние. Петля выше по цепочке (B→C→B) к слиянию отношения не имеет: снять там
+    привязку primary значит уничтожить работающую связь с его законным реферером и
+    при этом оставить настоящую петлю нетронутой. Такие данные чинятся отдельно и
+    осознанно, а не побочным эффектом слияния аккаунтов.
+
+    Какое из двух звеньев резать в петле через primary, задаёт секция 9: рефералы
+    secondary становятся рефералами primary, значит связь «primary приглашён своим
+    же новым рефералом» и есть лишняя.
+
     Флаш не нужен: перепривязка выше сделана ``update()``-запросами, которые уже
     ушли в БД, а собственная привязка primary читается из Python-атрибута.
     """
@@ -339,14 +349,20 @@ async def _break_referral_cycle_through(db: AsyncSession, primary: User) -> bool
     depth = 0
 
     while current_id and depth < _MERGE_CHAIN_MAX_DEPTH:
-        if current_id in seen:
+        if current_id == primary.id:
             logger.warning(
                 'Слияние замкнуло реферальную цепочку в цикл, привязка primary снята',
                 primary_id=primary.id,
-                repeated_id=current_id,
             )
             primary.referred_by_id = None
             return True
+        if current_id in seen:
+            logger.warning(
+                'В реферальной цепочке выше primary есть цикл; слияние его не создавало и не чинит',
+                primary_id=primary.id,
+                repeated_id=current_id,
+            )
+            return False
         seen.add(current_id)
         result = await db.execute(select(User.referred_by_id).where(User.id == current_id))
         current_id = result.scalar_one_or_none()

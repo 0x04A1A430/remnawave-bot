@@ -34,7 +34,7 @@ def not_referee_directed():
     """
     from app.services.referral_reward_service import REFEREE_DIRECTED_REASONS
 
-    return ReferralEarning.id.isnot(None)  # MUTANT
+    return ReferralEarning.reason.notin_(tuple(REFEREE_DIRECTED_REASONS))
 
 
 async def get_user_campaign_id(db: AsyncSession, user_id: int) -> int | None:
@@ -191,6 +191,9 @@ async def get_referral_statistics(db: AsyncSession) -> dict:
 
     # Дни — вторая валюта программы. Без отдельной суммы установка, платящая
     # только днями, показывает «выплачено 0 ₽» при работающих начислениях.
+    # Глобальный итог — это СТОИМОСТЬ программы, поэтому здесь предиката нет
+    # намеренно: дни, выданные приглашённым, программа тоже раздала. Отбрасывать
+    # их нужно там, где считается «сколько заработал вот этот человек».
     total_days_result = await db.execute(select(func.coalesce(func.sum(ReferralEarning.days_granted), 0)))
     total_days = total_days_result.scalar()
 
@@ -201,12 +204,18 @@ async def get_referral_statistics(db: AsyncSession) -> dict:
     )
     referrals_stats = {row.referrer_id: row.referrals_count for row in referrals_stats_result.all()}
 
+    # Подушевой агрегат: предикат обязателен. Без него приглашённый, не
+    # пригласивший никого, попадает в топ рефереров с «заработком» из
+    # собственного бонуса. В глобальные итоги выше такие дни, наоборот, входят —
+    # там считается стоимость программы, а не чей-то доход.
     referral_earnings_result = await db.execute(
         select(
             ReferralEarning.user_id.label('referrer_id'),
             func.sum(ReferralEarning.amount_kopeks).label('referral_earnings'),
             func.sum(ReferralEarning.days_granted).label('referral_days'),
-        ).group_by(ReferralEarning.user_id)
+        )
+        .where(not_referee_directed())
+        .group_by(ReferralEarning.user_id)
     )
     referral_earnings = {
         row.referrer_id: (row.referral_earnings, row.referral_days) for row in referral_earnings_result.all()

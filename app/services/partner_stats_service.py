@@ -114,7 +114,7 @@ class PartnerStatsService:
                 func.coalesce(
                     func.sum(case((ReferralEarning.created_at >= month_ago, ReferralEarning.days_granted), else_=0)), 0
                 ).label('month_days'),
-            ).where(ReferralEarning.user_id == user_id)
+            ).where(ReferralEarning.user_id == user_id, not_referee_directed())
         )
         earnings_row = earnings_result.one()
         earnings_all_time = int(earnings_row.all_time)
@@ -133,7 +133,7 @@ class PartnerStatsService:
                 func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0).label('money'),
                 func.coalesce(func.sum(ReferralEarning.days_granted), 0).label('days'),
             )
-            .where(ReferralEarning.user_id == user_id)
+            .where(ReferralEarning.user_id == user_id, not_referee_directed())
             .group_by(ReferralEarning.level)
             .order_by(ReferralEarning.level.asc())
         )
@@ -601,11 +601,17 @@ class PartnerStatsService:
         start_date = now - timedelta(days=days) if days else None
 
         # Подсчёт рефералов и заработков
-        earnings_query = select(
-            ReferralEarning.user_id,
-            func.sum(ReferralEarning.amount_kopeks).label('total_earnings'),
-            func.sum(ReferralEarning.days_granted).label('total_days'),
-        ).group_by(ReferralEarning.user_id)
+        # Подушевой агрегат: дни, выданные партнёру как приглашённому, — не его
+        # партнёрский доход. Глобальные выплаты ниже, наоборот, их учитывают.
+        earnings_query = (
+            select(
+                ReferralEarning.user_id,
+                func.sum(ReferralEarning.amount_kopeks).label('total_earnings'),
+                func.sum(ReferralEarning.days_granted).label('total_days'),
+            )
+            .where(not_referee_directed())
+            .group_by(ReferralEarning.user_id)
+        )
         if start_date:
             earnings_query = earnings_query.where(ReferralEarning.created_at >= start_date)
 

@@ -121,6 +121,19 @@ class TestSingleAnswerPerCallback:
         assert callback.answer.await_count == 1
 
     @pytest.mark.asyncio
+    async def test_toggle_toast_matches_what_happened(self, wired):
+        """upsert правит тот же ORM-объект, поэтому чтение флага после записи врёт."""
+        callback = _callback('admin_ref_lvl_active:1')  # уровень 1 активен в фикстуре
+        await _raw(editor.toggle_level_active)(callback, db_user=SimpleNamespace(id=1), db=None)
+        assert wired['saved'][-1]['is_active'] is False
+        assert 'выключен' in callback.answer.await_args.args[0]
+
+        callback = _callback('admin_ref_lvl_active:1')
+        await _raw(editor.toggle_level_active)(callback, db_user=SimpleNamespace(id=1), db=None)
+        assert wired['saved'][-1]['is_active'] is True
+        assert 'включён' in callback.answer.await_args.args[0]
+
+    @pytest.mark.asyncio
     async def test_mode_cycle_answers_once(self, wired):
         callback = _callback('admin_ref_lvl_mode:1')
         await _raw(editor.cycle_level_mode)(callback, db_user=SimpleNamespace(id=1), db=None)

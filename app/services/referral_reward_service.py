@@ -732,17 +732,23 @@ def _trigger_label(trigger: str, texts) -> str:
     return texts.t(key, default) if key else trigger
 
 
-def _days_can_be_granted(config: LevelConfig, *, tariff_id: int | None) -> bool:
+def _days_can_be_granted(config: LevelConfig, *, tariff_id: int | None, for_referee: bool) -> bool:
     """Могут ли дни этого правила вообще куда-то лечь.
 
-    При поводе «регистрация» получатель — только что созданный пользователь: у
-    него нет ни одной подписки. Без указанного тарифа продлевать нечего, а
-    создать подписку не из чего — параметры взять неоткуда, и награда не
-    начисляется НИКОГДА, а не иногда. Обещать её в приветствии и в тексте
-    приглашения значит гарантированно обмануть каждого нового пользователя.
+    Условие касается ТОЛЬКО приглашённого и только повода «регистрация»: он создан
+    секунду назад, подписки у него нет ни одной, и без указанного тарифа продлевать
+    нечего, а создать подписку не из чего. Такая награда не начисляется НИКОГДА, а
+    не иногда, — обещать её в приветствии значит обмануть каждого нового
+    пользователя.
 
-    С указанным тарифом подписка будет создана, поэтому обещание честное.
+    Пригласившего это не касается: он в системе давно, подписка у него, как
+    правило, есть, и его дни лягут в основную. Глушить его описание по тому же
+    признаку значило бы наоборот — умолчать о награде, которая реально приходит.
+
+    С указанным тарифом подписка будет создана в любом случае.
     """
+    if not for_referee:
+        return True
     if config.trigger != ReferralRewardTrigger.REGISTRATION.value:
         return True
     return tariff_id is not None
@@ -788,7 +794,7 @@ async def describe_active_levels(
         if (
             config.days_enabled
             and config.referrer_days
-            and _days_can_be_granted(config, tariff_id=config.referrer_tariff_id)
+            and _days_can_be_granted(config, tariff_id=config.referrer_tariff_id, for_referee=False)
         ):
             tariff_suffix = ''
             if config.referrer_tariff_id and config.referrer_tariff_id in names:
@@ -835,7 +841,7 @@ async def describe_referee_bonus(
         if (
             config.days_enabled
             and config.referee_days
-            and _days_can_be_granted(config, tariff_id=config.referee_tariff_id)
+            and _days_can_be_granted(config, tariff_id=config.referee_tariff_id, for_referee=True)
         ):
             tariff_suffix = ''
             if config.referee_tariff_id and config.referee_tariff_id in names:
