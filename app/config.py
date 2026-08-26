@@ -395,6 +395,15 @@ class Settings(BaseSettings):
     REFERRAL_NOTIFICATIONS_ENABLED: bool = True
     REFERRAL_NOTIFICATION_RETRY_ATTEMPTS: int = 3
 
+    # Схема наград: 'legacy' — прежнее поведение на ключах REFERRAL_* выше,
+    # 'levels' — таблица referral_reward_levels (деньги и/или дни, много уровней).
+    # Значение по умолчанию менять нельзя: смена схемы обязана быть осознанным
+    # действием админа, а не побочным эффектом обновления бота.
+    REFERRAL_REWARD_SCHEME: str = 'legacy'
+    # Насколько глубоко подниматься по цепочке пригласивших. Отдельный предохранитель
+    # от обхода длинной цепочки на каждом пополнении, даже если уровней настроено больше.
+    REFERRAL_MAX_LEVEL_DEPTH: int = 3
+
     # Настройки вывода реферального баланса
     REFERRAL_WITHDRAWAL_ENABLED: bool = False  # Включить возможность вывода
     REFERRAL_WITHDRAWAL_MIN_AMOUNT_KOPEKS: int = 100000  # Мин. сумма вывода (1000₽)
@@ -3583,6 +3592,8 @@ class Settings(BaseSettings):
             'first_payment_commission_percent': self.REFERRAL_FIRST_PAYMENT_COMMISSION_PERCENT,
             'recurring_commission_tiers': self.REFERRAL_RECURRING_COMMISSION_TIERS,
             'notifications_enabled': self.REFERRAL_NOTIFICATIONS_ENABLED,
+            'reward_scheme': self.REFERRAL_REWARD_SCHEME,
+            'max_level_depth': self.REFERRAL_MAX_LEVEL_DEPTH,
             'withdrawal_enabled': self.REFERRAL_WITHDRAWAL_ENABLED,
             'withdrawal_min_amount_kopeks': self.REFERRAL_WITHDRAWAL_MIN_AMOUNT_KOPEKS,
             'withdrawal_cooldown_days': self.REFERRAL_WITHDRAWAL_COOLDOWN_DAYS,
@@ -3591,6 +3602,13 @@ class Settings(BaseSettings):
     def is_referral_withdrawal_enabled(self) -> bool:
         """Проверяет, включена ли функция вывода реферального баланса."""
         return self.is_referral_program_enabled() and self.REFERRAL_WITHDRAWAL_ENABLED
+
+    def is_referral_levels_scheme(self) -> bool:
+        """Включена ли многоуровневая схема наград."""
+        return str(self.REFERRAL_REWARD_SCHEME or '').strip().lower() == 'levels'
+
+    def get_referral_max_level_depth(self) -> int:
+        return max(1, int(self.REFERRAL_MAX_LEVEL_DEPTH or 1))
 
     def is_referral_program_enabled(self) -> bool:
         return bool(self.REFERRAL_PROGRAM_ENABLED)

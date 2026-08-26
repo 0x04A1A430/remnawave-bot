@@ -5,7 +5,14 @@ from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.database.models import AdvertisingCampaignRegistration, ReferralEarning, Subscription, SubscriptionStatus, User
+from app.database.models import (
+    AdvertisingCampaignRegistration,
+    ReferralEarning,
+    ReferralRewardType,
+    Subscription,
+    SubscriptionStatus,
+    User,
+)
 
 
 logger = structlog.get_logger(__name__)
@@ -30,7 +37,21 @@ async def create_referral_earning(
     reason: str,
     referral_transaction_id: int | None = None,
     campaign_id: int | None = None,
+    reward_type: str = ReferralRewardType.MONEY.value,
+    level: int = 1,
+    days_granted: int = 0,
+    tariff_id: int | None = None,
 ) -> ReferralEarning:
+    """Строка реферального ledger'а.
+
+    Новые аргументы имеют значения по умолчанию, совпадающие с прежним поведением:
+    деньги, первый уровень. Так все существующие вызовы продолжают писать ровно то
+    же, что и раньше, и статистика на старых установках не меняется.
+
+    Награда в днях пишется с ``amount_kopeks=0``: дни не деньги, и подмешивать их
+    в денежную сумму нельзя — на ней построены и статистика, и расчёт доступного
+    к выводу реферального баланса.
+    """
     earning = ReferralEarning(
         user_id=user_id,
         referral_id=referral_id,
@@ -38,13 +59,26 @@ async def create_referral_earning(
         reason=reason,
         referral_transaction_id=referral_transaction_id,
         campaign_id=campaign_id,
+        reward_type=reward_type,
+        level=level,
+        days_granted=days_granted,
+        tariff_id=tariff_id,
     )
 
     db.add(earning)
     await db.commit()
     await db.refresh(earning)
 
-    logger.info('💰 Создан реферальный заработок', amount_kopeks=amount_kopeks / 100, user_id=user_id)
+    if reward_type == ReferralRewardType.DAYS.value:
+        logger.info(
+            '📅 Создано реферальное начисление днями',
+            days_granted=days_granted,
+            level=level,
+            user_id=user_id,
+            tariff_id=tariff_id,
+        )
+    else:
+        logger.info('💰 Создан реферальный заработок', amount_kopeks=amount_kopeks / 100, level=level, user_id=user_id)
     return earning
 
 

@@ -2864,6 +2864,76 @@ class Coupon(Base):
         return f"<Coupon token='{token_prefix}...' status='{self.status}'>"
 
 
+class ReferralRewardType(Enum):
+    """Чем именно выдана награда за реферала."""
+
+    MONEY = 'money'
+    DAYS = 'days'
+
+
+class ReferralRewardTrigger(Enum):
+    """Повод для награды. Задаётся на каждом уровне отдельно."""
+
+    REGISTRATION = 'registration'
+    FIRST_TOPUP = 'first_topup'
+    EVERY_TOPUP = 'every_topup'
+
+
+class ReferralRewardMode(Enum):
+    """Какие бонусы уровня активны: деньги, дни или оба."""
+
+    MONEY = 'money'
+    DAYS = 'days'
+    BOTH = 'both'
+
+
+class ReferralRewardLevel(Base):
+    """Правило награды для одного уровня реферальной цепочки.
+
+    Конфигурация живёт в БД, а не в Settings, намеренно: ключ, заданный в .env,
+    попадает в ENV_OVERRIDE_KEYS и перестаёт меняться из админки. Отдельная таблица
+    этого механизма не касается, поэтому редактируется одинаково из бота и кабинета
+    и переживает перезапуск по определению.
+
+    NULL в percent/fixed_kopeks означает «взять значение из legacy-настроек
+    REFERRAL_*» — так существующие установки не обнуляются при включении схемы.
+    """
+
+    __tablename__ = 'referral_reward_levels'
+
+    id = Column(Integer, primary_key=True, index=True)
+    level = Column(Integer, nullable=False, unique=True, index=True)
+    is_active = Column(Boolean, nullable=False, default=True, server_default='true')
+
+    reward_mode = Column(String(10), nullable=False, default=ReferralRewardMode.MONEY.value, server_default='money')
+    trigger = Column(
+        String(20), nullable=False, default=ReferralRewardTrigger.FIRST_TOPUP.value, server_default='first_topup'
+    )
+
+    # Пригласивший
+    referrer_percent = Column(Integer, nullable=True)
+    referrer_fixed_kopeks = Column(Integer, nullable=True)
+    referrer_days = Column(Integer, nullable=False, default=0, server_default='0')
+    referrer_tariff_id = Column(Integer, ForeignKey('tariffs.id', ondelete='SET NULL'), nullable=True)
+
+    # Приглашённый
+    referee_fixed_kopeks = Column(Integer, nullable=True)
+    referee_days = Column(Integer, nullable=False, default=0, server_default='0')
+    referee_tariff_id = Column(Integer, ForeignKey('tariffs.id', ondelete='SET NULL'), nullable=True)
+
+    # 0 — без лимита, как у REFERRAL_MAX_COMMISSION_PAYMENTS
+    max_payments = Column(Integer, nullable=False, default=0, server_default='0')
+
+    created_at = Column(AwareDateTime(), default=func.now())
+    updated_at = Column(AwareDateTime(), default=func.now(), onupdate=func.now())
+
+    referrer_tariff = relationship('Tariff', foreign_keys=[referrer_tariff_id])
+    referee_tariff = relationship('Tariff', foreign_keys=[referee_tariff_id])
+
+    def __repr__(self) -> str:
+        return f'<ReferralRewardLevel level={self.level} mode={self.reward_mode} trigger={self.trigger}>'
+
+
 class ReferralEarning(Base):
     __tablename__ = 'referral_earnings'
 
@@ -2873,6 +2943,16 @@ class ReferralEarning(Base):
 
     amount_kopeks = Column(Integer, nullable=False)
     reason = Column(String(100), nullable=False)
+
+    # Награда может быть выдана днями подписки, а не деньгами. Без этих колонок
+    # дни физически не помещаются в ledger, а вся статистика построена на сумме
+    # amount_kopeks — то есть дневные награды просто не были бы видны.
+    reward_type = Column(
+        String(10), nullable=False, default=ReferralRewardType.MONEY.value, server_default='money', index=True
+    )
+    level = Column(Integer, nullable=False, default=1, server_default='1', index=True)
+    days_granted = Column(Integer, nullable=False, default=0, server_default='0')
+    tariff_id = Column(Integer, ForeignKey('tariffs.id', ondelete='SET NULL'), nullable=True)
 
     referral_transaction_id = Column(Integer, ForeignKey('transactions.id'), nullable=True)
     campaign_id = Column(

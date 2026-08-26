@@ -512,6 +512,10 @@ class BotConfigurationService:
     }
 
     CHOICES: dict[str, list[ChoiceOption]] = {
+        'REFERRAL_REWARD_SCHEME': [
+            ChoiceOption('legacy', '💰 Классическая', 'Проценты и фиксированные бонусы из настроек REFERRAL_*'),
+            ChoiceOption('levels', '🪜 Многоуровневая', 'Уровни с деньгами и/или днями подписки'),
+        ],
         'DATABASE_MODE': [
             ChoiceOption('auto', '🤖 Авто'),
             ChoiceOption('postgresql', '🐘 PostgreSQL'),
