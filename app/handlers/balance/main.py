@@ -395,14 +395,14 @@ async def show_transaction_category(
             db, db_user.id, limit=TRANSACTIONS_PER_PAGE, offset=offset, type_values=CREDIT_TRANSACTION_TYPES
         )
         total = await get_user_transactions_count(db, db_user.id, type_values=CREDIT_TRANSACTION_TYPES)
-        title = '💰 Пополнения'
+        title = 'Пополнения'
         list_callback = 'balance_history_deposits'
     else:
         transactions = await get_user_transactions(
             db, db_user.id, limit=TRANSACTIONS_PER_PAGE, offset=offset, exclude_type_values=CREDIT_TRANSACTION_TYPES
         )
         total = await get_user_transactions_count(db, db_user.id, exclude_type_values=CREDIT_TRANSACTION_TYPES)
-        title = '💸 Списания'
+        title = 'Списания'
         list_callback = 'balance_history_withdrawals'
 
     if not transactions:
