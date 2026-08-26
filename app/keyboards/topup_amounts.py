@@ -1,3 +1,5 @@
+import random
+
 import structlog
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,6 +14,9 @@ from app.services.payment_method_config_service import (
 
 
 logger = structlog.get_logger(__name__)
+
+# Цвета быстрых сумм: рандом, кроме danger (красный зарезервирован для «Назад»)
+_QUICK_AMOUNT_STYLES: tuple[str, ...] = ('primary', 'success')
 
 METHOD_CONFIG_IDS = {
     'stars': 'telegram_stars',
@@ -102,6 +107,7 @@ async def get_topup_amount_keyboard(
             InlineKeyboardButton(
                 text=format_quick_amount(amount),
                 callback_data=f'topup_amount|{method}|{amount}',
+                style=random.choice(_QUICK_AMOUNT_STYLES),
             )
         )
         if len(row) == 2:
@@ -109,5 +115,5 @@ async def get_topup_amount_keyboard(
             row = []
     if row:
         keyboard.append(row)
-    keyboard.append([InlineKeyboardButton(text=texts.BACK, callback_data=back_callback)])
+    keyboard.append([InlineKeyboardButton(text=texts.BACK, callback_data=back_callback, style='danger')])
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
