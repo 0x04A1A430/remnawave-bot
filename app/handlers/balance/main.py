@@ -473,26 +473,26 @@ async def show_transaction_detail(callback: types.CallbackQuery, db_user: User, 
     amount_text = f'{sign}{texts.format_price(abs(transaction.amount_kopeks))}'
     op_type = 'Пополнение' if is_credit else 'Списание'
 
-    lines = [
-        f'{emoji_html} <b>{op_type}</b>',
-        '<blockquote>',
-        f'<b>Сумма:</b> {amount_text}',
-    ]
+    details = [f'<b>Сумма:</b> {amount_text}']
     if transaction.description:
-        lines.append(f'<b>Описание:</b> {html.escape(transaction.description)}')
+        details.append(f'<b>Описание:</b> {html.escape(transaction.description)}')
     if transaction.payment_method:
         pretty_method = get_display_name_override(str(transaction.payment_method)) or (
             str(transaction.payment_method).replace('_', ' ').strip().title()
         )
-        lines.append(f'<b>Способ оплаты:</b> {html.escape(pretty_method)}')
+        details.append(f'<b>Способ оплаты:</b> {html.escape(pretty_method)}')
     status_text = 'Выполнена' if transaction.is_completed else 'В обработке'
     if transaction.is_completed:
         status_emoji = "<tg-emoji emoji-id='5776375003280838798'>✅</tg-emoji>"
     else:
         status_emoji = "<tg-emoji emoji-id='5778605968208170641'>🕒</tg-emoji>"
-    lines.append(f'<b>Статус:</b> {status_emoji} {status_text}')
-    lines.append(f'<b>Дата:</b> {format_local_datetime(transaction.created_at, "%d.%m.%Y %H:%M")}')
-    lines.append('</blockquote>')
+    details.append(f'<b>Статус:</b> {status_emoji} {status_text}')
+    details.append(f"<b>Дата:</b> {format_local_datetime(transaction.created_at, '%d.%m.%Y %H:%M')}")
+
+    lines = [
+        f'{emoji_html} <b>{op_type}</b>',
+        '<blockquote>' + '\n'.join(details) + '</blockquote>',
+    ]
     if transaction.external_id:
         lines.append(f'<code>{html.escape(transaction.external_id)}</code>')
 

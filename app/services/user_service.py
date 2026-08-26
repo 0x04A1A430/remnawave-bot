@@ -97,7 +97,7 @@ class UserService:
             # У пользователя есть активная подписка - обычное сообщение
             message = (
                 '<b>Баланс пополнен!</b>\n\n'
-                '<blockquote>\n'
+                '<blockquote>'
                 f'<b>Сумма:</b> +{settings.format_price(amount_kopeks)}\n'
                 f'<b>Текущий баланс:</b> {settings.format_price(user.balance_kopeks)}\n'
                 '</blockquote>'
@@ -111,7 +111,7 @@ class UserService:
             # НЕТ активной подписки - БОЛЬШОЕ ПРЕДУПРЕЖДЕНИЕ
             message = (
                 '<b>Баланс пополнен!</b>\n\n'
-                '<blockquote>\n'
+                '<blockquote>'
                 f'<b>Сумма:</b> +{settings.format_price(amount_kopeks)}\n'
                 f'<b>Текущий баланс:</b> {settings.format_price(user.balance_kopeks)}\n'
                 '</blockquote>\n\n'
@@ -158,7 +158,7 @@ class UserService:
             amount_text = f'+{settings.format_price(amount_kopeks)}'
             message = (
                 "<tg-emoji emoji-id='5776375003280838798'>✅</tg-emoji> <b>Баланс пополнен!</b>\n\n"
-                '<blockquote>\n'
+                '<blockquote>'
                 f'<b>Сумма:</b> {amount_text}\n'
                 f'<b>Текущий баланс:</b> {settings.format_price(user.balance_kopeks)}\n'
                 '</blockquote>'
@@ -168,7 +168,7 @@ class UserService:
             amount_text = f'-{settings.format_price(abs(amount_kopeks))}'
             message = (
                 "<tg-emoji emoji-id='5877413297170419326'>💸</tg-emoji> <b>Средства списаны с баланса</b>\n\n"
-                '<blockquote>\n'
+                '<blockquote>'
                 f'<b>Сумма:</b> {amount_text}\n'
                 f'<b>Текущий баланс:</b> {settings.format_price(user.balance_kopeks)}\n'
                 '</blockquote>\n\n'
