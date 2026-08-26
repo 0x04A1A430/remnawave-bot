@@ -1001,3 +1001,43 @@ class TestLegacyImportPercent:
             assert 'settings.REFERRAL_COMMISSION_PERCENT' not in source, (
                 'ставка обязана браться общим расчётом, иначе два переноса разойдутся'
             )
+
+
+class TestDepthOnThePayoutPath:
+    """Глубина обязана резать ВЫПЛАТЫ, а не только описание.
+
+    Проверки глубины были только на тексте условий: подмена предела на 999
+    оставляла весь набор зелёным, хотя платить начали бы все уровни подряд.
+    """
+
+    @pytest.mark.asyncio
+    async def test_levels_beyond_depth_pay_nothing(self, chain, monkeypatch):
+        _install_levels(
+            monkeypatch,
+            {
+                1: _level(1, referrer_percent=10),
+                2: _level(2, referrer_percent=5),
+                3: _level(3, referrer_percent=2),
+            },
+        )
+        monkeypatch.setattr(engine, 'count_level_payments', _no_prior_payments)
+        monkeypatch.setattr(settings, 'REFERRAL_MAX_LEVEL_DEPTH', 2)
+
+        components = await build_reward_components(
+            None, chain[4], event=RewardEvent.REPEAT_TOPUP, topup_amount_kopeks=1000_00
+        )
+        assert [c.level for c in components] == [1, 2], 'третий уровень настроен, но цепочка до него не идёт'
+
+    @pytest.mark.asyncio
+    async def test_depth_one_pays_only_the_direct_referrer(self, chain, monkeypatch):
+        _install_levels(
+            monkeypatch,
+            {1: _level(1, referrer_percent=10), 2: _level(2, referrer_percent=5)},
+        )
+        monkeypatch.setattr(engine, 'count_level_payments', _no_prior_payments)
+        monkeypatch.setattr(settings, 'REFERRAL_MAX_LEVEL_DEPTH', 1)
+
+        components = await build_reward_components(
+            None, chain[4], event=RewardEvent.REPEAT_TOPUP, topup_amount_kopeks=1000_00
+        )
+        assert [(c.recipient_id, c.level) for c in components] == [(3, 1)]

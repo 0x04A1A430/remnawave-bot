@@ -76,6 +76,11 @@ def upgrade() -> None:
             sa.Column('updated_at', sa.DateTime(timezone=True), nullable=True),
         )
         op.create_index('ix_referral_reward_levels_level', 'referral_reward_levels', ['level'], unique=True)
+        # Модель объявляет id как primary_key + index (общая конвенция таблиц в
+        # проекте), и create_all на свежей установке этот индекс создаёт. Без него
+        # здесь свежая и обновлённая базы расходятся, а autogenerate вечно видит
+        # фантомную разницу.
+        op.create_index('ix_referral_reward_levels_id', 'referral_reward_levels', ['id'])
 
     if 'referral_earnings' not in tables:
         return
@@ -87,9 +92,16 @@ def upgrade() -> None:
             op.add_column('referral_earnings', column)
             added.append(name)
 
-    existing_fks = {fk['name'] for fk in inspector.get_foreign_keys('referral_earnings')}
+    # Проверяется наличие ЛЮБОГО внешнего ключа на tariff_id, а не только нашего
+    # именованного. На свежей установке таблицу создаёт create_all по модели, где
+    # ограничение безымянное: PostgreSQL называет его сам
+    # (referral_earnings_tariff_id_fkey). Сверка по имени его не увидит, и рядом
+    # появится второй, дублирующий FK на ту же колонку.
+    tariff_fk_exists = any(
+        'tariff_id' in (fk.get('constrained_columns') or []) for fk in inspector.get_foreign_keys('referral_earnings')
+    )
     tariff_column_present = 'tariff_id' in existing_cols | set(added)
-    if tariff_column_present and _EARNING_TARIFF_FK not in existing_fks and bind.dialect.name != 'sqlite':
+    if tariff_column_present and not tariff_fk_exists and bind.dialect.name != 'sqlite':
         op.create_foreign_key(
             _EARNING_TARIFF_FK,
             'referral_earnings',
@@ -112,6 +124,8 @@ def downgrade() -> None:
     tables = set(inspector.get_table_names())
 
     if 'referral_earnings' in tables:
+        # Снимается только СВОЁ ограничение: безымянное, созданное create_all на
+        # свежей установке, этой миграции не принадлежит.
         existing_fks = {fk['name'] for fk in inspector.get_foreign_keys('referral_earnings')}
         if _EARNING_TARIFF_FK in existing_fks and bind.dialect.name != 'sqlite':
             op.drop_constraint(_EARNING_TARIFF_FK, 'referral_earnings', type_='foreignkey')
@@ -122,4 +136,5 @@ def downgrade() -> None:
                 op.drop_column('referral_earnings', name)
 
     if 'referral_reward_levels' in tables:
+        # Индексы уходят вместе с таблицей — отдельный drop_index не нужен.
         op.drop_table('referral_reward_levels')
