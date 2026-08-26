@@ -145,7 +145,8 @@ async def _create_overpay_payment_and_respond(
             [
                 InlineKeyboardButton(
                     text=texts.t('BACK_BUTTON', 'Назад'),
-                    callback_data='menu_balance', style='danger',
+                    callback_data='menu_balance',
+                    style='danger',
                 )
             ],
         ]
@@ -286,7 +287,8 @@ async def start_overpay_topup(
         [
             InlineKeyboardButton(
                 text=texts.t('BACK_BUTTON', 'Назад'),
-                callback_data='menu_balance', style='danger',
+                callback_data='menu_balance',
+                style='danger',
             )
         ]
     )

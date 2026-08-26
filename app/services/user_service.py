@@ -103,7 +103,9 @@ class UserService:
                 '</blockquote>'
             )
             keyboard = types.InlineKeyboardMarkup(
-                inline_keyboard=[[types.InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu', style='danger')]]
+                inline_keyboard=[
+                    [types.InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu', style='danger')]
+                ]
             )
         else:
             # НЕТ активной подписки - БОЛЬШОЕ ПРЕДУПРЕЖДЕНИЕ
@@ -174,7 +176,11 @@ class UserService:
             )
 
         keyboard_rows = [
-            [types.InlineKeyboardButton(text=get_texts(user.language).BACK, callback_data='back_to_menu', style='danger')]
+            [
+                types.InlineKeyboardButton(
+                    text=get_texts(user.language).BACK, callback_data='back_to_menu', style='danger'
+                )
+            ]
         ]
         reply_markup = types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
 

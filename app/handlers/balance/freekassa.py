@@ -121,7 +121,8 @@ async def _create_freekassa_payment_and_respond(
                     {'icon_custom_emoji_id': _pay_parsed.icon_custom_emoji_id}
                     if _pay_parsed.icon_custom_emoji_id
                     else {}
-                ), style='success',
+                ),
+                style='success',
             )
         ],
     ]
@@ -144,7 +145,9 @@ async def _create_freekassa_payment_and_respond(
             ]
         )
 
-    keyboard_rows.append([InlineKeyboardButton(text=texts.t('BACK_BUTTON', 'Назад'), callback_data='menu_balance', style='danger')])
+    keyboard_rows.append(
+        [InlineKeyboardButton(text=texts.t('BACK_BUTTON', 'Назад'), callback_data='menu_balance', style='danger')]
+    )
 
     keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
 

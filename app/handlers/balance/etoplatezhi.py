@@ -96,13 +96,15 @@ async def _create_etoplatezhi_payment_and_respond(
                         'PAY_BUTTON',
                         '\U0001f4b3 Оплатить {amount}\u20bd',
                     ).format(amount=f'{amount_rub:.0f}'),
-                    url=payment_url, style='success',
+                    url=payment_url,
+                    style='success',
                 )
             ],
             [
                 InlineKeyboardButton(
                     text=texts.t('BACK_BUTTON', '\u25c0\ufe0f Назад'),
-                    callback_data='menu_balance', style='danger',
+                    callback_data='menu_balance',
+                    style='danger',
                 )
             ],
         ]

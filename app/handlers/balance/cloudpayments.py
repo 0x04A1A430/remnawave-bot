@@ -87,13 +87,15 @@ async def _create_cloudpayments_payment_and_respond(
                         'PAY_BUTTON',
                         'Оплатить {amount}₽',
                     ).format(amount=f'{amount_rub:.0f}'),
-                    url=payment_url, style='success',
+                    url=payment_url,
+                    style='success',
                 )
             ],
             [
                 InlineKeyboardButton(
                     text=texts.t('BACK_BUTTON', 'Назад'),
-                    callback_data='menu_balance', style='danger',
+                    callback_data='menu_balance',
+                    style='danger',
                 )
             ],
         ]
@@ -355,13 +357,15 @@ async def process_cloudpayments_amount(
                         'PAY_BUTTON',
                         'Оплатить {amount}₽',
                     ).format(amount=f'{amount_rub:.0f}'),
-                    url=payment_url, style='success',
+                    url=payment_url,
+                    style='success',
                 )
             ],
             [
                 InlineKeyboardButton(
                     text=texts.t('BACK_BUTTON', 'Назад'),
-                    callback_data='menu_balance', style='danger',
+                    callback_data='menu_balance',
+                    style='danger',
                 )
             ],
         ]

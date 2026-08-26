@@ -182,13 +182,15 @@ async def process_mulenpay_payment_amount(
                             'MULENPAY_PAY_BUTTON',
                             'Оплатить через {mulenpay_name}',
                         ).format(mulenpay_name=mulenpay_name),
-                        url=payment_url, style='success',
+                        url=payment_url,
+                        style='success',
                     )
                 ],
                 [
                     types.InlineKeyboardButton(
                         text=texts.t('CHECK_STATUS_BUTTON', 'Проверить статус'),
-                        callback_data=f'check_mulenpay_{local_payment_id}', style='primary',
+                        callback_data=f'check_mulenpay_{local_payment_id}',
+                        style='primary',
                     )
                 ],
                 [types.InlineKeyboardButton(text=texts.BACK, callback_data='balance_topup', style='danger')],

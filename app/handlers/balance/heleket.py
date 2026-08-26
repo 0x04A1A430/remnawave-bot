@@ -209,11 +209,16 @@ async def process_heleket_payment_amount(
 
     keyboard = types.InlineKeyboardMarkup(
         inline_keyboard=[
-            [types.InlineKeyboardButton(text=texts.t('PAY_WITH_COINS_BUTTON', 'Оплатить'), url=payment_url, style='success')],
+            [
+                types.InlineKeyboardButton(
+                    text=texts.t('PAY_WITH_COINS_BUTTON', 'Оплатить'), url=payment_url, style='success'
+                )
+            ],
             [
                 types.InlineKeyboardButton(
                     text=texts.t('CHECK_STATUS_BUTTON', 'Проверить статус'),
-                    callback_data=f'check_heleket_{result["local_payment_id"]}', style='primary',
+                    callback_data=f'check_heleket_{result["local_payment_id"]}',
+                    style='primary',
                 )
             ],
             [types.InlineKeyboardButton(text=texts.BACK, callback_data='balance_topup', style='danger')],
