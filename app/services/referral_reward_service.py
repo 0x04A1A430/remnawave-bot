@@ -96,6 +96,9 @@ class LevelConfig:
     referee_days: int
     referee_tariff_id: int | None
     max_payments: int
+    # Момент создания правила. Нужен лимиту: «сколько раз ЭТОТ уровень заплатил»
+    # не должно включать начисления, сделанные до того, как уровень появился.
+    created_at: object | None = None
 
     @property
     def money_enabled(self) -> bool:
@@ -177,6 +180,7 @@ class ReferralRewardLevelService:
                     referee_days=int(row.referee_days or 0),
                     referee_tariff_id=row.referee_tariff_id,
                     max_payments=int(row.max_payments or 0),
+                    created_at=row.created_at,
                 )
             if generation == cls._generation:
                 cls._cache = configs
@@ -260,22 +264,31 @@ def _resolve_percent(config: LevelConfig, referrer: User) -> int:
     return max(0, min(100, int(config.referrer_percent)))
 
 
-async def count_level_payments(db: AsyncSession, referrer_id: int, referral_id: int, level: int) -> int:
+async def count_level_payments(db: AsyncSession, referrer_id: int, referral_id: int, level: int, since=None) -> int:
     """Сколько раз этот уровень уже платил за эту пару.
 
     Считаются только денежные строки: лимит ``max_payments`` унаследован от
     ``REFERRAL_MAX_COMMISSION_PAYMENTS`` и всегда означал число оплаченных
     комиссий. Дни ограничиваются собственным ``referrer_days``, а не этим счётчиком.
+
+    ``since`` — момент создания правила уровня, и отсекает он не мелочь. Денежные
+    строки классической схемы бэкфиллены в ``level=1`` и по причине неотличимы от
+    уровневых. Без этой границы установка, год проработавшая на классической
+    схеме, при переключении получала бы лимит, исчерпанный ЗАДОЛГО до того, как
+    админ его задал: он ставит «не больше 5 выплат на реферала» и не получает ни
+    одной. Считается то, что заплатил этот уровень, а не вся история пары.
     """
-    result = await db.execute(
-        select(func.count(ReferralEarning.id)).where(
-            ReferralEarning.user_id == referrer_id,
-            ReferralEarning.referral_id == referral_id,
-            ReferralEarning.level == level,
-            ReferralEarning.reward_type == ReferralRewardType.MONEY.value,
-            ReferralEarning.amount_kopeks > 0,
-        )
+    query = select(func.count(ReferralEarning.id)).where(
+        ReferralEarning.user_id == referrer_id,
+        ReferralEarning.referral_id == referral_id,
+        ReferralEarning.level == level,
+        ReferralEarning.reward_type == ReferralRewardType.MONEY.value,
+        ReferralEarning.amount_kopeks > 0,
     )
+    if since is not None:
+        query = query.where(ReferralEarning.created_at >= since)
+
+    result = await db.execute(query)
     return int(result.scalar() or 0)
 
 
@@ -317,7 +330,7 @@ async def build_reward_components(
                 money += max(0, int(config.referrer_fixed_kopeks))
 
         if money > 0 and config.max_payments > 0:
-            paid = await count_level_payments(db, referrer.id, referee.id, level)
+            paid = await count_level_payments(db, referrer.id, referee.id, level, since=config.created_at)
             if paid >= config.max_payments:
                 logger.info(
                     'Лимит платежей уровня исчерпан, деньги не начисляются',
@@ -1020,3 +1033,39 @@ def format_reward_total(money_kopeks: int, days: int, language: str | None = Non
     if days:
         return f'{settings.format_price(money)} + {days_label}'
     return settings.format_price(money)
+
+
+def legacy_percent_for_import() -> tuple[int, list[str]]:
+    """Процент для переносимого уровня и то, о чём нужно предупредить.
+
+    Общий на два интерфейса: перенос из бота и из кабинета обязан давать один и
+    тот же уровень, иначе результат зависит от того, откуда нажали.
+
+    Классический процент задают ТРИ ключа, а не один. Копировать только
+    ``REFERRAL_COMMISSION_PERCENT`` значит перенести не ту ставку:
+
+    * ``REFERRAL_FIRST_PAYMENT_COMMISSION_PERCENT`` перебивает её на первом
+      платеже — а перенос делается с поводом «первое пополнение», так что именно
+      этот ключ и есть верный источник, когда он задан;
+    * ``REFERRAL_RECURRING_COMMISSION_TIERS`` — лестница ставок по числу платящих
+      рефералов. Одним уровнем она невыразима вовсе, поэтому о ней сообщается
+      прямо: молча потерять ступени хуже, чем не перенести их с предупреждением.
+    """
+    notes: list[str] = []
+
+    percent = settings.REFERRAL_COMMISSION_PERCENT
+    first_payment = settings.REFERRAL_FIRST_PAYMENT_COMMISSION_PERCENT
+    if first_payment is not None:
+        percent = first_payment
+        notes.append(
+            f'Взят процент первого платежа ({first_payment}%), а не общий '
+            f'({settings.REFERRAL_COMMISSION_PERCENT}%) — повод уровня «первое пополнение».'
+        )
+
+    if (settings.REFERRAL_RECURRING_COMMISSION_TIERS or '').strip():
+        notes.append(
+            'Ступени комиссии (REFERRAL_RECURRING_COMMISSION_TIERS) НЕ перенесены: '
+            'у уровня одна ставка, лестницы по числу рефералов в нём нет.'
+        )
+
+    return max(0, min(100, int(percent or 0))), notes

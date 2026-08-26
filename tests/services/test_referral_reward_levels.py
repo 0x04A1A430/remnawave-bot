@@ -85,7 +85,7 @@ def _install_levels(monkeypatch, configs: dict[int, LevelConfig]):
     )
 
 
-async def _no_prior_payments(_db, _referrer_id, _referral_id, _level):
+async def _no_prior_payments(_db, _referrer_id, _referral_id, _level, since=None):
     return 0
 
 
@@ -194,7 +194,7 @@ class TestMoneyPerLevel:
             {1: _level(1, reward_mode='both', referrer_percent=10, referrer_days=7, max_payments=2)},
         )
 
-        async def already_paid(_db, _referrer_id, _referral_id, _level):
+        async def already_paid(_db, _referrer_id, _referral_id, _level, since=None):
             return 2
 
         monkeypatch.setattr(engine, 'count_level_payments', already_paid)
@@ -944,3 +944,60 @@ class TestGeneratedTextIsLocalized:
         monkeypatch.setattr(ReferralRewardLevelService, 'get_all', classmethod(lambda cls, db: fake_all(db)))
         lines = await describe_active_levels(None)
         assert lines and '5 дн.' in lines[0]
+
+
+class TestLegacyImportPercent:
+    """Классический процент задают три ключа, а не один.
+
+    Перенос делается с поводом «первое пополнение», значит верный источник —
+    процент первого платежа, когда он задан. Ступени комиссии уровнем невыразимы
+    вовсе, и молча их потерять хуже, чем сказать об этом.
+    """
+
+    def test_plain_percent_is_taken_when_nothing_overrides_it(self, monkeypatch):
+        from app.services.referral_reward_service import legacy_percent_for_import
+
+        monkeypatch.setattr(settings, 'REFERRAL_COMMISSION_PERCENT', 25)
+        monkeypatch.setattr(settings, 'REFERRAL_FIRST_PAYMENT_COMMISSION_PERCENT', None)
+        monkeypatch.setattr(settings, 'REFERRAL_RECURRING_COMMISSION_TIERS', '')
+
+        percent, notes = legacy_percent_for_import()
+        assert percent == 25
+        assert notes == []
+
+    def test_first_payment_percent_wins_and_is_announced(self, monkeypatch):
+        from app.services.referral_reward_service import legacy_percent_for_import
+
+        monkeypatch.setattr(settings, 'REFERRAL_COMMISSION_PERCENT', 25)
+        monkeypatch.setattr(settings, 'REFERRAL_FIRST_PAYMENT_COMMISSION_PERCENT', 40)
+        monkeypatch.setattr(settings, 'REFERRAL_RECURRING_COMMISSION_TIERS', '')
+
+        percent, notes = legacy_percent_for_import()
+        assert percent == 40, 'повод уровня — первое пополнение, значит и ставка его'
+        assert any('40' in note for note in notes)
+
+    def test_tiers_cannot_be_expressed_and_are_reported(self, monkeypatch):
+        from app.services.referral_reward_service import legacy_percent_for_import
+
+        monkeypatch.setattr(settings, 'REFERRAL_COMMISSION_PERCENT', 25)
+        monkeypatch.setattr(settings, 'REFERRAL_FIRST_PAYMENT_COMMISSION_PERCENT', None)
+        monkeypatch.setattr(settings, 'REFERRAL_RECURRING_COMMISSION_TIERS', '0:10,10:15')
+
+        percent, notes = legacy_percent_for_import()
+        assert percent == 25
+        assert any('TIERS' in note for note in notes), 'потерянные ступени обязаны быть названы'
+
+    def test_both_editors_import_identically(self, monkeypatch):
+        """Результат не должен зависеть от того, откуда нажали кнопку."""
+        import inspect
+
+        from app.cabinet.routes import admin_partners
+        from app.handlers.admin import referral_levels
+
+        for handler in (admin_partners.import_legacy_referral_settings, referral_levels.import_legacy_settings):
+            source = inspect.getsource(handler)
+            assert 'legacy_percent_for_import()' in source
+            # Именно обращение к настройке, а не упоминание её имени в докстринге.
+            assert 'settings.REFERRAL_COMMISSION_PERCENT' not in source, (
+                'ставка обязана браться общим расчётом, иначе два переноса разойдутся'
+            )

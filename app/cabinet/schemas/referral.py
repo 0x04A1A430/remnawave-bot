@@ -153,6 +153,9 @@ class ReferralRewardLevelsResponse(BaseModel):
     max_supported_level: int
     levels: list[ReferralRewardLevelResponse]
     available_tariffs: list[ReferralRewardTariffOption] = []
+    # Что перенос не смог выразить уровнем. Заполняется только ответом на импорт:
+    # молча потерять ступени комиссии хуже, чем не перенести их с предупреждением.
+    import_notes: list[str] = []
 
 
 class ReferralRewardLevelUpdateRequest(BaseModel):

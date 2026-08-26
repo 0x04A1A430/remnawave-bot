@@ -140,3 +140,88 @@ async def test_distinct_referral_id_does_not_count_own_inviter(monkeypatch):
             select(func.count(func.distinct(ReferralEarning.referral_id))).where(ReferralEarning.user_id == REFEREE_ID)
         )
         assert result.scalar() == 1, 'без предиката пригласивший попадает в собственные рефералы'
+
+
+class TestLevelPaymentCap:
+    """Запрос лимита исполняется на реальных строках.
+
+    Все проверки ограничения подменяли ``count_level_payments`` целиком, поэтому
+    сам запрос ни разу не выполнялся: перепутанный фильтр остался бы незамеченным.
+    """
+
+    @staticmethod
+    def _row(**kwargs):
+        base = {
+            'user_id': REFERRER_ID,
+            'referral_id': REFEREE_ID,
+            'amount_kopeks': 10_000,
+            'reason': 'referral_commission_topup',
+            'reward_type': 'money',
+            'level': 1,
+            'days_granted': 0,
+        }
+        base.update(kwargs)
+        return ReferralEarning(**base)
+
+    @pytest.mark.asyncio
+    async def test_counts_only_this_pair_this_level_and_only_money(self, monkeypatch):
+        from app.services.referral_reward_service import count_level_payments
+
+        async with memory_session(monkeypatch, [ReferralEarning.__table__]) as db:
+            db.add_all(
+                [
+                    self._row(),  # считается
+                    self._row(),  # считается
+                    self._row(level=2),  # чужой уровень
+                    self._row(referral_id=99),  # другая пара
+                    self._row(user_id=99),  # другой реферер
+                    self._row(amount_kopeks=0, days_granted=5, reward_type='days'),  # дни
+                    self._row(amount_kopeks=0),  # нулевая сумма
+                ]
+            )
+            await db.commit()
+
+            assert await count_level_payments(db, REFERRER_ID, REFEREE_ID, 1) == 2
+            assert await count_level_payments(db, REFERRER_ID, REFEREE_ID, 2) == 1
+
+    @pytest.mark.asyncio
+    async def test_rows_older_than_the_level_do_not_consume_the_cap(self, monkeypatch):
+        """Начисления классической схемы бэкфиллены в level=1 и по причине неотличимы.
+
+        Без границы по дате установка, год проработавшая на классической схеме,
+        при переключении получала бы лимит, исчерпанный до того, как админ его
+        задал: «не больше 5 выплат на реферала» и ни одной выплаты.
+        """
+        from datetime import UTC, datetime, timedelta
+
+        from app.services.referral_reward_service import count_level_payments
+
+        async with memory_session(monkeypatch, [ReferralEarning.__table__]) as db:
+            level_created = datetime.now(UTC)
+            old = self._row()
+            old.created_at = level_created - timedelta(days=30)
+            fresh = self._row()
+            fresh.created_at = level_created + timedelta(minutes=1)
+            db.add_all([old, fresh])
+            await db.commit()
+
+            assert await count_level_payments(db, REFERRER_ID, REFEREE_ID, 1) == 2
+            assert await count_level_payments(db, REFERRER_ID, REFEREE_ID, 1, since=level_created) == 1
+
+    @pytest.mark.asyncio
+    async def test_reward_type_filter_stands_on_its_own(self, monkeypatch):
+        """Фильтр по типу не должен держаться на том, что у дней сумма нулевая.
+
+        Сегодня ``amount_kopeks > 0`` отсекает дневные строки и сам по себе, но
+        это совпадение двух инвариантов, а не одно правило. Строка с ненулевой
+        суммой и типом ``days`` в проде не появляется — здесь она заведена
+        нарочно, чтобы условие по типу проверялось независимо и не выглядело
+        лишним при следующем рефакторинге.
+        """
+        from app.services.referral_reward_service import count_level_payments
+
+        async with memory_session(monkeypatch, [ReferralEarning.__table__]) as db:
+            db.add_all([self._row(), self._row(reward_type='days', days_granted=5)])
+            await db.commit()
+
+            assert await count_level_payments(db, REFERRER_ID, REFEREE_ID, 1) == 1

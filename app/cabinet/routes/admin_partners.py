@@ -776,19 +776,24 @@ async def import_legacy_referral_settings(
     if await get_reward_level(db, 1) is not None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail='Level 1 already exists')
 
+    from app.services.referral_reward_service import legacy_percent_for_import
+
+    percent, notes = legacy_percent_for_import()
     await upsert_reward_level(
         db,
         1,
         is_active=False,
         reward_mode=ReferralRewardMode.MONEY.value,
         trigger=ReferralRewardTrigger.FIRST_TOPUP.value,
-        referrer_percent=settings.REFERRAL_COMMISSION_PERCENT,
+        referrer_percent=percent,
         referrer_fixed_kopeks=settings.REFERRAL_INVITER_BONUS_KOPEKS or None,
         referee_fixed_kopeks=settings.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS or None,
         max_payments=settings.REFERRAL_MAX_COMMISSION_PAYMENTS,
     )
-    logger.info('Легаси-настройки перенесены в уровень 1 из кабинета', admin_id=admin.id)
-    return await _levels_payload(db)
+    logger.info('Легаси-настройки перенесены в уровень 1 из кабинета', admin_id=admin.id, notes=notes)
+    payload = await _levels_payload(db)
+    payload.import_notes = notes
+    return payload
 
 
 @router.patch('/referral-scheme', response_model=ReferralRewardLevelsResponse)

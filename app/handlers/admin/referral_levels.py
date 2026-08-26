@@ -291,23 +291,28 @@ async def import_legacy_settings(
         await callback.answer('Уровень 1 уже существует', show_alert=True)
         return
 
+    from app.services.referral_reward_service import legacy_percent_for_import
+
+    percent, notes = legacy_percent_for_import()
     await upsert_reward_level(
         db,
         1,
         is_active=False,
         reward_mode=ReferralRewardMode.MONEY.value,
         trigger=ReferralRewardTrigger.FIRST_TOPUP.value,
-        referrer_percent=settings.REFERRAL_COMMISSION_PERCENT,
+        referrer_percent=percent,
         referrer_fixed_kopeks=settings.REFERRAL_INVITER_BONUS_KOPEKS or None,
         referee_fixed_kopeks=settings.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS or None,
         max_payments=settings.REFERRAL_MAX_COMMISSION_PAYMENTS,
     )
-    await callback.answer(
+    message = (
         'Перенесено в уровень 1 (выключен). Повод — первое пополнение: '
         'фиксированные бонусы в классической схеме разовые. Для комиссии с каждого '
-        'пополнения смените повод и уберите фикс. суммы.',
-        show_alert=True,
+        'пополнения смените повод и уберите фикс. суммы.'
     )
+    if notes:
+        message += '\n\n' + '\n'.join(f'⚠️ {note}' for note in notes)
+    await callback.answer(message, show_alert=True)
     await _render_level(callback, db, 1)
 
 
