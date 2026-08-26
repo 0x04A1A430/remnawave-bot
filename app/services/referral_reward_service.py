@@ -722,3 +722,23 @@ async def describe_referee_bonus(db: AsyncSession, *, tariff_names: dict[int, st
             return f'{" + ".join(parts)} {trigger_label}'
 
     return None
+
+
+def format_reward_total(money_kopeks: int, days: int) -> str:
+    """Выплаченное одной строкой: деньги, дни или и то и другое.
+
+    Дни называются отдельно, а не через денежную сумму: на ней считается
+    доступный к выводу баланс, и подмешать в неё дни нельзя. Но и показать
+    «выплачено 0 ₽» на программе, которая платит днями, значит соврать.
+
+    Нулевые деньги при ненулевых днях не печатаются: «0 ₽ + 14 дн.» — это шум,
+    сообщающий об отсутствии того, чего в этой программе и не предполагалось.
+    """
+    money = int(money_kopeks or 0)
+    days = int(days or 0)
+
+    if days and not money:
+        return f'{days} дн.'
+    if days:
+        return f'{settings.format_price(money)} + {days} дн.'
+    return settings.format_price(money)

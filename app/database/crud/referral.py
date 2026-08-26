@@ -169,6 +169,11 @@ async def get_referral_statistics(db: AsyncSession) -> dict:
     referral_paid_result = await db.execute(select(func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0)))
     total_paid = referral_paid_result.scalar()
 
+    # Дни — вторая валюта программы. Без отдельной суммы установка, платящая
+    # только днями, показывает «выплачено 0 ₽» при работающих начислениях.
+    total_days_result = await db.execute(select(func.coalesce(func.sum(ReferralEarning.days_granted), 0)))
+    total_days = total_days_result.scalar()
+
     referrals_stats_result = await db.execute(
         select(User.referred_by_id.label('referrer_id'), func.count(User.id).label('referrals_count'))
         .where(User.referred_by_id.isnot(None))
@@ -180,24 +185,32 @@ async def get_referral_statistics(db: AsyncSession) -> dict:
         select(
             ReferralEarning.user_id.label('referrer_id'),
             func.sum(ReferralEarning.amount_kopeks).label('referral_earnings'),
+            func.sum(ReferralEarning.days_granted).label('referral_days'),
         ).group_by(ReferralEarning.user_id)
     )
-    referral_earnings = {row.referrer_id: row.referral_earnings for row in referral_earnings_result.all()}
+    referral_earnings = {
+        row.referrer_id: (row.referral_earnings, row.referral_days) for row in referral_earnings_result.all()
+    }
 
     top_referrers_data = {}
 
     for referrer_id, count in referrals_stats.items():
         if referrer_id not in top_referrers_data:
-            top_referrers_data[referrer_id] = {'referrals_count': 0, 'total_earned': 0}
+            top_referrers_data[referrer_id] = {'referrals_count': 0, 'total_earned': 0, 'total_days': 0}
         top_referrers_data[referrer_id]['referrals_count'] = count
 
-    for referrer_id, earnings in referral_earnings.items():
+    for referrer_id, (earnings, days) in referral_earnings.items():
         if referrer_id not in top_referrers_data:
-            top_referrers_data[referrer_id] = {'referrals_count': 0, 'total_earned': 0}
+            top_referrers_data[referrer_id] = {'referrals_count': 0, 'total_earned': 0, 'total_days': 0}
         top_referrers_data[referrer_id]['total_earned'] += earnings or 0
+        top_referrers_data[referrer_id]['total_days'] += days or 0
 
+    # Дни участвуют в сортировке: иначе реферер, которому программа платит только
+    # днями, стоит с нулём и выпадает из топа, хотя приглашает больше всех.
     sorted_referrers = sorted(
-        top_referrers_data.items(), key=lambda x: (x[1]['total_earned'], x[1]['referrals_count']), reverse=True
+        top_referrers_data.items(),
+        key=lambda x: (x[1]['total_earned'], x[1]['total_days'], x[1]['referrals_count']),
+        reverse=True,
     )
 
     top_referrers = []
@@ -229,6 +242,7 @@ async def get_referral_statistics(db: AsyncSession) -> dict:
                     'username': user.username,
                     'telegram_id': user.telegram_id,  # Can be None for email users
                     'total_earned_kopeks': stats['total_earned'],
+                    'total_earned_days': stats.get('total_days', 0),
                     'referrals_count': stats['referrals_count'],
                 }
             )
@@ -236,21 +250,47 @@ async def get_referral_statistics(db: AsyncSession) -> dict:
     today = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
 
     today_earnings_result = await db.execute(
-        select(func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0)).where(ReferralEarning.created_at >= today)
+        select(
+            func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0),
+            func.coalesce(func.sum(ReferralEarning.days_granted), 0),
+        ).where(ReferralEarning.created_at >= today)
     )
-    today_earnings = today_earnings_result.scalar()
+    today_earnings, today_days = today_earnings_result.one()
 
     week_ago = datetime.now(UTC) - timedelta(days=7)
     week_earnings_result = await db.execute(
-        select(func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0)).where(ReferralEarning.created_at >= week_ago)
+        select(
+            func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0),
+            func.coalesce(func.sum(ReferralEarning.days_granted), 0),
+        ).where(ReferralEarning.created_at >= week_ago)
     )
-    week_earnings = week_earnings_result.scalar()
+    week_earnings, week_days = week_earnings_result.one()
 
     month_ago = datetime.now(UTC) - timedelta(days=30)
     month_earnings_result = await db.execute(
-        select(func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0)).where(ReferralEarning.created_at >= month_ago)
+        select(
+            func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0),
+            func.coalesce(func.sum(ReferralEarning.days_granted), 0),
+        ).where(ReferralEarning.created_at >= month_ago)
     )
-    month_earnings = month_earnings_result.scalar()
+    month_earnings, month_days = month_earnings_result.one()
+
+    # Разбивка по уровням: главная новая величина многоуровневой схемы. Без неё
+    # админ видит общую сумму и не знает, какую её часть создаёт глубина цепочки.
+    by_level_result = await db.execute(
+        select(
+            ReferralEarning.level,
+            func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0).label('money'),
+            func.coalesce(func.sum(ReferralEarning.days_granted), 0).label('days'),
+            func.count(ReferralEarning.id).label('rows'),
+        )
+        .group_by(ReferralEarning.level)
+        .order_by(ReferralEarning.level.asc())
+    )
+    by_level = [
+        {'level': int(row.level or 1), 'money_kopeks': int(row.money), 'days': int(row.days), 'rows': int(row.rows)}
+        for row in by_level_result.all()
+    ]
 
     logger.info(
         'Реферальная статистика: рефералов, рефереров, выплачено копеек',
@@ -263,9 +303,14 @@ async def get_referral_statistics(db: AsyncSession) -> dict:
         'users_with_referrals': users_with_referrals,
         'active_referrers': active_referrers,
         'total_paid_kopeks': total_paid,
+        'total_paid_days': int(total_days or 0),
         'today_earnings_kopeks': today_earnings,
+        'today_earnings_days': int(today_days or 0),
         'week_earnings_kopeks': week_earnings,
+        'week_earnings_days': int(week_days or 0),
         'month_earnings_kopeks': month_earnings,
+        'month_earnings_days': int(month_days or 0),
+        'by_level': by_level,
         'top_referrers': top_referrers,
     }
 

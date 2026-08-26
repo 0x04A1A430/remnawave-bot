@@ -602,3 +602,95 @@ class TestLevelNotifications:
 
         context = captured['context']
         assert context['formatted_reward'] == context['formatted_bonus']
+
+
+class TestRewardFormatting:
+    @pytest.mark.parametrize(
+        ('money', 'days', 'expected_fragments', 'forbidden'),
+        [
+            (250_00, 0, ['250'], ['дн.']),
+            (0, 14, ['14 дн.'], ['0 ₽']),
+            (250_00, 7, ['250', '7 дн.'], []),
+            (0, 0, ['0'], ['дн.']),
+        ],
+    )
+    def test_reward_total_names_each_currency(self, money, days, expected_fragments, forbidden):
+        """«0 ₽» на программе, платящей днями, — ложь; «0 ₽ + 14 дн.» — шум."""
+        from app.services.referral_reward_service import format_reward_total
+
+        rendered = format_reward_total(money, days)
+        for fragment in expected_fragments:
+            assert fragment in rendered
+        for fragment in forbidden:
+            assert fragment not in rendered
+
+
+class TestProgramDescription:
+    """Описание программы обязано идти из того же источника, что и расчёт."""
+
+    @pytest.mark.asyncio
+    async def test_describes_each_active_level(self, chain, monkeypatch):
+        from app.services.referral_reward_service import describe_active_levels
+
+        configs = {
+            1: _level(1, reward_mode='both', trigger='every_topup', referrer_percent=10, referrer_days=3),
+            2: _level(2, referrer_percent=5, trigger='first_topup'),
+            3: _level(3, is_active=False, referrer_percent=99),
+        }
+
+        async def fake_all(_db):
+            return configs
+
+        monkeypatch.setattr(ReferralRewardLevelService, 'get_all', classmethod(lambda cls, db: fake_all(db)))
+
+        lines = await describe_active_levels(None, tariff_names={})
+        assert len(lines) == 2, 'выключенный уровень описывать нельзя — он не платит'
+        assert '10%' in lines[0] and '3 дн.' in lines[0]
+        assert 'с каждого пополнения' in lines[0]
+        assert 'за первое пополнение' in lines[1]
+
+    @pytest.mark.asyncio
+    async def test_names_the_tariff_days_land_in(self, chain, monkeypatch):
+        """«7 дн. подписки» без тарифа умалчивает ровно то, что настроил админ."""
+        from app.services.referral_reward_service import describe_active_levels
+
+        configs = {1: _level(1, reward_mode='days', referrer_days=7, referrer_tariff_id=42)}
+
+        async def fake_all(_db):
+            return configs
+
+        monkeypatch.setattr(ReferralRewardLevelService, 'get_all', classmethod(lambda cls, db: fake_all(db)))
+
+        lines = await describe_active_levels(None, tariff_names={42: 'Про'})
+        assert 'Про' in lines[0]
+
+    @pytest.mark.asyncio
+    async def test_referee_bonus_taken_from_first_matching_level(self, chain, monkeypatch):
+        """Приглашённому платят один раз — описание обязано говорить то же самое."""
+        from app.services.referral_reward_service import describe_referee_bonus
+
+        configs = {
+            1: _level(1, referee_fixed_kopeks=100_00),
+            2: _level(2, referee_fixed_kopeks=999_00),
+        }
+
+        async def fake_all(_db):
+            return configs
+
+        monkeypatch.setattr(ReferralRewardLevelService, 'get_all', classmethod(lambda cls, db: fake_all(db)))
+
+        described = await describe_referee_bonus(None, tariff_names={})
+        assert '100' in described
+        assert '999' not in described
+
+    @pytest.mark.asyncio
+    async def test_nothing_configured_describes_nothing(self, chain, monkeypatch):
+        from app.services.referral_reward_service import describe_active_levels, describe_referee_bonus
+
+        async def fake_all(_db):
+            return {}
+
+        monkeypatch.setattr(ReferralRewardLevelService, 'get_all', classmethod(lambda cls, db: fake_all(db)))
+
+        assert await describe_active_levels(None) == []
+        assert await describe_referee_bonus(None) is None
