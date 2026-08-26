@@ -321,6 +321,15 @@ class NotificationDeliveryService:
             TelegramServerError,
         )
 
+        # В rich-режиме уведомление отправляется тем же полотном, что и меню, — иначе
+        # оно выбивается из общего вида. Ровно одна попытка: любой отказ (включая
+        # разметку, которую rich не воспроизводит дословно) отдаёт False, и ниже
+        # отрабатывает классический путь со своими ретраями, учётом и метриками.
+        from app.utils.rich_notify import try_send_rich_notification
+
+        if await try_send_rich_notification(bot, user.telegram_id, message, keyboard=markup):
+            return True
+
         # Retry transient Telegram-side ошибки (network/5xx/flood) с экспоненциальным
         # бэк-оффом. До этого ConnectionReset уходил в `except Exception` и логировался
         # как ERROR → летел в админ-чат через TelegramNotifierProcessor каждый раз,

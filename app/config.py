@@ -1062,6 +1062,9 @@ class Settings(BaseSettings):
     # Bot API 10.3: кнопки живут внутри полотна rich-сообщения (<tg-button-row>),
     # а не отдельной клавиатурой под ним. Клавиатура при этом не дублируется.
     MAIN_MENU_RICH_INLINE_BUTTONS: bool = False
+    # Пользовательские уведомления rich-сообщением. Действует только при
+    # включённом rich-меню: иначе сервер про rich может не знать вовсе.
+    USER_NOTIFICATIONS_RICH_ENABLED: bool = True
     # Публичный HTTPS-URL картинки-логотипа в шапке rich-меню. Пусто — авто-режим:
     # при заданном WEBHOOK_URL и существующем LOGO_FILE логотип отдаётся своим
     # эндпоинтом {origin WEBHOOK_URL}/cabinet/branding/bot-logo. Если Telegram не

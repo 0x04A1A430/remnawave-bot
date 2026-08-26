@@ -413,6 +413,7 @@ class BotConfigurationService:
         'MAIN_MENU_RICH_LOGO_URL': 'INTERFACE',
         'MAIN_MENU_RICH_SUBSCRIPTIONS_COLLAPSIBLE': 'INTERFACE',
         'MAIN_MENU_RICH_INLINE_BUTTONS': 'INTERFACE',
+        'USER_NOTIFICATIONS_RICH_ENABLED': 'INTERFACE',
         'USER_ACTION_LOG_ENABLED': 'MONITORING',
         'USER_ACTION_LOG_RETENTION_DAYS': 'MONITORING',
         'CABINET_BUTTON_STYLE': 'INTERFACE',
@@ -789,6 +790,21 @@ class BotConfigurationService:
                 'сообщения целиком остаётся под ним: половина кнопок внутри — это потерянные кнопки.'
             ),
             'dependencies': 'MAIN_MENU_RICH_ENABLED, ADMIN_NOTIFICATIONS_RICH_ENABLED',
+        },
+        'USER_NOTIFICATIONS_RICH_ENABLED': {
+            'description': (
+                'Отправлять пользовательские уведомления (истечение подписки, автоплатёж, баланс, '
+                'рефералы, выплаты) rich-сообщением, как главное меню, а не обычным текстом. '
+                'Кнопки переезжают внутрь полотна, если включено MAIN_MENU_RICH_INLINE_BUTTONS.'
+            ),
+            'format': 'Булево значение.',
+            'example': 'true',
+            'warning': (
+                'Действует только при MAIN_MENU_RICH_ENABLED. Уведомления со сложной разметкой '
+                '(цитаты, списки, блоки кода) и уведомления мониторинга с логотипом уходят '
+                'классическим сообщением: rich-разметка их не воспроизводит дословно.'
+            ),
+            'dependencies': 'MAIN_MENU_RICH_ENABLED, MAIN_MENU_RICH_INLINE_BUTTONS',
         },
         'USER_ACTION_LOG_ENABLED': {
             'description': (
