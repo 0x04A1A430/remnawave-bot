@@ -6,7 +6,7 @@ readme = 'README.md'
 license = { text = 'MIT' }
 requires-python = '==3.13.*'
 dependencies = [
-    "aiogram>=3.29.1",
+    "aiogram>=3.31.0",
     'sqlalchemy>=2.0.46',
     # Нужен асинхронному SQLAlchemy. Сам он тянет greenlet по маркеру
     # platform_machine, где есть aarch64, но НЕТ arm64 — на Apple Silicon пакет

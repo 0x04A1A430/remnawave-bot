@@ -693,6 +693,15 @@ async def try_send_rich_main_menu(
     except TelegramNetworkError as error:
         logger.warning('Сетевая ошибка при отправке rich-меню', error=str(error), chat_id=chat_id)
         return False
+    except Exception:
+        # Всё, что не является ошибкой Telegram API, тоже не должно ронять хендлер.
+        # Свежий сервер может вернуть тип rich-блока, которого установленная aiogram
+        # ещё не знает: строгий discriminated union RichBlock отвергает его, aiogram
+        # оборачивает это в ClientDecodeError, а он наследуется от AiogramError, а НЕ
+        # от TelegramAPIError — то есть пролетает мимо всех except выше. Сообщение при
+        # этом уже доставлено, но пользователь не увидел бы ни rich, ни классики.
+        logger.exception('Непредвиденная ошибка rich-меню, фоллбек на классику', chat_id=chat_id)
+        return False
 
 
 async def try_answer_rich_main_menu(
@@ -806,4 +815,13 @@ async def try_edit_rich_main_menu(
         return False
     except TelegramNetworkError as error:
         logger.warning('Сетевая ошибка при показе rich-меню', error=str(error), chat_id=chat_id)
+        return False
+    except Exception:
+        # Всё, что не является ошибкой Telegram API, тоже не должно ронять хендлер.
+        # Свежий сервер может вернуть тип rich-блока, которого установленная aiogram
+        # ещё не знает: строгий discriminated union RichBlock отвергает его, aiogram
+        # оборачивает это в ClientDecodeError, а он наследуется от AiogramError, а НЕ
+        # от TelegramAPIError — то есть пролетает мимо всех except выше. Сообщение при
+        # этом уже доставлено, но пользователь не увидел бы ни rich, ни классики.
+        logger.exception('Непредвиденная ошибка rich-меню, фоллбек на классику', chat_id=chat_id)
         return False

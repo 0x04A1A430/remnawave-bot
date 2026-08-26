@@ -1305,3 +1305,46 @@ async def test_far_future_end_date_in_single_block_renders_without_tg_time(monke
     assert '<tg-time' not in html_out
     # Строка «истекает …» осталась — с текстом остатка дней вместо tg-time
     assert 'осталось' in html_out
+
+
+async def test_try_send_decode_error_falls_back_to_classic(monkeypatch):
+    """ClientDecodeError не наследуется от TelegramAPIError и пролетал мимо всех except.
+
+    Свежий сервер может вернуть тип rich-блока, которого установленная aiogram ещё не
+    знает: строгий discriminated union RichBlock отвергает его при разборе ОТВЕТА.
+    Сообщение при этом уже доставлено, а хендлер падал — пользователь не видел ни
+    rich-меню, ни классического фоллбека, и флаг недоступности не взводился.
+    """
+    from aiogram.exceptions import ClientDecodeError
+
+    async def fake_build(user, texts, db):
+        return '<p>menu</p>'
+
+    monkeypatch.setattr(rich_menu, 'build_main_menu_rich_html', fake_build)
+
+    bot = AsyncMock()
+    bot.send_rich_message.side_effect = ClientDecodeError('Failed to decode object', ValueError('unknown block'), '{}')
+
+    sent = await rich_menu.try_send_rich_main_menu(bot, 1, _make_user(None), DummyTexts(), AsyncMock(), MagicMock())
+
+    assert sent is False
+    # Ошибка разбора ответа — не признак «сервер не умеет rich», rich остаётся включённым.
+    assert rich_menu.is_rich_menu_enabled() is True
+
+
+async def test_try_edit_decode_error_falls_back_to_classic(monkeypatch):
+    from aiogram.exceptions import ClientDecodeError
+
+    async def fake_build(user, texts, db):
+        return '<p>menu</p>'
+
+    monkeypatch.setattr(rich_menu, 'build_main_menu_rich_html', fake_build)
+
+    callback = _make_callback()
+    callback.bot.side_effect = ClientDecodeError('Failed to decode object', ValueError('unknown block'), '{}')
+
+    edited = await rich_menu.try_edit_rich_main_menu(
+        callback, _make_user(None), DummyTexts(), AsyncMock(), _make_keyboard()
+    )
+
+    assert edited is False
