@@ -18,6 +18,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import html
 import re
 
 import structlog
@@ -31,7 +33,12 @@ from app.config import settings
 # а не наше — держим его в одном месте, чтобы значения не разъехались.
 from app.utils.rich_admin import RICH_TEXT_LIMIT
 from app.utils.rich_buttons import render_keyboard_as_rich_html
-from app.utils.rich_menu import is_rich_menu_enabled
+from app.utils.rich_menu import (
+    _is_media_fetch_error,
+    _mark_logo_unavailable_once,
+    _resolve_rich_logo_url,
+    is_rich_menu_enabled,
+)
 
 
 logger = structlog.get_logger(__name__)
@@ -72,18 +79,35 @@ async def try_send_rich_notification(
     text: str,
     *,
     keyboard: InlineKeyboardMarkup | None = None,
+    with_logo: bool = False,
+    timeout: float | None = None,
 ) -> bool:
     """Шлёт уведомление rich-сообщением. ``False`` — отправить классическое.
 
     Без ретраев: их делает классический путь, на который вызывающий обязан
     откатиться при ``False``. Уведомления уходят в личный чат, поэтому Mini App
     среди переносимых кнопок допустим.
+
+    ``with_logo`` вставляет шапку с логотипом тем же способом, что и rich-меню:
+    публичной ссылкой в ``<img>``, а не загрузкой файла. Так уведомления
+    мониторинга не теряют логотип при переходе на rich.
+
+    ``timeout`` ограничивает ОДНУ попытку. Он обязателен там, где отправка идёт
+    по списку получателей: без него залипший запрос держит await до таймаута
+    сессии и блокирует хвост цикла.
     """
     if not settings.USER_NOTIFICATIONS_RICH_ENABLED or not is_rich_menu_enabled():
         return False
 
     rich_html = build_notification_rich_html(text)
-    if rich_html is None or len(rich_html) > RICH_TEXT_LIMIT:
+    if rich_html is None:
+        return False
+
+    logo_url = _resolve_rich_logo_url() if with_logo else ''
+    if logo_url:
+        rich_html = f'<img src="{html.escape(logo_url, quote=True)}"/>{rich_html}'
+
+    if len(rich_html) > RICH_TEXT_LIMIT:
         return False
 
     reply_markup = keyboard
@@ -101,13 +125,28 @@ async def try_send_rich_notification(
         kwargs['reply_markup'] = reply_markup
 
     try:
-        await bot.send_rich_message(**kwargs)
+        if timeout is not None:
+            await asyncio.wait_for(bot.send_rich_message(**kwargs), timeout=timeout)
+        else:
+            await bot.send_rich_message(**kwargs)
         return True
+    except TimeoutError:
+        # Пробрасываем наверх: вызывающий по списку получателей сам решает,
+        # пропустить получателя или пробовать классику — повторная попытка с тем
+        # же таймаутом удвоила бы бюджет цикла.
+        raise
     except TelegramForbiddenError:
         # Пользователь заблокировал бота — классика упрётся в то же самое, но
         # пусть отработает её штатная обработка (там свой учёт и метрики).
         return False
     except (TelegramNotFound, TelegramBadRequest) as error:
+        if logo_url and _is_media_fetch_error(error):
+            # Логотип не скачался — единственный повтор уже без него, флаг взводится
+            # глобально, как в rich-меню, чтобы не долбить недоступную ссылку.
+            _mark_logo_unavailable_once(error)
+            return await try_send_rich_notification(
+                bot, chat_id, text, keyboard=keyboard, with_logo=False, timeout=timeout
+            )
         logger.warning('Rich-уведомление не отправлено, фоллбек на классику', error=str(error), chat_id=chat_id)
         return False
     except Exception as error:

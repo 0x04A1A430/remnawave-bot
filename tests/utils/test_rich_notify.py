@@ -185,3 +185,96 @@ class TestDeliveryIntegration:
         assert ok is True
         bot.send_message.assert_awaited_once()
         assert bot.send_message.await_args.kwargs['parse_mode'] == 'HTML'
+
+
+class TestLogoAndTimeout:
+    """Логотип и бюджет времени — две вещи, которые легко потерять на этом пути."""
+
+    async def test_logo_is_embedded_as_image_header(self, monkeypatch):
+        monkeypatch.setattr(rich_notify, '_resolve_rich_logo_url', lambda: 'https://cdn.example/logo.png')
+        bot = AsyncMock()
+
+        await try_send_rich_notification(bot, 42, 'текст', with_logo=True)
+
+        html = bot.send_rich_message.await_args.kwargs['rich_message'].html
+        assert html.startswith('<img src="https://cdn.example/logo.png"/>')
+
+    async def test_logo_absent_when_not_requested(self, monkeypatch):
+        monkeypatch.setattr(rich_notify, '_resolve_rich_logo_url', lambda: 'https://cdn.example/logo.png')
+        bot = AsyncMock()
+
+        await try_send_rich_notification(bot, 42, 'текст', with_logo=False)
+
+        assert '<img' not in bot.send_rich_message.await_args.kwargs['rich_message'].html
+
+    async def test_undownloadable_logo_retries_once_without_it(self, monkeypatch):
+        """Ровно как в rich-меню: картинку не скачали — шлём то же самое без шапки."""
+        monkeypatch.setattr(rich_notify, '_resolve_rich_logo_url', lambda: 'https://cdn.example/logo.png')
+        monkeypatch.setattr(rich_notify, '_is_media_fetch_error', lambda error: True)
+        monkeypatch.setattr(rich_notify, '_mark_logo_unavailable_once', lambda error: True)
+
+        bot = AsyncMock()
+        bot.send_rich_message.side_effect = [
+            TelegramBadRequest(method=None, message='failed to get HTTP URL content'),
+            None,
+        ]
+
+        sent = await try_send_rich_notification(bot, 42, 'текст', with_logo=True)
+
+        assert sent is True
+        assert bot.send_rich_message.await_count == 2
+        assert '<img' not in bot.send_rich_message.await_args.kwargs['rich_message'].html
+
+    async def test_timeout_propagates_instead_of_retrying(self, monkeypatch):
+        """Повтор с тем же таймаутом удвоил бы бюджет цикла на получателя."""
+        import asyncio
+
+        async def never_returns(**_kwargs):
+            await asyncio.sleep(10)
+
+        bot = AsyncMock()
+        bot.send_rich_message = never_returns
+
+        with pytest.raises(TimeoutError):
+            await try_send_rich_notification(bot, 42, 'текст', timeout=0.01)
+
+
+class TestMonitoringIntegration:
+    @staticmethod
+    def _service():
+        from app.services.monitoring_service import MonitoringService
+
+        service = MonitoringService.__new__(MonitoringService)
+        service.bot = AsyncMock()
+        return service
+
+    async def test_rich_success_skips_photo_and_text(self, monkeypatch):
+        service = self._service()
+        monkeypatch.setattr('app.services.monitoring_service.try_send_rich_notification', AsyncMock(return_value=True))
+
+        await service._send_message_with_logo(42, 'текст')
+
+        service.bot.send_photo.assert_not_awaited()
+        service.bot.send_message.assert_not_awaited()
+
+    async def test_rich_refusal_falls_through_to_classic(self, monkeypatch):
+        service = self._service()
+        monkeypatch.setattr('app.services.monitoring_service.try_send_rich_notification', AsyncMock(return_value=False))
+        monkeypatch.setattr(settings, 'ENABLE_LOGO_MODE', False, raising=False)
+
+        await service._send_message_with_logo(42, 'текст')
+
+        service.bot.send_message.assert_awaited_once()
+
+    async def test_rich_timeout_skips_recipient_without_second_attempt(self, monkeypatch):
+        """Бюджет на получателя должен остаться одинарным."""
+        service = self._service()
+        monkeypatch.setattr(
+            'app.services.monitoring_service.try_send_rich_notification', AsyncMock(side_effect=TimeoutError)
+        )
+
+        result = await service._send_message_with_logo(42, 'текст')
+
+        assert result is None
+        service.bot.send_photo.assert_not_awaited()
+        service.bot.send_message.assert_not_awaited()
