@@ -96,6 +96,7 @@ async def cleanup_stale_rich_menu(bot: Bot, chat_id: int) -> None:
     except (TelegramBadRequest, TelegramForbiddenError, TelegramNotFound):
         pass
 
+
 # Telegram не смог скачать логотип по URL (нет публичного доступа, битый файл) —
 # дальше собираем меню без логотипа, не роняя rich-рендер в классику.
 _logo_unavailable = False
