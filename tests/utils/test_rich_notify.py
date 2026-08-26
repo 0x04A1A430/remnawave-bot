@@ -26,19 +26,45 @@ def _enable_rich(monkeypatch):
 
 
 class TestBuildHtml:
-    def test_single_newline_becomes_br(self):
-        assert build_notification_rich_html('первая\nвторая') == '<p>первая<br>вторая</p>'
+    def test_first_line_becomes_heading_like_in_the_menu(self):
+        """Стиль меню: заголовок в <h4>, под ним разделитель, дальше содержимое."""
+        html = build_notification_rich_html('⚠️ Подписка истекает\n\nОсталось 3 дня')
 
-    def test_blank_line_starts_new_paragraph(self):
-        html = build_notification_rich_html('заголовок\n\nтело')
+        assert html == '<h4>⚠️ Подписка истекает</h4><hr/><p>Осталось 3 дня</p>'
 
-        assert html == '<p>заголовок</p><p>тело</p>'
+    def test_single_newline_inside_body_becomes_br(self):
+        html = build_notification_rich_html('Заголовок\nпервая\nвторая')
+
+        assert html == '<h4>Заголовок</h4><hr/><p>первая<br>вторая</p>'
+
+    def test_lone_line_stays_paragraph_without_heading(self):
+        """Заголовок без содержимого под ним — это уже не заголовок."""
+        assert build_notification_rich_html('Баланс пополнен') == '<p>Баланс пополнен</p>'
+
+    def test_long_first_line_is_not_turned_into_heading(self):
+        long_line = 'Э' * 120
+
+        html = build_notification_rich_html(f'{long_line}\nвторая')
+
+        assert '<h4>' not in html
+        assert html.startswith('<p>')
+
+    def test_heading_length_counts_text_not_markup(self):
+        """Разметка не должна съедать лимит: <b> — это ноль видимых символов."""
+        html = build_notification_rich_html('<b>Короткий заголовок</b>\nтело')
+
+        assert html.startswith('<h4><b>Короткий заголовок</b></h4>')
 
     def test_several_blank_lines_do_not_make_empty_paragraphs(self):
-        html = build_notification_rich_html('а\n\n\n\nб')
+        html = build_notification_rich_html('Заголовок\n\nа\n\n\n\nб')
 
-        assert html == '<p>а</p><p>б</p>'
+        assert html == '<h4>Заголовок</h4><hr/><p>а</p><p>б</p>'
         assert '<p></p>' not in html
+
+    def test_logo_leads_the_message_like_in_the_menu(self):
+        html = build_notification_rich_html('Заголовок\nтело', logo_url='https://cdn.example/logo.png')
+
+        assert html.startswith('<img src="https://cdn.example/logo.png"/><h4>Заголовок</h4><hr/>')
 
     def test_inline_markup_survives(self):
         html = build_notification_rich_html('<b>Подписка</b> истекает <a href="https://t.me">тут</a>')
@@ -77,7 +103,7 @@ class TestSend:
 
         assert sent is True
         html = bot.send_rich_message.await_args.kwargs['rich_message'].html
-        assert html == '<p>Подписка истекает</p><p>Продлите её</p>'
+        assert html == '<h4>Подписка истекает</h4><hr/><p>Продлите её</p>'
 
     async def test_disabled_setting_falls_back(self, monkeypatch):
         monkeypatch.setattr(settings, 'USER_NOTIFICATIONS_RICH_ENABLED', False, raising=False)
@@ -278,3 +304,69 @@ class TestMonitoringIntegration:
         assert result is None
         service.bot.send_photo.assert_not_awaited()
         service.bot.send_message.assert_not_awaited()
+
+
+class TestBroadcastIntegration:
+    """Рассылка — тоже клиентское уведомление, но с медиа rich не работает."""
+
+    @staticmethod
+    def _service():
+        from app.services.broadcast_service import BroadcastService
+
+        service = BroadcastService()
+        service.set_bot(AsyncMock())
+        return service
+
+    @staticmethod
+    def _config(media=None):
+        from app.services.broadcast_service import BroadcastConfig
+
+        return BroadcastConfig(target='all', message_text='Новость\nподробности', selected_buttons=[], media=media)
+
+    async def test_text_broadcast_goes_rich(self, monkeypatch):
+        service = self._service()
+        rich = AsyncMock(return_value=True)
+        monkeypatch.setattr('app.utils.rich_notify.try_send_rich_notification', rich)
+
+        await service._deliver_message(42, self._config(), None)
+
+        rich.assert_awaited_once()
+        service._bot.send_message.assert_not_awaited()
+
+    async def test_rich_refusal_falls_back_to_plain_send(self, monkeypatch):
+        service = self._service()
+        monkeypatch.setattr('app.utils.rich_notify.try_send_rich_notification', AsyncMock(return_value=False))
+
+        await service._deliver_message(42, self._config(), None)
+
+        service._bot.send_message.assert_awaited_once()
+
+    async def test_media_broadcast_never_touches_rich(self, monkeypatch):
+        """Загруженный по file_id файл rich-сообщение не несёт."""
+        from app.services.broadcast_service import BroadcastMediaConfig
+
+        service = self._service()
+        rich = AsyncMock(return_value=True)
+        monkeypatch.setattr('app.utils.rich_notify.try_send_rich_notification', rich)
+        config = self._config(media=BroadcastMediaConfig(type='photo', file_id='abc', caption='подпись'))
+
+        await service._deliver_message(42, config, None)
+
+        rich.assert_not_awaited()
+        service._bot.send_photo.assert_awaited_once()
+
+
+class TestUnsupportedServer:
+    async def test_unsupported_rich_is_disabled_globally(self, monkeypatch):
+        """Иначе рассылка на тысячи получателей удвоила бы число запросов."""
+        marked: list[Exception] = []
+        monkeypatch.setattr(rich_notify, '_looks_like_unsupported', lambda error: True)
+        monkeypatch.setattr(rich_notify, '_mark_rich_unavailable', lambda error: marked.append(error))
+
+        bot = AsyncMock()
+        bot.send_rich_message.side_effect = TelegramBadRequest(method=None, message='METHOD_NOT_FOUND')
+
+        sent = await try_send_rich_notification(bot, 42, 'Заголовок\nтело')
+
+        assert sent is False
+        assert len(marked) == 1

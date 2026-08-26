@@ -327,7 +327,9 @@ class NotificationDeliveryService:
         # отрабатывает классический путь со своими ретраями, учётом и метриками.
         from app.utils.rich_notify import try_send_rich_notification
 
-        if await try_send_rich_notification(bot, user.telegram_id, message, keyboard=markup):
+        if await try_send_rich_notification(
+            bot, user.telegram_id, message, keyboard=markup, with_logo=settings.ENABLE_LOGO_MODE
+        ):
             return True
 
         # Retry transient Telegram-side ошибки (network/5xx/flood) с экспоненциальным

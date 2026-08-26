@@ -35,7 +35,9 @@ from app.utils.rich_admin import RICH_TEXT_LIMIT
 from app.utils.rich_buttons import render_keyboard_as_rich_html
 from app.utils.rich_menu import (
     _is_media_fetch_error,
+    _looks_like_unsupported,
     _mark_logo_unavailable_once,
+    _mark_rich_unavailable,
     _resolve_rich_logo_url,
     is_rich_menu_enabled,
 )
@@ -53,10 +55,35 @@ _SPOILER_SPAN_RE = re.compile(
     re.IGNORECASE | re.DOTALL,
 )
 _BLANK_LINE_RE = re.compile(r'\n\s*\n+')
+_TAG_RE = re.compile(r'<[^>]+>')
+
+# Первая строка уведомления почти всегда служит заголовком («⚠️ <b>Подписка
+# истекает</b>»), и в стиле меню ей место в <h4>. Но если строка длинная, это уже
+# не заголовок, а первый абзац текста — делать из него огромный заголовок хуже,
+# чем оставить абзацем.
+_TITLE_MAX_LENGTH = 80
 
 
-def build_notification_rich_html(text: str) -> str | None:
-    """Классический HTML уведомления → rich-разметка. ``None`` — переносить нельзя."""
+def _visible_length(value: str) -> int:
+    """Длина без учёта разметки: <b>Тариф</b> — это пять символов, а не двенадцать."""
+    return len(_TAG_RE.sub('', value).strip())
+
+
+def _paragraphs_html(lines: list[str]) -> list[str]:
+    """Строки → абзацы: пустая строка разделяет, одиночный перенос даёт <br>."""
+    chunks = [chunk.strip('\n') for chunk in _BLANK_LINE_RE.split('\n'.join(lines))]
+    return [f'<p>{chunk.replace(chr(10), "<br>")}</p>' for chunk in chunks if chunk.strip()]
+
+
+def build_notification_rich_html(text: str, *, logo_url: str = '') -> str | None:
+    """Текст уведомления → rich-разметка в стиле главного меню.
+
+    Повторяет визуальный язык ``build_main_menu_rich_html``: шапка с логотипом,
+    заголовок в ``<h4>``, ``<hr/>`` под ним и абзацы содержимого. Так уведомление
+    выглядит частью того же интерфейса, а не чужеродным текстом.
+
+    ``None`` — превратить в rich нельзя, вызывающий шлёт классическое сообщение.
+    """
     if not text or not text.strip():
         return None
 
@@ -64,13 +91,31 @@ def build_notification_rich_html(text: str) -> str | None:
         return None
 
     value = _SPOILER_SPAN_RE.sub(r'<tg-spoiler>\2</tg-spoiler>', text)
+    lines = value.split('\n')
 
-    paragraphs = [chunk.strip('\n') for chunk in _BLANK_LINE_RE.split(value)]
-    rendered = [f'<p>{chunk.replace(chr(10), "<br>")}</p>' for chunk in paragraphs if chunk.strip()]
-    if not rendered:
+    blocks: list[str] = []
+    if logo_url:
+        blocks.append(f'<img src="{html.escape(logo_url, quote=True)}"/>')
+
+    # Заголовок отделяем, только если под ним реально есть содержимое: иначе
+    # однострочное уведомление превратилось бы в заголовок без текста.
+    first_index = next((i for i, line in enumerate(lines) if line.strip()), None)
+    if first_index is None:
         return None
 
-    return ''.join(rendered)
+    title = lines[first_index].strip()
+    rest = lines[first_index + 1 :]
+    if _visible_length(title) <= _TITLE_MAX_LENGTH and any(line.strip() for line in rest):
+        blocks.append(f'<h4>{title}</h4>')
+        blocks.append('<hr/>')
+        blocks.extend(_paragraphs_html(rest))
+    else:
+        blocks.extend(_paragraphs_html(lines[first_index:]))
+
+    if not any(block.startswith(('<h4>', '<p>')) for block in blocks):
+        return None
+
+    return ''.join(blocks)
 
 
 async def try_send_rich_notification(
@@ -99,15 +144,9 @@ async def try_send_rich_notification(
     if not settings.USER_NOTIFICATIONS_RICH_ENABLED or not is_rich_menu_enabled():
         return False
 
-    rich_html = build_notification_rich_html(text)
-    if rich_html is None:
-        return False
-
     logo_url = _resolve_rich_logo_url() if with_logo else ''
-    if logo_url:
-        rich_html = f'<img src="{html.escape(logo_url, quote=True)}"/>{rich_html}'
-
-    if len(rich_html) > RICH_TEXT_LIMIT:
+    rich_html = build_notification_rich_html(text, logo_url=logo_url)
+    if rich_html is None or len(rich_html) > RICH_TEXT_LIMIT:
         return False
 
     reply_markup = keyboard
@@ -147,6 +186,12 @@ async def try_send_rich_notification(
             return await try_send_rich_notification(
                 bot, chat_id, text, keyboard=keyboard, with_logo=False, timeout=timeout
             )
+        if _looks_like_unsupported(error):
+            # Сервер не знает про rich — гасим его глобально тем же флагом, что и меню.
+            # Без этого рассылка на тысячи получателей удвоила бы число запросов:
+            # каждому сначала неудачный rich, потом классика.
+            _mark_rich_unavailable(error)
+            return False
         logger.warning('Rich-уведомление не отправлено, фоллбек на классику', error=str(error), chat_id=chat_id)
         return False
     except Exception as error:
