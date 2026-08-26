@@ -1483,6 +1483,7 @@
   "REFERRAL_REWARD_NEW_USER_LEVELS": "• Новый пользователь получает: <b>{bonus}</b>",
   "REFERRAL_INFO": "\n🤝 <b>Реферальная программа</b>\n\n👥 <b>Приглашено:</b> {referrals_count} друзей\n💰 <b>Заработано:</b> {earned_amount}\n\n🔗 <b>Ваша реферальная ссылка:</b>\n<code>{referral_link}</code>\n\n🎫 <b>Ваш промокод:</b>\n<code>{referral_code}</code>\n\n💰 <b>Условия:</b>\n• За каждого друга: {registration_bonus}\n• Процент с пополнений: {commission_percent}%\n",
   "REFERRAL_INVITE_BONUS": "💎 При первом пополнении от {minimum} ты получишь {bonus} бонусом на баланс!",
+  "REFERRAL_INVITE_BONUS_LEVELS": "💎 Твой бонус за регистрацию по ссылке: {bonus}",
   "REFERRAL_INVITE_CREATED_INSTRUCTION": "Нажмите на текст ниже, чтобы скопировать:",
   "REFERRAL_INVITE_CREATED_TITLE": "📝 <b>Приглашение создано!</b>",
   "REFERRAL_INVITE_FEATURE_FAST": "🚀 Быстрое подключение",

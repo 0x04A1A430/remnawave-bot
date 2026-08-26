@@ -190,3 +190,121 @@ class TestMergeChainRepair:
         db = SimpleNamespace(execute=fake_execute)
         assert await merge._break_referral_cycle_through(db, primary) is False
         assert primary.referred_by_id == 7
+
+
+class TestAsyncSessionHazards:
+    """Ловушки async-сессии, каждая из которых теряет уже выданную награду."""
+
+    @pytest.mark.asyncio
+    async def test_tariff_name_never_touches_the_relationship(self):
+        """subscription.tariff у только что найденной подписки не загружен.
+
+        Обращение к связи — неявный запрос: в async-сессии это MissingGreenlet,
+        и дни оказываются выданы, а строка ledger'а уже не записана.
+        """
+        import ast
+        import inspect
+
+        from app.services.referral_reward_service import grant_reward_days
+
+        tree = ast.parse(inspect.getsource(grant_reward_days).lstrip())
+        touches = [
+            node
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Attribute)
+            and node.attr == 'tariff'
+            and isinstance(node.value, ast.Name)
+            and node.value.id == 'subscription'
+        ]
+        assert not touches, 'название тарифа обязано резолвиться запросом по tariff_id'
+
+        # То же самое, но через getattr — обход проверки выше.
+        source = inspect.getsource(grant_reward_days)
+        assert "getattr(subscription, 'tariff'" not in source
+
+    @pytest.mark.asyncio
+    async def test_recipient_is_reloaded_per_component(self):
+        """Неудачный add_user_balance делает rollback, а он истекает ВСЕ объекты сессии.
+
+        Держать полученного до отката пользователя и читать его поля дальше — тот
+        же MissingGreenlet, только уже в уведомлении.
+        """
+        import inspect
+
+        from app.services.referral_reward_service import _grant_one
+
+        source = inspect.getsource(_grant_one)
+        assert 'await get_user_by_id(db, component.recipient_id)' in source
+
+
+class TestCacheGeneration:
+    @pytest.mark.asyncio
+    async def test_invalidation_during_load_is_not_overwritten(self, monkeypatch):
+        """Сброс кэша, случившийся ПОКА идёт чтение, не должен затираться результатом.
+
+        Иначе в кэше навсегда останется снимок, сделанный до правки: админ видит
+        новое правило, а начисления идут по старому до перезапуска.
+        """
+        ReferralRewardLevelService.invalidate_cache()
+
+        class _Result:
+            def scalars(self):
+                return self
+
+            def all(self):
+                # Правка приезжает ровно в момент чтения.
+                ReferralRewardLevelService.invalidate_cache()
+                return []
+
+        async def fake_execute(_query):
+            return _Result()
+
+        db = SimpleNamespace(execute=fake_execute)
+        await ReferralRewardLevelService._load(db)
+
+        assert ReferralRewardLevelService._cache is None, 'устаревший снимок не должен осесть в кэше'
+
+
+class TestFirstTopupClaim:
+    @pytest.mark.asyncio
+    async def test_concurrent_topups_fire_first_event_once(self, monkeypatch):
+        """Два одновременных платежа не должны оба выдать награду за первое пополнение."""
+        from app.services import referral_service
+
+        rows_affected = [1, 0]  # первый UPDATE выигрывает, второй затрагивает 0 строк
+        events: list[str] = []
+
+        async def fake_execute(query):
+            # Через ту же сессию проходит ещё и удаление pending-строки — считать
+            # захватом первого пополнения нужно только UPDATE по users.
+            statement = str(query).strip().upper()
+            if statement.startswith('UPDATE USERS'):
+                return SimpleNamespace(rowcount=rows_affected.pop(0))
+            return SimpleNamespace(rowcount=0)
+
+        async def fake_award(_db, _user, *, event, topup_amount_kopeks=0, bot=None):
+            events.append(event)
+            return []
+
+        monkeypatch.setattr(settings, 'REFERRAL_REWARD_SCHEME', 'levels')
+        monkeypatch.setattr(settings, 'REFERRAL_MINIMUM_TOPUP_KOPEKS', 100_00)
+        monkeypatch.setattr('app.services.referral_reward_service.award_referral_rewards', fake_award)
+
+        async def noop_commit():
+            return None
+
+        db = SimpleNamespace(execute=fake_execute, commit=noop_commit)
+
+        for _ in range(2):
+            user = SimpleNamespace(
+                id=2,
+                telegram_id=1002,
+                full_name='Реферал',
+                language='ru',
+                referred_by_id=1,
+                has_made_first_topup=False,
+            )
+            await referral_service._process_topup_levels(db, user, 500_00, None)
+
+        assert events.count('first_topup') == 1, 'первое пополнение засчитывается ровно один раз'
+        assert events.count('repeat_topup') == 1

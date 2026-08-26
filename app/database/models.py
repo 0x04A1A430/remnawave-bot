@@ -2947,10 +2947,12 @@ class ReferralEarning(Base):
     # Награда может быть выдана днями подписки, а не деньгами. Без этих колонок
     # дни физически не помещаются в ledger, а вся статистика построена на сумме
     # amount_kopeks — то есть дневные награды просто не были бы видны.
-    reward_type = Column(
-        String(10), nullable=False, default=ReferralRewardType.MONEY.value, server_default='money', index=True
-    )
-    level = Column(Integer, nullable=False, default=1, server_default='1', index=True)
+    # Без index=True намеренно: обе колонки участвуют либо в выборках, уже
+    # суженных индексом по user_id, либо в агрегатах по всей таблице, которым
+    # индекс не помогает. А их построение на старте — блокирующий CREATE INDEX
+    # на таблице начислений, которая на живой установке большая.
+    reward_type = Column(String(10), nullable=False, default=ReferralRewardType.MONEY.value, server_default='money')
+    level = Column(Integer, nullable=False, default=1, server_default='1')
     days_granted = Column(Integer, nullable=False, default=0, server_default='0')
     tariff_id = Column(Integer, ForeignKey('tariffs.id', ondelete='SET NULL'), nullable=True)
 

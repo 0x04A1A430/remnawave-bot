@@ -243,6 +243,16 @@ async def import_legacy_settings(callback: types.CallbackQuery, db_user: User, d
     Явное действие вместо неявного отката: отката к ``REFERRAL_COMMISSION_PERCENT``
     в расчёте нет, поэтому включение схемы на пустой таблице ничего не платит.
     Кнопка даёт понятный переход — то, что было, становится видимым правилом.
+
+    Повод — «первое пополнение», и это не деталь оформления. В классической схеме
+    фиксированные бонусы (пригласившему и приглашённому) разовые: они выдаются один
+    раз, за первое пополнение реферала. Повод уровня один на всё правило, поэтому
+    перенос с «каждым пополнением» превратил бы оба разовых бонуса в регулярную
+    выплату — на живой базе это деньги, которых никто не обещал.
+
+    Плата за такой выбор — процент здесь тоже становится разовым. Недоплатить и
+    попросить админа осознанно поменять повод безопаснее, чем переплатить молча;
+    правило создаётся выключенным и подписано ровно этим текстом.
     """
     if await get_reward_level(db, 1) is not None:
         await callback.answer('Уровень 1 уже существует', show_alert=True)
@@ -253,13 +263,18 @@ async def import_legacy_settings(callback: types.CallbackQuery, db_user: User, d
         1,
         is_active=False,
         reward_mode=ReferralRewardMode.MONEY.value,
-        trigger=ReferralRewardTrigger.EVERY_TOPUP.value,
+        trigger=ReferralRewardTrigger.FIRST_TOPUP.value,
         referrer_percent=settings.REFERRAL_COMMISSION_PERCENT,
         referrer_fixed_kopeks=settings.REFERRAL_INVITER_BONUS_KOPEKS or None,
         referee_fixed_kopeks=settings.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS or None,
         max_payments=settings.REFERRAL_MAX_COMMISSION_PAYMENTS,
     )
-    await callback.answer('Настройки перенесены в уровень 1 (выключен — проверьте и включите)')
+    await callback.answer(
+        'Перенесено в уровень 1 (выключен). Повод — первое пополнение: '
+        'фиксированные бонусы в классической схеме разовые. Для комиссии с каждого '
+        'пополнения смените повод и уберите фикс. суммы.',
+        show_alert=True,
+    )
     await _render_level(callback, db, 1)
 
 

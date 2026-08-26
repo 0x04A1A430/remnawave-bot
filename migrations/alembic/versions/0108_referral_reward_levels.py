@@ -12,8 +12,9 @@ Create Date: 2026-08-26
 
 Расширение ``referral_earnings`` обязательно, а не опционально: вся статистика,
 партнёрка и расчёт доступного к выводу баланса построены на сумме ``amount_kopeks``,
-и награда в днях туда физически не помещается. Старые строки бэкфиллятся в
-reward_type='money', level=1 — иначе группировки дадут NULL-бакет.
+и награда в днях туда физически не помещается. Отдельный UPDATE для старых строк не
+нужен: колонки добавляются NOT NULL с server_default, поэтому PostgreSQL проставляет
+'money'/1/0 всем существующим строкам сам.
 """
 
 from typing import Sequence, Union
@@ -74,7 +75,7 @@ def upgrade() -> None:
             sa.Column('created_at', sa.DateTime(timezone=True), nullable=True),
             sa.Column('updated_at', sa.DateTime(timezone=True), nullable=True),
         )
-        op.create_index('ux_referral_reward_levels_level', 'referral_reward_levels', ['level'], unique=True)
+        op.create_index('ix_referral_reward_levels_level', 'referral_reward_levels', ['level'], unique=True)
 
     if 'referral_earnings' not in tables:
         return
@@ -86,7 +87,9 @@ def upgrade() -> None:
             op.add_column('referral_earnings', column)
             added.append(name)
 
-    if 'tariff_id' in added and bind.dialect.name != 'sqlite':
+    existing_fks = {fk['name'] for fk in inspector.get_foreign_keys('referral_earnings')}
+    tariff_column_present = 'tariff_id' in existing_cols | set(added)
+    if tariff_column_present and _EARNING_TARIFF_FK not in existing_fks and bind.dialect.name != 'sqlite':
         op.create_foreign_key(
             _EARNING_TARIFF_FK,
             'referral_earnings',
@@ -96,21 +99,11 @@ def upgrade() -> None:
             ondelete='SET NULL',
         )
 
-    existing_indexes = {idx['name'] for idx in inspector.get_indexes('referral_earnings')}
-    if 'ix_referral_earnings_reward_type' not in existing_indexes and 'reward_type' in existing_cols | set(added):
-        op.create_index('ix_referral_earnings_reward_type', 'referral_earnings', ['reward_type'])
-    if 'ix_referral_earnings_level' not in existing_indexes and 'level' in existing_cols | set(added):
-        op.create_index('ix_referral_earnings_level', 'referral_earnings', ['level'])
-
-    # Бэкфилл: всё, что начислено до перехода, — это деньги первого уровня.
-    # Без него группировки по reward_type/level дадут NULL-бакет в статистике.
-    if added:
-        op.execute(
-            sa.text(
-                "UPDATE referral_earnings SET reward_type = 'money', level = 1, days_granted = 0 "
-                'WHERE reward_type IS NULL OR level IS NULL'
-            )
-        )
+    # Индексы по reward_type/level не создаются намеренно: запросы, которые их
+    # читают, либо уже сужены индексом по user_id, либо агрегируют всю таблицу.
+    # Зато их построение — блокирующий CREATE INDEX внутри того же ACCESS
+    # EXCLUSIVE, что взяли ALTER'ы выше: на большой таблице начислений это
+    # остановило бы запись на всё время сборки, причём на старте бота.
 
 
 def downgrade() -> None:
@@ -119,11 +112,6 @@ def downgrade() -> None:
     tables = set(inspector.get_table_names())
 
     if 'referral_earnings' in tables:
-        existing_indexes = {idx['name'] for idx in inspector.get_indexes('referral_earnings')}
-        for index_name in ('ix_referral_earnings_reward_type', 'ix_referral_earnings_level'):
-            if index_name in existing_indexes:
-                op.drop_index(index_name, table_name='referral_earnings')
-
         existing_fks = {fk['name'] for fk in inspector.get_foreign_keys('referral_earnings')}
         if _EARNING_TARIFF_FK in existing_fks and bind.dialect.name != 'sqlite':
             op.drop_constraint(_EARNING_TARIFF_FK, 'referral_earnings', type_='foreignkey')

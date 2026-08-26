@@ -174,6 +174,24 @@ class TestNewLevelSafety:
         assert imported['referrer_fixed_kopeks'] == 100_00
         assert imported['referee_fixed_kopeks'] == 50_00
 
+    @pytest.mark.asyncio
+    async def test_legacy_import_does_not_make_one_off_bonuses_recurring(self, wired, monkeypatch):
+        """Фиксированные бонусы классической схемы разовые — за первое пополнение.
+
+        Повод у уровня один на всё правило. Перенос с «каждым пополнением»
+        превратил бы оба разовых бонуса в регулярную выплату: на живой базе это
+        деньги, которых никто не обещал.
+        """
+        wired['levels'] = []
+        monkeypatch.setattr(settings, 'REFERRAL_COMMISSION_PERCENT', 25)
+        monkeypatch.setattr(settings, 'REFERRAL_INVITER_BONUS_KOPEKS', 100_00)
+        monkeypatch.setattr(settings, 'REFERRAL_FIRST_TOPUP_BONUS_KOPEKS', 50_00)
+
+        callback = _callback('admin_ref_lvl_import')
+        await _raw(editor.import_legacy_settings)(callback, db_user=SimpleNamespace(id=1), db=None)
+
+        assert wired['saved'][-1]['trigger'] == 'first_topup'
+
 
 class TestValueInput:
     @pytest.fixture

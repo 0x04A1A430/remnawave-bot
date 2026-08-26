@@ -834,7 +834,27 @@ async def _process_topup_levels(db: AsyncSession, user, topup_amount_kopeks: int
     """
     from app.services.referral_reward_service import RewardEvent, award_referral_rewards
 
-    is_first = not user.has_made_first_topup and topup_amount_kopeks >= settings.REFERRAL_MINIMUM_TOPUP_KOPEKS
+    # Захват «первого пополнения» — атомарный UPDATE с условием, а не проверка
+    # атрибута с последующей записью. Два платежа, пришедшие одновременно (два
+    # вебхука провайдера, ретрай, оплата с двух устройств), оба увидели бы флаг
+    # снятым и оба выдали бы награду за первое пополнение по ВСЕЙ цепочке.
+    # Условие в WHERE делает победителя ровно одним: второй апдейт затрагивает
+    # ноль строк и уходит в ветку обычного пополнения.
+    is_first = False
+    if not user.has_made_first_topup and topup_amount_kopeks >= settings.REFERRAL_MINIMUM_TOPUP_KOPEKS:
+        from sqlalchemy import update as _update
+
+        claim = await db.execute(
+            _update(User)
+            .where(User.id == user.id, User.has_made_first_topup.is_(False))
+            .values(has_made_first_topup=True)
+        )
+        is_first = (claim.rowcount or 0) > 0
+        if not is_first:
+            logger.info(
+                'Первое пополнение уже засчитано конкурентным платежом, начисляем как повторное',
+                user_id=user.id,
+            )
 
     if is_first:
         user.has_made_first_topup = True
@@ -861,10 +881,13 @@ async def _process_topup_levels(db: AsyncSession, user, topup_amount_kopeks: int
             # Уведомление не должно откатывать уже выданное.
             logger.error('Не удалось уведомить о реферальной награде', error=str(error))
 
+    # Ключ называется reward_event, а не event: 'event' зарезервирован structlog
+    # под само сообщение, и вызов с ним падает TypeError — уже ПОСЛЕ того, как
+    # награды выданы, то есть теряется и уведомление, и возврат управления.
     logger.info(
         'Многоуровневые реферальные награды выданы',
         user_id=user.id,
-        event=event,
+        reward_event=event,
         granted=len(outcomes),
     )
     return True

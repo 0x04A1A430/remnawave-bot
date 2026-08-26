@@ -41,7 +41,15 @@ def _iter_python_files():
 
 
 def _uses_referral_id_as_grouping(node: ast.AST) -> bool:
-    """Обращение к ``ReferralEarning.referral_id`` внутри group_by/distinct."""
+    """Обращение к ``.referral_id`` внутри group_by/distinct.
+
+    Квалификатор намеренно НЕ проверяется. Привязка к литералу
+    ``ReferralEarning.referral_id`` обходилась любым алиасом импорта
+    (``RE.referral_id``), обращением через модуль (``models.ReferralEarning...``)
+    или через ORM-алиас — то есть ровно теми формами, в которых пишут реальные
+    запросы. Проверка по имени поля ловит их все; лишние срабатывания на других
+    моделях снимаются разбором конкретного файла и списком исключений.
+    """
     if not isinstance(node, ast.Call):
         return False
 
@@ -53,15 +61,7 @@ def _uses_referral_id_as_grouping(node: ast.AST) -> bool:
     if func_name not in ('group_by', 'distinct'):
         return False
 
-    for arg in ast.walk(node):
-        if (
-            isinstance(arg, ast.Attribute)
-            and arg.attr == 'referral_id'
-            and isinstance(arg.value, ast.Name)
-            and arg.value.id == 'ReferralEarning'
-        ):
-            return True
-    return False
+    return any(isinstance(arg, ast.Attribute) and arg.attr == 'referral_id' for arg in ast.walk(node))
 
 
 def _enclosing_statements(tree: ast.AST) -> dict[int, ast.stmt]:
@@ -96,7 +96,7 @@ def test_referral_id_grouping_excludes_referee_rows(path):
         pytest.skip('файл разобран вручную')
 
     source = path.read_text(encoding='utf-8')
-    if 'ReferralEarning' not in source:
+    if 'referral_id' not in source:
         return
 
     tree = ast.parse(source)
@@ -118,7 +118,7 @@ def test_ratchet_actually_sees_the_guarded_sites():
     found = 0
     for path in _iter_python_files():
         source = path.read_text(encoding='utf-8')
-        if 'ReferralEarning' not in source:
+        if 'referral_id' not in source:
             continue
         for node in ast.walk(ast.parse(source)):
             if _uses_referral_id_as_grouping(node):

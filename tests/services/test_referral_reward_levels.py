@@ -694,3 +694,119 @@ class TestProgramDescription:
 
         assert await describe_active_levels(None) == []
         assert await describe_referee_bonus(None) is None
+
+
+class TestInvitePromise:
+    """Приглашение обязано обещать то, что реально начислят.
+
+    Легаси-ключ REFERRAL_FIRST_TOPUP_BONUS_KOPEKS в многоуровневой схеме ничем не
+    управляет: бонус приглашённому задаётся уровнем. Пообещать по старому ключу —
+    значит отправить другу неправду от имени пользователя.
+    """
+
+    @pytest.mark.asyncio
+    async def test_levels_scheme_promises_level_bonus(self, monkeypatch):
+        from unittest.mock import AsyncMock, MagicMock
+
+        import app.handlers.referral as screen
+
+        captured = {}
+
+        async def fake_edit(_callback, text, _keyboard):
+            captured['text'] = text
+
+        monkeypatch.setattr(screen, 'edit_or_answer_photo', fake_edit)
+        monkeypatch.setattr(settings, 'REFERRAL_REWARD_SCHEME', 'levels')
+        monkeypatch.setattr(settings, 'REFERRAL_FIRST_TOPUP_BONUS_KOPEKS', 999_00)
+        monkeypatch.setattr(
+            type(screen.settings), 'get_bot_referral_link', lambda self, code, bot: 'https://t.me/b?start=x'
+        )
+        monkeypatch.setattr(type(screen.settings), 'get_cabinet_referral_link', lambda self, code: '')
+
+        async def fake_referee_bonus(_db, tariff_names=None):
+            return '7 дн. подписки (Про) за регистрацию'
+
+        async def fake_tariffs(_db):
+            return {}
+
+        monkeypatch.setattr('app.services.referral_reward_service.describe_referee_bonus', fake_referee_bonus)
+        monkeypatch.setattr(screen, '_reward_tariff_names', fake_tariffs)
+
+        bot = MagicMock()
+        bot.get_me = AsyncMock(return_value=SimpleNamespace(username='b'))
+        callback = MagicMock()
+        callback.bot = bot
+        callback.answer = AsyncMock()
+
+        await screen.create_invite_message(callback, SimpleNamespace(referral_code='X', language='ru'), None)
+
+        assert '7 дн. подписки' in captured['text']
+        assert '999' not in captured['text'], 'легаси-бонус в многоуровневой схеме не начисляется'
+
+    @pytest.mark.asyncio
+    async def test_legacy_scheme_keeps_its_promise(self, monkeypatch):
+        from unittest.mock import AsyncMock, MagicMock
+
+        import app.handlers.referral as screen
+
+        captured = {}
+
+        async def fake_edit(_callback, text, _keyboard):
+            captured['text'] = text
+
+        monkeypatch.setattr(screen, 'edit_or_answer_photo', fake_edit)
+        monkeypatch.setattr(settings, 'REFERRAL_REWARD_SCHEME', 'legacy')
+        monkeypatch.setattr(settings, 'REFERRAL_FIRST_TOPUP_BONUS_KOPEKS', 500_00)
+        monkeypatch.setattr(settings, 'REFERRAL_MINIMUM_TOPUP_KOPEKS', 100_00)
+        monkeypatch.setattr(
+            type(screen.settings), 'get_bot_referral_link', lambda self, code, bot: 'https://t.me/b?start=x'
+        )
+        monkeypatch.setattr(type(screen.settings), 'get_cabinet_referral_link', lambda self, code: '')
+
+        bot = MagicMock()
+        bot.get_me = AsyncMock(return_value=SimpleNamespace(username='b'))
+        callback = MagicMock()
+        callback.bot = bot
+        callback.answer = AsyncMock()
+
+        await screen.create_invite_message(callback, SimpleNamespace(referral_code='X', language='ru'), None)
+
+        assert '500' in captured['text']
+
+
+class TestDepthHonesty:
+    """Описание не должно обещать уровни, до которых движок не доходит."""
+
+    @pytest.mark.asyncio
+    async def test_levels_beyond_depth_are_not_advertised(self, chain, monkeypatch):
+        from app.services.referral_reward_service import describe_active_levels
+
+        configs = {
+            1: _level(1, referrer_percent=10),
+            2: _level(2, referrer_percent=5),
+            5: _level(5, referrer_percent=1),
+        }
+
+        async def fake_all(_db):
+            return configs
+
+        monkeypatch.setattr(ReferralRewardLevelService, 'get_all', classmethod(lambda cls, db: fake_all(db)))
+        monkeypatch.setattr(settings, 'REFERRAL_MAX_LEVEL_DEPTH', 2)
+
+        lines = await describe_active_levels(None, tariff_names={})
+        assert len(lines) == 2
+        assert not any('Уровень 5' in line for line in lines)
+
+    @pytest.mark.asyncio
+    async def test_referee_bonus_ignores_levels_beyond_depth(self, chain, monkeypatch):
+        from app.services.referral_reward_service import describe_referee_bonus
+
+        configs = {5: _level(5, referee_fixed_kopeks=100_00)}
+
+        async def fake_all(_db):
+            return configs
+
+        monkeypatch.setattr(ReferralRewardLevelService, 'get_all', classmethod(lambda cls, db: fake_all(db)))
+        monkeypatch.setattr(settings, 'REFERRAL_MAX_LEVEL_DEPTH', 2)
+
+        assert await describe_referee_bonus(None) is None

@@ -560,7 +560,7 @@ async def show_referral_analytics(callback: types.CallbackQuery, db_user: User, 
     await callback.answer()
 
 
-async def create_invite_message(callback: types.CallbackQuery, db_user: User):
+async def create_invite_message(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
     texts = get_texts(db_user.language)
 
     if not db_user.referral_code:
@@ -571,8 +571,20 @@ async def create_invite_message(callback: types.CallbackQuery, db_user: User):
     bot_referral_link = settings.get_bot_referral_link(db_user.referral_code, bot_username)
     cabinet_referral_link = settings.get_cabinet_referral_link(db_user.referral_code)
 
+    # Обещание в приглашении обязано совпадать с тем, что реально начислят.
+    # В многоуровневой схеме бонус приглашённому задаётся уровнем, а легаси-ключ
+    # ничем не управляет — пообещать по нему значит отправить другу неправду.
     bonus_block = ''
-    if settings.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS > 0:
+    if settings.is_referral_levels_scheme():
+        from app.services.referral_reward_service import describe_referee_bonus
+
+        referee_bonus = await describe_referee_bonus(db, tariff_names=await _reward_tariff_names(db))
+        if referee_bonus:
+            bonus_block = '\n\n' + texts.t(
+                'REFERRAL_INVITE_BONUS_LEVELS',
+                '💎 Твой бонус за регистрацию по ссылке: {bonus}',
+            ).format(bonus=referee_bonus)
+    elif settings.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS > 0:
         bonus_block = '\n\n' + texts.t(
             'REFERRAL_INVITE_BONUS',
             '💎 При первом пополнении от {minimum} ты получишь {bonus} бонусом на баланс!',

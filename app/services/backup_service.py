@@ -1708,6 +1708,10 @@ class BackupService:
             'broadcast_history',
             'subscription_conversions',
             'referral_earnings',
+            # Правила уровней — тоже часть восстанавливаемого состояния. Без
+            # очистки восстановление «с заменой» оставило бы правила приёмника,
+            # и программа платила бы по чужой конфигурации при своей истории.
+            'referral_reward_levels',
             'promocode_uses',
             'yookassa_payments',
             'cryptobot_payments',

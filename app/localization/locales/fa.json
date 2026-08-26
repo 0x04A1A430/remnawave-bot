@@ -1483,6 +1483,7 @@
   "REFERRAL_REWARD_NEW_USER_LEVELS": "• کاربر جدید دریافت می‌کند: <b>{bonus}</b>",
   "REFERRAL_INFO": "\n🤝 <b>برنامه معرفی</b>\n\n👥 <b>دعوت‌شده:</b> {referrals_count} دوست\n💰 <b>کسب‌شده:</b> {earned_amount}\n\n🔗 <b>لینک معرفی شما:</b>\n<code>{referral_link}</code>\n\n🎫 <b>کد تخفیف شما:</b>\n<code>{referral_code}</code>\n\n💰 <b>شرایط:</b>\n• برای هر دوست: {registration_bonus}\n• درصد از شارژها: {commission_percent}%\n",
   "REFERRAL_INVITE_BONUS": "💎 با اولین شارژ از {minimum} مبلغ {bonus} پاداش دریافت می‌کنی!",
+  "REFERRAL_INVITE_BONUS_LEVELS": "💎 پاداش شما برای ثبت‌نام از طریق لینک: {bonus}",
   "REFERRAL_INVITE_CREATED_INSTRUCTION": "روی متن زیر بزنید تا کپی شود:",
   "REFERRAL_INVITE_CREATED_TITLE": "📝 <b>دعوت‌نامه ایجاد شد!</b>",
   "REFERRAL_INVITE_FEATURE_FAST": "🚀 اتصال سریع",

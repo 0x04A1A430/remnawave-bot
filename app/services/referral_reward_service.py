@@ -139,10 +139,16 @@ class ReferralRewardLevelService:
 
     _cache: dict[int, LevelConfig] | None = None
     _lock: asyncio.Lock = asyncio.Lock()
+    # Поколение конфигурации. Без него сброс кэша, случившийся ПОКА идёт чтение из
+    # базы, затирается результатом этого чтения: сохранится снимок, сделанный до
+    # правки, и он останется в кэше навсегда — админ будет видеть новое правило и
+    # получать начисления по старому.
+    _generation: int = 0
 
     @classmethod
     def invalidate_cache(cls) -> None:
         cls._cache = None
+        cls._generation += 1
 
     @classmethod
     async def _load(cls, db: AsyncSession) -> dict[int, LevelConfig]:
@@ -153,6 +159,7 @@ class ReferralRewardLevelService:
             if cls._cache is not None:
                 return cls._cache
 
+            generation = cls._generation
             result = await db.execute(select(ReferralRewardLevel).order_by(ReferralRewardLevel.level.asc()))
             configs: dict[int, LevelConfig] = {}
             for row in result.scalars().all():
@@ -170,7 +177,13 @@ class ReferralRewardLevelService:
                     referee_tariff_id=row.referee_tariff_id,
                     max_payments=int(row.max_payments or 0),
                 )
-            cls._cache = configs
+            if generation == cls._generation:
+                cls._cache = configs
+            else:
+                # Конфигурацию правили, пока мы её читали: снимок уже устарел.
+                # Отдаём прочитанное вызывающему, но в кэш не кладём — следующий
+                # вызов перечитает.
+                logger.debug('Конфигурация уровней изменилась во время чтения, кэш не заполняется')
             return configs
 
     @classmethod
@@ -473,10 +486,17 @@ async def grant_reward_days(db: AsyncSession, user: User, days: int, tariff_id: 
             error=str(error),
         )
 
+    # Название тарифа берётся отдельным запросом по идентификатору, а НЕ через
+    # subscription.tariff. Связь у только что созданной или найденной подписки не
+    # загружена, и обращение к ней — неявный запрос в базу: в async-сессии это
+    # MissingGreenlet, то есть дни выданы, а строка ledger'а уже не записана.
     tariff_name = None
-    tariff = getattr(subscription, 'tariff', None)
-    if tariff is not None:
-        tariff_name = getattr(tariff, 'name', None)
+    tariff_id_for_name = subscription.tariff_id or tariff_id
+    if tariff_id_for_name:
+        from app.database.models import Tariff
+
+        name_result = await db.execute(select(Tariff.name).where(Tariff.id == tariff_id_for_name))
+        tariff_name = name_result.scalar_one_or_none()
 
     return DaysGrant(days=days, subscription_id=subscription.id, tariff_name=tariff_name)
 
@@ -541,9 +561,7 @@ async def award_referral_rewards(
     Ошибка на одном получателе не должна съедать награды остальных: цепочка
     обрабатывается по звеньям, сбой звена логируется и не прерывает обход.
     """
-    from app.database.crud.referral import create_referral_earning, get_user_campaign_id
-    from app.database.crud.user import add_user_balance
-    from app.database.models import TransactionType
+    from app.database.crud.referral import get_user_campaign_id
 
     components = await build_reward_components(db, referee, event=event, topup_amount_kopeks=topup_amount_kopeks)
     if not components:
@@ -551,102 +569,151 @@ async def award_referral_rewards(
 
     campaign_id = await get_user_campaign_id(db, referee.id)
     outcomes: list[GrantOutcome] = []
+    referee_id = referee.id
 
     for component in components:
-        recipient = (
-            referee if component.recipient_id == referee.id else await get_user_by_id(db, component.recipient_id)
-        )
-        if recipient is None:
-            logger.error('Получатель награды не найден', recipient_id=component.recipient_id, level=component.level)
+        try:
+            outcome = await _grant_one(
+                db, component, referee_id=referee_id, event=event, campaign_id=campaign_id, bot=bot
+            )
+        except Exception as error:
+            # Изоляция по звеньям: сбой на одном получателе не должен съедать
+            # награды остальной цепочки — они друг от друга не зависят.
+            #
+            # exc_info обязателен. Сюда попадает и ошибка в коде (NameError после
+            # рефакторинга поймали ровно так), и без трейсбека она выглядит как
+            # обычный сбой звена: награды тихо не начисляются, а в логе одна строка.
+            logger.error(
+                'Ошибка выдачи награды за реферала, остальная цепочка продолжается',
+                recipient_id=component.recipient_id,
+                level=component.level,
+                error=str(error),
+                exc_info=True,
+            )
             continue
 
-        referrer_id = component.referrer_id
-        outcome = GrantOutcome(component=component)
-
-        if component.days > 0:
-            try:
-                grant = await grant_reward_days(db, recipient, component.days, component.tariff_id)
-            except Exception as error:
-                logger.error(
-                    'Ошибка выдачи дней за реферала',
-                    recipient_id=recipient.id,
-                    level=component.level,
-                    error=str(error),
-                )
-                grant = DaysGrant(failure='error')
-
-            if grant.days > 0:
-                outcome.days_credited = grant.days
-                outcome.subscription_id = grant.subscription_id
-                outcome.tariff_name = grant.tariff_name
-                await create_referral_earning(
-                    db=db,
-                    # Получатель — владелец строки. Для награды приглашённому пара
-                    # зеркалится, чтобы дни не приписались пригласившему.
-                    user_id=referrer_id if component.is_referrer else referee.id,
-                    referral_id=referee.id if component.is_referrer else referrer_id,
-                    amount_kopeks=0,
-                    reason=REASON_DAYS_REFERRER if component.is_referrer else REASON_DAYS_REFEREE,
-                    campaign_id=campaign_id,
-                    reward_type=ReferralRewardType.DAYS.value,
-                    level=component.level,
-                    days_granted=grant.days,
-                    tariff_id=component.tariff_id,
-                )
-            else:
-                outcome.failure = grant.failure
-                logger.warning(
-                    'Дни за реферала не выданы: подходящей подписки нет',
-                    recipient_id=recipient.id,
-                    level=component.level,
-                    tariff_id=component.tariff_id,
-                    failure=grant.failure,
-                )
-
-        if component.money_kopeks > 0:
-            description = (
-                f'Реферальная награда, уровень {component.level}'
-                if component.is_referrer
-                else 'Бонус по реферальной программе'
-            )
-            credited = await add_user_balance(
-                db,
-                recipient,
-                component.money_kopeks,
-                description,
-                transaction_type=TransactionType.REFERRAL_REWARD,
-                bot=bot,
-            )
-            if credited:
-                outcome.money_credited = component.money_kopeks
-                # Строка ledger'а пишется ТОЛЬКО за пригласившего: приглашённому
-                # деньги начисляются транзакцией на баланс, и так было всегда —
-                # запись их в referral_earnings раздула бы его «реферальный доход»
-                # и, что хуже, сумму, доступную к выводу.
-                if component.is_referrer:
-                    await create_referral_earning(
-                        db=db,
-                        user_id=referrer_id,
-                        referral_id=referee.id,
-                        amount_kopeks=component.money_kopeks,
-                        reason=_money_reason(event),
-                        campaign_id=campaign_id,
-                        reward_type=ReferralRewardType.MONEY.value,
-                        level=component.level,
-                    )
-            else:
-                outcome.failure = outcome.failure or 'balance_failed'
-                logger.error(
-                    'Не удалось начислить реферальные деньги на баланс',
-                    recipient_id=recipient.id,
-                    level=component.level,
-                    amount_kopeks=component.money_kopeks,
-                )
-
-        if outcome.granted_anything:
+        if outcome is not None and outcome.granted_anything:
             outcomes.append(outcome)
 
     return outcomes
+
+
+async def _grant_one(
+    db: AsyncSession,
+    component: RewardComponent,
+    *,
+    referee_id: int,
+    event: str,
+    campaign_id: int | None,
+    bot=None,
+) -> GrantOutcome | None:
+    """Выдать один компонент награды одному получателю.
+
+    Получатель перечитывается из базы на каждом компоненте намеренно. Неудачный
+    ``add_user_balance`` внутри делает ``db.rollback()``, а откат истекает ВСЕ
+    объекты сессии — включая те, что вызывающий держал в руках. Обращение к
+    полю такого объекта в async-сессии даёт MissingGreenlet вместо понятной ошибки.
+    """
+    from app.database.crud.referral import create_referral_earning
+    from app.database.crud.user import add_user_balance
+    from app.database.models import TransactionType
+
+    recipient = await get_user_by_id(db, component.recipient_id)
+    if recipient is None:
+        logger.error('Получатель награды не найден', recipient_id=component.recipient_id, level=component.level)
+        return None
+
+    referrer_id = component.referrer_id
+    outcome = GrantOutcome(component=component)
+
+    if component.days > 0:
+        try:
+            grant = await grant_reward_days(db, recipient, component.days, component.tariff_id)
+        except Exception as error:
+            logger.error(
+                'Ошибка выдачи дней за реферала',
+                recipient_id=recipient.id,
+                level=component.level,
+                error=str(error),
+            )
+            grant = DaysGrant(failure='error')
+
+        if grant.days > 0:
+            outcome.days_credited = grant.days
+            outcome.subscription_id = grant.subscription_id
+            outcome.tariff_name = grant.tariff_name
+            await create_referral_earning(
+                db=db,
+                # Получатель — владелец строки. Для награды приглашённому пара
+                # зеркалится, чтобы дни не приписались пригласившему.
+                user_id=referrer_id if component.is_referrer else referee_id,
+                referral_id=referee_id if component.is_referrer else referrer_id,
+                amount_kopeks=0,
+                reason=REASON_DAYS_REFERRER if component.is_referrer else REASON_DAYS_REFEREE,
+                campaign_id=campaign_id,
+                reward_type=ReferralRewardType.DAYS.value,
+                level=component.level,
+                days_granted=grant.days,
+                tariff_id=component.tariff_id,
+            )
+        else:
+            outcome.failure = grant.failure
+            logger.warning(
+                'Дни за реферала не выданы: подходящей подписки нет',
+                recipient_id=recipient.id,
+                level=component.level,
+                tariff_id=component.tariff_id,
+                failure=grant.failure,
+            )
+
+    if component.money_kopeks > 0:
+        description = (
+            f'Реферальная награда, уровень {component.level}'
+            if component.is_referrer
+            else 'Бонус по реферальной программе'
+        )
+        credited = await add_user_balance(
+            db,
+            recipient,
+            component.money_kopeks,
+            description,
+            transaction_type=TransactionType.REFERRAL_REWARD,
+            bot=bot,
+        )
+        if credited:
+            outcome.money_credited = component.money_kopeks
+            # Порядок «сначала деньги, потом строка ledger'а» выбран осознанно.
+            # Атомарности между ними нет: add_user_balance коммитит сам. Если
+            # запись строки упадёт, у пользователя останутся деньги без записи —
+            # заработок будет НЕДОоценён. Обратный порядок при том же сбое дал бы
+            # строку без денег, то есть завысил бы сумму, доступную к выводу.
+            # Из двух расхождений безопасно только первое.
+            #
+            # Строка пишется ТОЛЬКО за пригласившего: приглашённому деньги идут
+            # транзакцией на баланс, и так было всегда — запись их в
+            # referral_earnings раздула бы его «реферальный доход» и, что хуже,
+            # сумму, доступную к выводу.
+            if component.is_referrer:
+                await create_referral_earning(
+                    db=db,
+                    user_id=referrer_id,
+                    referral_id=referee_id,
+                    amount_kopeks=component.money_kopeks,
+                    reason=_money_reason(event),
+                    campaign_id=campaign_id,
+                    reward_type=ReferralRewardType.MONEY.value,
+                    level=component.level,
+                )
+        else:
+            outcome.failure = outcome.failure or 'balance_failed'
+            logger.error(
+                'Не удалось начислить реферальные деньги на баланс',
+                recipient_id=recipient.id,
+                level=component.level,
+                amount_kopeks=component.money_kopeks,
+            )
+
+    return outcome
 
 
 _TRIGGER_LABELS = {
@@ -668,9 +735,14 @@ async def describe_active_levels(db: AsyncSession, *, tariff_names: dict[int, st
     names = tariff_names or {}
     lines: list[str] = []
 
+    # Глубже REFERRAL_MAX_LEVEL_DEPTH цепочка не обходится вовсе, поэтому такие
+    # уровни не платят — сколько бы их ни было заведено. Описывать их значит
+    # обещать пользователю награду, которая не придёт никогда.
+    max_depth = settings.get_referral_max_level_depth()
+
     for level in sorted(configs):
         config = configs[level]
-        if not config.is_active:
+        if not config.is_active or level > max_depth:
             continue
 
         rewards: list[str] = []
@@ -702,10 +774,11 @@ async def describe_referee_bonus(db: AsyncSession, *, tariff_names: dict[int, st
     """
     configs = await ReferralRewardLevelService.get_all(db)
     names = tariff_names or {}
+    max_depth = settings.get_referral_max_level_depth()
 
     for level in sorted(configs):
         config = configs[level]
-        if not config.is_active:
+        if not config.is_active or level > max_depth:
             continue
 
         parts: list[str] = []
