@@ -33,6 +33,7 @@ from app.database.crud.transaction import (
 )
 from app.database.crud.user import get_user_by_id, lock_user_for_update
 from app.database.models import PaymentMethod, Transaction, TransactionType, User
+from app.utils.message_effects import TOPUP_SUCCESS_EFFECT_ID
 
 
 logger = structlog.get_logger(__name__)
@@ -327,6 +328,7 @@ async def _notify_user(
                 ),
                 parse_mode='HTML',
                 reply_markup=keyboard,
+                message_effect_id=TOPUP_SUCCESS_EFFECT_ID,
             )
         except Exception as error:
             logger.error('Не удалось уведомить пользователя о ручном пополнении', user_id=user.id, error=error)
