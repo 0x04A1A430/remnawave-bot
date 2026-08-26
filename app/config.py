@@ -2140,7 +2140,14 @@ class Settings(BaseSettings):
         return _url_quote(referral_code, safe='')
 
     def _normalized_cabinet_url(self) -> str | None:
-        """Return normalized cabinet URL, or None if not configured."""
+        """Return normalized cabinet URL, or None if not configured.
+
+        При CABINET_ENABLED=False ссылки на кабинет нигде не показываем:
+        URL может остаться в .env «на будущее», но пользовательский бот
+        не должен его рекламировать.
+        """
+        if not self.is_cabinet_enabled():
+            return None
         cabinet_url = (self.CABINET_URL or '').strip().rstrip('/')
         if not cabinet_url or cabinet_url == self._CABINET_URL_DEFAULT:
             return None

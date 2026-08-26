@@ -27,9 +27,11 @@ from app.keyboards.inline import (
     get_payment_methods_keyboard,
 )
 from app.localization.texts import get_texts
+from app.services.payment_method_config_service import get_display_name_override
 from app.states import BalanceStates
 from app.utils.button_emoji import make_button
 from app.utils.decorators import error_handler
+from app.utils.timezone import format_local_datetime
 
 
 logger = structlog.get_logger(__name__)
@@ -349,6 +351,8 @@ def _transaction_button_label(transaction, *, is_credit: bool, texts) -> str:
     amount = texts.format_price(abs(transaction.amount_kopeks))
     date_part = transaction.created_at.strftime('%d.%m %H:%M')
     description = (transaction.description or '').strip()
+    if len(description) > 24:
+        description = description[:23] + '…'
     label = f'{emoji_html} {sign}{amount} · {date_part}'
     if description:
         label += f' · {description}'
@@ -471,21 +475,37 @@ async def show_transaction_detail(callback: types.CallbackQuery, db_user: User, 
 
     lines = [
         f'{emoji_html} <b>{op_type}</b>',
-        '',
+        '<blockquote>',
         f'<b>Сумма:</b> {amount_text}',
     ]
     if transaction.description:
         lines.append(f'<b>Описание:</b> {html.escape(transaction.description)}')
     if transaction.payment_method:
-        lines.append(f'<b>Способ:</b> {html.escape(str(transaction.payment_method))}')
+        pretty_method = get_display_name_override(str(transaction.payment_method)) or (
+            str(transaction.payment_method).replace('_', ' ').strip().title()
+        )
+        lines.append(f'<b>Способ оплаты:</b> {html.escape(pretty_method)}')
     status_text = 'Выполнена' if transaction.is_completed else 'В обработке'
-    lines.append(f'<b>Статус:</b> {status_text}')
-    lines.append(f'<b>Дата:</b> {transaction.created_at.strftime("%d.%m.%Y %H:%M")}')
+    if transaction.is_completed:
+        status_emoji = "<tg-emoji emoji-id='5776375003280838798'>✅</tg-emoji>"
+    else:
+        status_emoji = "<tg-emoji emoji-id='5778605968208170641'>🕒</tg-emoji>"
+    lines.append(f'<b>Статус:</b> {status_emoji} {status_text}')
+    lines.append(f"<b>Дата:</b> {format_local_datetime(transaction.created_at, '%d.%m.%Y %H:%M')}")
+    lines.append('</blockquote>')
+    if transaction.external_id:
+        lines.append(f'<code>{html.escape(transaction.external_id)}</code>')
 
     back_to_list = 'balance_history_deposits' if deposits else 'balance_history_withdrawals'
     keyboard = [
-        [types.InlineKeyboardButton(text=texts.BACK, callback_data=back_to_list, style='danger')],
-        [types.InlineKeyboardButton(text=texts.BACK, callback_data='balance_history', style='danger')],
+        [types.InlineKeyboardButton(text='← К списку', callback_data=back_to_list, style='danger')],
+        [
+            types.InlineKeyboardButton(
+                text=texts.t('BACK_TO_MENU', 'В главное меню'),
+                callback_data='back_to_menu',
+                style='danger',
+            )
+        ],
     ]
 
     await callback.message.edit_text(
