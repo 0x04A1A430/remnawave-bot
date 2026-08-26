@@ -401,7 +401,7 @@ def _build_combo_caption(
 def _build_syntax_hint(texts) -> list[types.InlineQueryResultArticle]:
     thumb = texts.t(
         'INLINE_GIFT_THUMBNAIL_URL',
-        'https://raw.githubusercontent.com/cy7su/cy7su/refs/heads/main/GIFT.png',
+        'https://raw.githubusercontent.com/0x04A1A430/storage/refs/heads/main/bot/GIFT.png',
     )
     error_text = texts.t(
         'INLINE_GIFT_HINT_TAP_ERROR',
@@ -466,7 +466,7 @@ async def handle_admin_inline_query(inline_query: types.InlineQuery) -> None:
 
     thumb = texts.t(
         'INLINE_GIFT_THUMBNAIL_URL',
-        'https://raw.githubusercontent.com/cy7su/cy7su/refs/heads/main/GIFT.png',
+        'https://raw.githubusercontent.com/0x04A1A430/storage/refs/heads/main/bot/GIFT.png',
     )
 
     hint_text = _flag_hint(query_text, texts)

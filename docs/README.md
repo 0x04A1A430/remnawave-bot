@@ -1,25 +1,25 @@
 <div>
   <picture>
-    <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/cy7su/remnawave-bot/main/.github/assets/logo.png">
-    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/cy7su/remnawave-bot/main/.github/assets/logo.png">
-    <img src="https://raw.githubusercontent.com/cy7su/remnawave-bot/main/.github/assets/logo.png" width="200" height="200" align="left" alt="xilarobot logo">
+    <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/0x04A1A430/remnawave-bot/main/.github/assets/logo.png">
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/0x04A1A430/remnawave-bot/main/.github/assets/logo.png">
+    <img src="https://raw.githubusercontent.com/0x04A1A430/remnawave-bot/main/.github/assets/logo.png" width="200" height="200" align="left" alt="xilarobot logo">
   </picture>
   <h1>
    <p align="left">xilarobot</p>
-  <a href="https://www.github.com/cy7su/remnawave-bot/releases/"><img alt="downloads"
-    src="https://img.shields.io/github/downloads/cy7su/remnawave-bot/total?labelColor=161616&color=242424" height="21" align="left"/></a>
+  <a href="https://www.github.com/0x04A1A430/remnawave-bot/releases/"><img alt="downloads"
+    src="https://img.shields.io/github/downloads/0x04A1A430/remnawave-bot/total?labelColor=161616&color=242424" height="21" align="left"/></a>
   </a>
   <br>
-  <a href="https://www.github.com/cy7su/remnawave-bot/releases/latest"><img alt="downloads@latest"
-    src="https://img.shields.io/github/downloads/cy7su/remnawave-bot/latest/total?labelColor=161616&color=242424" height="21" align="left"/></a>
+  <a href="https://www.github.com/0x04A1A430/remnawave-bot/releases/latest"><img alt="downloads@latest"
+    src="https://img.shields.io/github/downloads/0x04A1A430/remnawave-bot/latest/total?labelColor=161616&color=242424" height="21" align="left"/></a>
   </a>
   <br>
-  <a href="https://www.github.com/cy7su/remnawave-bot/releases/"><img alt="release"
-    src="https://img.shields.io/github/v/release/cy7su/remnawave-bot?labelColor=161616&color=242424" height="21" align="left"/></a>
+  <a href="https://www.github.com/0x04A1A430/remnawave-bot/releases/"><img alt="release"
+    src="https://img.shields.io/github/v/release/0x04A1A430/remnawave-bot?labelColor=161616&color=242424" height="21" align="left"/></a>
   </a>
   <br>
-  <a href="https://www.github.com/cy7su/remnawave-bot/tree/main"><img alt="code size"
-    src="https://img.shields.io/github/languages/code-size/cy7su/remnawave-bot?labelColor=161616&color=242424" height="21" align="left"/></a>
+  <a href="https://www.github.com/0x04A1A430/remnawave-bot/tree/main"><img alt="code size"
+    src="https://img.shields.io/github/languages/code-size/0x04A1A430/remnawave-bot?labelColor=161616&color=242424" height="21" align="left"/></a>
   </a>
   <br>
 </div>
