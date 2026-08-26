@@ -41,23 +41,13 @@ from aiogram.types import (
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.database.crud.subscription import get_all_subscriptions_by_user_id
-from app.database.crud.tariff import get_tariff_by_id
-from app.database.crud.user_message import get_random_active_message
 from app.database.models import User
-from app.localization.texts import Texts
-from app.utils.formatters import format_username_link
-from app.utils.miniapp_buttons import build_miniapp_startapp_url
-from app.utils.promo_offer import build_promo_offer_hint, build_test_access_hint
-from app.utils.subscription_utils import get_happ_cryptolink_redirect_link
-from app.utils.timezone import format_local_datetime
 from app.utils.validators import sanitize_html
 
 
 logger = structlog.get_logger(__name__)
 
 _RTL_LANGUAGES = frozenset({'ar', 'he'})
-_PROGRESS_BAR_LENGTH = 10
 
 # Сервер не поддерживает rich-сообщения (устаревший self-hosted bot-api).
 # Взводится один раз до рестарта — по образцу _happ_encrypt_unavailable.
@@ -246,32 +236,6 @@ def _tg_time(moment: datetime, time_format: str, fallback: str) -> str:
     return f'<tg-time unix="{unix_time}" format="{time_format}">{html.escape(fallback)}</tg-time>'
 
 
-def _progress_bar(seconds_left: float, total_seconds: float) -> str:
-    # Тот же вид [████░░░░░░], что у таймеров промо-предложений (app/utils/promo_offer.py).
-    if total_seconds <= 0:
-        total_seconds = seconds_left or 1
-    ratio = max(0.0, min(1.0, seconds_left / total_seconds))
-    filled = int(round(ratio * _PROGRESS_BAR_LENGTH))
-    filled = max(0, min(_PROGRESS_BAR_LENGTH, filled))
-    if filled == 0 and seconds_left > 0:
-        filled = 1
-    return f'[{"█" * filled}{"░" * (_PROGRESS_BAR_LENGTH - filled)}]'
-
-
-def _rich_status_label(texts, actual_status: str, is_trial: bool) -> str:
-    if actual_status == 'limited':
-        return texts.t('MAIN_MENU_RICH_STATUS_LIMITED', '🟡 Лимит трафика')
-    if actual_status == 'expired':
-        return texts.t('MAIN_MENU_RICH_STATUS_EXPIRED', '🔴 Истекла')
-    if actual_status == 'disabled':
-        return texts.t('MAIN_MENU_RICH_STATUS_DISABLED', '⚫ Отключена')
-    if actual_status == 'pending':
-        return texts.t('MAIN_MENU_RICH_STATUS_PENDING', '⏳ Ожидает')
-    if is_trial or actual_status == 'trial':
-        return texts.t('MAIN_MENU_RICH_STATUS_TRIAL', '🎁 Тестовая')
-    if actual_status == 'active':
-        return texts.t('MAIN_MENU_RICH_STATUS_ACTIVE', '🟢 Активна')
-    return texts.t('SUB_STATUS_UNKNOWN', '❓ Неизвестно')
 
 
 def _sanitize_rich_inline(value: str) -> str:
@@ -300,280 +264,28 @@ def _rich_text(value: str) -> str:
     return _sanitize_rich_inline(sanitize_html(html.escape(value)))
 
 
-def _renew_link(subscription_id: int | None, texts) -> str:
-    """Ссылка «Продлить» для истёкшей подписки — открывает раздел подписок кабинета.
-
-    Текстовая ссылка не умеет web_app, поэтому единственный путь в Mini App из
-    текста — t.me/<bot>/<app>?startapp=… (нужен MINIAPP_APP_SHORT_NAME). Параметр
-    разбирает StartParamNavigator кабинета: renew_<id> → /subscriptions/<id>/renew,
-    subscriptions → /subscriptions. Только в cabinet-режиме; иначе ''.
-    """
-    if not settings.is_cabinet_mode():
-        return ''
-    start_param = f'renew_{subscription_id}' if subscription_id else 'subscriptions'
-    url = build_miniapp_startapp_url(start_param)
-    if not url:
-        return ''
-    label = _rich_text(texts.t('MAIN_MENU_RICH_RENEW', '🔄 Продлить'))
-    return f'<a href="{url}">{label}</a>'
-
-
-def _traffic_usage_text(subscription, texts) -> str:
-    used = texts.format_traffic(float(getattr(subscription, 'traffic_used_gb', 0) or 0), is_limit=False)
-    limit = texts.format_traffic(float(getattr(subscription, 'traffic_limit_gb', 0) or 0), is_limit=True)
-    return f'{used} / {limit}'
-
-
-def _connect_url(subscription) -> str:
-    """URL мгновенного подключения подписки для текстовой ссылки.
-
-    В happ-режиме — https-обёртка редиректа над crypto-ссылкой (сырой happ://
-    в <a href> rich-HTML не поддерживается); иначе — страница подписки
-    subscription_url, если оператор не скрыл прямые ссылки.
-    """
-    if settings.is_happ_cryptolink_mode():
-        crypto_link = getattr(subscription, 'subscription_crypto_link', None)
-        redirect_link = get_happ_cryptolink_redirect_link(crypto_link) if crypto_link else None
-        if redirect_link:
-            return redirect_link
-    if settings.should_hide_subscription_link():
-        return ''
-    return getattr(subscription, 'subscription_url', None) or ''
-
-
-def _connect_link(subscription, texts) -> str:
-    url = _connect_url(subscription)
-    if not url:
-        return ''
-    label = _rich_text(texts.t('MAIN_MENU_RICH_CONNECT', '⚡ Подключить'))
-    return f'<a href="{html.escape(url, quote=True)}"><b>{label}</b></a>'
-
-
-def _trial_offer_link(user: User, texts) -> str:
-    """Ссылка «Активировать триал» для нового юзера без использованного триала.
-
-    Бесплатный триал — диплинк t.me/<bot>?start=trial (обрабатывается в
-    start.py: активация + перерисовка меню с новой подпиской). Платный триал
-    (TRIAL_PAYMENT_ENABLED + цена) активируется только через оплату — ссылка
-    ведёт в миниапп-кабинет (дашборд с TrialOfferCard, startapp=trial).
-    """
-    if settings.TRIAL_DURATION_DAYS <= 0 or settings.TRIAL_DISABLED_FOR == 'all':
-        return ''
-    if settings.is_trial_disabled_for_user(getattr(user, 'auth_type', None)):
-        return ''
-    try:
-        if user.is_trial_already_used():
-            return ''
-    except Exception as error:
-        logger.debug('Не удалось проверить доступность триала для rich-меню', error=str(error))
-        return ''
-
-    if settings.is_trial_paid_activation_enabled():
-        url = build_miniapp_startapp_url('trial')
-    else:
-        bot_username = settings.get_bot_username()
-        url = f'https://t.me/{bot_username}?start=trial' if bot_username else ''
-    if not url:
-        return ''
-
-    label = _rich_text(texts.t('MAIN_MENU_RICH_TRIAL_BUTTON', '🚀 Активировать триал'))
-    return f'<a href="{html.escape(url, quote=True)}"><b>{label}</b></a>'
-
-
-def _build_subscriptions_table(subscriptions, texts) -> str:
-    if not subscriptions:
-        return f'<p>{_rich_text(texts.t("SUB_STATUS_NONE", "❌ Отсутствует"))}</p>'
-
-    current_time = datetime.now(UTC)
-    header = (
-        '<tr>'
-        f'<th>{_rich_text(texts.t("MAIN_MENU_RICH_TABLE_TARIFF", "Тариф"))}</th>'
-        f'<th>{_rich_text(texts.t("MAIN_MENU_RICH_TABLE_STATUS", "Статус"))}</th>'
-        f'<th>{_rich_text(texts.t("MAIN_MENU_RICH_TABLE_UNTIL", "Действует до"))}</th>'
-        '</tr>'
-    )
-    tariff_fallback = texts.t('MAIN_MENU_RICH_TARIFF_FALLBACK', 'Подписка')
-    rows = [header]
-    for subscription in subscriptions:
-        tariff_name = html.escape(subscription.tariff.name) if subscription.tariff else _rich_text(tariff_fallback)
-        actual_status = (subscription.actual_status or '').lower()
-        status_label = _rich_status_label(texts, actual_status, bool(getattr(subscription, 'is_trial', False)))
-
-        end_date = getattr(subscription, 'end_date', None)
-        end_date_text = format_local_datetime(end_date, '%d.%m.%Y') if end_date else ''
-        if end_date and end_date > current_time and actual_status in {'active', 'trial', 'limited'}:
-            days_left = (end_date - current_time).days
-            days_text = texts.t('MAIN_MENU_RICH_DAYS_LEFT', 'осталось {days} дн.').replace('{days}', str(days_left))
-            until_cell = f'{_tg_time(end_date, "d", end_date_text)} ({_rich_text(days_text)})'
-        elif end_date:
-            until_cell = _tg_time(end_date, 'd', end_date_text)
-        else:
-            until_cell = '—'
-
-        rows.append(
-            f'<tr><td>{tariff_name}</td><td>{_rich_text(status_label)}</td><td align="right">{until_cell}</td></tr>'
-        )
-
-        # Нижняя строка ряда: расход + «кнопки» действий. Отдельная узкая колонка
-        # действий не влезает на мобильных (таблица уезжает за край экрана) —
-        # colspan-строка видна всегда.
-        if actual_status in {'active', 'trial', 'limited'}:
-            usage_parts = [f'📊 {html.escape(_traffic_usage_text(subscription, texts))}']
-            device_limit = getattr(subscription, 'device_limit', None)
-            if device_limit is not None:
-                # 0 — безлимит (HWID выключен), а не «нет устройств»: строку не прячем
-                usage_parts.append(f'📱 {Texts.format_device_limit(device_limit)}')
-            connect_link = _connect_link(subscription, texts)
-            if connect_link:
-                usage_parts.append(connect_link)
-            rows.append(f'<tr><td colspan="3">{" · ".join(usage_parts)}</td></tr>')
-        elif actual_status == 'expired':
-            renew_link = _renew_link(getattr(subscription, 'id', None), texts)
-            if renew_link:
-                rows.append(f'<tr><td colspan="3">{renew_link}</td></tr>')
-
-    return f'<table bordered striped>{"".join(rows)}</table>'
-
-
-async def _build_single_subscription_block(user: User, texts, db: AsyncSession) -> str:
-    # Статусные строки берём из того же builder-а, что и классическое меню, —
-    # единый источник правды для формулировок (см. tests/test_start_menu_text_consistency.py).
-    from app.handlers.menu import _get_subscription_status
-
-    subscription = getattr(user, 'subscription', None)
-    if not subscription:
-        return f'<p>{_rich_text(texts.t("SUB_STATUS_NONE", "❌ Отсутствует"))}</p>'
-
-    is_daily_tariff = False
-    tariff_line = ''
-    if settings.is_tariffs_mode() and subscription.tariff_id:
-        try:
-            tariff = await get_tariff_by_id(db, subscription.tariff_id)
-        except Exception as error:
-            tariff = None
-            logger.debug('Не удалось загрузить тариф для rich-меню', error=str(error))
-        if tariff:
-            is_daily_tariff = bool(getattr(tariff, 'is_daily', False))
-            tariff_template = texts.t('MAIN_MENU_RICH_TARIFF', '📦 Тариф: {tariff}')
-            tariff_line = _rich_text(tariff_template).replace('{tariff}', f'<b>{html.escape(tariff.name)}</b>')
-
-    status_text = _get_subscription_status(user, texts, is_daily_tariff)
-    lines = [_rich_text(line) for line in status_text.split('\n') if line.strip()]
-    if tariff_line:
-        lines.append(tariff_line)
-
-    current_time = datetime.now(UTC)
-    end_date = getattr(subscription, 'end_date', None)
-    start_date = getattr(subscription, 'start_date', None)
-    actual_status = (subscription.actual_status or '').lower()
-    if not is_daily_tariff and end_date and end_date > current_time and actual_status in {'active', 'trial'}:
-        seconds_left = (end_date - current_time).total_seconds()
-        total_seconds = (end_date - start_date).total_seconds() if start_date else 0
-        relative_template = texts.t('MAIN_MENU_RICH_EXPIRES_RELATIVE', '⏳ истекает {when}')
-        days_left_text = texts.t('MAIN_MENU_RICH_DAYS_LEFT', 'осталось {days} дн.').replace(
-            '{days}', str(max((end_date - current_time).days, 0))
-        )
-        relative_line = _rich_text(relative_template).replace('{when}', _tg_time(end_date, 'r', days_left_text))
-        lines.append(f'<code>{_progress_bar(seconds_left, total_seconds)}</code> {relative_line}')
-
-    if actual_status in {'active', 'trial', 'limited'}:
-        traffic_template = texts.t('MAIN_MENU_RICH_TRAFFIC', '📊 Трафик: {traffic}')
-        lines.append(
-            _rich_text(traffic_template).replace('{traffic}', html.escape(_traffic_usage_text(subscription, texts)))
-        )
-        device_limit = getattr(subscription, 'device_limit', None)
-        if device_limit is not None:
-            devices_template = texts.t('MAIN_MENU_RICH_DEVICES', '📱 Устройства: {devices}')
-            lines.append(_rich_text(devices_template).replace('{devices}', Texts.format_device_limit(device_limit)))
-        connect_link = _connect_link(subscription, texts)
-        if connect_link:
-            lines.append(connect_link)
-
-    if actual_status == 'expired':
-        renew_link = _renew_link(getattr(subscription, 'id', None), texts)
-        if renew_link:
-            lines.append(renew_link)
-
-    return '<blockquote>' + '<br>'.join(lines) + '</blockquote>'
-
-
 async def build_main_menu_rich_html(user: User, texts, db: AsyncSession) -> str:
-    """Собирает rich-HTML главного меню (контент, без клавиатуры)."""
+    """Собирает rich-HTML главного меню (контент, без клавиатуры).
+
+    Минималистичный рендер: контент ровно тот же, что у классического меню —
+    get_main_menu_text остаётся единственным источником правды (шапка с именем,
+    статус подписки, подсказки, случайное сообщение). Никаких таблиц,
+    прогресс-баров и отдельных блоков трафика/устройств/ссылок.
+    """
+    from app.handlers.menu import get_main_menu_text
+
+    menu_text = await get_main_menu_text(user, texts, db)
+
     blocks: list[str] = []
 
     logo_url = _resolve_rich_logo_url()
     if logo_url:
         blocks.append(f'<img src="{html.escape(logo_url, quote=True)}"/>')
 
-    # full_name подставляет username, когда имени нет (см. User.full_name), — только
-    # в этом случае показываем логин ссылкой на профиль, а не голым текстом.
-    username = getattr(user, 'username', None)
-    has_name = bool(getattr(user, 'first_name', None) or getattr(user, 'last_name', None))
-    user_name = format_username_link(username) if username and not has_name else html.escape(user.full_name or '')
-    blocks.append(f'<h4>👤 {user_name}</h4>')
-    blocks.append('<hr/>')
-
-    if settings.is_multi_tariff_enabled():
-        heading = texts.t('MAIN_MENU_RICH_SUBSCRIPTIONS_HEADING', '📱 Подписки')
-        subscriptions = await get_all_subscriptions_by_user_id(db, user.id)
-        # Неоплаченные черновики триала не показываем как существующую подписку
-        subscriptions = [sub for sub in subscriptions if not getattr(sub, 'is_pending_trial', False)]
-        subscription_block = _build_subscriptions_table(subscriptions, texts)
-        if len(subscriptions) > 1 and settings.MAIN_MENU_RICH_SUBSCRIPTIONS_COLLAPSIBLE:
-            # Несколько подписок раздувают меню — сворачиваем таблицу в details;
-            # summary служит заголовком (h6 не дублируем), счётчик — вместо содержимого.
-            summary = f'<b>{_rich_text(heading)} ({len(subscriptions)})</b>'
-            blocks.append(f'<details><summary>{summary}</summary>{subscription_block}</details>')
-        else:
-            blocks.append(f'<h6>{_rich_text(heading)}</h6>')
-            blocks.append(subscription_block)
-    else:
-        heading = texts.t('MAIN_MENU_RICH_SUBSCRIPTION_HEADING', '📱 Подписка')
-        blocks.append(f'<h6>{_rich_text(heading)}</h6>')
-        blocks.append(await _build_single_subscription_block(user, texts, db))
-
-    trial_link = _trial_offer_link(user, texts)
-    if trial_link:
-        blocks.append(f'<p>{trial_link}</p>')
-
-    balance_template = texts.t('MAIN_MENU_RICH_BALANCE', '💰 Баланс: {balance}')
-    balance_value = f'<b>{html.escape(settings.format_price(user.balance_kopeks))}</b>'
-    blocks.append(f'<p>{_rich_text(balance_template).replace("{balance}", balance_value)}</p>')
-
-    hint_sections: list[str] = []
-    try:
-        promo_hint = await build_promo_offer_hint(db, user, texts)
-        if promo_hint:
-            hint_sections.append(promo_hint.strip())
-    except Exception as hint_error:
-        logger.debug('Не удалось построить подсказку промо-предложения для rich-меню', hint_error=hint_error)
-    try:
-        test_access_hint = await build_test_access_hint(db, user, texts)
-        if test_access_hint:
-            hint_sections.append(test_access_hint.strip())
-    except Exception as test_error:
-        logger.debug('Не удалось построить подсказку тестового доступа для rich-меню', test_error=test_error)
-
-    if hint_sections:
-        summary = texts.t('MAIN_MENU_RICH_HINTS_SUMMARY', '💡 Акции и подсказки')
-        # Строки подсказок содержат только inline-теги (<code>{bar}</code>) — переносы
-        # превращаем в отдельные параграфы внутри details-блока.
-        inner = ''.join(f'<p>{line}</p>' for section in hint_sections for line in section.split('\n') if line.strip())
-        blocks.append(f'<details open><summary>{_rich_text(summary)}</summary>{inner}</details>')
-
-    try:
-        random_message = await get_random_active_message(db)
-    except Exception as error:
-        random_message = None
-        logger.error('Ошибка получения случайного сообщения для rich-меню', error=error)
-    if random_message:
-        # Rich-HTML живёт по правилам HTML: перенос строки — только через <br>.
-        random_message_html = _sanitize_rich_inline(random_message).replace('\n', '<br>')
-        blocks.append(f'<blockquote>{random_message_html}</blockquote>')
-
-    blocks.append('<hr/>')
-    action_prompt = texts.t('MAIN_MENU_ACTION_PROMPT', 'Выберите действие:')
-    blocks.append(f'<footer>{_rich_text(action_prompt)}</footer>')
+    # Текст классического меню уже HTML (<b>, <blockquote>, tg-emoji) — прогоняем
+    # его через тот же _rich_text, что и редактируемые шаблоны, а переносы строк
+    # заменяем на <br>: в rich-HTML голый backslash-n не отображается.
+    blocks.append(_rich_text(menu_text).replace('\n', '<br/>'))
 
     return ''.join(blocks)
 
