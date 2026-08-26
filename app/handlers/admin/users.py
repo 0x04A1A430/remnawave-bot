@@ -4074,18 +4074,50 @@ async def _show_servers_for_user(
 ):
     try:
         user = await get_user_by_id(db, user_id)
-        current_squads = []
-        if user:
-            if subscription_id and settings.is_multi_tariff_enabled():
-                from app.database.crud.subscription import (
-                    get_subscription_by_id_for_user,
-                )
+        if subscription_id and settings.is_multi_tariff_enabled():
+            from app.database.crud.subscription import (
+                get_subscription_by_id_for_user,
+            )
 
-                subscription = await get_subscription_by_id_for_user(db, subscription_id, user_id)
-            else:
-                subscription = await _resolve_admin_subscription(db, user_id)
-            if subscription:
-                current_squads = subscription.connected_squads or []
+            subscription = await get_subscription_by_id_for_user(db, subscription_id, user_id)
+        else:
+            subscription = await _resolve_admin_subscription(db, user_id)
+
+        # Актуальный список сквадов синхронизируется один раз при старте бота
+        # (см. ensure_servers_synced в main.py) — здесь только читаем локальную копию.
+
+        current_squads: list[str] = []
+        if subscription:
+            current_squads = list(subscription.connected_squads or [])
+
+        # Актуальное состояние берём из панели (activeInternalSquads пользователя),
+        # а не из локального снимка connected_squads.
+        _uuid = (
+            getattr(subscription, 'remnawave_uuid', None)
+            if settings.is_multi_tariff_enabled() and subscription
+            else None
+        ) or getattr(user, 'remnawave_uuid', None)
+        remnawave_id = (
+            subscription.remnawave_id if settings.is_multi_tariff_enabled() and subscription else None
+        ) or getattr(user, 'remnawave_id', None)
+
+        if _uuid:
+            try:
+                async with RemnaWaveService().get_api_client() as api:
+                    rw_user = await api.get_user_by_uuid(_uuid, user_id=remnawave_id)
+                if rw_user and rw_user.active_internal_squads is not None:
+                    panel_squads = list(rw_user.active_internal_squads)
+                    if set(panel_squads) != set(current_squads):
+                        if subscription:
+                            subscription.connected_squads = panel_squads
+                            subscription.updated_at = datetime.now(UTC)
+                            await db.commit()
+                    current_squads = panel_squads
+            except Exception as fetch_error:
+                logger.warning(
+                    'Не удалось получить актуальные сквады из панели',
+                    error=str(fetch_error),
+                )
 
         _sid = f'_s{subscription_id}' if subscription_id and settings.is_multi_tariff_enabled() else ''
         back_cb = (
@@ -4094,14 +4126,9 @@ async def _show_servers_for_user(
             else f'admin_user_subscription_{user_id}'
         )
 
-        all_servers, _ = await get_all_server_squads(db, available_only=False)
+        all_servers, _total = await get_all_server_squads(db, available_only=False, page=1, limit=500)
 
-        servers_to_show = []
-        for server in all_servers:
-            if server.is_available or server.squad_uuid in current_squads:
-                servers_to_show.append(server)
-
-        if not servers_to_show:
+        if not all_servers:
             await callback.message.edit_text(
                 'Доступные серверы не найдены',
                 reply_markup=types.InlineKeyboardMarkup(
@@ -4111,27 +4138,13 @@ async def _show_servers_for_user(
             return
 
         text = '<b>Управление серверами</b>\n\n'
-        text += 'Нажмите на сервер чтобы добавить/убрать:\n'
-        text += '- выбранный сервер\n'
-        text += '- доступный сервер\n'
-        text += '- неактивный (только для уже назначенных)\n\n'
+        text += '[x] — сквад подключён, [ ] — не подключён.\n'
+        text += 'Нажмите на сервер, чтобы переключить:\n'
 
         keyboard = []
-        selected_servers = [s for s in servers_to_show if s.squad_uuid in current_squads]
-        available_servers = [s for s in servers_to_show if s.squad_uuid not in current_squads and s.is_available]
-        inactive_servers = [s for s in servers_to_show if s.squad_uuid not in current_squads and not s.is_available]
-
-        sorted_servers = selected_servers + available_servers + inactive_servers
-
-        for server in sorted_servers[:20]:
+        for server in all_servers:
             is_selected = server.squad_uuid in current_squads
-
-            if is_selected:
-                emoji = '[OK]'
-            elif server.is_available:
-                emoji = ''
-            else:
-                emoji = ''
+            checkbox = '[x]' if is_selected else '[ ]'
 
             display_name = server.display_name
             if not server.is_available and not is_selected:
@@ -4140,20 +4153,14 @@ async def _show_servers_for_user(
             keyboard.append(
                 [
                     types.InlineKeyboardButton(
-                        text=f'{emoji} {display_name}',
+                        text=f'{checkbox} {display_name}',
                         callback_data=f'admin_user_toggle_server_{user_id}_{server.id}{_sid}',
                     )
                 ]
             )
 
-        if len(servers_to_show) > 20:
-            text += f'\n Показано первых 20 из {len(servers_to_show)} серверов'
-
         keyboard.append(
-            [
-                types.InlineKeyboardButton(text='Готово', callback_data=back_cb),
-                types.InlineKeyboardButton(text='Назад', callback_data=back_cb),
-            ]
+            [types.InlineKeyboardButton(text='Назад', callback_data=back_cb)]
         )
 
         await callback.message.edit_text(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
@@ -4250,70 +4257,9 @@ async def refresh_server_selection_screen(
     db: AsyncSession,
     subscription_id: int | None = None,
 ):
-    try:
-        user = await get_user_by_id(db, user_id)
-        current_squads = []
-        if user:
-            if subscription_id and settings.is_multi_tariff_enabled():
-                from app.database.crud.subscription import (
-                    get_subscription_by_id_for_user,
-                )
-
-                subscription = await get_subscription_by_id_for_user(db, subscription_id, user_id)
-            else:
-                subscription = await _resolve_admin_subscription(db, user_id)
-            if subscription:
-                current_squads = subscription.connected_squads or []
-
-        _sid = f'_s{subscription_id}' if subscription_id and settings.is_multi_tariff_enabled() else ''
-        back_cb = (
-            f'admin_user_sub_select_{user_id}_{subscription_id}'
-            if subscription_id and settings.is_multi_tariff_enabled()
-            else f'admin_user_subscription_{user_id}'
-        )
-
-        servers, _ = await get_all_server_squads(db, available_only=True)
-
-        if not servers:
-            await callback.message.edit_text(
-                'Доступные серверы не найдены',
-                reply_markup=types.InlineKeyboardMarkup(
-                    inline_keyboard=[[types.InlineKeyboardButton(text='Назад', callback_data=back_cb)]]
-                ),
-            )
-            return
-
-        text = '<b>Управление серверами</b>\n\n'
-        text += 'Нажмите на сервер чтобы добавить/убрать:\n\n'
-
-        keyboard = []
-        for server in servers[:15]:
-            is_selected = server.squad_uuid in current_squads
-            emoji = '[v]' if is_selected else '[ ]'
-
-            keyboard.append(
-                [
-                    types.InlineKeyboardButton(
-                        text=f'{emoji} {server.display_name}',
-                        callback_data=f'admin_user_toggle_server_{user_id}_{server.id}{_sid}',
-                    )
-                ]
-            )
-
-        if len(servers) > 15:
-            text += f'\n Показано первых 15 из {len(servers)} серверов'
-
-        keyboard.append(
-            [
-                types.InlineKeyboardButton(text='Готово', callback_data=back_cb),
-                types.InlineKeyboardButton(text='Назад', callback_data=back_cb),
-            ]
-        )
-
-        await callback.message.edit_text(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
-
-    except Exception as e:
-        logger.error('Ошибка обновления экрана серверов', error=e)
+    # Единый рендер с _show_servers_for_user: та же синхронизация сквадов
+    # и те же галочки из актуального состояния панели.
+    await _show_servers_for_user(callback, user_id, db, subscription_id=subscription_id)
 
 
 @admin_required
