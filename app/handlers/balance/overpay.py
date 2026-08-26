@@ -56,7 +56,7 @@ def _check_topup_restriction(db_user: User, texts) -> InlineKeyboardMarkup | Non
     support_url = settings.get_support_contact_url()
     if support_url:
         keyboard.append([InlineKeyboardButton(text='\U0001f198 Обжаловать', url=support_url)])
-    keyboard.append([InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance')])
+    keyboard.append([InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance', style='danger')])
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
@@ -141,11 +141,11 @@ async def _create_overpay_payment_and_respond(
 
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text=pay_button_text, url=payment_url)],
+            [InlineKeyboardButton(text=pay_button_text, url=payment_url, style='success')],
             [
                 InlineKeyboardButton(
                     text=texts.t('BACK_BUTTON', 'Назад'),
-                    callback_data='menu_balance',
+                    callback_data='menu_balance', style='danger',
                 )
             ],
         ]
@@ -286,7 +286,7 @@ async def start_overpay_topup(
         [
             InlineKeyboardButton(
                 text=texts.t('BACK_BUTTON', 'Назад'),
-                callback_data='menu_balance',
+                callback_data='menu_balance', style='danger',
             )
         ]
     )

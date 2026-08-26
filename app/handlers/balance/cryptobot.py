@@ -29,7 +29,7 @@ async def start_cryptobot_payment(callback: types.CallbackQuery, db_user: User, 
         keyboard = []
         if support_url:
             keyboard.append([types.InlineKeyboardButton(text='Обжаловать', url=support_url)])
-        keyboard.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance')])
+        keyboard.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance', style='danger')])
 
         await callback.message.edit_text(
             f'<b>Пополнение ограничено</b>\n\n{reason}\n\nЕсли вы считаете это ошибкой, вы можете обжаловать решение.',
@@ -96,7 +96,7 @@ async def process_cryptobot_payment_amount(
         keyboard = []
         if support_url:
             keyboard.append([types.InlineKeyboardButton(text='Обжаловать', url=support_url)])
-        keyboard.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance')])
+        keyboard.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance', style='danger')])
 
         await message.answer(
             f'<b>Пополнение ограничено</b>\n\n{reason}\n\nЕсли вы считаете это ошибкой, вы можете обжаловать решение.',
@@ -196,16 +196,16 @@ async def process_cryptobot_payment_amount(
                             {'icon_custom_emoji_id': _pay_parsed.icon_custom_emoji_id}
                             if _pay_parsed.icon_custom_emoji_id
                             else {}
-                        ),
+                        ), style='success',
                     )
                 ],
                 [
                     types.InlineKeyboardButton(
                         text=texts.t('CHECK_STATUS_BUTTON', 'Проверить статус'),
-                        callback_data=f'check_cryptobot_{payment_result["local_payment_id"]}',
+                        callback_data=f'check_cryptobot_{payment_result["local_payment_id"]}', style='primary',
                     )
                 ],
-                [types.InlineKeyboardButton(text=texts.BACK, callback_data='balance_topup')],
+                [types.InlineKeyboardButton(text=texts.BACK, callback_data='balance_topup', style='danger')],
             ]
         )
 

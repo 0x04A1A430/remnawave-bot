@@ -32,7 +32,7 @@ async def start_stars_payment(callback: types.CallbackQuery, db_user: User, stat
         keyboard = []
         if support_url:
             keyboard.append([types.InlineKeyboardButton(text='Обжаловать', url=support_url)])
-        keyboard.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance')])
+        keyboard.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance', style='danger')])
 
         await callback.message.edit_text(
             f'<b>Пополнение ограничено</b>\n\n{reason}\n\nЕсли вы считаете это ошибкой, вы можете обжаловать решение.',
@@ -68,7 +68,7 @@ async def process_stars_payment_amount(message: types.Message, db_user: User, am
         keyboard = []
         if support_url:
             keyboard.append([types.InlineKeyboardButton(text='Обжаловать', url=support_url)])
-        keyboard.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance')])
+        keyboard.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance', style='danger')])
 
         await message.answer(
             f'<b>Пополнение ограничено</b>\n\n{reason}\n\nЕсли вы считаете это ошибкой, вы можете обжаловать решение.',
@@ -106,7 +106,7 @@ async def process_stars_payment_amount(message: types.Message, db_user: User, am
                         url=invoice_link,
                     )
                 ],
-                [types.InlineKeyboardButton(text=texts.BACK, callback_data='balance_topup')],
+                [types.InlineKeyboardButton(text=texts.BACK, callback_data='balance_topup', style='danger')],
             ]
         )
 

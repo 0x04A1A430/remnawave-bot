@@ -530,7 +530,7 @@ async def show_payment_methods(callback: types.CallbackQuery, db_user: User, db:
         keyboard = []
         if support_url:
             keyboard.append([types.InlineKeyboardButton(text='Обжаловать', url=support_url)])
-        keyboard.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance')])
+        keyboard.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance', style='danger')])
 
         await callback.message.edit_text(
             f'<b>Пополнение ограничено</b>\n\n{reason}\n\nЕсли вы считаете это ошибкой, вы можете обжаловать решение.',
@@ -627,7 +627,7 @@ async def handle_successful_topup_with_cart(user_id: int, amount_kopeks: int, bo
                             callback_data='return_to_saved_cart',
                         )
                     ],
-                    [types.InlineKeyboardButton(text='Мой баланс', callback_data='menu_balance')],
+                    [types.InlineKeyboardButton(text='Мой баланс', callback_data='menu_balance', style='danger')],
                     [types.InlineKeyboardButton(text='Главное меню', callback_data='back_to_menu')],
                 ]
             )
@@ -700,7 +700,7 @@ async def request_support_topup(callback: types.CallbackQuery, db_user: User):
                     url=settings.get_support_contact_url() or 'https://t.me/',
                 )
             ],
-            [types.InlineKeyboardButton(text=texts.BACK, callback_data='balance_topup')],
+            [types.InlineKeyboardButton(text=texts.BACK, callback_data='balance_topup', style='danger')],
         ]
     )
 
