@@ -312,9 +312,7 @@ async def get_user_transactions(
     if exclude_type_values is not None:
         query = query.where(Transaction.type.not_in(exclude_type_values))
 
-    result = await db.execute(
-        query.order_by(Transaction.created_at.desc()).offset(offset).limit(limit)
-    )
+    result = await db.execute(query.order_by(Transaction.created_at.desc()).offset(offset).limit(limit))
     return list(result.scalars().all())
 
 
