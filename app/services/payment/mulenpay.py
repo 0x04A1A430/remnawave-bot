@@ -18,6 +18,32 @@ from app.utils.user_utils import format_referrer_info
 class MulenPayPaymentMixin:
     """Mixin с созданием платежей, обработкой callback и проверкой статусов MulenPay."""
 
+    @staticmethod
+    def _build_mulenpay_client(user: Any) -> str | None:
+        """Собирает значение поля ``client`` для MulenPay.
+
+        MulenPay просит передавать контакт плательщика (email, телефон или
+        Telegram ID), чтобы иметь возможность связаться с ним по вопросам
+        платежа. Отдаём то, что реально известно о пользователе, по приоритету
+        email -> телефон -> Telegram ID.
+        """
+        if user is None:
+            return None
+
+        email = getattr(user, 'email', None)
+        if email:
+            return str(email)
+
+        phone = getattr(user, 'phone', None)
+        if phone:
+            return str(phone)
+
+        telegram_id = getattr(user, 'telegram_id', None)
+        if telegram_id:
+            return str(telegram_id)
+
+        return None
+
     async def create_mulenpay_payment(
         self,
         db: AsyncSession,
@@ -56,6 +82,11 @@ class MulenPayPaymentMixin:
             payment_uuid = f'mulen_{user_id or "guest"}_{uuid.uuid4().hex}'
             amount_rubles = amount_kopeks / 100
 
+            client = None
+            if user_id is not None:
+                user = await payment_module.get_user_by_id(db, user_id)
+                client = self._build_mulenpay_client(user)
+
             items = [
                 {
                     'description': description[:128],
@@ -74,6 +105,7 @@ class MulenPayPaymentMixin:
                 items=items,
                 language=language or settings.MULENPAY_LANGUAGE,
                 website_url=settings.MULENPAY_WEBSITE_URL or settings.WEBHOOK_URL,
+                client=client,
             )
 
             if not response:

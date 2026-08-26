@@ -75,10 +75,22 @@ async def test_create_mulenpay_payment_success(monkeypatch: pytest.MonkeyPatch) 
         captured_args.update(kwargs)
         return DummyLocalPayment(payment_id=999)
 
+    dummy_user = SimpleNamespace(email='user@example.com', telegram_id=555)
+
+    async def fake_get_user_by_id(_db: DummySession, user_id: int) -> SimpleNamespace:
+        assert user_id == 77
+        return dummy_user
+
     monkeypatch.setattr(
         payment_service_module,
         'create_mulenpay_payment',
         fake_create_mulenpay_payment,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        payment_service_module,
+        'get_user_by_id',
+        fake_get_user_by_id,
         raising=False,
     )
     monkeypatch.setattr(settings, 'MULENPAY_MIN_AMOUNT_KOPEKS', 1000, raising=False)
@@ -103,9 +115,25 @@ async def test_create_mulenpay_payment_success(monkeypatch: pytest.MonkeyPatch) 
     assert result['payment_url'] == 'https://mulenpay/pay'
     assert result['status'] == 'created'
     assert stub.calls and stub.calls[0]['language'] == 'en'
+    assert stub.calls[0]['client'] == 'user@example.com'
     assert captured_args['user_id'] == 77
     assert captured_args['amount_kopeks'] == 25000
     assert captured_args['uuid'].startswith('mulen_77_')
+
+
+@pytest.mark.parametrize(
+    ('user', 'expected'),
+    [
+        (SimpleNamespace(email='user@example.com', phone='+70000000000', telegram_id=555), 'user@example.com'),
+        (SimpleNamespace(email=None, phone='+70000000000', telegram_id=555), '+70000000000'),
+        (SimpleNamespace(email=None, phone=None, telegram_id=555), '555'),
+        (SimpleNamespace(email=None, phone=None, telegram_id=None), None),
+        (None, None),
+    ],
+)
+def test_build_mulenpay_client_priority(user: Any, expected: str | None) -> None:
+    service = _make_service(None)
+    assert service._build_mulenpay_client(user) == expected
 
 
 @pytest.mark.anyio('asyncio')
