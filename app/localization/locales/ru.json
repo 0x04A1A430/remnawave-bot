@@ -1523,6 +1523,7 @@
   "SUBSCRIPTION_WARNING_TOMORROW": "\n️ истекает завтра!",
   "SUB_STATUS_ACTIVE_FEW_DAYS": "Активна\n️ истекает через {days} дн.",
   "SUB_STATUS_ACTIVE_LONG": "Активна\nдо {end_date} ({days} дн.)",
+  "SUB_STATUS_ACTIVE_FOREVER": "Активна (навсегда)",
   "SUB_STATUS_ACTIVE_TODAY": "Активна\n️ истекает сегодня!",
   "SUB_STATUS_ACTIVE_TOMORROW": "Активна\n️ истекает завтра!",
   "SUB_STATUS_DAILY_ACTIVE": "Активна",

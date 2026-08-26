@@ -36,6 +36,7 @@ from app.services.subscription_checkout_service import (
 from app.services.support_settings_service import SupportSettingsService
 from app.services.user_cart_service import user_cart_service
 from app.utils.display_mode import is_visible_in_bot
+from app.utils.formatters import INFINITY_DAYS_THRESHOLD
 from app.utils.photo_message import edit_or_answer_photo
 from app.utils.pricing_utils import format_period_description
 from app.utils.promo_offer import (
@@ -1308,6 +1309,10 @@ def _get_subscription_status(user: User, texts, is_daily_tariff: bool = False) -
         if is_daily_tariff:
             return texts.t('SUB_STATUS_DAILY_ACTIVE', 'Активна')
 
+        # «Вечная» подписка (выдана, например, до 2099 года) — без дат и дней
+        if days_left > INFINITY_DAYS_THRESHOLD:
+            return texts.t('SUB_STATUS_ACTIVE_FOREVER', 'Активна (навсегда)')
+
         if days_left > 7 and end_date_text:
             return texts.t(
                 'SUB_STATUS_ACTIVE_LONG',
@@ -1374,8 +1379,11 @@ async def _get_multi_tariff_status(user, texts, db: AsyncSession) -> tuple[str, 
             status_suffix = ' — лимит трафика'
         elif sub.end_date and sub.end_date > current_time:
             days_left = (sub.end_date - current_time).days
-            end_str = format_local_datetime(sub.end_date, '%d.%m.%Y')
-            status_suffix = f' — до {end_str} ({days_left} дн.)'
+            if days_left > INFINITY_DAYS_THRESHOLD:
+                status_suffix = f' — {texts.t("SUB_STATUS_ACTIVE_FOREVER", "Активна (навсегда)").lower()}'
+            else:
+                end_str = format_local_datetime(sub.end_date, '%d.%m.%Y')
+                status_suffix = f' — до {end_str} ({days_left} дн.)'
         else:
             status_suffix = ''
 
