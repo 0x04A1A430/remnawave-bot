@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database.models import PaymentMethod, TransactionType
 from app.services.aurapay_service import aurapay_service
+from app.utils.message_effects import TOPUP_SUCCESS_EFFECT_ID
 from app.utils.payment_logger import payment_logger as logger
 from app.utils.user_utils import format_referrer_info
 
@@ -489,6 +490,7 @@ class AuraPayPaymentMixin:
                     ),
                     parse_mode='HTML',
                     reply_markup=keyboard,
+                    message_effect_id=TOPUP_SUCCESS_EFFECT_ID,
                 )
             except Exception as error:
                 logger.error('Ошибка отправки уведомления пользователю AuraPay', error=error)

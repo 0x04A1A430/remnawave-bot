@@ -24,6 +24,7 @@ from app.services.subscription_renewal_service import (
     parse_payment_metadata,
 )
 from app.utils.currency_converter import currency_converter
+from app.utils.message_effects import TOPUP_SUCCESS_EFFECT_ID
 from app.utils.payment_logger import payment_logger as logger
 from app.utils.user_utils import format_referrer_info
 
@@ -688,6 +689,7 @@ class CryptoBotPaymentMixin:
                 payload.text,
                 parse_mode=payload.parse_mode,
                 reply_markup=payload.reply_markup,
+                message_effect_id=TOPUP_SUCCESS_EFFECT_ID,
             )
             logger.info(
                 'Отправлено уведомление пользователю о пополнении',

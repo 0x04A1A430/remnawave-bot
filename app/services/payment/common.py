@@ -26,6 +26,7 @@ from app.services.subscription_checkout_service import (
     should_offer_checkout_resume,
 )
 from app.services.user_cart_service import user_cart_service
+from app.utils.message_effects import TOPUP_SUCCESS_EFFECT_ID
 from app.utils.miniapp_buttons import (
     build_main_menu_button,
     build_miniapp_or_callback_button,
@@ -224,6 +225,7 @@ class PaymentCommonMixin:
                 text=message,
                 parse_mode='HTML',
                 reply_markup=keyboard,
+                message_effect_id=TOPUP_SUCCESS_EFFECT_ID,
             )
         except Exception as error:
             from aiogram.exceptions import (
