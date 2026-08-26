@@ -4073,7 +4073,6 @@ async def _show_servers_for_user(
     subscription_id: int | None = None,
 ):
     try:
-        user = await get_user_by_id(db, user_id)
         if subscription_id and settings.is_multi_tariff_enabled():
             from app.database.crud.subscription import (
                 get_subscription_by_id_for_user,
@@ -4089,35 +4088,6 @@ async def _show_servers_for_user(
         current_squads: list[str] = []
         if subscription:
             current_squads = list(subscription.connected_squads or [])
-
-        # Актуальное состояние берём из панели (activeInternalSquads пользователя),
-        # а не из локального снимка connected_squads.
-        _uuid = (
-            getattr(subscription, 'remnawave_uuid', None)
-            if settings.is_multi_tariff_enabled() and subscription
-            else None
-        ) or getattr(user, 'remnawave_uuid', None)
-        remnawave_id = (
-            subscription.remnawave_id if settings.is_multi_tariff_enabled() and subscription else None
-        ) or getattr(user, 'remnawave_id', None)
-
-        if _uuid:
-            try:
-                async with RemnaWaveService().get_api_client() as api:
-                    rw_user = await api.get_user_by_uuid(_uuid, user_id=remnawave_id)
-                if rw_user and rw_user.active_internal_squads is not None:
-                    panel_squads = list(rw_user.active_internal_squads)
-                    if set(panel_squads) != set(current_squads):
-                        if subscription:
-                            subscription.connected_squads = panel_squads
-                            subscription.updated_at = datetime.now(UTC)
-                            await db.commit()
-                    current_squads = panel_squads
-            except Exception as fetch_error:
-                logger.warning(
-                    'Не удалось получить актуальные сквады из панели',
-                    error=str(fetch_error),
-                )
 
         _sid = f'_s{subscription_id}' if subscription_id and settings.is_multi_tariff_enabled() else ''
         back_cb = (
