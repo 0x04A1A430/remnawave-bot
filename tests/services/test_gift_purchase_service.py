@@ -593,3 +593,65 @@ async def test_idempotent_replay_and_conflict(monkeypatch):
         assert res3.remaining_balance_kopeks == 30000  # 70000 - 40000
         purchases_after = (await db.execute(select(GuestPurchase))).scalars().all()
         assert len(purchases_after) == 2
+
+
+@pytest.mark.asyncio
+async def test_replay_never_attaches_another_gifts_transaction(monkeypatch):
+    """Повтор обязан вернуть списание ИМЕННО этого подарка либо ничего.
+
+    Прежний фоллбек брал последнюю GIFT_PAYMENT покупателя с order_by(id.desc()):
+    у того, кто дарил дважды, повтор показывал сумму от другого подарка.
+    """
+    from app.database.models import GuestPurchase, GuestPurchaseStatus, PaymentMethod, Transaction, TransactionType
+    from app.services.gift_purchase_service import _build_gift_transaction_external_id, _find_gift_transaction
+    from tests.fixtures.sqlite_memory import memory_session
+
+    async with memory_session(monkeypatch, [User.__table__, GuestPurchase.__table__, Transaction.__table__]) as db:
+        earlier = Transaction(
+            user_id=1,
+            type=TransactionType.GIFT_PAYMENT.value,
+            amount_kopeks=50000,
+            description='другой подарок',
+            payment_method=PaymentMethod.BALANCE.value,
+            external_id=_build_gift_transaction_external_id('bot', 'checkout-other'),
+            is_completed=True,
+        )
+        db.add(earlier)
+        await db.commit()
+
+        purchase = GuestPurchase(
+            token='t' * 64,
+            contact_type='telegram',
+            contact_value='@buyer',
+            period_days=30,
+            amount_kopeks=10000,
+            status=GuestPurchaseStatus.PAID.value,
+            is_gift=True,
+            source='cabinet',
+            buyer_user_id=1,
+            idempotency_key='checkout-mine',
+        )
+        db.add(purchase)
+        await db.commit()
+
+        # Своей транзакции ещё нет — вернуть чужую нельзя
+        assert await _find_gift_transaction(db, purchase, 'checkout-mine', 'bot') is None
+
+        mine = Transaction(
+            user_id=1,
+            type=TransactionType.GIFT_PAYMENT.value,
+            amount_kopeks=10000,
+            description='этот подарок',
+            payment_method=PaymentMethod.BALANCE.value,
+            # Ключ собран из source покупки (cabinet), а повтор придёт из бота
+            external_id=_build_gift_transaction_external_id('cabinet', 'checkout-mine'),
+            is_completed=True,
+        )
+        db.add(mine)
+        await db.commit()
+
+        found = await _find_gift_transaction(db, purchase, 'checkout-mine', 'bot')
+
+    assert found is not None
+    assert found.external_id == mine.external_id
+    assert found.amount_kopeks == 10000

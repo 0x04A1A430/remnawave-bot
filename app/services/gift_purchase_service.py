@@ -162,6 +162,32 @@ def _build_gift_transaction_external_id(source: str, idempotency_key: str) -> st
     return f'gift_{source}_{idempotency_key}'
 
 
+async def _find_gift_transaction(
+    db: AsyncSession,
+    purchase: GuestPurchase,
+    idempotency_key: str,
+    fallback_source: str,
+) -> Transaction | None:
+    """Найти списание, которым оплачен именно этот подарок.
+
+    Ключ собирается из ``purchase.source``: повтор может прийти из другого канала,
+    чем исходная покупка, и тогда аргумент ``source`` вызывающего дал бы чужой
+    external_id. Если ничего не нашлось — возвращаем ``None``: подставить чужую
+    транзакцию хуже, чем не показать никакой.
+    """
+    candidates = {
+        _build_gift_transaction_external_id(purchase.source or fallback_source, idempotency_key),
+        _build_gift_transaction_external_id(fallback_source, idempotency_key),
+    }
+    result = await db.execute(
+        select(Transaction).where(
+            Transaction.external_id.in_(candidates),
+            Transaction.payment_method == PaymentMethod.BALANCE.value,
+        )
+    )
+    return result.scalars().first()
+
+
 def _build_quote_from_pricing(
     tariff: Tariff,
     period_days: int,
@@ -329,24 +355,12 @@ async def purchase_gift_from_balance(
                 f"Idempotency key '{idempotency_key}' was already used with different purchase parameters"
             )
 
-        # Load existing transaction
-        tx_stmt = select(Transaction).where(
-            Transaction.external_id == external_id,
-            Transaction.payment_method == PaymentMethod.BALANCE.value,
-        )
-        tx_res = await db.execute(tx_stmt)
-        tx = tx_res.scalars().first()
-        if tx is None:
-            tx_fallback_stmt = (
-                select(Transaction)
-                .where(
-                    Transaction.user_id == buyer_id,
-                    Transaction.type == TransactionType.GIFT_PAYMENT.value,
-                )
-                .order_by(Transaction.id.desc())
-            )
-            tx_fallback_res = await db.execute(tx_fallback_stmt)
-            tx = tx_fallback_res.scalars().first()
+        # Транзакция ищется по external_id, собранному из source САМОЙ покупки:
+        # повтор может прийти из другого канала (бот против кабинета), и тогда
+        # аргумент source дал бы чужой ключ. Промахнуться тут нельзя — раньше
+        # фоллбек брал последнюю GIFT_PAYMENT покупателя и при нескольких
+        # подарках подсовывал транзакцию от другого.
+        tx = await _find_gift_transaction(db, existing_purchase, idempotency_key, source)
 
         buyer = await db.get(User, buyer_id)
         remaining_balance = buyer.balance_kopeks if buyer else 0
@@ -483,13 +497,7 @@ async def purchase_gift_from_balance(
                     f"Idempotency key '{idempotency_key}' was already used with different purchase parameters"
                 )
 
-            tx_res = await db.execute(
-                select(Transaction).where(
-                    Transaction.external_id == external_id,
-                    Transaction.payment_method == PaymentMethod.BALANCE.value,
-                )
-            )
-            tx = tx_res.scalars().first()
+            tx = await _find_gift_transaction(db, winning_purchase, idempotency_key, source)
             buyer = await db.get(User, buyer_id)
             remaining_balance = buyer.balance_kopeks if buyer else 0
             quote = _build_quote_from_purchase(winning_purchase)
