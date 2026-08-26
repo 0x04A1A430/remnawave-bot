@@ -428,7 +428,9 @@ async def _resolve_days_target(db: AsyncSession, user: User, tariff_id: int | No
     if tariff_id is not None:
         subscription = await get_subscription_by_user_and_tariff(db, user.id, tariff_id, include_inactive=True)
     else:
-        subscription = await get_subscription_by_user_id(db, user.id)
+        subscription = await _pick_primary_paid_subscription(db, user)
+        if subscription is None:
+            subscription = await get_subscription_by_user_id(db, user.id)
 
     if subscription is None:
         return None, None
@@ -452,6 +454,64 @@ async def _resolve_days_target(db: AsyncSession, user: User, tariff_id: int | No
 # подписку, то есть бесплатно снимает триальный статус и выключает человека из
 # авто-продления (класс бага #629889).
 _ALIVE_SUBSCRIPTION_STATUSES = frozenset({'active', 'trial', 'limited'})
+
+
+async def _pick_primary_paid_subscription(db: AsyncSession, user: User):
+    """Платная подписка, в которую пойдут дни, когда тариф в правиле не задан.
+
+    ``get_subscription_by_user_id`` сортирует по СТАТУСУ и не смотрит на
+    ``is_trial``: у пользователя с несколькими подписками награда легко уходила в
+    триал мимо оплаченной. В мультитарифе это обычная ситуация — подписок много.
+
+    Правило выбора и его порядок:
+
+    1. только живые подписки, не считая тех, куда награду класть нельзя;
+    2. оплаченные вперёд триальных — за них человек заплатил;
+    3. посуточные тарифы в конец: там плата списывается за день, и добавленные дни
+       ведут себя не так, как на обычной подписке;
+    4. при равенстве — с самым поздним сроком окончания, затем меньший id.
+
+    Пункт 4 нужен не «для красоты»: без полного порядка одна и та же награда при
+    двух одинаковых подписках могла бы уходить то в одну, то в другую, и понять
+    задним числом, куда делись дни, стало бы невозможно.
+
+    ``None`` — подходящей платной подписки нет; вызывающий откатывается к обычному
+    выбору основной, чтобы владелец одного лишь триала награду всё же получил.
+    """
+    from app.database.crud.subscription import get_all_subscriptions_by_user_id
+
+    candidates = [
+        sub
+        for sub in await get_all_subscriptions_by_user_id(db, user.id)
+        if (sub.status or '').lower() in _ALIVE_SUBSCRIPTION_STATUSES
+        and (sub.status or '').lower() not in _DAYS_TARGET_BLOCKED_STATUSES
+    ]
+    if not candidates:
+        return None
+
+    def _is_daily(subscription) -> bool:
+        tariff = getattr(subscription, 'tariff', None)
+        return bool(getattr(tariff, 'is_daily', False))
+
+    candidates.sort(
+        key=lambda sub: (
+            bool(sub.is_trial),
+            _is_daily(sub),
+            -(sub.end_date.timestamp() if sub.end_date else 0),
+            sub.id,
+        )
+    )
+    chosen = candidates[0]
+
+    if len(candidates) > 1:
+        logger.info(
+            'Дни за реферала: выбрана подписка из нескольких',
+            user_id=user.id,
+            subscription_id=chosen.id,
+            is_trial=bool(chosen.is_trial),
+            candidates=len(candidates),
+        )
+    return chosen
 
 
 async def _create_subscription_for_days(db: AsyncSession, user: User, days: int, tariff_id: int):

@@ -349,6 +349,13 @@ async def _render_level(callback: types.CallbackQuery, db: AsyncSession, level_n
             'сколько бы ни был настроен.</i>'
         )
 
+    if days_on and not level.referrer_tariff_id and level.referrer_days:
+        lines.append('')
+        lines.append(
+            '<i>Без тарифа дни идут в оплаченную подписку получателя — при нескольких '
+            'выбирается с самым поздним сроком; триал берётся, только если платной нет.</i>'
+        )
+
     if level.level == 1:
         lines.append('')
         lines.append('<i>На первом уровне личный процент партнёра перебивает процент уровня.</i>')
@@ -367,6 +374,16 @@ async def _render_level(callback: types.CallbackQuery, db: AsyncSession, level_n
         lines.append(
             f'<i>⚠️ Тариф не выбран для дней {" и ".join(warnings)}: они лягут в основную '
             'подписку получателя, а если подписки нет — не начислятся вовсе.</i>'
+        )
+
+    # В классическом режиме у подписок нет тарифа: правило с тарифом не найдёт
+    # подходящую подписку и не начислит НИЧЕГО. Это не поломка движка, а
+    # несовместимая настройка, и сказать о ней надо там, где её задают.
+    if days_on and not settings.is_multi_tariff_enabled() and (level.referrer_tariff_id or level.referee_tariff_id):
+        lines.append('')
+        lines.append(
+            '<i>❗️ Мультитариф выключен: у подписок нет тарифа, и дни с выбранным '
+            'тарифом не начислятся. Уберите тариф — дни пойдут в основную подписку.</i>'
         )
 
     if (
