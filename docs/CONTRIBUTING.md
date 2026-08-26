@@ -99,7 +99,7 @@ Use the `enhancement` label and describe:
 
 1. **Fork and clone the repository:**
 ```bash
-git clone https://github.com/cy7su/remnawave-bot.git
+git clone https://github.com/0x04A1A430/remnawave-bot.git
 cd remnawave-bot
 ```
 

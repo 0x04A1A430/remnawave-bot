@@ -60,7 +60,7 @@ representative at an online or offline event.
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be
 reported to the community leaders responsible for enforcement at
-[GitHub Issues](https://github.com/cy7su/remnawave-bot/issues) or privately via
+[GitHub Issues](https://github.com/0x04A1A430/remnawave-bot/issues) or privately via
 Telegram [@xilarobot](https://t.me/xilarobot).
 All complaints will be reviewed and investigated promptly and fairly.
 

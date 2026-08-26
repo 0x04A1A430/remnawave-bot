@@ -52,8 +52,8 @@ LABEL org.opencontainers.image.title="RemnaWaveBot" \
       org.opencontainers.image.version="${VERSION}" \
       org.opencontainers.image.created="${BUILD_DATE}" \
       org.opencontainers.image.revision="${VCS_REF}" \
-      org.opencontainers.image.source="https://github.com/cy7su/remnawave-bot" \
-      org.opencontainers.image.url="https://github.com/cy7su/remnawave-bot" \
+      org.opencontainers.image.source="https://github.com/0x04A1A430/remnawave-bot" \
+      org.opencontainers.image.url="https://github.com/0x04A1A430/remnawave-bot" \
       org.opencontainers.image.vendor="cy6su"
 
 ENTRYPOINT ["python", "-m", "app.entrypoint"]
