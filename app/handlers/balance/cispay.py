@@ -112,7 +112,8 @@ async def _create_cispay_payment_and_respond(
         [
             InlineKeyboardButton(
                 text=texts.t('BACK_BUTTON', 'Назад'),
-                callback_data='menu_balance', style='danger',
+                callback_data='menu_balance',
+                style='danger',
             )
         ]
     )

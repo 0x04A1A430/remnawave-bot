@@ -358,7 +358,8 @@ async def process_platega_payment_amount(
         [
             types.InlineKeyboardButton(
                 text=texts.t('CHECK_STATUS_BUTTON', 'Проверить статус'),
-                callback_data=f'check_platega_{local_payment_id}', style='primary',
+                callback_data=f'check_platega_{local_payment_id}',
+                style='primary',
             )
         ],
     ]

@@ -196,13 +196,15 @@ async def process_cryptobot_payment_amount(
                             {'icon_custom_emoji_id': _pay_parsed.icon_custom_emoji_id}
                             if _pay_parsed.icon_custom_emoji_id
                             else {}
-                        ), style='success',
+                        ),
+                        style='success',
                     )
                 ],
                 [
                     types.InlineKeyboardButton(
                         text=texts.t('CHECK_STATUS_BUTTON', 'Проверить статус'),
-                        callback_data=f'check_cryptobot_{payment_result["local_payment_id"]}', style='primary',
+                        callback_data=f'check_cryptobot_{payment_result["local_payment_id"]}',
+                        style='primary',
                     )
                 ],
                 [types.InlineKeyboardButton(text=texts.BACK, callback_data='balance_topup', style='danger')],

@@ -131,13 +131,15 @@ async def _create_kassa_ai_payment_and_respond(
                         'PAY_BUTTON',
                         'Оплатить {amount}₽',
                     ).format(amount=f'{amount_rub:.0f}'),
-                    url=payment_url, style='success',
+                    url=payment_url,
+                    style='success',
                 )
             ],
             [
                 InlineKeyboardButton(
                     text=texts.t('BACK_BUTTON', 'Назад'),
-                    callback_data='menu_balance', style='danger',
+                    callback_data='menu_balance',
+                    style='danger',
                 )
             ],
         ]

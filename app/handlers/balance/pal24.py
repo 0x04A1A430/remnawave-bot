@@ -187,7 +187,8 @@ async def _send_pal24_payment_message(
             [
                 types.InlineKeyboardButton(
                     text=texts.t('CHECK_STATUS_BUTTON', 'Проверить статус'),
-                    callback_data=f'check_pal24_{local_payment_id}', style='primary',
+                    callback_data=f'check_pal24_{local_payment_id}',
+                    style='primary',
                 )
             ],
             [types.InlineKeyboardButton(text=texts.BACK, callback_data='balance_topup', style='danger')],
@@ -407,7 +408,8 @@ async def process_pal24_payment_amount(
                     text=settings.get_pal24_sbp_button_text(
                         texts.t('PAL24_SBP_PAY_BUTTON', 'Оплатить через PayPalych (СБП)')
                     ),
-                    callback_data='pal24_method_sbp', style='success',
+                    callback_data='pal24_method_sbp',
+                    style='success',
                 )
             ]
         )
@@ -421,7 +423,8 @@ async def process_pal24_payment_amount(
                             'Оплатить банковской картой (PayPalych)',
                         )
                     ),
-                    callback_data='pal24_method_card', style='success',
+                    callback_data='pal24_method_card',
+                    style='success',
                 )
             ]
         )
@@ -635,7 +638,8 @@ async def check_pal24_payment_status(
             [
                 types.InlineKeyboardButton(
                     text=texts.t('CHECK_STATUS_BUTTON', 'Проверить статус'),
-                    callback_data=f'check_pal24_{local_payment_id}', style='primary',
+                    callback_data=f'check_pal24_{local_payment_id}',
+                    style='primary',
                 )
             ],
             [types.InlineKeyboardButton(text=texts.BACK, callback_data='balance_topup', style='danger')],

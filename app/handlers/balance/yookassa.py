@@ -193,7 +193,8 @@ async def process_yookassa_payment_amount(
                 [
                     types.InlineKeyboardButton(
                         text='Проверить статус',
-                        callback_data=f'check_yookassa_{payment_result["local_payment_id"]}', style='primary',
+                        callback_data=f'check_yookassa_{payment_result["local_payment_id"]}',
+                        style='primary',
                     )
                 ],
                 [types.InlineKeyboardButton(text=texts.BACK, callback_data='balance_topup', style='danger')],
@@ -421,7 +422,8 @@ async def process_yookassa_sbp_payment_amount(
                 [
                     types.InlineKeyboardButton(
                         text='Оплатить в приложении банка',
-                        callback_data='temp_disabled', style='success',
+                        callback_data='temp_disabled',
+                        style='success',
                     )
                 ]
             )
@@ -431,11 +433,14 @@ async def process_yookassa_sbp_payment_amount(
             [
                 types.InlineKeyboardButton(
                     text='Проверить статус',
-                    callback_data=f'check_yookassa_{payment_result["local_payment_id"]}', style='primary',
+                    callback_data=f'check_yookassa_{payment_result["local_payment_id"]}',
+                    style='primary',
                 )
             ]
         )
-        keyboard_buttons.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='balance_topup', style='danger')])
+        keyboard_buttons.append(
+            [types.InlineKeyboardButton(text=texts.BACK, callback_data='balance_topup', style='danger')]
+        )
 
         keyboard = types.InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
 
