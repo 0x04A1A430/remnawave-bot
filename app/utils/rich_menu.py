@@ -236,8 +236,6 @@ def _tg_time(moment: datetime, time_format: str, fallback: str) -> str:
     return f'<tg-time unix="{unix_time}" format="{time_format}">{html.escape(fallback)}</tg-time>'
 
 
-
-
 def _sanitize_rich_inline(value: str) -> str:
     """Приводит sanitize_html-вывод (случайные сообщения админа) к rich-HTML."""
     value = _SPOILER_SPAN_RE.sub(r'<tg-spoiler>\2</tg-spoiler>', value)
