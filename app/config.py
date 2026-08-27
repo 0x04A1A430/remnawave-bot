@@ -247,6 +247,8 @@ class Settings(BaseSettings):
     GRACE_ACCESS_DURATION_HOURS: int = 72
     GRACE_ACCESS_EXPIRED_SQUAD_UUID: str = ''
     GRACE_ACCESS_LIMITED_SQUAD_UUID: str = ''
+    # Внешний сквад для grace-доступа: пусто = сброс в None, 'keep' = сохранять текущий, либо UUID аварийного внешнего сквада
+    GRACE_ACCESS_EXTERNAL_SQUAD_UUID: str = ''
     GRACE_ACCESS_TRAFFIC_GB: int = 1
     GRACE_ACCESS_TRIAL_ENABLED: bool = False
     GRACE_ACCESS_DAILY_ENABLED: bool = False
