@@ -12,6 +12,7 @@ from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.crud.campaign import get_campaign_statistics, get_campaigns_count, get_campaigns_list
+from app.database.crud.referral import not_referee_directed
 from app.database.crud.server_squad import get_server_statistics
 from app.database.crud.subscription import get_subscriptions_statistics
 from app.database.crud.transaction import REAL_PAYMENT_METHODS, get_revenue_by_period, get_transactions_statistics
@@ -658,6 +659,10 @@ async def get_top_referrers(
         # Подушевой агрегат: not_referee_directed() отбрасывает награды, полученные
         # человеком КАК ПРИГЛАШЁННЫМ — они не его партнёрский доход. Дни считаются
         # рядом с деньгами: без них лидерборд «дневной» программы состоит из нулей.
+        #
+        # Тот же предикат стоит и на периодных суммах ниже. Без него «всего» и
+        # «за месяц» считались бы по разным популяциям, и у приглашённого без
+        # единого реферала месячный доход оказывался бы больше общего.
         total_earnings_query = await db.execute(
             select(
                 ReferralEarning.user_id.label('referrer_id'),
@@ -675,7 +680,7 @@ async def get_top_referrers(
         # Today earnings
         today_earnings_query = await db.execute(
             select(ReferralEarning.user_id.label('referrer_id'), func.sum(ReferralEarning.amount_kopeks).label('total'))
-            .where(ReferralEarning.created_at >= today_start)
+            .where(and_(not_referee_directed(), ReferralEarning.created_at >= today_start))
             .group_by(ReferralEarning.user_id)
         )
         for row in today_earnings_query:
@@ -685,7 +690,7 @@ async def get_top_referrers(
         # Week earnings
         week_earnings_query = await db.execute(
             select(ReferralEarning.user_id.label('referrer_id'), func.sum(ReferralEarning.amount_kopeks).label('total'))
-            .where(ReferralEarning.created_at >= week_ago)
+            .where(and_(not_referee_directed(), ReferralEarning.created_at >= week_ago))
             .group_by(ReferralEarning.user_id)
         )
         for row in week_earnings_query:
@@ -695,7 +700,7 @@ async def get_top_referrers(
         # Month earnings
         month_earnings_query = await db.execute(
             select(ReferralEarning.user_id.label('referrer_id'), func.sum(ReferralEarning.amount_kopeks).label('total'))
-            .where(ReferralEarning.created_at >= month_ago)
+            .where(and_(not_referee_directed(), ReferralEarning.created_at >= month_ago))
             .group_by(ReferralEarning.user_id)
         )
         for row in month_earnings_query:

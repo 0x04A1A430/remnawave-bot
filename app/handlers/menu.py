@@ -41,6 +41,7 @@ from app.utils.pricing_utils import format_period_description
 from app.utils.promo_offer import (
     build_promo_offer_hint,
     build_test_access_hint,
+    get_user_active_promo_discount_percent,
 )
 from app.utils.rich_menu import try_edit_rich_main_menu
 from app.utils.telegram_html import html_to_telegram, info_page_faq_to_telegram, split_telegram_text

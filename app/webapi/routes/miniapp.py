@@ -36,6 +36,8 @@ from app.database.crud.subscription import (
     add_subscription_servers,
     create_trial_subscription,
     extend_subscription,
+    get_active_subscriptions_by_user_id,
+    get_subscription_by_user_id,
     remove_subscription_servers,
     update_subscription_autopay,
 )
@@ -6721,6 +6723,17 @@ async def purchase_tariff_endpoint(
 
         all_servers, _ = await get_all_server_squads(db, available_only=True)
         squads = [s.squad_uuid for s in all_servers if s.squad_uuid]
+
+    # Какую подписку продлевать. Переменной здесь не было вовсе: `if subscription:`
+    # падало NameError на КАЖДОЙ покупке тарифа через этот эндпоинт. Разрешение
+    # повторяет рабочий путь бота (app/handlers/subscription/tariff_purchase.py):
+    # в мультитарифе берётся подписка на ЭТОТ тариф, в классическом режиме —
+    # единственная подписка пользователя.
+    if settings.is_multi_tariff_enabled():
+        active_subs = await get_active_subscriptions_by_user_id(db, user.id)
+        subscription = next((s for s in active_subs if s.tariff_id == tariff.id), None)
+    else:
+        subscription = await get_subscription_by_user_id(db, user.id)
 
     if subscription:
         # Preserve extra purchased devices when renewing the same tariff
