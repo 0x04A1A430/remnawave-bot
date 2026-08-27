@@ -362,6 +362,8 @@ async def get_referral_terms(
     program_levels: list[ReferralProgramLevel] = []
     personal_percent: int | None = None
     days_target_options: list[ReferralDaysTargetOption] = []
+    choice_money: str | None = None
+    choice_days: str | None = None
 
     if settings.is_referral_levels_scheme():
         from app.database.models import Tariff
@@ -370,6 +372,7 @@ async def get_referral_terms(
             build_level_views,
             describe_active_levels,
             describe_referee_bonus,
+            describe_reward_choice_sides,
             resolve_tier_progress,
         )
 
@@ -417,6 +420,11 @@ async def get_referral_terms(
         if user is not None and settings.is_referral_days_target_choice_enabled():
             days_target_options = await _days_target_options(db, user)
 
+        if user is not None:
+            choice_money, choice_days = await describe_reward_choice_sides(
+                db, user, tariff_names=tariff_names, language=language
+            )
+
     return ReferralTermsResponse(
         scheme='levels' if settings.is_referral_levels_scheme() else 'legacy',
         level_descriptions=level_descriptions,
@@ -442,6 +450,8 @@ async def get_referral_terms(
         reward_preference=(normalize_reward_preference(user.referral_reward_preference) if user else None),
         days_target_subscription_id=(user.referral_days_subscription_id if user else None),
         days_target_options=days_target_options,
+        reward_choice_money=choice_money,
+        reward_choice_days=choice_days,
         is_enabled=settings.is_referral_program_enabled(),
         commission_percent=settings.REFERRAL_COMMISSION_PERCENT,
         first_payment_commission_percent=settings.REFERRAL_FIRST_PAYMENT_COMMISSION_PERCENT,

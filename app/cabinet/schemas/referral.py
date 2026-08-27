@@ -181,6 +181,11 @@ class ReferralTermsResponse(BaseModel):
     days_target_subscription_id: int | None = None
     # Подписки, между которыми есть смысл выбирать. Пусто — выбирать не из чего.
     days_target_options: list[ReferralDaysTargetOption] = []
+    # Что даёт каждая сторона выбора: «25% от суммы» и «7 дн. подписки (Про)».
+    # Считается без учёта уже сделанного выбора — карточки показывают, что даёт
+    # каждый вариант, а не только выбранный. None — этой стороны у правила нет.
+    reward_choice_money: str | None = None
+    reward_choice_days: str | None = None
 
 
 class ReferralRewardLevelResponse(BaseModel):

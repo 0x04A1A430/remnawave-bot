@@ -82,9 +82,17 @@ async def _render(callback: types.CallbackQuery, db: AsyncSession, db_user: User
     На один callback Telegram принимает ровно один ответ, а вызывающие сначала
     подтверждают действие своим текстом и только потом перерисовывают экран.
     """
+    from app.services.referral_reward_service import describe_reward_choice_sides
+
     texts = get_texts(db_user.language)
     kind_choice = settings.is_referral_reward_kind_choice_enabled()
     target_choice = settings.is_referral_days_target_choice_enabled()
+    # Не выбиравший получает деньги — так же, как их выдаст расчёт. Показать
+    # «ничего не выбрано» значило бы разойтись с начислением.
+    current_kind = normalize_reward_preference(db_user.referral_reward_preference) or REWARD_PREFERENCE_MONEY
+
+    choice_money, choice_days = await describe_reward_choice_sides(db, db_user, language=db_user.language)
+    side_labels = {REWARD_PREFERENCE_MONEY: choice_money, REWARD_PREFERENCE_DAYS: choice_days}
 
     lines = [
         texts.t('REFERRAL_REWARD_SETTINGS_TITLE', '⚙️ <b>Настройки наград</b>'),
@@ -97,25 +105,29 @@ async def _render(callback: types.CallbackQuery, db: AsyncSession, db_user: User
     keyboard: list[list[types.InlineKeyboardButton]] = []
 
     if kind_choice:
-        # Не выбиравший получает деньги — так же, как их выдаст расчёт. Показать
-        # здесь «ничего не выбрано» значило бы разойтись с начислением.
-        current = normalize_reward_preference(db_user.referral_reward_preference) or REWARD_PREFERENCE_MONEY
         lines += ['', texts.t('REFERRAL_PREF_HEADER', '🎁 <b>Что получать</b>')]
         lines.append(
             f'<i>{texts.t("REFERRAL_PREF_HINT", "Выбор действует только там, где уровень даёт и то и другое.")}</i>'
         )
         for value in _PREFERENCES:
-            mark = '🔘' if value == current else '⚪️'
+            # На кнопке — сколько именно даёт эта сторона по правилу, которое
+            # человеку и применяется. Без суммы выбор делается вслепую.
+            mark = '🔘' if value == current_kind else '⚪️'
+            side = side_labels.get(value)
             keyboard.append(
                 [
                     types.InlineKeyboardButton(
-                        text=f'{mark} {_preference_label(value, texts)}',
+                        text=f'{mark} {_preference_label(value, texts)}' + (f' — {side}' if side else ''),
                         callback_data=f'ref_pref:{value}',
                     )
                 ]
             )
 
-    if target_choice:
+    # Куда класть дни спрашиваем, только когда человек выбрал дни: выбравшему
+    # деньги эта настройка ни на что не влияет, и пункт обещал бы влияние,
+    # которого нет. Если выбор вида админ не разрешил, спрашиваем всегда — дни
+    # тогда приходят по правилу, и цель у них есть.
+    if target_choice and (not kind_choice or current_kind == REWARD_PREFERENCE_DAYS):
         subscriptions = await _user_subscriptions(db, db_user)
         names = await _tariff_names(db, subscriptions)
         lines += ['', texts.t('REFERRAL_DAYS_TARGET_HEADER', '📅 <b>Куда зачислять дни</b>')]

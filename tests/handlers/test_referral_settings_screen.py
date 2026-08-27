@@ -56,6 +56,18 @@ def allowed(monkeypatch):
 
 
 @pytest.fixture
+def sides(monkeypatch):
+    """Суммы сторон считает движок по настоящей БД — здесь она не предмет."""
+    store = {'money': '25% от суммы', 'days': '7 дн. подписки'}
+
+    async def fake_sides(_db, _viewer, *, tariff_names=None, language=None):
+        return store['money'], store['days']
+
+    monkeypatch.setattr('app.services.referral_reward_service.describe_reward_choice_sides', fake_sides)
+    return store
+
+
+@pytest.fixture
 def subs(monkeypatch):
     store = {'items': [_sub(10, tariff_id=1), _sub(11, tariff_id=2), _sub(12, trial=True)]}
 
@@ -97,7 +109,7 @@ class TestVisibility:
         assert 'referral_reward_settings' in actions
 
     @pytest.mark.asyncio
-    async def test_only_the_allowed_section_is_rendered(self, allowed, subs, monkeypatch):
+    async def test_only_the_allowed_section_is_rendered(self, allowed, subs, sides, monkeypatch):
         monkeypatch.setattr(settings, 'REFERRAL_ALLOW_DAYS_TARGET_CHOICE', False)
         callback = _callback()
 
@@ -124,7 +136,7 @@ class TestCurrentStateIsVisible:
             ('days', 'ref_pref:days'),
         ],
     )
-    async def test_selected_preference_is_marked(self, allowed, subs, preference, marked):
+    async def test_selected_preference_is_marked(self, allowed, subs, sides, preference, marked):
         callback = _callback()
         await _raw(screen.show_reward_settings)(callback, db_user=_user(preference=preference), db=None)
 
@@ -133,10 +145,11 @@ class TestCurrentStateIsVisible:
         assert marked in chosen, chosen
 
     @pytest.mark.asyncio
-    async def test_trial_subscriptions_are_not_offered(self, allowed, subs):
+    async def test_trial_subscriptions_are_not_offered(self, allowed, subs, sides):
         """Положить награду в триал всё равно нельзя — пункт обещал бы обратное."""
+        # Раздел подписок показывается выбравшему дни — у него он и осмыслен.
         callback = _callback()
-        await _raw(screen.show_reward_settings)(callback, db_user=_user(), db=None)
+        await _raw(screen.show_reward_settings)(callback, db_user=_user(preference='days'), db=None)
 
         actions = [
             b.callback_data
@@ -147,18 +160,18 @@ class TestCurrentStateIsVisible:
         assert 'ref_days_target:10' in actions
 
     @pytest.mark.asyncio
-    async def test_says_so_when_there_is_nothing_to_choose(self, allowed, subs):
+    async def test_says_so_when_there_is_nothing_to_choose(self, allowed, subs, sides):
         subs['items'] = []
         callback = _callback()
 
-        await _raw(screen.show_reward_settings)(callback, db_user=_user(), db=None)
+        await _raw(screen.show_reward_settings)(callback, db_user=_user(preference='days'), db=None)
 
         assert 'нет подписок' in callback.message.edit_text.await_args.args[0]
 
 
 class TestSaving:
     @pytest.mark.asyncio
-    async def test_preference_is_saved(self, allowed, subs):
+    async def test_preference_is_saved(self, allowed, subs, sides):
         user = _user()
         db = SimpleNamespace(commit=AsyncMock())
 
@@ -168,7 +181,7 @@ class TestSaving:
         db.commit.assert_awaited()
 
     @pytest.mark.asyncio
-    async def test_only_two_options_are_offered(self, allowed, subs):
+    async def test_only_two_options_are_offered(self, allowed, subs, sides):
         """Выбор двоичный: деньги ИЛИ дни, варианта «и то и другое» нет."""
         callback = _callback()
         await _raw(screen.show_reward_settings)(callback, db_user=_user(), db=None)
@@ -182,7 +195,7 @@ class TestSaving:
         assert actions == ['ref_pref:money', 'ref_pref:days'], actions
 
     @pytest.mark.asyncio
-    async def test_unknown_value_is_not_saved(self, allowed, subs):
+    async def test_unknown_value_is_not_saved(self, allowed, subs, sides):
         """Мусор в callback'е не должен переключать вид награды."""
         user = _user(preference='money')
         db = SimpleNamespace(commit=AsyncMock())
@@ -195,7 +208,7 @@ class TestSaving:
         assert callback.answer.await_args.kwargs.get('show_alert') is True
 
     @pytest.mark.asyncio
-    async def test_a_foreign_subscription_is_refused(self, allowed, subs):
+    async def test_a_foreign_subscription_is_refused(self, allowed, subs, sides):
         """Чужому идентификатору не место в БД: проверка при начислении — не единственный рубеж."""
         user = _user()
         db = SimpleNamespace(commit=AsyncMock())
@@ -208,7 +221,7 @@ class TestSaving:
         assert callback.answer.await_args.kwargs.get('show_alert') is True
 
     @pytest.mark.asyncio
-    async def test_own_subscription_is_saved(self, allowed, subs):
+    async def test_own_subscription_is_saved(self, allowed, subs, sides):
         user = _user()
         db = SimpleNamespace(commit=AsyncMock())
 
@@ -217,7 +230,7 @@ class TestSaving:
         assert user.referral_days_subscription_id == 11
 
     @pytest.mark.asyncio
-    async def test_auto_clears_the_target(self, allowed, subs):
+    async def test_auto_clears_the_target(self, allowed, subs, sides):
         user = _user(chosen=11)
         db = SimpleNamespace(commit=AsyncMock())
 
@@ -233,7 +246,7 @@ class TestSaving:
             ('set_days_target', 'ref_days_target:10', 'REFERRAL_ALLOW_DAYS_TARGET_CHOICE'),
         ],
     )
-    async def test_disallowed_setting_is_not_written(self, allowed, subs, monkeypatch, handler, data, key):
+    async def test_disallowed_setting_is_not_written(self, allowed, subs, sides, monkeypatch, handler, data, key):
         """Запрещённую настройку нельзя записать даже прямым callback'ом."""
         monkeypatch.setattr(settings, key, False)
         user = _user()
@@ -249,3 +262,73 @@ def test_every_handler_is_registered():
     source = inspect.getsource(screen.register_handlers)
     for name in ('show_reward_settings', 'set_reward_preference', 'set_days_target'):
         assert name in source, name
+
+
+class TestDaysTargetFollowsTheKindChoice:
+    """Куда класть дни спрашиваем, только когда человек выбрал дни.
+
+    Выбравшему деньги эта настройка ни на что не влияет, и пункт обещал бы
+    влияние, которого нет.
+    """
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(('preference', 'shown'), [('days', True), ('money', False), (None, False)])
+    async def test_section_follows_the_choice(self, allowed, subs, sides, preference, shown):
+        callback = _callback()
+        await _raw(screen.show_reward_settings)(callback, db_user=_user(preference=preference), db=None)
+
+        actions = [
+            b.callback_data
+            for row in callback.message.edit_text.await_args.kwargs['reply_markup'].inline_keyboard
+            for b in row
+        ]
+        assert any(a.startswith('ref_days_target:') for a in actions) is shown, actions
+
+    @pytest.mark.asyncio
+    async def test_section_is_shown_when_the_kind_choice_is_not_allowed(self, allowed, subs, sides, monkeypatch):
+        """Без выбора вида дни приходят по правилу — цель у них всё равно есть."""
+        monkeypatch.setattr(settings, 'REFERRAL_ALLOW_REWARD_KIND_CHOICE', False)
+        callback = _callback()
+
+        await _raw(screen.show_reward_settings)(callback, db_user=_user(), db=None)
+
+        actions = [
+            b.callback_data
+            for row in callback.message.edit_text.await_args.kwargs['reply_markup'].inline_keyboard
+            for b in row
+        ]
+        assert any(a.startswith('ref_days_target:') for a in actions), actions
+
+
+class TestAmountsAreShown:
+    """Без суммы выбор делается вслепую: непонятно, от чего отказываешься."""
+
+    @pytest.mark.asyncio
+    async def test_each_side_shows_what_it_gives(self, allowed, subs, sides):
+        callback = _callback()
+        await _raw(screen.show_reward_settings)(callback, db_user=_user(), db=None)
+
+        labels = {
+            b.callback_data: b.text
+            for row in callback.message.edit_text.await_args.kwargs['reply_markup'].inline_keyboard
+            for b in row
+            if b.callback_data.startswith('ref_pref:')
+        }
+        assert '25% от суммы' in labels['ref_pref:money'], labels
+        assert '7 дн. подписки' in labels['ref_pref:days'], labels
+
+    @pytest.mark.asyncio
+    async def test_side_without_a_reward_stays_plain(self, allowed, subs, sides):
+        """Стороны может не быть вовсе — тогда приписывать к ней нечего."""
+        sides['days'] = None
+        callback = _callback()
+
+        await _raw(screen.show_reward_settings)(callback, db_user=_user(), db=None)
+
+        labels = {
+            b.callback_data: b.text
+            for row in callback.message.edit_text.await_args.kwargs['reply_markup'].inline_keyboard
+            for b in row
+            if b.callback_data.startswith('ref_pref:')
+        }
+        assert '—' not in labels['ref_pref:days'], labels['ref_pref:days']

@@ -1358,6 +1358,69 @@ async def build_level_views(
     return views, current_level, personal_percent
 
 
+async def describe_reward_choice_sides(
+    db: AsyncSession,
+    viewer: User,
+    *,
+    tariff_names: dict[int, str] | None = None,
+    language: str | None = None,
+) -> tuple[str | None, str | None]:
+    """Что человек получит, выбрав деньги, и что — выбрав дни.
+
+    Возвращает ``(деньги, дни)``; ``None`` с любой стороны означает «этой стороны
+    у правила нет», и выбирать там нечего. Обе стороны считаются БЕЗ учёта уже
+    сделанного выбора: карточки выбора обязаны показывать, что даёт каждый
+    вариант, а не только выбранный.
+
+    Берётся то правило, по которому человеку и платят: в режиме за приглашёнными
+    его ступень, в цепочке — уровень 1, то есть выплата за его прямых
+    приглашённых. Остальные уровни цепочки складываются сверх, но выбор
+    одинаково действует на всех, и показывать их суммой значило бы обещать одно
+    начисление вместо нескольких.
+    """
+    from app.localization.texts import get_texts
+
+    if not settings.is_referral_reward_kind_choice_enabled():
+        return None, None
+
+    texts = get_texts(language) if language else get_texts()
+    names = tariff_names or {}
+    configs = await ReferralRewardLevelService.get_all(db)
+
+    if settings.is_referral_tier_levels():
+        config = await select_tier_config(db, configs, viewer.id)
+    else:
+        config = configs.get(1)
+        if config is not None and not config.is_active:
+            config = None
+
+    if config is None:
+        return None, None
+
+    money_parts: list[str] = []
+    if config.money_enabled:
+        # Личная ставка партнёра перебивает процент правила на выплате прямому —
+        # а здесь получатель именно прямой, и в цепочке, и в рангах.
+        percent = _resolve_percent(config, viewer, direct=True)
+        if percent:
+            money_parts.append(texts.t('REFERRAL_REWARD_PERCENT_OF_SUM', '{percent}% от суммы').format(percent=percent))
+        if config.referrer_fixed_kopeks:
+            money_parts.append(settings.format_price(config.referrer_fixed_kopeks))
+
+    days_label: str | None = None
+    if (
+        config.days_enabled
+        and config.referrer_days
+        and _days_can_be_granted(config, tariff_id=config.referrer_tariff_id, for_referee=False)
+    ):
+        suffix = ''
+        if config.referrer_tariff_id and config.referrer_tariff_id in names:
+            suffix = f' ({names[config.referrer_tariff_id]})'
+        days_label = texts.t('REFERRAL_REWARD_DAYS', '{days} дн. подписки').format(days=config.referrer_days) + suffix
+
+    return (' + '.join(money_parts) or None), days_label
+
+
 def _describe_referee_parts(config: LevelConfig, names: dict[int, str], texts) -> str | None:
     """Что получает приглашённый на этой ступени. ``None`` — ничего."""
     parts: list[str] = []
