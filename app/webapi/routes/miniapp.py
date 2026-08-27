@@ -3320,7 +3320,7 @@ async def get_subscription_details(
                 raw_content = (page.content or '').strip()
                 if not raw_content:
                     continue
-                if not re.sub(r'<[^>]+>', '', raw_content).strip():
+                if not re.sub(r'<[^<>]+>', '', raw_content).strip():
                     continue
                 faq_items.append(
                     MiniAppFaqItem(

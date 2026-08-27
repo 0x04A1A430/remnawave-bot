@@ -13,7 +13,6 @@ from typing import Any
 import pytest
 
 import app.services.payment_service as payment_service_module
-from app.services.payment_service import PaymentService
 
 
 @pytest.fixture
@@ -29,8 +28,8 @@ class _Session:
         return None
 
 
-def _service() -> PaymentService:
-    service = PaymentService.__new__(PaymentService)
+def _service() -> payment_service_module.PaymentService:
+    service = payment_service_module.PaymentService.__new__(payment_service_module.PaymentService)
     service.mulenpay_service = SimpleNamespace()
     return service
 
@@ -50,12 +49,12 @@ async def _run_guest_payment(
         return purchase
 
     monkeypatch.setattr(
-        PaymentService, 'create_mulenpay_payment', staticmethod(fake_create_mulenpay_payment), raising=False
+        payment_service_module.PaymentService,
+        'create_mulenpay_payment',
+        staticmethod(fake_create_mulenpay_payment),
+        raising=False,
     )
     monkeypatch.setattr('app.database.crud.landing.get_purchase_by_token', fake_get_purchase_by_token, raising=False)
-
-    async def noop(*_args: Any, **_kwargs: Any) -> None:
-        return None
 
     monkeypatch.setattr(payment_service_module, '_GETTER_OVERRIDES', {}, raising=False)
 

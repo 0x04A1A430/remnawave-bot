@@ -1304,6 +1304,9 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
             await state.update_data(pending_gift_token=gift_token)
             start_parameter = None  # Don't treat as campaign or referral
         except InvalidGiftTokenError:
+            # Не подарочный токен — это нормальная развилка, а не сбой: тем же
+            # префиксом начинаются купоны и реферальные ссылки, и разбор просто
+            # передаётся следующей ветке ниже.
             pass
 
     # Handle coupon deep links: /start coupon_{token} — one-time wholesale coupons

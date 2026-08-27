@@ -93,7 +93,7 @@ class EmailService:
         # <style>/<script> без закрывающего тега иначе утёк бы телом CSS/JS в текст —
         # срезаем висячий блок до конца ввода.
         text = re.sub(r'<(style|script)\b[^>]*>.*', '', text, flags=re.DOTALL | re.IGNORECASE)
-        text = re.sub(r'<[^>]+>', '', text)
+        text = re.sub(r'<[^<>]+>', '', text)
         text = text.replace('&nbsp;', ' ')
         text = text.replace('&lt;', '<')
         text = text.replace('&gt;', '>')

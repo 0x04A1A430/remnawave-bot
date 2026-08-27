@@ -23,6 +23,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import CallbackQuery, Chat, Message, User as TgUser
 from sqlalchemy import select
 
+import app.handlers.gift_activation as gift_act_mod
 from app.config import settings
 from app.database.crud.landing import generate_purchase_token
 from app.database.models import (
@@ -49,7 +50,6 @@ from app.database.models import (
     WebhookDelivery,
     tariff_promo_groups,
 )
-from app.handlers.gift_activation import handle_gift_activate
 from app.handlers.start import (
     _activate_pending_gift_after_registration,
     cmd_start,
@@ -477,8 +477,6 @@ class TestGiftDeeplinkActivation:
             callback.answer = AsyncMock()
 
             # Mock AsyncSessionLocal used in handle_gift_activate
-            import app.handlers.gift_activation as gift_act_mod
-
             class DummySessionCtx:
                 async def __aenter__(self):
                     return db
@@ -489,7 +487,7 @@ class TestGiftDeeplinkActivation:
             monkeypatch.setattr(gift_act_mod, 'AsyncSessionLocal', lambda: DummySessionCtx())
 
             with patch('app.services.subscription_service.SubscriptionService.create_remnawave_user', AsyncMock()):
-                await handle_gift_activate(callback)
+                await gift_act_mod.handle_gift_activate(callback)
 
             await db.refresh(purchase)
             assert purchase.status == GuestPurchaseStatus.DELIVERED.value
