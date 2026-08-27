@@ -1150,6 +1150,13 @@ class Settings(BaseSettings):
     HAPP_DOWNLOAD_LINK_MACOS: str | None = None
     HAPP_DOWNLOAD_LINK_WINDOWS: str | None = None
     HAPP_DOWNLOAD_LINK_PC: str | None = None
+    # У INCY есть свой формат шифрованных ссылок (incy://crypt1/...) — без него ссылка
+    # подписки уезжает в открытом виде, в отличие от happ-cryptolink. Выключатель на
+    # случай ротации ключа INCY: тогда кнопки вернутся к обычным incy://import/...
+    INCY_CRYPTOLINK_ENABLED: bool = True
+    # Необязательное имя провайдера внутри зашифрованной ссылки (поле "n"): INCY
+    # показывает его пользователю при добавлении подписки.
+    INCY_CRYPTOLINK_PROVIDER_NAME: str | None = None
     HIDE_SUBSCRIPTION_LINK: bool = False
     ENABLE_LOGO_MODE: bool = True
     LOGO_FILE: str = 'vpn_logo.png'
@@ -3335,6 +3342,10 @@ class Settings(BaseSettings):
     def get_happ_cryptolink_redirect_template(self) -> str | None:
         template = (self.HAPP_CRYPTOLINK_REDIRECT_TEMPLATE or '').strip()
         return template or None
+
+    def get_incy_provider_name(self) -> str | None:
+        name = (self.INCY_CRYPTOLINK_PROVIDER_NAME or '').strip()
+        return name or None
 
     def get_happ_download_link(self, platform: str) -> str | None:
         platform_key = platform.lower()
