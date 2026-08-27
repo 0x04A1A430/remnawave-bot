@@ -374,6 +374,10 @@ async def _break_referral_cycle_through(db: AsyncSession, primary: User) -> bool
 async def _repair_referral_levels(db: AsyncSession, primary: User) -> int:
     """Привести ``level`` перенесённых начислений в соответствие с новой цепочкой.
 
+    Только для режима цепочки. В режиме рангов ``level`` означает не расстояние,
+    а ступень партнёра, и пересчитывать его по глубине нельзя — вызывающий это
+    и проверяет.
+
     Уровень строки — это расстояние между реферером и рефералом на момент
     начисления. Слияние это расстояние меняет: реферал уровня 2 у secondary может
     стать прямым рефералом primary. Перенесённая строка при этом сохраняет
@@ -902,7 +906,10 @@ async def execute_merge(
     await _break_referral_cycle_through(db, primary)
 
     # 9c. Уровень перенесённых начислений мог перестать соответствовать цепочке.
-    if settings.is_referral_levels_scheme():
+    # Только в режиме цепочки: там level — расстояние, и слияние его меняет.
+    # В режиме рангов level это ступень партнёра, расстояние всегда 1, и пересчёт
+    # переписал бы ранг в единицу — обнулив вместе с ним и учёт лимита выплат.
+    if settings.is_referral_levels_scheme() and not settings.is_referral_tier_levels():
         await _repair_referral_levels(db, primary)
 
     # 10. Переназначение withdrawal_requests

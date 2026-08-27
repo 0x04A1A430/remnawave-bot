@@ -284,6 +284,7 @@ async def get_referral_terms(
     """
     level_descriptions: list[str] = []
     referee_bonus: str | None = None
+    tier_progress = None
 
     if settings.is_referral_levels_scheme():
         from app.database.models import Tariff
@@ -291,6 +292,7 @@ async def get_referral_terms(
             ReferralRewardLevelService,
             describe_active_levels,
             describe_referee_bonus,
+            resolve_tier_progress,
         )
 
         configs = await ReferralRewardLevelService.get_all(db)
@@ -302,14 +304,34 @@ async def get_referral_terms(
             tariff_names = {row.id: row.name for row in tariffs_result.all()}
 
         language = user.language if user else None
-        level_descriptions = await describe_active_levels(db, tariff_names=tariff_names, language=language)
-        referee_bonus = await describe_referee_bonus(db, tariff_names=tariff_names, language=language)
+        level_descriptions = await describe_active_levels(db, tariff_names=tariff_names, language=language, viewer=user)
+        # Пользователь известен — он и есть потенциальный пригласивший, и в
+        # режиме рангов бонус его приглашённых задаётся его рангом. Аноним
+        # получает описание стартового ранга.
+        referee_bonus = await describe_referee_bonus(db, tariff_names=tariff_names, language=language, referrer=user)
+        # Ранг считается только для известного пользователя: эндпоинт публичный,
+        # и «ваш ранг» без пользователя было бы чужим или выдуманным.
+        if user is not None:
+            tier_progress = await resolve_tier_progress(db, user)
 
     return ReferralTermsResponse(
         scheme='levels' if settings.is_referral_levels_scheme() else 'legacy',
         level_descriptions=level_descriptions,
         referee_bonus_description=referee_bonus,
-        max_level_depth=settings.get_referral_max_level_depth() if settings.is_referral_levels_scheme() else 1,
+        # В режиме рангов цепочки нет: получатель ровно один, прямой пригласивший.
+        # Отдать сюда настроенную глубину значило бы пообещать клиенту выплаты
+        # тем, кто выше, — их в этом режиме не бывает.
+        max_level_depth=(
+            settings.get_referral_max_level_depth()
+            if settings.is_referral_levels_scheme() and not settings.is_referral_tier_levels()
+            else 1
+        ),
+        levels_mode=settings.get_referral_levels_mode() if settings.is_referral_levels_scheme() else 'chain',
+        tier_current_level=tier_progress.current_level if tier_progress else None,
+        tier_next_level=tier_progress.next_level if tier_progress else None,
+        tier_next_remaining=tier_progress.next_remaining if tier_progress else 0,
+        tier_referrals_any=tier_progress.referrals_any if tier_progress else 0,
+        tier_referrals_active=tier_progress.referrals_active if tier_progress else 0,
         is_enabled=settings.is_referral_program_enabled(),
         commission_percent=settings.REFERRAL_COMMISSION_PERCENT,
         first_payment_commission_percent=settings.REFERRAL_FIRST_PAYMENT_COMMISSION_PERCENT,

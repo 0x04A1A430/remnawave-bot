@@ -725,7 +725,7 @@ class TestInvitePromise:
         )
         monkeypatch.setattr(type(screen.settings), 'get_cabinet_referral_link', lambda self, code: '')
 
-        async def fake_referee_bonus(_db, tariff_names=None, language=None):
+        async def fake_referee_bonus(_db, tariff_names=None, language=None, referrer=None):
             return '7 дн. подписки (Про) за регистрацию'
 
         async def fake_tariffs(_db):

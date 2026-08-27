@@ -282,7 +282,7 @@ class TestTermsEndpointUnderLevels:
         async def fake_all(_db):
             return {}
 
-        async def fake_describe(_db, tariff_names=None, language=None):
+        async def fake_describe(_db, tariff_names=None, language=None, viewer=None, referrer=None):
             captured['language'] = language
             return []
 
@@ -401,3 +401,158 @@ class TestDepthEndpoint:
             )
         assert excinfo.value.status_code == 409
         service.set_value.assert_not_awaited()
+
+
+class TestLevelsModeSetting:
+    """Режим уровней меняет получателей выплат — значение обязано быть проверено.
+
+    Общий эндпоинт ``PUT /admin/settings/{key}`` сверяет присланное со списком
+    вариантов ТОЛЬКО если ключ в нём есть. Без записи в CHOICES он принял бы
+    'ranks' или 'TIERS!', вернул 200 и показал сохранённое значение, а чтение
+    молча трактовало бы его как 'chain': кабинет говорит «сохранено» о настройке,
+    которая не применилась.
+    """
+
+    def test_mode_has_choice_options(self):
+        from app.services.system_settings_service import bot_configuration_service
+
+        values = [option.value for option in bot_configuration_service.get_choice_options('REFERRAL_LEVELS_MODE')]
+        assert values == ['chain', 'tiers']
+
+    def test_mode_route_is_registered_and_literal(self, registered_paths):
+        assert '/cabinet/admin/partners/referral-levels-mode' in registered_paths
+
+    @pytest.mark.parametrize(
+        ('path', 'expected'),
+        [('/admin/partners/referral-levels-mode', 'update_referral_levels_mode')],
+    )
+    def test_mode_route_is_not_shadowed(self, path, expected):
+        from app.cabinet.routes.admin_partners import router
+
+        for route in router.routes:
+            if 'PATCH' not in route.methods:
+                continue
+            match, _scope = route.matches({'type': 'http', 'method': 'PATCH', 'path': path, 'headers': []})
+            if match.name == 'FULL':
+                assert route.endpoint.__name__ == expected
+                return
+        raise AssertionError(f'PATCH {path} не совпал ни с одним маршрутом')
+
+
+class TestLevelsModeEndpoint:
+    """Эндпоинт переключения режима вызывается по-настоящему.
+
+    Мутационная проверка показала, что его тело можно было целиком превратить в
+    no-op — убрать белый список, убрать проверку .env, убрать саму запись — и весь
+    набор оставался зелёным. Кабинет при этом возвращал бы 200 и «сохранено», а
+    бот продолжал платить по прежнему режиму: молчаливое расхождение UI и выплат.
+    """
+
+    @pytest.mark.asyncio
+    async def test_valid_mode_is_persisted(self, wired, monkeypatch):
+        from app.cabinet.routes import admin_partners
+        from app.cabinet.schemas.referral import ReferralLevelsModeUpdateRequest
+
+        service = SimpleNamespace(set_value=AsyncMock(), is_env_locked=lambda key: False)
+        monkeypatch.setattr(admin_partners, 'bot_configuration_service', service)
+
+        db = _db_returning(None)
+        await admin_partners.update_referral_levels_mode(
+            ReferralLevelsModeUpdateRequest(levels_mode='tiers'), admin=SimpleNamespace(id=1), db=db
+        )
+        service.set_value.assert_awaited_once_with(db, 'REFERRAL_LEVELS_MODE', 'tiers')
+
+    @pytest.mark.asyncio
+    async def test_switching_back_to_chain_is_persisted(self, wired, monkeypatch):
+        """Обратный путь так же важен: без него включивший ранги не вернётся."""
+        from app.cabinet.routes import admin_partners
+        from app.cabinet.schemas.referral import ReferralLevelsModeUpdateRequest
+
+        service = SimpleNamespace(set_value=AsyncMock(), is_env_locked=lambda key: False)
+        monkeypatch.setattr(admin_partners, 'bot_configuration_service', service)
+
+        db = _db_returning(None)
+        await admin_partners.update_referral_levels_mode(
+            ReferralLevelsModeUpdateRequest(levels_mode='chain'), admin=SimpleNamespace(id=1), db=db
+        )
+        service.set_value.assert_awaited_once_with(db, 'REFERRAL_LEVELS_MODE', 'chain')
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize('bad', ['ranks', 'tier', 'TIERS!', '', 'levels'])
+    async def test_unknown_mode_is_rejected(self, wired, monkeypatch, bad):
+        """Неизвестная строка при чтении молча стала бы 'chain'.
+
+        То есть кабинет показал бы «сохранено» на настройке, которая не применилась.
+        """
+        from app.cabinet.routes import admin_partners
+        from app.cabinet.schemas.referral import ReferralLevelsModeUpdateRequest
+
+        service = SimpleNamespace(set_value=AsyncMock(), is_env_locked=lambda key: False)
+        monkeypatch.setattr(admin_partners, 'bot_configuration_service', service)
+
+        with pytest.raises(HTTPException) as excinfo:
+            await admin_partners.update_referral_levels_mode(
+                ReferralLevelsModeUpdateRequest(levels_mode=bad), admin=SimpleNamespace(id=1), db=_db_returning(None)
+            )
+        assert excinfo.value.status_code == 400
+        service.set_value.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_case_and_spaces_are_normalised(self, wired, monkeypatch):
+        from app.cabinet.routes import admin_partners
+        from app.cabinet.schemas.referral import ReferralLevelsModeUpdateRequest
+
+        service = SimpleNamespace(set_value=AsyncMock(), is_env_locked=lambda key: False)
+        monkeypatch.setattr(admin_partners, 'bot_configuration_service', service)
+
+        db = _db_returning(None)
+        await admin_partners.update_referral_levels_mode(
+            ReferralLevelsModeUpdateRequest(levels_mode='  TIERS '), admin=SimpleNamespace(id=1), db=db
+        )
+        service.set_value.assert_awaited_once_with(db, 'REFERRAL_LEVELS_MODE', 'tiers')
+
+    @pytest.mark.asyncio
+    async def test_env_pinned_mode_is_refused(self, wired, monkeypatch):
+        """Ключ из .env перетрёт запись при рестарте — писать его в БД нельзя."""
+        from app.cabinet.routes import admin_partners
+        from app.cabinet.schemas.referral import ReferralLevelsModeUpdateRequest
+
+        service = SimpleNamespace(set_value=AsyncMock(), is_env_locked=lambda key: key == 'REFERRAL_LEVELS_MODE')
+        monkeypatch.setattr(admin_partners, 'bot_configuration_service', service)
+
+        with pytest.raises(HTTPException) as excinfo:
+            await admin_partners.update_referral_levels_mode(
+                ReferralLevelsModeUpdateRequest(levels_mode='tiers'),
+                admin=SimpleNamespace(id=1),
+                db=_db_returning(None),
+            )
+        assert excinfo.value.status_code == 409
+        service.set_value.assert_not_awaited()
+
+
+class TestLevelsPayloadReportsTheMode:
+    """Кабинет рисует редактор по levels_mode из ответа — значение обязано быть настоящим."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(('stored', 'expected'), [('chain', 'chain'), ('tiers', 'tiers')])
+    async def test_payload_reports_the_stored_mode(self, wired, monkeypatch, stored, expected):
+        from app.cabinet.routes import admin_partners
+
+        monkeypatch.setattr(settings, 'REFERRAL_REWARD_SCHEME', 'levels')
+        monkeypatch.setattr(settings, 'REFERRAL_LEVELS_MODE', stored)
+        service = SimpleNamespace(set_value=AsyncMock(), is_env_locked=lambda key: False)
+        monkeypatch.setattr(admin_partners, 'bot_configuration_service', service)
+
+        payload = await admin_partners._levels_payload(_db_returning(None))
+        assert payload.levels_mode == expected
+
+    @pytest.mark.asyncio
+    async def test_payload_reports_the_env_lock(self, wired, monkeypatch):
+        """Без честного флага кнопка перестанет быть заблокированной, и правка уйдёт в БД."""
+        from app.cabinet.routes import admin_partners
+
+        service = SimpleNamespace(set_value=AsyncMock(), is_env_locked=lambda key: key == 'REFERRAL_LEVELS_MODE')
+        monkeypatch.setattr(admin_partners, 'bot_configuration_service', service)
+
+        payload = await admin_partners._levels_payload(_db_returning(None))
+        assert payload.levels_mode_locked_by_env is True

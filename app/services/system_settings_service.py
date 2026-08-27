@@ -516,6 +516,10 @@ class BotConfigurationService:
             ChoiceOption('legacy', '💰 Классическая', 'Проценты и фиксированные бонусы из настроек REFERRAL_*'),
             ChoiceOption('levels', '🪜 Многоуровневая', 'Уровни с деньгами и/или днями подписки'),
         ],
+        'REFERRAL_LEVELS_MODE': [
+            ChoiceOption('chain', '🔗 Цепочка', 'Уровень = глубина: платят и пригласившему, и тем, кто выше'),
+            ChoiceOption('tiers', '🏅 Ранги', 'Уровень = ранг за число рефералов: платят только прямому пригласившему'),
+        ],
         'DATABASE_MODE': [
             ChoiceOption('auto', '🤖 Авто'),
             ChoiceOption('postgresql', '🐘 PostgreSQL'),

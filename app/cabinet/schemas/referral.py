@@ -107,6 +107,17 @@ class ReferralTermsResponse(BaseModel):
     level_descriptions: list[str] = []
     referee_bonus_description: str | None = None
     max_level_depth: int = 1
+    # Что означает номер уровня: 'chain' — глубина цепочки, 'tiers' — ранг за
+    # число рефералов. Клиент обязан различать: в рангах платят только прямому
+    # пригласившему, и глубина цепочки там равна 1 независимо от настройки.
+    levels_mode: str = 'chain'
+    # Ранг самого пользователя. Заполняется только в режиме рангов — в цепочке
+    # ранга не существует, и нули читались бы как «ранг 0».
+    tier_current_level: int | None = None
+    tier_next_level: int | None = None
+    tier_next_remaining: int = 0
+    tier_referrals_any: int = 0
+    tier_referrals_active: int = 0
 
 
 class ReferralRewardLevelResponse(BaseModel):
@@ -152,6 +163,8 @@ class ReferralRewardLevelsResponse(BaseModel):
 
     scheme: str
     scheme_locked_by_env: bool = False
+    levels_mode: str = 'chain'
+    levels_mode_locked_by_env: bool = False
     max_level_depth: int
     max_supported_level: int
     levels: list[ReferralRewardLevelResponse]
@@ -193,3 +206,9 @@ class ReferralDepthUpdateRequest(BaseModel):
     """Глубина обхода цепочки: сколько звеньев вверх получают награду."""
 
     max_level_depth: int
+
+
+class ReferralLevelsModeUpdateRequest(BaseModel):
+    """Что означает номер уровня: 'chain' (глубина) или 'tiers' (ранг)."""
+
+    levels_mode: str

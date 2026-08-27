@@ -123,17 +123,35 @@ async def show_referral_info(callback: types.CallbackQuery, db_user: User, db: A
         # Описание берётся из того же источника, что и расчёт: расхождение
         # обещанного и начисляемого — самый дорогой класс ошибок в реферальных
         # программах, и берётся он ровно из отдельно написанного текста.
-        from app.services.referral_reward_service import describe_active_levels, describe_referee_bonus
+        from app.services.referral_reward_service import (
+            describe_active_levels,
+            describe_referee_bonus,
+            format_tier_progress,
+            resolve_tier_progress,
+        )
 
         tariff_names = await _reward_tariff_names(db)
-        for line in await describe_active_levels(db, tariff_names=tariff_names, language=db_user.language):
+        for line in await describe_active_levels(
+            db, tariff_names=tariff_names, language=db_user.language, viewer=db_user
+        ):
             referral_text += f'\n• {line}'
-        referee_bonus = await describe_referee_bonus(db, tariff_names=tariff_names, language=db_user.language)
+        # «Новый пользователь получает» на экране партнёра — это обещание тем,
+        # кого пригласит ИМЕННО ЭТОТ партнёр, поэтому берётся его ранг.
+        referee_bonus = await describe_referee_bonus(
+            db, tariff_names=tariff_names, language=db_user.language, referrer=db_user
+        )
         if referee_bonus:
             referral_text += '\n' + texts.t(
                 'REFERRAL_REWARD_NEW_USER_LEVELS',
                 '• Новый пользователь получает: <b>{bonus}</b>',
             ).format(bonus=referee_bonus)
+
+        # В режиме рангов лестница без отметки «вы здесь» не отвечает на главный
+        # вопрос пользователя: какой ранг у НЕГО и сколько до следующего.
+        progress_lines = format_tier_progress(await resolve_tier_progress(db, db_user), db_user.language)
+        if progress_lines:
+            referral_text += '\n\n' + '\n'.join(progress_lines)
+
         referral_text += '\n\n'
 
     if not levels_scheme and settings.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS > 0:
@@ -235,9 +253,16 @@ async def show_referral_info(callback: types.CallbackQuery, db_user: User, db: A
                     ),
                 }.get(earning['reason'], earning['reason'])
 
+                # В режиме рангов level это ступень партнёра, а не глубина сети:
+                # получатель всегда прямой пригласивший, и «ур. 3» рядом с именем
+                # его собственного реферала утверждает несуществующую цепочку.
                 level = earning.get('level', 1)
                 if level > 1:
-                    reason_text += f' (ур. {level})'
+                    reason_text += (
+                        texts.t('REFERRAL_EARNING_TIER_SUFFIX', ' (ранг {level})')
+                        if settings.is_referral_tier_levels()
+                        else texts.t('REFERRAL_EARNING_LEVEL_SUFFIX', ' (ур. {level})')
+                    ).format(level=level)
 
                 referral_text += (
                     texts.t(
@@ -624,8 +649,10 @@ async def create_invite_message(callback: types.CallbackQuery, db_user: User, db
     if settings.is_referral_levels_scheme():
         from app.services.referral_reward_service import describe_referee_bonus
 
+        # Текст пересылают другу, и обещание в нём — про бонус ЭТОГО приглашающего:
+        # в режиме рангов сумма зависит от его ранга, а не от стартового.
         referee_bonus = await describe_referee_bonus(
-            db, tariff_names=await _reward_tariff_names(db), language=db_user.language
+            db, tariff_names=await _reward_tariff_names(db), language=db_user.language, referrer=db_user
         )
         if referee_bonus:
             bonus_block = '\n\n' + texts.t(

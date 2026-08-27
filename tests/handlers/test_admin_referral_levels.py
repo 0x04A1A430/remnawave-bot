@@ -633,3 +633,157 @@ class TestLevelUnlockThresholdEditing:
         callback = _callback('admin_ref_lvl_countmode:1')
         await _raw(editor.toggle_threshold_population)(callback, db_user=SimpleNamespace(id=1), db=None)
         assert wired['saved'][-1]['required_referrals_active_only'] is True
+
+
+class TestLevelsModeToggle:
+    """Переключатель «цепочка / ранги» в редакторе уровней.
+
+    Переключение меняет и получателей выплат, и число сработавших правил на одном
+    пополнении, поэтому оно отдельное действие и обязано быть видимым с экрана
+    уровней: искать его в общем списке конфигурации админ не пойдёт.
+    """
+
+    @pytest.mark.asyncio
+    async def test_toggle_is_on_the_levels_screen(self, wired, monkeypatch):
+        monkeypatch.setattr(settings, 'REFERRAL_REWARD_SCHEME', 'levels')
+        callback = _callback('admin_ref_levels')
+        await _raw(editor.show_reward_levels)(callback, db_user=SimpleNamespace(id=1), db=None)
+
+        markup = callback.message.edit_text.await_args.kwargs['reply_markup']
+        actions = [b.callback_data for row in markup.inline_keyboard for b in row]
+        assert 'admin_ref_lvl_tiers' in actions
+
+    @pytest.mark.asyncio
+    async def test_switches_chain_to_tiers_and_back(self, wired, monkeypatch):
+        saved = {}
+
+        async def fake_set(_db, key, value):
+            saved[key] = value
+            monkeypatch.setattr(settings, key, value)
+
+        monkeypatch.setattr(editor.bot_configuration_service, 'set_value', fake_set)
+        monkeypatch.setattr(settings, 'REFERRAL_REWARD_SCHEME', 'levels')
+        monkeypatch.setattr(settings, 'REFERRAL_LEVELS_MODE', 'chain')
+
+        await _raw(editor.toggle_levels_mode)(_callback('admin_ref_lvl_tiers'), db_user=SimpleNamespace(id=1), db=None)
+        assert saved['REFERRAL_LEVELS_MODE'] == 'tiers'
+
+        await _raw(editor.toggle_levels_mode)(_callback('admin_ref_lvl_tiers'), db_user=SimpleNamespace(id=1), db=None)
+        assert saved['REFERRAL_LEVELS_MODE'] == 'chain'
+
+    @pytest.mark.asyncio
+    async def test_env_locked_mode_is_not_written(self, wired, monkeypatch):
+        saved = {}
+
+        async def fake_set(_db, key, value):
+            saved[key] = value
+
+        monkeypatch.setattr(editor.bot_configuration_service, 'set_value', fake_set)
+        monkeypatch.setattr(editor.bot_configuration_service, 'is_env_locked', lambda key: True)
+
+        callback = _callback('admin_ref_lvl_tiers')
+        await _raw(editor.toggle_levels_mode)(callback, db_user=SimpleNamespace(id=1), db=None)
+
+        assert not saved, 'ключ из .env перезапишется при рестарте — писать его в БД нельзя'
+        assert callback.answer.await_args.kwargs.get('show_alert') is True
+
+    @pytest.mark.asyncio
+    async def test_warns_when_no_tier_starts_at_zero(self, wired, monkeypatch):
+        """Лестница без стартовой ступени молча прекращает выплаты всем новичкам."""
+
+        async def fake_set(_db, key, value):
+            monkeypatch.setattr(settings, key, value)
+
+        monkeypatch.setattr(editor.bot_configuration_service, 'set_value', fake_set)
+        monkeypatch.setattr(editor.bot_configuration_service, 'is_env_locked', lambda key: False)
+        monkeypatch.setattr(settings, 'REFERRAL_REWARD_SCHEME', 'levels')
+        monkeypatch.setattr(settings, 'REFERRAL_LEVELS_MODE', 'chain')
+
+        async def only_gated(_db, only_active=False):
+            return [_level(1, required_referrals=10), _level(2, required_referrals=25)]
+
+        monkeypatch.setattr(editor, 'get_all_reward_levels', only_gated)
+
+        callback = _callback('admin_ref_lvl_tiers')
+        await _raw(editor.toggle_levels_mode)(callback, db_user=SimpleNamespace(id=1), db=None)
+
+        text = callback.answer.await_args.args[0]
+        assert 'порог' in text and '10' in text, text
+
+    @pytest.mark.asyncio
+    async def test_depth_editor_refuses_to_open_under_tiers(self, wired, monkeypatch):
+        """Форма, которая примет значение и ничего не изменит, хуже отсутствующей кнопки."""
+        monkeypatch.setattr(settings, 'REFERRAL_REWARD_SCHEME', 'levels')
+        monkeypatch.setattr(settings, 'REFERRAL_LEVELS_MODE', 'tiers')
+
+        state = SimpleNamespace(set_state=AsyncMock())
+        callback = _callback('admin_ref_lvl_depth')
+        await _raw(editor.start_depth_edit)(callback, db_user=SimpleNamespace(id=1), db=None, state=state)
+
+        state.set_state.assert_not_awaited()
+        assert callback.answer.await_args.kwargs.get('show_alert') is True
+
+    @pytest.mark.asyncio
+    async def test_tier_levels_beyond_depth_are_not_marked_as_dead(self, wired, monkeypatch):
+        """Глубина ограничивает только цепочку — в рангах работают все уровни."""
+        monkeypatch.setattr(settings, 'REFERRAL_REWARD_SCHEME', 'levels')
+        monkeypatch.setattr(settings, 'REFERRAL_LEVELS_MODE', 'tiers')
+        monkeypatch.setattr(settings, 'REFERRAL_MAX_LEVEL_DEPTH', 3)
+
+        async def deep(_db, only_active=False):
+            return [_level(5, required_referrals=10)]
+
+        monkeypatch.setattr(editor, 'get_all_reward_levels', deep)
+
+        callback = _callback('admin_ref_levels')
+        await _raw(editor.show_reward_levels)(callback, db_user=SimpleNamespace(id=1), db=None)
+
+        markup = callback.message.edit_text.await_args.kwargs['reply_markup']
+        labels = [b.text for row in markup.inline_keyboard for b in row]
+        assert not any('не платит' in label for label in labels), labels
+        assert any('Ранг 5' in label for label in labels), labels
+
+    @pytest.mark.asyncio
+    async def test_button_label_follows_the_stored_value(self, wired, monkeypatch):
+        """Ярлык обязан совпадать с тем, что сделает нажатие.
+
+        Он рисовался по ``is_referral_tier_levels()``, которая требует включённой
+        схемы уровней, а переключатель решает по ``get_referral_levels_mode()``,
+        от схемы не зависящей. При классической схеме кнопка показывала «цепочка»
+        поверх сохранённых «рангов», и первое нажатие не меняло ничего видимого.
+        """
+        monkeypatch.setattr(settings, 'REFERRAL_REWARD_SCHEME', 'legacy')
+        monkeypatch.setattr(settings, 'REFERRAL_LEVELS_MODE', 'tiers')
+
+        callback = _callback('admin_ref_levels')
+        await _raw(editor.show_reward_levels)(callback, db_user=SimpleNamespace(id=1), db=None)
+
+        markup = callback.message.edit_text.await_args.kwargs['reply_markup']
+        labels = [b.text for row in markup.inline_keyboard for b in row]
+        assert any('Режим: ранги' in label for label in labels), labels
+
+    @pytest.mark.asyncio
+    async def test_warns_about_a_ladder_carried_over_from_chain(self, wired, monkeypatch):
+        """У цепочки пороги нулевые: после переключения платит один уровень, старший.
+
+        Без предупреждения это выглядит как «остальные уровни перестали работать».
+        """
+
+        async def fake_set(_db, key, value):
+            monkeypatch.setattr(settings, key, value)
+
+        monkeypatch.setattr(editor.bot_configuration_service, 'set_value', fake_set)
+        monkeypatch.setattr(editor.bot_configuration_service, 'is_env_locked', lambda key: False)
+        monkeypatch.setattr(settings, 'REFERRAL_REWARD_SCHEME', 'levels')
+        monkeypatch.setattr(settings, 'REFERRAL_LEVELS_MODE', 'chain')
+
+        async def chain_ladder(_db, only_active=False):
+            return [_level(1), _level(2), _level(3)]
+
+        monkeypatch.setattr(editor, 'get_all_reward_levels', chain_ladder)
+
+        callback = _callback('admin_ref_lvl_tiers')
+        await _raw(editor.toggle_levels_mode)(callback, db_user=SimpleNamespace(id=1), db=None)
+
+        text = callback.answer.await_args.args[0]
+        assert 'одинаковый порог' in text, text

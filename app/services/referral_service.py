@@ -678,7 +678,7 @@ async def process_referral_registration(db: AsyncSession, new_user_id: int, refe
             if settings.is_referral_levels_scheme():
                 from app.services.referral_reward_service import describe_referee_bonus
 
-                referee_promise = await describe_referee_bonus(db)
+                referee_promise = await describe_referee_bonus(db, referrer=referrer)
                 if referee_promise:
                     referral_notification += f'\n\n🎁 Ваш бонус: {referee_promise}!'
             elif settings.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS > 0:
@@ -691,7 +691,9 @@ async def process_referral_registration(db: AsyncSession, new_user_id: int, refe
             if settings.is_referral_levels_scheme():
                 from app.services.referral_reward_service import describe_active_levels
 
-                level_lines = await describe_active_levels(db)
+                # Уведомление уходит пригласившему — в списке отмечается ЕГО ранг,
+                # иначе вся лестница выглядит как перечень уже причитающихся ему наград.
+                level_lines = await describe_active_levels(db, viewer=referrer)
                 inviter_notification = (
                     f'👥 <b>Новый реферал!</b>\n\n'
                     f'По вашей ссылке зарегистрировался пользователь '
@@ -771,13 +773,19 @@ def _level_event_phrase(event: str, level: int, referee_name: str) -> str:
 
     Две вещи, которые нельзя писать наугад. Первое: при триггере «регистрация»
     пополнения не было, и сообщать о нём — прямая ложь в денежном уведомлении.
-    Второе: на уровне 2+ платит не тот, кого получатель приглашал, а реферал его
-    реферала — называть этого человека «вашим рефералом» неверно, да и его имени
-    получатель раньше не видел.
+    Второе: в цепочке на уровне 2+ платит не тот, кого получатель приглашал, а
+    реферал его реферала — называть этого человека «вашим рефералом» неверно, да
+    и его имени получатель раньше не видел.
+
+    В режиме рангов номер означает не глубину, а ступень самого партнёра, и
+    получатель всегда прямой пригласивший. Прежняя проверка ``level > 1`` там
+    прятала бы имя собственного реферала у каждого, кто поднялся выше первого
+    ранга, и обещала бы «сеть», которой в этом режиме не существует.
     """
+    from app.config import settings
     from app.services.referral_reward_service import RewardEvent
 
-    if level > 1:
+    if level > 1 and not settings.is_referral_tier_levels():
         source = f'участник вашей сети (уровень {level})'
     else:
         source = f'ваш реферал <b>{html.escape(referee_name)}</b>'

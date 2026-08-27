@@ -9,6 +9,7 @@ import structlog
 from sqlalchemy import and_, case, desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.database.crud.referral import not_referee_directed
 from app.database.crud.transaction import REAL_PAYMENT_METHODS
 from app.database.models import (
@@ -152,8 +153,13 @@ class PartnerStatsService:
         # поэтому в многоуровневой схеме «средний доход с реферала» завышался бы
         # тем сильнее, чем глубже сеть. Считаем от дохода первого уровня: он
         # относится ровно к тем рефералам, что стоят в знаменателе.
-        direct_earnings = next(
-            (row['money_kopeks'] for row in earnings_by_level if row['level'] == 1), earnings_all_time
+        # В режиме рангов срез по level=1 не годится: level там — ранг партнёра,
+        # а доход приходит от прямых рефералов на любом ранге. Отбор по первому
+        # занижал бы среднее в разы у всех, кто поднялся выше стартовой ступени.
+        direct_earnings = (
+            earnings_all_time
+            if settings.is_referral_tier_levels()
+            else next((row['money_kopeks'] for row in earnings_by_level if row['level'] == 1), earnings_all_time)
         )
         avg_earnings_per_referral = round(direct_earnings / paid_referrals, 2) if paid_referrals > 0 else 0
 
@@ -517,7 +523,11 @@ class PartnerStatsService:
         # Средний доход с реферала: числитель — только первый уровень, знаменатель —
         # прямые приглашённые. Смешивать все уровни с прямыми рефералами значит
         # завышать среднее тем сильнее, чем глубже сети у партнёров.
-        direct_paid = next((row['money_kopeks'] for row in payouts_by_level if row['level'] == 1), total_paid)
+        direct_paid = (
+            total_paid
+            if settings.is_referral_tier_levels()
+            else next((row['money_kopeks'] for row in payouts_by_level if row['level'] == 1), total_paid)
+        )
         avg_per_referral = round(direct_paid / paid_referrals_count, 2) if paid_referrals_count > 0 else 0
 
         return {

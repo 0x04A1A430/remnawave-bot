@@ -2234,5 +2234,17 @@
   "REFERRAL_DAYS_SHORT": "{days} дн.",
   "REFERRAL_LEVEL_LINE": "Уровень {level}: {rewards} {trigger}",
   "REFERRAL_LEVEL_UNLOCK_ACTIVE": " (открывается за {count} рефералов с пополнением)",
-  "REFERRAL_LEVEL_UNLOCK_ANY": " (открывается за {count} приглашённых)"
+  "REFERRAL_LEVEL_UNLOCK_ANY": " (открывается за {count} приглашённых)",
+  "REFERRAL_TIER_LINE": "Ранг {level}: {rewards} {trigger}",
+  "REFERRAL_TIER_FROM_ACTIVE": " — от {count} рефералов с пополнением",
+  "REFERRAL_TIER_FROM_ANY": " — от {count} приглашённых",
+  "REFERRAL_TIER_BASE": " — стартовый",
+  "REFERRAL_TIER_CURRENT": "🏅 Ваш ранг: {level}",
+  "REFERRAL_TIER_NEXT": "До ранга {level}: ещё {count}",
+  "REFERRAL_TIER_NONE": "🏅 Ранг пока не открыт",
+  "REFERRAL_TIER_YOU_ARE_HERE": "  ← ваш ранг",
+  "REFERRAL_TIER_PERSONAL_RATE": "💼 У вас индивидуальная ставка {percent}% — она действует на любом ранге",
+  "REFERRAL_TIER_NO_REFERRER_REWARD": "вам не начисляется",
+  "REFERRAL_EARNING_TIER_SUFFIX": " (ранг {level})",
+  "REFERRAL_EARNING_LEVEL_SUFFIX": " (ур. {level})"
 }

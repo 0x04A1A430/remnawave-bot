@@ -2937,11 +2937,17 @@ async def _build_referral_info(
     # проценты и бонусы, которых бот не платит.
     level_descriptions: list[str] = []
     referee_bonus: str | None = None
+    tier_progress = None
     if settings.is_referral_levels_scheme():
-        from app.services.referral_reward_service import describe_active_levels, describe_referee_bonus
+        from app.services.referral_reward_service import (
+            describe_active_levels,
+            describe_referee_bonus,
+            resolve_tier_progress,
+        )
 
-        level_descriptions = await describe_active_levels(db, language=user.language)
-        referee_bonus = await describe_referee_bonus(db, language=user.language)
+        level_descriptions = await describe_active_levels(db, language=user.language, viewer=user)
+        referee_bonus = await describe_referee_bonus(db, language=user.language, referrer=user)
+        tier_progress = await resolve_tier_progress(db, user)
 
     terms = MiniAppReferralTerms(
         minimum_topup_kopeks=minimum_topup_kopeks,
@@ -2954,6 +2960,10 @@ async def _build_referral_info(
         scheme='levels' if settings.is_referral_levels_scheme() else 'legacy',
         level_descriptions=level_descriptions,
         referee_bonus_description=referee_bonus,
+        levels_mode=settings.get_referral_levels_mode() if settings.is_referral_levels_scheme() else 'chain',
+        tier_current_level=tier_progress.current_level if tier_progress else None,
+        tier_next_level=tier_progress.next_level if tier_progress else None,
+        tier_next_remaining=tier_progress.next_remaining if tier_progress else 0,
     )
 
     summary = await get_user_referral_summary(db, user.id)

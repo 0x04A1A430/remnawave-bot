@@ -26,6 +26,11 @@ _VALID_TRIGGERS = frozenset(trigger.value for trigger in ReferralRewardTrigger)
 # означает обход десятка пользователей на каждом пополнении.
 MAX_SUPPORTED_LEVEL = 10
 
+# Что означает номер уровня. Значения лежат здесь, а не в Settings, чтобы движок
+# наград и конфиг ссылались на одну константу, а не на две одинаковые строки.
+LEVELS_MODE_CHAIN = 'chain'
+LEVELS_MODE_TIERS = 'tiers'
+
 
 def _invalidate_level_cache() -> None:
     """Сбросить кэш уровней после записи.

@@ -345,6 +345,13 @@ class MiniAppReferralTerms(BaseModel):
     scheme: str = 'legacy'
     level_descriptions: list[str] = []
     referee_bonus_description: str | None = None
+    # 'chain' — номер уровня это глубина цепочки, 'tiers' — ранг за число
+    # рефералов. В рангах платят только прямому пригласившему, и строки уровней
+    # описывают лестницу самого пользователя, а не выплаты тем, кто выше.
+    levels_mode: str = 'chain'
+    tier_current_level: int | None = None
+    tier_next_level: int | None = None
+    tier_next_remaining: int = 0
 
 
 class MiniAppReferralStats(BaseModel):

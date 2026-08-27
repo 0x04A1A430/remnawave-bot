@@ -25,6 +25,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.crud.referral_reward_level import (
+    LEVELS_MODE_CHAIN,
+    LEVELS_MODE_TIERS,
     MAX_SUPPORTED_LEVEL,
     delete_reward_level,
     get_all_reward_levels,
@@ -119,10 +121,71 @@ async def _tariff_names(db: AsyncSession) -> dict[int, str]:
     return {tariff.id: tariff.name for tariff in tariffs}
 
 
+def _tier_ladder_warnings(levels) -> list[str]:
+    """Чем эта лестница рангов молча перестанет платить.
+
+    Возвращаются ВСЕ подходящие предупреждения, а не первое: у лестницы,
+    перенесённой из цепочки, обычно сразу и нет стартовой ступени, и пороги
+    совпадают, а показанное поодиночке выглядит как единственная проблема.
+
+    Пустой список в режиме цепочки: там ни одно из этих условий не мешает —
+    уровни действуют одновременно, а не вытесняют друг друга.
+    """
+    if not settings.is_referral_tier_levels():
+        return []
+
+    active = [lvl for lvl in levels if lvl.is_active]
+    if not active:
+        return []
+
+    warnings: list[str] = []
+    thresholds = [int(lvl.required_referrals or 0) for lvl in active]
+
+    if all(t > 0 for t in thresholds):
+        warnings.append(
+            f'Ни у одного ранга нет нулевого порога (минимальный — {min(thresholds)}): '
+            'партнёры, не набравшие его, не получат ничего. Заведите стартовый ранг с порогом 0.'
+        )
+
+    duplicate = next((t for i, t in enumerate(thresholds) if t in thresholds[:i]), None)
+    if duplicate is not None:
+        warnings.append(
+            f'У нескольких активных рангов одинаковый порог ({duplicate}) — применится только тот, '
+            'у которого номер больше. Остальные не сработают никогда.'
+        )
+
+    empty = [lvl.level for lvl in active if not _pays_referrer(lvl)]
+    if empty:
+        warnings.append(
+            f'Ранг {", ".join(str(n) for n in empty)} ничего не начисляет пригласившему. '
+            'Набрав его порог, партнёр перестанет получать доход: действует ровно один ранг.'
+        )
+
+    triggers = {lvl.trigger for lvl in active}
+    if len(triggers) > 1:
+        warnings.append(
+            'У рангов разные поводы начисления. Действует повод того ранга, который партнёр набрал, '
+            'поэтому награда за другой повод ему не достанется — задайте нужные поводы на каждом ранге.'
+        )
+
+    return warnings
+
+
+def _pays_referrer(level) -> bool:
+    """Начисляет ли правило хоть что-то ПРИГЛАСИВШЕМУ."""
+    money_on = level.reward_mode in (ReferralRewardMode.MONEY.value, ReferralRewardMode.BOTH.value)
+    days_on = level.reward_mode in (ReferralRewardMode.DAYS.value, ReferralRewardMode.BOTH.value)
+    if money_on and (level.referrer_percent or level.referrer_fixed_kopeks):
+        return True
+    return bool(days_on and level.referrer_days)
+
+
 def _scheme_line() -> str:
-    if settings.is_referral_levels_scheme():
-        return f'✅ Многоуровневая схема включена (глубина: до {settings.get_referral_max_level_depth()})'
-    return '⚠️ Схема наград: классическая — уровни ниже НЕ применяются'
+    if not settings.is_referral_levels_scheme():
+        return '⚠️ Схема наград: классическая — уровни ниже НЕ применяются'
+    if settings.is_referral_tier_levels():
+        return '✅ Многоуровневая схема включена (режим: ранги за число рефералов)'
+    return f'✅ Многоуровневая схема включена (режим: цепочка, глубина до {settings.get_referral_max_level_depth()})'
 
 
 async def _render_levels(callback: types.CallbackQuery, db: AsyncSession) -> None:
@@ -135,16 +198,30 @@ async def _render_levels(callback: types.CallbackQuery, db: AsyncSession) -> Non
     levels = await get_all_reward_levels(db)
     names = await _tariff_names(db)
 
-    lines = ['🪜 <b>Уровни реферальных наград</b>', '', _scheme_line(), '']
+    tier_mode_header = settings.is_referral_tier_levels()
+    header_caption = 'Ранг' if tier_mode_header else 'Уровень'
+    lines = [
+        f'🪜 <b>{"Ранги" if tier_mode_header else "Уровни"} реферальных наград</b>',
+        '',
+        _scheme_line(),
+        '',
+    ]
 
     if not levels:
-        lines.append('Уровни не заведены — награды по этой схеме не начисляются.')
+        lines.append(f'{"Ранги" if tier_mode_header else "Уровни"} не заведены — награды по этой схеме не начисляются.')
     else:
+        # Ранги перечисляются по возрастанию порога: это лестница, и читать её
+        # надо в том порядке, в котором по ней поднимаются.
+        if tier_mode_header:
+            levels = sorted(levels, key=lambda lvl: ((lvl.required_referrals or 0), lvl.level))
         for level in levels:
             status = '✅' if level.is_active else '⛔️'
             lines.append(
-                f'{status} <b>Уровень {level.level}</b> — {_MODE_LABELS.get(level.reward_mode, level.reward_mode)}'
+                f'{status} <b>{header_caption} {level.level}</b> — '
+                f'{_MODE_LABELS.get(level.reward_mode, level.reward_mode)}'
             )
+            if tier_mode_header:
+                lines.append(f'   Действует с: {_fmt_threshold(level)}')
             lines.append(f'   Повод: {_TRIGGER_LABELS.get(level.trigger, level.trigger)}')
 
             referrer_parts = []
@@ -173,21 +250,31 @@ async def _render_levels(callback: types.CallbackQuery, db: AsyncSession) -> Non
 
             lines.append('')
 
+    # Предупреждения ПОСТОЯННЫЕ, а не тост в момент переключения: типовой порядок
+    # действий — сначала переключить режим, потом расставить пороги, и опасная
+    # лестница складывается уже после того, как тост показан и забыт.
+    for warning in _tier_ladder_warnings(levels):
+        lines.append('')
+        lines.append(f'<i>⚠️ {warning}</i>')
+
     lines.append(
         '<i>Правила хранятся в базе, а не в .env, поэтому меняются отсюда и из кабинета и переживают перезапуск.</i>'
     )
 
-    max_depth = settings.get_referral_max_level_depth()
+    max_level = settings.get_referral_effective_max_level()
+    tier_mode = settings.is_referral_tier_levels()
+    caption = 'Ранг' if tier_mode else 'Уровень'
     keyboard_rows = []
     for level in levels:
         # Уровень глубже предела обхода не платит вовсе: помечаем прямо на кнопке,
-        # иначе «✅ Уровень 4» неотличим от работающего.
+        # иначе «✅ Уровень 4» неотличим от работающего. В режиме рангов предела
+        # нет — там работают все заведённые.
         mark = '✅' if level.is_active else '⛔️'
-        suffix = ' (не платит)' if level.level > max_depth else ''
+        suffix = ' (не платит)' if level.level > max_level else ''
         keyboard_rows.append(
             [
                 types.InlineKeyboardButton(
-                    text=f'{mark} Уровень {level.level}{suffix}', callback_data=f'admin_ref_lvl:{level.level}'
+                    text=f'{mark} {caption} {level.level}{suffix}', callback_data=f'admin_ref_lvl:{level.level}'
                 )
             ]
         )
@@ -195,7 +282,11 @@ async def _render_levels(callback: types.CallbackQuery, db: AsyncSession) -> Non
     next_level = _next_free_level(levels)
     if next_level <= MAX_SUPPORTED_LEVEL:
         keyboard_rows.append(
-            [types.InlineKeyboardButton(text=f'➕ Добавить уровень {next_level}', callback_data='admin_ref_lvl_add')]
+            [
+                types.InlineKeyboardButton(
+                    text=f'➕ Добавить {caption.lower()} {next_level}', callback_data='admin_ref_lvl_add'
+                )
+            ]
         )
 
     if not levels:
@@ -207,14 +298,39 @@ async def _render_levels(callback: types.CallbackQuery, db: AsyncSession) -> Non
             ]
         )
 
+    # Ярлык — по СОХРАНЁННОМУ значению, а не по is_referral_tier_levels(): та
+    # требует включённой схемы уровней, а переключатель от схемы не зависит. При
+    # классической схеме кнопка иначе показывала бы «цепочка» поверх сохранённых
+    # «рангов», и первое нажатие не меняло бы ничего видимого.
+    stored_tiers = settings.get_referral_levels_mode() == LEVELS_MODE_TIERS
     keyboard_rows.append(
         [
             types.InlineKeyboardButton(
-                text=f'📏 Глубина цепочки: {settings.get_referral_max_level_depth()}',
-                callback_data='admin_ref_lvl_depth',
+                text=f'🎚 Режим: {"ранги" if stored_tiers else "цепочка"}',
+                callback_data='admin_ref_lvl_tiers',
             )
         ]
     )
+    # Глубина имеет смысл только в цепочке. В режиме рангов кнопка не прячется,
+    # а прямо говорит, что настройка не действует: исчезнувшая кнопка выглядит
+    # как пропавшая настройка, и админ идёт искать её в общем списке конфигурации.
+    if tier_mode:
+        keyboard_rows.append(
+            [
+                types.InlineKeyboardButton(
+                    text='📏 Глубина цепочки: не используется', callback_data='admin_ref_lvl_depth'
+                )
+            ]
+        )
+    else:
+        keyboard_rows.append(
+            [
+                types.InlineKeyboardButton(
+                    text=f'📏 Глубина цепочки: {settings.get_referral_max_level_depth()}',
+                    callback_data='admin_ref_lvl_depth',
+                )
+            ]
+        )
 
     scheme_toggle = '🔻 Вернуть классическую' if settings.is_referral_levels_scheme() else '🔺 Включить многоуровневую'
     keyboard_rows.append([types.InlineKeyboardButton(text=scheme_toggle, callback_data='admin_ref_lvl_scheme')])
@@ -293,7 +409,7 @@ async def toggle_reward_scheme(
 
     if new_value == 'levels':
         active = await get_all_reward_levels(db, only_active=True)
-        max_depth = settings.get_referral_max_level_depth()
+        max_depth = settings.get_referral_effective_max_level()
         reachable = [lvl for lvl in active if lvl.level <= max_depth]
         if not active:
             await callback.answer(
@@ -403,9 +519,11 @@ async def _render_level(callback: types.CallbackQuery, db: AsyncSession, level_n
     money_on = level.reward_mode in (ReferralRewardMode.MONEY.value, ReferralRewardMode.BOTH.value)
     days_on = level.reward_mode in (ReferralRewardMode.DAYS.value, ReferralRewardMode.BOTH.value)
 
-    beyond_depth = level.level > settings.get_referral_max_level_depth()
+    tier_mode = settings.is_referral_tier_levels()
+    caption = 'Ранг' if tier_mode else 'Уровень'
+    beyond_depth = level.level > settings.get_referral_effective_max_level()
     lines = [
-        f'🪜 <b>Уровень {level.level}</b>',
+        f'🪜 <b>{caption} {level.level}</b>',
         '',
         f'Состояние: {"✅ активен" if level.is_active else "⛔️ выключен"}',
         f'Активные бонусы: {_MODE_LABELS.get(level.reward_mode, level.reward_mode)}',
@@ -422,8 +540,16 @@ async def _render_level(callback: types.CallbackQuery, db: AsyncSession, level_n
         '',
         f'Лимит оплаченных комиссий: {level.max_payments or "без лимита"}',
         '',
-        f'<b>Открывается за:</b> {_fmt_threshold(level)}',
+        f'<b>{"Действует с:" if tier_mode else "Открывается за:"}</b> {_fmt_threshold(level)}',
     ]
+
+    if tier_mode:
+        lines.append('')
+        lines.append(
+            '<i>Режим рангов: платят только прямому пригласившему, и применяется '
+            'ровно один ранг — старший из достигнутых. Уровни выше по номеру не '
+            'складываются с этим.</i>'
+        )
 
     if beyond_depth:
         lines.append('')
@@ -447,11 +573,13 @@ async def _render_level(callback: types.CallbackQuery, db: AsyncSession, level_n
             'Включите многоуровневую схему на экране уровней.</i>'
         )
 
-    if level.level == 1:
+    # Личный процент партнёра перебивает процент правила на выплате ПРЯМОМУ
+    # пригласившему. В цепочке прямой — только уровень 1; в рангах прямой всегда.
+    if tier_mode or level.level == 1:
         lines.append('')
         lines.append(
-            '<i>На первом уровне личный процент партнёра перебивает процент уровня — '
-            'в том числе когда процент уровня не задан.</i>'
+            '<i>Личный процент партнёра перебивает процент этого правила — '
+            'в том числе когда процент правила не задан.</i>'
         )
 
     # Предупреждение — по каждой стороне отдельно. Общее условие через `and`
@@ -847,6 +975,51 @@ async def process_level_value(message: types.Message, db_user: User, db: AsyncSe
 
 @admin_required
 @error_handler
+async def toggle_levels_mode(
+    callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext | None = None
+):
+    """Переключить, что означает номер уровня: глубину цепочки или ранг партнёра.
+
+    Отдельным действием, как и смена схемы: переключение меняет и получателей, и
+    число сработавших правил на одном пополнении, то есть реальные выплаты живым
+    людям. Побочным эффектом создания уровня такое быть не должно.
+    """
+    await _cancel_pending_input(state)
+    if bot_configuration_service.is_env_locked('REFERRAL_LEVELS_MODE'):
+        await callback.answer(
+            'REFERRAL_LEVELS_MODE задан в .env и не меняется из админки. Уберите строку из .env и перезапустите бота.',
+            show_alert=True,
+        )
+        return
+
+    to_tiers = settings.get_referral_levels_mode() != LEVELS_MODE_TIERS
+    new_value = LEVELS_MODE_TIERS if to_tiers else LEVELS_MODE_CHAIN
+    await bot_configuration_service.set_value(db, 'REFERRAL_LEVELS_MODE', new_value)
+
+    if to_tiers:
+        levels = await get_all_reward_levels(db, only_active=True)
+        # Все подходящие сразу: у лестницы, перенесённой из цепочки, обычно и
+        # стартовой ступени нет, и пороги совпадают — показанное поодиночке
+        # выглядит как единственная проблема.
+        warnings = _tier_ladder_warnings(levels)
+        if warnings:
+            await callback.answer('Режим: ранги.\n\n' + '\n\n'.join(f'⚠️ {w}' for w in warnings), show_alert=True)
+        else:
+            await callback.answer(
+                'Режим: ранги. Платят только прямому пригласившему, применяется один ранг — старший из достигнутых.',
+                show_alert=True,
+            )
+    else:
+        await callback.answer(
+            f'Режим: цепочка. Обход до {settings.get_referral_max_level_depth()} уровней вверх.',
+            show_alert=True,
+        )
+
+    await _render_levels(callback, db)
+
+
+@admin_required
+@error_handler
 async def start_depth_edit(callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext):
     """Правка глубины обхода цепочки.
 
@@ -855,6 +1028,17 @@ async def start_depth_edit(callback: types.CallbackQuery, db_user: User, db: Asy
     предел экран не давал — со стороны это выглядело как «уровни выше третьего
     просто не работают».
     """
+    if settings.is_referral_tier_levels():
+        # Правку не открываем вовсе: в режиме рангов цепочки нет, и сохранённое
+        # здесь число ни на что не повлияет. Форма, которая принимает значение и
+        # ничего не меняет, хуже отсутствующей кнопки.
+        await callback.answer(
+            'В режиме рангов цепочка не обходится — глубина не применяется. '
+            'Переключите режим на «цепочку», чтобы её настроить.',
+            show_alert=True,
+        )
+        return
+
     if bot_configuration_service.is_env_locked('REFERRAL_MAX_LEVEL_DEPTH'):
         await callback.answer(
             'REFERRAL_MAX_LEVEL_DEPTH задан в .env и не меняется из админки. '
@@ -908,6 +1092,9 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(add_reward_level, F.data == 'admin_ref_lvl_add')
     dp.callback_query.register(import_legacy_settings, F.data == 'admin_ref_lvl_import')
     dp.callback_query.register(start_depth_edit, F.data == 'admin_ref_lvl_depth')
+    # Точное сравнение, а не префикс: 'admin_ref_lvl_mode:' уже занято сменой
+    # набора бонусов уровня, и второй похожий префикс путал бы маршрутизацию.
+    dp.callback_query.register(toggle_levels_mode, F.data == 'admin_ref_lvl_tiers')
     # Двоеточие в 'admin_ref_lvl:' обязательно: без него префикс поглотил бы все
     # соседние строки, и любая кнопка уровня открывала бы его карточку. Порядок
     # регистрации при таком разделителе значения не имеет — маршрутизацию

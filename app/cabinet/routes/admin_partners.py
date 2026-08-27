@@ -11,6 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.crud.referral_reward_level import (
+    LEVELS_MODE_CHAIN,
+    LEVELS_MODE_TIERS,
     MAX_SUPPORTED_LEVEL,
     delete_reward_level,
     get_all_reward_levels,
@@ -45,6 +47,7 @@ from ..schemas.partners import (
 )
 from ..schemas.referral import (
     ReferralDepthUpdateRequest,
+    ReferralLevelsModeUpdateRequest,
     ReferralRewardLevelResponse,
     ReferralRewardLevelsResponse,
     ReferralRewardLevelUpdateRequest,
@@ -469,6 +472,8 @@ async def _levels_payload(db: AsyncSession) -> ReferralRewardLevelsResponse:
     return ReferralRewardLevelsResponse(
         scheme='levels' if settings.is_referral_levels_scheme() else 'legacy',
         scheme_locked_by_env=bot_configuration_service.is_env_locked('REFERRAL_REWARD_SCHEME'),
+        levels_mode=settings.get_referral_levels_mode(),
+        levels_mode_locked_by_env=bot_configuration_service.is_env_locked('REFERRAL_LEVELS_MODE'),
         max_level_depth=settings.get_referral_max_level_depth(),
         max_supported_level=MAX_SUPPORTED_LEVEL,
         available_tariffs=[ReferralRewardTariffOption(id=row.id, name=row.name) for row in tariff_options.all()],
@@ -625,6 +630,39 @@ async def import_legacy_referral_settings(
     payload = await _levels_payload(db)
     payload.import_notes = notes
     return payload
+
+
+@router.patch('/referral-levels-mode', response_model=ReferralRewardLevelsResponse)
+async def update_referral_levels_mode(
+    request: ReferralLevelsModeUpdateRequest,
+    admin: User = Depends(require_permission('partners:settings')),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Что означает номер уровня: глубина цепочки или ранг партнёра.
+
+    Переключение меняет и получателей награды, и число сработавших правил на
+    одном пополнении, поэтому оно отдельное действие, а не поле в правке уровня.
+
+    Значение проверяется по белому списку: неизвестная строка молча трактовалась
+    бы как 'chain' при чтении, и кабинет показывал бы «сохранено» на настройке,
+    которая не применилась.
+    """
+    mode = str(request.levels_mode or '').strip().lower()
+    if mode not in (LEVELS_MODE_CHAIN, LEVELS_MODE_TIERS):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"levels_mode must be '{LEVELS_MODE_CHAIN}' or '{LEVELS_MODE_TIERS}'",
+        )
+
+    if bot_configuration_service.is_env_locked('REFERRAL_LEVELS_MODE'):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail='REFERRAL_LEVELS_MODE is pinned in .env and cannot be changed from the cabinet',
+        )
+
+    await bot_configuration_service.set_value(db, 'REFERRAL_LEVELS_MODE', mode)
+    logger.info('Режим уровней реферальной программы изменён из кабинета', admin_id=admin.id, levels_mode=mode)
+    return await _levels_payload(db)
 
 
 @router.patch('/referral-scheme', response_model=ReferralRewardLevelsResponse)
