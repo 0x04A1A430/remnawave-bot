@@ -112,6 +112,7 @@ class GraceAccessPolicy:
     daily_enabled: bool = False
     free_enabled: bool = False
     reconcile_batch_size: int = 200
+    external_squad_uuid: str | None = None
 
     def __post_init__(self) -> None:
         if self.duration <= timedelta(0):
@@ -954,14 +955,14 @@ def build_panel_overlay(
     # old remaining limit or an old unlimited (zero) limit.
     temporary_limit = snapshot.used_traffic_bytes + policy.traffic_bytes
 
+    external_squad_uuid = policy.external_squad_uuid.strip() if policy.external_squad_uuid else None
+
     return GracePanelOverlay(
         status='ACTIVE',
         expire_at=_as_utc(now) + policy.duration,
         traffic_limit_bytes=temporary_limit,
         squad_uuids=(policy.squad_for(reason),),
-        # External squads can provide unrestricted access independently of the
-        # internal Telegram-only squad, so grace must temporarily detach them.
-        external_squad_uuid=None,
+        external_squad_uuid=external_squad_uuid,
     )
 
 

@@ -1512,6 +1512,7 @@ def _build_policy() -> GraceAccessPolicy:
         daily_enabled=settings.GRACE_ACCESS_DAILY_ENABLED,
         free_enabled=settings.GRACE_ACCESS_FREE_ENABLED,
         reconcile_batch_size=settings.GRACE_ACCESS_RECONCILE_BATCH_SIZE,
+        external_squad_uuid=settings.GRACE_ACCESS_EXTERNAL_SQUAD_UUID.strip() or None,
     )
 
 
