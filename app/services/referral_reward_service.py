@@ -96,6 +96,9 @@ class LevelConfig:
     referee_days: int
     referee_tariff_id: int | None
     max_payments: int
+    # Сколько рефералов открывают уровень и кого из них считать.
+    required_referrals: int = 0
+    required_referrals_active_only: bool = True
     # Момент создания правила. Нужен лимиту: «сколько раз ЭТОТ уровень заплатил»
     # не должно включать начисления, сделанные до того, как уровень появился.
     created_at: object | None = None
@@ -180,6 +183,8 @@ class ReferralRewardLevelService:
                     referee_days=int(row.referee_days or 0),
                     referee_tariff_id=row.referee_tariff_id,
                     max_payments=int(row.max_payments or 0),
+                    required_referrals=int(getattr(row, 'required_referrals', 0) or 0),
+                    required_referrals_active_only=bool(getattr(row, 'required_referrals_active_only', True)),
                     created_at=row.created_at,
                 )
             if generation == cls._generation:
@@ -292,6 +297,49 @@ async def count_level_payments(db: AsyncSession, referrer_id: int, referral_id: 
     return int(result.scalar() or 0)
 
 
+async def count_referrals(db: AsyncSession, user_id: int, *, active_only: bool) -> int:
+    """Сколько рефералов у пользователя.
+
+    ``active_only`` — считать только тех, кто сделал хотя бы одно пополнение.
+    Разделение существенное: порог по всем регистрациям берётся накруткой пустых
+    аккаунтов, и уровень открывается, не принеся программе ничего.
+
+    Считаются ТОЛЬКО прямые приглашённые, на любой глубине уровня. Порог отвечает
+    на вопрос «насколько вырос сам партнёр», а не «сколько людей под ним всего»:
+    иначе номер уровня и условие его открытия мерили бы одно и то же.
+    """
+    query = select(func.count(User.id)).where(User.referred_by_id == user_id)
+    if active_only:
+        query = query.where(User.has_made_first_topup.is_(True))
+
+    result = await db.execute(query)
+    return int(result.scalar() or 0)
+
+
+async def is_level_unlocked(db: AsyncSession, config: LevelConfig, referrer_id: int) -> bool:
+    """Открыт ли уровень для этого партнёра.
+
+    Порог 0 означает «открыт сразу» — запрос при этом не выполняется вовсе, чтобы
+    обычная конфигурация не платила лишним обращением к базе на каждом пополнении.
+    """
+    if config.required_referrals <= 0:
+        return True
+
+    reached = await count_referrals(db, referrer_id, active_only=config.required_referrals_active_only)
+    if reached >= config.required_referrals:
+        return True
+
+    logger.info(
+        'Уровень ещё не открыт для партнёра',
+        referrer_id=referrer_id,
+        level=config.level,
+        required=config.required_referrals,
+        reached=reached,
+        active_only=config.required_referrals_active_only,
+    )
+    return False
+
+
 async def build_reward_components(
     db: AsyncSession,
     referee: User,
@@ -319,6 +367,12 @@ async def build_reward_components(
     for level, referrer in chain:
         config = await ReferralRewardLevelService.get_level(db, level)
         if config is None or not config.matches(event):
+            continue
+
+        # Порог проверяется до расчёта: уровень, который партнёру ещё не открыт,
+        # не платит ни деньгами, ни днями, и приглашённому по нему тоже ничего
+        # не причитается — правило целиком не действует.
+        if not await is_level_unlocked(db, config, referrer.id):
             continue
 
         percent = _resolve_percent(config, referrer) if config.money_enabled else 0
@@ -967,11 +1021,22 @@ async def describe_active_levels(
         if not rewards:
             continue
 
-        lines.append(
-            texts.t('REFERRAL_LEVEL_LINE', 'Уровень {level}: {rewards} {trigger}').format(
-                level=level, rewards=' + '.join(rewards), trigger=_trigger_label(config.trigger, texts)
-            )
+        line = texts.t('REFERRAL_LEVEL_LINE', 'Уровень {level}: {rewards} {trigger}').format(
+            level=level, rewards=' + '.join(rewards), trigger=_trigger_label(config.trigger, texts)
         )
+        # Порог называется прямо в описании: без него уровень выглядит как
+        # награда, которая просто есть, и непонятно, за что она достаётся.
+        if config.required_referrals > 0:
+            key = (
+                'REFERRAL_LEVEL_UNLOCK_ACTIVE' if config.required_referrals_active_only else 'REFERRAL_LEVEL_UNLOCK_ANY'
+            )
+            default = (
+                ' (открывается за {count} рефералов с пополнением)'
+                if config.required_referrals_active_only
+                else ' (открывается за {count} приглашённых)'
+            )
+            line += texts.t(key, default).format(count=config.required_referrals)
+        lines.append(line)
 
     return lines
 

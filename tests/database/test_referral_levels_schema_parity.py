@@ -1,5 +1,8 @@
 """Свежая установка и обновлённая обязаны прийти к одной схеме.
 
+Сверяется вся цепочка миграций реферальных уровней: новая ревизия, забытая в
+списке ниже, роняет эти проверки — и это правильный сигнал, а не помеха.
+
 Свежая база создаётся ``Base.metadata.create_all`` по модели, обновлённая —
 миграцией. Любое расхождение между ними живёт долго и тихо: autogenerate вечно
 показывает фантомную разницу, а запрос, опирающийся на индекс, ведёт себя
@@ -20,14 +23,22 @@ from alembic.operations import Operations
 from app.database.models import Base, ReferralEarning, ReferralRewardLevel
 
 
-MIGRATION = pathlib.Path(__file__).resolve().parents[2] / ('migrations/alembic/versions/0108_referral_reward_levels.py')
+VERSIONS = pathlib.Path(__file__).resolve().parents[2] / 'migrations/alembic/versions'
+
+# Вся цепочка миграций реферальных уровней, по порядку. Сверять модель с одной
+# ревизией нельзя: следующая добавляет колонки, и «расхождение» показывало бы не
+# ошибку, а собственную неполноту проверки.
+MIGRATIONS = ('0108_referral_reward_levels.py', '0109_referral_level_thresholds.py')
 
 
-def _load_migration():
-    spec = importlib.util.spec_from_file_location('m0108', MIGRATION)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+def _load_migrations():
+    modules = []
+    for name in MIGRATIONS:
+        spec = importlib.util.spec_from_file_location(name.split('_')[0], VERSIONS / name)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        modules.append(module)
+    return modules
 
 
 def _fresh_install(path: pathlib.Path):
@@ -59,11 +70,11 @@ def _upgraded_install(path: pathlib.Path):
             )
         )
 
-    module = _load_migration()
-    with engine.begin() as conn:
-        context = MigrationContext.configure(conn)
-        with Operations.context(context):
-            module.upgrade()
+    for module in _load_migrations():
+        with engine.begin() as conn:
+            context = MigrationContext.configure(conn)
+            with Operations.context(context):
+                module.upgrade()
     return engine
 
 

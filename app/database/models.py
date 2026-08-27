@@ -2926,6 +2926,18 @@ class ReferralRewardLevel(Base):
     # 0 — без лимита, как у REFERRAL_MAX_COMMISSION_PAYMENTS
     max_payments = Column(Integer, nullable=False, default=0, server_default='0')
 
+    # Сколько рефералов открывают этот уровень. 0 — доступен сразу.
+    #
+    # Отвечает на вопрос, которого в схеме не хватало: за ЧТО уровень получают.
+    # Номер уровня говорит, чьё пополнение приносит награду (1 — приглашённый
+    # напрямую, 2 — приглашённый им), а порог — с какого момента партнёр начинает
+    # получать доход с этого звена вообще.
+    required_referrals = Column(Integer, nullable=False, default=0, server_default='0')
+
+    # Считать только рефералов с пополнением. По умолчанию да: иначе порог берётся
+    # накруткой пустых регистраций, и уровень открывается, ничего не принеся.
+    required_referrals_active_only = Column(Boolean, nullable=False, default=True, server_default='true')
+
     created_at = Column(AwareDateTime(), default=func.now())
     updated_at = Column(AwareDateTime(), default=func.now(), onupdate=func.now())
 

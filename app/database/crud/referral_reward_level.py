@@ -89,7 +89,7 @@ async def upsert_reward_level(db: AsyncSession, level: int, **values) -> Referra
     if 'trigger' in values:
         values['trigger'] = normalize_trigger(values['trigger'])
 
-    for key in ('referrer_days', 'referee_days', 'max_payments'):
+    for key in ('referrer_days', 'referee_days', 'max_payments', 'required_referrals'):
         if key in values and values[key] is not None:
             values[key] = max(0, int(values[key]))
     for key in ('referrer_fixed_kopeks', 'referee_fixed_kopeks'):

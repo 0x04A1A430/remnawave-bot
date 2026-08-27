@@ -2232,5 +2232,7 @@
   "REFERRAL_REWARD_PERCENT_OF_SUM": "{percent}% от суммы",
   "REFERRAL_REWARD_DAYS": "{days} дн. подписки",
   "REFERRAL_DAYS_SHORT": "{days} дн.",
-  "REFERRAL_LEVEL_LINE": "Уровень {level}: {rewards} {trigger}"
+  "REFERRAL_LEVEL_LINE": "Уровень {level}: {rewards} {trigger}",
+  "REFERRAL_LEVEL_UNLOCK_ACTIVE": " (открывается за {count} рефералов с пополнением)",
+  "REFERRAL_LEVEL_UNLOCK_ANY": " (открывается за {count} приглашённых)"
 }

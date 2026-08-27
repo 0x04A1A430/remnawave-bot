@@ -2232,5 +2232,7 @@
   "REFERRAL_REWARD_PERCENT_OF_SUM": "金额的 {percent}%",
   "REFERRAL_REWARD_DAYS": "{days} 天订阅",
   "REFERRAL_DAYS_SHORT": "{days} 天",
-  "REFERRAL_LEVEL_LINE": "第 {level} 级：{rewards}{trigger}"
+  "REFERRAL_LEVEL_LINE": "第 {level} 级：{rewards}{trigger}",
+  "REFERRAL_LEVEL_UNLOCK_ACTIVE": "（需 {count} 位已充值的推荐用户解锁）",
+  "REFERRAL_LEVEL_UNLOCK_ANY": "（需邀请 {count} 人解锁）"
 }

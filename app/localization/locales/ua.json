@@ -2232,5 +2232,7 @@
   "REFERRAL_REWARD_PERCENT_OF_SUM": "{percent}% від суми",
   "REFERRAL_REWARD_DAYS": "{days} дн. підписки",
   "REFERRAL_DAYS_SHORT": "{days} дн.",
-  "REFERRAL_LEVEL_LINE": "Рівень {level}: {rewards} {trigger}"
+  "REFERRAL_LEVEL_LINE": "Рівень {level}: {rewards} {trigger}",
+  "REFERRAL_LEVEL_UNLOCK_ACTIVE": " (відкривається за {count} рефералів із поповненням)",
+  "REFERRAL_LEVEL_UNLOCK_ANY": " (відкривається за {count} запрошених)"
 }

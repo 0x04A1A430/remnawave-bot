@@ -696,6 +696,8 @@ async def _levels_payload(db: AsyncSession) -> ReferralRewardLevelsResponse:
                 referee_tariff_id=lvl.referee_tariff_id,
                 referee_tariff_name=tariff_names.get(lvl.referee_tariff_id),
                 max_payments=int(lvl.max_payments or 0),
+                required_referrals=int(getattr(lvl, 'required_referrals', 0) or 0),
+                required_referrals_active_only=bool(getattr(lvl, 'required_referrals_active_only', True)),
             )
             for lvl in levels
         ],

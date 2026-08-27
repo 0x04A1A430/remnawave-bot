@@ -50,6 +50,8 @@ def _level(level: int, **kwargs) -> LevelConfig:
         'referee_days': 0,
         'referee_tariff_id': None,
         'max_payments': 0,
+        'required_referrals': 0,
+        'required_referrals_active_only': True,
     }
     base.update(kwargs)
     return LevelConfig(level=level, **base)
@@ -1041,3 +1043,68 @@ class TestDepthOnThePayoutPath:
             None, chain[4], event=RewardEvent.REPEAT_TOPUP, topup_amount_kopeks=1000_00
         )
         assert [(c.recipient_id, c.level) for c in components] == [(3, 1)]
+
+
+class TestThresholdGatesThePayout:
+    """Порог обязан резать ВЫПЛАТЫ, а не только карточку в админке.
+
+    Проверка самого предиката в изоляции этого не показывает: убери его вызов из
+    расчёта — и она останется зелёной, а закрытый уровень начнёт платить.
+    """
+
+    @staticmethod
+    def _counts(monkeypatch, per_user):
+        async def fake_count(_db, user_id, *, active_only):
+            return per_user.get(user_id, 0)
+
+        monkeypatch.setattr(engine, 'count_referrals', fake_count)
+
+    @pytest.mark.asyncio
+    async def test_closed_level_pays_nothing(self, chain, monkeypatch):
+        _install_levels(
+            monkeypatch,
+            {
+                1: _level(1, referrer_percent=10),
+                2: _level(2, referrer_percent=5, required_referrals=10),
+            },
+        )
+        monkeypatch.setattr(engine, 'count_level_payments', _no_prior_payments)
+        # У реферера уровня 2 (id=2) всего 3 реферала — порог не взят.
+        self._counts(monkeypatch, {2: 3, 3: 50})
+
+        components = await build_reward_components(
+            None, chain[4], event=RewardEvent.REPEAT_TOPUP, topup_amount_kopeks=1000_00
+        )
+        assert [(c.recipient_id, c.level) for c in components] == [(3, 1)]
+
+    @pytest.mark.asyncio
+    async def test_level_opens_once_the_threshold_is_reached(self, chain, monkeypatch):
+        _install_levels(
+            monkeypatch,
+            {
+                1: _level(1, referrer_percent=10),
+                2: _level(2, referrer_percent=5, required_referrals=10),
+            },
+        )
+        monkeypatch.setattr(engine, 'count_level_payments', _no_prior_payments)
+        self._counts(monkeypatch, {2: 10, 3: 50})
+
+        components = await build_reward_components(
+            None, chain[4], event=RewardEvent.REPEAT_TOPUP, topup_amount_kopeks=1000_00
+        )
+        assert [(c.recipient_id, c.level) for c in components] == [(3, 1), (2, 2)]
+
+    @pytest.mark.asyncio
+    async def test_closed_level_pays_the_referee_nothing_either(self, chain, monkeypatch):
+        """Закрытый уровень не действует целиком, включая бонус приглашённому."""
+        _install_levels(
+            monkeypatch,
+            {1: _level(1, referrer_percent=10, referee_fixed_kopeks=300_00, required_referrals=10)},
+        )
+        monkeypatch.setattr(engine, 'count_level_payments', _no_prior_payments)
+        self._counts(monkeypatch, {3: 2})
+
+        components = await build_reward_components(
+            None, chain[4], event=RewardEvent.REPEAT_TOPUP, topup_amount_kopeks=1000_00
+        )
+        assert components == []

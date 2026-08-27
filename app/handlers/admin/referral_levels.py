@@ -66,6 +66,7 @@ _NUMERIC_FIELDS = {
     'referee_fixed_kopeks': ('Фикс. сумма приглашённому', '₽', None),
     'referee_days': ('Дни приглашённому', 'дн.', 3650),
     'max_payments': ('Лимит оплаченных комиссий (0 = без лимита)', 'шт.', None),
+    'required_referrals': ('Рефералов для открытия уровня (0 = сразу)', 'чел.', None),
 }
 
 _MONEY_FIELDS = frozenset({'referrer_fixed_kopeks', 'referee_fixed_kopeks'})
@@ -73,6 +74,23 @@ _MONEY_FIELDS = frozenset({'referrer_fixed_kopeks', 'referee_fixed_kopeks'})
 # Сколько тарифов помещается в одно сообщение с кнопками. Превышение не молчит:
 # «показаны первые N из M» честнее, чем список, из которого тариф просто исчез.
 _TARIFF_PICKER_LIMIT = 40
+
+
+def _fmt_threshold(level) -> str:
+    """За сколько рефералов открывается уровень.
+
+    Это ответ на вопрос, которого экрану не хватало: номер уровня говорит, ЧЬЁ
+    пополнение приносит награду, а порог — с какого момента партнёр начинает
+    получать доход с этого звена вообще.
+    """
+    required = int(getattr(level, 'required_referrals', 0) or 0)
+    if required <= 0:
+        return 'доступен сразу'
+
+    population = (
+        'рефералов с пополнением' if getattr(level, 'required_referrals_active_only', True) else 'приглашённых (любых)'
+    )
+    return f'{required} {population}'
 
 
 def _fmt_optional_percent(value: int | None) -> str:
@@ -403,6 +421,8 @@ async def _render_level(callback: types.CallbackQuery, db: AsyncSession, level_n
         f'• Дни: {_fmt_days(level.referee_days, names.get(level.referee_tariff_id)) if days_on else "выключено режимом"}',
         '',
         f'Лимит оплаченных комиссий: {level.max_payments or "без лимита"}',
+        '',
+        f'<b>Открывается за:</b> {_fmt_threshold(level)}',
     ]
 
     if beyond_depth:
@@ -515,6 +535,16 @@ async def _render_level(callback: types.CallbackQuery, db: AsyncSession, level_n
 
     rows.append([types.InlineKeyboardButton(text='🔢 Лимит комиссий', callback_data=f'{prefix}:max_payments')])
     rows.append(
+        [
+            types.InlineKeyboardButton(text='🎖 Рефералов для открытия', callback_data=f'{prefix}:required_referrals'),
+            types.InlineKeyboardButton(
+                text='👥 Считать: '
+                + ('с пополнением' if getattr(level, 'required_referrals_active_only', True) else 'всех'),
+                callback_data=f'admin_ref_lvl_countmode:{level.level}',
+            ),
+        ]
+    )
+    rows.append(
         [types.InlineKeyboardButton(text='🗑 Удалить уровень', callback_data=f'admin_ref_lvl_delask:{level.level}')]
     )
     rows.append([types.InlineKeyboardButton(text='⬅️ К уровням', callback_data='admin_ref_levels')])
@@ -621,6 +651,29 @@ async def confirm_delete_level(
         ),
     )
     await callback.answer()
+
+
+@admin_required
+@error_handler
+async def toggle_threshold_population(
+    callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext | None = None
+):
+    """Кого считать при проверке порога: всех приглашённых или только с пополнением.
+
+    Разница не косметическая. Порог по всем регистрациям берётся накруткой пустых
+    аккаунтов, и уровень открывается, не принеся программе ни рубля.
+    """
+    await _cancel_pending_input(state)
+    level_number = int(callback.data.split(':')[1])
+    level = await get_reward_level(db, level_number)
+    if level is None:
+        await callback.answer('Уровень не найден', show_alert=True)
+        return
+
+    active_only = not bool(getattr(level, 'required_referrals_active_only', True))
+    await upsert_reward_level(db, level_number, required_referrals_active_only=active_only)
+    await callback.answer('Считаем рефералов с пополнением' if active_only else 'Считаем всех приглашённых')
+    await _render_level(callback, db, level_number)
 
 
 @admin_required
@@ -862,6 +915,7 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(toggle_level_active, F.data.startswith('admin_ref_lvl_active:'))
     dp.callback_query.register(cycle_level_mode, F.data.startswith('admin_ref_lvl_mode:'))
     dp.callback_query.register(cycle_level_trigger, F.data.startswith('admin_ref_lvl_trigger:'))
+    dp.callback_query.register(toggle_threshold_population, F.data.startswith('admin_ref_lvl_countmode:'))
     # Более длинный префикс регистрируется раньше: 'admin_ref_lvl_del:' —
     # начало строки 'admin_ref_lvl_delask:', и порядок здесь важен.
     dp.callback_query.register(confirm_delete_level, F.data.startswith('admin_ref_lvl_delask:'))

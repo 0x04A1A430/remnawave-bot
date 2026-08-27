@@ -126,6 +126,9 @@ class ReferralRewardLevelResponse(BaseModel):
     referee_tariff_id: int | None = None
     referee_tariff_name: str | None = None
     max_payments: int = 0
+    # За сколько рефералов открывается уровень и кого считать.
+    required_referrals: int = 0
+    required_referrals_active_only: bool = True
 
     class Config:
         from_attributes = True
@@ -176,6 +179,8 @@ class ReferralRewardLevelUpdateRequest(BaseModel):
     referee_days: int | None = None
     referee_tariff_id: int | None = None
     max_payments: int | None = None
+    required_referrals: int | None = None
+    required_referrals_active_only: bool | None = None
 
 
 class ReferralSchemeUpdateRequest(BaseModel):

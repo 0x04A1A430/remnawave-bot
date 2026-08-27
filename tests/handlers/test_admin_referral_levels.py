@@ -49,6 +49,8 @@ def _level(level=1, **kwargs):
         'referee_days': 0,
         'referee_tariff_id': None,
         'max_payments': 0,
+        'required_referrals': 0,
+        'required_referrals_active_only': True,
     }
     base.update(kwargs)
     return SimpleNamespace(**base)
@@ -304,6 +306,7 @@ class TestCallbackRouting:
         'admin_ref_lvl_mode:2': 'cycle_level_mode',
         'admin_ref_lvl_trigger:2': 'cycle_level_trigger',
         'admin_ref_lvl_del:2': 'delete_level',
+        'admin_ref_lvl_countmode:2': 'toggle_threshold_population',
         'admin_ref_lvl_delask:2': 'confirm_delete_level',
         'admin_ref_lvl_tariff:2:referrer': 'choose_level_tariff',
         'admin_ref_lvl_settariff:2:referrer:9': 'set_level_tariff',
@@ -584,3 +587,49 @@ class TestChainDepthEditing:
 
 async def _resolved(value):
     return value
+
+
+class TestLevelUnlockThresholdEditing:
+    """«За что уровень» должно быть видно на карточке и настраиваться.
+
+    Номер уровня отвечает, чьё пополнение приносит награду; порог — с какого
+    момента партнёр начинает получать доход с этого звена.
+    """
+
+    @pytest.mark.asyncio
+    async def test_card_states_what_unlocks_the_level(self, wired):
+        wired['levels'] = [_level(1, required_referrals=10, required_referrals_active_only=True)]
+        callback = _callback('admin_ref_lvl:1')
+        await _raw(editor.show_reward_level)(callback, db_user=SimpleNamespace(id=1), db=None)
+
+        text = callback.message.edit_text.await_args.args[0]
+        assert 'Открывается за' in text
+        assert '10 рефералов с пополнением' in text
+
+    @pytest.mark.asyncio
+    async def test_zero_threshold_reads_as_immediately_available(self, wired):
+        callback = _callback('admin_ref_lvl:1')
+        await _raw(editor.show_reward_level)(callback, db_user=SimpleNamespace(id=1), db=None)
+        assert 'доступен сразу' in callback.message.edit_text.await_args.args[0]
+
+    @pytest.mark.asyncio
+    async def test_threshold_is_entered_as_a_plain_count(self, wired):
+        state = SimpleNamespace(
+            get_data=lambda: _resolved({'referral_level': 1, 'referral_field': 'required_referrals'}),
+            clear=lambda: _resolved(None),
+        )
+        message = SimpleNamespace(text='25', answer=AsyncMock(), from_user=SimpleNamespace(id=1))
+        await _raw(editor.process_level_value)(message, db_user=SimpleNamespace(id=1), db=None, state=state)
+
+        assert wired['saved'][-1]['required_referrals'] == 25
+
+    @pytest.mark.asyncio
+    async def test_counted_population_can_be_switched(self, wired):
+        """Порог по всем регистрациям берётся накруткой пустых аккаунтов."""
+        callback = _callback('admin_ref_lvl_countmode:1')
+        await _raw(editor.toggle_threshold_population)(callback, db_user=SimpleNamespace(id=1), db=None)
+        assert wired['saved'][-1]['required_referrals_active_only'] is False
+
+        callback = _callback('admin_ref_lvl_countmode:1')
+        await _raw(editor.toggle_threshold_population)(callback, db_user=SimpleNamespace(id=1), db=None)
+        assert wired['saved'][-1]['required_referrals_active_only'] is True

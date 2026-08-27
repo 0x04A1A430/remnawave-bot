@@ -9,6 +9,8 @@
 сломанное тело роняет тест немедленно.
 """
 
+from types import SimpleNamespace
+
 import pytest
 from sqlalchemy import func, select
 
@@ -225,3 +227,109 @@ class TestLevelPaymentCap:
             await db.commit()
 
             assert await count_level_payments(db, REFERRER_ID, REFEREE_ID, 1) == 1
+
+
+class TestLevelUnlockThreshold:
+    """Порог открытия уровня — на настоящих пользователях в базе.
+
+    Уровень отвечает на вопрос «чьё пополнение приносит награду», порог — «с
+    какого момента партнёр начинает получать доход с этого звена». Считать надо
+    именно рефералов с пополнением: порог по всем регистрациям берётся накруткой
+    пустых аккаунтов, и уровень открывается, не принеся ничего.
+    """
+
+    @staticmethod
+    def _user(uid: int, *, referred_by: int | None = None, paid: bool = False):
+        from app.database.models import User
+
+        return User(
+            id=uid,
+            telegram_id=1000 + uid,
+            first_name=f'User {uid}',
+            language='ru',
+            status='active',
+            balance_kopeks=0,
+            referred_by_id=referred_by,
+            has_made_first_topup=paid,
+        )
+
+    @pytest.mark.asyncio
+    async def test_counts_split_active_and_inactive(self, monkeypatch):
+        from app.database.models import User
+        from app.services.referral_reward_service import count_referrals
+
+        async with memory_session(monkeypatch, [User.__table__]) as db:
+            db.add(self._user(1))
+            db.add_all(
+                [
+                    self._user(2, referred_by=1, paid=True),
+                    self._user(3, referred_by=1, paid=True),
+                    self._user(4, referred_by=1, paid=False),
+                    self._user(5, referred_by=1, paid=False),
+                    self._user(6, referred_by=99, paid=True),  # чужой реферал
+                ]
+            )
+            await db.commit()
+
+            assert await count_referrals(db, 1, active_only=False) == 4
+            assert await count_referrals(db, 1, active_only=True) == 2
+
+    @pytest.mark.asyncio
+    async def test_level_opens_only_at_the_threshold(self, monkeypatch):
+        from app.database.models import User
+        from app.services.referral_reward_service import LevelConfig, is_level_unlocked
+
+        def _config(required: int, active_only: bool = True) -> LevelConfig:
+            return LevelConfig(
+                level=2,
+                is_active=True,
+                reward_mode='money',
+                trigger='every_topup',
+                referrer_percent=5,
+                referrer_fixed_kopeks=None,
+                referrer_days=0,
+                referrer_tariff_id=None,
+                referee_fixed_kopeks=None,
+                referee_days=0,
+                referee_tariff_id=None,
+                max_payments=0,
+                required_referrals=required,
+                required_referrals_active_only=active_only,
+            )
+
+        async with memory_session(monkeypatch, [User.__table__]) as db:
+            db.add(self._user(1))
+            db.add_all([self._user(uid, referred_by=1, paid=uid <= 3) for uid in range(2, 6)])
+            await db.commit()
+            # У партнёра 4 реферала, из них 2 с пополнением.
+
+            assert await is_level_unlocked(db, _config(0), 1) is True, 'порог 0 — открыт сразу'
+            assert await is_level_unlocked(db, _config(2), 1) is True
+            assert await is_level_unlocked(db, _config(3), 1) is False, 'третьего с пополнением ещё нет'
+            # По всем регистрациям тот же порог уже взят — в этом и разница.
+            assert await is_level_unlocked(db, _config(3, active_only=False), 1) is True
+
+    @pytest.mark.asyncio
+    async def test_zero_threshold_costs_no_query(self, monkeypatch):
+        """Обычная конфигурация не должна платить лишним запросом на каждом пополнении."""
+        from app.services.referral_reward_service import LevelConfig, is_level_unlocked
+
+        async def explode(*_args, **_kwargs):
+            raise AssertionError('при пороге 0 запрос выполняться не должен')
+
+        config = LevelConfig(
+            level=1,
+            is_active=True,
+            reward_mode='money',
+            trigger='every_topup',
+            referrer_percent=10,
+            referrer_fixed_kopeks=None,
+            referrer_days=0,
+            referrer_tariff_id=None,
+            referee_fixed_kopeks=None,
+            referee_days=0,
+            referee_tariff_id=None,
+            max_payments=0,
+            required_referrals=0,
+        )
+        assert await is_level_unlocked(SimpleNamespace(execute=explode), config, 1) is True

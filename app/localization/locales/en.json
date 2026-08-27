@@ -2232,5 +2232,7 @@
   "REFERRAL_REWARD_PERCENT_OF_SUM": "{percent}% of the amount",
   "REFERRAL_REWARD_DAYS": "{days} subscription days",
   "REFERRAL_DAYS_SHORT": "{days} days",
-  "REFERRAL_LEVEL_LINE": "Level {level}: {rewards} {trigger}"
+  "REFERRAL_LEVEL_LINE": "Level {level}: {rewards} {trigger}",
+  "REFERRAL_LEVEL_UNLOCK_ACTIVE": " (unlocked at {count} referrals who topped up)",
+  "REFERRAL_LEVEL_UNLOCK_ANY": " (unlocked at {count} invited users)"
 }

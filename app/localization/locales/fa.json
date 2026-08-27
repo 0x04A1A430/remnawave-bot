@@ -2232,5 +2232,7 @@
   "REFERRAL_REWARD_PERCENT_OF_SUM": "{percent}٪ از مبلغ",
   "REFERRAL_REWARD_DAYS": "{days} روز اشتراک",
   "REFERRAL_DAYS_SHORT": "{days} روز",
-  "REFERRAL_LEVEL_LINE": "سطح {level}: {rewards} {trigger}"
+  "REFERRAL_LEVEL_LINE": "سطح {level}: {rewards} {trigger}",
+  "REFERRAL_LEVEL_UNLOCK_ACTIVE": " (با {count} معرفی دارای شارژ باز می‌شود)",
+  "REFERRAL_LEVEL_UNLOCK_ANY": " (با {count} کاربر دعوت‌شده باز می‌شود)"
 }
