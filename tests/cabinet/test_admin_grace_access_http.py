@@ -185,6 +185,17 @@ async def test_out_of_range_value_is_a_validation_error(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_explicit_null_is_refused(monkeypatch):
+    """Пустое значение уезжало в system_settings как NULL и переживало перезапуск."""
+    async with _app(monkeypatch) as (http, written, _settings):
+        response = http.put('/cabinet/admin/grace-access', json={'duration_hours': None})
+
+    assert response.status_code == 400
+    assert 'duration_hours' in response.json()['detail']
+    assert written == []
+
+
+@pytest.mark.asyncio
 async def test_unknown_mode_is_refused(monkeypatch):
     async with _app(monkeypatch) as (http, written, _settings):
         response = http.put('/cabinet/admin/grace-access', json={'mode': 'maybe'})

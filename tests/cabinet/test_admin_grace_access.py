@@ -46,6 +46,40 @@ def test_each_url_reaches_its_own_handler(method, path, expected):
     raise AssertionError(f'{method} {path} не совпал ни с одним маршрутом')
 
 
+def _required_permissions(endpoint_name: str) -> set[str]:
+    """Права, которые маршрут реально требует, — из его зависимостей, а не из текста.
+
+    ``require_permission`` возвращает замыкание, поэтому запрошенные строки лежат
+    в его ячейках. Проверка по исходнику зеленела бы и на закомментированном коде.
+    """
+    for candidate in route.router.routes:
+        if candidate.endpoint.__name__ != endpoint_name:
+            continue
+        found: set[str] = set()
+        for dependant in candidate.dependant.dependencies:
+            for cell in getattr(dependant.call, '__closure__', None) or ():
+                value = cell.cell_contents
+                if isinstance(value, tuple) and value and all(isinstance(item, str) and ':' in item for item in value):
+                    found.update(value)
+        return found
+    raise AssertionError(f'Маршрут {endpoint_name} не найден')
+
+
+def test_sessions_endpoint_also_requires_users_read():
+    """Список отдаёт чужие telegram_id, @логины и имена.
+
+    Право на настройки бота не должно быть обходным путём к списку абонентов:
+    во всей остальной админке за такие данные отвечает users:read.
+    """
+    assert _required_permissions('list_grace_sessions') == {'settings:read', 'users:read'}
+
+
+def test_configuration_endpoints_stay_on_settings_permissions():
+    assert _required_permissions('get_grace_access_overview') == {'settings:read'}
+    assert _required_permissions('update_grace_access') == {'settings:edit'}
+    assert _required_permissions('list_grace_squads') == {'settings:read'}
+
+
 @pytest.fixture
 def config(monkeypatch):
     """Живые настройки grace с валидной конфигурацией; правки не утекают в другие тесты."""
@@ -115,6 +149,29 @@ def status_snapshot(monkeypatch):
 ADMIN = SimpleNamespace(id=1, telegram_id=1)
 
 
+class _ApiClient:
+    """Асинхронный контекст, как у RemnaWaveService.get_api_client()."""
+
+    def __init__(self, squads=None):
+        self._squads = (
+            squads
+            if squads is not None
+            else [
+                SimpleNamespace(uuid=VALID_UUID, name='Grace', members_count=4),
+                SimpleNamespace(uuid=None, name='без uuid', members_count=0),
+            ]
+        )
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *_exc):
+        return False
+
+    async def get_internal_squads(self):
+        return self._squads
+
+
 async def _update(db, **fields):
     return await route.update_grace_access(
         route.GraceAccessUpdate(**fields),
@@ -179,6 +236,47 @@ class TestEnabling:
         await _update(empty_db, mode='drain')
 
         assert ('GRACE_ACCESS_MODE', 'drain') in saved
+
+
+class TestRejectedInput:
+    @pytest.mark.asyncio
+    async def test_explicit_null_is_refused(self, saved, empty_db, status_snapshot):
+        """null проходил валидацию и уезжал в БД: настройка становилась NULL и переживала рестарт."""
+        with pytest.raises(HTTPException) as excinfo:
+            await route.update_grace_access(
+                route.GraceAccessUpdate.model_validate({'mode': None, 'duration_hours': None}),
+                admin=ADMIN,
+                db=empty_db,
+            )
+
+        assert excinfo.value.status_code == 400
+        assert 'duration_hours' in excinfo.value.detail
+        assert saved == []
+
+    @pytest.mark.asyncio
+    async def test_broken_config_refused_while_the_worker_still_runs(
+        self, monkeypatch, saved, empty_db, status_snapshot, config
+    ):
+        """Сохранённый drain не останавливает воркер до перезапуска — политика ещё живая."""
+        monkeypatch.setattr(route.grace_access_runtime, '_mode', route.GraceAccessMode.ACTIVE, raising=False)
+        config.GRACE_ACCESS_MODE = 'drain'
+
+        with pytest.raises(HTTPException) as excinfo:
+            await _update(empty_db, traffic_gb=0)
+
+        assert excinfo.value.status_code == 400
+        assert saved == []
+
+    @pytest.mark.asyncio
+    async def test_same_write_passes_once_the_worker_is_down(
+        self, monkeypatch, saved, empty_db, status_snapshot, config
+    ):
+        monkeypatch.setattr(route.grace_access_runtime, '_mode', route.GraceAccessMode.DISABLED, raising=False)
+        config.GRACE_ACCESS_MODE = 'drain'
+
+        await _update(empty_db, traffic_gb=0)
+
+        assert saved == [('GRACE_ACCESS_TRAFFIC_GB', 0)]
 
 
 class TestPartialUpdate:
@@ -247,16 +345,55 @@ class TestOverview:
     async def test_broken_config_is_reported_before_it_is_switched_on(
         self, monkeypatch, empty_db, status_snapshot, config
     ):
-        """Пустой сквад — ошибка и при выключенном режиме: иначе о ней узнают при старте."""
+        """Пустой сквад виден и при выключенном grace, но как замечание, а не авария."""
         monkeypatch.setattr(bot_configuration_service, 'is_env_locked', lambda _key: False)
+        monkeypatch.setattr(route.grace_access_runtime, '_mode', route.GraceAccessMode.DISABLED, raising=False)
         config.GRACE_ACCESS_EXPIRED_SQUAD_UUID = ''
 
         overview = await route.get_grace_access_overview(admin=ADMIN, db=empty_db)
 
         assert overview.config.mode == 'false'
-        assert [(issue.field, issue.code) for issue in overview.issues if issue.severity == 'error'] == [
-            ('expired_squad_uuid', 'squad_required')
+        assert [(issue.field, issue.code, issue.severity) for issue in overview.issues] == [
+            ('expired_squad_uuid', 'squad_required', 'warning')
         ]
+
+    @pytest.mark.asyncio
+    async def test_same_gap_is_an_error_once_grace_runs(self, monkeypatch, empty_db, status_snapshot, config):
+        """Работающий воркер собирает политику из этих же ключей на каждом проходе."""
+        monkeypatch.setattr(bot_configuration_service, 'is_env_locked', lambda _key: False)
+        monkeypatch.setattr(route.grace_access_runtime, '_mode', route.GraceAccessMode.ACTIVE, raising=False)
+        config.GRACE_ACCESS_MODE = 'drain'
+        config.GRACE_ACCESS_EXPIRED_SQUAD_UUID = ''
+
+        overview = await route.get_grace_access_overview(admin=ADMIN, db=empty_db)
+
+        assert [issue.severity for issue in overview.issues if issue.code == 'squad_required'] == ['error']
+
+    @pytest.mark.asyncio
+    async def test_unparseable_stored_mode_is_reported_not_fatal(self, monkeypatch, empty_db, status_snapshot, config):
+        """Раздел обязан открыться: иначе починить настройку было бы негде."""
+        monkeypatch.setattr(bot_configuration_service, 'is_env_locked', lambda _key: False)
+        config.GRACE_ACCESS_MODE = 'yes-please'
+
+        overview = await route.get_grace_access_overview(admin=ADMIN, db=empty_db)
+
+        assert overview.config.mode == 'yes-please'
+        assert ('mode', 'mode_invalid', 'error') in [
+            (issue.field, issue.code, issue.severity) for issue in overview.issues
+        ]
+
+    @pytest.mark.asyncio
+    async def test_stored_mode_is_folded_like_the_runtime_folds_it(
+        self, monkeypatch, empty_db, status_snapshot, config
+    ):
+        """GraceAccessMode.parse приводит к нижнему регистру, значит 'TRUE' реально работает."""
+        monkeypatch.setattr(bot_configuration_service, 'is_env_locked', lambda _key: False)
+        config.GRACE_ACCESS_MODE = ' TRUE '
+
+        overview = await route.get_grace_access_overview(admin=ADMIN, db=empty_db)
+
+        assert overview.config.mode == 'true'
+        assert [issue.code for issue in overview.issues] == []
 
     @pytest.mark.asyncio
     async def test_keep_is_a_valid_external_squad(self, monkeypatch, empty_db, status_snapshot, config):
@@ -324,7 +461,7 @@ class TestSquadPicker:
         class _Broken:
             is_configured = True
 
-            async def get_all_squads(self):
+            def get_api_client(self):
                 raise RuntimeError('panel is down')
 
         monkeypatch.setattr(remnawave_service, 'RemnaWaveService', _Broken)
@@ -348,17 +485,32 @@ class TestSquadPicker:
         assert response.available is False
 
     @pytest.mark.asyncio
+    async def test_panel_with_no_squads_is_not_reported_as_unreachable(self, monkeypatch):
+        """get_all_squads глотает ошибки и отдаёт [], поэтому список берётся у клиента напрямую."""
+        from app.services import remnawave_service
+
+        class _Empty:
+            is_configured = True
+
+            def get_api_client(self):
+                return _ApiClient(squads=[])
+
+        monkeypatch.setattr(remnawave_service, 'RemnaWaveService', _Empty)
+
+        response = await route.list_grace_squads(admin=ADMIN)
+
+        assert response.available is True
+        assert response.items == []
+
+    @pytest.mark.asyncio
     async def test_squads_without_uuid_are_dropped(self, monkeypatch):
         from app.services import remnawave_service
 
         class _Panel:
             is_configured = True
 
-            async def get_all_squads(self):
-                return [
-                    {'uuid': VALID_UUID, 'name': 'Grace', 'members_count': 4},
-                    {'name': 'без uuid'},
-                ]
+            def get_api_client(self):
+                return _ApiClient()
 
         monkeypatch.setattr(remnawave_service, 'RemnaWaveService', _Panel)
 

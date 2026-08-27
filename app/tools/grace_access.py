@@ -36,6 +36,16 @@ async def _restore_all(*, apply: bool, accept_conflicts: bool) -> int:
         print('Refusing restore-all while GRACE_ACCESS_MODE=true. Switch the bot to drain and restart it first.')
         return 2
 
+    # Читается СОХРАНЁННАЯ конфигурация, а работающий процесс мог стартовать с
+    # другим режимом: он кэширует его при запуске, и переключение из кабинета
+    # вступает в силу только после перезапуска. Проверить это отсюда нельзя —
+    # процесс чужой, — поэтому предупреждаем явно.
+    print(
+        'Note: this reads the stored configuration. A bot process that started before the mode was '
+        'changed is still running its old mode — restart it first, or it will keep granting grace '
+        'while this command closes sessions.'
+    )
+
     result = await grace_access_runtime.force_restore_all()
     after = await _status()
     summary = {

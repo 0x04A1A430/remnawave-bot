@@ -66,6 +66,8 @@ RESTART_ONLY_FIELDS: frozenset[str] = frozenset({'mode', 'reconcile_interval_sec
 # compares it lowercased, so 'Keep' works there and must not be called malformed here.
 EXTERNAL_SQUAD_KEEP = 'keep'
 
+_KNOWN_MODES: frozenset[str] = frozenset(mode.value for mode in GraceAccessMode)
+
 _ENV_LOCKED_DETAIL = (
     "Setting '{key}' is fixed in the environment (.env) and cannot be changed here. "
     'Remove it from .env (and restart) to manage it from the cabinet.'
@@ -85,9 +87,16 @@ SESSIONS_PAGE_LIMIT = 50
 
 
 class GraceAccessConfig(BaseModel):
-    """Stored configuration — what the bot will use from its next start on."""
+    """Stored configuration — what the bot will use from its next start on.
 
-    mode: Literal['false', 'observe', 'true', 'drain']
+    ``mode`` is a plain string, not the literal the update accepts: the generic
+    settings page compares choices case-insensitively but stores what it was
+    given, so a row can legally hold ``'TRUE'``. A literal here would make every
+    request to this section fail validation — including the one that repairs it.
+    An unparseable value is reported as an issue instead.
+    """
+
+    mode: str
     duration_hours: int
     expired_squad_uuid: str
     limited_squad_uuid: str
@@ -216,7 +225,21 @@ class GraceSquadsResponse(BaseModel):
 
 def _read_config() -> GraceAccessConfig:
     values = {field: bot_configuration_service.get_current_value(key) for field, key in FIELD_KEYS.items()}
+    values['mode'] = _normalize_mode(values['mode'])
     return GraceAccessConfig(**values)
+
+
+def _normalize_mode(value: object) -> str:
+    """Fold a stored mode the way the runtime folds it, or hand it back untouched.
+
+    ``GraceAccessMode.parse`` strips and lowercases, so a stored ``'TRUE'`` really
+    does run as ACTIVE. Showing it verbatim would leave the screen disagreeing
+    with the bot; silently rewriting an unrecognisable one would hide it.
+    """
+    try:
+        return GraceAccessMode.parse(value).value
+    except ValueError:
+        return str(value)
 
 
 def _normalize_squad(value: str) -> str:
@@ -231,29 +254,47 @@ def _is_uuid(value: str) -> bool:
     return True
 
 
+def _grace_is_live(config: GraceAccessConfig, running_mode: str) -> bool:
+    """Whether the incomplete configuration is one somebody is actually consuming.
+
+    The saved mode alone is not enough. ``mode`` is the one key the runtime caches
+    at startup, so right after "switch to drain and restart later" the saved mode
+    says drain while the worker is still ACTIVE — and it rebuilds its policy from
+    these very keys on the next iteration.
+    """
+    return GraceAccessMode.ACTIVE.value in {config.mode, running_mode}
+
+
 def _collect_issues(config: GraceAccessConfig, *, open_sessions: int, running_mode: str) -> list[GraceAccessIssue]:
     """Everything that makes the configuration unsafe, whether or not it is on yet.
 
     Deliberately independent of the current mode: the reason to list the missing
     squad UUID is precisely that the admin has not switched grace on yet, and
     finding out at the next restart — from a log line — is how this ends up
-    silently disabled in production.
+    silently disabled in production. What the mode does change is the weight: with
+    grace off the same gap is a note about what enabling will need, not a fault.
     """
     issues: list[GraceAccessIssue] = []
+    weight = 'error' if _grace_is_live(config, running_mode) else 'warning'
+
+    if _normalize_mode(config.mode) != config.mode or config.mode not in _KNOWN_MODES:
+        # Пришло сюда только если parse не смог: значение не соответствует ни
+        # одному режиму, и при старте бот на нём упадёт.
+        issues.append(GraceAccessIssue(field='mode', code='mode_invalid', severity='error'))
 
     for field in ('expired_squad_uuid', 'limited_squad_uuid'):
         raw = _normalize_squad(getattr(config, field))
         if not raw:
-            issues.append(GraceAccessIssue(field=field, code='squad_required', severity='error'))
+            issues.append(GraceAccessIssue(field=field, code='squad_required', severity=weight))
         elif not _is_uuid(raw):
-            issues.append(GraceAccessIssue(field=field, code='squad_invalid', severity='error'))
+            issues.append(GraceAccessIssue(field=field, code='squad_invalid', severity=weight))
 
     external = _normalize_squad(config.external_squad_uuid)
     if external and external.lower() != EXTERNAL_SQUAD_KEEP and not _is_uuid(external):
-        issues.append(GraceAccessIssue(field='external_squad_uuid', code='squad_invalid', severity='error'))
+        issues.append(GraceAccessIssue(field='external_squad_uuid', code='squad_invalid', severity=weight))
 
     if config.traffic_gb < 1:
-        issues.append(GraceAccessIssue(field='traffic_gb', code='traffic_required', severity='error'))
+        issues.append(GraceAccessIssue(field='traffic_gb', code='traffic_required', severity=weight))
 
     # A non-mutating runtime never finishes what an earlier active run started: those
     # users keep the grace overlay in the panel until someone switches to drain or runs
@@ -264,26 +305,35 @@ def _collect_issues(config: GraceAccessConfig, *, open_sessions: int, running_mo
     return issues
 
 
-def _validate_for_mode(config: GraceAccessConfig) -> None:
-    """Reject a write that would leave the runtime unable to start in this mode.
+def _validate_for_mode(config: GraceAccessConfig, *, running_mode: str) -> None:
+    """Reject a write that would leave grace unable to run as configured.
 
     Mirrors ``_validate_active_configuration``: without it the cabinet happily saves
     ``mode=true`` with an empty squad, and the only feedback is grace being disabled
     after the next restart.
+
+    The running mode counts too. Flipping the saved mode to drain does not stop the
+    worker until a restart, so between those two moments an empty squad or a zero
+    traffic grant would reach a live grant on the next reconcile pass.
     """
+    if not _grace_is_live(config, running_mode):
+        return
+
     blockers = [
-        issue for issue in _collect_issues(config, open_sessions=0, running_mode='') if issue.severity == 'error'
+        issue
+        for issue in _collect_issues(config, open_sessions=0, running_mode=running_mode)
+        if issue.severity == 'error' and issue.code != 'mode_invalid'
     ]
-    if config.mode != GraceAccessMode.ACTIVE.value or not blockers:
+    if not blockers:
         return
 
     labels = {
-        'squad_required': "'{field}' is required when the mode is 'true'",
+        'squad_required': "'{field}' is required while grace is active",
         'squad_invalid': "'{field}' must contain a valid UUID",
-        'traffic_required': "'traffic_gb' must be at least 1 when the mode is 'true'",
+        'traffic_required': "'traffic_gb' must be at least 1 while grace is active",
     }
     reasons = '; '.join(labels[issue.code].format(field=issue.field) for issue in blockers)
-    raise HTTPException(status.HTTP_400_BAD_REQUEST, f'Grace access cannot be enabled: {reasons}')
+    raise HTTPException(status.HTTP_400_BAD_REQUEST, f'Grace access cannot run with this configuration: {reasons}')
 
 
 def _runtime_state(config: GraceAccessConfig) -> GraceAccessRuntimeState:
@@ -351,7 +401,11 @@ async def list_grace_squads(
         service = RemnaWaveService()
         if not service.is_configured:
             return GraceSquadsResponse(available=False, items=[])
-        squads = await service.get_all_squads()
+        # Напрямую через клиент, а не через get_all_squads: тот глотает любую
+        # ошибку и возвращает пустой список, из-за чего лежащая панель была бы
+        # неотличима от панели без сквадов — и экран сказал бы не то.
+        async with service.get_api_client() as api:
+            squads = await api.get_internal_squads()
     except Exception as error:
         logger.warning('Grace squad list unavailable; falling back to manual UUID entry', error=str(error))
         return GraceSquadsResponse(available=False, items=[])
@@ -360,19 +414,22 @@ async def list_grace_squads(
         available=True,
         items=[
             GraceSquadOption(
-                uuid=str(squad.get('uuid') or ''),
-                name=str(squad.get('name') or ''),
-                members_count=int(squad.get('members_count') or 0),
+                uuid=str(squad.uuid),
+                name=str(squad.name or ''),
+                members_count=int(squad.members_count or 0),
             )
             for squad in squads
-            if squad.get('uuid')
+            if getattr(squad, 'uuid', None)
         ],
     )
 
 
 @router.get('/sessions', response_model=GraceSessionsPage)
 async def list_grace_sessions(
-    admin: User = Depends(require_permission('settings:read')),
+    # Единственный эндпоинт раздела, отдающий чужие личности: telegram_id, @логин
+    # и имя. Остальная админка требует за такое users:read, и настройка бота не
+    # должна быть обходным путём к списку абонентов.
+    admin: User = Depends(require_permission('settings:read', 'users:read')),
     db: AsyncSession = Depends(get_cabinet_db),
     state: Annotated[Literal['open', 'pending', 'active', 'restoring', 'completed', 'errors'] | None, Query()] = None,
     page: Annotated[int, Query(ge=1)] = 1,
@@ -439,6 +496,18 @@ async def update_grace_access(
     current = _read_config()
     patch: dict[str, Any] = payload.model_dump(exclude_unset=True)
 
+    # Каждое поле объявлено как ``X | None``, чтобы отличить «не прислали» от
+    # «прислали». Явный JSON null проходит валидацию и остаётся после
+    # exclude_unset, а дальше уходит в set_value: в таблице появляется NULL,
+    # он же применяется к живым настройкам и переживает перезапуск. Ни одно из
+    # этих полей не может быть пустым, поэтому null здесь — ошибка запроса.
+    nulls = sorted(field for field, value in patch.items() if value is None)
+    if nulls:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            f'These fields cannot be null: {", ".join(nulls)}',
+        )
+
     for field in ('expired_squad_uuid', 'limited_squad_uuid', 'external_squad_uuid'):
         if field in patch:
             patch[field] = _normalize_squad(patch[field] or '')
@@ -454,7 +523,7 @@ async def update_grace_access(
             raise HTTPException(status.HTTP_409_CONFLICT, _ENV_LOCKED_DETAIL.format(key=key))
 
     merged = current.model_copy(update=changed)
-    _validate_for_mode(merged)
+    _validate_for_mode(merged, running_mode=grace_access_runtime.mode.value)
 
     for field, value in changed.items():
         try:
