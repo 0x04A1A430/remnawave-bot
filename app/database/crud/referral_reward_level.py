@@ -31,6 +31,11 @@ MAX_SUPPORTED_LEVEL = 10
 LEVELS_MODE_CHAIN = 'chain'
 LEVELS_MODE_TIERS = 'tiers'
 
+# Десять лет подписки одной наградой — это уже не настройка, а опечатка. Граница
+# общая для бота и кабинета: раньше её знал только редактор бота, и через API
+# проходило любое число.
+MAX_REWARD_DAYS = 3650
+
 
 def _invalidate_level_cache() -> None:
     """Сбросить кэш уровней после записи.
@@ -94,7 +99,12 @@ async def upsert_reward_level(db: AsyncSession, level: int, **values) -> Referra
     if 'trigger' in values:
         values['trigger'] = normalize_trigger(values['trigger'])
 
-    for key in ('referrer_days', 'referee_days', 'max_payments', 'required_referrals'):
+    for key in ('referrer_days', 'referee_days'):
+        if key in values and values[key] is not None:
+            # Верхняя граница та же, что в редакторе бота: без неё кабинет
+            # сохранял 100000 дней, а бот на том же вводе отвечал «Максимум: 3650».
+            values[key] = max(0, min(MAX_REWARD_DAYS, int(values[key])))
+    for key in ('max_payments', 'required_referrals'):
         if key in values and values[key] is not None:
             values[key] = max(0, int(values[key]))
     for key in ('referrer_fixed_kopeks', 'referee_fixed_kopeks'):
@@ -111,6 +121,12 @@ async def upsert_reward_level(db: AsyncSession, level: int, **values) -> Referra
         # бы платить с ближайшего пополнения по одному заполненному полю.
         existing = ReferralRewardLevel(level=level, is_active=False)
         db.add(existing)
+        # Воскрешённый уровень не включается, даже если правка просит об этом:
+        # у админа с открытым старым экраном «Включить» на уже удалённом уровне
+        # создавало бы пустое правило СРАЗУ активным, и оно платило бы по одному
+        # заполненному полю с ближайшего пополнения. Настроить и включить заново —
+        # осознанное действие, а не побочный эффект устаревшего снимка.
+        values = {k: v for k, v in values.items() if k != 'is_active'}
 
     for key, value in values.items():
         if hasattr(existing, key):

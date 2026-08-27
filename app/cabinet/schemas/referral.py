@@ -192,6 +192,11 @@ class ReferralRewardLevelsResponse(BaseModel):
     scheme_locked_by_env: bool = False
     levels_mode: str = 'chain'
     levels_mode_locked_by_env: bool = False
+    # Выключенный мультитариф означает, что у подписок нет тарифа и дни с
+    # выбранным тарифом не начислятся вовсе. Бот об этом предупреждает на
+    # карточке; кабинету нужен тот же признак, иначе выпадающий список тарифов
+    # полон, а настройка молча ничего не даёт.
+    multi_tariff_enabled: bool = True
     max_level_depth: int
     max_supported_level: int
     levels: list[ReferralRewardLevelResponse]

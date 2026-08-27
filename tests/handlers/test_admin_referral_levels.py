@@ -788,7 +788,7 @@ class TestLevelsModeToggle:
         await _raw(editor.toggle_levels_mode)(callback, db_user=SimpleNamespace(id=1), db=None)
 
         screen = callback.message.edit_text.await_args.args[0]
-        assert 'одинаковый порог' in screen, screen
+        assert 'одинаковое условие' in screen, screen
 
 
 class TestCallbackAnswerLength:
@@ -825,7 +825,7 @@ class TestCallbackAnswerLength:
         answer = callback.answer.await_args.args[0]
         assert len(answer) <= editor._CALLBACK_ANSWER_LIMIT, f'{len(answer)} символов: {answer}'
         # И при этом ничего не потеряно — подробности на экране.
-        assert 'одинаковый порог' in callback.message.edit_text.await_args.args[0]
+        assert 'одинаковое условие' in callback.message.edit_text.await_args.args[0]
 
     @pytest.mark.asyncio
     async def test_legacy_import_answer_fits_the_limit(self, wired, monkeypatch):
@@ -857,3 +857,146 @@ class TestCallbackAnswerLength:
         answer = callback.answer.await_args.args[0]
         assert len(answer) <= editor._CALLBACK_ANSWER_LIMIT
         assert answer.endswith('…'), 'обрезка обязана быть видимой'
+
+
+class TestRegistrationPercentTrap:
+    """Процент с поводом «за регистрацию» не может начислиться никогда.
+
+    На этом событии пополнения нет, topup_amount_kopeks = 0, и деньги считаются
+    только от суммы. Карточка при этом печатала «Процент: 50%» без единой
+    оговорки, то есть выглядела рабочей настройкой.
+    """
+
+    @pytest.mark.asyncio
+    async def test_card_warns_about_percent_at_registration(self, wired, monkeypatch):
+        async def only_level(_db, level):
+            return _level(1, trigger='registration', referrer_percent=50, referrer_fixed_kopeks=None)
+
+        monkeypatch.setattr(editor, 'get_reward_level', only_level)
+
+        callback = _callback('admin_ref_lvl:1')
+        await _raw(editor.show_reward_level)(callback, db_user=SimpleNamespace(id=1), db=None)
+
+        text = callback.message.edit_text.await_args.args[0]
+        assert 'не начислит пригласившему ничего' in text, text
+
+    @pytest.mark.asyncio
+    async def test_no_warning_when_a_fixed_amount_is_set(self, wired, monkeypatch):
+        """С фиксированной суммой правило работает — предупреждать не о чем."""
+
+        async def only_level(_db, level):
+            return _level(1, trigger='registration', referrer_percent=50, referrer_fixed_kopeks=10000)
+
+        monkeypatch.setattr(editor, 'get_reward_level', only_level)
+
+        callback = _callback('admin_ref_lvl:1')
+        await _raw(editor.show_reward_level)(callback, db_user=SimpleNamespace(id=1), db=None)
+
+        assert 'не начислит пригласившему ничего' not in callback.message.edit_text.await_args.args[0]
+
+    @pytest.mark.asyncio
+    async def test_no_warning_on_a_topup_trigger(self, wired, monkeypatch):
+        async def only_level(_db, level):
+            return _level(1, trigger='every_topup', referrer_percent=50, referrer_fixed_kopeks=None)
+
+        monkeypatch.setattr(editor, 'get_reward_level', only_level)
+
+        callback = _callback('admin_ref_lvl:1')
+        await _raw(editor.show_reward_level)(callback, db_user=SimpleNamespace(id=1), db=None)
+
+        assert 'не начислит пригласившему ничего' not in callback.message.edit_text.await_args.args[0]
+
+
+class TestNonFiniteInput:
+    """'inf' и 'nan' роняли обработчик и оставляли состояние взведённым.
+
+    float() их принимает, проверка на отрицательность пропускает, а int() падает.
+    Обработчик уходил с ошибкой, НЕ сняв состояние ввода, — и следующее
+    произвольное сообщение админа попадало сюда же и переписывало денежное поле.
+    Ровно так однажды «100» превратилось в «процент пригласившему = 100%».
+    """
+
+    @pytest.mark.parametrize('raw', ['inf', '-inf', 'nan', 'Infinity', 'INF', 'NaN'])
+    @pytest.mark.parametrize('field', ['referrer_percent', 'referrer_days', 'max_payments', 'referrer_fixed_kopeks'])
+    @pytest.mark.asyncio
+    async def test_non_finite_is_refused_without_crashing(self, wired, monkeypatch, raw, field):
+        saved = {}
+
+        async def fake_upsert(_db, level, **values):
+            saved.update(values)
+            return _level(level)
+
+        monkeypatch.setattr(editor, 'upsert_reward_level', fake_upsert)
+        cleared = {'called': False}
+
+        async def fake_clear():
+            cleared['called'] = True
+
+        state = SimpleNamespace(
+            get_data=lambda: _resolved({'referral_level': 1, 'referral_field': field}),
+            clear=fake_clear,
+        )
+        message = SimpleNamespace(text=raw, answer=AsyncMock(), from_user=SimpleNamespace(id=1))
+
+        await _raw(editor.process_level_value)(message, db_user=SimpleNamespace(id=1), db=None, state=state)
+
+        assert not saved, f'{raw} не должно сохраняться'
+        message.answer.assert_awaited()
+        assert '❌' in message.answer.await_args.args[0]
+
+    @pytest.mark.asyncio
+    async def test_ordinary_number_still_saves(self, wired, monkeypatch):
+        """Контроль: отсечка не должна ломать обычный ввод."""
+        saved = {}
+
+        async def fake_upsert(_db, level, **values):
+            saved.update(values)
+            return _level(level)
+
+        monkeypatch.setattr(editor, 'upsert_reward_level', fake_upsert)
+        state = SimpleNamespace(
+            get_data=lambda: _resolved({'referral_level': 1, 'referral_field': 'referrer_percent'}),
+            clear=lambda: _resolved(None),
+        )
+        message = SimpleNamespace(text='25', answer=AsyncMock(), from_user=SimpleNamespace(id=1))
+
+        await _raw(editor.process_level_value)(message, db_user=SimpleNamespace(id=1), db=None, state=state)
+
+        assert saved == {'referrer_percent': 25}
+
+
+class TestThresholdWarningPrecision:
+    """Одинаковое ЧИСЛО ещё не значит одинаковое условие.
+
+    «5 приглашённых» и «5 из них с пополнением» достигаются в разное время и
+    конфликта не создают. Предупреждение по одним числам объявляло такую
+    лестницу сломанной, хотя она работает как задумано.
+    """
+
+    @pytest.mark.asyncio
+    async def test_same_number_different_population_is_not_a_conflict(self, wired, monkeypatch):
+        monkeypatch.setattr(settings, 'REFERRAL_REWARD_SCHEME', 'levels')
+        monkeypatch.setattr(settings, 'REFERRAL_LEVELS_MODE', 'tiers')
+
+        levels = [
+            _level(1, required_referrals=0),
+            _level(2, required_referrals=5, required_referrals_active_only=True),
+            _level(3, required_referrals=5, required_referrals_active_only=False),
+        ]
+        warnings = editor._tier_ladder_warnings(levels)
+
+        assert not any('одинаковое условие' in w for w in warnings), warnings
+
+    @pytest.mark.asyncio
+    async def test_same_number_same_population_is_a_conflict(self, wired, monkeypatch):
+        monkeypatch.setattr(settings, 'REFERRAL_REWARD_SCHEME', 'levels')
+        monkeypatch.setattr(settings, 'REFERRAL_LEVELS_MODE', 'tiers')
+
+        levels = [
+            _level(1, required_referrals=0),
+            _level(2, required_referrals=5, required_referrals_active_only=True),
+            _level(3, required_referrals=5, required_referrals_active_only=True),
+        ]
+        warnings = editor._tier_ladder_warnings(levels)
+
+        assert any('одинаковое условие' in w and '5' in w for w in warnings), warnings

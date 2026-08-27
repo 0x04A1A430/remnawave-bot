@@ -556,3 +556,56 @@ class TestLevelsPayloadReportsTheMode:
 
         payload = await admin_partners._levels_payload(_db_returning(None))
         assert payload.levels_mode_locked_by_env is True
+
+
+class TestBotAndCabinetAgree:
+    """Одинаковый ввод обязан давать одинаковый результат из бота и из кабинета.
+
+    Границы значений знал только редактор бота: через API проходило что угодно.
+    «100000 дней» кабинет сохранял, а бот на том же вводе отвечал «Максимум: 3650».
+    """
+
+    @pytest.mark.asyncio
+    async def test_days_are_capped_the_same_way(self, wired, monkeypatch):
+        from app.database.crud.referral_reward_level import MAX_REWARD_DAYS, upsert_reward_level
+        from app.database.models import ReferralRewardLevel
+        from tests.fixtures.sqlite_memory import ensure_real_aiosqlite, memory_session
+
+        ensure_real_aiosqlite(monkeypatch)
+        async with memory_session(monkeypatch, [ReferralRewardLevel.__table__]) as db:
+            level = await upsert_reward_level(db, 1, referrer_days=100000, referee_days=100000)
+            assert level.referrer_days == MAX_REWARD_DAYS
+            assert level.referee_days == MAX_REWARD_DAYS
+
+    @pytest.mark.asyncio
+    async def test_reviving_a_deleted_level_does_not_switch_it_on(self, wired, monkeypatch):
+        """Устаревший экран не должен включать пустое правило.
+
+        Админ A удалил уровень; у админа B открыт старый снимок, он жмёт
+        «Включить». Уровень создавался заново СРАЗУ активным и начинал платить по
+        одному заполненному полю.
+        """
+        from app.database.crud.referral_reward_level import delete_reward_level, upsert_reward_level
+        from app.database.models import ReferralRewardLevel
+        from tests.fixtures.sqlite_memory import ensure_real_aiosqlite, memory_session
+
+        ensure_real_aiosqlite(monkeypatch)
+        async with memory_session(monkeypatch, [ReferralRewardLevel.__table__]) as db:
+            await upsert_reward_level(db, 1, is_active=True, referrer_percent=25)
+            assert await delete_reward_level(db, 1) is True
+
+            revived = await upsert_reward_level(db, 1, is_active=True)
+            assert revived.is_active is False, 'воскрешённый уровень обязан остаться выключенным'
+
+    @pytest.mark.asyncio
+    async def test_switching_on_an_existing_level_still_works(self, wired, monkeypatch):
+        """Контроль: защита не должна мешать включать настоящий уровень."""
+        from app.database.crud.referral_reward_level import upsert_reward_level
+        from app.database.models import ReferralRewardLevel
+        from tests.fixtures.sqlite_memory import ensure_real_aiosqlite, memory_session
+
+        ensure_real_aiosqlite(monkeypatch)
+        async with memory_session(monkeypatch, [ReferralRewardLevel.__table__]) as db:
+            await upsert_reward_level(db, 1, is_active=False, referrer_percent=25)
+            level = await upsert_reward_level(db, 1, is_active=True)
+            assert level.is_active is True

@@ -804,3 +804,86 @@ class TestModeNormalisation:
         monkeypatch.setattr(settings, 'REFERRAL_REWARD_SCHEME', 'levels')
         monkeypatch.setattr(settings, 'REFERRAL_LEVELS_MODE', raw)
         assert settings.get_referral_levels_mode() == 'chain'
+
+
+class TestChainRefereePromise:
+    """Цепочка: приглашённому нельзя обещать бонус закрытого уровня.
+
+    Уровень, порог которого пригласивший не набрал, не платит ни ему, ни
+    приглашённому — правило не действует целиком. Обещание при этом уходило в
+    первом же сообщении, которое человек видит после перехода по ссылке.
+    """
+
+    @pytest.mark.asyncio
+    async def test_locked_level_is_not_promised(self, tiers, monkeypatch):
+        ladder = {1: _level(1, required_referrals=5, referee_fixed_kopeks=500_00, trigger='first_topup')}
+        _install(monkeypatch, ladder)
+        monkeypatch.setattr(settings, 'REFERRAL_LEVELS_MODE', 'chain')
+        tiers.counts[3] = {True: 0, False: 0}
+
+        promised = await describe_referee_bonus(None, referrer=tiers.users[3], language='ru')
+        paid = await build_reward_components(
+            None, tiers.users[4], event=RewardEvent.FIRST_TOPUP, topup_amount_kopeks=100_00
+        )
+
+        assert paid == [], 'уровень закрыт порогом — платить нечему'
+        assert promised is None, f'обещано «{promised}», а не начислится ничего'
+
+    @pytest.mark.asyncio
+    async def test_unlocked_level_is_still_promised(self, tiers, monkeypatch):
+        """Контроль: набранный порог обещание не отменяет."""
+        ladder = {1: _level(1, required_referrals=5, referee_fixed_kopeks=500_00, trigger='first_topup')}
+        _install(monkeypatch, ladder)
+        monkeypatch.setattr(settings, 'REFERRAL_LEVELS_MODE', 'chain')
+        tiers.counts[3] = {True: 5, False: 5}
+
+        promised = await describe_referee_bonus(None, referrer=tiers.users[3], language='ru')
+        paid = await build_reward_components(
+            None, tiers.users[4], event=RewardEvent.FIRST_TOPUP, topup_amount_kopeks=100_00
+        )
+
+        assert any(not c.is_referrer and c.money_kopeks == 500_00 for c in paid)
+        assert promised is not None and '500' in promised
+
+    @pytest.mark.asyncio
+    async def test_anonymous_caller_still_sees_the_terms(self, tiers, monkeypatch):
+        """Без пригласившего порог проверять не по кому — условия остаются видимы."""
+        ladder = {1: _level(1, required_referrals=5, referee_fixed_kopeks=500_00, trigger='first_topup')}
+        _install(monkeypatch, ladder)
+        monkeypatch.setattr(settings, 'REFERRAL_LEVELS_MODE', 'chain')
+
+        assert await describe_referee_bonus(None, language='ru') is not None
+
+
+class TestRestoreInvalidatesLevelCache:
+    """Восстановление из бэкапа обязано сбрасывать кэш уровней.
+
+    Восстановление пишет строки НАПРЯМУЮ, минуя crud, а сброс кэша живёт в crud.
+    Без него экран показывает восстановленную лестницу, а начисляется доресторная
+    — и так до перезапуска бота.
+    """
+
+    def test_restore_paths_invalidate_the_cache(self):
+        import ast
+        import inspect
+
+        from app.services import backup_service
+
+        tree = ast.parse(inspect.getsource(backup_service))
+        calls = [
+            node
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == '_invalidate_restored_caches'
+        ]
+        # Две ветки восстановления: полный бэкап и снимок данных.
+        assert len(calls) >= 2, f'сброс кэша вызывается {len(calls)} раз, а веток восстановления две'
+
+    def test_helper_actually_clears_the_cache(self, monkeypatch):
+        from app.services.backup_service import BackupService
+
+        ReferralRewardLevelService._cache = {1: _level(1)}
+        BackupService._invalidate_restored_caches()
+
+        assert ReferralRewardLevelService._cache is None

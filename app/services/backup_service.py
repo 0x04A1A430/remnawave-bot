@@ -588,6 +588,19 @@ class BackupService:
 
             return False, error_msg, None
 
+    @staticmethod
+    def _invalidate_restored_caches() -> None:
+        """Сбросить кэши, читающие восстановленные таблицы.
+
+        Восстановление пишет строки НАПРЯМУЮ, минуя crud, а сброс кэша уровней
+        живёт именно в crud. Без этого бот продолжал бы начислять по правилам,
+        которые только что заменили: экран показывает восстановленную лестницу,
+        а платит доресторная — до перезапуска.
+        """
+        from app.services.referral_reward_service import ReferralRewardLevelService
+
+        ReferralRewardLevelService.invalidate_cache()
+
     async def restore_backup(self, backup_file_path: str, clear_existing: bool = False) -> tuple[bool, str]:
         try:
             logger.info('📄 Начинаем восстановление из файла', backup_file_path=backup_file_path)
@@ -953,6 +966,8 @@ class BackupService:
             if files_info:
                 await self._restore_files(files_info, temp_path)
 
+            self._invalidate_restored_caches()
+
             message = (
                 f'✅ Восстановление завершено!\n'
                 f'📊 Таблиц: {metadata.get("tables_count", 0)}\n'
@@ -1260,6 +1275,8 @@ class BackupService:
             restored_files = await self._restore_file_snapshots(file_snapshots)
             if restored_files:
                 logger.info('📁 Восстановлено файлов конфигурации', restored_files=restored_files)
+
+        self._invalidate_restored_caches()
 
         message = (
             f'✅ Восстановление завершено!\n'

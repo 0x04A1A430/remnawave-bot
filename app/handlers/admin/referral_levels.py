@@ -19,6 +19,8 @@
 значило бы повторить ту же ловушку.
 """
 
+import math
+
 from aiogram import Dispatcher, F, types
 from aiogram.fsm.context import FSMContext
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -165,11 +167,17 @@ def _tier_ladder_warnings(levels) -> list[str]:
             'партнёры, не набравшие его, не получат ничего. Заведите стартовый уровень с порогом 0.'
         )
 
-    duplicate = next((t for i, t in enumerate(thresholds) if t in thresholds[:i]), None)
+    # Порог сравнивается ВМЕСТЕ с популяцией подсчёта: «5 приглашённых» и
+    # «5 из них с пополнением» — разные условия, достигаются в разное время и
+    # конфликта не создают. Сравнение одних чисел объявляло такую лестницу
+    # сломанной, хотя она работает как задумано.
+    keys = [(int(lvl.required_referrals or 0), bool(lvl.required_referrals_active_only)) for lvl in active]
+    duplicate = next((k for i, k in enumerate(keys) if k in keys[:i]), None)
     if duplicate is not None:
+        population = 'с пополнением' if duplicate[1] else 'любых приглашённых'
         warnings.append(
-            f'У нескольких активных уровней одинаковый порог ({duplicate}) — применится только тот, '
-            'у которого номер больше. Остальные не сработают никогда.'
+            f'У нескольких активных уровней одинаковое условие ({duplicate[0]} {population}) — '
+            'применится только тот, у которого номер больше. Остальные не сработают никогда.'
         )
 
     empty = [lvl.level for lvl in active if not _pays_referrer(lvl)]
@@ -584,6 +592,22 @@ async def _render_level(
             'сколько бы ни был настроен.</i>'
         )
 
+    # За регистрацию пополнения не было, и процент считать не от чего: правило
+    # с одним процентом на этом поводе не начисляет ничего никогда. Соседняя
+    # ловушка того же повода (дни без тарифа) предупреждение уже имела.
+    if (
+        level.trigger == ReferralRewardTrigger.REGISTRATION.value
+        and money_on
+        and level.referrer_percent
+        and not level.referrer_fixed_kopeks
+    ):
+        lines.append('')
+        lines.append(
+            '<i>❗️ Повод «за регистрацию»: пополнения не было, и процент считать не от чего — '
+            'этот уровень не начислит пригласившему ничего. Задайте фиксированную сумму '
+            'или смените повод.</i>'
+        )
+
     if days_on and not level.referrer_tariff_id and level.referrer_days:
         lines.append('')
         lines.append(
@@ -964,6 +988,14 @@ async def process_level_value(message: types.Message, db_user: User, db: AsyncSe
         parsed = float(raw)
     except ValueError:
         await message.answer(f'❌ Нужно число. {label} ({unit}).')
+        return
+
+    # float() принимает 'inf' и 'nan', проверка на отрицательность их пропускает,
+    # а int() ниже падает OverflowError/ValueError. Обработчик при этом уходит с
+    # ошибкой, НЕ сняв состояние: следующее произвольное сообщение админа
+    # попадает сюда же и переписывает денежное поле.
+    if not math.isfinite(parsed):
+        await message.answer(f'❌ Нужно обычное число. {label} ({unit}).')
         return
 
     if parsed < 0:

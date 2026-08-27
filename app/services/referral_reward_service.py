@@ -1393,7 +1393,10 @@ async def describe_referee_bonus(
         active = [lvl for lvl, cfg in configs.items() if cfg.is_active]
         if active:
             floor = min(configs[lvl].required_referrals for lvl in active)
-            order = sorted(lvl for lvl in active if configs[lvl].required_referrals == floor)
+            # Порядок тот же, что у select_tier_config: при равных порогах
+            # применяется БОЛЬШИЙ номер. Перебор по возрастанию называл бонус
+            # уровня, который на деле никогда не сработает.
+            order = sorted((lvl for lvl in active if configs[lvl].required_referrals == floor), reverse=True)
         else:
             order = []
     else:
@@ -1402,6 +1405,13 @@ async def describe_referee_bonus(
     for level in order:
         config = configs[level]
         if not config.is_active or level > max_level:
+            continue
+
+        # Уровень, ещё не открытый пригласившему порогом, не платит ни ему, ни
+        # приглашённому — правило не действует целиком. Обещать его бонус значит
+        # обещать деньги, которые не придут, в первом же сообщении после перехода
+        # по ссылке. В режиме за приглашённых порог уже учтён выбором ступени.
+        if not tier_mode and referrer is not None and not await is_level_unlocked(db, config, referrer.id):
             continue
 
         parts: list[str] = []

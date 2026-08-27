@@ -474,6 +474,7 @@ async def _levels_payload(db: AsyncSession) -> ReferralRewardLevelsResponse:
         scheme_locked_by_env=bot_configuration_service.is_env_locked('REFERRAL_REWARD_SCHEME'),
         levels_mode=settings.get_referral_levels_mode(),
         levels_mode_locked_by_env=bot_configuration_service.is_env_locked('REFERRAL_LEVELS_MODE'),
+        multi_tariff_enabled=settings.is_multi_tariff_enabled(),
         max_level_depth=settings.get_referral_max_level_depth(),
         max_supported_level=MAX_SUPPORTED_LEVEL,
         available_tariffs=[ReferralRewardTariffOption(id=row.id, name=row.name) for row in tariff_options.all()],
