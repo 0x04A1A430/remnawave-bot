@@ -74,3 +74,36 @@ def test_visible_length_uses_the_linear_pattern():
 
     assert _visible_length('<b>Тариф</b>') == 5
     assert _visible_length('1 < 2') == 5
+
+
+def test_html_validator_stays_fast_on_unclosed_tags():
+    """Проверка HTML правовых страниц: их длина из кабинета ничем не ограничена.
+
+    Шаблон `[^>]*` после имени тега перебирал хвост заново с каждого «<»:
+    на 80 КБ из «<a» разбор структуры занимал 10 секунд заблокированного CPU.
+    """
+    from app.utils.validators import validate_html_tags
+
+    payload = '<a' * 40_000
+
+    start = time.perf_counter()
+    validate_html_tags(payload)
+    elapsed = time.perf_counter() - start
+
+    assert elapsed < 0.5, f'проверка HTML заняла {elapsed:.3f}s — шаблон снова квадратичный'
+
+
+@pytest.mark.parametrize(
+    ('source', 'valid'),
+    [
+        ('<b>жирный</b>', True),
+        ('<a href="https://example.com">ссылка</a>', True),
+        ('<b>1 < 2</b>', True),
+        ('<nosuchtag>текст</nosuchtag>', False),
+    ],
+)
+def test_html_validator_verdicts_unchanged(source, valid):
+    """Ускорение не должно менять вердикты на обычной разметке."""
+    from app.utils.validators import validate_html_tags
+
+    assert validate_html_tags(source)[0] is valid
