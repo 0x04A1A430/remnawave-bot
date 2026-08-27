@@ -422,8 +422,12 @@ class TestSourceNeutralPresentation:
             traffic_limit_gb=200,
             device_limit=3,
         )
+        # Номер тот же, что у bot_item: сравниваются карточки, различающиеся
+        # ТОЛЬКО происхождением. Кнопки QR и текста для отправки адресуют
+        # конкретный подарок, и разные номера здесь означали бы, что тест
+        # требует одинаковых callback'ов у разных подарков.
         cabinet_item = _make_gift_history_item(
-            purchase_id=11,
+            purchase_id=10,
             token=token,
             status=GuestPurchaseStatus.PAID.value,
             tariff_name='VIP',

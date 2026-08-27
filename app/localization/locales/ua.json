@@ -2261,5 +2261,13 @@
   "REFERRAL_DAYS_TARGET_HINT": "Якщо рівню заданий тариф, дні все одно підуть у підписку цього тарифу — так налаштував адміністратор.",
   "REFERRAL_DAYS_TARGET_NONE": "У вас поки немає підписок, між якими можна обирати.",
   "REFERRAL_SETTINGS_SAVED": "✅ Збережено",
-  "REFERRAL_SUBSCRIPTION_UNTIL": "до {date}"
+  "REFERRAL_SUBSCRIPTION_UNTIL": "до {date}",
+  "GIFT_QR_BUTTON": "📱 QR-код подарунка",
+  "GIFT_COPY_TEXT_BUTTON": "📋 Текст для надсилання",
+  "GIFT_QR_CAPTION": "📱 <b>QR-код подарунка</b>\n\nПокажіть його отримувачу — камера відкриє активацію.\n\n🔑 Код: <code>{public_code}</code>",
+  "GIFT_COPY_TEXT_TITLE": "📋 <b>Текст для надсилання</b>",
+  "GIFT_COPY_TEXT_HINT": "Натисніть на текст нижче — він скопіюється повністю. Надішліть його отримувачу.",
+  "GIFT_COPY_TEXT_BODY": "🎁 Дарую тобі підписку {tariff_name} на {period_days} дн.\n\nАктивувати: {claim_link}\n\nЯкщо посилання не відкривається, введи код у боті: {public_code}",
+  "GIFT_ITEM_NOT_CLAIMABLE": "Цей подарунок уже активовано — ділитися нічим.",
+  "GIFT_MY_BACK_TO_CARD": "◀️ До подарунка"
 }

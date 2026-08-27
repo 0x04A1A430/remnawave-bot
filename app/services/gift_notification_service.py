@@ -338,8 +338,21 @@ def build_gift_history_detail_presentation(
             claim_link=claim_link_display,
         )
 
+        # Два способа передать подарок вживую, когда переслать сообщение нельзя:
+        # показать QR с камеры и отдать готовый текст одним нажатием. Ссылка и код
+        # выше остаются — они для тех, кому удобнее скопировать вручную.
         buttons = [
             *action_buttons,
+            [
+                InlineKeyboardButton(
+                    text=texts.t('GIFT_QR_BUTTON', '📱 QR-код подарка'),
+                    callback_data=f'gift_my_qr:{item.purchase_id}',
+                ),
+                InlineKeyboardButton(
+                    text=texts.t('GIFT_COPY_TEXT_BUTTON', '📋 Текст для отправки'),
+                    callback_data=f'gift_my_text:{item.purchase_id}',
+                ),
+            ],
             [
                 InlineKeyboardButton(
                     text=texts.t('GIFT_MY_BACK_BUTTON', '◀️ К списку подарков'),

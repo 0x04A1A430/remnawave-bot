@@ -2261,5 +2261,13 @@
   "REFERRAL_DAYS_TARGET_HINT": "اگر برای سطحی تعرفه تعیین شده باشد، روزها باز هم به اشتراک همان تعرفه می‌روند — مدیر این‌طور تنظیم کرده است.",
   "REFERRAL_DAYS_TARGET_NONE": "هنوز اشتراکی برای انتخاب ندارید.",
   "REFERRAL_SETTINGS_SAVED": "✅ ذخیره شد",
-  "REFERRAL_SUBSCRIPTION_UNTIL": "تا {date}"
+  "REFERRAL_SUBSCRIPTION_UNTIL": "تا {date}",
+  "GIFT_QR_BUTTON": "📱 کد QR هدیه",
+  "GIFT_COPY_TEXT_BUTTON": "📋 متن برای ارسال",
+  "GIFT_QR_CAPTION": "📱 <b>کد QR هدیه</b>\n\nآن را به گیرنده نشان دهید — دوربین صفحه فعال‌سازی را باز می‌کند.\n\n🔑 کد: <code>{public_code}</code>",
+  "GIFT_COPY_TEXT_TITLE": "📋 <b>متن برای ارسال</b>",
+  "GIFT_COPY_TEXT_HINT": "روی متن زیر بزنید تا کامل کپی شود، سپس آن را برای گیرنده بفرستید.",
+  "GIFT_COPY_TEXT_BODY": "🎁 یک اشتراک {tariff_name} به مدت {period_days} روز به تو هدیه می‌دهم.\n\nفعال‌سازی: {claim_link}\n\nاگر لینک باز نشد، این کد را در ربات وارد کن: {public_code}",
+  "GIFT_ITEM_NOT_CLAIMABLE": "این هدیه قبلاً فعال شده است — چیزی برای اشتراک‌گذاری نیست.",
+  "GIFT_MY_BACK_TO_CARD": "◀️ بازگشت به هدیه"
 }

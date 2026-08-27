@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
+import hashlib
 import html
 import uuid
+from pathlib import Path
 
+import qrcode
 import structlog
 from aiogram import Dispatcher, F, types
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
-from aiogram.types import InaccessibleMessage, InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import FSInputFile, InaccessibleMessage, InlineKeyboardButton, InlineKeyboardMarkup
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -54,6 +58,7 @@ from app.services.gift_purchase_service import (
 from app.services.guest_purchase_service import GuestPurchaseError
 from app.services.user_cart_service import user_cart_service
 from app.states import GiftActivationStates, GiftPurchaseStates
+from app.utils.gift_links import build_gift_claim_artifacts
 
 
 logger = structlog.get_logger(__name__)
@@ -1383,6 +1388,165 @@ async def handle_gift_my_open(
     await callback.answer()
 
 
+async def _load_shareable_gift(callback: types.CallbackQuery, db_user: User, db: AsyncSession, prefix: str):
+    """Подарок отправителя вместе с его ссылками. ``None`` — показывать нечего.
+
+    Один разбор на оба экрана: и QR, и текст для отправки нуждаются в одном и том
+    же — своём подарке, который ещё не активирован, и в его ссылке. Дублировать
+    проверку владельца в двух местах значило бы однажды забыть её в одном.
+    """
+    texts = get_texts(db_user.language)
+    not_found = texts.t('GIFT_MY_ITEM_NOT_FOUND', 'Подарок не найден или недоступен.')
+
+    raw = (callback.data or '').split(':', 1)
+    if len(raw) != 2:
+        await callback.answer(not_found, show_alert=True)
+        return None
+
+    try:
+        purchase_id = int(raw[1])
+    except ValueError:
+        await callback.answer(not_found, show_alert=True)
+        return None
+
+    # Владелец проверяется запросом: идентификатор приходит из callback'а, и без
+    # привязки к покупателю чужой подарок открывался бы по номеру.
+    item = await get_sender_gift(db, buyer_id=db_user.id, purchase_id=purchase_id)
+    if item is None:
+        await callback.answer(not_found, show_alert=True)
+        return None
+
+    if not item.is_claimable:
+        # Активированный подарок делиться нечем, а ссылка на него уже недействительна.
+        await callback.answer(
+            texts.t('GIFT_ITEM_NOT_CLAIMABLE', 'Этот подарок уже активирован — делиться нечем.'),
+            show_alert=True,
+        )
+        return None
+
+    bot_username, cabinet_url = await resolve_gift_claim_channel(bot=callback.bot)
+    artifacts = build_gift_claim_artifacts(token=item.token, bot_username=bot_username, cabinet_url=cabinet_url)
+    claim_link = artifacts.bot_claim_url or artifacts.cabinet_claim_url
+    if not claim_link:
+        logger.error('Gift claim channel is not configured', purchase_id=purchase_id)
+        await callback.answer(not_found, show_alert=True)
+        return None
+
+    return item, artifacts, claim_link
+
+
+def _gift_back_keyboard(texts, purchase_id: int) -> InlineKeyboardMarkup:
+    """Возврат к карточке подарка, а не к списку: пользователь пришёл именно с неё."""
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text=texts.t('GIFT_MY_BACK_TO_CARD', '◀️ К подарку'),
+                    callback_data=f'gift_my_open:{purchase_id}',
+                )
+            ]
+        ]
+    )
+
+
+async def handle_gift_my_qr(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext,
+) -> None:
+    """Показать QR со ссылкой на активацию подарка.
+
+    Нужен там, где переслать сообщение нельзя: подарок вручают вживую, и получатель
+    наводит камеру.
+    """
+    if isinstance(callback.message, InaccessibleMessage):
+        await callback.answer()
+        return
+
+    loaded = await _load_shareable_gift(callback, db_user, db, 'gift_my_qr')
+    if loaded is None:
+        return
+
+    item, artifacts, claim_link = loaded
+    texts = get_texts(db_user.language)
+    await callback.answer()
+
+    qr_dir = Path('data') / 'gift_qr'
+    qr_dir.mkdir(parents=True, exist_ok=True)
+
+    # Имя файла — от ССЫЛКИ, а не от номера подарка: сменится канал выдачи, и
+    # закэшированный QR вёл бы на старый адрес.
+    link_hash = hashlib.md5(claim_link.encode()).hexdigest()[:8]
+    file_path = qr_dir / f'{item.purchase_id}_{link_hash}.png'
+    if not file_path.exists():
+        qrcode.make(claim_link).save(file_path)
+
+    caption = texts.t(
+        'GIFT_QR_CAPTION',
+        '📱 <b>QR-код подарка</b>\n\nПокажите его получателю — камера откроет активацию.\n\n🔑 Код: <code>{public_code}</code>',
+    ).format(public_code=html.escape(artifacts.public_code))
+    keyboard = _gift_back_keyboard(texts, item.purchase_id)
+    photo = FSInputFile(file_path)
+
+    try:
+        await callback.message.edit_media(
+            types.InputMediaPhoto(media=photo, caption=caption, parse_mode='HTML'),
+            reply_markup=keyboard,
+        )
+    except TelegramBadRequest:
+        # Текстовое сообщение нельзя заменить фотографией — отправляем новым.
+        await callback.message.delete()
+        await callback.message.answer_photo(photo, caption=caption, reply_markup=keyboard, parse_mode='HTML')
+
+
+async def handle_gift_my_text(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext,
+) -> None:
+    """Готовое сообщение получателю, скопировать одним нажатием.
+
+    Карточка показывает ссылку и код по отдельности, и переслать их приходится
+    вручную, собирая фразу заново. Здесь текст уже собран и лежит в блоке кода —
+    Telegram копирует такой блок целиком по нажатию.
+    """
+    if isinstance(callback.message, InaccessibleMessage):
+        await callback.answer()
+        return
+
+    loaded = await _load_shareable_gift(callback, db_user, db, 'gift_my_text')
+    if loaded is None:
+        return
+
+    item, artifacts, claim_link = loaded
+    texts = get_texts(db_user.language)
+
+    body = texts.t(
+        'GIFT_COPY_TEXT_BODY',
+        '🎁 Дарю тебе подписку {tariff_name} на {period_days} дн.\n\n'
+        'Активировать: {claim_link}\n\n'
+        'Если ссылка не открывается, введи код в боте: {public_code}',
+    ).format(
+        tariff_name=item.tariff_name or texts.t('GIFT_TARIFF_DEFAULT_NAME', 'VPN'),
+        period_days=item.period_days,
+        claim_link=claim_link,
+        public_code=artifacts.public_code,
+    )
+
+    text = (
+        f'{texts.t("GIFT_COPY_TEXT_TITLE", "📋 <b>Текст для отправки</b>")}\n\n'
+        f'{texts.t("GIFT_COPY_TEXT_HINT", "Нажмите на текст ниже — он скопируется целиком.")}\n\n'
+        # Экранируется ВСЁ содержимое: имя тарифа задаёт человек, и угловая
+        # скобка в нём иначе оборвала бы разметку сообщения.
+        f'<pre>{html.escape(body)}</pre>'
+    )
+
+    await callback.message.edit_text(text, reply_markup=_gift_back_keyboard(texts, item.purchase_id), parse_mode='HTML')
+    await callback.answer()
+
+
 async def handle_gift_my_back(
     callback: types.CallbackQuery,
     db_user: User,
@@ -1403,6 +1567,8 @@ def register_gift_handlers(dp: Dispatcher) -> None:
     dp.callback_query.register(handle_gift_my_page, F.data.startswith('gift_my_page:'))
     dp.callback_query.register(handle_gift_my_open, F.data.startswith('gift_my_open:'))
     dp.callback_query.register(handle_gift_my_back, F.data == 'gift_my_back')
+    dp.callback_query.register(handle_gift_my_qr, F.data.startswith('gift_my_qr:'))
+    dp.callback_query.register(handle_gift_my_text, F.data.startswith('gift_my_text:'))
     dp.callback_query.register(handle_gift_enter_code, F.data == 'gift_enter_code')
     dp.callback_query.register(handle_gift_activation_cancel, F.data == 'gift_activation_cancel')
     dp.callback_query.register(handle_gift_tariff_select, F.data.startswith('gift_tariff:'))

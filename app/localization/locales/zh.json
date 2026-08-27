@@ -2261,5 +2261,13 @@
   "REFERRAL_DAYS_TARGET_HINT": "若等级指定了资费，天数仍会计入该资费的订阅——这是管理员的设置。",
   "REFERRAL_DAYS_TARGET_NONE": "您还没有可供选择的订阅。",
   "REFERRAL_SETTINGS_SAVED": "✅ 已保存",
-  "REFERRAL_SUBSCRIPTION_UNTIL": "至 {date}"
+  "REFERRAL_SUBSCRIPTION_UNTIL": "至 {date}",
+  "GIFT_QR_BUTTON": "📱 礼物二维码",
+  "GIFT_COPY_TEXT_BUTTON": "📋 待发送文本",
+  "GIFT_QR_CAPTION": "📱 <b>礼物二维码</b>\n\n出示给接收者——摄像头会打开激活页面。\n\n🔑 代码：<code>{public_code}</code>",
+  "GIFT_COPY_TEXT_TITLE": "📋 <b>待发送文本</b>",
+  "GIFT_COPY_TEXT_HINT": "点击下方文本即可整段复制，然后发送给接收者。",
+  "GIFT_COPY_TEXT_BODY": "🎁 送你一份 {tariff_name} 订阅，为期 {period_days} 天。\n\n激活：{claim_link}\n\n如果链接打不开，请在机器人中输入代码：{public_code}",
+  "GIFT_ITEM_NOT_CLAIMABLE": "该礼物已被激活——没有可分享的内容。",
+  "GIFT_MY_BACK_TO_CARD": "◀️ 返回礼物"
 }

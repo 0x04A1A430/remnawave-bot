@@ -2261,5 +2261,13 @@
   "REFERRAL_DAYS_TARGET_HINT": "If a level targets a tariff, the days still go to that tariff — the administrator set it that way.",
   "REFERRAL_DAYS_TARGET_NONE": "You have no subscriptions to choose between yet.",
   "REFERRAL_SETTINGS_SAVED": "✅ Saved",
-  "REFERRAL_SUBSCRIPTION_UNTIL": "until {date}"
+  "REFERRAL_SUBSCRIPTION_UNTIL": "until {date}",
+  "GIFT_QR_BUTTON": "📱 Gift QR code",
+  "GIFT_COPY_TEXT_BUTTON": "📋 Message to send",
+  "GIFT_QR_CAPTION": "📱 <b>Gift QR code</b>\n\nShow it to the recipient — their camera opens the activation page.\n\n🔑 Code: <code>{public_code}</code>",
+  "GIFT_COPY_TEXT_TITLE": "📋 <b>Message to send</b>",
+  "GIFT_COPY_TEXT_HINT": "Tap the text below to copy all of it, then send it to the recipient.",
+  "GIFT_COPY_TEXT_BODY": "🎁 I'm giving you a {tariff_name} subscription for {period_days} days.\n\nActivate: {claim_link}\n\nIf the link does not open, enter this code in the bot: {public_code}",
+  "GIFT_ITEM_NOT_CLAIMABLE": "This gift has already been activated — there is nothing to share.",
+  "GIFT_MY_BACK_TO_CARD": "◀️ Back to gift"
 }
