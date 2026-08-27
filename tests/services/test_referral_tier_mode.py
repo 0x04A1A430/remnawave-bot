@@ -329,12 +329,12 @@ class TestPayout:
         tiers.counts[3] = {True: 3, False: 3}
 
         lines = await describe_active_levels(None, viewer=tiers.users[3], language='ru')
-        marked = [line for line in lines if 'ваш ранг' in line]
+        marked = [line for line in lines if 'ваш уровень' in line]
         paid = await build_reward_components(
             None, tiers.users[4], event=RewardEvent.REPEAT_TOPUP, topup_amount_kopeks=100_00
         )
 
-        assert len(marked) == 1 and 'Ранг 2' in marked[0]
+        assert len(marked) == 1 and 'Уровень 2' in marked[0]
         assert paid == [], 'ранг 2 не настроен на пополнения — значит и платить по ним нечему'
 
     @pytest.mark.asyncio
@@ -410,9 +410,9 @@ class TestLadderText:
 
         lines = await describe_active_levels(None, viewer=tiers.users[3], language='ru')
 
-        marked = [line for line in lines if 'ваш ранг' in line]
+        marked = [line for line in lines if 'ваш уровень' in line]
         assert len(marked) == 1
-        assert 'Ранг 2' in marked[0]
+        assert 'Уровень 2' in marked[0]
 
     @pytest.mark.asyncio
     async def test_ladder_is_ordered_by_threshold(self, tiers, monkeypatch):
@@ -423,7 +423,7 @@ class TestLadderText:
         _install(monkeypatch, ladder)
 
         lines = await describe_active_levels(None, language='ru')
-        assert lines[0].startswith('Ранг 3'), lines
+        assert lines[0].startswith('Уровень 3'), lines
 
     @pytest.mark.asyncio
     async def test_tiers_beyond_depth_are_described(self, tiers, monkeypatch):
@@ -433,7 +433,7 @@ class TestLadderText:
         monkeypatch.setattr(settings, 'REFERRAL_MAX_LEVEL_DEPTH', 3)
 
         lines = await describe_active_levels(None, language='ru')
-        assert any('Ранг 5' in line for line in lines), lines
+        assert any('Уровень 5' in line for line in lines), lines
 
 
 class TestProgress:
@@ -615,10 +615,10 @@ class TestTextMatchesPayout:
         tiers.counts[3] = {True: 30, False: 30}
 
         lines = await describe_active_levels(None, viewer=tiers.users[3], language='ru')
-        marked = [line for line in lines if 'ваш ранг' in line]
+        marked = [line for line in lines if 'ваш уровень' in line]
 
         assert len(marked) == 1
-        assert 'Ранг 3' in marked[0] and 'не начисляется' in marked[0], marked
+        assert 'Уровень 3' in marked[0] and 'не начисляется' in marked[0], marked
 
     @pytest.mark.asyncio
     async def test_empty_tier_of_someone_else_stays_hidden(self, tiers, monkeypatch):
@@ -631,7 +631,7 @@ class TestTextMatchesPayout:
         tiers.counts[3] = {True: 0, False: 0}
 
         lines = await describe_active_levels(None, viewer=tiers.users[3], language='ru')
-        assert not any('Ранг 2' in line for line in lines), lines
+        assert not any('Уровень 2' in line for line in lines), lines
 
     @pytest.mark.asyncio
     async def test_next_tier_is_the_one_that_will_actually_apply(self, tiers, monkeypatch):
@@ -673,7 +673,7 @@ class TestChainModeIsUntouchedByTheNewArguments:
         with_viewer = await describe_active_levels(None, viewer=tiers.users[3], language='ru')
 
         assert without == with_viewer
-        assert not any('ваш ранг' in line for line in with_viewer)
+        assert not any('ваш уровень' in line for line in with_viewer)
         assert not any('индивидуальная ставка' in line for line in with_viewer)
 
     @pytest.mark.asyncio
@@ -716,7 +716,7 @@ class TestProgressFormatting:
             TierProgress(current_level=2, referrals_any=12, referrals_active=12, next_level=3, next_remaining=13),
             'ru',
         )
-        assert any('2' in line and 'ранг' in line.lower() for line in lines), lines
+        assert any('2' in line and 'уровень' in line.lower() for line in lines), lines
         assert any('3' in line and '13' in line for line in lines), lines
 
     def test_says_so_when_no_rank_reached(self):

@@ -741,7 +741,7 @@ class TestLevelsModeToggle:
         markup = callback.message.edit_text.await_args.kwargs['reply_markup']
         labels = [b.text for row in markup.inline_keyboard for b in row]
         assert not any('не платит' in label for label in labels), labels
-        assert any('Ранг 5' in label for label in labels), labels
+        assert any('Уровень 5' in label for label in labels), labels
 
     @pytest.mark.asyncio
     async def test_button_label_follows_the_stored_value(self, wired, monkeypatch):
@@ -760,7 +760,7 @@ class TestLevelsModeToggle:
 
         markup = callback.message.edit_text.await_args.kwargs['reply_markup']
         labels = [b.text for row in markup.inline_keyboard for b in row]
-        assert any('Режим: ранги' in label for label in labels), labels
+        assert any('Режим: за приглашённых' in label for label in labels), labels
 
     @pytest.mark.asyncio
     async def test_warns_about_a_ladder_carried_over_from_chain(self, wired, monkeypatch):

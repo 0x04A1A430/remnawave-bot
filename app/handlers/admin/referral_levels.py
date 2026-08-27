@@ -143,29 +143,29 @@ def _tier_ladder_warnings(levels) -> list[str]:
 
     if all(t > 0 for t in thresholds):
         warnings.append(
-            f'Ни у одного ранга нет нулевого порога (минимальный — {min(thresholds)}): '
-            'партнёры, не набравшие его, не получат ничего. Заведите стартовый ранг с порогом 0.'
+            f'Ни у одного уровня нет нулевого порога (минимальный — {min(thresholds)}): '
+            'партнёры, не набравшие его, не получат ничего. Заведите стартовый уровень с порогом 0.'
         )
 
     duplicate = next((t for i, t in enumerate(thresholds) if t in thresholds[:i]), None)
     if duplicate is not None:
         warnings.append(
-            f'У нескольких активных рангов одинаковый порог ({duplicate}) — применится только тот, '
+            f'У нескольких активных уровней одинаковый порог ({duplicate}) — применится только тот, '
             'у которого номер больше. Остальные не сработают никогда.'
         )
 
     empty = [lvl.level for lvl in active if not _pays_referrer(lvl)]
     if empty:
         warnings.append(
-            f'Ранг {", ".join(str(n) for n in empty)} ничего не начисляет пригласившему. '
-            'Набрав его порог, партнёр перестанет получать доход: действует ровно один ранг.'
+            f'Уровень {", ".join(str(n) for n in empty)} ничего не начисляет пригласившему. '
+            'Набрав его порог, партнёр перестанет получать доход: действует ровно один уровень.'
         )
 
     triggers = {lvl.trigger for lvl in active}
     if len(triggers) > 1:
         warnings.append(
-            'У рангов разные поводы начисления. Действует повод того ранга, который партнёр набрал, '
-            'поэтому награда за другой повод ему не достанется — задайте нужные поводы на каждом ранге.'
+            'У уровней разные поводы начисления. Действует повод того уровня, который партнёр набрал, '
+            'поэтому награда за другой повод ему не достанется — задайте нужные поводы на каждом уровне.'
         )
 
     return warnings
@@ -184,7 +184,7 @@ def _scheme_line() -> str:
     if not settings.is_referral_levels_scheme():
         return '⚠️ Схема наград: классическая — уровни ниже НЕ применяются'
     if settings.is_referral_tier_levels():
-        return '✅ Многоуровневая схема включена (режим: ранги за число рефералов)'
+        return '✅ Многоуровневая схема включена (режим: уровни за приглашённых)'
     return f'✅ Многоуровневая схема включена (режим: цепочка, глубина до {settings.get_referral_max_level_depth()})'
 
 
@@ -199,16 +199,16 @@ async def _render_levels(callback: types.CallbackQuery, db: AsyncSession) -> Non
     names = await _tariff_names(db)
 
     tier_mode_header = settings.is_referral_tier_levels()
-    header_caption = 'Ранг' if tier_mode_header else 'Уровень'
+    header_caption = 'Уровень'
     lines = [
-        f'🪜 <b>{"Ранги" if tier_mode_header else "Уровни"} реферальных наград</b>',
+        '🪜 <b>Уровни реферальных наград</b>',
         '',
         _scheme_line(),
         '',
     ]
 
     if not levels:
-        lines.append(f'{"Ранги" if tier_mode_header else "Уровни"} не заведены — награды по этой схеме не начисляются.')
+        lines.append('Уровни не заведены — награды по этой схеме не начисляются.')
     else:
         # Ранги перечисляются по возрастанию порога: это лестница, и читать её
         # надо в том порядке, в котором по ней поднимаются.
@@ -263,7 +263,7 @@ async def _render_levels(callback: types.CallbackQuery, db: AsyncSession) -> Non
 
     max_level = settings.get_referral_effective_max_level()
     tier_mode = settings.is_referral_tier_levels()
-    caption = 'Ранг' if tier_mode else 'Уровень'
+    caption = 'Уровень'
     keyboard_rows = []
     for level in levels:
         # Уровень глубже предела обхода не платит вовсе: помечаем прямо на кнопке,
@@ -282,11 +282,7 @@ async def _render_levels(callback: types.CallbackQuery, db: AsyncSession) -> Non
     next_level = _next_free_level(levels)
     if next_level <= MAX_SUPPORTED_LEVEL:
         keyboard_rows.append(
-            [
-                types.InlineKeyboardButton(
-                    text=f'➕ Добавить {caption.lower()} {next_level}', callback_data='admin_ref_lvl_add'
-                )
-            ]
+            [types.InlineKeyboardButton(text=f'➕ Добавить уровень {next_level}', callback_data='admin_ref_lvl_add')]
         )
 
     if not levels:
@@ -306,7 +302,7 @@ async def _render_levels(callback: types.CallbackQuery, db: AsyncSession) -> Non
     keyboard_rows.append(
         [
             types.InlineKeyboardButton(
-                text=f'🎚 Режим: {"ранги" if stored_tiers else "цепочка"}',
+                text=f'🎚 Режим: {"за приглашённых" if stored_tiers else "по цепочке"}',
                 callback_data='admin_ref_lvl_tiers',
             )
         ]
@@ -520,7 +516,7 @@ async def _render_level(callback: types.CallbackQuery, db: AsyncSession, level_n
     days_on = level.reward_mode in (ReferralRewardMode.DAYS.value, ReferralRewardMode.BOTH.value)
 
     tier_mode = settings.is_referral_tier_levels()
-    caption = 'Ранг' if tier_mode else 'Уровень'
+    caption = 'Уровень'
     beyond_depth = level.level > settings.get_referral_effective_max_level()
     lines = [
         f'🪜 <b>{caption} {level.level}</b>',
@@ -546,8 +542,8 @@ async def _render_level(callback: types.CallbackQuery, db: AsyncSession, level_n
     if tier_mode:
         lines.append('')
         lines.append(
-            '<i>Режим рангов: платят только прямому пригласившему, и применяется '
-            'ровно один ранг — старший из достигнутых. Уровни выше по номеру не '
+            '<i>Уровни за приглашённых: платят только прямому пригласившему, и применяется '
+            'ровно один уровень — старший из достигнутых. Уровни выше по номеру не '
             'складываются с этим.</i>'
         )
 
@@ -1003,15 +999,17 @@ async def toggle_levels_mode(
         # выглядит как единственная проблема.
         warnings = _tier_ladder_warnings(levels)
         if warnings:
-            await callback.answer('Режим: ранги.\n\n' + '\n\n'.join(f'⚠️ {w}' for w in warnings), show_alert=True)
+            await callback.answer(
+                'Режим: уровни за приглашённых.\n\n' + '\n\n'.join(f'⚠️ {w}' for w in warnings), show_alert=True
+            )
         else:
             await callback.answer(
-                'Режим: ранги. Платят только прямому пригласившему, применяется один ранг — старший из достигнутых.',
+                'Режим: уровни за приглашённых. Платят только прямому пригласившему, применяется один уровень — старший из достигнутых.',
                 show_alert=True,
             )
     else:
         await callback.answer(
-            f'Режим: цепочка. Обход до {settings.get_referral_max_level_depth()} уровней вверх.',
+            f'Режим: уровни по цепочке. Обход до {settings.get_referral_max_level_depth()} уровней вверх.',
             show_alert=True,
         )
 
@@ -1033,8 +1031,8 @@ async def start_depth_edit(callback: types.CallbackQuery, db_user: User, db: Asy
         # здесь число ни на что не повлияет. Форма, которая принимает значение и
         # ничего не меняет, хуже отсутствующей кнопки.
         await callback.answer(
-            'В режиме рангов цепочка не обходится — глубина не применяется. '
-            'Переключите режим на «цепочку», чтобы её настроить.',
+            'В режиме «за приглашённых» цепочка не обходится — глубина не применяется. '
+            'Переключите режим на «по цепочке», чтобы её настроить.',
             show_alert=True,
         )
         return

@@ -66,7 +66,7 @@ async def _program_rules_block(db: AsyncSession) -> str:
 
     tariff_names = await _reward_tariff_names(db)
     tier_mode = settings.is_referral_tier_levels()
-    header = 'ранги за число рефералов' if tier_mode else 'цепочка пригласивших'
+    header = 'уровни за приглашённых' if tier_mode else 'уровни по цепочке'
     lines = [f'<b>Правила программы (многоуровневая схема, {header}):</b>']
     level_lines = await describe_active_levels(db, tariff_names=tariff_names)
     if level_lines:
@@ -80,7 +80,7 @@ async def _program_rules_block(db: AsyncSession) -> str:
     if tier_mode:
         # Про глубину здесь писать нечего: цепочка не обходится. Зато admin
         # обязан видеть главное отличие режима — платят одному и по одному правилу.
-        lines.append('- Платят только прямому пригласившему, применяется один ранг — старший из достигнутых')
+        lines.append('- Платят только прямому пригласившему, применяется один уровень — старший из достигнутых')
     else:
         lines.append(f'- Глубина цепочки: до {settings.get_referral_max_level_depth()} уровней')
     return '\n'.join(lines)

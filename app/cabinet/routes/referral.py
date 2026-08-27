@@ -27,6 +27,7 @@ from ..schemas.referral import (
     ReferralInfoResponse,
     ReferralItemResponse,
     ReferralListResponse,
+    ReferralProgramLevel,
     ReferralTermsResponse,
 )
 
@@ -285,11 +286,14 @@ async def get_referral_terms(
     level_descriptions: list[str] = []
     referee_bonus: str | None = None
     tier_progress = None
+    program_levels: list[ReferralProgramLevel] = []
+    personal_percent: int | None = None
 
     if settings.is_referral_levels_scheme():
         from app.database.models import Tariff
         from app.services.referral_reward_service import (
             ReferralRewardLevelService,
+            build_level_views,
             describe_active_levels,
             describe_referee_bonus,
             resolve_tier_progress,
@@ -309,8 +313,28 @@ async def get_referral_terms(
         # режиме рангов бонус его приглашённых задаётся его рангом. Аноним
         # получает описание стартового ранга.
         referee_bonus = await describe_referee_bonus(db, tariff_names=tariff_names, language=language, referrer=user)
-        # Ранг считается только для известного пользователя: эндпоинт публичный,
-        # и «ваш ранг» без пользователя было бы чужим или выдуманным.
+        # Разобранные ступени для карточек кабинета. Строятся тем же кодом, что и
+        # строки выше, поэтому разойтись с ними не могут.
+        views, _current, personal_percent = await build_level_views(
+            db, tariff_names=tariff_names, language=language, viewer=user
+        )
+        program_levels = [
+            ReferralProgramLevel(
+                level=view.level,
+                is_current=view.is_current,
+                rewards=view.rewards,
+                pays_referrer=view.pays_referrer,
+                trigger=view.trigger,
+                trigger_label=view.trigger_label,
+                required_referrals=view.required_referrals,
+                required_referrals_active_only=view.required_referrals_active_only,
+                referee_reward=view.referee_reward,
+            )
+            for view in views
+        ]
+
+        # Уровень считается только для известного пользователя: эндпоинт
+        # публичный, и «ваш уровень» без пользователя было бы чужим.
         if user is not None:
             tier_progress = await resolve_tier_progress(db, user)
 
@@ -332,6 +356,8 @@ async def get_referral_terms(
         tier_next_remaining=tier_progress.next_remaining if tier_progress else 0,
         tier_referrals_any=tier_progress.referrals_any if tier_progress else 0,
         tier_referrals_active=tier_progress.referrals_active if tier_progress else 0,
+        levels=program_levels,
+        personal_percent=personal_percent,
         is_enabled=settings.is_referral_program_enabled(),
         commission_percent=settings.REFERRAL_COMMISSION_PERCENT,
         first_payment_commission_percent=settings.REFERRAL_FIRST_PAYMENT_COMMISSION_PERCENT,

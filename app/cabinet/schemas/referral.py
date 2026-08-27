@@ -85,6 +85,28 @@ class ReferralEarningsListResponse(BaseModel):
     pages: int
 
 
+class ReferralProgramLevel(BaseModel):
+    """Одна ступень программы, разобранная на части.
+
+    Кабинет раскладывает её по карточке, поэтому части приходят по отдельности, а
+    не готовой строкой. Собирается тем же кодом, что и текст бота, — иначе экран
+    и бот описывали бы одно правило двумя способами и разошлись бы.
+    """
+
+    level: int
+    is_current: bool = False
+    # Готовые куски награды пригласившему: «25% от суммы», «50 ₽», «7 дн. (Про)».
+    rewards: list[str] = []
+    # False — ступень пригласившему не платит; её показывают, только если она его.
+    pays_referrer: bool = True
+    trigger: str = ''
+    trigger_label: str = ''
+    required_referrals: int = 0
+    required_referrals_active_only: bool = True
+    # Что на этой ступени получает приглашённый. None — ничего.
+    referee_reward: str | None = None
+
+
 class ReferralTermsResponse(BaseModel):
     """Referral program terms."""
 
@@ -118,6 +140,11 @@ class ReferralTermsResponse(BaseModel):
     tier_next_remaining: int = 0
     tier_referrals_any: int = 0
     tier_referrals_active: int = 0
+    # Ступени программы в том порядке, в котором их показывают: в цепочке по
+    # номеру, в режиме за приглашённых — по возрастанию порога.
+    levels: list[ReferralProgramLevel] = []
+    # Личная ставка партнёра, если она перебивает процент ступени. None — нет.
+    personal_percent: int | None = None
 
 
 class ReferralRewardLevelResponse(BaseModel):

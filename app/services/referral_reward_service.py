@@ -1102,41 +1102,58 @@ def _days_can_be_granted(config: LevelConfig, *, tariff_id: int | None, for_refe
     return tariff_id is not None
 
 
-async def describe_active_levels(
+@dataclass(frozen=True)
+class LevelView:
+    """Одна ступень программы, разобранная на части.
+
+    Текст бота и данные кабинета собираются из ЭТОГО, а не каждый из своего
+    источника: расхождение показанного и начисляемого — самый дорогой класс
+    ошибок в реферальных программах, и берётся он ровно из двух описаний одного
+    правила. Кабинету нужны части по отдельности, чтобы разложить их по карточке;
+    боту — склеенная строка.
+    """
+
+    level: int
+    is_current: bool
+    rewards: list[str]
+    pays_referrer: bool
+    trigger: str
+    trigger_label: str
+    required_referrals: int
+    required_referrals_active_only: bool
+    referee_reward: str | None
+
+
+async def build_level_views(
     db: AsyncSession,
     *,
     tariff_names: dict[int, str] | None = None,
     language: str | None = None,
     viewer: User | None = None,
-) -> list[str]:
-    """Человекочитаемое описание активных уровней.
+) -> tuple[list[LevelView], int | None, int | None]:
+    """Ступени программы, уровень смотрящего и его личная ставка.
 
-    Один источник и для приветственного текста, и для экрана «Партнёрская
-    программа», и для админского превью. Расхождение обещанного и начисляемого —
-    самый дорогой класс ошибок в реферальных программах, а он ровно из того и
-    берётся, что описание пишут отдельно от расчёта.
-
-    ``viewer`` отмечает в списке ранг того, кто на него смотрит. В цепочке
-    перечисленные уровни действуют ОДНОВРЕМЕННО, в рангах — ровно один, и без
-    отметки та же самая лестница читается как список складывающихся наград:
-    партнёр с 12 рефералами видит три строки и суммирует их.
+    Возвращает ``(ступени, текущий уровень, личный процент)``. Личный процент —
+    только когда он реально перебивает процент правила, то есть в режиме за
+    приглашённых и когда деньгами платит хоть одна ступень.
     """
     from app.localization.texts import get_texts
 
     texts = get_texts(language) if language else get_texts()
     configs = await ReferralRewardLevelService.get_all(db)
     names = tariff_names or {}
-    lines: list[str] = []
 
     # Глубже REFERRAL_MAX_LEVEL_DEPTH цепочка не обходится вовсе, поэтому такие
     # уровни не платят — сколько бы их ни было заведено. Описывать их значит
-    # обещать пользователю награду, которая не придёт никогда. В режиме рангов
-    # ограничения нет: ранг не обходится, а выбирается по числу рефералов.
+    # обещать пользователю награду, которая не придёт никогда. В режиме за
+    # приглашённых ограничения нет: ступень не обходится, а выбирается по числу
+    # рефералов.
     max_level = settings.get_referral_effective_max_level()
     tier_mode = settings.is_referral_tier_levels()
 
-    # Ранги перечисляются по возрастанию порога, а не номера: это лестница, и
-    # читать её надо в том порядке, в котором по ней поднимаются.
+    # В режиме за приглашённых ступени перечисляются по возрастанию порога, а не
+    # номера: это лестница, и читать её надо в том порядке, в котором по ней
+    # поднимаются.
     order = sorted(configs, key=lambda lvl: (configs[lvl].required_referrals, lvl)) if tier_mode else sorted(configs)
 
     current_level: int | None = None
@@ -1144,6 +1161,7 @@ async def describe_active_levels(
         current = await select_tier_config(db, configs, viewer.id)
         current_level = current.level if current else None
 
+    views: list[LevelView] = []
     for level in order:
         config = configs[level]
         if not config.is_active or level > max_level:
@@ -1153,9 +1171,9 @@ async def describe_active_levels(
 
         rewards: list[str] = []
         if config.money_enabled:
-            # На СВОЕЙ строке печатается процент, который реально начислят: в
-            # режиме рангов получатель всегда прямой, и личная ставка партнёра
-            # перебивает процент правила. Строка своего ранга — единственное
+            # На СВОЕЙ ступени печатается процент, который реально начислят: в
+            # режиме за приглашённых получатель всегда прямой, и личная ставка
+            # партнёра перебивает процент правила. Своя ступень — единственное
             # в списке утверждение лично о смотрящем, и общий процент программы
             # в ней противоречил бы выплате.
             percent = (
@@ -1179,81 +1197,144 @@ async def describe_active_levels(
                 texts.t('REFERRAL_REWARD_DAYS', '{days} дн. подписки').format(days=config.referrer_days) + tariff_suffix
             )
 
-        # Ранг, по которому пригласившему ничего не причитается, из общего
-        # перечня выпадает — обещать нечего. Но СВОЙ ранг обязан остаться:
-        # в режиме рангов действует ровно он, и его исчезновение читается как
-        # «мой ранг не существует», хотя именно он и обнулил доход.
-        empty_for_referrer = not rewards
-        if empty_for_referrer:
+        # Ступень, по которой пригласившему ничего не причитается, из общего
+        # перечня выпадает — обещать нечего. Но СВОЯ обязана остаться: в режиме
+        # за приглашённых действует ровно она, и её исчезновение читается как
+        # «моего уровня не существует», хотя именно он и обнулил доход.
+        pays_referrer = bool(rewards)
+        if not pays_referrer:
             if not is_current:
                 continue
             rewards.append(texts.t('REFERRAL_TIER_NO_REFERRER_REWARD', 'вам не начисляется'))
 
+        views.append(
+            LevelView(
+                level=level,
+                is_current=is_current,
+                rewards=rewards,
+                pays_referrer=pays_referrer,
+                trigger=config.trigger,
+                trigger_label=_trigger_label(config.trigger, texts),
+                required_referrals=config.required_referrals,
+                required_referrals_active_only=config.required_referrals_active_only,
+                referee_reward=_describe_referee_parts(config, names, texts),
+            )
+        )
+
+    personal_percent: int | None = None
+    # Оговорка нужна только там, где ставка вообще во что-то превращается: в
+    # программе, платящей одними днями, «действует на любом уровне» обещает
+    # деньги, которых не будет никогда.
+    if tier_mode and viewer is not None and any(c.is_active and c.money_enabled for c in configs.values()):
+        raw = getattr(viewer, 'referral_commission_percent', None)
+        if raw is not None:
+            personal_percent = max(0, min(100, int(raw)))
+
+    return views, current_level, personal_percent
+
+
+def _describe_referee_parts(config: LevelConfig, names: dict[int, str], texts) -> str | None:
+    """Что получает приглашённый на этой ступени. ``None`` — ничего."""
+    parts: list[str] = []
+    if config.money_enabled and config.referee_fixed_kopeks:
+        parts.append(settings.format_price(config.referee_fixed_kopeks))
+    if (
+        config.days_enabled
+        and config.referee_days
+        and _days_can_be_granted(config, tariff_id=config.referee_tariff_id, for_referee=True)
+    ):
+        suffix = ''
+        if config.referee_tariff_id and config.referee_tariff_id in names:
+            suffix = f' ({names[config.referee_tariff_id]})'
+        parts.append(texts.t('REFERRAL_REWARD_DAYS', '{days} дн. подписки').format(days=config.referee_days) + suffix)
+    return ' + '.join(parts) or None
+
+
+async def describe_active_levels(
+    db: AsyncSession,
+    *,
+    tariff_names: dict[int, str] | None = None,
+    language: str | None = None,
+    viewer: User | None = None,
+) -> list[str]:
+    """Человекочитаемое описание активных ступеней.
+
+    Один источник и для приветственного текста, и для экрана «Партнёрская
+    программа», и для админского превью. Расхождение обещанного и начисляемого —
+    самый дорогой класс ошибок в реферальных программах, а он ровно из того и
+    берётся, что описание пишут отдельно от расчёта.
+
+    ``viewer`` отмечает в списке ступень того, кто на него смотрит. В цепочке
+    перечисленные уровни действуют ОДНОВРЕМЕННО, в режиме за приглашённых —
+    ровно один, и без отметки та же самая лестница читается как список
+    складывающихся наград: партнёр с 12 рефералами видит три строки и суммирует.
+    """
+    from app.localization.texts import get_texts
+
+    texts = get_texts(language) if language else get_texts()
+    views, _current, personal_percent = await build_level_views(
+        db, tariff_names=tariff_names, language=language, viewer=viewer
+    )
+    tier_mode = settings.is_referral_tier_levels()
+    lines: list[str] = []
+
+    for view in views:
         line_key, line_default = (
-            ('REFERRAL_TIER_LINE', 'Ранг {level}: {rewards} {trigger}')
+            ('REFERRAL_TIER_LINE', 'Уровень {level}: {rewards} {trigger}')
             if tier_mode
             else ('REFERRAL_LEVEL_LINE', 'Уровень {level}: {rewards} {trigger}')
         )
         line = (
             texts.t(line_key, line_default)
             .format(
-                level=level,
-                rewards=' + '.join(rewards),
+                level=view.level,
+                rewards=' + '.join(view.rewards),
                 # Повод у пустого правила называть незачем: «вам не начисляется с
-                # каждого пополнения» звучит как награда, которой её не является.
-                trigger='' if empty_for_referrer else _trigger_label(config.trigger, texts),
+                # каждого пополнения» звучит как награда, которой оно не является.
+                trigger='' if not view.pays_referrer else view.trigger_label,
             )
             .rstrip()
         )
-        # Порог называется прямо в описании: без него уровень выглядит как
+
+        # Порог называется прямо в описании: без него ступень выглядит как
         # награда, которая просто есть, и непонятно, за что она достаётся.
-        if config.required_referrals > 0:
+        if view.required_referrals > 0:
             if tier_mode:
-                key = 'REFERRAL_TIER_FROM_ACTIVE' if config.required_referrals_active_only else 'REFERRAL_TIER_FROM_ANY'
+                key = 'REFERRAL_TIER_FROM_ACTIVE' if view.required_referrals_active_only else 'REFERRAL_TIER_FROM_ANY'
                 default = (
                     ' — от {count} рефералов с пополнением'
-                    if config.required_referrals_active_only
+                    if view.required_referrals_active_only
                     else ' — от {count} приглашённых'
                 )
             else:
                 key = (
                     'REFERRAL_LEVEL_UNLOCK_ACTIVE'
-                    if config.required_referrals_active_only
+                    if view.required_referrals_active_only
                     else 'REFERRAL_LEVEL_UNLOCK_ANY'
                 )
                 default = (
                     ' (открывается за {count} рефералов с пополнением)'
-                    if config.required_referrals_active_only
+                    if view.required_referrals_active_only
                     else ' (открывается за {count} приглашённых)'
                 )
-            line += texts.t(key, default).format(count=config.required_referrals)
+            line += texts.t(key, default).format(count=view.required_referrals)
         elif tier_mode:
-            # Ранг с нулевым порогом — стартовый. Без пометки он в лестнице
+            # Ступень с нулевым порогом — стартовая. Без пометки она в лестнице
             # выглядит как ступень, условие которой забыли указать.
             line += texts.t('REFERRAL_TIER_BASE', ' — стартовый')
 
-        if is_current:
-            line += texts.t('REFERRAL_TIER_YOU_ARE_HERE', '  ← ваш ранг')
+        if view.is_current:
+            line += texts.t('REFERRAL_TIER_YOU_ARE_HERE', '  ← ваш уровень')
 
         lines.append(line)
 
-    # A: личный процент партнёра перебивает процент ЛЮБОГО ранга (получатель в
-    # этом режиме всегда прямой). Без оговорки строка «Ранг 3: 20% ← ваш ранг»
-    # — прямое утверждение лично о смотрящем, и оно неверно: заплатят по его
-    # ставке. Строки лестницы при этом остаются общими условиями программы.
-    # Оговорка нужна только там, где ставка вообще во что-то превращается: в
-    # программе, платящей одними днями, «действует на любом ранге» обещает
-    # деньги, которых не будет никогда.
-    money_anywhere = any(cfg.is_active and cfg.money_enabled for cfg in configs.values())
-    if tier_mode and viewer is not None and money_anywhere:
-        personal = getattr(viewer, 'referral_commission_percent', None)
-        if personal is not None:
-            lines.append(
-                texts.t(
-                    'REFERRAL_TIER_PERSONAL_RATE',
-                    '💼 У вас индивидуальная ставка {percent}% — она действует на любом ранге',
-                ).format(percent=max(0, min(100, int(personal))))
-            )
+    if personal_percent is not None:
+        lines.append(
+            texts.t(
+                'REFERRAL_TIER_PERSONAL_RATE',
+                '💼 У вас индивидуальная ставка {percent}% — она действует на любом уровне',
+            ).format(percent=personal_percent)
+        )
 
     return lines
 
@@ -1413,13 +1494,13 @@ def format_tier_progress(progress: TierProgress | None, language: str | None = N
     lines: list[str] = []
 
     if progress.current_level is None:
-        lines.append(texts.t('REFERRAL_TIER_NONE', '🏅 Ранг пока не открыт'))
+        lines.append(texts.t('REFERRAL_TIER_NONE', '🏅 Уровень пока не открыт'))
     else:
-        lines.append(texts.t('REFERRAL_TIER_CURRENT', '🏅 Ваш ранг: {level}').format(level=progress.current_level))
+        lines.append(texts.t('REFERRAL_TIER_CURRENT', '🏅 Ваш уровень: {level}').format(level=progress.current_level))
 
     if progress.next_level is not None:
         lines.append(
-            texts.t('REFERRAL_TIER_NEXT', 'До ранга {level}: ещё {count}').format(
+            texts.t('REFERRAL_TIER_NEXT', 'До уровня {level}: ещё {count}').format(
                 level=progress.next_level, count=progress.next_remaining
             )
         )
