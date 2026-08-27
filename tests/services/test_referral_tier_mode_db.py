@@ -438,3 +438,81 @@ async def test_overview_average_counts_every_rank_too(monkeypatch, tier_mode):
         average = stats['summary']['avg_earnings_per_referral_kopeks']
 
     assert average > 100_00, f'среднее {average} посчитано только по стартовому рангу'
+
+
+@pytest.mark.asyncio
+async def test_cap_applies_to_an_earning_made_in_the_same_second(monkeypatch, tier_mode):
+    """Лимит обязан считать начисление, сделанное сразу после создания правила.
+
+    SQLite хранит datetime строкой и сравнивает строки: у значения без долей
+    секунды и у связанного aware-значения форматы расходятся, поэтому строка,
+    созданная в ТУ ЖЕ секунду, что и правило, отбрасывалась отсечкой — лимит к
+    ней не применялся, и партнёр получал выплату сверх настроенной. Типичный
+    случай: админ завёл уровень, и тут же пришло пополнение.
+    """
+    ensure_real_aiosqlite(monkeypatch)
+    async with memory_session(monkeypatch, TABLES) as db:
+        db.add(_user(1))
+        for uid in range(2, 13):
+            db.add(_user(uid, referred_by=1, topped_up=True))
+        db.add(_level(2, referrer_percent=15, required_referrals=10, max_payments=1))
+        await db.commit()
+
+        # Первая выплата — в ту же секунду, что и правило.
+        db.add(
+            ReferralEarning(
+                user_id=1,
+                referral_id=2,
+                amount_kopeks=100_00,
+                reason='referral_level_topup',
+                level=2,
+                reward_type=ReferralRewardType.MONEY.value,
+            )
+        )
+        await db.commit()
+
+        referee = await db.get(User, 2)
+        components = await build_reward_components(
+            db, referee, event=RewardEvent.REPEAT_TOPUP, topup_amount_kopeks=200_00
+        )
+
+        assert components == [], 'лимит в 1 выплату уже исчерпан — начислять нечего'
+
+
+@pytest.mark.asyncio
+async def test_margin_does_not_swallow_older_history(monkeypatch, tier_mode):
+    """Контроль: запас на границе не должен втягивать историю прежних схем.
+
+    Отсечка для того и существует: денежные строки классической схемы лежат в
+    тех же колонках, и без границы новый уровень был бы исчерпан при рождении.
+    Запас измеряется секундами, история — днями.
+    """
+    ensure_real_aiosqlite(monkeypatch)
+    async with memory_session(monkeypatch, TABLES) as db:
+        recently = datetime.now(UTC) - timedelta(minutes=5)
+        long_ago = datetime.now(UTC) - timedelta(days=30)
+
+        db.add(_user(1))
+        for uid in range(2, 13):
+            db.add(_user(uid, referred_by=1, topped_up=True))
+        db.add(_level(2, referrer_percent=15, required_referrals=10, max_payments=1, created_at=recently))
+        for _ in range(5):
+            db.add(
+                ReferralEarning(
+                    user_id=1,
+                    referral_id=2,
+                    amount_kopeks=100_00,
+                    reason='referral_commission_topup',
+                    level=2,
+                    reward_type=ReferralRewardType.MONEY.value,
+                    created_at=long_ago,
+                )
+            )
+        await db.commit()
+
+        referee = await db.get(User, 2)
+        components = await build_reward_components(
+            db, referee, event=RewardEvent.REPEAT_TOPUP, topup_amount_kopeks=200_00
+        )
+
+        assert components and components[0].money_kopeks == 30_00, 'старая история не должна съедать лимит'

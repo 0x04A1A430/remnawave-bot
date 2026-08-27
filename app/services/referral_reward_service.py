@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
+from datetime import timedelta
 
 import structlog
 from sqlalchemy import func, select
@@ -301,7 +302,13 @@ async def count_level_payments(db: AsyncSession, referrer_id: int, referral_id: 
         ReferralEarning.amount_kopeks > 0,
     )
     if since is not None:
-        query = query.where(ReferralEarning.created_at >= since)
+        # Запас на границе. SQLite хранит datetime строкой и сравнивает строки:
+        # у значения без долей секунды и у связанного aware-значения форматы
+        # расходятся, и начисление, сделанное в ТУ ЖЕ секунду, что и правило,
+        # отбрасывалось — лимит к нему не применялся вовсе. Отсечка существует,
+        # чтобы отбросить историю ДО появления правила, а она измеряется днями;
+        # пара секунд слака ничего лишнего не втягивает.
+        query = query.where(ReferralEarning.created_at >= since - timedelta(seconds=2))
 
     result = await db.execute(query)
     return int(result.scalar() or 0)
