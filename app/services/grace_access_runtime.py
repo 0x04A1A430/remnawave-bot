@@ -1512,6 +1512,7 @@ def _build_policy() -> GraceAccessPolicy:
         daily_enabled=settings.GRACE_ACCESS_DAILY_ENABLED,
         free_enabled=settings.GRACE_ACCESS_FREE_ENABLED,
         reconcile_batch_size=settings.GRACE_ACCESS_RECONCILE_BATCH_SIZE,
+        external_squad_uuid=settings.GRACE_ACCESS_EXTERNAL_SQUAD_UUID.strip() or None,
     )
 
 
@@ -1528,6 +1529,83 @@ def _validate_active_configuration() -> None:
             UUID(raw_uuid.strip())
         except ValueError as error:
             raise ValueError(f'{label} must contain a valid UUID') from error
+
+
+async def collect_grace_status(db: AsyncSession, *, error_limit: int = 20) -> dict[str, Any]:
+    """Session counters and the newest failures, as one read-only snapshot.
+
+    The emergency CLI and the cabinet page both report grace health, and a second
+    copy of these queries would let the two drift: the rollback runbook compares
+    the numbers an operator reads on screen with the ones the CLI prints before
+    and after ``restore-all``. The returned mapping is that CLI payload, so its
+    keys are a contract — the runbook quotes them.
+    """
+    state_rows = (
+        await db.execute(
+            select(GraceAccessSessionModel.state, func.count())
+            .group_by(GraceAccessSessionModel.state)
+            .order_by(GraceAccessSessionModel.state)
+        )
+    ).all()
+    open_error_count = int(
+        (
+            await db.execute(
+                select(func.count())
+                .select_from(GraceAccessSessionModel)
+                .where(
+                    GraceAccessSessionModel.state.in_(_OPEN_STATES),
+                    GraceAccessSessionModel.last_error.isnot(None),
+                )
+            )
+        ).scalar_one()
+    )
+    completed_error_count = int(
+        (
+            await db.execute(
+                select(func.count())
+                .select_from(GraceAccessSessionModel)
+                .where(
+                    GraceAccessSessionModel.state == GraceSessionState.COMPLETED.value,
+                    GraceAccessSessionModel.last_error.isnot(None),
+                )
+            )
+        ).scalar_one()
+    )
+    error_rows = (
+        await db.execute(
+            select(
+                GraceAccessSessionModel.id,
+                GraceAccessSessionModel.subscription_id,
+                GraceAccessSessionModel.state,
+                GraceAccessSessionModel.completion_reason,
+                GraceAccessSessionModel.last_error,
+            )
+            .where(GraceAccessSessionModel.last_error.isnot(None))
+            .order_by(GraceAccessSessionModel.updated_at.desc())
+            .limit(error_limit)
+        )
+    ).all()
+
+    states = {str(state): int(count) for state, count in state_rows}
+    open_count = sum(states.get(state, 0) for state in _OPEN_STATES)
+    recent_errors = [
+        {
+            'id': str(session_id),
+            'subscription_id': int(subscription_id),
+            'state': str(state),
+            'completion_reason': str(completion_reason) if completion_reason else None,
+            'last_error': str(last_error),
+        }
+        for session_id, subscription_id, state, completion_reason, last_error in error_rows
+    ]
+    return {
+        'open': open_count,
+        'open_errors': open_error_count,
+        'completed_errors': completed_error_count,
+        'with_errors': open_error_count + completed_error_count,
+        'states': states,
+        'recent_errors': recent_errors,
+    }
 
 
 async def _acquire_database_lock(db: AsyncSession, subscription_id: int) -> None:

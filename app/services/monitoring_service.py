@@ -65,8 +65,9 @@ from app.services.subscription_service import SubscriptionService, get_traffic_r
 from app.utils.cache import cache
 from app.utils.formatters import format_username_link
 from app.utils.message_patch import caption_exceeds_telegram_limit
-from app.utils.miniapp_buttons import build_miniapp_or_callback_button
+from app.utils.miniapp_buttons import build_miniapp_or_callback_button, build_subscription_extend_button
 from app.utils.promo_offer import get_user_active_promo_discount_percent
+from app.utils.rich_notify import try_send_rich_notification
 from app.utils.subscription_utils import (
     resolve_hwid_device_limit_for_payload,
 )
@@ -229,6 +230,30 @@ class MonitoringService:
         # Skip blocked/deleted users to save Telegram rate limits
         if user and user.status in (UserStatus.BLOCKED.value, UserStatus.DELETED.value):
             logger.debug('Пропуск уведомления: пользователь недоступен', user_id=user.id, status=user.status)
+            return None
+
+        # Rich-путь идёт первым, чтобы уведомления мониторинга выглядели так же, как
+        # меню. Логотип не теряется: в rich он вставляется публичной ссылкой в <img>,
+        # тем же способом, что и в шапке rich-меню. Таймаут тот же, что у классических
+        # отправок ниже, и попытка ровно одна — иначе бюджет цикла на получателя
+        # удвоился бы, а его как раз и ограничивали, чтобы цикл не залипал.
+        try:
+            sent_rich = await try_send_rich_notification(
+                self.bot,
+                chat_id,
+                text,
+                keyboard=reply_markup,
+                with_logo=settings.ENABLE_LOGO_MODE,
+                timeout=settings.MONITORING_NOTIFICATION_SEND_TIMEOUT,
+            )
+        except TimeoutError:
+            logger.warning(
+                'rich-уведомление зависло дольше таймаута — пропускаем получателя, цикл продолжается',
+                chat_id=chat_id,
+                timeout=settings.MONITORING_NOTIFICATION_SEND_TIMEOUT,
+            )
+            return None
+        if sent_rich:
             return None
 
         if (
@@ -1813,10 +1838,9 @@ class MonitoringService:
 
             from aiogram.types import InlineKeyboardMarkup
 
-            extend_callback = f'se:{subscription.id}' if settings.is_multi_tariff_enabled() else 'subscription_extend'
             keyboard = InlineKeyboardMarkup(
                 inline_keyboard=[
-                    [build_miniapp_or_callback_button(text='💎 Продлить подписку', callback_data=extend_callback)],
+                    [build_subscription_extend_button('💎 Продлить подписку', subscription.id)],
                     [build_miniapp_or_callback_button(text='💳 Пополнить баланс', callback_data='balance_topup')],
                 ]
             )
@@ -1911,7 +1935,6 @@ class MonitoringService:
 
             from aiogram.types import InlineKeyboardMarkup
 
-            extend_callback = f'se:{subscription.id}' if settings.is_multi_tariff_enabled() else 'subscription_extend'
             sub_btn_text = texts.t(
                 'BTN_MY_SUBSCRIPTIONS' if settings.is_multi_tariff_enabled() else 'BTN_MY_SUBSCRIPTION',
                 '📱 Мои подписки' if settings.is_multi_tariff_enabled() else '📱 Моя подписка',
@@ -1919,10 +1942,9 @@ class MonitoringService:
             keyboard = InlineKeyboardMarkup(
                 inline_keyboard=[
                     [
-                        build_miniapp_or_callback_button(
-                            text=texts.t('BTN_RENEW_SUBSCRIPTION', '⏰ Продлить подписку'),
-                            callback_data=extend_callback,
-                            cabinet_path='/subscription',
+                        build_subscription_extend_button(
+                            texts.t('BTN_RENEW_SUBSCRIPTION', '⏰ Продлить подписку'),
+                            subscription.id,
                         )
                     ],
                     [
@@ -2144,14 +2166,12 @@ class MonitoringService:
 
             from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
-            extend_callback = f'se:{subscription.id}' if settings.is_multi_tariff_enabled() else 'subscription_extend'
-
             keyboard = InlineKeyboardMarkup(
                 inline_keyboard=[
                     [
-                        build_miniapp_or_callback_button(
-                            text=texts.t('SUBSCRIPTION_EXTEND', '💎 Продлить подписку'),
-                            callback_data=extend_callback,
+                        build_subscription_extend_button(
+                            texts.t('SUBSCRIPTION_EXTEND', '💎 Продлить подписку'),
+                            subscription.id,
                         )
                     ],
                     [
@@ -2251,8 +2271,6 @@ class MonitoringService:
 
             from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
-            extend_callback = f'se:{subscription.id}' if settings.is_multi_tariff_enabled() else 'subscription_extend'
-
             keyboard = InlineKeyboardMarkup(
                 inline_keyboard=[
                     [
@@ -2261,9 +2279,9 @@ class MonitoringService:
                         )
                     ],
                     [
-                        build_miniapp_or_callback_button(
-                            text=texts.t('SUBSCRIPTION_EXTEND', '💎 Продлить подписку'),
-                            callback_data=extend_callback,
+                        build_subscription_extend_button(
+                            texts.t('SUBSCRIPTION_EXTEND', '💎 Продлить подписку'),
+                            subscription.id,
                         )
                     ],
                     [

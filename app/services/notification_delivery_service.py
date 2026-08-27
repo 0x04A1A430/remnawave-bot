@@ -321,6 +321,17 @@ class NotificationDeliveryService:
             TelegramServerError,
         )
 
+        # В rich-режиме уведомление отправляется тем же полотном, что и меню, — иначе
+        # оно выбивается из общего вида. Ровно одна попытка: любой отказ (включая
+        # разметку, которую rich не воспроизводит дословно) отдаёт False, и ниже
+        # отрабатывает классический путь со своими ретраями, учётом и метриками.
+        from app.utils.rich_notify import try_send_rich_notification
+
+        if await try_send_rich_notification(
+            bot, user.telegram_id, message, keyboard=markup, with_logo=settings.ENABLE_LOGO_MODE
+        ):
+            return True
+
         # Retry transient Telegram-side ошибки (network/5xx/flood) с экспоненциальным
         # бэк-оффом. До этого ConnectionReset уходил в `except Exception` и логировался
         # как ERROR → летел в админ-чат через TelegramNotifierProcessor каждый раз,
@@ -715,12 +726,33 @@ class NotificationDeliveryService:
         bot: Bot | None = None,
         telegram_message: str | None = None,
         telegram_markup: Any | None = None,
+        bonus_days: int = 0,
+        tariff_name: str = '',
+        level: int = 1,
     ) -> bool:
-        """Notify user about referral bonus."""
+        """Notify user about referral bonus.
+
+        Награда может быть выдана днями подписки, а не деньгами. Без ``bonus_days``
+        такое начисление уходит в письмо как «Реферальный бонус: +0.00 ₽» — сумма
+        честно нулевая, потому что дни в неё и не должны попадать, а выданные дни
+        назвать нечем. ``formatted_reward`` поэтому описывает награду целиком.
+        """
+        reward_parts = []
+        if bonus_kopeks > 0:
+            reward_parts.append(settings.format_price(bonus_kopeks))
+        if bonus_days > 0:
+            tariff_suffix = f' тарифа «{tariff_name}»' if tariff_name else ''
+            reward_parts.append(f'{bonus_days} дн. подписки{tariff_suffix}')
+
         context = {
             'bonus_kopeks': bonus_kopeks,
             'bonus_rubles': bonus_kopeks / 100,
             'formatted_bonus': settings.format_price(bonus_kopeks),
+            'bonus_days': bonus_days,
+            'tariff_name': tariff_name,
+            'level': level,
+            # Единственное поле, которое верно и для денег, и для дней, и для обоих.
+            'formatted_reward': ' + '.join(reward_parts) or settings.format_price(bonus_kopeks),
             'referral_name': referral_name,
         }
 

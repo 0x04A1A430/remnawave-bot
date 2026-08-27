@@ -87,6 +87,10 @@ class Settings(BaseSettings):
     ADMIN_IDS: str = ''
     ADMIN_EMAILS: str = ''  # Comma-separated admin emails for email-only users
 
+    # Closed public registration. Existing users keep normal access.
+    INVITE_ONLY_ENABLED: bool = False
+    INVITE_ONLY_ALLOW_GIFT_LINKS: bool = True
+
     # Test email account for development/testing (bypasses email verification and SMTP)
     TEST_EMAIL: str = ''  # e.g., test@example.com
     TEST_EMAIL_PASSWORD: str = ''  # Password for test account
@@ -243,6 +247,8 @@ class Settings(BaseSettings):
     GRACE_ACCESS_DURATION_HOURS: int = 72
     GRACE_ACCESS_EXPIRED_SQUAD_UUID: str = ''
     GRACE_ACCESS_LIMITED_SQUAD_UUID: str = ''
+    # Внешний сквад для grace-доступа: пусто = сброс в None, 'keep' = сохранять текущий, либо UUID аварийного внешнего сквада
+    GRACE_ACCESS_EXTERNAL_SQUAD_UUID: str = ''
     GRACE_ACCESS_TRAFFIC_GB: int = 1
     GRACE_ACCESS_TRIAL_ENABLED: bool = False
     GRACE_ACCESS_DAILY_ENABLED: bool = False
@@ -390,6 +396,31 @@ class Settings(BaseSettings):
     REFERRAL_PROGRAM_ENABLED: bool = True
     REFERRAL_NOTIFICATIONS_ENABLED: bool = True
     REFERRAL_NOTIFICATION_RETRY_ATTEMPTS: int = 3
+
+    # Схема наград: 'legacy' — прежнее поведение на ключах REFERRAL_* выше,
+    # 'levels' — таблица referral_reward_levels (деньги и/или дни, много уровней).
+    # Значение по умолчанию менять нельзя: смена схемы обязана быть осознанным
+    # действием админа, а не побочным эффектом обновления бота.
+    REFERRAL_REWARD_SCHEME: str = 'legacy'
+    # Насколько глубоко подниматься по цепочке пригласивших. Отдельный предохранитель
+    # от обхода длинной цепочки на каждом пополнении, даже если уровней настроено больше.
+    # Действует только в режиме 'chain': в режиме 'tiers' цепочки нет вовсе.
+    REFERRAL_MAX_LEVEL_DEPTH: int = 3
+    # Что означает номер уровня внутри многоуровневой схемы.
+    # 'chain' — глубина в цепочке пригласивших: уровень 1 платит прямому, уровень 2 —
+    #   его пригласившему, и так далее. За одно событие платят несколько уровней.
+    # 'tiers' — ранг самого партнёра: платят ТОЛЬКО прямому пригласившему, и применяется
+    #   ровно один уровень — старший из тех, чей порог required_referrals он набрал.
+    # По умолчанию 'chain' — прежнее поведение схемы, чтобы обновление бота не
+    # перекроило выплаты на установках, где уровни уже включены.
+    REFERRAL_LEVELS_MODE: str = 'chain'
+    # Разрешить пользователю самому выбирать, в какую подписку лягут дни награды.
+    # Пока выключено, подписку подбирает бот — платную с самым поздним сроком.
+    REFERRAL_ALLOW_DAYS_TARGET_CHOICE: bool = False
+    # Разрешить пользователю выбирать, что получать по правилу, платящему и
+    # деньгами, и днями: только деньги или только дни. Пока выключено, выдаётся
+    # и то и другое, как правило и настроено.
+    REFERRAL_ALLOW_REWARD_KIND_CHOICE: bool = False
 
     # Настройки вывода реферального баланса
     REFERRAL_WITHDRAWAL_ENABLED: bool = False  # Включить возможность вывода
@@ -1055,6 +1086,12 @@ class Settings(BaseSettings):
     # Сворачивать таблицу подписок в раскрываемый details-блок, когда у юзера
     # больше одной подписки (мультитариф) — меню компактнее.
     MAIN_MENU_RICH_SUBSCRIPTIONS_COLLAPSIBLE: bool = True
+    # Bot API 10.3: кнопки живут внутри полотна rich-сообщения (<tg-button-row>),
+    # а не отдельной клавиатурой под ним. Клавиатура при этом не дублируется.
+    MAIN_MENU_RICH_INLINE_BUTTONS: bool = False
+    # Пользовательские уведомления rich-сообщением. Действует только при
+    # включённом rich-меню: иначе сервер про rich может не знать вовсе.
+    USER_NOTIFICATIONS_RICH_ENABLED: bool = True
     # Публичный HTTPS-URL картинки-логотипа в шапке rich-меню. Пусто — авто-режим:
     # при заданном WEBHOOK_URL и существующем LOGO_FILE логотип отдаётся своим
     # эндпоинтом {origin WEBHOOK_URL}/cabinet/branding/bot-logo. Если Telegram не
@@ -3573,6 +3610,14 @@ class Settings(BaseSettings):
             'first_payment_commission_percent': self.REFERRAL_FIRST_PAYMENT_COMMISSION_PERCENT,
             'recurring_commission_tiers': self.REFERRAL_RECURRING_COMMISSION_TIERS,
             'notifications_enabled': self.REFERRAL_NOTIFICATIONS_ENABLED,
+            'reward_scheme': self.REFERRAL_REWARD_SCHEME,
+            'levels_mode': self.get_referral_levels_mode(),
+            'allow_days_target_choice': self.is_referral_days_target_choice_enabled(),
+            'allow_reward_kind_choice': self.is_referral_reward_kind_choice_enabled(),
+            # Через геттер, а не сырым полем: сырое отдавало бы 999 или 0 —
+            # значения, которые расчёт всё равно приводит к границам, так что
+            # потребители видели бы не ту глубину, по которой бот платит.
+            'max_level_depth': self.get_referral_max_level_depth(),
             'withdrawal_enabled': self.REFERRAL_WITHDRAWAL_ENABLED,
             'withdrawal_min_amount_kopeks': self.REFERRAL_WITHDRAWAL_MIN_AMOUNT_KOPEKS,
             'withdrawal_cooldown_days': self.REFERRAL_WITHDRAWAL_COOLDOWN_DAYS,
@@ -3581,6 +3626,76 @@ class Settings(BaseSettings):
     def is_referral_withdrawal_enabled(self) -> bool:
         """Проверяет, включена ли функция вывода реферального баланса."""
         return self.is_referral_program_enabled() and self.REFERRAL_WITHDRAWAL_ENABLED
+
+    def is_referral_levels_scheme(self) -> bool:
+        """Включена ли многоуровневая схема наград."""
+        return str(self.REFERRAL_REWARD_SCHEME or '').strip().lower() == 'levels'
+
+    def get_referral_levels_mode(self) -> str:
+        """Что означает номер уровня: глубина цепочки ('chain') или ранг ('tiers').
+
+        Неизвестное значение трактуется как 'chain', а не как ошибка: опечатка в
+        .env не должна менять схему выплат на ту, которую админ не выбирал.
+        """
+        from app.database.crud.referral_reward_level import LEVELS_MODE_CHAIN, LEVELS_MODE_TIERS
+
+        value = str(self.REFERRAL_LEVELS_MODE or '').strip().lower()
+        return LEVELS_MODE_TIERS if value == LEVELS_MODE_TIERS else LEVELS_MODE_CHAIN
+
+    def is_referral_days_target_choice_enabled(self) -> bool:
+        """Может ли пользователь сам выбрать подписку для дней награды.
+
+        Смысл есть только под уровневой схемой: в классической дни наградой не
+        выдаются вовсе, и выбирать было бы нечего.
+        """
+        return self.is_referral_levels_scheme() and bool(self.REFERRAL_ALLOW_DAYS_TARGET_CHOICE)
+
+    def is_referral_reward_kind_choice_enabled(self) -> bool:
+        """Может ли пользователь выбрать, деньги или дни, когда правило даёт оба."""
+        return self.is_referral_levels_scheme() and bool(self.REFERRAL_ALLOW_REWARD_KIND_CHOICE)
+
+    def is_referral_tier_levels(self) -> bool:
+        """Включён ли режим рангов: один уровень, только прямому пригласившему.
+
+        Проверяется вместе со схемой: режим — это уточнение внутри 'levels', и
+        сам по себе, при классической схеме, он ничего не значит.
+        """
+        from app.database.crud.referral_reward_level import LEVELS_MODE_TIERS
+
+        return self.is_referral_levels_scheme() and self.get_referral_levels_mode() == LEVELS_MODE_TIERS
+
+    def get_referral_max_level_depth(self) -> int:
+        """Глубина обхода цепочки, ограниченная числом поддерживаемых уровней.
+
+        Верхняя граница обязательна: значение выше числа заводимых уровней ничего
+        не добавляет, зато заставляет обходить цепочку вхолостую на каждом
+        пополнении — по одному запросу пользователя на пустое звено.
+
+        Значение здесь — всегда настроенная глубина ЦЕПОЧКИ, даже в режиме рангов,
+        где она не применяется. Это намеренно: тот же вызов используется как фильтр
+        «какие уровни вообще способны заплатить», и подмена его на 1 в режиме рангов
+        молча спрятала бы все ранги выше первого. Для фильтра есть отдельный
+        get_referral_effective_max_level(), а показывать глубину пользователю в
+        режиме рангов не нужно вовсе — там её нет.
+        """
+        from app.database.crud.referral_reward_level import MAX_SUPPORTED_LEVEL
+
+        return max(1, min(MAX_SUPPORTED_LEVEL, int(self.REFERRAL_MAX_LEVEL_DEPTH or 1)))
+
+    def get_referral_effective_max_level(self) -> int:
+        """Наибольший номер уровня, который вообще способен что-то начислить.
+
+        В режиме цепочки это глубина обхода: уровень глубже неё не встречается, и
+        описывать его пользователю значит обещать награду, которая не придёт.
+        В режиме рангов ограничения нет — ранг не обходится, а выбирается по числу
+        рефералов, поэтому работают все заведённые уровни.
+        """
+        from app.database.crud.referral_reward_level import MAX_SUPPORTED_LEVEL
+
+        if self.is_referral_tier_levels():
+            return MAX_SUPPORTED_LEVEL
+
+        return self.get_referral_max_level_depth()
 
     def is_referral_program_enabled(self) -> bool:
         return bool(self.REFERRAL_PROGRAM_ENABLED)

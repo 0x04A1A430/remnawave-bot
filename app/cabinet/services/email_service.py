@@ -2,6 +2,7 @@
 
 import re
 import smtplib
+import time
 from email import encoders
 from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
@@ -17,8 +18,23 @@ from app.config import settings
 logger = structlog.get_logger(__name__)
 
 
+# Сколько молчать после отказа установить соединение. Один упавший коннект
+# доказывает недоступность сервера для всей пачки: рассылка на N адресов иначе
+# ждёт таймаут N раз подряд и пишет N одинаковых трейсбеков. Держим окно
+# коротким — примерно один таймаут коннекта: транзакционное письмо (код входа),
+# отправленное сразу после сорвавшейся рассылки, всё равно не дошло бы, но и
+# зависать в этом состоянии дольше необходимого не должно.
+_CONNECTION_FAILURE_COOLDOWN_SECONDS = 30.0
+
+
 class EmailService:
     """Service for sending emails via SMTP."""
+
+    def __init__(self) -> None:
+        # Момент, до которого считаем сервер недоступным. Гонки между потоками
+        # исполнителя безобидны: худшее — лишняя попытка соединения.
+        self._unreachable_until: float = 0.0
+        self._unreachable_reason: str = ''
 
     @property
     def host(self) -> str | None:
@@ -77,7 +93,7 @@ class EmailService:
         # <style>/<script> без закрывающего тега иначе утёк бы телом CSS/JS в текст —
         # срезаем висячий блок до конца ввода.
         text = re.sub(r'<(style|script)\b[^>]*>.*', '', text, flags=re.DOTALL | re.IGNORECASE)
-        text = re.sub(r'<[^>]+>', '', text)
+        text = re.sub(r'<[^<>]+>', '', text)
         text = text.replace('&nbsp;', ' ')
         text = text.replace('&lt;', '<')
         text = text.replace('&gt;', '>')
@@ -86,6 +102,37 @@ class EmailService:
         # схлопываем, чтобы текст не начинался с десятков переносов.
         text = re.sub(r'\n\s*\n\s*\n+', '\n\n', text)
         return text.strip()
+
+    def _endpoint(self) -> dict[str, Any]:
+        """Куда именно шли — без этого «Network is unreachable» ничего не говорит."""
+        mode = 'ssl' if self.use_ssl else ('starttls' if self.use_tls else 'plain')
+        return {'smtp_host': self.host, 'smtp_port': self.port, 'smtp_mode': mode}
+
+    def _cooldown_left(self) -> float:
+        return max(0.0, self._unreachable_until - time.monotonic())
+
+    def _note_connection_failure(self, error: BaseException) -> None:
+        self._unreachable_until = time.monotonic() + _CONNECTION_FAILURE_COOLDOWN_SECONDS
+        self._unreachable_reason = f'{type(error).__name__}: {error}'
+
+    def _note_success(self) -> None:
+        self._unreachable_until = 0.0
+        self._unreachable_reason = ''
+
+    def _log_connection_failure(self, to_email: str, error: BaseException) -> None:
+        """Причина строкой, а не объектом исключения.
+
+        Объект в kwarg заставляет логгер приложить трейсбек, а он здесь всегда
+        одинаковый (три кадра внутри smtplib) и не добавляет ничего к «куда
+        шли и что ответила сеть». На рассылке это N одинаковых полотен в логе.
+        """
+        logger.warning(
+            'Не удалось соединиться с SMTP-сервером, письмо не отправлено',
+            to_email=to_email,
+            reason=f'{type(error).__name__}: {error}',
+            retry_after_seconds=_CONNECTION_FAILURE_COOLDOWN_SECONDS,
+            **self._endpoint(),
+        )
 
     def _get_smtp_connection(self) -> smtplib.SMTP:
         """Create and return SMTP connection."""
@@ -145,6 +192,18 @@ class EmailService:
         # Defensive: strip newlines to prevent header injection
         to_email = to_email.strip().replace('\n', '').replace('\r', '')
         subject = subject.replace('\n', '').replace('\r', '')
+
+        cooldown_left = self._cooldown_left()
+        if cooldown_left:
+            # Соединение только что не состоялось — ждать таймаут ещё раз незачем.
+            logger.debug(
+                'SMTP недоступен, письмо пропущено без попытки соединения',
+                to_email=to_email,
+                retry_in_seconds=round(cooldown_left, 1),
+                last_failure=self._unreachable_reason,
+                **self._endpoint(),
+            )
+            return False
 
         try:
             # С вложениями письмо становится multipart/mixed: внутри него
@@ -211,13 +270,40 @@ class EmailService:
                     attachment_part.add_header('Content-Disposition', 'attachment', filename=safe_filename)
                     msg.attach(attachment_part)
 
-            with self._get_smtp_connection() as smtp:
-                smtp.sendmail(safe_from_email, to_email, msg.as_string())
+            try:
+                with self._get_smtp_connection() as smtp:
+                    smtp.sendmail(safe_from_email, to_email, msg.as_string())
+            # Порядок веток задан иерархией smtplib: SMTPException наследуется
+            # от OSError, поэтому широкий except OSError выше перехватывал бы и
+            # отказ по одному адресу — и глушил бы почту всем на время остывания.
+            except (smtplib.SMTPConnectError, smtplib.SMTPServerDisconnected) as connection_error:
+                self._note_connection_failure(connection_error)
+                self._log_connection_failure(to_email, connection_error)
+                return False
+            except smtplib.SMTPException as smtp_error:
+                # Сервер ответил отказом: отклонён адрес, не прошла авторизация,
+                # превышен лимит. Соединение при этом рабочее, и остывание не
+                # объявляется: следующему адресу письмо может уйти.
+                logger.warning(
+                    'SMTP-сервер отклонил письмо',
+                    to_email=to_email,
+                    reason=f'{type(smtp_error).__name__}: {smtp_error}',
+                    **self._endpoint(),
+                )
+                return False
+            except OSError as connection_error:
+                # Сеть: недоступный маршрут, таймаут, отказ в соединении, DNS.
+                self._note_connection_failure(connection_error)
+                self._log_connection_failure(to_email, connection_error)
+                return False
 
+            self._note_success()
             logger.info('Email sent successfully to', to_email=to_email)
             return True
 
         except Exception as e:
+            # Сюда попадает уже не работа сети, а ошибка сборки письма — такой
+            # трейсбек нужен.
             logger.error('Failed to send email to', to_email=to_email, error=e)
             return False
 
