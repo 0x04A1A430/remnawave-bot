@@ -19,6 +19,7 @@ def test_referral_level_routes_registered(registered_paths):
     assert '/cabinet/admin/partners/referral-levels' in registered_paths
     assert '/cabinet/admin/partners/referral-levels/{level}' in registered_paths
     assert '/cabinet/admin/partners/referral-scheme' in registered_paths
+    assert '/cabinet/admin/partners/referral-depth' in registered_paths
 
 
 @pytest.fixture
@@ -308,3 +309,58 @@ class TestLegacyImportEndpoint:
             await admin_partners.import_legacy_referral_settings(admin=SimpleNamespace(id=1), db=_db_returning(None))
         assert excinfo.value.status_code == 409
         assert not wired['saved'], 'существующее правило не должно затираться переносом'
+
+
+class TestDepthEndpoint:
+    @pytest.mark.asyncio
+    async def test_depth_within_bounds_persists(self, wired, monkeypatch):
+        from app.cabinet.routes import admin_partners
+        from app.cabinet.schemas.referral import ReferralDepthUpdateRequest
+        from app.database.crud.referral_reward_level import MAX_SUPPORTED_LEVEL
+
+        service = SimpleNamespace(set_value=AsyncMock(), is_env_locked=lambda key: False)
+        monkeypatch.setattr(admin_partners, 'bot_configuration_service', service)
+
+        db = _db_returning(None)
+        await admin_partners.update_referral_depth(
+            ReferralDepthUpdateRequest(max_level_depth=MAX_SUPPORTED_LEVEL),
+            admin=SimpleNamespace(id=1),
+            db=db,
+        )
+        service.set_value.assert_awaited_once_with(db, 'REFERRAL_MAX_LEVEL_DEPTH', MAX_SUPPORTED_LEVEL)
+
+    @pytest.mark.asyncio
+    async def test_depth_beyond_supported_levels_is_rejected(self, wired, monkeypatch):
+        """Глубже, чем можно завести уровней, — лишний обход на каждом пополнении."""
+        from app.cabinet.routes import admin_partners
+        from app.cabinet.schemas.referral import ReferralDepthUpdateRequest
+        from app.database.crud.referral_reward_level import MAX_SUPPORTED_LEVEL
+
+        service = SimpleNamespace(set_value=AsyncMock(), is_env_locked=lambda key: False)
+        monkeypatch.setattr(admin_partners, 'bot_configuration_service', service)
+
+        with pytest.raises(HTTPException) as excinfo:
+            await admin_partners.update_referral_depth(
+                ReferralDepthUpdateRequest(max_level_depth=MAX_SUPPORTED_LEVEL + 1),
+                admin=SimpleNamespace(id=1),
+                db=_db_returning(None),
+            )
+        assert excinfo.value.status_code == 400
+        service.set_value.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_env_pinned_depth_conflicts(self, wired, monkeypatch):
+        from app.cabinet.routes import admin_partners
+        from app.cabinet.schemas.referral import ReferralDepthUpdateRequest
+
+        service = SimpleNamespace(set_value=AsyncMock(), is_env_locked=lambda key: True)
+        monkeypatch.setattr(admin_partners, 'bot_configuration_service', service)
+
+        with pytest.raises(HTTPException) as excinfo:
+            await admin_partners.update_referral_depth(
+                ReferralDepthUpdateRequest(max_level_depth=5),
+                admin=SimpleNamespace(id=1),
+                db=_db_returning(None),
+            )
+        assert excinfo.value.status_code == 409
+        service.set_value.assert_not_awaited()

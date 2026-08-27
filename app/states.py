@@ -161,6 +161,7 @@ class AdminStates(StatesGroup):
     # Редактор уровней реферальных наград: одно состояние на всё числовое поле,
     # какое именно правится — хранится в data FSM (как в редакторе мониторинга).
     referral_level_value_input = State()
+    referral_depth_input = State()
 
     # Диагностика рефералов
     referral_diagnostics_period = State()

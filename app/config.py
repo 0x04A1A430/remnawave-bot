@@ -3608,7 +3608,15 @@ class Settings(BaseSettings):
         return str(self.REFERRAL_REWARD_SCHEME or '').strip().lower() == 'levels'
 
     def get_referral_max_level_depth(self) -> int:
-        return max(1, int(self.REFERRAL_MAX_LEVEL_DEPTH or 1))
+        """Глубина обхода цепочки, ограниченная числом поддерживаемых уровней.
+
+        Верхняя граница обязательна: значение выше числа заводимых уровней ничего
+        не добавляет, зато заставляет обходить цепочку вхолостую на каждом
+        пополнении — по одному запросу пользователя на пустое звено.
+        """
+        from app.database.crud.referral_reward_level import MAX_SUPPORTED_LEVEL
+
+        return max(1, min(MAX_SUPPORTED_LEVEL, int(self.REFERRAL_MAX_LEVEL_DEPTH or 1)))
 
     def is_referral_program_enabled(self) -> bool:
         return bool(self.REFERRAL_PROGRAM_ENABLED)

@@ -189,6 +189,15 @@ async def _render_levels(callback: types.CallbackQuery, db: AsyncSession) -> Non
             ]
         )
 
+    keyboard_rows.append(
+        [
+            types.InlineKeyboardButton(
+                text=f'📏 Глубина цепочки: {settings.get_referral_max_level_depth()}',
+                callback_data='admin_ref_lvl_depth',
+            )
+        ]
+    )
+
     scheme_toggle = '🔻 Вернуть классическую' if settings.is_referral_levels_scheme() else '🔺 Включить многоуровневую'
     keyboard_rows.append([types.InlineKeyboardButton(text=scheme_toggle, callback_data='admin_ref_lvl_scheme')])
     keyboard_rows.append([types.InlineKeyboardButton(text='⬅️ Назад', callback_data='admin_referrals_settings')])
@@ -783,11 +792,69 @@ async def process_level_value(message: types.Message, db_user: User, db: AsyncSe
     )
 
 
+@admin_required
+@error_handler
+async def start_depth_edit(callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext):
+    """Правка глубины обхода цепочки.
+
+    Настройка живёт в общем списке конфигурации, и добраться до неё из редактора
+    было нельзя: уровни глубже неё помечались как неплатящие, а способа поднять
+    предел экран не давал — со стороны это выглядело как «уровни выше третьего
+    просто не работают».
+    """
+    if bot_configuration_service.is_env_locked('REFERRAL_MAX_LEVEL_DEPTH'):
+        await callback.answer(
+            'REFERRAL_MAX_LEVEL_DEPTH задан в .env и не меняется из админки. '
+            'Уберите строку из .env и перезапустите бота.',
+            show_alert=True,
+        )
+        return
+
+    await state.set_state(AdminStates.referral_depth_input)
+    await callback.message.edit_text(
+        f'📏 <b>Глубина реферальной цепочки</b>\n\n'
+        f'Сейчас: {settings.get_referral_max_level_depth()}\n\n'
+        f'Сколько звеньев вверх обходить при начислении. Уровень 1 — тот, кто пригласил '
+        f'напрямую; уровень 2 — пригласивший его, и так далее. Правила глубже этого числа '
+        f'не начисляют ничего.\n\n'
+        f'Введите число от 1 до {MAX_SUPPORTED_LEVEL}.',
+        reply_markup=types.InlineKeyboardMarkup(
+            inline_keyboard=[[types.InlineKeyboardButton(text='⬅️ Отмена', callback_data='admin_ref_levels')]]
+        ),
+    )
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def process_depth_value(message: types.Message, db_user: User, db: AsyncSession, state: FSMContext):
+    raw = (message.text or '').strip()
+    try:
+        depth = int(raw)
+    except ValueError:
+        await message.answer(f'❌ Нужно целое число от 1 до {MAX_SUPPORTED_LEVEL}.')
+        return
+
+    if depth < 1 or depth > MAX_SUPPORTED_LEVEL:
+        await message.answer(f'❌ Допустимо от 1 до {MAX_SUPPORTED_LEVEL}.')
+        return
+
+    await bot_configuration_service.set_value(db, 'REFERRAL_MAX_LEVEL_DEPTH', depth)
+    await state.clear()
+    await message.answer(
+        f'✅ Глубина цепочки: {depth}\n\nПравила уровней до {depth} включительно теперь начисляют награды.',
+        reply_markup=types.InlineKeyboardMarkup(
+            inline_keyboard=[[types.InlineKeyboardButton(text='🪜 К уровням', callback_data='admin_ref_levels')]]
+        ),
+    )
+
+
 def register_handlers(dp: Dispatcher):
     dp.callback_query.register(show_reward_levels, F.data == 'admin_ref_levels')
     dp.callback_query.register(toggle_reward_scheme, F.data == 'admin_ref_lvl_scheme')
     dp.callback_query.register(add_reward_level, F.data == 'admin_ref_lvl_add')
     dp.callback_query.register(import_legacy_settings, F.data == 'admin_ref_lvl_import')
+    dp.callback_query.register(start_depth_edit, F.data == 'admin_ref_lvl_depth')
     # Двоеточие в 'admin_ref_lvl:' обязательно: без него префикс поглотил бы все
     # соседние строки, и любая кнопка уровня открывала бы его карточку. Порядок
     # регистрации при таком разделителе значения не имеет — маршрутизацию
@@ -804,3 +871,4 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(start_level_value_edit, F.data.startswith('admin_ref_lvl_edit:'))
     dp.callback_query.register(show_reward_level, F.data.startswith('admin_ref_lvl:'))
     dp.message.register(process_level_value, AdminStates.referral_level_value_input)
+    dp.message.register(process_depth_value, AdminStates.referral_depth_input)

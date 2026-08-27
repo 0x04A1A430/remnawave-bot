@@ -182,3 +182,9 @@ class ReferralSchemeUpdateRequest(BaseModel):
     """Переключение схемы наград целиком."""
 
     scheme: str
+
+
+class ReferralDepthUpdateRequest(BaseModel):
+    """Глубина обхода цепочки: сколько звеньев вверх получают награду."""
+
+    max_level_depth: int

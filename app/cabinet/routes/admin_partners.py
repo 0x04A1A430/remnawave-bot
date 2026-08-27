@@ -44,6 +44,7 @@ from ..schemas.partners import (
     CampaignSummary,
 )
 from ..schemas.referral import (
+    ReferralDepthUpdateRequest,
     ReferralRewardLevelResponse,
     ReferralRewardLevelsResponse,
     ReferralRewardLevelUpdateRequest,
@@ -757,6 +758,39 @@ async def remove_referral_level(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Level not found')
 
     logger.info('Правило реферального уровня удалено из кабинета', admin_id=admin.id, level=level)
+    return await _levels_payload(db)
+
+
+@router.patch('/referral-depth', response_model=ReferralRewardLevelsResponse)
+async def update_referral_depth(
+    request: ReferralDepthUpdateRequest,
+    admin: User = Depends(require_permission('partners:settings')),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Сколько звеньев цепочки получают награду.
+
+    Настройка живёт в общем списке конфигурации, и добраться до неё из редактора
+    уровней было нельзя: правила глубже неё помечались как неплатящие, а способа
+    поднять предел экран не давал.
+
+    Верхняя граница — число заводимых уровней: глубже них обходить нечего, зато
+    каждый лишний шаг это запрос пользователя на пустое звено при каждом пополнении.
+    """
+    depth = int(request.max_level_depth)
+    if depth < 1 or depth > MAX_SUPPORTED_LEVEL:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f'max_level_depth must be between 1 and {MAX_SUPPORTED_LEVEL}',
+        )
+
+    if bot_configuration_service.is_env_locked('REFERRAL_MAX_LEVEL_DEPTH'):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail='REFERRAL_MAX_LEVEL_DEPTH is pinned in .env and cannot be changed from the cabinet',
+        )
+
+    await bot_configuration_service.set_value(db, 'REFERRAL_MAX_LEVEL_DEPTH', depth)
+    logger.info('Глубина реферальной цепочки изменена из кабинета', admin_id=admin.id, depth=depth)
     return await _levels_payload(db)
 
 

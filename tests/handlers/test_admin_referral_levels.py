@@ -298,6 +298,7 @@ class TestCallbackRouting:
         'admin_ref_lvl_scheme': 'toggle_reward_scheme',
         'admin_ref_lvl_add': 'add_reward_level',
         'admin_ref_lvl_import': 'import_legacy_settings',
+        'admin_ref_lvl_depth': 'start_depth_edit',
         'admin_ref_lvl:2': 'show_reward_level',
         'admin_ref_lvl_active:2': 'toggle_level_active',
         'admin_ref_lvl_mode:2': 'cycle_level_mode',
@@ -514,3 +515,72 @@ class TestEditorTraps:
         assert any('Снятый' in label for label in labels), 'назначенный тариф обязан остаться в списке'
         assert any('✅' in label and 'Снятый' in label for label in labels), 'и быть помечен как выбранный'
         assert any('неактивен' in label for label in labels)
+
+
+class TestChainDepthEditing:
+    """Глубина обхода задаётся там же, где уровни.
+
+    Настройка лежала в общем списке конфигурации, и уровни глубже неё помечались
+    как неплатящие без всякого способа поднять предел с этого экрана: со стороны
+    это выглядело как «уровни выше третьего просто не работают».
+    """
+
+    @pytest.mark.asyncio
+    async def test_depth_button_is_on_the_levels_screen(self, wired, monkeypatch):
+        monkeypatch.setattr(settings, 'REFERRAL_MAX_LEVEL_DEPTH', 3)
+        callback = _callback('admin_ref_levels')
+        await _raw(editor.show_reward_levels)(callback, db_user=SimpleNamespace(id=1), db=None)
+
+        markup = callback.message.edit_text.await_args.kwargs['reply_markup']
+        actions = [b.callback_data for row in markup.inline_keyboard for b in row]
+        assert 'admin_ref_lvl_depth' in actions
+
+    @pytest.mark.asyncio
+    async def test_depth_accepts_up_to_the_supported_maximum(self, wired, monkeypatch):
+        from app.database.crud.referral_reward_level import MAX_SUPPORTED_LEVEL
+
+        saved = {}
+
+        async def fake_set(_db, key, value):
+            saved[key] = value
+
+        monkeypatch.setattr(editor.bot_configuration_service, 'set_value', fake_set)
+        state = SimpleNamespace(clear=lambda: _resolved(None))
+        message = SimpleNamespace(text=str(MAX_SUPPORTED_LEVEL), answer=AsyncMock(), from_user=SimpleNamespace(id=1))
+
+        await _raw(editor.process_depth_value)(message, db_user=SimpleNamespace(id=1), db=None, state=state)
+
+        assert saved['REFERRAL_MAX_LEVEL_DEPTH'] == MAX_SUPPORTED_LEVEL
+
+    @pytest.mark.asyncio
+    async def test_depth_beyond_the_maximum_is_rejected(self, wired, monkeypatch):
+        from app.database.crud.referral_reward_level import MAX_SUPPORTED_LEVEL
+
+        saved = {}
+
+        async def fake_set(_db, key, value):
+            saved[key] = value
+
+        monkeypatch.setattr(editor.bot_configuration_service, 'set_value', fake_set)
+        state = SimpleNamespace(clear=lambda: _resolved(None))
+        message = SimpleNamespace(
+            text=str(MAX_SUPPORTED_LEVEL + 1), answer=AsyncMock(), from_user=SimpleNamespace(id=1)
+        )
+
+        await _raw(editor.process_depth_value)(message, db_user=SimpleNamespace(id=1), db=None, state=state)
+
+        assert not saved, 'глубже, чем можно завести уровней, — бессмысленно'
+
+    def test_depth_is_clamped_to_the_supported_maximum(self, monkeypatch):
+        """Значение из .env тоже нельзя задрать выше числа уровней."""
+        from app.database.crud.referral_reward_level import MAX_SUPPORTED_LEVEL
+
+        monkeypatch.setattr(settings, 'REFERRAL_MAX_LEVEL_DEPTH', 999)
+        assert settings.get_referral_max_level_depth() == MAX_SUPPORTED_LEVEL
+
+        monkeypatch.setattr(settings, 'REFERRAL_MAX_LEVEL_DEPTH', 0)
+        assert settings.get_referral_max_level_depth() == 1
+
+
+async def _resolved(value):
+    return value
