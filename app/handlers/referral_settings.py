@@ -25,17 +25,15 @@ from app.utils.decorators import error_handler
 
 logger = structlog.get_logger(__name__)
 
-# Значение «как настроено правилом» кодируется отдельным словом, а не пустой
-# строкой: пустая часть callback_data неотличима от обрезанной.
-_PREFERENCE_ANY = 'any'
+# Выбор двоичный: деньги ИЛИ дни. Варианта «и то и другое» здесь нет — настройка
+# ровно про то, чтобы получать что-то одно.
+_PREFERENCES = (REWARD_PREFERENCE_MONEY, REWARD_PREFERENCE_DAYS)
 
 
-def _preference_label(value: str | None, texts) -> str:
-    if value == REWARD_PREFERENCE_MONEY:
-        return texts.t('REFERRAL_PREF_MONEY', 'Только деньги')
+def _preference_label(value: str, texts) -> str:
     if value == REWARD_PREFERENCE_DAYS:
-        return texts.t('REFERRAL_PREF_DAYS', 'Только дни подписки')
-    return texts.t('REFERRAL_PREF_BOTH', 'Всё, что даёт уровень')
+        return texts.t('REFERRAL_PREF_DAYS', '📅 Дни подписки')
+    return texts.t('REFERRAL_PREF_MONEY', '💰 Деньги на баланс')
 
 
 def _subscription_label(subscription, tariff_names: dict[int, str], texts) -> str:
@@ -99,18 +97,20 @@ async def _render(callback: types.CallbackQuery, db: AsyncSession, db_user: User
     keyboard: list[list[types.InlineKeyboardButton]] = []
 
     if kind_choice:
-        current = normalize_reward_preference(db_user.referral_reward_preference)
+        # Не выбиравший получает деньги — так же, как их выдаст расчёт. Показать
+        # здесь «ничего не выбрано» значило бы разойтись с начислением.
+        current = normalize_reward_preference(db_user.referral_reward_preference) or REWARD_PREFERENCE_MONEY
         lines += ['', texts.t('REFERRAL_PREF_HEADER', '🎁 <b>Что получать</b>')]
         lines.append(
             f'<i>{texts.t("REFERRAL_PREF_HINT", "Выбор действует только там, где уровень даёт и то и другое.")}</i>'
         )
-        for value in (None, REWARD_PREFERENCE_MONEY, REWARD_PREFERENCE_DAYS):
+        for value in _PREFERENCES:
             mark = '🔘' if value == current else '⚪️'
             keyboard.append(
                 [
                     types.InlineKeyboardButton(
                         text=f'{mark} {_preference_label(value, texts)}',
-                        callback_data=f'ref_pref:{value or _PREFERENCE_ANY}',
+                        callback_data=f'ref_pref:{value}',
                     )
                 ]
             )
@@ -170,8 +170,14 @@ async def set_reward_preference(callback: types.CallbackQuery, db_user: User, db
         await callback.answer(get_texts(db_user.language).ERROR, show_alert=True)
         return
 
-    raw = callback.data.split(':', 1)[1]
-    db_user.referral_reward_preference = None if raw == _PREFERENCE_ANY else normalize_reward_preference(raw)
+    # Неизвестное значение не сохраняется вовсе: молча переключить человека на
+    # другой вид награды из-за мусора в callback'е нельзя.
+    chosen = normalize_reward_preference(callback.data.split(':', 1)[1])
+    if chosen is None:
+        await callback.answer(get_texts(db_user.language).ERROR, show_alert=True)
+        return
+
+    db_user.referral_reward_preference = chosen
     await db.commit()
 
     logger.info(

@@ -489,16 +489,24 @@ async def _resolve_applicable_levels(
 def resolve_reward_preference(recipient: User) -> str | None:
     """Что получатель предпочитает, когда правило платит и деньгами, и днями.
 
-    ``None`` — «как настроено правилом», то есть и то и другое. Пока настройка
-    выключена, предпочтение игнорируется целиком: сохранённый ранее выбор не
-    должен молча урезать награду, если админ передумал давать этот выбор.
+    Выбор двоичный: деньги ИЛИ дни, обе стороны сразу настройка не предполагает.
+    Поэтому у того, кто ещё ничего не выбирал, берутся деньги — иначе обещание
+    «получаете что-то одно» было бы неверным для всех, кто в настройки не
+    заходил, а таких большинство. Деньги, а не дни: это то, что реферальная
+    программа платила всегда, и по умолчанию менять вид награды не следует.
+
+    ``None`` возвращается ТОЛЬКО когда настройка выключена, и означает «как
+    настроено правилом» — сохранённый ранее выбор не должен молча урезать
+    награду, если админ передумал давать этот выбор.
     """
     if not settings.is_referral_reward_kind_choice_enabled():
         return None
 
-    from app.database.crud.referral_reward_level import normalize_reward_preference
+    from app.database.crud.referral_reward_level import REWARD_PREFERENCE_MONEY, normalize_reward_preference
 
-    return normalize_reward_preference(getattr(recipient, 'referral_reward_preference', None))
+    return (
+        normalize_reward_preference(getattr(recipient, 'referral_reward_preference', None)) or REWARD_PREFERENCE_MONEY
+    )
 
 
 def _apply_preference(money: int, days: int, preference: str | None) -> tuple[int, int]:

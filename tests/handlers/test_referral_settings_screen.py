@@ -114,7 +114,16 @@ class TestVisibility:
 
 class TestCurrentStateIsVisible:
     @pytest.mark.asyncio
-    @pytest.mark.parametrize(('preference', 'marked'), [(None, 'ref_pref:any'), ('money', 'ref_pref:money')])
+    @pytest.mark.parametrize(
+        ('preference', 'marked'),
+        [
+            # Не выбиравший получает деньги — отметка обязана это показывать,
+            # иначе экран расходится с тем, что реально начислят.
+            (None, 'ref_pref:money'),
+            ('money', 'ref_pref:money'),
+            ('days', 'ref_pref:days'),
+        ],
+    )
     async def test_selected_preference_is_marked(self, allowed, subs, preference, marked):
         callback = _callback()
         await _raw(screen.show_reward_settings)(callback, db_user=_user(preference=preference), db=None)
@@ -159,13 +168,31 @@ class TestSaving:
         db.commit.assert_awaited()
 
     @pytest.mark.asyncio
-    async def test_any_clears_the_preference(self, allowed, subs):
+    async def test_only_two_options_are_offered(self, allowed, subs):
+        """Выбор двоичный: деньги ИЛИ дни, варианта «и то и другое» нет."""
+        callback = _callback()
+        await _raw(screen.show_reward_settings)(callback, db_user=_user(), db=None)
+
+        actions = [
+            b.callback_data
+            for row in callback.message.edit_text.await_args.kwargs['reply_markup'].inline_keyboard
+            for b in row
+            if b.callback_data.startswith('ref_pref:')
+        ]
+        assert actions == ['ref_pref:money', 'ref_pref:days'], actions
+
+    @pytest.mark.asyncio
+    async def test_unknown_value_is_not_saved(self, allowed, subs):
+        """Мусор в callback'е не должен переключать вид награды."""
         user = _user(preference='money')
         db = SimpleNamespace(commit=AsyncMock())
+        callback = _callback('ref_pref:any')
 
-        await _raw(screen.set_reward_preference)(_callback('ref_pref:any'), db_user=user, db=db)
+        await _raw(screen.set_reward_preference)(callback, db_user=user, db=db)
 
-        assert user.referral_reward_preference is None
+        assert user.referral_reward_preference == 'money'
+        db.commit.assert_not_awaited()
+        assert callback.answer.await_args.kwargs.get('show_alert') is True
 
     @pytest.mark.asyncio
     async def test_a_foreign_subscription_is_refused(self, allowed, subs):

@@ -130,7 +130,12 @@ class TestRewardKindChoice:
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
         ('preference', 'expected'),
-        [('money', (100_00, 0)), ('days', (0, 7)), (None, (100_00, 7))],
+        [
+            ('money', (100_00, 0)),
+            ('days', (0, 7)),
+            # Выбор двоичный: у не выбиравшего берутся деньги, а не обе стороны.
+            (None, (100_00, 0)),
+        ],
     )
     async def test_preference_trims_the_reward(self, wired, monkeypatch, preference, expected):
         _install(monkeypatch, {1: _level(1)})
@@ -186,8 +191,12 @@ class TestRewardKindChoice:
         assert (referee.money_kopeks, referee.days) == (0, 3)
 
     @pytest.mark.asyncio
-    async def test_unknown_preference_keeps_both_sides(self, wired, monkeypatch):
-        """Опечатка не должна молча лишать половины награды."""
+    async def test_unknown_preference_falls_back_to_money(self, wired, monkeypatch):
+        """Опечатка не должна выбирать за человека дни.
+
+        Деньги — то, что программа платила всегда; молча перевести человека на
+        дни из-за мусора в поле значило бы сменить вид награды без его ведома.
+        """
         _install(monkeypatch, {1: _level(1)})
         wired[1].referral_reward_preference = 'МОНЕТЫ'
 
@@ -195,7 +204,7 @@ class TestRewardKindChoice:
             None, wired[2], event=RewardEvent.REPEAT_TOPUP, topup_amount_kopeks=1000_00
         )
 
-        assert (components[0].money_kopeks, components[0].days) == (100_00, 7)
+        assert (components[0].money_kopeks, components[0].days) == (100_00, 0)
 
 
 class TestLadderMatchesTheChoice:
@@ -219,8 +228,18 @@ class TestLadderMatchesTheChoice:
         assert shows_days is (components[0].days > 0), lines[0]
 
     @pytest.mark.asyncio
-    async def test_without_a_choice_the_ladder_shows_both(self, wired, monkeypatch):
+    async def test_without_a_choice_the_ladder_shows_money(self, wired, monkeypatch):
+        """Не выбиравший получает деньги — лестница обязана показывать их одни."""
         _install(monkeypatch, {1: _level(1)})
+
+        lines = await describe_active_levels(None, viewer=wired[1], language='ru')
+        assert '%' in lines[0] and 'дн.' not in lines[0], lines[0]
+
+    @pytest.mark.asyncio
+    async def test_with_the_setting_off_the_ladder_shows_both(self, wired, monkeypatch):
+        """Пока админ выбор не разрешил, правило платит обе стороны — так и пишем."""
+        _install(monkeypatch, {1: _level(1)})
+        monkeypatch.setattr(settings, 'REFERRAL_ALLOW_REWARD_KIND_CHOICE', False)
 
         lines = await describe_active_levels(None, viewer=wired[1], language='ru')
         assert '%' in lines[0] and 'дн.' in lines[0], lines[0]
