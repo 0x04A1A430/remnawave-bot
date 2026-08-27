@@ -197,6 +197,10 @@ class ReferralRewardLevelsResponse(BaseModel):
     # карточке; кабинету нужен тот же признак, иначе выпадающий список тарифов
     # полон, а настройка молча ничего не даёт.
     multi_tariff_enabled: bool = True
+    # Глубина, закреплённая в .env, не меняется из кабинета: PATCH вернёт 409.
+    # Без флага поле оставалось активным, правка отбивалась, а несохранённое
+    # значение продолжало висеть в форме — выглядело как принятое.
+    max_level_depth_locked_by_env: bool = False
     max_level_depth: int
     max_supported_level: int
     levels: list[ReferralRewardLevelResponse]

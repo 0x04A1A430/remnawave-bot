@@ -107,6 +107,23 @@ def _fmt_optional_percent(value: int | None) -> str:
     return f'{value}%' if value else 'не начисляется'
 
 
+def _fmt_percent_for_card(level, money_on: bool, tier_mode: bool) -> str:
+    """Процент так, как он действительно применится к этому правилу.
+
+    «Не начисляется» было прямой ложью для правил, где получатель ПРЯМОЙ:
+    личный процент партнёра перебивает процент правила и тогда, когда тот не
+    задан. Карточка печатала «Процент: не начисляется», а рядом — оговорку, что
+    личный всё равно платится, и читались эти две строки как противоречие.
+    """
+    if not money_on:
+        return 'выключено режимом'
+    if level.referrer_percent:
+        return f'{level.referrer_percent}%'
+    if tier_mode or level.level == 1:
+        return 'не задан — платится личный процент партнёра, если он назначен'
+    return 'не начисляется'
+
+
 def _fmt_optional_money(value: int | None) -> str:
     return settings.format_price(value) if value else 'не начисляется'
 
@@ -363,6 +380,16 @@ async def _render_levels(callback: types.CallbackQuery, db: AsyncSession) -> Non
     )
 
 
+# Состояния, которые обязана снимать любая кнопка возврата. Оставленное взведённым
+# состояние превращает следующее произвольное сообщение админа в правку настройки.
+_PENDING_INPUT_STATES = frozenset(
+    {
+        AdminStates.referral_level_value_input.state,
+        AdminStates.referral_depth_input.state,
+    }
+)
+
+
 async def _cancel_pending_input(state: FSMContext | None) -> None:
     """Снять ожидание ввода значения при возврате на любой экран уровней.
 
@@ -373,10 +400,15 @@ async def _cancel_pending_input(state: FSMContext | None) -> None:
 
     Глобальный фоллбек неизвестных сообщений сюда не помогает: он навешен с
     ``StateFilter(None)`` и такое сообщение не перехватывает.
+
+    Снимаются ОБА состояния редактора. У глубины цепочки та же кнопка «Отмена» и
+    та же ловушка, но последствие хуже: следующее число переписывало
+    ``REFERRAL_MAX_LEVEL_DEPTH`` и обрубало цепочку — уровни глубже переставали
+    платить, и связать это с набранным в чат числом было нельзя.
     """
     if state is None:
         return
-    if await state.get_state() == AdminStates.referral_level_value_input.state:
+    if await state.get_state() in _PENDING_INPUT_STATES:
         await state.clear()
 
 
@@ -559,7 +591,7 @@ async def _render_level(
         f'Повод: {_TRIGGER_LABELS.get(level.trigger, level.trigger)}',
         '',
         '<b>Пригласившему:</b>',
-        f'• Процент: {_fmt_optional_percent(level.referrer_percent) if money_on else "выключено режимом"}',
+        f'• Процент: {_fmt_percent_for_card(level, money_on, tier_mode)}',
         f'• Фикс. сумма: {_fmt_optional_money(level.referrer_fixed_kopeks) if money_on else "выключено режимом"}',
         f'• Дни: {_fmt_days(level.referrer_days, names.get(level.referrer_tariff_id)) if days_on else "выключено режимом"}',
         '',

@@ -1000,3 +1000,66 @@ class TestThresholdWarningPrecision:
         warnings = editor._tier_ladder_warnings(levels)
 
         assert any('одинаковое условие' in w and '5' in w for w in warnings), warnings
+
+
+class TestDepthInputIsCancelledToo:
+    """«Отмена» в редакторе глубины обязана снимать состояние.
+
+    Кнопка ведёт на экран уровней, а состояние оставалось взведённым: следующее
+    произвольное число в чате переписывало REFERRAL_MAX_LEVEL_DEPTH и обрубало
+    цепочку — уровни глубже переставали платить, и связать это с набранным в чат
+    числом было нельзя. Для правки полей уровня эту ловушку закрыли раньше, а у
+    глубины она осталась.
+    """
+
+    @pytest.mark.asyncio
+    async def test_returning_to_levels_clears_the_depth_state(self, wired, monkeypatch):
+        cleared = {'called': False}
+
+        async def fake_clear():
+            cleared['called'] = True
+
+        state = SimpleNamespace(
+            get_state=lambda: _resolved(editor.AdminStates.referral_depth_input.state),
+            clear=fake_clear,
+        )
+
+        await _raw(editor.show_reward_levels)(
+            _callback('admin_ref_levels'), db_user=SimpleNamespace(id=1), db=None, state=state
+        )
+
+        assert cleared['called'], 'состояние ввода глубины осталось взведённым'
+
+    @pytest.mark.asyncio
+    async def test_returning_to_a_level_card_clears_it_as_well(self, wired, monkeypatch):
+        cleared = {'called': False}
+
+        async def fake_clear():
+            cleared['called'] = True
+
+        state = SimpleNamespace(
+            get_state=lambda: _resolved(editor.AdminStates.referral_depth_input.state),
+            clear=fake_clear,
+        )
+
+        await _raw(editor.show_reward_level)(
+            _callback('admin_ref_lvl:1'), db_user=SimpleNamespace(id=1), db=None, state=state
+        )
+
+        assert cleared['called']
+
+    @pytest.mark.asyncio
+    async def test_unrelated_state_is_left_alone(self, wired, monkeypatch):
+        """Чужое состояние снимать нельзя — оно принадлежит другому экрану."""
+        cleared = {'called': False}
+
+        async def fake_clear():
+            cleared['called'] = True
+
+        state = SimpleNamespace(get_state=lambda: _resolved('SomeOther:state'), clear=fake_clear)
+
+        await _raw(editor.show_reward_levels)(
+            _callback('admin_ref_levels'), db_user=SimpleNamespace(id=1), db=None, state=state
+        )
+
+        assert not cleared['called']
