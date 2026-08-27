@@ -13,83 +13,16 @@ import asyncio
 import json
 from typing import Any
 
-from sqlalchemy import func, select
-
 from app.config import settings
 from app.database.database import AsyncSessionLocal
-from app.database.models import GraceAccessSessionModel
-from app.services.grace_access_runtime import grace_access_runtime
+from app.services.grace_access_runtime import collect_grace_status, grace_access_runtime
 from app.services.grace_access_service import GraceAccessMode
 from app.services.system_settings_service import bot_configuration_service
 
 
 async def _status() -> dict[str, Any]:
     async with AsyncSessionLocal() as db:
-        state_rows = (
-            await db.execute(
-                select(GraceAccessSessionModel.state, func.count())
-                .group_by(GraceAccessSessionModel.state)
-                .order_by(GraceAccessSessionModel.state)
-            )
-        ).all()
-        open_error_count = int(
-            (
-                await db.execute(
-                    select(func.count())
-                    .select_from(GraceAccessSessionModel)
-                    .where(
-                        GraceAccessSessionModel.state.in_(('pending', 'active', 'restoring')),
-                        GraceAccessSessionModel.last_error.isnot(None),
-                    )
-                )
-            ).scalar_one()
-        )
-        completed_error_count = int(
-            (
-                await db.execute(
-                    select(func.count())
-                    .select_from(GraceAccessSessionModel)
-                    .where(
-                        GraceAccessSessionModel.state == 'completed',
-                        GraceAccessSessionModel.last_error.isnot(None),
-                    )
-                )
-            ).scalar_one()
-        )
-        error_rows = (
-            await db.execute(
-                select(
-                    GraceAccessSessionModel.id,
-                    GraceAccessSessionModel.subscription_id,
-                    GraceAccessSessionModel.state,
-                    GraceAccessSessionModel.completion_reason,
-                    GraceAccessSessionModel.last_error,
-                )
-                .where(GraceAccessSessionModel.last_error.isnot(None))
-                .order_by(GraceAccessSessionModel.updated_at.desc())
-                .limit(20)
-            )
-        ).all()
-    states = {str(state): int(count) for state, count in state_rows}
-    open_count = sum(states.get(state, 0) for state in ('pending', 'active', 'restoring'))
-    recent_errors = [
-        {
-            'id': str(session_id),
-            'subscription_id': int(subscription_id),
-            'state': str(state),
-            'completion_reason': str(completion_reason) if completion_reason else None,
-            'last_error': str(last_error),
-        }
-        for session_id, subscription_id, state, completion_reason, last_error in error_rows
-    ]
-    return {
-        'open': open_count,
-        'open_errors': open_error_count,
-        'completed_errors': completed_error_count,
-        'with_errors': open_error_count + completed_error_count,
-        'states': states,
-        'recent_errors': recent_errors,
-    }
+        return await collect_grace_status(db)
 
 
 async def _restore_all(*, apply: bool, accept_conflicts: bool) -> int:

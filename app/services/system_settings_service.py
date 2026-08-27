@@ -201,6 +201,7 @@ class BotConfigurationService:
         'MODERATION': '🛡️ Модерация и фильтры',
         'BAN_NOTIFICATIONS': '🚫 Тексты уведомлений о блокировках',
         'INFO_PAGES': '📄 Инфо-страницы',
+        'GRACE_ACCESS': '🛟 Grace-доступ',
     }
 
     CATEGORY_DESCRIPTIONS: dict[str, str] = {
@@ -275,6 +276,11 @@ class BotConfigurationService:
         'MODERATION': 'Настройки фильтров отображаемых имен и защиты от фишинга.',
         'BAN_NOTIFICATIONS': 'Тексты уведомлений о блокировках, которые отправляются пользователям.',
         'INFO_PAGES': 'Видимость встроенных страниц (правила, политика, оферта, FAQ) в боте и веб-кабинете.',
+        'GRACE_ACCESS': (
+            'Временный ограниченный доступ для истёкших и лимитных подписок. '
+            'Здесь ключи лежат по отдельности; связанный экран с проверкой конфигурации и состоянием '
+            'сессий — в админке кабинета, раздел «Grace-доступ».'
+        ),
     }
 
     @staticmethod
@@ -509,9 +515,16 @@ class BotConfigurationService:
         'DEBUG': 'DEBUG',
         'DISPLAY_NAME_': 'MODERATION',
         'BAN_MSG_': 'BAN_NOTIFICATIONS',
+        'GRACE_ACCESS_': 'GRACE_ACCESS',
     }
 
     CHOICES: dict[str, list[ChoiceOption]] = {
+        'GRACE_ACCESS_MODE': [
+            ChoiceOption('false', '⛔️ Выключен', 'Grace-сессии не выдаются и не завершаются'),
+            ChoiceOption('observe', '👀 Наблюдение', 'Кандидаты только логируются, панель не меняется'),
+            ChoiceOption('true', '🛟 Включён', 'Выдаёт и завершает grace-доступ'),
+            ChoiceOption('drain', '🚰 Слив', 'Новых сессий нет, открытые доводятся до конца'),
+        ],
         'REFERRAL_REWARD_SCHEME': [
             ChoiceOption('legacy', '💰 Классическая', 'Проценты и фиксированные бонусы из настроек REFERRAL_*'),
             ChoiceOption('levels', '🪜 Многоуровневая', 'Уровни с деньгами и/или днями подписки'),
@@ -672,6 +685,49 @@ class BotConfigurationService:
     }
 
     SETTING_HINTS: dict[str, dict[str, str]] = {
+        'GRACE_ACCESS_MODE': {
+            'description': (
+                'Режим grace-доступа: временного ограниченного VPN-доступа для истёкшей или упёршейся '
+                'в лимит подписки, чтобы человек успел продлить её.'
+            ),
+            'format': 'false — выключен, observe — только журнал, true — включён, drain — доводит открытые сессии.',
+            'example': 'false',
+            'warning': (
+                'Режим читается один раз при старте бота — сохранённое значение начнёт действовать только '
+                'после перезапуска. С true и незаполненными сквадами бот запустится с выключенным grace.'
+            ),
+            'dependencies': 'GRACE_ACCESS_EXPIRED_SQUAD_UUID, GRACE_ACCESS_LIMITED_SQUAD_UUID, GRACE_ACCESS_TRAFFIC_GB',
+        },
+        'GRACE_ACCESS_EXPIRED_SQUAD_UUID': {
+            'description': 'Сквад, в который переводится пользователь с истёкшей подпиской на время grace-доступа.',
+            'format': 'UUID сквада из панели RemnaWave.',
+            'example': '3fa85f64-5717-4562-b3fc-2c963f66afa6',
+            'warning': 'Обязателен при режиме true. Пустое или некорректное значение отключает grace при старте.',
+        },
+        'GRACE_ACCESS_LIMITED_SQUAD_UUID': {
+            'description': 'Сквад для подписки, упёршейся в лимит трафика, на время grace-доступа.',
+            'format': 'UUID сквада из панели RemnaWave.',
+            'example': '3fa85f64-5717-4562-b3fc-2c963f66afa6',
+            'warning': 'Обязателен при режиме true. Пустое или некорректное значение отключает grace при старте.',
+        },
+        'GRACE_ACCESS_EXTERNAL_SQUAD_UUID': {
+            'description': 'Что делать с внешним сквадом пользователя на время grace-доступа.',
+            'format': 'Пусто — отцепить, keep — оставить как есть, либо UUID аварийного сквада.',
+            'example': 'keep',
+            'warning': 'Исходное состояние сохраняется в снимке сессии и возвращается при завершении grace.',
+        },
+        'GRACE_ACCESS_TRAFFIC_GB': {
+            'description': 'Лимит трафика, который выдаётся на время grace-доступа.',
+            'format': 'Целое число гигабайт.',
+            'example': '1',
+            'warning': 'При режиме true должно быть не меньше 1, иначе grace выключится при старте.',
+        },
+        'GRACE_ACCESS_DURATION_HOURS': {
+            'description': 'Сколько действует grace-доступ, если подписку так и не продлили.',
+            'format': 'Целое число часов.',
+            'example': '72',
+            'warning': 'По истечении срока панельное состояние возвращается к исходному из снимка сессии.',
+        },
         'SALES_MODE': {
             'description': (
                 'Режим продажи подписок. '
