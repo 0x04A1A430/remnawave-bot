@@ -2247,5 +2247,20 @@
   "REFERRAL_TIER_NO_REFERRER_REWARD": "pays you nothing",
   "REFERRAL_EARNING_TIER_SUFFIX": " (lvl. {level})",
   "REFERRAL_EARNING_LEVEL_SUFFIX": " (lvl. {level})",
-  "REFERRAL_LEVEL_PERSONAL_RATE": "💼 You have a personal rate of {percent}% — it applies at level 1"
+  "REFERRAL_LEVEL_PERSONAL_RATE": "💼 You have a personal rate of {percent}% — it applies at level 1",
+  "REFERRAL_REWARD_SETTINGS_BUTTON": "⚙️ Reward settings",
+  "REFERRAL_REWARD_SETTINGS_TITLE": "⚙️ <b>Reward settings</b>",
+  "REFERRAL_REWARD_SETTINGS_INTRO": "Choose the form your referral rewards take and which subscription the days go to.",
+  "REFERRAL_PREF_HEADER": "🎁 <b>What to receive</b>",
+  "REFERRAL_PREF_BOTH": "Everything the level gives",
+  "REFERRAL_PREF_MONEY": "Money only",
+  "REFERRAL_PREF_DAYS": "Subscription days only",
+  "REFERRAL_PREF_HINT": "The choice applies only where a level gives both money and days. If a level gives just one, you get that one.",
+  "REFERRAL_DAYS_TARGET_HEADER": "📅 <b>Where the days go</b>",
+  "REFERRAL_DAYS_TARGET_AUTO": "Pick automatically",
+  "REFERRAL_DAYS_TARGET_AUTO_HINT": "Days go to the paid subscription with the latest end date.",
+  "REFERRAL_DAYS_TARGET_HINT": "If a level targets a tariff, the days still go to that tariff — the administrator set it that way.",
+  "REFERRAL_DAYS_TARGET_NONE": "You have no subscriptions to choose between yet.",
+  "REFERRAL_SETTINGS_SAVED": "✅ Saved",
+  "REFERRAL_SUBSCRIPTION_UNTIL": "until {date}"
 }

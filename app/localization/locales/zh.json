@@ -2247,5 +2247,20 @@
   "REFERRAL_TIER_NO_REFERRER_REWARD": "不向您发放",
   "REFERRAL_EARNING_TIER_SUFFIX": "（第 {level} 级）",
   "REFERRAL_EARNING_LEVEL_SUFFIX": "（第 {level} 级）",
-  "REFERRAL_LEVEL_PERSONAL_RATE": "💼 您有 {percent}% 的专属费率——适用于第 1 级"
+  "REFERRAL_LEVEL_PERSONAL_RATE": "💼 您有 {percent}% 的专属费率——适用于第 1 级",
+  "REFERRAL_REWARD_SETTINGS_BUTTON": "⚙️ 奖励设置",
+  "REFERRAL_REWARD_SETTINGS_TITLE": "⚙️ <b>奖励设置</b>",
+  "REFERRAL_REWARD_SETTINGS_INTRO": "在此选择推荐奖励的形式，以及订阅天数计入哪个订阅。",
+  "REFERRAL_PREF_HEADER": "🎁 <b>获取方式</b>",
+  "REFERRAL_PREF_BOTH": "该等级提供的全部",
+  "REFERRAL_PREF_MONEY": "仅现金",
+  "REFERRAL_PREF_DAYS": "仅订阅天数",
+  "REFERRAL_PREF_HINT": "此选择仅在等级同时提供现金和天数时生效。若等级只给其中一种，您将获得该种。",
+  "REFERRAL_DAYS_TARGET_HEADER": "📅 <b>天数计入何处</b>",
+  "REFERRAL_DAYS_TARGET_AUTO": "自动选择",
+  "REFERRAL_DAYS_TARGET_AUTO_HINT": "天数计入到期日最晚的付费订阅。",
+  "REFERRAL_DAYS_TARGET_HINT": "若等级指定了资费，天数仍会计入该资费的订阅——这是管理员的设置。",
+  "REFERRAL_DAYS_TARGET_NONE": "您还没有可供选择的订阅。",
+  "REFERRAL_SETTINGS_SAVED": "✅ 已保存",
+  "REFERRAL_SUBSCRIPTION_UNTIL": "至 {date}"
 }

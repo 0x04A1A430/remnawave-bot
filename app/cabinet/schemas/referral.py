@@ -85,6 +85,32 @@ class ReferralEarningsListResponse(BaseModel):
     pages: int
 
 
+class ReferralDaysTargetOption(BaseModel):
+    """Подписка, в которую можно направить дни награды."""
+
+    id: int
+    tariff_name: str | None = None
+    # Срок нужен вместе с названием: подписок одного тарифа может быть несколько,
+    # и по названию их не различить.
+    end_date: str | None = None
+
+
+class ReferralRewardChoiceRequest(BaseModel):
+    """Правка предпочтений пользователя. Поля необязательны по отдельности.
+
+    Экран правит их по одному, и присылать оба ради одного значило бы затирать
+    выбор, сделанный из бота между двумя запросами.
+    """
+
+    reward_preference: str | None = None
+    days_target_subscription_id: int | None = None
+    # Явные признаки «поле прислано»: сам None — значимое значение («как
+    # настроено правилом» и «подбирать автоматически»), и отличить его от
+    # «не трогали» иначе нельзя.
+    set_reward_preference: bool = False
+    set_days_target: bool = False
+
+
 class ReferralProgramLevel(BaseModel):
     """Одна ступень программы, разобранная на части.
 
@@ -145,6 +171,16 @@ class ReferralTermsResponse(BaseModel):
     levels: list[ReferralProgramLevel] = []
     # Личная ставка партнёра, если она перебивает процент ступени. None — нет.
     personal_percent: int | None = None
+    # Что пользователю разрешено выбирать самому. Пока не разрешено, экран
+    # настроек не показывается вовсе: выбор, ни на что не влияющий, обещает
+    # влияние, которого нет.
+    allow_reward_kind_choice: bool = False
+    allow_days_target_choice: bool = False
+    # Текущий выбор пользователя. 'money' | 'days' | None — «как настроено правилом».
+    reward_preference: str | None = None
+    days_target_subscription_id: int | None = None
+    # Подписки, между которыми есть смысл выбирать. Пусто — выбирать не из чего.
+    days_target_options: list[ReferralDaysTargetOption] = []
 
 
 class ReferralRewardLevelResponse(BaseModel):

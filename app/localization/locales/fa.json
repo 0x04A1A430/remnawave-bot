@@ -2247,5 +2247,20 @@
   "REFERRAL_TIER_NO_REFERRER_REWARD": "به شما پرداختی ندارد",
   "REFERRAL_EARNING_TIER_SUFFIX": " (سطح {level})",
   "REFERRAL_EARNING_LEVEL_SUFFIX": " (سطح {level})",
-  "REFERRAL_LEVEL_PERSONAL_RATE": "💼 شما نرخ اختصاصی {percent}٪ دارید — در سطح ۱ اعمال می‌شود"
+  "REFERRAL_LEVEL_PERSONAL_RATE": "💼 شما نرخ اختصاصی {percent}٪ دارید — در سطح ۱ اعمال می‌شود",
+  "REFERRAL_REWARD_SETTINGS_BUTTON": "⚙️ تنظیمات پاداش",
+  "REFERRAL_REWARD_SETTINGS_TITLE": "⚙️ <b>تنظیمات پاداش</b>",
+  "REFERRAL_REWARD_SETTINGS_INTRO": "اینجا انتخاب می‌کنید پاداش‌های معرفی را به چه شکلی دریافت کنید و روزهای اشتراک به کدام اشتراک اضافه شود.",
+  "REFERRAL_PREF_HEADER": "🎁 <b>چه چیزی دریافت شود</b>",
+  "REFERRAL_PREF_BOTH": "هر چه سطح می‌دهد",
+  "REFERRAL_PREF_MONEY": "فقط پول",
+  "REFERRAL_PREF_DAYS": "فقط روزهای اشتراک",
+  "REFERRAL_PREF_HINT": "این انتخاب فقط جایی اعمال می‌شود که سطح هم پول و هم روز می‌دهد. اگر سطح تنها یکی را بدهد، همان را دریافت می‌کنید.",
+  "REFERRAL_DAYS_TARGET_HEADER": "📅 <b>روزها به کجا اضافه شود</b>",
+  "REFERRAL_DAYS_TARGET_AUTO": "انتخاب خودکار",
+  "REFERRAL_DAYS_TARGET_AUTO_HINT": "روزها به اشتراک پولی با دیرترین تاریخ پایان اضافه می‌شوند.",
+  "REFERRAL_DAYS_TARGET_HINT": "اگر برای سطحی تعرفه تعیین شده باشد، روزها باز هم به اشتراک همان تعرفه می‌روند — مدیر این‌طور تنظیم کرده است.",
+  "REFERRAL_DAYS_TARGET_NONE": "هنوز اشتراکی برای انتخاب ندارید.",
+  "REFERRAL_SETTINGS_SAVED": "✅ ذخیره شد",
+  "REFERRAL_SUBSCRIPTION_UNTIL": "تا {date}"
 }

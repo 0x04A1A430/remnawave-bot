@@ -3,13 +3,14 @@
 import math
 
 import structlog
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.config import settings
 from app.database.crud.referral import not_referee_directed
+from app.database.crud.referral_reward_level import normalize_reward_preference
 from app.database.models import (
     AdvertisingCampaign,
     ReferralEarning,
@@ -22,12 +23,14 @@ from app.database.models import (
 
 from ..dependencies import get_cabinet_db, get_current_cabinet_user, get_optional_cabinet_user
 from ..schemas.referral import (
+    ReferralDaysTargetOption,
     ReferralEarningResponse,
     ReferralEarningsListResponse,
     ReferralInfoResponse,
     ReferralItemResponse,
     ReferralListResponse,
     ReferralProgramLevel,
+    ReferralRewardChoiceRequest,
     ReferralTermsResponse,
 )
 
@@ -268,6 +271,76 @@ async def get_referral_earnings(
     )
 
 
+async def _days_target_options(db: AsyncSession, user) -> list[ReferralDaysTargetOption]:
+    """Подписки, между которыми есть смысл выбирать.
+
+    Триальные не предлагаются: положить в них награду всё равно нельзя, а пункт
+    в списке обещал бы обратное.
+    """
+    from app.database.crud.subscription import get_active_subscriptions_by_user_id
+    from app.database.models import Tariff
+
+    subscriptions = [sub for sub in await get_active_subscriptions_by_user_id(db, user.id) if not sub.is_trial]
+    if not subscriptions:
+        return []
+
+    tariff_ids = {sub.tariff_id for sub in subscriptions if sub.tariff_id}
+    names: dict[int, str] = {}
+    if tariff_ids:
+        rows = await db.execute(select(Tariff.id, Tariff.name).where(Tariff.id.in_(tariff_ids)))
+        names = {row.id: row.name for row in rows.all()}
+
+    return [
+        ReferralDaysTargetOption(
+            id=sub.id,
+            tariff_name=names.get(sub.tariff_id),
+            end_date=sub.end_date.isoformat() if sub.end_date else None,
+        )
+        for sub in subscriptions
+    ]
+
+
+@router.patch('/reward-choice', response_model=ReferralTermsResponse)
+async def update_reward_choice(
+    request: ReferralRewardChoiceRequest,
+    db: AsyncSession = Depends(get_cabinet_db),
+    user=Depends(get_current_cabinet_user),
+):
+    """Сохранить, что получать и куда класть дни.
+
+    Каждое поле пишется, только если админ его разрешил и только если экран
+    прислал признак «поле трогали»: сам None здесь значимое значение — «как
+    настроено правилом» и «подбирать автоматически», — и от «не присылали» он
+    иначе неотличим.
+    """
+    if request.set_reward_preference:
+        if not settings.is_referral_reward_kind_choice_enabled():
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Reward kind choice is disabled')
+        user.referral_reward_preference = normalize_reward_preference(request.reward_preference)
+
+    if request.set_days_target:
+        if not settings.is_referral_days_target_choice_enabled():
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Days target choice is disabled')
+
+        chosen = request.days_target_subscription_id
+        if chosen is not None:
+            # Принадлежность проверяется здесь, а не только при начислении:
+            # чужому идентификатору не место в базе.
+            allowed = {option.id for option in await _days_target_options(db, user)}
+            if chosen not in allowed:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Subscription is not yours')
+        user.referral_days_subscription_id = chosen
+
+    await db.commit()
+    logger.info(
+        'Пользователь изменил настройки реферальных наград',
+        user_id=user.id,
+        preference=user.referral_reward_preference,
+        subscription_id=user.referral_days_subscription_id,
+    )
+    return await get_referral_terms(db=db, user=user)
+
+
 @router.get('/terms', response_model=ReferralTermsResponse)
 async def get_referral_terms(
     db: AsyncSession = Depends(get_cabinet_db),
@@ -288,6 +361,7 @@ async def get_referral_terms(
     tier_progress = None
     program_levels: list[ReferralProgramLevel] = []
     personal_percent: int | None = None
+    days_target_options: list[ReferralDaysTargetOption] = []
 
     if settings.is_referral_levels_scheme():
         from app.database.models import Tariff
@@ -338,6 +412,11 @@ async def get_referral_terms(
         if user is not None:
             tier_progress = await resolve_tier_progress(db, user)
 
+        # Подписки для выбора запрашиваются только когда выбор разрешён: иначе
+        # это лишние запросы на каждом открытии публичной страницы условий.
+        if user is not None and settings.is_referral_days_target_choice_enabled():
+            days_target_options = await _days_target_options(db, user)
+
     return ReferralTermsResponse(
         scheme='levels' if settings.is_referral_levels_scheme() else 'legacy',
         level_descriptions=level_descriptions,
@@ -358,6 +437,11 @@ async def get_referral_terms(
         tier_referrals_active=tier_progress.referrals_active if tier_progress else 0,
         levels=program_levels,
         personal_percent=personal_percent,
+        allow_reward_kind_choice=settings.is_referral_reward_kind_choice_enabled(),
+        allow_days_target_choice=settings.is_referral_days_target_choice_enabled(),
+        reward_preference=(normalize_reward_preference(user.referral_reward_preference) if user else None),
+        days_target_subscription_id=(user.referral_days_subscription_id if user else None),
+        days_target_options=days_target_options,
         is_enabled=settings.is_referral_program_enabled(),
         commission_percent=settings.REFERRAL_COMMISSION_PERCENT,
         first_payment_commission_percent=settings.REFERRAL_FIRST_PAYMENT_COMMISSION_PERCENT,

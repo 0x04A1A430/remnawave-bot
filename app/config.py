@@ -412,6 +412,13 @@ class Settings(BaseSettings):
     # По умолчанию 'chain' — прежнее поведение схемы, чтобы обновление бота не
     # перекроило выплаты на установках, где уровни уже включены.
     REFERRAL_LEVELS_MODE: str = 'chain'
+    # Разрешить пользователю самому выбирать, в какую подписку лягут дни награды.
+    # Пока выключено, подписку подбирает бот — платную с самым поздним сроком.
+    REFERRAL_ALLOW_DAYS_TARGET_CHOICE: bool = False
+    # Разрешить пользователю выбирать, что получать по правилу, платящему и
+    # деньгами, и днями: только деньги или только дни. Пока выключено, выдаётся
+    # и то и другое, как правило и настроено.
+    REFERRAL_ALLOW_REWARD_KIND_CHOICE: bool = False
 
     # Настройки вывода реферального баланса
     REFERRAL_WITHDRAWAL_ENABLED: bool = False  # Включить возможность вывода
@@ -3603,6 +3610,8 @@ class Settings(BaseSettings):
             'notifications_enabled': self.REFERRAL_NOTIFICATIONS_ENABLED,
             'reward_scheme': self.REFERRAL_REWARD_SCHEME,
             'levels_mode': self.get_referral_levels_mode(),
+            'allow_days_target_choice': self.is_referral_days_target_choice_enabled(),
+            'allow_reward_kind_choice': self.is_referral_reward_kind_choice_enabled(),
             # Через геттер, а не сырым полем: сырое отдавало бы 999 или 0 —
             # значения, которые расчёт всё равно приводит к границам, так что
             # потребители видели бы не ту глубину, по которой бот платит.
@@ -3630,6 +3639,18 @@ class Settings(BaseSettings):
 
         value = str(self.REFERRAL_LEVELS_MODE or '').strip().lower()
         return LEVELS_MODE_TIERS if value == LEVELS_MODE_TIERS else LEVELS_MODE_CHAIN
+
+    def is_referral_days_target_choice_enabled(self) -> bool:
+        """Может ли пользователь сам выбрать подписку для дней награды.
+
+        Смысл есть только под уровневой схемой: в классической дни наградой не
+        выдаются вовсе, и выбирать было бы нечего.
+        """
+        return self.is_referral_levels_scheme() and bool(self.REFERRAL_ALLOW_DAYS_TARGET_CHOICE)
+
+    def is_referral_reward_kind_choice_enabled(self) -> bool:
+        """Может ли пользователь выбрать, деньги или дни, когда правило даёт оба."""
+        return self.is_referral_levels_scheme() and bool(self.REFERRAL_ALLOW_REWARD_KIND_CHOICE)
 
     def is_referral_tier_levels(self) -> bool:
         """Включён ли режим рангов: один уровень, только прямому пригласившему.

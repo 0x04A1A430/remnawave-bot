@@ -2325,6 +2325,18 @@ def get_referral_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMar
         ],
     ]
 
+    # Кнопка появляется, только когда админ разрешил хотя бы одну из настроек:
+    # экран, на котором нечего менять, обещает влияние, которого нет.
+    if settings.is_referral_reward_kind_choice_enabled() or settings.is_referral_days_target_choice_enabled():
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t('REFERRAL_REWARD_SETTINGS_BUTTON', '⚙️ Настройки наград'),
+                    callback_data='referral_reward_settings',
+                )
+            ]
+        )
+
     # Добавляем кнопку вывода, если включена
     if settings.is_referral_withdrawal_enabled():
         keyboard.append(

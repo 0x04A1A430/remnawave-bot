@@ -350,6 +350,24 @@ async def _render_levels(callback: types.CallbackQuery, db: AsyncSession) -> Non
             )
         ]
     )
+    # Что разрешено выбирать самому пользователю. Обе настройки видны рядом с
+    # уровнями, потому что относятся к тому же — как выдаётся награда уровня.
+    keyboard_rows.append(
+        [
+            types.InlineKeyboardButton(
+                text=f'🎁 Выбор награды: {"разрешён" if settings.REFERRAL_ALLOW_REWARD_KIND_CHOICE else "запрещён"}',
+                callback_data='admin_ref_lvl_kindchoice',
+            )
+        ]
+    )
+    keyboard_rows.append(
+        [
+            types.InlineKeyboardButton(
+                text=f'📅 Выбор подписки: {"разрешён" if settings.REFERRAL_ALLOW_DAYS_TARGET_CHOICE else "запрещён"}',
+                callback_data='admin_ref_lvl_targetchoice',
+            )
+        ]
+    )
     # Глубина имеет смысл только в цепочке. В режиме рангов кнопка не прячется,
     # а прямо говорит, что настройка не действует: исчезнувшая кнопка выглядит
     # как пропавшая настройка, и админ идёт искать её в общем списке конфигурации.
@@ -1117,6 +1135,40 @@ async def toggle_levels_mode(
 
 @admin_required
 @error_handler
+async def toggle_user_choice(
+    callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext | None = None
+):
+    """Разрешить или запретить пользователю выбирать вид награды и подписку для дней.
+
+    Обе настройки только РАЗРЕШАЮТ выбор, но не делают его за человека: пока они
+    выключены, сохранённые предпочтения игнорируются целиком, а начисления идут
+    ровно так, как настроено правилом.
+    """
+    await _cancel_pending_input(state)
+    key = (
+        'REFERRAL_ALLOW_REWARD_KIND_CHOICE'
+        if callback.data == 'admin_ref_lvl_kindchoice'
+        else 'REFERRAL_ALLOW_DAYS_TARGET_CHOICE'
+    )
+
+    if bot_configuration_service.is_env_locked(key):
+        await _answer_capped(
+            callback,
+            f'{key} задан в .env и не меняется из админки. Уберите строку из .env и перезапустите бота.',
+            show_alert=True,
+        )
+        return
+
+    new_value = not bool(getattr(settings, key))
+    await bot_configuration_service.set_value(db, key, new_value)
+
+    label = 'Выбор вида награды' if key == 'REFERRAL_ALLOW_REWARD_KIND_CHOICE' else 'Выбор подписки для дней'
+    await _answer_capped(callback, f'{label}: {"разрешён" if new_value else "запрещён"} пользователю.', show_alert=True)
+    await _render_levels(callback, db)
+
+
+@admin_required
+@error_handler
 async def start_depth_edit(callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext):
     """Правка глубины обхода цепочки.
 
@@ -1192,6 +1244,8 @@ def register_handlers(dp: Dispatcher):
     # Точное сравнение, а не префикс: 'admin_ref_lvl_mode:' уже занято сменой
     # набора бонусов уровня, и второй похожий префикс путал бы маршрутизацию.
     dp.callback_query.register(toggle_levels_mode, F.data == 'admin_ref_lvl_tiers')
+    dp.callback_query.register(toggle_user_choice, F.data == 'admin_ref_lvl_kindchoice')
+    dp.callback_query.register(toggle_user_choice, F.data == 'admin_ref_lvl_targetchoice')
     # Двоеточие в 'admin_ref_lvl:' обязательно: без него префикс поглотил бы все
     # соседние строки, и любая кнопка уровня открывала бы его карточку. Порядок
     # регистрации при таком разделителе значения не имеет — маршрутизацию

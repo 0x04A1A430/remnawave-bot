@@ -2247,5 +2247,20 @@
   "REFERRAL_TIER_NO_REFERRER_REWARD": "вам не нараховується",
   "REFERRAL_EARNING_TIER_SUFFIX": " (рів. {level})",
   "REFERRAL_EARNING_LEVEL_SUFFIX": " (рів. {level})",
-  "REFERRAL_LEVEL_PERSONAL_RATE": "💼 У вас індивідуальна ставка {percent}% — вона діє на першому рівні"
+  "REFERRAL_LEVEL_PERSONAL_RATE": "💼 У вас індивідуальна ставка {percent}% — вона діє на першому рівні",
+  "REFERRAL_REWARD_SETTINGS_BUTTON": "⚙️ Налаштування нагород",
+  "REFERRAL_REWARD_SETTINGS_TITLE": "⚙️ <b>Налаштування нагород</b>",
+  "REFERRAL_REWARD_SETTINGS_INTRO": "Тут ви обираєте, у якому вигляді отримувати реферальні нагороди та куди зараховувати дні підписки.",
+  "REFERRAL_PREF_HEADER": "🎁 <b>Що отримувати</b>",
+  "REFERRAL_PREF_BOTH": "Усе, що дає рівень",
+  "REFERRAL_PREF_MONEY": "Тільки гроші",
+  "REFERRAL_PREF_DAYS": "Тільки дні підписки",
+  "REFERRAL_PREF_HINT": "Вибір діє лише там, де рівень дає і гроші, і дні. Якщо рівень дає щось одне, ви отримаєте це одне.",
+  "REFERRAL_DAYS_TARGET_HEADER": "📅 <b>Куди зараховувати дні</b>",
+  "REFERRAL_DAYS_TARGET_AUTO": "Обирати автоматично",
+  "REFERRAL_DAYS_TARGET_AUTO_HINT": "Дні йдуть в оплачену підписку з найпізнішим терміном.",
+  "REFERRAL_DAYS_TARGET_HINT": "Якщо рівню заданий тариф, дні все одно підуть у підписку цього тарифу — так налаштував адміністратор.",
+  "REFERRAL_DAYS_TARGET_NONE": "У вас поки немає підписок, між якими можна обирати.",
+  "REFERRAL_SETTINGS_SAVED": "✅ Збережено",
+  "REFERRAL_SUBSCRIPTION_UNTIL": "до {date}"
 }

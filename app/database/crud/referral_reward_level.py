@@ -36,6 +36,22 @@ LEVELS_MODE_TIERS = 'tiers'
 # проходило любое число.
 MAX_REWARD_DAYS = 3650
 
+# Что пользователь может выбрать вместо «и то и другое».
+REWARD_PREFERENCE_MONEY = 'money'
+REWARD_PREFERENCE_DAYS = 'days'
+REWARD_PREFERENCES = frozenset({REWARD_PREFERENCE_MONEY, REWARD_PREFERENCE_DAYS})
+
+
+def normalize_reward_preference(value: str | None) -> str | None:
+    """Предпочтение награды или ``None`` — «как настроено правилом».
+
+    Неизвестное значение превращается в None, а не в одну из сторон: молча
+    выбрать за пользователя деньги или дни значило бы лишить его второй половины
+    награды на основании опечатки.
+    """
+    candidate = str(value or '').strip().lower()
+    return candidate if candidate in REWARD_PREFERENCES else None
+
 
 def _invalidate_level_cache() -> None:
     """Сбросить кэш уровней после записи.

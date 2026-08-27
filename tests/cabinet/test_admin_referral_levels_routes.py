@@ -292,7 +292,12 @@ class TestTermsEndpointUnderLevels:
         )
         monkeypatch.setattr('app.services.referral_reward_service.describe_active_levels', fake_describe)
 
-        await route.get_referral_terms(db=AsyncMock(), user=SimpleNamespace(language='en'))
+        await route.get_referral_terms(
+            db=AsyncMock(),
+            user=SimpleNamespace(
+                language='en', id=1, referral_reward_preference=None, referral_days_subscription_id=None
+            ),
+        )
         assert captured['language'] == 'en'
 
     @pytest.mark.asyncio

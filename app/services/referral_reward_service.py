@@ -486,6 +486,39 @@ async def _resolve_applicable_levels(
     return pairs
 
 
+def resolve_reward_preference(recipient: User) -> str | None:
+    """Что получатель предпочитает, когда правило платит и деньгами, и днями.
+
+    ``None`` — «как настроено правилом», то есть и то и другое. Пока настройка
+    выключена, предпочтение игнорируется целиком: сохранённый ранее выбор не
+    должен молча урезать награду, если админ передумал давать этот выбор.
+    """
+    if not settings.is_referral_reward_kind_choice_enabled():
+        return None
+
+    from app.database.crud.referral_reward_level import normalize_reward_preference
+
+    return normalize_reward_preference(getattr(recipient, 'referral_reward_preference', None))
+
+
+def _apply_preference(money: int, days: int, preference: str | None) -> tuple[int, int]:
+    """Урезать награду до выбранной стороны.
+
+    Выбор действует ТОЛЬКО когда правило действительно даёт обе стороны: у
+    правила, платящего одними днями, «предпочитаю деньги» не должно отменять
+    награду вовсе — человек выбирал между двумя, а не отказывался от одной.
+    """
+    from app.database.crud.referral_reward_level import REWARD_PREFERENCE_DAYS, REWARD_PREFERENCE_MONEY
+
+    if preference is None or not (money > 0 and days > 0):
+        return money, days
+    if preference == REWARD_PREFERENCE_MONEY:
+        return money, 0
+    if preference == REWARD_PREFERENCE_DAYS:
+        return 0, days
+    return money, days
+
+
 async def build_reward_components(
     db: AsyncSession,
     referee: User,
@@ -537,6 +570,15 @@ async def build_reward_components(
                 percent = 0
 
         days = max(0, config.referrer_days) if config.days_enabled else 0
+        # Процент обнуляется, ТОЛЬКО если деньги срезал выбор: иначе строка ledger
+        # сообщала бы процент при нулевой сумме. Проверяется именно факт среза, а
+        # не money == 0, — сумма бывает нулевой и без всякого выбора (на
+        # регистрации пополнения нет), и обнулять процент там значило бы менять
+        # поведение режима по умолчанию.
+        trimmed_money, days = _apply_preference(money, days, resolve_reward_preference(referrer))
+        if trimmed_money != money:
+            percent = 0
+        money = trimmed_money
 
         referrer_component = RewardComponent(
             recipient_id=referrer.id,
@@ -557,6 +599,11 @@ async def build_reward_components(
         if not referee_already_paid:
             referee_money = max(0, int(config.referee_fixed_kopeks or 0)) if config.money_enabled else 0
             referee_days = max(0, config.referee_days) if config.days_enabled else 0
+            # Предпочтение берётся у ПОЛУЧАТЕЛЯ, а не у пригласившего: это его
+            # награда и его выбор.
+            referee_money, referee_days = _apply_preference(
+                referee_money, referee_days, resolve_reward_preference(referee)
+            )
             referee_component = RewardComponent(
                 recipient_id=referee.id,
                 referrer_id=referrer.id,
@@ -642,7 +689,12 @@ async def _resolve_days_target(db: AsyncSession, user: User, tariff_id: int | No
     if tariff_id is not None:
         subscription = await get_subscription_by_user_and_tariff(db, user.id, tariff_id, include_inactive=True)
     else:
-        subscription = await _pick_primary_paid_subscription(db, user)
+        # Выбор пользователя старше автоподбора, но только когда тарифа в правиле
+        # нет: тариф — это и есть указание админа, куда дни обязаны лечь, и
+        # перебивать его пользовательским выбором значило бы менять правило.
+        subscription = await _resolve_chosen_days_target(db, user)
+        if subscription is None:
+            subscription = await _pick_primary_paid_subscription(db, user)
         if subscription is None:
             subscription = await get_subscription_by_user_id(db, user.id)
 
@@ -668,6 +720,35 @@ async def _resolve_days_target(db: AsyncSession, user: User, tariff_id: int | No
 # подписку, то есть бесплатно снимает триальный статус и выключает человека из
 # авто-продления (класс бага #629889).
 _ALIVE_SUBSCRIPTION_STATUSES = frozenset({'active', 'trial', 'limited'})
+
+
+async def _resolve_chosen_days_target(db: AsyncSession, user: User):
+    """Подписка, выбранная самим пользователем. ``None`` — выбора нет или он протух.
+
+    Проверяется принадлежность: ссылка живёт в строке пользователя и переживает
+    что угодно — смену тарифа, удаление подписки, перенос при слиянии аккаунтов.
+    Отдать награду в чужую подписку из-за устаревшей ссылки нельзя, поэтому
+    негодный выбор молча превращается в автоподбор, а не в отказ: человек не
+    обязан замечать, что подписки, которую он когда-то выбрал, больше нет.
+    """
+    if not settings.is_referral_days_target_choice_enabled():
+        return None
+
+    chosen_id = getattr(user, 'referral_days_subscription_id', None)
+    if not chosen_id:
+        return None
+
+    from app.database.models import Subscription
+
+    result = await db.execute(select(Subscription).where(Subscription.id == chosen_id, Subscription.user_id == user.id))
+    subscription = result.scalar_one_or_none()
+    if subscription is None:
+        logger.info(
+            'Выбранная подписка для дней не найдена, дни пойдут по автоподбору',
+            user_id=user.id,
+            subscription_id=chosen_id,
+        )
+    return subscription
 
 
 async def _pick_primary_paid_subscription(db: AsyncSession, user: User):
@@ -1176,8 +1257,22 @@ async def build_level_views(
 
         is_current = current_level is not None and level == current_level
 
+        # Выбор смотрящего урезает награду ровно так же, как при начислении, —
+        # иначе лестница обещает обе стороны, а приходит одна. Считается по тем
+        # же данным: money>0 и days>0 у правила, предпочтение у получателя.
+        preference = resolve_reward_preference(viewer) if viewer is not None else None
+        money_wins = preference != 'days'
+        days_win = preference != 'money'
+        both_sides = bool(
+            preference
+            and config.money_enabled
+            and (config.referrer_percent or config.referrer_fixed_kopeks)
+            and config.days_enabled
+            and config.referrer_days
+        )
+
         rewards: list[str] = []
-        if config.money_enabled:
+        if config.money_enabled and (money_wins or not both_sides):
             # На СВОЕЙ ступени печатается процент, который реально начислят: в
             # режиме за приглашённых получатель всегда прямой, и личная ставка
             # партнёра перебивает процент правила. Своя ступень — единственное
@@ -1205,6 +1300,7 @@ async def build_level_views(
         if (
             config.days_enabled
             and config.referrer_days
+            and (days_win or not both_sides)
             and _days_can_be_granted(config, tariff_id=config.referrer_tariff_id, for_referee=False)
         ):
             tariff_suffix = ''

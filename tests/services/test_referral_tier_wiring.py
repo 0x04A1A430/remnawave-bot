@@ -54,7 +54,7 @@ class TestCabinetTerms:
             'app.services.referral_reward_service.ReferralRewardLevelService.get_all',
             classmethod(lambda cls, db: fake_all(db)),
         )
-        user = SimpleNamespace(id=7, language='ru')
+        user = SimpleNamespace(id=7, language='ru', referral_reward_preference=None, referral_days_subscription_id=None)
 
         await route.get_referral_terms(db=AsyncMock(), user=user)
 

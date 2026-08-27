@@ -13,6 +13,7 @@ from app.handlers import (
     polls as user_polls,
     promocode,
     referral,
+    referral_settings,
     server_status,
     simple_subscription,
     start,
@@ -189,6 +190,7 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
     balance.register_balance_handlers(dp)
     promocode.register_handlers(dp)
     referral.register_handlers(dp)
+    referral_settings.register_handlers(dp)
     support.register_handlers(dp)
     server_status.register_handlers(dp)
     tickets.register_handlers(dp)

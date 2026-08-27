@@ -2163,6 +2163,20 @@ class User(Base):
     auto_promo_group_assigned = Column(Boolean, nullable=False, default=False)
     auto_promo_group_threshold_kopeks = Column(BigInteger, nullable=False, default=0)
     referral_commission_percent = Column(Integer, nullable=True)
+    # Выбор пользователя, куда класть дни реферальной награды. NULL — «решай сам»,
+    # то есть прежний автоматический подбор. Хранится идентификатором конкретной
+    # подписки, а не номером тарифа: подписок на один тариф может быть несколько.
+    #
+    # БЕЗ внешнего ключа намеренно. Между users и subscriptions уже есть связь
+    # subscriptions.user_id -> users.id, и вторая делает join между этими
+    # таблицами неоднозначным: SQLAlchemy перестаёт его выводить и роняет
+    # половину запросов приложения. Ссылка здесь мягкая — протухший выбор
+    # (подписка удалена, перенесена при слиянии) проверяется запросом при
+    # начислении и превращается в автоподбор, а не в отказ.
+    referral_days_subscription_id = Column(Integer, nullable=True)
+    # Что предпочитает получать, когда правило платит и деньгами, и днями:
+    # 'money' | 'days'. NULL — «и то и другое», как правило и настроено.
+    referral_reward_preference = Column(String(10), nullable=True)
     promo_offer_discount_percent = Column(Integer, nullable=False, default=0)
     promo_offer_discount_source = Column(String(100), nullable=True)
     promo_offer_discount_expires_at = Column(AwareDateTime(), nullable=True)
