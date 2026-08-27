@@ -2246,5 +2246,6 @@
   "REFERRAL_TIER_PERSONAL_RATE": "💼 شما نرخ اختصاصی {percent}٪ دارید — در هر سطحی اعمال می‌شود",
   "REFERRAL_TIER_NO_REFERRER_REWARD": "به شما پرداختی ندارد",
   "REFERRAL_EARNING_TIER_SUFFIX": " (سطح {level})",
-  "REFERRAL_EARNING_LEVEL_SUFFIX": " (سطح {level})"
+  "REFERRAL_EARNING_LEVEL_SUFFIX": " (سطح {level})",
+  "REFERRAL_LEVEL_PERSONAL_RATE": "💼 شما نرخ اختصاصی {percent}٪ دارید — در سطح ۱ اعمال می‌شود"
 }

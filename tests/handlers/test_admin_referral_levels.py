@@ -707,8 +707,10 @@ class TestLevelsModeToggle:
         callback = _callback('admin_ref_lvl_tiers')
         await _raw(editor.toggle_levels_mode)(callback, db_user=SimpleNamespace(id=1), db=None)
 
-        text = callback.answer.await_args.args[0]
-        assert 'порог' in text and '10' in text, text
+        # Предупреждения печатаются на ЭКРАНЕ: во всплывающем окне Telegram
+        # обрезает всё длиннее 200 символов, и текст терялся бы целиком.
+        screen = callback.message.edit_text.await_args.args[0]
+        assert 'нулевого порога' in screen and '10' in screen, screen
 
     @pytest.mark.asyncio
     async def test_depth_editor_refuses_to_open_under_tiers(self, wired, monkeypatch):
@@ -785,5 +787,73 @@ class TestLevelsModeToggle:
         callback = _callback('admin_ref_lvl_tiers')
         await _raw(editor.toggle_levels_mode)(callback, db_user=SimpleNamespace(id=1), db=None)
 
-        text = callback.answer.await_args.args[0]
-        assert 'одинаковый порог' in text, text
+        screen = callback.message.edit_text.await_args.args[0]
+        assert 'одинаковый порог' in screen, screen
+
+
+class TestCallbackAnswerLength:
+    """Ответ на callback не должен превышать лимит Telegram.
+
+    answerCallbackQuery отклоняет текст длиннее 200 символов, и aiogram его не
+    подрезает: вызов падает уже ПОСЛЕ выполненного действия. Админ видит
+    generic-ошибку поверх неперерисованного экрана и считает, что ничего не
+    произошло, — хотя режим уже переключён и выплаты идут по-новому.
+    """
+
+    @pytest.mark.asyncio
+    async def test_mode_toggle_answer_fits_the_limit(self, wired, monkeypatch):
+        async def fake_set(_db, key, value):
+            monkeypatch.setattr(settings, key, value)
+
+        monkeypatch.setattr(editor.bot_configuration_service, 'set_value', fake_set)
+        monkeypatch.setattr(editor.bot_configuration_service, 'is_env_locked', lambda key: False)
+        monkeypatch.setattr(settings, 'REFERRAL_REWARD_SCHEME', 'levels')
+        monkeypatch.setattr(settings, 'REFERRAL_LEVELS_MODE', 'chain')
+
+        async def worst_case(_db, only_active=False):
+            # Лестница, которая срабатывает по ВСЕМ четырём предупреждениям сразу.
+            return [
+                _level(1, required_referrals=5, trigger='registration', referrer_percent=None),
+                _level(2, required_referrals=5, trigger='every_topup'),
+            ]
+
+        monkeypatch.setattr(editor, 'get_all_reward_levels', worst_case)
+
+        callback = _callback('admin_ref_lvl_tiers')
+        await _raw(editor.toggle_levels_mode)(callback, db_user=SimpleNamespace(id=1), db=None)
+
+        answer = callback.answer.await_args.args[0]
+        assert len(answer) <= editor._CALLBACK_ANSWER_LIMIT, f'{len(answer)} символов: {answer}'
+        # И при этом ничего не потеряно — подробности на экране.
+        assert 'одинаковый порог' in callback.message.edit_text.await_args.args[0]
+
+    @pytest.mark.asyncio
+    async def test_legacy_import_answer_fits_the_limit(self, wired, monkeypatch):
+        """Перенос с заметками: уровень создан, значит ответ обязан дойти."""
+        saved = {}
+
+        async def fake_upsert(_db, level, **values):
+            saved.update({'level': level, **values})
+            return _level(level, **{k: v for k, v in values.items() if k != 'level'})
+
+        monkeypatch.setattr(editor, 'upsert_reward_level', fake_upsert)
+        # Импорт локальный внутри обработчика, поэтому подменяется в исходном модуле.
+        monkeypatch.setattr(
+            'app.services.referral_reward_service.legacy_percent_for_import',
+            lambda: (30, ['Ступени комиссии не перенесены', 'Взят иной процент вместо общего']),
+        )
+
+        callback = _callback('admin_ref_lvl_import')
+        await _raw(editor.import_legacy_settings)(callback, db_user=SimpleNamespace(id=1), db=None)
+
+        answer = callback.answer.await_args.args[0]
+        assert len(answer) <= editor._CALLBACK_ANSWER_LIMIT, f'{len(answer)} символов: {answer}'
+
+    @pytest.mark.asyncio
+    async def test_long_text_is_capped_not_dropped(self):
+        callback = _callback('x')
+        await editor._answer_capped(callback, 'я' * 500, show_alert=True)
+
+        answer = callback.answer.await_args.args[0]
+        assert len(answer) <= editor._CALLBACK_ANSWER_LIMIT
+        assert answer.endswith('…'), 'обрезка обязана быть видимой'

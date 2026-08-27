@@ -126,3 +126,102 @@ def test_no_duplicate_tariff_foreign_key(both):
             if 'tariff_id' in (fk.get('constrained_columns') or [])
         ]
         assert len(tariff_fks) <= 1, f'{label}: внешних ключей на tariff_id {len(tariff_fks)}'
+
+
+def _shape(inspector, table: str) -> dict[str, tuple[str, bool, str | None]]:
+    """Колонка -> (тип, nullable, серверный дефолт).
+
+    Имена колонок совпадать могут, а типы — нет: миграция пишет DDL руками, и
+    ``Integer`` вместо ``Boolean`` или пропущенный ``NOT NULL`` там появляется
+    незаметно. На свежей установке колонка обязана быть той же самой.
+    """
+    shape = {}
+    for column in inspector.get_columns(table):
+        default = column.get('default')
+        shape[column['name']] = (
+            str(column['type']).upper(),
+            bool(column['nullable']),
+            None if default is None else str(default).strip('\'" '),
+        )
+    return shape
+
+
+# Колонки, которые заводит сама фича. Прежние в referral_earnings сравнивать
+# нельзя: «старая» база в этом тесте описана рукописным DDL, и расхождение в
+# них говорило бы о фикстуре, а не о миграции.
+_ADDED_EARNING_COLUMNS = ('reward_type', 'level', 'days_granted', 'tariff_id')
+
+
+@pytest.mark.parametrize(
+    ('table', 'columns'),
+    [('referral_reward_levels', None), ('referral_earnings', _ADDED_EARNING_COLUMNS)],
+)
+def test_column_shapes_match(both, table, columns):
+    fresh, upgraded = both
+    fresh_shape, upgraded_shape = _shape(fresh, table), _shape(upgraded, table)
+    names = sorted(columns) if columns else sorted(set(fresh_shape) & set(upgraded_shape))
+
+    mismatched = [
+        f'{name}: свежая={fresh_shape.get(name)} обновлённая={upgraded_shape.get(name)}'
+        for name in names
+        if fresh_shape.get(name) != upgraded_shape.get(name)
+    ]
+
+    assert mismatched == [], f'{table}: колонки описаны по-разному\n' + '\n'.join(mismatched)
+
+
+def test_threshold_columns_are_not_nullable(both):
+    """Порог и флаг подсчёта читаются напрямую в расчёт награды.
+
+    NULL там означал бы сравнение ``None >= int`` при выборе уровня — падение на
+    начислении, а не мягкую деградацию.
+    """
+    for inspector in both:
+        shape = _shape(inspector, 'referral_reward_levels')
+        for column in ('required_referrals', 'required_referrals_active_only'):
+            assert shape[column][1] is False, f'{column} допускает NULL'
+            assert shape[column][2] is not None, f'у {column} нет серверного дефолта'
+
+
+def test_downgrade_removes_everything_it_added(tmp_path):
+    """Откат обязан возвращать базу к исходному виду.
+
+    Иначе повторный upgrade после отката упрётся в уже существующие объекты, и
+    установка застрянет между версиями.
+    """
+    engine = _upgraded_install(tmp_path / 'roundtrip.db')
+
+    for module in reversed(_load_migrations()):
+        with engine.begin() as conn:
+            context = MigrationContext.configure(conn)
+            with Operations.context(context):
+                module.downgrade()
+
+    inspector = sa.inspect(engine)
+    assert 'referral_reward_levels' not in inspector.get_table_names()
+    remaining = {c['name'] for c in inspector.get_columns('referral_earnings')}
+    assert not (remaining & {'reward_type', 'level', 'days_granted', 'tariff_id'}), remaining
+
+    # И снова вверх: миграции обязаны переживать цикл, а не только первый прогон.
+    for module in _load_migrations():
+        with engine.begin() as conn:
+            context = MigrationContext.configure(conn)
+            with Operations.context(context):
+                module.upgrade()
+
+    inspector = sa.inspect(engine)
+    assert 'referral_reward_levels' in inspector.get_table_names()
+
+
+def test_upgrade_is_idempotent(tmp_path):
+    """Повторный прогон на уже обновлённой базе не должен падать."""
+    engine = _upgraded_install(tmp_path / 'twice.db')
+
+    for module in _load_migrations():
+        with engine.begin() as conn:
+            context = MigrationContext.configure(conn)
+            with Operations.context(context):
+                module.upgrade()
+
+    inspector = sa.inspect(engine)
+    assert 'referral_reward_levels' in inspector.get_table_names()

@@ -1176,10 +1176,14 @@ async def build_level_views(
             # партнёра перебивает процент правила. Своя ступень — единственное
             # в списке утверждение лично о смотрящем, и общий процент программы
             # в ней противоречил бы выплате.
+            # Показывается процент, который реально начислят смотрящему. Личная
+            # ставка партнёра перебивает процент правила на выплате ПРЯМОМУ
+            # пригласившему: в режиме за приглашённых это его ступень, в цепочке —
+            # уровень 1. Общий процент программы в этих строках противоречил бы
+            # выплате, а своя ступень — вдобавок утверждение лично о смотрящем.
+            shows_own_rate = viewer is not None and (is_current if tier_mode else level == 1)
             percent = (
-                _resolve_percent(config, viewer, direct=True)
-                if (tier_mode and is_current and viewer is not None)
-                else (config.referrer_percent or 0)
+                _resolve_percent(config, viewer, direct=True) if shows_own_rate else (config.referrer_percent or 0)
             )
             if percent:
                 rewards.append(texts.t('REFERRAL_REWARD_PERCENT_OF_SUM', '{percent}% от суммы').format(percent=percent))
@@ -1203,7 +1207,11 @@ async def build_level_views(
         # «моего уровня не существует», хотя именно он и обнулил доход.
         pays_referrer = bool(rewards)
         if not pays_referrer:
-            if not is_current:
+            # В цепочке такая ступень просто ничего не добавляет — обещать нечего.
+            # В режиме за приглашённых она ЗАМЕЩАЕТ собой платящую, и прятать её
+            # нельзя: прогресс зовёт к ней («До уровня 2: ещё 2»), а достижение
+            # обнуляет доход. Скрытая ступень делала этот обрыв необъяснимым.
+            if not (tier_mode or is_current):
                 continue
             rewards.append(texts.t('REFERRAL_TIER_NO_REFERRER_REWARD', 'вам не начисляется'))
 
@@ -1225,7 +1233,7 @@ async def build_level_views(
     # Оговорка нужна только там, где ставка вообще во что-то превращается: в
     # программе, платящей одними днями, «действует на любом уровне» обещает
     # деньги, которых не будет никогда.
-    if tier_mode and viewer is not None and any(c.is_active and c.money_enabled for c in configs.values()):
+    if viewer is not None and any(c.is_active and c.money_enabled for c in configs.values()):
         raw = getattr(viewer, 'referral_commission_percent', None)
         if raw is not None:
             personal_percent = max(0, min(100, int(raw)))
@@ -1329,12 +1337,17 @@ async def describe_active_levels(
         lines.append(line)
 
     if personal_percent is not None:
-        lines.append(
-            texts.t(
-                'REFERRAL_TIER_PERSONAL_RATE',
-                '💼 У вас индивидуальная ставка {percent}% — она действует на любом уровне',
-            ).format(percent=personal_percent)
+        key, default = (
+            ('REFERRAL_TIER_PERSONAL_RATE', '💼 У вас индивидуальная ставка {percent}% — она действует на любом уровне')
+            if tier_mode
+            # В цепочке личная ставка перебивает процент только на уровне 1:
+            # глубже платят не за ваших приглашённых, и «на любом» было бы ложью.
+            else (
+                'REFERRAL_LEVEL_PERSONAL_RATE',
+                '💼 У вас индивидуальная ставка {percent}% — она действует на первом уровне',
+            )
         )
+        lines.append(texts.t(key, default).format(percent=personal_percent))
 
     return lines
 

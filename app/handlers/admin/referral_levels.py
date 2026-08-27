@@ -121,6 +121,24 @@ async def _tariff_names(db: AsyncSession) -> dict[int, str]:
     return {tariff.id: tariff.name for tariff in tariffs}
 
 
+# Telegram отклоняет answerCallbackQuery с текстом длиннее 200 символов, а
+# aiogram его не подрезает: вызов падает уже ПОСЛЕ того, как действие выполнено.
+# Админ видит generic-ошибку поверх неперерисованного экрана и считает, что
+# ничего не произошло, — хотя настройка уже записана и выплаты идут по-новому.
+_CALLBACK_ANSWER_LIMIT = 200
+
+
+async def _answer_capped(callback: types.CallbackQuery, text: str, *, show_alert: bool = False) -> None:
+    """Ответить на callback, не превысив лимит Telegram.
+
+    Подробностям длинных сообщений место на ЭКРАНЕ, а не во всплывающем окне;
+    здесь только страховка, чтобы обработчик не падал на границе.
+    """
+    if len(text) > _CALLBACK_ANSWER_LIMIT:
+        text = text[: _CALLBACK_ANSWER_LIMIT - 1].rstrip() + '…'
+    await callback.answer(text, show_alert=show_alert)
+
+
 def _tier_ladder_warnings(levels) -> list[str]:
     """Чем эта лестница рангов молча перестанет платить.
 
@@ -494,19 +512,26 @@ async def import_legacy_settings(
         referee_fixed_kopeks=settings.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS or None,
         max_payments=settings.REFERRAL_MAX_COMMISSION_PAYMENTS,
     )
-    message = (
-        'Перенесено в уровень 1 (выключен). Повод — первое пополнение: '
-        'фиксированные бонусы в классической схеме разовые. Для комиссии с каждого '
-        'пополнения смените повод и уберите фикс. суммы.'
+    # Заметки о непереносимом уходят на КАРТОЧКУ, а не во всплывающее окно: с
+    # ними текст переваливал за лимит Telegram, вызов падал, и админ не узнавал
+    # ни что перенесено, ни что потеряно, — при уже созданном уровне.
+    await _answer_capped(
+        callback,
+        'Перенесено в уровень 1 (выключен).' + (f' Не перенесено: {len(notes)} — см. карточку.' if notes else ''),
+        show_alert=True,
     )
-    if notes:
-        message += '\n\n' + '\n'.join(f'⚠️ {note}' for note in notes)
-    await callback.answer(message, show_alert=True)
-    await _render_level(callback, db, 1)
+    await _render_level(callback, db, 1, notes=notes)
 
 
-async def _render_level(callback: types.CallbackQuery, db: AsyncSession, level_number: int) -> bool:
-    """Отрисовать карточку уровня. ``False`` — уровня нет. Без ``callback.answer()``."""
+async def _render_level(
+    callback: types.CallbackQuery, db: AsyncSession, level_number: int, *, notes: list[str] | None = None
+) -> bool:
+    """Отрисовать карточку уровня. ``False`` — уровня нет. Без ``callback.answer()``.
+
+    ``notes`` — что перенос не смог выразить уровнем. Печатается на карточке,
+    потому что во всплывающем окне такой текст не помещается и теряется навсегда:
+    повторить перенос на непустой таблице сервер уже не даст.
+    """
     level = await get_reward_level(db, level_number)
     if level is None:
         return False
@@ -538,6 +563,10 @@ async def _render_level(callback: types.CallbackQuery, db: AsyncSession, level_n
         '',
         f'<b>{"Действует с:" if tier_mode else "Открывается за:"}</b> {_fmt_threshold(level)}',
     ]
+
+    for note in notes or []:
+        lines.append('')
+        lines.append(f'<i>⚠️ {note}</i>')
 
     if tier_mode:
         lines.append('')
@@ -999,12 +1028,18 @@ async def toggle_levels_mode(
         # выглядит как единственная проблема.
         warnings = _tier_ladder_warnings(levels)
         if warnings:
-            await callback.answer(
-                'Режим: уровни за приглашённых.\n\n' + '\n\n'.join(f'⚠️ {w}' for w in warnings), show_alert=True
+            # Сами предупреждения печатает _render_levels ниже — целиком и без
+            # обрезки. В окне только счёт, чтобы админ понял, куда смотреть.
+            await _answer_capped(
+                callback,
+                f'Режим: уровни за приглашённых. Внимание: предупреждений к лестнице — {len(warnings)}, '
+                'смотрите экран.',
+                show_alert=True,
             )
         else:
-            await callback.answer(
-                'Режим: уровни за приглашённых. Платят только прямому пригласившему, применяется один уровень — старший из достигнутых.',
+            await _answer_capped(
+                callback,
+                'Режим: уровни за приглашённых. Платят только прямому пригласившему, применяется один уровень.',
                 show_alert=True,
             )
     else:

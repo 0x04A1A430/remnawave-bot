@@ -2246,5 +2246,6 @@
   "REFERRAL_TIER_PERSONAL_RATE": "💼 您有 {percent}% 的专属费率——适用于任何等级",
   "REFERRAL_TIER_NO_REFERRER_REWARD": "不向您发放",
   "REFERRAL_EARNING_TIER_SUFFIX": "（第 {level} 级）",
-  "REFERRAL_EARNING_LEVEL_SUFFIX": "（第 {level} 级）"
+  "REFERRAL_EARNING_LEVEL_SUFFIX": "（第 {level} 级）",
+  "REFERRAL_LEVEL_PERSONAL_RATE": "💼 您有 {percent}% 的专属费率——适用于第 1 级"
 }

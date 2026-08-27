@@ -621,14 +621,35 @@ class TestTextMatchesPayout:
         assert 'Уровень 3' in marked[0] and 'не начисляется' in marked[0], marked
 
     @pytest.mark.asyncio
-    async def test_empty_tier_of_someone_else_stays_hidden(self, tiers, monkeypatch):
-        """Контроль: чужой пустой ранг обещать по-прежнему нечего."""
+    async def test_upcoming_level_that_pays_nothing_is_visible(self, tiers, monkeypatch):
+        """Ступень без награды пригласившему видна ЗАРАНЕЕ, а не только когда стала своей.
+
+        Прогресс зовёт к ней («До уровня 2: ещё 10»), а её достижение обнуляет
+        доход: она замещает собой платящую. Пока она была скрыта, обрыв дохода
+        объяснить по экрану было нельзя — уровня, который его обнулил, там не было.
+        """
         ladder = {
             1: _level(1, referrer_percent=5),
             2: _level(2, required_referrals=10, referee_fixed_kopeks=300_00),
         }
         _install(monkeypatch, ladder)
         tiers.counts[3] = {True: 0, False: 0}
+
+        lines = await describe_active_levels(None, viewer=tiers.users[3], language='ru')
+        upcoming = [line for line in lines if 'Уровень 2' in line]
+
+        assert len(upcoming) == 1, lines
+        assert 'не начисляется' in upcoming[0], upcoming[0]
+
+    @pytest.mark.asyncio
+    async def test_chain_still_hides_a_level_that_adds_nothing(self, tiers, monkeypatch):
+        """В цепочке такая ступень ничего не замещает — показывать нечего."""
+        ladder = {
+            1: _level(1, referrer_percent=5),
+            2: _level(2, referee_fixed_kopeks=300_00),
+        }
+        _install(monkeypatch, ladder)
+        monkeypatch.setattr(settings, 'REFERRAL_LEVELS_MODE', 'chain')
 
         lines = await describe_active_levels(None, viewer=tiers.users[3], language='ru')
         assert not any('Уровень 2' in line for line in lines), lines
@@ -664,17 +685,46 @@ class TestChainModeIsUntouchedByTheNewArguments:
     """
 
     @pytest.mark.asyncio
-    async def test_viewer_changes_nothing_under_chain(self, tiers, monkeypatch):
+    async def test_viewer_without_personal_rate_changes_nothing_under_chain(self, tiers, monkeypatch):
+        """У партнёра без личной ставки цепочка выглядит ровно как без смотрящего.
+
+        Отметка «ваш уровень» существует только в режиме за приглашённых, и
+        протечь в режим по умолчанию она не должна.
+        """
         _install(monkeypatch, LADDER)
         monkeypatch.setattr(settings, 'REFERRAL_LEVELS_MODE', 'chain')
         tiers.counts[3] = {True: 30, False: 30}
+        tiers.users[3].referral_commission_percent = None
 
         without = await describe_active_levels(None, language='ru')
         with_viewer = await describe_active_levels(None, viewer=tiers.users[3], language='ru')
 
         assert without == with_viewer
         assert not any('ваш уровень' in line for line in with_viewer)
-        assert not any('индивидуальная ставка' in line for line in with_viewer)
+
+    @pytest.mark.asyncio
+    async def test_chain_shows_the_personal_rate_on_level_one(self, tiers, monkeypatch):
+        """В цепочке личная ставка перебивает процент уровня 1 — и обязана быть названа.
+
+        Экран печатал процент правила, а начислялась личная ставка: партнёру,
+        одобренному со своей ставкой, показывали чужое число. И оговорка должна
+        говорить «на первом уровне», а не «на любом»: глубже платят не за его
+        приглашённых.
+        """
+        _install(monkeypatch, LADDER)
+        monkeypatch.setattr(settings, 'REFERRAL_LEVELS_MODE', 'chain')
+        viewer = tiers.users[3]
+        viewer.referral_commission_percent = 40
+
+        lines = await describe_active_levels(None, viewer=viewer, language='ru')
+        components = await build_reward_components(
+            None, tiers.users[4], event=RewardEvent.REPEAT_TOPUP, topup_amount_kopeks=1000_00
+        )
+        direct = next(c for c in components if c.referrer_id == viewer.id and c.is_referrer)
+
+        assert direct.percent == 40
+        assert lines[0].startswith('Уровень 1: 40%'), lines[0]
+        assert any('на первом уровне' in line for line in lines), lines
 
     @pytest.mark.asyncio
     async def test_viewer_costs_no_extra_queries_under_chain(self, tiers, monkeypatch):
