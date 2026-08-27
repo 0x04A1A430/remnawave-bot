@@ -269,6 +269,16 @@ class TestOverview:
         assert overview.issues == []
 
     @pytest.mark.asyncio
+    async def test_keep_is_recognised_regardless_of_case(self, monkeypatch, empty_db, status_snapshot, config):
+        """Рантайм сравнивает 'keep' в нижнем регистре — здесь оно не должно считаться кривым UUID."""
+        monkeypatch.setattr(bot_configuration_service, 'is_env_locked', lambda _key: False)
+        config.GRACE_ACCESS_EXTERNAL_SQUAD_UUID = 'Keep'
+
+        overview = await route.get_grace_access_overview(admin=ADMIN, db=empty_db)
+
+        assert overview.issues == []
+
+    @pytest.mark.asyncio
     async def test_open_sessions_without_a_worker_are_flagged(self, monkeypatch, empty_db, status_snapshot, config):
         """Незакрытые сессии при неактивном режиме остаются с наложенным оверлеем в панели."""
         monkeypatch.setattr(bot_configuration_service, 'is_env_locked', lambda _key: False)

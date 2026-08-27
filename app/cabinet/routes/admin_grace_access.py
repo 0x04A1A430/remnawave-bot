@@ -62,7 +62,8 @@ FIELD_KEYS: dict[str, str] = {
 RESTART_ONLY_FIELDS: frozenset[str] = frozenset({'mode', 'reconcile_interval_seconds'})
 
 # 'keep' is not a UUID: it tells the overlay builder to leave whatever external squad
-# the panel user already has instead of detaching it.
+# the panel user already has instead of detaching it. _resolve_grace_external_squad
+# compares it lowercased, so 'Keep' works there and must not be called malformed here.
 EXTERNAL_SQUAD_KEEP = 'keep'
 
 _ENV_LOCKED_DETAIL = (
@@ -248,7 +249,7 @@ def _collect_issues(config: GraceAccessConfig, *, open_sessions: int, running_mo
             issues.append(GraceAccessIssue(field=field, code='squad_invalid', severity='error'))
 
     external = _normalize_squad(config.external_squad_uuid)
-    if external and external != EXTERNAL_SQUAD_KEEP and not _is_uuid(external):
+    if external and external.lower() != EXTERNAL_SQUAD_KEEP and not _is_uuid(external):
         issues.append(GraceAccessIssue(field='external_squad_uuid', code='squad_invalid', severity='error'))
 
     if config.traffic_gb < 1:
