@@ -22,6 +22,43 @@ def test_referral_level_routes_registered(registered_paths):
     assert '/cabinet/admin/partners/referral-depth' in registered_paths
 
 
+@pytest.mark.parametrize(
+    ('method', 'path', 'expected'),
+    [
+        ('GET', '/admin/partners/referral-levels', 'list_referral_levels'),
+        ('PUT', '/admin/partners/referral-levels/2', 'upsert_referral_level'),
+        ('DELETE', '/admin/partners/referral-levels/2', 'remove_referral_level'),
+        ('POST', '/admin/partners/referral-levels/import-legacy', 'import_legacy_referral_settings'),
+        ('PATCH', '/admin/partners/referral-scheme', 'update_referral_scheme'),
+        ('PATCH', '/admin/partners/referral-depth', 'update_referral_depth'),
+        # Контроль: параметризованный путь обязан продолжать работать.
+        ('GET', '/admin/partners/42', 'get_partner_detail'),
+    ],
+)
+def test_each_url_reaches_its_own_handler(method, path, expected):
+    """Наличия пути в списке МАЛО — важно, какой обработчик его получит.
+
+    ``/{user_id}`` объявлен в том же роутере и перехватывает любой литеральный
+    сегмент: FastAPI берёт первый совпавший маршрут и пытается разобрать
+    ``referral-levels`` как int, отдавая 422 на GET без единого параметра. Ровно
+    это и уехало в прод — прежняя проверка видела путь зарегистрированным и
+    молчала.
+    """
+    from app.cabinet.routes.admin_partners import router
+
+    for route in router.routes:
+        if method not in route.methods:
+            continue
+        match, _scope = route.matches({'type': 'http', 'method': method, 'path': path, 'headers': []})
+        if match.name == 'FULL':
+            assert route.endpoint.__name__ == expected, (
+                f'{method} {path} попадает в {route.endpoint.__name__}, а не в {expected}'
+            )
+            return
+
+    raise AssertionError(f'{method} {path} не совпал ни с одним маршрутом')
+
+
 @pytest.fixture
 def wired(monkeypatch):
     from app.cabinet.routes import admin_partners

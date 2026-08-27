@@ -437,214 +437,6 @@ async def list_partners(
 # ==================== Partner detail (parametric paths last) ====================
 
 
-@router.get('/{user_id}', response_model=AdminPartnerDetailResponse)
-async def get_partner_detail(
-    user_id: int,
-    admin: User = Depends(require_permission('partners:read')),
-    db: AsyncSession = Depends(get_cabinet_db),
-):
-    """Get detailed partner info."""
-    user = await db.get(User, user_id)
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail='Пользователь не найден',
-        )
-
-    stats = await PartnerStatsService.get_referrer_detailed_stats(db, user_id)
-
-    # Get assigned campaigns with per-campaign stats
-    campaigns_result = await db.execute(
-        select(AdvertisingCampaign).where(AdvertisingCampaign.partner_user_id == user_id)
-    )
-    campaigns = campaigns_result.scalars().all()
-
-    campaign_ids = [c.id for c in campaigns]
-    per_campaign_stats = await PartnerStatsService.get_per_campaign_stats(db, user_id, campaign_ids)
-
-    campaign_list = [
-        CampaignSummary(
-            id=c.id,
-            name=c.name,
-            start_parameter=c.start_parameter,
-            is_active=c.is_active,
-            registrations_count=per_campaign_stats.get(c.id, {}).get('registrations_count', 0),
-            referrals_count=per_campaign_stats.get(c.id, {}).get('referrals_count', 0),
-            earnings_kopeks=per_campaign_stats.get(c.id, {}).get('earnings_kopeks', 0),
-        )
-        for c in campaigns
-    ]
-
-    summary = stats['summary']
-    earnings = stats['earnings']
-
-    return AdminPartnerDetailResponse(
-        user_id=user.id,
-        username=user.username,
-        first_name=user.first_name,
-        telegram_id=user.telegram_id,
-        commission_percent=user.referral_commission_percent,
-        partner_status=user.partner_status,
-        balance_kopeks=user.balance_kopeks,
-        total_referrals=summary['total_referrals'],
-        paid_referrals=summary['paid_referrals'],
-        active_referrals=summary['active_referrals'],
-        earnings_all_time=earnings['all_time_kopeks'],
-        earnings_today=earnings['today_kopeks'],
-        earnings_week=earnings['week_kopeks'],
-        earnings_month=earnings['month_kopeks'],
-        earnings_all_time_days=earnings.get('all_time_days', 0),
-        earnings_month_days=earnings.get('month_days', 0),
-        earnings_by_level=stats.get('earnings_by_level') or [],
-        conversion_to_paid=summary['conversion_to_paid_percent'],
-        campaigns=campaign_list,
-        created_at=user.created_at,
-    )
-
-
-@router.patch('/{user_id}/commission')
-async def update_commission(
-    user_id: int,
-    request: AdminUpdateCommissionRequest,
-    admin: User = Depends(require_permission('partners:edit')),
-    db: AsyncSession = Depends(get_cabinet_db),
-):
-    """Update partner commission percent."""
-    user = await db.get(User, user_id)
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail='Пользователь не найден',
-        )
-
-    if user.partner_status != PartnerStatus.APPROVED.value:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Пользователь не является партнёром',
-        )
-
-    old_commission = user.referral_commission_percent
-    user.referral_commission_percent = request.commission_percent
-    await db.commit()
-
-    logger.info(
-        'Комиссия партнёра обновлена',
-        user_id=user_id,
-        old_commission=old_commission,
-        new_commission=request.commission_percent,
-        admin_id=admin.id,
-    )
-
-    return {'success': True, 'commission_percent': request.commission_percent}
-
-
-@router.post('/{user_id}/revoke')
-async def revoke_partner(
-    user_id: int,
-    admin: User = Depends(require_permission('partners:revoke')),
-    db: AsyncSession = Depends(get_cabinet_db),
-):
-    """Revoke partner status."""
-    success, error = await partner_application_service.revoke_partner(db, user_id=user_id, admin_id=admin.id)
-
-    if not success:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error,
-        )
-
-    return {'success': True}
-
-
-@router.post('/{user_id}/campaigns/{campaign_id}/assign')
-async def assign_campaign(
-    user_id: int,
-    campaign_id: int,
-    admin: User = Depends(require_permission('partners:edit')),
-    db: AsyncSession = Depends(get_cabinet_db),
-):
-    """Assign a campaign to a partner."""
-    campaign = await db.get(AdvertisingCampaign, campaign_id)
-    if not campaign:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail='Кампания не найдена',
-        )
-
-    user = await db.get(User, user_id)
-    if not user or user.partner_status != PartnerStatus.APPROVED.value:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Пользователь не является партнёром',
-        )
-
-    # Atomic check-and-set to prevent race conditions
-    result = await db.execute(
-        update(AdvertisingCampaign)
-        .where(
-            AdvertisingCampaign.id == campaign_id,
-            or_(
-                AdvertisingCampaign.partner_user_id.is_(None),
-                AdvertisingCampaign.partner_user_id == user_id,
-            ),
-        )
-        .values(partner_user_id=user_id, updated_at=datetime.now(UTC))
-    )
-    if result.rowcount == 0:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Кампания уже привязана к другому партнёру',
-        )
-    await db.commit()
-
-    logger.info(
-        'Кампания привязана к партнёру',
-        campaign_id=campaign_id,
-        partner_user_id=user_id,
-        admin_id=admin.id,
-    )
-    return {'success': True}
-
-
-@router.post('/{user_id}/campaigns/{campaign_id}/unassign')
-async def unassign_campaign(
-    user_id: int,
-    campaign_id: int,
-    admin: User = Depends(require_permission('partners:edit')),
-    db: AsyncSession = Depends(get_cabinet_db),
-):
-    """Unassign a campaign from a partner."""
-    # Atomic check-and-unset to prevent race conditions
-    result = await db.execute(
-        update(AdvertisingCampaign)
-        .where(
-            AdvertisingCampaign.id == campaign_id,
-            AdvertisingCampaign.partner_user_id == user_id,
-        )
-        .values(partner_user_id=None, updated_at=datetime.now(UTC))
-    )
-    if result.rowcount == 0:
-        campaign = await db.get(AdvertisingCampaign, campaign_id)
-        if not campaign:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail='Кампания не найдена',
-            )
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Кампания не привязана к этому партнёру',
-        )
-    await db.commit()
-
-    logger.info(
-        'Кампания откреплена от партнёра',
-        campaign_id=campaign_id,
-        partner_user_id=user_id,
-        admin_id=admin.id,
-    )
-    return {'success': True}
-
-
 # ---------------------------------------------------------------------------
 # Уровни реферальных наград
 # ---------------------------------------------------------------------------
@@ -861,3 +653,217 @@ async def update_referral_scheme(
     await bot_configuration_service.set_value(db, 'REFERRAL_REWARD_SCHEME', scheme)
     logger.info('Схема реферальных наград переключена из кабинета', admin_id=admin.id, scheme=scheme)
     return await _levels_payload(db)
+
+
+# ВНИМАНИЕ: всё, что ниже, объявлено ПОСЛЕ параметризованных путей вида
+# '/{user_id}'. Литеральные сегменты обязаны идти раньше — FastAPI выбирает первый
+# совпавший маршрут, и '/{user_id}' перехватит любой литерал, отдав 422 при
+# разборе его как int. Новые литеральные пути добавляйте ВЫШЕ этой строки.
+
+
+@router.get('/{user_id}', response_model=AdminPartnerDetailResponse)
+async def get_partner_detail(
+    user_id: int,
+    admin: User = Depends(require_permission('partners:read')),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Get detailed partner info."""
+    user = await db.get(User, user_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail='Пользователь не найден',
+        )
+
+    stats = await PartnerStatsService.get_referrer_detailed_stats(db, user_id)
+
+    # Get assigned campaigns with per-campaign stats
+    campaigns_result = await db.execute(
+        select(AdvertisingCampaign).where(AdvertisingCampaign.partner_user_id == user_id)
+    )
+    campaigns = campaigns_result.scalars().all()
+
+    campaign_ids = [c.id for c in campaigns]
+    per_campaign_stats = await PartnerStatsService.get_per_campaign_stats(db, user_id, campaign_ids)
+
+    campaign_list = [
+        CampaignSummary(
+            id=c.id,
+            name=c.name,
+            start_parameter=c.start_parameter,
+            is_active=c.is_active,
+            registrations_count=per_campaign_stats.get(c.id, {}).get('registrations_count', 0),
+            referrals_count=per_campaign_stats.get(c.id, {}).get('referrals_count', 0),
+            earnings_kopeks=per_campaign_stats.get(c.id, {}).get('earnings_kopeks', 0),
+        )
+        for c in campaigns
+    ]
+
+    summary = stats['summary']
+    earnings = stats['earnings']
+
+    return AdminPartnerDetailResponse(
+        user_id=user.id,
+        username=user.username,
+        first_name=user.first_name,
+        telegram_id=user.telegram_id,
+        commission_percent=user.referral_commission_percent,
+        partner_status=user.partner_status,
+        balance_kopeks=user.balance_kopeks,
+        total_referrals=summary['total_referrals'],
+        paid_referrals=summary['paid_referrals'],
+        active_referrals=summary['active_referrals'],
+        earnings_all_time=earnings['all_time_kopeks'],
+        earnings_today=earnings['today_kopeks'],
+        earnings_week=earnings['week_kopeks'],
+        earnings_month=earnings['month_kopeks'],
+        earnings_all_time_days=earnings.get('all_time_days', 0),
+        earnings_month_days=earnings.get('month_days', 0),
+        earnings_by_level=stats.get('earnings_by_level') or [],
+        conversion_to_paid=summary['conversion_to_paid_percent'],
+        campaigns=campaign_list,
+        created_at=user.created_at,
+    )
+
+
+@router.patch('/{user_id}/commission')
+async def update_commission(
+    user_id: int,
+    request: AdminUpdateCommissionRequest,
+    admin: User = Depends(require_permission('partners:edit')),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Update partner commission percent."""
+    user = await db.get(User, user_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail='Пользователь не найден',
+        )
+
+    if user.partner_status != PartnerStatus.APPROVED.value:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Пользователь не является партнёром',
+        )
+
+    old_commission = user.referral_commission_percent
+    user.referral_commission_percent = request.commission_percent
+    await db.commit()
+
+    logger.info(
+        'Комиссия партнёра обновлена',
+        user_id=user_id,
+        old_commission=old_commission,
+        new_commission=request.commission_percent,
+        admin_id=admin.id,
+    )
+
+    return {'success': True, 'commission_percent': request.commission_percent}
+
+
+@router.post('/{user_id}/revoke')
+async def revoke_partner(
+    user_id: int,
+    admin: User = Depends(require_permission('partners:revoke')),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Revoke partner status."""
+    success, error = await partner_application_service.revoke_partner(db, user_id=user_id, admin_id=admin.id)
+
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error,
+        )
+
+    return {'success': True}
+
+
+@router.post('/{user_id}/campaigns/{campaign_id}/assign')
+async def assign_campaign(
+    user_id: int,
+    campaign_id: int,
+    admin: User = Depends(require_permission('partners:edit')),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Assign a campaign to a partner."""
+    campaign = await db.get(AdvertisingCampaign, campaign_id)
+    if not campaign:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail='Кампания не найдена',
+        )
+
+    user = await db.get(User, user_id)
+    if not user or user.partner_status != PartnerStatus.APPROVED.value:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Пользователь не является партнёром',
+        )
+
+    # Atomic check-and-set to prevent race conditions
+    result = await db.execute(
+        update(AdvertisingCampaign)
+        .where(
+            AdvertisingCampaign.id == campaign_id,
+            or_(
+                AdvertisingCampaign.partner_user_id.is_(None),
+                AdvertisingCampaign.partner_user_id == user_id,
+            ),
+        )
+        .values(partner_user_id=user_id, updated_at=datetime.now(UTC))
+    )
+    if result.rowcount == 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Кампания уже привязана к другому партнёру',
+        )
+    await db.commit()
+
+    logger.info(
+        'Кампания привязана к партнёру',
+        campaign_id=campaign_id,
+        partner_user_id=user_id,
+        admin_id=admin.id,
+    )
+    return {'success': True}
+
+
+@router.post('/{user_id}/campaigns/{campaign_id}/unassign')
+async def unassign_campaign(
+    user_id: int,
+    campaign_id: int,
+    admin: User = Depends(require_permission('partners:edit')),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Unassign a campaign from a partner."""
+    # Atomic check-and-unset to prevent race conditions
+    result = await db.execute(
+        update(AdvertisingCampaign)
+        .where(
+            AdvertisingCampaign.id == campaign_id,
+            AdvertisingCampaign.partner_user_id == user_id,
+        )
+        .values(partner_user_id=None, updated_at=datetime.now(UTC))
+    )
+    if result.rowcount == 0:
+        campaign = await db.get(AdvertisingCampaign, campaign_id)
+        if not campaign:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail='Кампания не найдена',
+            )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Кампания не привязана к этому партнёру',
+        )
+    await db.commit()
+
+    logger.info(
+        'Кампания откреплена от партнёра',
+        campaign_id=campaign_id,
+        partner_user_id=user_id,
+        admin_id=admin.id,
+    )
+    return {'success': True}
