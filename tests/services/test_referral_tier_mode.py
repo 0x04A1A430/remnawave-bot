@@ -887,3 +887,51 @@ class TestRestoreInvalidatesLevelCache:
         BackupService._invalidate_restored_caches()
 
         assert ReferralRewardLevelService._cache is None
+
+
+class TestImpossiblePercentIsNotPromised:
+    """Процент на поводе «за регистрацию» не начислится никогда — и не обещается.
+
+    На этом событии пополнения нет, а деньги считаются от суммы. Экран печатал
+    «Уровень 1: 20% от суммы за регистрацию», а начислялось ноль — в обоих режимах.
+    """
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize('mode', ['chain', 'tiers'])
+    async def test_registration_percent_is_not_shown(self, tiers, monkeypatch, mode):
+        ladder = {1: _level(1, trigger='registration', referrer_percent=20)}
+        _install(monkeypatch, ladder)
+        monkeypatch.setattr(settings, 'REFERRAL_LEVELS_MODE', mode)
+        tiers.counts[3] = {True: 0, False: 0}
+
+        lines = await describe_active_levels(None, viewer=tiers.users[3], language='ru')
+        paid = await build_reward_components(
+            None, tiers.users[4], event=RewardEvent.REGISTRATION, topup_amount_kopeks=0
+        )
+
+        assert not any(c.money_kopeks for c in paid), 'процент на регистрации начислиться не может'
+        assert not any('%' in line for line in lines), lines
+
+    @pytest.mark.asyncio
+    async def test_fixed_amount_at_registration_is_still_promised(self, tiers, monkeypatch):
+        """Контроль: фиксированная сумма на регистрации работает и обязана обещаться."""
+        ladder = {1: _level(1, trigger='registration', referrer_fixed_kopeks=500_00)}
+        _install(monkeypatch, ladder)
+        monkeypatch.setattr(settings, 'REFERRAL_LEVELS_MODE', 'chain')
+
+        lines = await describe_active_levels(None, language='ru')
+        paid = await build_reward_components(
+            None, tiers.users[4], event=RewardEvent.REGISTRATION, topup_amount_kopeks=0
+        )
+
+        assert any(c.money_kopeks == 500_00 for c in paid)
+        assert any('500' in line for line in lines), lines
+
+    @pytest.mark.asyncio
+    async def test_percent_on_a_topup_trigger_is_still_promised(self, tiers, monkeypatch):
+        ladder = {1: _level(1, trigger='every_topup', referrer_percent=20)}
+        _install(monkeypatch, ladder)
+        monkeypatch.setattr(settings, 'REFERRAL_LEVELS_MODE', 'chain')
+
+        lines = await describe_active_levels(None, language='ru')
+        assert any('20%' in line for line in lines), lines

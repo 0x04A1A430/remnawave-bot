@@ -1192,6 +1192,12 @@ async def build_level_views(
             percent = (
                 _resolve_percent(config, viewer, direct=True) if shows_own_rate else (config.referrer_percent or 0)
             )
+            # На регистрации пополнения нет, и процент считать не от чего: такое
+            # правило не начислит по проценту ничего никогда. Показывать его —
+            # обещать награду, которая не придёт. Админ об этом предупреждён на
+            # карточке уровня, пользователю обещать нечего вовсе.
+            if config.trigger == ReferralRewardTrigger.REGISTRATION.value:
+                percent = 0
             if percent:
                 rewards.append(texts.t('REFERRAL_REWARD_PERCENT_OF_SUM', '{percent}% от суммы').format(percent=percent))
             if config.referrer_fixed_kopeks:

@@ -2941,14 +2941,30 @@ async def _build_referral_info(
     referee_bonus: str | None = None
     tier_progress = None
     if settings.is_referral_levels_scheme():
+        # Без имён тарифов строка «7 дн. подписки» умалчивает, в какой тариф эти
+        # дни лягут, — в боте и кабинете тариф называется, а миниапп его терял.
+        from app.database.models import Tariff
         from app.services.referral_reward_service import (
+            ReferralRewardLevelService,
             describe_active_levels,
             describe_referee_bonus,
             resolve_tier_progress,
         )
 
-        level_descriptions = await describe_active_levels(db, language=user.language, viewer=user)
-        referee_bonus = await describe_referee_bonus(db, language=user.language, referrer=user)
+        configs = await ReferralRewardLevelService.get_all(db)
+        tariff_ids = {cfg.referrer_tariff_id for cfg in configs.values() if cfg.referrer_tariff_id}
+        tariff_ids |= {cfg.referee_tariff_id for cfg in configs.values() if cfg.referee_tariff_id}
+        tariff_names: dict[int, str] = {}
+        if tariff_ids:
+            rows = await db.execute(select(Tariff.id, Tariff.name).where(Tariff.id.in_(tariff_ids)))
+            tariff_names = {row.id: row.name for row in rows.all()}
+
+        level_descriptions = await describe_active_levels(
+            db, tariff_names=tariff_names, language=user.language, viewer=user
+        )
+        referee_bonus = await describe_referee_bonus(
+            db, tariff_names=tariff_names, language=user.language, referrer=user
+        )
         tier_progress = await resolve_tier_progress(db, user)
 
     terms = MiniAppReferralTerms(
