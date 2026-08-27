@@ -1569,6 +1569,33 @@ class BotConfigurationService:
             return formatted
         return _truncate(formatted)
 
+    @staticmethod
+    def as_choice_key(value: Any) -> str:
+        """Значение в том виде, в котором его можно сравнить с ``ChoiceOption.value``.
+
+        Варианты всегда описаны СТРОКАМИ, а значение приходит уже приведённым к
+        типу настройки: у булевой это ``True``/``False``, у числовой — ``int``.
+        Прямое сравнение с ``'true'`` не совпадает никогда, и настройка с
+        вариантами становится несохраняемой — PUT отвечает 400 на любое значение,
+        включая перечисленные в самих вариантах.
+
+        Отдельной ветки для булевых не нужно: ``str(True).lower()`` и так даёт
+        ``'true'``. Числа при этом не сливаются с ними — ``1`` остаётся ``'1'``.
+        """
+        return str(value).strip().lower()
+
+    @classmethod
+    def value_matches_choice(cls, key: str, value: Any) -> bool:
+        """Допустимо ли значение для настройки с перечисленными вариантами.
+
+        Настройка без вариантов принимает что угодно: ограничение задаётся
+        именно списком, а не самим фактом проверки.
+        """
+        options = cls.get_choice_options(key)
+        if not options:
+            return True
+        return cls.as_choice_key(value) in {cls.as_choice_key(option.value) for option in options}
+
     @classmethod
     def get_choice_options(cls, key: str) -> list[ChoiceOption]:
         cls.initialize_definitions()
