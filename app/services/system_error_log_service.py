@@ -50,11 +50,29 @@ STATUS_SUPPRESSED = 'suppressed'
 STATUS_SKIPPED = 'skipped'
 
 
+def _redact(text: str) -> str:
+    """Вырезать Telegram-токены перед записью в БД.
+
+    Тот же фильтр, что применяется на пути в админ-чат: aiohttp кладёт в
+    сообщение и трейсбек полный URL вида ``.../bot<TOKEN>/sendMessage``. Без
+    него журнал складывал бы токен бота в открытом виде в таблицу и отдавал
+    его наружу через ``GET /admin/system-errors/{id}``.
+    """
+    try:
+        from app.services.admin_notification_service import _redact_telegram_secrets
+
+        return _redact_telegram_secrets(text)
+    except Exception:
+        # Молча: error-уровень отсюда вернулся бы в тот же конвейер. Лучше
+        # потерять запись, чем записать секрет.
+        return ''
+
+
 def _truncate(value: Any, limit: int) -> str | None:
     if value is None:
         return None
     text = value if isinstance(value, str) else str(value)
-    return text[:limit]
+    return _redact(text)[:limit]
 
 
 class SystemErrorLogService:
@@ -80,7 +98,18 @@ class SystemErrorLogService:
         self._cleanup_worker = asyncio.create_task(self._run_cleanup())
         logger.info('SystemErrorLogService запущен', queue_max_size=QUEUE_MAX_SIZE)
 
-    async def stop(self) -> None:
+    async def stop(self, drain_timeout: float = 5.0) -> None:
+        """Дописать то, что уже в очереди, и остановить воркеров.
+
+        Слив обязателен: при аварийном завершении в очереди лежат ровно те
+        ошибки, которые к этому завершению и привели. Отмена воркера без слива
+        выбросила бы их — то есть самый ценный случай журнал бы и потерял.
+        """
+        queue = self._queue
+        if queue is not None and self._worker and not self._worker.done():
+            with contextlib.suppress(TimeoutError, asyncio.TimeoutError):
+                await asyncio.wait_for(queue.join(), timeout=drain_timeout)
+
         for task in (self._worker, self._cleanup_worker):
             if task and not task.done():
                 task.cancel()
@@ -208,7 +237,7 @@ class SystemErrorLogService:
             if key in skip_keys:
                 continue
             try:
-                context[str(key)[:64]] = str(value)[:500]
+                context[str(key)[:64]] = _redact(str(value))[:500]
             except Exception:
                 continue
 
@@ -255,11 +284,14 @@ class SystemErrorLogService:
             if op == 'insert':
                 await session.execute(insert(SystemErrorEvent).values(**payload))
             elif op == 'status':
-                values: dict[str, Any] = {
-                    'delivery_status': payload['status'],
-                    'last_attempt_at': datetime.now(tz=UTC),
-                    'delivery_attempts': SystemErrorEvent.delivery_attempts + 1,
-                }
+                values: dict[str, Any] = {'delivery_status': payload['status']}
+                # Попыткой считается только реальная отправка. suppressed
+                # (дубликат в окне TTL) и skipped (бот не поднят, канал выключен)
+                # до Telegram не доходят, и счётчик «сколько раз пытались» на них
+                # врал бы — админ читает его, чтобы понять, пробовали ли вообще.
+                if payload['status'] in (STATUS_SENT, STATUS_FAILED):
+                    values['last_attempt_at'] = datetime.now(tz=UTC)
+                    values['delivery_attempts'] = SystemErrorEvent.delivery_attempts + 1
                 if payload['status'] == STATUS_SENT:
                     values['delivered_at'] = datetime.now(tz=UTC)
                     values['delivery_error'] = None
