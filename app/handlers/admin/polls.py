@@ -285,12 +285,7 @@ def _build_polls_keyboard(polls: list[Poll], language: str) -> types.InlineKeybo
         ]
     )
     keyboard.append(
-        [
-            types.InlineKeyboardButton(
-                text=texts.BACK,
-                callback_data='admin_submenu_communications',
-             style='danger')
-        ]
+        [types.InlineKeyboardButton(text=texts.BACK, callback_data='admin_submenu_communications', style='danger')]
     )
 
     return types.InlineKeyboardMarkup(inline_keyboard=keyboard)
@@ -388,12 +383,7 @@ def _build_target_keyboard(poll_id: int, language: str) -> types.InlineKeyboardM
                     callback_data=f'poll_custom_menu:{poll_id}',
                 )
             ],
-            [
-                types.InlineKeyboardButton(
-                    text=texts.BACK,
-                    callback_data=f'poll_view:{poll_id}',
-                 style='danger')
-            ],
+            [types.InlineKeyboardButton(text=texts.BACK, callback_data=f'poll_view:{poll_id}', style='danger')],
         ]
     )
 
@@ -457,12 +447,7 @@ def _build_send_confirmation_keyboard(poll_id: int, target: str, language: str) 
                     callback_data=f'poll_send_confirm:{poll_id}:{target}',
                 )
             ],
-            [
-                types.InlineKeyboardButton(
-                    text=texts.BACK,
-                    callback_data=f'poll_send:{poll_id}',
-                 style='danger')
-            ],
+            [types.InlineKeyboardButton(text=texts.BACK, callback_data=f'poll_send:{poll_id}', style='danger')],
         ]
     )
 
@@ -1161,12 +1146,7 @@ async def confirm_poll_delete(
                         callback_data=f'poll_delete_confirm:{poll_id}',
                     )
                 ],
-                [
-                    types.InlineKeyboardButton(
-                        text=texts.BACK,
-                        callback_data=f'poll_view:{poll_id}',
-                     style='danger')
-                ],
+                [types.InlineKeyboardButton(text=texts.BACK, callback_data=f'poll_view:{poll_id}', style='danger')],
             ]
         ),
         parse_mode='HTML',

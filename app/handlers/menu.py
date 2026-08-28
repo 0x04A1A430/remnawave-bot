@@ -306,7 +306,9 @@ async def show_service_rules(callback: types.CallbackQuery, db_user: User, db: A
         callback.message,
         f'{texts.t("RULES_HEADER", " <b>Правила</b>")}\n\n{rules_text}',
         reply_markup=types.InlineKeyboardMarkup(
-            inline_keyboard=[[types.InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu', style='danger')]]
+            inline_keyboard=[
+                [types.InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu', style='danger')]
+            ]
         ),
     )
     await callback.answer()

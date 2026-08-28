@@ -1214,7 +1214,8 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
                             InlineKeyboardButton(
                                 text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '← В главное меню'),
                                 callback_data='back_to_menu',
-                             style='danger')
+                                style='danger',
+                            )
                         ],
                     ]
                 )
@@ -1244,7 +1245,8 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
                             InlineKeyboardButton(
                                 text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '← В главное меню'),
                                 callback_data='back_to_menu',
-                             style='danger')
+                                style='danger',
+                            )
                         ],
                     ]
                 )
@@ -1268,7 +1270,8 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
                         InlineKeyboardButton(
                             text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '← В главное меню'),
                             callback_data='back_to_menu',
-                         style='danger')
+                            style='danger',
+                        )
                     ]
                 )
                 connect_keyboard = InlineKeyboardMarkup(inline_keyboard=rows)
@@ -1292,7 +1295,8 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
                         InlineKeyboardButton(
                             text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '← В главное меню'),
                             callback_data='back_to_menu',
-                         style='danger')
+                            style='danger',
+                        )
                     ]
                 )
                 connect_keyboard = InlineKeyboardMarkup(inline_keyboard=rows)
@@ -1312,7 +1316,8 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
                             InlineKeyboardButton(
                                 text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '← В главное меню'),
                                 callback_data='back_to_menu',
-                             style='danger')
+                                style='danger',
+                            )
                         ],
                     ]
                 )
@@ -2857,7 +2862,8 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
                             InlineKeyboardButton(
                                 text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '← В главное меню'),
                                 callback_data='back_to_menu',
-                             style='danger')
+                                style='danger',
+                            )
                         ],
                     ]
                 )
@@ -2887,7 +2893,8 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
                             InlineKeyboardButton(
                                 text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '← В главное меню'),
                                 callback_data='back_to_menu',
-                             style='danger')
+                                style='danger',
+                            )
                         ],
                     ]
                 )
@@ -2911,7 +2918,8 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
                         InlineKeyboardButton(
                             text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '← В главное меню'),
                             callback_data='back_to_menu',
-                         style='danger')
+                            style='danger',
+                        )
                     ]
                 )
                 connect_keyboard = InlineKeyboardMarkup(inline_keyboard=rows)
@@ -2935,7 +2943,8 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
                         InlineKeyboardButton(
                             text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '← В главное меню'),
                             callback_data='back_to_menu',
-                         style='danger')
+                            style='danger',
+                        )
                     ]
                 )
                 connect_keyboard = InlineKeyboardMarkup(inline_keyboard=rows)
@@ -2955,7 +2964,8 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
                             InlineKeyboardButton(
                                 text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '← В главное меню'),
                                 callback_data='back_to_menu',
-                             style='danger')
+                                style='danger',
+                            )
                         ],
                     ]
                 )
@@ -3704,7 +3714,8 @@ def _build_trial_success_keyboard(texts, subscription_link: str, connect_mode: s
                     InlineKeyboardButton(
                         text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '← В главное меню'),
                         callback_data='back_to_menu',
-                     style='danger')
+                        style='danger',
+                    )
                 ],
             ]
         )
@@ -3727,7 +3738,8 @@ def _build_trial_success_keyboard(texts, subscription_link: str, connect_mode: s
                     InlineKeyboardButton(
                         text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '← В главное меню'),
                         callback_data='back_to_menu',
-                     style='danger')
+                        style='danger',
+                    )
                 ],
             ]
         )
@@ -3751,7 +3763,8 @@ def _build_trial_success_keyboard(texts, subscription_link: str, connect_mode: s
                 InlineKeyboardButton(
                     text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '← В главное меню'),
                     callback_data='back_to_menu',
-                 style='danger')
+                    style='danger',
+                )
             ]
         )
         return InlineKeyboardMarkup(inline_keyboard=rows)
@@ -3775,7 +3788,8 @@ def _build_trial_success_keyboard(texts, subscription_link: str, connect_mode: s
                 InlineKeyboardButton(
                     text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '← В главное меню'),
                     callback_data='back_to_menu',
-                 style='danger')
+                    style='danger',
+                )
             ]
         )
         return InlineKeyboardMarkup(inline_keyboard=rows)
@@ -3794,7 +3808,8 @@ def _build_trial_success_keyboard(texts, subscription_link: str, connect_mode: s
                 InlineKeyboardButton(
                     text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '← В главное меню'),
                     callback_data='back_to_menu',
-                 style='danger')
+                    style='danger',
+                )
             ],
         ]
     )

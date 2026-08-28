@@ -1936,7 +1936,9 @@ async def start_edit_tariff_traffic_topup(
             ]
         )
 
-    buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data=f'admin_tariff_view:{tariff_id}', style='danger')])
+    buttons.append(
+        [InlineKeyboardButton(text=texts.BACK, callback_data=f'admin_tariff_view:{tariff_id}', style='danger')]
+    )
 
     await callback.message.edit_text(
         f'<b>Докупка трафика для «{html.escape(tariff.name)}»</b>\n\n'
@@ -2033,7 +2035,9 @@ async def toggle_tariff_traffic_topup(
             ]
         )
 
-    buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data=f'admin_tariff_view:{tariff_id}', style='danger')])
+    buttons.append(
+        [InlineKeyboardButton(text=texts.BACK, callback_data=f'admin_tariff_view:{tariff_id}', style='danger')]
+    )
 
     try:
         await callback.message.edit_text(
@@ -2498,7 +2502,9 @@ async def start_edit_tariff_squads(
             ),
         ]
     )
-    buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data=f'admin_tariff_view:{tariff_id}', style='danger')])
+    buttons.append(
+        [InlineKeyboardButton(text=texts.BACK, callback_data=f'admin_tariff_view:{tariff_id}', style='danger')]
+    )
 
     selected_count = len(current_squads)
 
@@ -2568,7 +2574,9 @@ async def toggle_tariff_squad(
             ),
         ]
     )
-    buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data=f'admin_tariff_view:{tariff_id}', style='danger')])
+    buttons.append(
+        [InlineKeyboardButton(text=texts.BACK, callback_data=f'admin_tariff_view:{tariff_id}', style='danger')]
+    )
 
     try:
         await callback.message.edit_text(
@@ -2639,7 +2647,9 @@ async def clear_tariff_squads(
             ),
         ]
     )
-    buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data=f'admin_tariff_view:{tariff_id}', style='danger')])
+    buttons.append(
+        [InlineKeyboardButton(text=texts.BACK, callback_data=f'admin_tariff_view:{tariff_id}', style='danger')]
+    )
 
     try:
         await callback.message.edit_text(
@@ -2709,7 +2719,9 @@ async def select_all_tariff_squads(
             ),
         ]
     )
-    buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data=f'admin_tariff_view:{tariff_id}', style='danger')])
+    buttons.append(
+        [InlineKeyboardButton(text=texts.BACK, callback_data=f'admin_tariff_view:{tariff_id}', style='danger')]
+    )
 
     try:
         await callback.message.edit_text(
@@ -2781,7 +2793,9 @@ async def start_edit_tariff_promo_groups(
             ),
         ]
     )
-    buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data=f'admin_tariff_view:{tariff_id}', style='danger')])
+    buttons.append(
+        [InlineKeyboardButton(text=texts.BACK, callback_data=f'admin_tariff_view:{tariff_id}', style='danger')]
+    )
 
     selected_count = len(current_groups)
 
@@ -2856,7 +2870,9 @@ async def toggle_tariff_promo_group(
             ),
         ]
     )
-    buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data=f'admin_tariff_view:{tariff_id}', style='danger')])
+    buttons.append(
+        [InlineKeyboardButton(text=texts.BACK, callback_data=f'admin_tariff_view:{tariff_id}', style='danger')]
+    )
 
     try:
         await callback.message.edit_text(
@@ -2916,7 +2932,9 @@ async def clear_tariff_promo_groups(
             ),
         ]
     )
-    buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data=f'admin_tariff_view:{tariff_id}', style='danger')])
+    buttons.append(
+        [InlineKeyboardButton(text=texts.BACK, callback_data=f'admin_tariff_view:{tariff_id}', style='danger')]
+    )
 
     try:
         await callback.message.edit_text(
@@ -2978,7 +2996,9 @@ def get_traffic_reset_mode_keyboard(tariff_id: int, current_mode: str | None, la
         )
 
     # Кнопка назад
-    buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data=f'admin_tariff_view:{tariff_id}', style='danger')])
+    buttons.append(
+        [InlineKeyboardButton(text=texts.BACK, callback_data=f'admin_tariff_view:{tariff_id}', style='danger')]
+    )
 
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 

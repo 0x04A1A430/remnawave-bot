@@ -318,9 +318,8 @@ async def handle_ticket_message_input(message: types.Message, state: FSMContext,
                 ],
                 [
                     types.InlineKeyboardButton(
-                        text=texts.t('BACK_TO_MENU', '← В главное меню'),
-                        callback_data='back_to_menu',
-                     style='danger')
+                        text=texts.t('BACK_TO_MENU', '← В главное меню'), callback_data='back_to_menu', style='danger'
+                    )
                 ],
             ]
         )
@@ -468,7 +467,8 @@ async def show_my_tickets_closed(callback: types.CallbackQuery, db_user: User, d
                         types.InlineKeyboardButton(
                             text=texts.t('BACK_TO_OPEN_TICKETS', '← Открытые тикеты'),
                             callback_data='my_tickets',
-                         style='danger')
+                            style='danger',
+                        )
                     ],
                     [types.InlineKeyboardButton(text=texts.BACK, callback_data='menu_support', style='danger')],
                 ]
@@ -494,9 +494,8 @@ async def show_my_tickets_closed(callback: types.CallbackQuery, db_user: User, d
         0,
         [
             types.InlineKeyboardButton(
-                text=texts.t('BACK_TO_OPEN_TICKETS', '← Открытые тикеты'),
-                callback_data='my_tickets',
-             style='danger')
+                text=texts.t('BACK_TO_OPEN_TICKETS', '← Открытые тикеты'), callback_data='my_tickets', style='danger'
+            )
         ],
     )
     await edit_or_answer_photo(
@@ -889,7 +888,8 @@ async def handle_ticket_reply(message: types.Message, state: FSMContext, db_user
                         types.InlineKeyboardButton(
                             text=texts.t('BACK_TO_MENU', '← В главное меню'),
                             callback_data='back_to_menu',
-                         style='danger')
+                            style='danger',
+                        )
                     ],
                 ]
             ),

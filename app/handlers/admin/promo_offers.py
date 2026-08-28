@@ -646,7 +646,9 @@ async def _render_send_user_list(
             )
         ]
     )
-    keyboard_rows.append([InlineKeyboardButton(text=texts.BACK, callback_data=f'promo_offer_{template_id}', style='danger')])
+    keyboard_rows.append(
+        [InlineKeyboardButton(text=texts.BACK, callback_data=f'promo_offer_{template_id}', style='danger')]
+    )
 
     markup = InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
     text = '\n'.join(lines)
@@ -1003,9 +1005,8 @@ async def _render_squad_selection(
                 inline_keyboard=[
                     [
                         InlineKeyboardButton(
-                            text=texts.BACK,
-                            callback_data=f'promo_offer_squad_back_{template.id}',
-                         style='danger')
+                            text=texts.BACK, callback_data=f'promo_offer_squad_back_{template.id}', style='danger'
+                        )
                     ]
                 ]
             ),

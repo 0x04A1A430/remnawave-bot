@@ -802,12 +802,7 @@ def get_admin_contests_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                     callback_data='admin_contests_create',
                 ),
             ],
-            [
-                make_button(
-                    text=texts.BACK,
-                    callback_data='admin_contests',
-                 style='danger')
-            ],
+            [make_button(text=texts.BACK, callback_data='admin_contests', style='danger')],
         ]
     )
 
@@ -1115,7 +1110,9 @@ def get_campaign_edit_keyboard(
         )
     # bonus_type == "none" - только базовые кнопки (название и параметр)
 
-    keyboard.append([make_button(text=texts.BACK, callback_data=f'admin_campaign_manage_{campaign_id}', style='danger')])
+    keyboard.append(
+        [make_button(text=texts.BACK, callback_data=f'admin_campaign_manage_{campaign_id}', style='danger')]
+    )
 
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
@@ -1705,12 +1702,16 @@ def get_promocode_list_keyboard(
         pagination_row = []
 
         if page > 1:
-            pagination_row.append(make_button(text='←', callback_data=f'admin_promo_list_page_{page - 1}', style='primary'))
+            pagination_row.append(
+                make_button(text='←', callback_data=f'admin_promo_list_page_{page - 1}', style='primary')
+            )
 
         pagination_row.append(make_button(text=f'{page}/{total_pages}', callback_data='current_page'))
 
         if page < total_pages:
-            pagination_row.append(make_button(text='→', callback_data=f'admin_promo_list_page_{page + 1}', style='primary'))
+            pagination_row.append(
+                make_button(text='→', callback_data=f'admin_promo_list_page_{page + 1}', style='primary')
+            )
 
         keyboard.append(pagination_row)
 
@@ -1853,12 +1854,16 @@ def get_broadcast_history_keyboard(page: int, total_pages: int, language: str = 
         pagination_row = []
 
         if page > 1:
-            pagination_row.append(make_button(text='←', callback_data=f'admin_msg_history_page_{page - 1}', style='primary'))
+            pagination_row.append(
+                make_button(text='←', callback_data=f'admin_msg_history_page_{page - 1}', style='primary')
+            )
 
         pagination_row.append(make_button(text=f'{page}/{total_pages}', callback_data='current_page'))
 
         if page < total_pages:
-            pagination_row.append(make_button(text='→', callback_data=f'admin_msg_history_page_{page + 1}', style='primary'))
+            pagination_row.append(
+                make_button(text='→', callback_data=f'admin_msg_history_page_{page + 1}', style='primary')
+            )
 
         keyboard.append(pagination_row)
 
@@ -1987,7 +1992,8 @@ def get_sync_result_keyboard(sync_type: str, has_errors: bool = False, language:
                 make_button(
                     text=_t(texts, 'ADMIN_BACK_TO_MAIN', '← В главное меню'),
                     callback_data='admin_remnawave',
-                 style='danger')
+                    style='danger',
+                )
             ],
         ]
     )
@@ -2531,12 +2537,16 @@ def get_admin_pagination_keyboard(
         row = []
 
         if current_page > 1:
-            row.append(make_button(text='←', callback_data=f'{callback_prefix}_page_{current_page - 1}', style='primary'))
+            row.append(
+                make_button(text='←', callback_data=f'{callback_prefix}_page_{current_page - 1}', style='primary')
+            )
 
         row.append(make_button(text=f'{current_page}/{total_pages}', callback_data='current_page'))
 
         if current_page < total_pages:
-            row.append(make_button(text='→', callback_data=f'{callback_prefix}_page_{current_page + 1}', style='primary'))
+            row.append(
+                make_button(text='→', callback_data=f'{callback_prefix}_page_{current_page + 1}', style='primary')
+            )
 
         keyboard.append(row)
 

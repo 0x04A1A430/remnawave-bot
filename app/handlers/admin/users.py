@@ -1655,12 +1655,7 @@ async def _build_user_referrals_view(
                     callback_data=f'admin_user_referrals_edit_{user_id}',
                 )
             ],
-            [
-                InlineKeyboardButton(
-                    text=texts.BACK,
-                    callback_data=f'admin_user_manage_{user_id}',
-                 style='danger')
-            ],
+            [InlineKeyboardButton(text=texts.BACK, callback_data=f'admin_user_manage_{user_id}', style='danger')],
         ]
     )
 
@@ -1772,12 +1767,7 @@ async def start_edit_referral_percent(
                     callback_data=f'admin_user_referral_percent_reset_{user_id}',
                 )
             ],
-            [
-                InlineKeyboardButton(
-                    text=texts.BACK,
-                    callback_data=f'admin_user_referrals_{user_id}',
-                 style='danger')
-            ],
+            [InlineKeyboardButton(text=texts.BACK, callback_data=f'admin_user_referrals_{user_id}', style='danger')],
         ]
     )
 
@@ -1998,12 +1988,7 @@ async def start_edit_user_referrals(
         prompt,
         reply_markup=InlineKeyboardMarkup(
             inline_keyboard=[
-                [
-                    InlineKeyboardButton(
-                        text=texts.BACK,
-                        callback_data=f'admin_user_referrals_{user_id}',
-                     style='danger')
-                ]
+                [InlineKeyboardButton(text=texts.BACK, callback_data=f'admin_user_referrals_{user_id}', style='danger')]
             ]
         ),
     )

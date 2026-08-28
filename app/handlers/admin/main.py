@@ -163,7 +163,8 @@ async def show_moderator_panel(callback: types.CallbackQuery, db_user: User, db:
                 InlineKeyboardButton(
                     text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '← В главное меню'),
                     callback_data='back_to_menu',
-                 style='danger')
+                    style='danger',
+                )
             ],
         ]
     )

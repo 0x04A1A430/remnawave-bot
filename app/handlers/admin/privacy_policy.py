@@ -186,12 +186,7 @@ async def _build_overview(
     )
 
     buttons.append(
-        [
-            types.InlineKeyboardButton(
-                text=texts.BACK,
-                callback_data='admin_submenu_settings',
-             style='danger')
-        ]
+        [types.InlineKeyboardButton(text=texts.BACK, callback_data='admin_submenu_settings', style='danger')]
     )
 
     return overview_text, types.InlineKeyboardMarkup(inline_keyboard=buttons), policy

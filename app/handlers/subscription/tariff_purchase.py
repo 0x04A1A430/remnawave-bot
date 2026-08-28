@@ -3124,7 +3124,9 @@ async def show_tariff_switch_list(
         await callback.message.edit_text(
             '<b>Смена тарифа недоступна</b>\n\nАдминистратор отключил возможность смены тарифа.',
             reply_markup=InlineKeyboardMarkup(
-                inline_keyboard=[[InlineKeyboardButton(text=texts.BACK, callback_data='menu_subscription', style='danger')]]
+                inline_keyboard=[
+                    [InlineKeyboardButton(text=texts.BACK, callback_data='menu_subscription', style='danger')]
+                ]
             ),
             parse_mode='HTML',
         )
@@ -3155,7 +3157,9 @@ async def show_tariff_switch_list(
         await callback.message.edit_text(
             '<b>Нет доступных тарифов для переключения</b>\n\nВы уже используете единственный доступный тариф.',
             reply_markup=InlineKeyboardMarkup(
-                inline_keyboard=[[InlineKeyboardButton(text=texts.BACK, callback_data='menu_subscription', style='danger')]]
+                inline_keyboard=[
+                    [InlineKeyboardButton(text=texts.BACK, callback_data='menu_subscription', style='danger')]
+                ]
             ),
             parse_mode='HTML',
         )
@@ -4217,7 +4221,9 @@ async def show_instant_switch_list(
         await callback.message.edit_text(
             '<b>Смена тарифа недоступна</b>\n\nАдминистратор отключил возможность смены тарифа.',
             reply_markup=InlineKeyboardMarkup(
-                inline_keyboard=[[InlineKeyboardButton(text=texts.BACK, callback_data='menu_subscription', style='danger')]]
+                inline_keyboard=[
+                    [InlineKeyboardButton(text=texts.BACK, callback_data='menu_subscription', style='danger')]
+                ]
             ),
             parse_mode='HTML',
         )
@@ -4243,7 +4249,9 @@ async def show_instant_switch_list(
         await callback.message.edit_text(
             '<b>Нет доступных тарифов для переключения</b>\n\nВы уже используете единственный доступный тариф.',
             reply_markup=InlineKeyboardMarkup(
-                inline_keyboard=[[InlineKeyboardButton(text=texts.BACK, callback_data='menu_subscription', style='danger')]]
+                inline_keyboard=[
+                    [InlineKeyboardButton(text=texts.BACK, callback_data='menu_subscription', style='danger')]
+                ]
             ),
             parse_mode='HTML',
         )
@@ -4936,9 +4944,8 @@ async def return_to_saved_tariff_cart(
                     ],
                     [
                         InlineKeyboardButton(
-                            text=texts.BACK,
-                            callback_data=f'tariff_extend:{_extend_sub_id}:{tariff_id}',
-                         style='danger')
+                            text=texts.BACK, callback_data=f'tariff_extend:{_extend_sub_id}:{tariff_id}', style='danger'
+                        )
                     ],
                 ]
             ),
