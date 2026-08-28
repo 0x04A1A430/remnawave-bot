@@ -3170,6 +3170,9 @@ async def handle_subscription_settings(callback: types.CallbackQuery, db_user: U
         devices_limit=devices_limit_display,
         time_left=subscription.time_until_revoke_available(settings.SUBSCRIPTION_REVOKE_COOLDOWN_SECONDS),
         revoke_cooldown=subscription.time_until_revoke_available(settings.SUBSCRIPTION_REVOKE_COOLDOWN_SECONDS),
+        # Шаблон из дефолтных локалей (фича стран) содержит {countries_count};
+        # старые варианты шаблона его просто игнорируют.
+        countries_count=len(subscription.connected_squads or []),
     )
 
     show_countries = await _should_show_countries_management(db_user)
