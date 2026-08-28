@@ -321,6 +321,12 @@ async def main():
         daily_subscription_service.set_bot(bot)
         telegram_notifier.set_bot(bot)
 
+        # Хранилище ошибок: пишет события ДО попытки доставки в Telegram,
+        # поэтому они переживают недоступность всех путей до чата.
+        from app.services.system_error_log_service import system_error_log_service
+
+        await system_error_log_service.start()
+
         from app.services.channel_subscription_service import channel_subscription_service
 
         channel_subscription_service.bot = bot

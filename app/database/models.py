@@ -4802,3 +4802,49 @@ class UserDeviceAlias(Base):
     alias = Column(String(64), nullable=False)
     created_at = Column(AwareDateTime(), server_default=func.now(), nullable=False)
     updated_at = Column(AwareDateTime(), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
+class SystemErrorEvent(Base):
+    """Ошибки уровня error/critical со статусом доставки в админ-чат.
+
+    Пишется из ``TelegramNotifierProcessor`` ДО попытки отправки, поэтому
+    запись остаётся даже когда все пути до Telegram недоступны. Раньше такие
+    ошибки жили только в docker-логах: провал доставки намеренно логируется
+    как warning (иначе получается петля усиления), и наружу не всплывал.
+    """
+
+    __tablename__ = 'system_error_events'
+    __table_args__ = (
+        Index('ix_system_error_events_status_created', 'delivery_status', 'created_at'),
+        Index('ix_system_error_events_dedup_created', 'dedup_hash', 'created_at'),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    # Клиентский идентификатор: строка пишется асинхронно, поэтому в момент
+    # отправки id из БД ещё неизвестен — статус обновляется по event_uid.
+    event_uid = Column(String(32), unique=True, nullable=False, index=True)
+
+    created_at = Column(AwareDateTime(), server_default=func.now(), nullable=False, index=True)
+
+    # Что произошло
+    level = Column(String(16), nullable=False, default='error', index=True)
+    logger_name = Column(String(255), nullable=True, index=True)
+    event = Column(Text, nullable=False)
+    error_type = Column(String(255), nullable=True, index=True)
+    traceback = Column(Text, nullable=True)
+    context = Column(JSON, nullable=True)
+
+    # Telegram-id пользователя, если ошибка произошла в его контексте.
+    # Намеренно без ForeignKey: ошибка может ссылаться на ещё не созданного
+    # или уже удалённого пользователя, а падение записи об ошибке недопустимо.
+    user_id = Column(BigInteger, nullable=True, index=True)
+
+    dedup_hash = Column(String(32), nullable=True)
+
+    # Доставка: pending -> sent | failed | suppressed | skipped
+    delivery_status = Column(String(16), nullable=False, default='pending')
+    delivery_attempts = Column(Integer, nullable=False, default=0)
+    last_attempt_at = Column(AwareDateTime(), nullable=True)
+    delivered_at = Column(AwareDateTime(), nullable=True)
+    delivery_error = Column(Text, nullable=True)
