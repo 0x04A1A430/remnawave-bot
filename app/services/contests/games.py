@@ -59,7 +59,7 @@ class BaseGameStrategy(ABC):
         from app.localization.texts import get_texts
 
         texts = get_texts(language)
-        return types.InlineKeyboardButton(text=texts.BACK, callback_data=callback)
+        return types.InlineKeyboardButton(text=texts.BACK, callback_data=callback, style='danger')
 
     def _get_texts(self, language: str):
         from app.localization.texts import get_texts

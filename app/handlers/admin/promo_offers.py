@@ -220,7 +220,7 @@ def _build_templates_keyboard(templates: Sequence[PromoOfferTemplate], language:
             )
         ]
     )
-    rows.append([InlineKeyboardButton(text=texts.BACK, callback_data='admin_submenu_communications')])
+    rows.append([InlineKeyboardButton(text=texts.BACK, callback_data='admin_submenu_communications', style='danger')])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -272,7 +272,7 @@ def _build_offer_detail_keyboard(template: PromoOfferTemplate, language: str) ->
     )
     rows.append(
         [
-            InlineKeyboardButton(text=texts.BACK, callback_data='admin_promo_offers'),
+            InlineKeyboardButton(text=texts.BACK, callback_data='admin_promo_offers', style='danger'),
         ]
     )
     return InlineKeyboardMarkup(inline_keyboard=rows)
@@ -439,7 +439,7 @@ def _build_logs_keyboard(page: int, total_pages: int, language: str) -> InlineKe
             )
         rows.append(nav_row)
 
-    rows.append([InlineKeyboardButton(text=texts.BACK, callback_data='admin_promo_offers')])
+    rows.append([InlineKeyboardButton(text=texts.BACK, callback_data='admin_promo_offers', style='danger')])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -471,7 +471,7 @@ def _build_send_keyboard(template: PromoOfferTemplate, language: str) -> InlineK
         ]
     )
 
-    rows.append([InlineKeyboardButton(text=texts.BACK, callback_data=f'promo_offer_{template.id}')])
+    rows.append([InlineKeyboardButton(text=texts.BACK, callback_data=f'promo_offer_{template.id}', style='danger')])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -646,7 +646,7 @@ async def _render_send_user_list(
             )
         ]
     )
-    keyboard_rows.append([InlineKeyboardButton(text=texts.BACK, callback_data=f'promo_offer_{template_id}')])
+    keyboard_rows.append([InlineKeyboardButton(text=texts.BACK, callback_data=f'promo_offer_{template_id}', style='danger')])
 
     markup = InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
     text = '\n'.join(lines)
@@ -1005,7 +1005,7 @@ async def _render_squad_selection(
                         InlineKeyboardButton(
                             text=texts.BACK,
                             callback_data=f'promo_offer_squad_back_{template.id}',
-                        )
+                         style='danger')
                     ]
                 ]
             ),
@@ -1926,7 +1926,7 @@ async def show_selected_user_details(
                 callback_data=f'promo_offer_send_user_back_{template_id}',
             )
         ],
-        [InlineKeyboardButton(text=texts.BACK, callback_data=f'promo_offer_{template_id}')],
+        [InlineKeyboardButton(text=texts.BACK, callback_data=f'promo_offer_{template_id}', style='danger')],
     ]
 
     await callback.message.edit_text(

@@ -425,7 +425,7 @@ class TributeService:
             keyboard = InlineKeyboardMarkup(
                 inline_keyboard=[
                     [InlineKeyboardButton(text='Поддержка', callback_data='menu_support')],
-                    [InlineKeyboardButton(text='Главное меню', callback_data='back_to_menu')],
+                    [InlineKeyboardButton(text='← Главное меню', callback_data='back_to_menu')],
                 ]
             )
 

@@ -731,8 +731,8 @@ async def _send_receipt_email(
 
     subject = 'Чек по вашему платежу'
     body_html = (
-        '<h2>🧾 Чек по вашему платежу сформирован</h2>'
-        f'<p>💰 Сумма: <b>{amount_text}</b></p>'
+        '<h2>Чек по вашему платежу сформирован</h2>'
+        f'<p>Сумма: <b>{amount_text}</b></p>'
         '<p>Чек зарегистрирован в ФНС через сервис «Мой налог».</p>'
         + ('<p>Файл чека — во вложении к этому письму.</p>' if attachment else '')
         + f'<p><a href="{receipt_url}">Открыть чек на сайте ФНС</a> '
@@ -789,7 +789,7 @@ async def send_nalogo_receipt_notifications(
     from aiogram import types
 
     keyboard = types.InlineKeyboardMarkup(
-        inline_keyboard=[[types.InlineKeyboardButton(text='🧾 Открыть чек', url=receipt_url)]]
+        inline_keyboard=[[types.InlineKeyboardButton(text='Открыть чек', url=receipt_url)]]
     )
     amount_text = settings.format_price(amount_kopeks)
 
@@ -873,8 +873,8 @@ async def send_nalogo_receipt_notifications(
             file_delivered = await _deliver(
                 telegram_user_id,
                 (
-                    '🧾 <b>Чек по вашему платежу сформирован</b>\n\n'
-                    f'💰 Сумма: {amount_text}\n\n'
+                    '<b>Чек по вашему платежу сформирован</b>\n\n'
+                    f'<blockquote>Сумма: {amount_text}</blockquote>\n\n'
                     'Чек зарегистрирован в ФНС через сервис «Мой налог».'
                 ),
             )
@@ -975,32 +975,32 @@ async def send_nalogo_receipt_notifications(
                 if db_user:
                     from html import escape as html_escape
 
-                    recipient_lines.append(f'🆔 Telegram ID: <code>{telegram_user_id}</code>')
+                    recipient_lines.append(f'Telegram ID: <code>{telegram_user_id}</code>')
                     full_name = ' '.join(filter(None, [db_user.first_name, db_user.last_name])).strip()
                     if full_name:
-                        recipient_lines.append(f'📛 Имя: <code>{html_escape(full_name)}</code>')
+                        recipient_lines.append(f'Имя: <code>{html_escape(full_name)}</code>')
                     if db_user.username:
-                        recipient_lines.append(f'👤 Username: @{db_user.username}')
+                        recipient_lines.append(f'Username: @{db_user.username}')
                     if db_user.email:
-                        recipient_lines.append(f'📧 Почта: <code>{html_escape(db_user.email)}</code>')
+                        recipient_lines.append(f'Почта: <code>{html_escape(db_user.email)}</code>')
                 else:
-                    recipient_lines.append(f'🆔 Telegram ID: <code>{telegram_user_id}</code>')
+                    recipient_lines.append(f'Telegram ID: <code>{telegram_user_id}</code>')
             except Exception as user_error:
                 logger.warning(
                     'Не удалось загрузить данные пользователя для уведомления о чеке',
                     telegram_user_id=telegram_user_id,
                     error=user_error,
                 )
-                recipient_lines.append(f'🆔 Telegram ID: <code>{telegram_user_id}</code>')
+                recipient_lines.append(f'Telegram ID: <code>{telegram_user_id}</code>')
         else:
-            recipient_lines.append('👤 Получатель: без Telegram (email/гость)')
+            recipient_lines.append('Получатель: без Telegram (email/гость)')
 
         recipient_block = '\n'.join(recipient_lines)
-        context_line = f'\nℹ️ {context_label}' if context_label else ''
+        context_line = f'\n{context_label}' if context_label else ''
         try:
             await _deliver(
                 chat_id,
-                f'🧾 <b>Новый чек NaloGO создан</b>\n\n💰 Сумма: {amount_text}\n{recipient_block}{context_line}',
+                f'<b>Новый чек NaloGO создан</b>\n\n<blockquote>Сумма: {amount_text}\n{recipient_block}</blockquote>{context_line}',
                 thread_id=topic_id,
             )
         except Exception as error:

@@ -106,7 +106,7 @@ def get_custom_traffic_keyboard(tariff: Tariff, language: str) -> InlineKeyboard
                     callback_data=f'admin_tariff_edit_custom_traffic_max:{tariff.id}',
                 )
             ],
-            [make_button(text=texts.BACK, callback_data=f'admin_tariff_view:{tariff.id}')],
+            [make_button(text=texts.BACK, callback_data=f'admin_tariff_view:{tariff.id}', style='danger')],
         ]
     )
 

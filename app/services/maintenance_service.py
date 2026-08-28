@@ -51,13 +51,13 @@ class MaintenanceService:
         if self._status.auto_enabled:
             last_check_display = format_local_datetime(self._status.last_check, '%H:%M:%S', 'неизвестно')
             return f"""
-🔧 Технические работы!
+<b>Технические работы</b>
 
-Сервис временно недоступен из-за проблем с подключением к серверам.
+<blockquote>Сервис временно недоступен из-за проблем с подключением к серверам.</blockquote>
 
-⏰ Мы работаем над восстановлением. Попробуйте через несколько минут.
+Мы работаем над восстановлением. Попробуйте через несколько минут.
 
-🔄 Последняя проверка: {last_check_display}
+Последняя проверка: {last_check_display}
 """
         return settings.get_maintenance_message()
 
@@ -149,11 +149,11 @@ class MaintenanceService:
             await self._save_status_to_cache()
 
             enabled_time = format_local_datetime(self._status.enabled_at, '%d.%m.%Y %H:%M:%S %Z')
-            notification_msg = f"""Режим технических работ ВКЛЮЧЕН
+            notification_msg = f"""<b>Режим технических работ включен</b>
 
-📋 <b>Причина:</b> {self._status.reason}
-🤖 <b>Автоматически:</b> {'Да' if auto else 'Нет'}
-🕐 <b>Время:</b> {enabled_time}
+<blockquote><b>Причина:</b> {self._status.reason}
+<b>Автоматически:</b> {'Да' if auto else 'Нет'}
+<b>Время:</b> {enabled_time}</blockquote>
 
 Обычные пользователи временно не смогут использовать бота."""
 
@@ -195,11 +195,11 @@ class MaintenanceService:
                     duration_str = f'\n <b>Длительность:</b> {minutes}мин'
 
             notification_time = format_local_datetime(datetime.now(UTC), '%d.%m.%Y %H:%M:%S %Z')
-            notification_msg = f"""Режим технических работ ВЫКЛЮЧЕН
+            notification_msg = f"""<b>Режим технических работ выключен</b>
 
-🤖 <b>Автоматически:</b> {'Да' if was_auto else 'Нет'}
-🕐 <b>Время:</b> {notification_time}
-{duration_str}
+<blockquote><b>Автоматически:</b> {'Да' if was_auto else 'Нет'}
+<b>Время:</b> {notification_time}
+{duration_str}</blockquote>
 
 Сервис снова доступен для пользователей."""
 
@@ -310,11 +310,11 @@ class MaintenanceService:
                         if not self._status.api_status:
                             recovery_time = format_local_datetime(self._status.last_check, '%H:%M:%S %Z')
                             await self._notify_admins(
-                                f"""API Remnawave восстановлено!
+                                f"""<b>API Remnawave восстановлено</b>
 
-✅ <b>Статус:</b> Доступно
-🕐 <b>Время восстановления:</b> {recovery_time}
-🔄 <b>Неудачных попыток было:</b> {self._status.consecutive_failures}
+<blockquote><b>Статус:</b> Доступно
+<b>Время восстановления:</b> {recovery_time}
+<b>Неудачных попыток было:</b> {self._status.consecutive_failures}</blockquote>
 
 API снова отвечает на запросы.""",
                                 'success',
@@ -344,11 +344,11 @@ API снова отвечает на запросы.""",
                 if was_available:
                     detection_time = format_local_datetime(self._status.last_check, '%H:%M:%S %Z')
                     await self._notify_admins(
-                        f"""API Remnawave недоступно!
+                        f"""<b>API Remnawave недоступно</b>
 
-❌ <b>Статус:</b> Недоступно
-🕐 <b>Время обнаружения:</b> {detection_time}
-🔄 <b>Попытка:</b> {self._status.consecutive_failures}
+<blockquote><b>Статус:</b> Недоступно
+<b>Время обнаружения:</b> {detection_time}
+<b>Попытка:</b> {self._status.consecutive_failures}</blockquote>
 
 Началась серия неудачных проверок API.""",
                         'error',
@@ -374,10 +374,10 @@ API снова отвечает на запросы.""",
             if self._status.api_status:
                 error_time = format_local_datetime(datetime.now(UTC), '%H:%M:%S %Z')
                 await self._notify_admins(
-                    f"""Ошибка при проверке API Remnawave
+                    f"""<b>Ошибка при проверке API Remnawave</b>
 
-❌ <b>Ошибка:</b> {e!s}
-🕐 <b>Время:</b> {error_time}
+<blockquote><b>Ошибка:</b> {e!s}
+<b>Время:</b> {error_time}</blockquote>
 
 Не удалось выполнить проверку доступности API.""",
                     'error',
@@ -497,15 +497,11 @@ API снова отвечает на запросы.""",
 
     async def send_remnawave_status_notification(self, status: str, details: str = '') -> bool:
         try:
-            status_emojis = {'online': '', 'offline': '', 'warning': '', 'error': ''}
+            message = f"""<b>Статус панели Remnawave изменился</b>
 
-            emoji = status_emojis.get(status, '')
-
-            message = f"""Статус панели Remnawave изменился
-
-{emoji} <b>Статус:</b> {status.upper()}
-🔗 <b>URL:</b> {settings.REMNAWAVE_API_URL}
-{details}"""
+<blockquote><b>Статус:</b> {status.upper()}
+<b>URL:</b> {settings.REMNAWAVE_API_URL}
+{details}</blockquote>"""
 
             alert_type = 'error' if status in ['offline', 'error'] else 'info'
             await self._notify_admins(message, alert_type)

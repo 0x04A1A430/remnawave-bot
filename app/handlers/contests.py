@@ -137,7 +137,7 @@ async def _build_contests_menu_view(db: AsyncSession, db_user) -> tuple[str, typ
             ]
         )
 
-    buttons.append([make_button(text=texts.BACK, callback_data='back_to_menu')])
+    buttons.append([make_button(text=texts.BACK, callback_data='back_to_menu', style='danger')])
 
     return (
         texts.t('CONTEST_MENU_TITLE', '<b>Игры/Конкурсы</b>\nВыберите игру:'),

@@ -2157,13 +2157,10 @@ class MonitoringService:
                     tariff_label = f' «{tariff_name}»'
                 elif hasattr(subscription, 'tariff') and subscription.tariff:
                     tariff_label = f' «{subscription.tariff.name}»'
-            message = f"""
-⛔ <b>Подписка{tariff_label} истекла</b>
-
-Ваша подписка истекла. Для восстановления доступа продлите подписку.
-
-🔧 Доступ к серверам заблокирован до продления.
-"""
+            message = (
+                f'<b>Подписка{tariff_label} истекла</b>\n\n'
+                '<blockquote>Для восстановления доступа продлите подписку.</blockquote>'
+            )
 
             from aiogram.types import InlineKeyboardMarkup
 
@@ -2273,16 +2270,11 @@ class MonitoringService:
             tariff_label = ''
             if settings.is_multi_tariff_enabled() and hasattr(subscription, 'tariff') and subscription.tariff:
                 tariff_label = f' «{subscription.tariff.name}»'
-            message = f"""
-🎁 <b>Тестовая подписка{tariff_label} скоро закончится!</b>
-
-Ваша тестовая подписка истекает через 2 часа.
-
-💎 <b>Не хотите остаться без VPN?</b>
-Переходите на полную подписку!
-
-⚡️ Успейте оформить до окончания тестового периода!
-"""
+            message = (
+                f'<b>Тестовая подписка{tariff_label} скоро закончится</b>\n\n'
+                '<blockquote>Истекает через 2 часа.</blockquote>\n\n'
+                'Переходите на полную подписку, чтобы не остаться без VPN.'
+            )
 
             from aiogram.types import InlineKeyboardMarkup
 

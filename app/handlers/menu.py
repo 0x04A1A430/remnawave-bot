@@ -306,7 +306,7 @@ async def show_service_rules(callback: types.CallbackQuery, db_user: User, db: A
         callback.message,
         f'{texts.t("RULES_HEADER", " <b>Правила</b>")}\n\n{rules_text}',
         reply_markup=types.InlineKeyboardMarkup(
-            inline_keyboard=[[types.InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu')]]
+            inline_keyboard=[[types.InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu', style='danger')]]
         ),
     )
     await callback.answer()
@@ -389,7 +389,7 @@ async def show_promo_groups_info(
     promo_groups = await get_auto_assign_promo_groups(db)
 
     keyboard = types.InlineKeyboardMarkup(
-        inline_keyboard=[[types.InlineKeyboardButton(text=texts.BACK, callback_data='menu_info')]]
+        inline_keyboard=[[types.InlineKeyboardButton(text=texts.BACK, callback_data='menu_info', style='danger')]]
     )
 
     if not promo_groups:
@@ -569,7 +569,7 @@ async def show_faq_pages(
             ]
         )
 
-    buttons.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='menu_info')])
+    buttons.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='menu_info', style='danger')])
 
     await callback.message.edit_text(
         caption,
@@ -683,8 +683,9 @@ async def show_faq_page(
         if current_page > 1:
             nav_row.append(
                 types.InlineKeyboardButton(
-                    text=texts.t('PAGINATION_PREV', ''),
+                    text=texts.t('PAGINATION_PREV', '←'),
                     callback_data=f'menu_faq_page:{page.id}:{current_page - 1}',
+                    style='primary',
                 )
             )
 
@@ -698,8 +699,9 @@ async def show_faq_page(
         if current_page < total_pages:
             nav_row.append(
                 types.InlineKeyboardButton(
-                    text=texts.t('PAGINATION_NEXT', ''),
+                    text=texts.t('PAGINATION_NEXT', '→'),
                     callback_data=f'menu_faq_page:{page.id}:{current_page + 1}',
+                    style='primary',
                 )
             )
 
@@ -710,10 +712,11 @@ async def show_faq_page(
             types.InlineKeyboardButton(
                 text=texts.t('FAQ_BACK_TO_LIST', 'К списку FAQ'),
                 callback_data='menu_faq',
+                style='danger',
             )
         ]
     )
-    keyboard_rows.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='menu_info')])
+    keyboard_rows.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='menu_info', style='danger')])
 
     await callback.message.edit_text(
         message_text,
@@ -815,8 +818,9 @@ async def show_privacy_policy(
         if current_page > 1:
             nav_row.append(
                 types.InlineKeyboardButton(
-                    text=texts.t('PAGINATION_PREV', ''),
+                    text=texts.t('PAGINATION_PREV', '←'),
                     callback_data=f'menu_privacy_policy:{current_page - 1}',
+                    style='primary',
                 )
             )
 
@@ -830,14 +834,15 @@ async def show_privacy_policy(
         if current_page < total_pages:
             nav_row.append(
                 types.InlineKeyboardButton(
-                    text=texts.t('PAGINATION_NEXT', ''),
+                    text=texts.t('PAGINATION_NEXT', '→'),
                     callback_data=f'menu_privacy_policy:{current_page + 1}',
+                    style='primary',
                 )
             )
 
         keyboard_rows.append(nav_row)
 
-    keyboard_rows.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='menu_info')])
+    keyboard_rows.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='menu_info', style='danger')])
 
     await callback.message.edit_text(
         message_text,
@@ -939,8 +944,9 @@ async def show_public_offer(
         if current_page > 1:
             nav_row.append(
                 types.InlineKeyboardButton(
-                    text=texts.t('PAGINATION_PREV', ''),
+                    text=texts.t('PAGINATION_PREV', '←'),
                     callback_data=f'menu_public_offer:{current_page - 1}',
+                    style='primary',
                 )
             )
 
@@ -954,14 +960,15 @@ async def show_public_offer(
         if current_page < total_pages:
             nav_row.append(
                 types.InlineKeyboardButton(
-                    text=texts.t('PAGINATION_NEXT', ''),
+                    text=texts.t('PAGINATION_NEXT', '→'),
                     callback_data=f'menu_public_offer:{current_page + 1}',
+                    style='primary',
                 )
             )
 
         keyboard_rows.append(nav_row)
 
-    keyboard_rows.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='menu_info')])
+    keyboard_rows.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='menu_info', style='danger')])
 
     await callback.message.edit_text(
         message_text,
@@ -1039,8 +1046,9 @@ async def show_info_page(
         if current_part > 1:
             nav_row.append(
                 types.InlineKeyboardButton(
-                    text=texts.t('PAGINATION_PREV', ''),
+                    text=texts.t('PAGINATION_PREV', '←'),
                     callback_data=f'info_page:{page.id}:{current_part - 1}',
+                    style='primary',
                 )
             )
         nav_row.append(
@@ -1052,13 +1060,14 @@ async def show_info_page(
         if current_part < total_parts:
             nav_row.append(
                 types.InlineKeyboardButton(
-                    text=texts.t('PAGINATION_NEXT', ''),
+                    text=texts.t('PAGINATION_NEXT', '→'),
                     callback_data=f'info_page:{page.id}:{current_part + 1}',
+                    style='primary',
                 )
             )
         keyboard_rows.append(nav_row)
 
-    keyboard_rows.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='menu_info')])
+    keyboard_rows.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='menu_info', style='danger')])
 
     await callback.message.edit_text(
         message_text,

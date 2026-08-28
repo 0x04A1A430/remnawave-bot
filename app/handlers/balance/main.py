@@ -501,7 +501,7 @@ async def show_transaction_detail(callback: types.CallbackQuery, db_user: User, 
         [types.InlineKeyboardButton(text='← К списку', callback_data=back_to_list, style='danger')],
         [
             types.InlineKeyboardButton(
-                text=texts.t('BACK_TO_MENU', 'В главное меню'),
+                text=texts.t('BACK_TO_MENU', '← В главное меню'),
                 callback_data='back_to_menu',
                 style='danger',
             )
@@ -628,7 +628,7 @@ async def handle_successful_topup_with_cart(user_id: int, amount_kopeks: int, bo
                         )
                     ],
                     [types.InlineKeyboardButton(text='Мой баланс', callback_data='menu_balance', style='danger')],
-                    [types.InlineKeyboardButton(text='Главное меню', callback_data='back_to_menu')],
+                    [types.InlineKeyboardButton(text='← Главное меню', callback_data='back_to_menu')],
                 ]
             )
 

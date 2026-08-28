@@ -309,7 +309,7 @@ def _build_list_keyboard(
 
         buttons.append(navigation_row)
 
-    buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data='admin_panel')])
+    buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data='admin_panel', style='danger')])
 
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
@@ -355,7 +355,7 @@ def _build_detail_keyboard(
             ]
         )
 
-    rows.append([InlineKeyboardButton(text=texts.BACK, callback_data='admin_payments')])
+    rows.append([InlineKeyboardButton(text=texts.BACK, callback_data='admin_payments', style='danger')])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 

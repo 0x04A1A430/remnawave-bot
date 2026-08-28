@@ -388,7 +388,7 @@ def _build_edit_menu_content(
             types.InlineKeyboardButton(
                 text=texts.BACK,
                 callback_data=f'promo_group_manage_{group.id}',
-            )
+             style='danger')
         ],
     ]
 
@@ -403,7 +403,7 @@ def _get_edit_prompt_keyboard(group_id: int, texts) -> types.InlineKeyboardMarku
                 types.InlineKeyboardButton(
                     text=texts.BACK,
                     callback_data=f'promo_group_edit_{group_id}',
-                )
+                 style='danger')
             ]
         ]
     )
@@ -487,7 +487,7 @@ async def show_promo_groups_menu(
         keyboard_rows = []
 
     keyboard_rows.append([types.InlineKeyboardButton(text='Создать', callback_data='admin_promo_group_create')])
-    keyboard_rows.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='admin_submenu_promo')])
+    keyboard_rows.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='admin_submenu_promo', style='danger')])
 
     await callback.message.edit_text(
         '\n'.join(line for line in lines if line is not None),
@@ -578,7 +578,7 @@ async def show_promo_group_details(
             ]
         )
 
-    keyboard_rows.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='admin_promo_groups')])
+    keyboard_rows.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='admin_promo_groups', style='danger')])
 
     await callback.message.edit_text(
         text.strip(),
@@ -623,7 +623,7 @@ async def start_create_promo_group(
             'Введите название новой промогруппы:',
         ),
         reply_markup=types.InlineKeyboardMarkup(
-            inline_keyboard=[[types.InlineKeyboardButton(text=texts.BACK, callback_data='admin_promo_groups')]]
+            inline_keyboard=[[types.InlineKeyboardButton(text=texts.BACK, callback_data='admin_promo_groups', style='danger')]]
         ),
     )
     await callback.answer()
@@ -1249,7 +1249,7 @@ async def show_promo_group_members(
         )
         keyboard.extend(pagination.inline_keyboard)
 
-    keyboard.append([types.InlineKeyboardButton(text=texts.BACK, callback_data=f'promo_group_manage_{group_id}')])
+    keyboard.append([types.InlineKeyboardButton(text=texts.BACK, callback_data=f'promo_group_manage_{group_id}', style='danger')])
 
     await callback.message.edit_text(
         f'{title}\n\n{body}',
@@ -1325,7 +1325,7 @@ async def delete_promo_group_confirmed(
     await callback.message.edit_text(
         texts.t('ADMIN_PROMO_GROUP_DELETED', 'Промогруппа «{name}» удалена.').format(name=html.escape(group.name)),
         reply_markup=types.InlineKeyboardMarkup(
-            inline_keyboard=[[types.InlineKeyboardButton(text=texts.BACK, callback_data='admin_promo_groups')]]
+            inline_keyboard=[[types.InlineKeyboardButton(text=texts.BACK, callback_data='admin_promo_groups', style='danger')]]
         ),
     )
     await callback.answer()

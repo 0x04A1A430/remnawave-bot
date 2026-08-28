@@ -190,7 +190,7 @@ async def _build_overview(
             types.InlineKeyboardButton(
                 text=texts.BACK,
                 callback_data='admin_submenu_settings',
-            )
+             style='danger')
         ]
     )
 

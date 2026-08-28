@@ -1612,24 +1612,24 @@ class EmailNotificationTemplates:
 
         if discount_percent > 0:
             subjects = {
-                'ru': f'🎁 Персональное предложение: скидка {discount_percent}%',
-                'en': f'🎁 Personal offer: {discount_percent}% off',
-                'zh': f'🎁 专属优惠：{discount_percent}% 折扣',
-                'ua': f'🎁 Персональна пропозиція: знижка {discount_percent}%',
+                'ru': f'Персональное предложение: скидка {discount_percent}%',
+                'en': f'Personal offer: {discount_percent}% off',
+                'zh': f'专属优惠：{discount_percent}% 折扣',
+                'ua': f'Персональна пропозиція: знижка {discount_percent}%',
             }
         else:
             subjects = {
-                'ru': '🎁 Персональное предложение',
-                'en': '🎁 Personal offer',
-                'zh': '🎁 专属优惠',
-                'ua': '🎁 Персональна пропозиція',
+                'ru': 'Персональное предложение',
+                'en': 'Personal offer',
+                'zh': '专属优惠',
+                'ua': 'Персональна пропозиція',
             }
 
         valid_lines = {
-            'ru': f'<p>⏰ Предложение действует <b>{valid_hours} ч.</b></p>' if valid_hours else '',
-            'en': f'<p>⏰ The offer is valid for <b>{valid_hours} h.</b></p>' if valid_hours else '',
-            'zh': f'<p>⏰ 优惠有效期 <b>{valid_hours} 小时</b></p>' if valid_hours else '',
-            'ua': f'<p>⏰ Пропозиція діє <b>{valid_hours} год.</b></p>' if valid_hours else '',
+            'ru': f'<p>Предложение действует <b>{valid_hours} ч.</b></p>' if valid_hours else '',
+            'en': f'<p>The offer is valid for <b>{valid_hours} h.</b></p>' if valid_hours else '',
+            'zh': f'<p>优惠有效期 <b>{valid_hours} 小时</b></p>' if valid_hours else '',
+            'ua': f'<p>Пропозиція діє <b>{valid_hours} год.</b></p>' if valid_hours else '',
         }
 
         bodies = {
