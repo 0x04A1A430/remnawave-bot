@@ -65,6 +65,7 @@ class EmailNotificationTemplates:
             NotificationType.TRAFFIC_RESET: self._traffic_reset_template,
             NotificationType.PAYMENT_RECEIVED: self._payment_received_template,
             NotificationType.PROMO_OFFER: self._promo_offer_template,
+            NotificationType.TICKET_REPLY: self._ticket_reply_template,
             NotificationType.EMAIL_VERIFICATION: self._email_verification_template,
             NotificationType.PASSWORD_RESET: self._password_reset_template,
             NotificationType.EMAIL_CHANGE_CODE: self._email_change_code_template,
@@ -1711,6 +1712,74 @@ class EmailNotificationTemplates:
                 </div>
                 <p>Thank you for your payment!</p>
                 {self._get_cabinet_button(language)}
+            """,
+        }
+
+        return {
+            'subject': subjects.get(language, subjects['ru']),
+            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
+        }
+
+    # ============================================================================
+    # Support Ticket Templates
+    # ============================================================================
+
+    def _get_support_button(self, language: str) -> str:
+        """Get support section link button HTML."""
+        if not self.cabinet_url:
+            return ''
+
+        texts = {
+            'ru': 'Открыть тикет',
+            'en': 'Open ticket',
+            'zh': '打开工单',
+            'ua': 'Відкрити тікет',
+            'fa': 'باز کردن تیکت',
+        }
+        text = texts.get(language, texts['en'])
+        url = f'{self.cabinet_url.rstrip("/")}/support'
+
+        return f'<p style="text-align: center;"><a href="{url}" class="button">{text}</a></p>'
+
+    def _ticket_reply_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
+        """Template for a support reply in a ticket."""
+        ticket_id = context.get('ticket_id', '')
+        # Экранируем ПОСЛЕ обрезки превью на стороне вызывающего кода: ответ
+        # поддержки вполне может содержать угловые скобки («откройте <config>»).
+        preview = html.escape(str(context.get('reply_preview', '') or '')).replace('\n', '<br>')
+        has_photo = bool(context.get('has_photo'))
+
+        subjects = {
+            'ru': f'Ответ по тикету #{ticket_id}',
+            'en': f'Reply to ticket #{ticket_id}',
+            'zh': f'工单 #{ticket_id} 的回复',
+            'ua': f'Відповідь по тікету #{ticket_id}',
+        }
+
+        photo_notes = {
+            'ru': '<p>К ответу приложено изображение — оно доступно в кабинете.</p>',
+            'en': '<p>The reply includes an image — it is available in your dashboard.</p>',
+        }
+        photo_note = photo_notes.get(language, photo_notes['ru']) if has_photo else ''
+
+        bodies = {
+            'ru': f"""
+                <h2>Ответ поддержки по тикету #{ticket_id}</h2>
+                <div class="highlight">
+                    {f'<p>{preview}</p>' if preview else '<p>Поддержка ответила на ваше обращение.</p>'}
+                </div>
+                {photo_note}
+                <p>Ответить можно в личном кабинете.</p>
+                {self._get_support_button(language)}
+            """,
+            'en': f"""
+                <h2>Support replied to ticket #{ticket_id}</h2>
+                <div class="highlight">
+                    {f'<p>{preview}</p>' if preview else '<p>Support has replied to your request.</p>'}
+                </div>
+                {photo_note}
+                <p>You can reply from your dashboard.</p>
+                {self._get_support_button(language)}
             """,
         }
 
