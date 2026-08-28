@@ -284,6 +284,17 @@ TEMPLATE_TYPES = [
         'context_vars': ['formatted_amount', 'payment_method'],
     },
     {
+        'type': 'ticket_reply',
+        'label': {'ru': 'Ответ поддержки', 'en': 'Support Reply', 'zh': '工单回复', 'ua': 'Відповідь підтримки'},
+        'description': {
+            'ru': 'Ответ поддержки в тикете — уходит юзерам без Telegram',
+            'en': 'Support reply in a ticket — sent to users without Telegram',
+            'zh': '工单中的支持回复 — 发送给没有 Telegram 的用户',
+            'ua': 'Відповідь підтримки в тікеті — надходить юзерам без Telegram',
+        },
+        'context_vars': ['ticket_id', 'reply_preview'],
+    },
+    {
         'type': 'email_verification',
         'label': {
             'ru': 'Подтверждение email',
@@ -520,6 +531,7 @@ SAMPLE_CONTEXTS: dict[str, dict[str, Any]] = {
     'referral_registered': {'referral_name': 'John'},
     'traffic_reset': {'reset_gb': 50, 'current_limit_gb': 100},
     'payment_received': {'formatted_amount': '500.00 ₽', 'amount_rubles': 500, 'payment_method': 'YooKassa'},
+    'ticket_reply': {'ticket_id': 42, 'reply_preview': 'Проверьте настройки подключения', 'has_photo': False},
     'email_verification': {
         'username': 'John',
         'verification_url': 'https://example.com/verify?token=abc123',
