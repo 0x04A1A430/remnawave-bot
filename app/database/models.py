@@ -4848,3 +4848,43 @@ class SystemErrorEvent(Base):
     last_attempt_at = Column(AwareDateTime(), nullable=True)
     delivered_at = Column(AwareDateTime(), nullable=True)
     delivery_error = Column(Text, nullable=True)
+
+
+class EmailQueueItem(Base):
+    """Письма, которые не удалось отправить сразу — очередь повторных попыток.
+
+    До этого ``send_email`` при ошибке просто возвращал False, и письмо
+    пропадало: во время обрыва SMTP-канала 24 августа так потерялись
+    уведомления, а в худшем случае теряется код подтверждения регистрации,
+    и человек просто не может завести аккаунт.
+
+    Массовые рассылки сюда НЕ попадают (``queue_on_failure=False`` на их
+    стороне) — иначе один обрыв забил бы очередь тысячами писем.
+    """
+
+    __tablename__ = 'email_queue'
+    __table_args__ = (Index('ix_email_queue_status_next_attempt', 'status', 'next_attempt_at'),)
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    to_email = Column(String(320), nullable=False, index=True)
+    subject = Column(Text, nullable=False)
+    body_html = Column(Text, nullable=False)
+    body_text = Column(Text, nullable=True)
+    unsubscribe_url = Column(Text, nullable=True)
+    # [{filename, mimetype, content_b64}] — с ограничением по суммарному размеру
+    attachments_json = Column(JSON, nullable=True)
+
+    # pending -> sent | dead
+    status = Column(String(16), nullable=False, default='pending', index=True)
+    attempts = Column(Integer, nullable=False, default=0)
+    next_attempt_at = Column(AwareDateTime(), nullable=True)
+    last_error = Column(Text, nullable=True)
+
+    # Докуда письмо вообще имеет смысл слать. У кода смены email жизнь 15 минут,
+    # у ссылки сброса пароля — час: доставленное позже письмо выглядит настоящим,
+    # но код в нём уже мёртвый, и это хуже, чем неприход. NULL = ограничения нет.
+    expires_at = Column(AwareDateTime(), nullable=True)
+
+    created_at = Column(AwareDateTime(), server_default=func.now(), nullable=False, index=True)
+    sent_at = Column(AwareDateTime(), nullable=True)

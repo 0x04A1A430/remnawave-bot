@@ -950,6 +950,10 @@ class EmailBroadcastService:
                             subject=subject,
                             body_html=html_content,
                             unsubscribe_url=unsubscribe_url or None,
+                            # Рассылки не ставим в очередь повторов: обрыв SMTP
+                            # посреди рассылки забил бы её тысячами писем,
+                            # которые потом сутки долбились бы повторами.
+                            queue_on_failure=False,
                         ),
                     )
                     return success
