@@ -327,6 +327,12 @@ async def main():
 
         await system_error_log_service.start()
 
+        # Очередь повторной отправки писем: без неё письмо, не ушедшее во время
+        # обрыва SMTP-канала, терялось молча — включая код регистрации.
+        from app.services.email_retry_service import email_retry_service
+
+        await email_retry_service.start()
+
         from app.services.channel_subscription_service import channel_subscription_service
 
         channel_subscription_service.bot = bot

@@ -155,6 +155,33 @@ class EmailService:
 
         return smtp
 
+    def _queue_for_retry(
+        self,
+        *,
+        to_email: str,
+        subject: str,
+        body_html: str,
+        body_text: str | None,
+        attachments: list[tuple[str, bytes, str]] | None,
+        unsubscribe_url: str | None,
+    ) -> bool:
+        """Отложить письмо для повторной отправки.
+
+        Вызывается ТОЛЬКО там, где виновата недоступность канала: остывание и
+        обе сетевые ветки. Отказ сервера по конкретному адресу (SMTPException)
+        и ошибка сборки письма не откладываются — повтор их не починит.
+        """
+        from app.services.email_retry_service import email_retry_service
+
+        return email_retry_service.enqueue(
+            to_email=to_email,
+            subject=subject,
+            body_html=body_html,
+            body_text=body_text,
+            attachments=attachments,
+            unsubscribe_url=unsubscribe_url,
+        )
+
     def send_email(
         self,
         to_email: str,
@@ -163,6 +190,7 @@ class EmailService:
         body_text: str | None = None,
         attachments: list[tuple[str, bytes, str]] | None = None,
         unsubscribe_url: str | None = None,
+        queue_on_failure: bool = True,
     ) -> bool:
         """
         Send an email.
@@ -203,6 +231,15 @@ class EmailService:
                 last_failure=self._unreachable_reason,
                 **self._endpoint(),
             )
+            if queue_on_failure:
+                self._queue_for_retry(
+                    to_email=to_email,
+                    subject=subject,
+                    body_html=body_html,
+                    body_text=body_text,
+                    attachments=attachments,
+                    unsubscribe_url=unsubscribe_url,
+                )
             return False
 
         try:
@@ -279,6 +316,15 @@ class EmailService:
             except (smtplib.SMTPConnectError, smtplib.SMTPServerDisconnected) as connection_error:
                 self._note_connection_failure(connection_error)
                 self._log_connection_failure(to_email, connection_error)
+                if queue_on_failure:
+                    self._queue_for_retry(
+                        to_email=to_email,
+                        subject=subject,
+                        body_html=body_html,
+                        body_text=body_text,
+                        attachments=attachments,
+                        unsubscribe_url=unsubscribe_url,
+                    )
                 return False
             except smtplib.SMTPException as smtp_error:
                 # Сервер ответил отказом: отклонён адрес, не прошла авторизация,
@@ -295,6 +341,15 @@ class EmailService:
                 # Сеть: недоступный маршрут, таймаут, отказ в соединении, DNS.
                 self._note_connection_failure(connection_error)
                 self._log_connection_failure(to_email, connection_error)
+                if queue_on_failure:
+                    self._queue_for_retry(
+                        to_email=to_email,
+                        subject=subject,
+                        body_html=body_html,
+                        body_text=body_text,
+                        attachments=attachments,
+                        unsubscribe_url=unsubscribe_url,
+                    )
                 return False
 
             self._note_success()
