@@ -4,6 +4,7 @@ import structlog
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.database.models import ServiceRule
 
 
@@ -67,11 +68,26 @@ async def clear_all_rules(db: AsyncSession, language: str = 'ru') -> bool:
         raise
 
 
-async def get_current_rules_content(db: AsyncSession, language: str = 'ru') -> str:
-    rules = await get_rules_by_language(db, language)
+def _normalize_language(language: str | None) -> str:
+    return (language or 'ru').split('-')[0].lower()
 
+
+async def get_current_rules_content(db: AsyncSession, language: str = 'ru') -> str:
+    lang = _normalize_language(language)
+
+    rules = await get_rules_by_language(db, lang)
     if rules:
         return rules.content
+
+    # Кастомных правил для языка пользователя нет — отдаём кастомные правила
+    # дефолтного языка (обычно правила редактируются под 'ru'), иначе смена
+    # языка «теряла» отредактированный текст и показывала встроенный дефолт.
+    fallback_language = _normalize_language(settings.DEFAULT_LANGUAGE)
+    if lang != fallback_language:
+        rules = await get_rules_by_language(db, fallback_language)
+        if rules:
+            return rules.content
+
     return """
 🔒 <b>Правила использования сервиса</b>
 
