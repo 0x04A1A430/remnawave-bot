@@ -1735,6 +1735,30 @@ async def handle_extend_subscription(
         await callback.answer()
         return
 
+    # Промо-тариф (выдан бонусом по рекламной кампании) продлению не подлежит —
+    # предлагаем выбрать новый тариф.
+    if subscription.tariff_id:
+        from app.database.crud.campaign import is_campaign_bonus_tariff_subscription
+
+        if await is_campaign_bonus_tariff_subscription(db, subscription):
+            await callback.message.edit_text(
+                '<b>Промо-тариф нельзя продлить</b>\n\nЧтобы продолжить пользоваться VPN, выберите новый тариф.',
+                reply_markup=types.InlineKeyboardMarkup(
+                    inline_keyboard=[
+                        [types.InlineKeyboardButton(text=texts.MENU_BUY_SUBSCRIPTION, callback_data='menu_buy')],
+                        [
+                            types.InlineKeyboardButton(
+                                text=texts.t('WEBHOOK_CLOSE_BUTTON', 'Закрыть'),
+                                callback_data='webhook:close',
+                            )
+                        ],
+                    ]
+                ),
+                parse_mode='HTML',
+            )
+            await callback.answer()
+            return
+
     # Триальная подписка с тарифом — направляем на покупку этого тарифа
     if subscription.is_trial:
         if subscription.tariff_id and settings.is_tariffs_mode():

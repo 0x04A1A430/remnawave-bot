@@ -2194,5 +2194,6 @@
   "LAVA_RECURRING_NOTIFY_CANCELLED": "Автопродление Lava отменено.",
   "LAVA_RECURRING_NOTIFY_CONFIRMED": "Подписка продлена автосписанием Lava.",
   "LAVA_RECURRING_NOTIFY_FAILED": "Не удалось списать оплату по автопродлению Lava.",
-  "LAVA_RECURRING_PAY_BUTTON": "Оплатить"
+  "LAVA_RECURRING_PAY_BUTTON": "Оплатить",
+  "AUTOPAY_NOT_AVAILABLE_PROMO": "Автоплатеж недоступен для промо-тарифа. Выберите новый тариф для продления."
 }

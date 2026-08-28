@@ -204,6 +204,29 @@ async def get_campaign_registration_by_user(
     return result.scalar_one_or_none()
 
 
+async def is_campaign_bonus_tariff_subscription(db: AsyncSession, subscription: Subscription) -> bool:
+    """True — тариф подписки выдан пользователю бонусом по рекламной кампании.
+
+    Такие («промо») подписки не продлеваются: пользователю предлагается
+    выбрать новый тариф.
+    """
+    tariff_id = getattr(subscription, 'tariff_id', None)
+    user_id = getattr(subscription, 'user_id', None)
+    if not tariff_id or not user_id:
+        return False
+
+    result = await db.execute(
+        select(AdvertisingCampaignRegistration.id)
+        .where(
+            AdvertisingCampaignRegistration.user_id == user_id,
+            AdvertisingCampaignRegistration.bonus_type == 'tariff',
+            AdvertisingCampaignRegistration.tariff_id == tariff_id,
+        )
+        .limit(1)
+    )
+    return result.scalar_one_or_none() is not None
+
+
 async def record_campaign_registration(
     db: AsyncSession,
     *,

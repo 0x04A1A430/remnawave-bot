@@ -861,7 +861,12 @@ class MonitoringService:
                         )
                         skip_notify = skip_notify or other_active.scalar_one_or_none() is not None
                     if not skip_notify:
-                        await self._send_subscription_expired_notification(user, subscription, tariff_name=_tariff_name)
+                        from app.database.crud.campaign import is_campaign_bonus_tariff_subscription
+
+                        is_promo = await is_campaign_bonus_tariff_subscription(db, subscription)
+                        await self._send_subscription_expired_notification(
+                            user, subscription, tariff_name=_tariff_name, is_promo_tariff=is_promo
+                        )
 
                 logger.info(
                     "Подписка пользователя истекла и статус изменен на 'expired'",
@@ -1116,7 +1121,12 @@ class MonitoringService:
                         continue
 
                     if self.bot:
-                        success = await self._send_subscription_expiring_notification(user, subscription, days)
+                        from app.database.crud.campaign import is_campaign_bonus_tariff_subscription
+
+                        is_promo = await is_campaign_bonus_tariff_subscription(db, subscription)
+                        success = await self._send_subscription_expiring_notification(
+                            user, subscription, days, is_promo_tariff=is_promo
+                        )
                         if success:
                             await record_notification(db, user.id, subscription.id, 'expiring', days)
                             all_processed_users.add(sub_key)
@@ -2148,7 +2158,7 @@ class MonitoringService:
             logger.error('Ошибка обработки автоплатежей', error=e, exc_info=True)
 
     async def _send_subscription_expired_notification(
-        self, user: User, subscription: Subscription, *, tariff_name: str | None = None
+        self, user: User, subscription: Subscription, *, tariff_name: str | None = None, is_promo_tariff: bool = False
     ) -> bool:
         try:
             tariff_label = ''
@@ -2164,13 +2174,24 @@ class MonitoringService:
 
             from aiogram.types import InlineKeyboardMarkup
 
-            extend_callback = f'se:{subscription.id}' if settings.is_multi_tariff_enabled() else 'subscription_extend'
-            keyboard = InlineKeyboardMarkup(
-                inline_keyboard=[
-                    [make_button(text='Продлить подписку', callback_data=extend_callback, style='success')],
-                    [make_button(text='Пополнить баланс', callback_data='balance_topup', style='primary')],
-                ]
-            )
+            if is_promo_tariff:
+                # Промо-тариф не продлевается — предлагаем выбрать новый
+                keyboard = InlineKeyboardMarkup(
+                    inline_keyboard=[
+                        [make_button(text='Выбрать тариф', callback_data='menu_buy', style='success')],
+                        [make_button(text='Пополнить баланс', callback_data='balance_topup', style='primary')],
+                    ]
+                )
+            else:
+                extend_callback = (
+                    f'se:{subscription.id}' if settings.is_multi_tariff_enabled() else 'subscription_extend'
+                )
+                keyboard = InlineKeyboardMarkup(
+                    inline_keyboard=[
+                        [make_button(text='Продлить подписку', callback_data=extend_callback, style='success')],
+                        [make_button(text='Пополнить баланс', callback_data='balance_topup', style='primary')],
+                    ]
+                )
 
             await self._send_message_with_logo(
                 chat_id=user.telegram_id,
@@ -2197,7 +2218,9 @@ class MonitoringService:
             )
             return False
 
-    async def _send_subscription_expiring_notification(self, user: User, subscription: Subscription, days: int) -> bool:
+    async def _send_subscription_expiring_notification(
+        self, user: User, subscription: Subscription, days: int, *, is_promo_tariff: bool = False
+    ) -> bool:
         try:
             from app.utils.formatters import format_days_declension
 
@@ -2217,19 +2240,27 @@ class MonitoringService:
 
             from aiogram.types import InlineKeyboardMarkup
 
-            extend_callback = f'se:{subscription.id}' if settings.is_multi_tariff_enabled() else 'subscription_extend'
-            keyboard = InlineKeyboardMarkup(
-                inline_keyboard=[
-                    [
-                        build_miniapp_or_callback_button(
-                            text=texts.t('BTN_RENEW_SUBSCRIPTION', 'Продлить подписку'),
-                            callback_data=extend_callback,
-                            cabinet_path='/subscription',
-                            style='success',
-                        )
-                    ],
-                ]
-            )
+            if is_promo_tariff:
+                # Промо-тариф не продлевается — предлагаем выбрать новый
+                keyboard = InlineKeyboardMarkup(
+                    inline_keyboard=[[make_button(text='Выбрать тариф', callback_data='menu_buy', style='success')]]
+                )
+            else:
+                extend_callback = (
+                    f'se:{subscription.id}' if settings.is_multi_tariff_enabled() else 'subscription_extend'
+                )
+                keyboard = InlineKeyboardMarkup(
+                    inline_keyboard=[
+                        [
+                            build_miniapp_or_callback_button(
+                                text=texts.t('BTN_RENEW_SUBSCRIPTION', 'Продлить подписку'),
+                                callback_data=extend_callback,
+                                cabinet_path='/subscription',
+                                style='success',
+                            )
+                        ],
+                    ]
+                )
 
             await self._send_message_with_logo(
                 chat_id=user.telegram_id,
