@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.crud.subscription import (
+    apply_trial_conversion_defaults,
     create_paid_subscription,
     create_pending_trial_subscription,
     create_trial_subscription,
@@ -2499,6 +2500,11 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
                     logger.error('Ошибка записи конверсии', conversion_error=conversion_error)
 
             existing_subscription.is_trial = False
+            if was_trial_conversion:
+                # is_trial сбрасывается и при обычном продлении платной подписки —
+                # дефолт автоплатежа вешаем на флаг конверсии, чтобы не затереть
+                # выбор пользователя.
+                apply_trial_conversion_defaults(existing_subscription)
             existing_subscription.status = SubscriptionStatus.ACTIVE.value
             existing_subscription.traffic_limit_gb = final_traffic_gb
             if should_update_devices:
@@ -4607,6 +4613,7 @@ async def _extend_existing_subscription(
     if current_subscription.is_trial:
         # При продлении триальной подписки переводим её в обычную
         current_subscription.is_trial = False
+        apply_trial_conversion_defaults(current_subscription)
         current_subscription.status = 'active'
         # Убираем ограничения с триальной подписки
         current_subscription.traffic_limit_gb = traffic_limit_gb
