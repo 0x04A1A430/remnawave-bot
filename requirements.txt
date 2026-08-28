@@ -9,7 +9,7 @@ aiosqlite==0.22.1
 
 # Дополнительные зависимости
 pydantic==2.11.9
-pydantic-settings==2.10.1
+pydantic-settings==2.14.2
 python-dotenv==1.2.2
 redis==7.1.1
 PyYAML==6.0.3
@@ -45,7 +45,7 @@ PyJWT>=2.11.0
 email-validator==2.1.0
 
 # Apple App Store Server API / Notifications
-app-store-server-library[async]>=3.1.1
+app-store-server-library[async]>=3.1.2
 
 # Для работы с версиями
 packaging==26.0
