@@ -1197,6 +1197,8 @@ async def extend_subscription(
             # Transient marker (not persisted): lets purchase handlers report the
             # payment as a trial→paid conversion without a signature change.
             subscription._converted_from_trial = True
+            # Trial sets it to False by default, we should rewrite it with correct value from ENV
+            subscription.autopay_enabled = settings.is_autopay_enabled_by_default()
             logger.info('🎓 Подписка конвертирована из триала в платную', subscription_id=subscription.id)
 
     if traffic_limit_gb is not None:
