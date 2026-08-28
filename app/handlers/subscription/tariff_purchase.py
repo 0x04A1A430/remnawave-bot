@@ -676,7 +676,8 @@ async def show_tariffs_list(
     # Единственный доступный тариф — сразу к периоду/подтверждению, без экрана
     # списка. Исключение: пользователь уже владеет этим тарифом (мульти-тариф) —
     # тогда показываем список: тариф помечен и понятно, почему купить нельзя.
-    tariffs = await get_tariffs_for_user(db_user)
+    promo_group_id = getattr(db_user, 'promo_group_id', None)
+    tariffs = await get_tariffs_for_user(db, promo_group_id)
     if len(tariffs) == 1:
         _already_owned = False
         if settings.is_multi_tariff_enabled():
@@ -689,7 +690,6 @@ async def show_tariffs_list(
             return
 
     # Получаем доступные тарифы
-    promo_group_id = getattr(db_user, 'promo_group_id', None)
     tariffs = await get_tariffs_for_user(db, promo_group_id)
 
     if not tariffs:
