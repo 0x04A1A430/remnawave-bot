@@ -1839,5 +1839,6 @@
   "INLINE_GIFT_EMOJI_CALENDAR": "",
   "INLINE_GIFT_EMOJI_TRAFFIC": "",
   "INLINE_GIFT_EMOJI_DEVICES": "",
-  "INLINE_GIFT_EMOJI_GIFT": ""
+  "INLINE_GIFT_EMOJI_GIFT": "",
+  "AUTOPAY_NOT_AVAILABLE_PROMO": "Автоплатеж недоступен для промо-тарифа. Выберите новый тариф для продления."
 }

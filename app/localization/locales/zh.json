@@ -2194,5 +2194,6 @@
   "LAVA_RECURRING_NOTIFY_CANCELLED": "已取消 Lava 自动续订。",
   "LAVA_RECURRING_NOTIFY_CONFIRMED": "订阅已通过 Lava 自动扣款续订。",
   "LAVA_RECURRING_NOTIFY_FAILED": "Lava 自动续订扣款失败。",
-  "LAVA_RECURRING_PAY_BUTTON": "支付"
+  "LAVA_RECURRING_PAY_BUTTON": "支付",
+  "AUTOPAY_NOT_AVAILABLE_PROMO": "促销套餐不支持自动续费。请选择新套餐以续订。"
 }

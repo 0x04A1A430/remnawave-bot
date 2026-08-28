@@ -1779,5 +1779,6 @@
   "WEBHOOK_USER_NOT_CONNECTED": "<b>هنوز متصل نشده‌اید</b>\n\nاشتراک{tariff_label} شما فعال است اما هنوز اتصال VPN برقرار نشده. برای شروع استفاده متصل شوید.",
   "WEBHOOK_DEVICE_ADDED": "<b>دستگاه جدید</b>\n\nدستگاه جدیدی به اشتراک{tariff_label} شما اضافه شد: <code>{device}</code>",
   "WEBHOOK_DEVICE_DELETED": "<b>دستگاه حذف شد</b>\n\nدستگاهی از اشتراک{tariff_label} شما حذف شد: <code>{device}</code>",
-  "WEBHOOK_CLOSE_BUTTON": "️ بستن"
+  "WEBHOOK_CLOSE_BUTTON": "️ بستن",
+  "AUTOPAY_NOT_AVAILABLE_PROMO": "پرداخت خودکار برای تعرفه تبلیغاتی در دسترس نیست. برای تمدید، تعرفه جدیدی انتخاب کنید."
 }

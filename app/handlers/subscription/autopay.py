@@ -195,6 +195,21 @@ async def toggle_autopay(
             )
             return
 
+        # Промо-тариф (бонус рекламной кампании) не продлевается —
+        # автоплатёж для него запрещён
+        from app.database.crud.campaign import is_campaign_bonus_tariff_subscription
+
+        if await is_campaign_bonus_tariff_subscription(db, subscription):
+            texts = get_texts(db_user.language)
+            await callback.answer(
+                texts.t(
+                    'AUTOPAY_NOT_AVAILABLE_PROMO',
+                    'Автоплатеж недоступен для промо-тарифа. Выберите новый тариф для продления.',
+                ),
+                show_alert=True,
+            )
+            return
+
     await update_subscription_autopay(db, subscription, enable)
 
     if enable:

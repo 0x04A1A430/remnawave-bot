@@ -2194,5 +2194,6 @@
   "LAVA_RECURRING_NOTIFY_CANCELLED": "Lava auto-renewal has been cancelled.",
   "LAVA_RECURRING_NOTIFY_CONFIRMED": "Subscription renewed by Lava auto-payment.",
   "LAVA_RECURRING_NOTIFY_FAILED": "Lava auto-renewal payment failed.",
-  "LAVA_RECURRING_PAY_BUTTON": "Pay"
+  "LAVA_RECURRING_PAY_BUTTON": "Pay",
+  "AUTOPAY_NOT_AVAILABLE_PROMO": "Autopay is not available for the promo plan. Choose a new plan to renew."
 }

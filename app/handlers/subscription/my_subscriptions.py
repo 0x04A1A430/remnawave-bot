@@ -110,11 +110,15 @@ def _build_subscriptions_keyboard(subscriptions: list, language: str) -> types.I
     return types.InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
-def _build_subscription_detail_keyboard(sub_id: int, sub=None) -> types.InlineKeyboardMarkup:
+def _build_subscription_detail_keyboard(
+    sub_id: int, sub=None, *, is_promo_tariff: bool = False
+) -> types.InlineKeyboardMarkup:
     """Build keyboard for single subscription management.
 
     For expired/disabled subscriptions, only 'Renew' and 'Back' are shown —
     connection link and traffic/device management are irrelevant.
+    Промо-тариф (бонус кампании) не продлевается — вместо «Продлить»
+    предлагается выбрать новый тариф.
     """
     is_inactive = sub is not None and sub.actual_status in ('expired', 'disabled')
 
@@ -123,7 +127,10 @@ def _build_subscription_detail_keyboard(sub_id: int, sub=None) -> types.InlineKe
     if not is_inactive:
         buttons.append([types.InlineKeyboardButton(text='Ссылка подключения', callback_data=f'sl:{sub_id}')])
 
-    buttons.append([types.InlineKeyboardButton(text='Продлить', callback_data=f'se:{sub_id}')])
+    if is_promo_tariff:
+        buttons.append([types.InlineKeyboardButton(text='Выбрать тариф', callback_data='menu_buy')])
+    else:
+        buttons.append([types.InlineKeyboardButton(text='Продлить', callback_data=f'se:{sub_id}')])
 
     if not is_inactive:
         buttons.append([types.InlineKeyboardButton(text='Автоплатеж', callback_data='subscription_autopay')])
@@ -228,7 +235,10 @@ async def show_subscription_detail(
     if subscription.subscription_url and not settings.should_hide_subscription_link():
         text += f'\n <code>{subscription.subscription_url}</code>'
 
-    keyboard = _build_subscription_detail_keyboard(sub_id, sub=subscription)
+    from app.database.crud.campaign import is_campaign_bonus_tariff_subscription
+
+    is_promo_tariff = await is_campaign_bonus_tariff_subscription(db, subscription)
+    keyboard = _build_subscription_detail_keyboard(sub_id, sub=subscription, is_promo_tariff=is_promo_tariff)
 
     if callback.message:
         await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='HTML')
