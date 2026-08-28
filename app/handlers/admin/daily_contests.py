@@ -266,9 +266,8 @@ async def prompt_edit_field(
         inline_keyboard=[
             [
                 types.InlineKeyboardButton(
-                    text=texts.BACK,
-                    callback_data=f'admin_daily_contest_{template_id}',
-                 style='danger')
+                    text=texts.BACK, callback_data=f'admin_daily_contest_{template_id}', style='danger'
+                )
             ]
         ]
     )
@@ -324,9 +323,8 @@ async def process_edit_field(
         inline_keyboard=[
             [
                 types.InlineKeyboardButton(
-                    text=texts.BACK,
-                    callback_data=f'admin_daily_contest_{template_id}',
-                 style='danger')
+                    text=texts.BACK, callback_data=f'admin_daily_contest_{template_id}', style='danger'
+                )
             ]
         ]
     )
@@ -356,9 +354,8 @@ async def edit_payload(
         inline_keyboard=[
             [
                 types.InlineKeyboardButton(
-                    text=texts.BACK,
-                    callback_data=f'admin_daily_contest_{template_id}',
-                 style='danger')
+                    text=texts.BACK, callback_data=f'admin_daily_contest_{template_id}', style='danger'
+                )
             ]
         ]
     )
@@ -409,9 +406,8 @@ async def process_payload(
         inline_keyboard=[
             [
                 types.InlineKeyboardButton(
-                    text=texts.BACK,
-                    callback_data=f'admin_daily_contest_{template_id}',
-                 style='danger')
+                    text=texts.BACK, callback_data=f'admin_daily_contest_{template_id}', style='danger'
+                )
             ]
         ]
     )

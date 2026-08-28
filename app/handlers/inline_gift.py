@@ -521,7 +521,8 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
                             make_button(
                                 text=texts.t('MAIN_MENU_BUTTON', '← Главное меню'),
                                 callback_data='back_to_menu',
-                             style='danger')
+                                style='danger',
+                            )
                         ]
                     ]
                 )
@@ -561,7 +562,8 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
                             make_button(
                                 text=texts.t('MAIN_MENU_BUTTON', '← Главное меню'),
                                 callback_data='back_to_menu',
-                             style='danger')
+                                style='danger',
+                            )
                         ]
                     ]
                 )
@@ -629,7 +631,8 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
                             make_button(
                                 text=texts.t('MAIN_MENU_BUTTON', '← Главное меню'),
                                 callback_data='back_to_menu',
-                             style='danger')
+                                style='danger',
+                            )
                         ]
                     ]
                 )
@@ -679,7 +682,8 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
                             make_button(
                                 text=texts.t('MAIN_MENU_BUTTON', '← Главное меню'),
                                 callback_data='back_to_menu',
-                             style='danger')
+                                style='danger',
+                            )
                         ]
                     ]
                 )
@@ -909,7 +913,8 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
                             make_button(
                                 text=texts.t('MAIN_MENU_BUTTON', '← Главное меню'),
                                 callback_data='back_to_menu',
-                             style='danger')
+                                style='danger',
+                            )
                         ]
                     ]
                 )
@@ -1064,9 +1069,8 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
             inline_keyboard=[
                 [
                     make_button(
-                        text=texts.t('MAIN_MENU_BUTTON', '← Главное меню'),
-                        callback_data='back_to_menu',
-                     style='danger')
+                        text=texts.t('MAIN_MENU_BUTTON', '← Главное меню'), callback_data='back_to_menu', style='danger'
+                    )
                 ]
             ]
         )

@@ -2495,7 +2495,8 @@ async def start_edit_setting(
                     types.InlineKeyboardButton(
                         text=texts.BACK,
                         callback_data=(f'botcfg_setting:{group_key}:{category_page}:{settings_page}:{token}'),
-                     style='danger')
+                        style='danger',
+                    )
                 ]
             ]
         ),

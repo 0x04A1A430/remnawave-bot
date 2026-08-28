@@ -1013,7 +1013,8 @@ def get_happ_cryptolink_keyboard(
                 make_button(
                     text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '← В главное меню'),
                     callback_data='back_to_menu',
-                 style='danger')
+                    style='danger',
+                )
             ],
         ]
     )
