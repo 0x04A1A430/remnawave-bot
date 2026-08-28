@@ -270,7 +270,7 @@ async def show_referral_qr(
 
     photo = FSInputFile(file_path)
     keyboard = types.InlineKeyboardMarkup(
-        inline_keyboard=[[make_button(text=texts.BACK, callback_data='menu_referrals')]]
+        inline_keyboard=[[make_button(text=texts.BACK, callback_data='menu_referrals', style='danger')]]
     )
 
     caption = texts.t(
@@ -343,7 +343,7 @@ async def show_detailed_referral_list(callback: types.CallbackQuery, db_user: Us
     if page > 1:
         nav_row.append(
             make_button(
-                texts.t('PAGINATION_PREV', '◀'),
+                texts.t('PAGINATION_PREV', '←'),
                 callback_data=f'referral_list_page_{page - 1}',
                 style='primary',
             )
@@ -352,7 +352,7 @@ async def show_detailed_referral_list(callback: types.CallbackQuery, db_user: Us
     if page < total_pages:
         nav_row.append(
             make_button(
-                texts.t('PAGINATION_NEXT', '▶'),
+                texts.t('PAGINATION_NEXT', '→'),
                 callback_data=f'referral_list_page_{page + 1}',
                 style='primary',
             )
@@ -562,7 +562,7 @@ async def create_invite_message(callback: types.CallbackQuery, db_user: User):
 
     keyboard = types.InlineKeyboardMarkup(
         inline_keyboard=[
-            [make_button(text=texts.BACK, callback_data='menu_referrals')],
+            [make_button(text=texts.BACK, callback_data='menu_referrals', style='danger')],
         ]
     )
 
@@ -634,7 +634,7 @@ async def show_withdrawal_info(callback: types.CallbackQuery, db_user: User, db:
     else:
         text += f'{html_escape(str(reason))}\n'
 
-    keyboard.append([make_button(text=texts.BACK, callback_data='menu_referrals')])
+    keyboard.append([make_button(text=texts.BACK, callback_data='menu_referrals', style='danger')])
 
     await edit_or_answer_photo(callback, text, types.InlineKeyboardMarkup(inline_keyboard=keyboard))
     await callback.answer()
@@ -925,7 +925,7 @@ async def confirm_withdrawal_request(callback: types.CallbackQuery, db_user: Use
     ).format(id=request.id, amount=texts.format_price(amount_kopeks))
 
     keyboard = types.InlineKeyboardMarkup(
-        inline_keyboard=[[make_button(text=texts.BACK, callback_data='menu_referrals')]]
+        inline_keyboard=[[make_button(text=texts.BACK, callback_data='menu_referrals', style='danger')]]
     )
 
     await edit_or_answer_photo(callback, text, keyboard)
@@ -940,7 +940,7 @@ async def cancel_withdrawal_request(callback: types.CallbackQuery, db_user: User
 
     # Возвращаем в меню партнёрки
     keyboard = types.InlineKeyboardMarkup(
-        inline_keyboard=[[make_button(text=texts.BACK, callback_data='menu_referrals')]]
+        inline_keyboard=[[make_button(text=texts.BACK, callback_data='menu_referrals', style='danger')]]
     )
     await edit_or_answer_photo(callback, texts.t('REFERRAL_WITHDRAWAL_CANCELLED', 'Заявка отменена'), keyboard)
 

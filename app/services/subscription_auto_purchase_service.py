@@ -712,9 +712,9 @@ async def _auto_extend_subscription(
                     ],
                     [
                         InlineKeyboardButton(
-                            text=texts.t('BACK_TO_MAIN_MENU_BUTTON', 'Main menu'),
+                            text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '← Main menu'),
                             callback_data='back_to_menu',
-                        )
+                         style='danger')
                     ],
                 ]
             )
@@ -1081,9 +1081,9 @@ async def _auto_purchase_tariff(
                     ],
                     [
                         InlineKeyboardButton(
-                            text=texts.t('BACK_TO_MAIN_MENU_BUTTON', 'Главное меню'),
+                            text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '← Главное меню'),
                             callback_data='back_to_menu',
-                        )
+                         style='danger')
                     ],
                 ]
             )
@@ -1440,9 +1440,9 @@ async def _auto_purchase_daily_tariff(
                     ],
                     [
                         InlineKeyboardButton(
-                            text=texts.t('BACK_TO_MAIN_MENU_BUTTON', 'Главное меню'),
+                            text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '← Главное меню'),
                             callback_data='back_to_menu',
-                        )
+                         style='danger')
                     ],
                 ]
             )
@@ -1803,9 +1803,9 @@ async def _auto_add_devices(
                     ],
                     [
                         InlineKeyboardButton(
-                            text=texts.t('BACK_TO_MAIN_MENU_BUTTON', 'Главное меню'),
+                            text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '← Главное меню'),
                             callback_data='back_to_menu',
-                        )
+                         style='danger')
                     ],
                 ]
             )
@@ -2184,9 +2184,9 @@ async def _auto_add_traffic(
                     ],
                     [
                         InlineKeyboardButton(
-                            text=texts.t('BACK_TO_MAIN_MENU_BUTTON', 'Главное меню'),
+                            text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '← Главное меню'),
                             callback_data='back_to_menu',
-                        )
+                         style='danger')
                     ],
                 ]
             )
@@ -2581,9 +2581,9 @@ async def try_auto_extend_expired_after_topup(
                     ],
                     [
                         InlineKeyboardButton(
-                            text=texts.t('BACK_TO_MAIN_MENU_BUTTON', 'Main menu'),
+                            text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '← Main menu'),
                             callback_data='back_to_menu',
-                        )
+                         style='danger')
                     ],
                 ]
             )
@@ -2964,9 +2964,9 @@ async def try_resume_disabled_daily_after_topup(
                     ],
                     [
                         InlineKeyboardButton(
-                            text=texts.t('BACK_TO_MAIN_MENU_BUTTON', 'Main menu'),
+                            text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '← Main menu'),
                             callback_data='back_to_menu',
-                        )
+                         style='danger')
                     ],
                 ]
             )
@@ -3382,9 +3382,9 @@ async def _process_legacy_generic_cart(
                         ],
                         [
                             InlineKeyboardButton(
-                                text=texts.t('BACK_TO_MAIN_MENU_BUTTON', 'Main menu'),
+                                text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '← Main menu'),
                                 callback_data='back_to_menu',
-                            )
+                             style='danger')
                         ],
                     ]
                 )

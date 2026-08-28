@@ -117,8 +117,8 @@ class BanNotificationService:
             logger.warning('Пользователь не найден в базе данных', user_identifier=user_identifier)
             return False, f'Пользователь не найден: {user_identifier}', None
 
-        # Формируем информацию о ноде (заметно выделяем)
-        node_info = f'🖥 <b>Нода:</b> <code>{html.escape(node_name)}</code>' if node_name else ''
+        # Формируем информацию о ноде
+        node_info = f'<b>Нода:</b> <code>{html.escape(node_name)}</code>\n' if node_name else ''
 
         # Формируем сообщение из настроек
         # Используем безопасное форматирование - если {node_info} отсутствует в шаблоне, не будет ошибки
@@ -126,9 +126,9 @@ class BanNotificationService:
         template = settings.BAN_MSG_REVOKE if revoke else settings.BAN_MSG_PUNISHMENT
         message_text = _format_notification_template(
             template,
-            '🚫 <b>АККАУНТ ЗАБЛОКИРОВАН</b>\n\n{node_info}\n'
-            '📱 Устройств: <b>{ip_count}</b> из <b>{limit}</b>\n'
-            '⏱ Ограничение: <b>{ban_minutes} мин</b>',
+            '<b>Аккаунт заблокирован</b>\n\n<blockquote>{node_info}'
+            '<b>Устройств:</b> {ip_count} из {limit}\n'
+            '<b>Ограничение:</b> {ban_minutes} мин</blockquote>',
             **format_vars,
         )
 
@@ -257,7 +257,7 @@ class BanNotificationService:
         safe_warning = html.escape(warning_message)
         message_text = _format_notification_template(
             settings.BAN_MSG_WARNING,
-            '⚠️ <b>ПРЕДУПРЕЖДЕНИЕ</b>\n\n{warning_message}',
+            '<b>Предупреждение</b>\n\n<blockquote>{warning_message}</blockquote>',
             warning_message=safe_warning,
         )
 
@@ -324,9 +324,9 @@ class BanNotificationService:
             logger.warning('Пользователь не найден в базе данных', user_identifier=user_identifier)
             return False, f'Пользователь не найден: {user_identifier}', None
 
-        # Формируем сообщение из настроек (заметно выделяем)
-        network_info = f'├ 🌐 Сеть: <b>{html.escape(network_type)}</b>\n' if network_type else ''
-        node_info = f'🖥 <b>Нода:</b> <code>{html.escape(node_name)}</code>' if node_name else ''
+        # Формируем сообщение из настроек
+        network_info = f'<b>Сеть:</b> {html.escape(network_type)}\n' if network_type else ''
+        node_info = f'<b>Нода:</b> <code>{html.escape(node_name)}</code>\n' if node_name else ''
 
         logger.info('WiFi notification', node_name=repr(node_name), node_info=repr(node_info))
 
@@ -334,7 +334,8 @@ class BanNotificationService:
         format_vars = {'ban_minutes': ban_minutes, 'network_info': network_info, 'node_info': node_info}
         message_text = _format_notification_template(
             settings.BAN_MSG_WIFI,
-            '🚫 <b>Блокировка за WiFi</b>\n\n{node_info}\n{network_info}⏱ Время блокировки: <b>{ban_minutes} мин</b>',
+            '<b>Аккаунт заблокирован</b>\n\n<blockquote>{node_info}{network_info}'
+            '<b>Время блокировки:</b> {ban_minutes} мин</blockquote>',
             **format_vars,
         )
 
@@ -404,16 +405,16 @@ class BanNotificationService:
             logger.warning('Пользователь не найден в базе данных', user_identifier=user_identifier)
             return False, f'Пользователь не найден: {user_identifier}', None
 
-        # Формируем сообщение из настроек (заметно выделяем)
-        network_info = f'├ 🌐 Сеть: <b>{html.escape(network_type)}</b>\n' if network_type else ''
-        node_info = f'🖥 <b>Нода:</b> <code>{html.escape(node_name)}</code>' if node_name else ''
+        # Формируем сообщение из настроек
+        network_info = f'<b>Сеть:</b> {html.escape(network_type)}\n' if network_type else ''
+        node_info = f'<b>Нода:</b> <code>{html.escape(node_name)}</code>\n' if node_name else ''
 
         # Безопасное форматирование
         format_vars = {'ban_minutes': ban_minutes, 'network_info': network_info, 'node_info': node_info}
         message_text = _format_notification_template(
             settings.BAN_MSG_MOBILE,
-            '🚫 <b>Блокировка за мобильную сеть</b>\n\n{node_info}\n{network_info}'
-            '⏱ Время блокировки: <b>{ban_minutes} мин</b>',
+            '<b>Аккаунт заблокирован</b>\n\n<blockquote>{node_info}{network_info}'
+            '<b>Время блокировки:</b> {ban_minutes} мин</blockquote>',
             **format_vars,
         )
 
@@ -496,13 +497,13 @@ class BanNotificationService:
 
         template = getattr(settings, template_name)
         safe_reason = html.escape(reason or 'Детали нарушения не указаны')
-        node_info = f'🖥 <b>Нода:</b> <code>{html.escape(node_name)}</code>' if node_name else ''
+        node_info = f'<b>Нода:</b> <code>{html.escape(node_name)}</code>\n' if node_name else ''
         message_text = _format_notification_template(
             template,
-            '🚫 <b>АККАУНТ ЗАБЛОКИРОВАН</b>\n\n{node_info}\n'
-            '📝 <b>Детали:</b> {reason}\n'
-            '⏱ <b>Время блокировки:</b> {ban_minutes} мин\n\n'
-            '🔄 Доступ восстановится автоматически после окончания блокировки.',
+            '<b>Аккаунт заблокирован</b>\n\n<blockquote>{node_info}'
+            '<b>Детали:</b> {reason}\n'
+            '<b>Время блокировки:</b> {ban_minutes} мин</blockquote>\n\n'
+            'Доступ восстановится автоматически после окончания блокировки.',
             ban_minutes=ban_minutes,
             reason=safe_reason,
             node_info=node_info,

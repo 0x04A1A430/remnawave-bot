@@ -53,7 +53,7 @@ async def start_simple_subscription_purchase(
         keyboard = []
         if support_url:
             keyboard.append([types.InlineKeyboardButton(text='Обжаловать', url=support_url)])
-        keyboard.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='subscription')])
+        keyboard.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='subscription', style='danger')])
 
         await callback.message.edit_text(
             f'<b>Покупка подписки ограничена</b>\n\n{reason}\n\n'
@@ -204,7 +204,7 @@ async def start_simple_subscription_purchase(
                     callback_data='simple_subscription_confirm_purchase',
                 )
             ],
-            [types.InlineKeyboardButton(text=texts.BACK, callback_data='subscription_purchase')],
+            [types.InlineKeyboardButton(text=texts.BACK, callback_data='subscription_purchase', style='danger')],
         ]
         keyboard = types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
     else:
@@ -315,7 +315,7 @@ def _get_simple_subscription_payment_keyboard(
         keyboard.append([types.InlineKeyboardButton(text='WATA', callback_data='simple_subscription_wata')])
 
     # Кнопка назад
-    keyboard.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='subscription_purchase')])
+    keyboard.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='subscription_purchase', style='danger')])
 
     return types.InlineKeyboardMarkup(inline_keyboard=keyboard)
 
@@ -670,7 +670,7 @@ async def handle_simple_subscription_pay_with_balance(
         if happ_row:
             keyboard_rows.append(happ_row)
 
-        keyboard_rows.append([types.InlineKeyboardButton(text='Главное меню', callback_data='back_to_menu')])
+        keyboard_rows.append([types.InlineKeyboardButton(text='← Главное меню', callback_data='back_to_menu')])
 
         keyboard = types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
 
@@ -1069,7 +1069,7 @@ async def handle_simple_subscription_payment_method(
                 ]
             )
             keyboard_buttons.append(
-                [types.InlineKeyboardButton(text=texts.BACK, callback_data='subscription_purchase')]
+                [types.InlineKeyboardButton(text=texts.BACK, callback_data='subscription_purchase', style='danger')]
             )
 
             keyboard = types.InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
@@ -1215,7 +1215,7 @@ async def handle_simple_subscription_payment_method(
                             callback_data=f'check_simple_cryptobot_{crypto_result["local_payment_id"]}',
                         )
                     ],
-                    [types.InlineKeyboardButton(text=texts.BACK, callback_data='subscription_purchase')],
+                    [types.InlineKeyboardButton(text=texts.BACK, callback_data='subscription_purchase', style='danger')],
                 ]
             )
 
@@ -1309,7 +1309,7 @@ async def handle_simple_subscription_payment_method(
                             callback_data=f'check_simple_heleket_{local_payment_id}',
                         )
                     ],
-                    [types.InlineKeyboardButton(text=texts.BACK, callback_data='subscription_purchase')],
+                    [types.InlineKeyboardButton(text=texts.BACK, callback_data='subscription_purchase', style='danger')],
                 ]
             )
 
@@ -1413,7 +1413,7 @@ async def handle_simple_subscription_payment_method(
                             callback_data=f'check_simple_mulenpay_{local_payment_id}',
                         )
                     ],
-                    [types.InlineKeyboardButton(text=texts.BACK, callback_data='subscription_purchase')],
+                    [types.InlineKeyboardButton(text=texts.BACK, callback_data='subscription_purchase', style='danger')],
                 ]
             )
 
@@ -1601,7 +1601,7 @@ async def handle_simple_subscription_payment_method(
                         callback_data=f'check_simple_pal24_{local_payment_id}',
                     )
                 ],
-                [types.InlineKeyboardButton(text=texts.BACK, callback_data='subscription_purchase')],
+                [types.InlineKeyboardButton(text=texts.BACK, callback_data='subscription_purchase', style='danger')],
             ]
 
             keyboard = types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
@@ -1679,7 +1679,7 @@ async def handle_simple_subscription_payment_method(
                             callback_data=f'check_simple_wata_{local_payment_id}',
                         )
                     ],
-                    [types.InlineKeyboardButton(text=texts.BACK, callback_data='subscription_purchase')],
+                    [types.InlineKeyboardButton(text=texts.BACK, callback_data='subscription_purchase', style='danger')],
                 ]
             )
 
@@ -1836,7 +1836,7 @@ async def check_simple_pal24_payment_status(
                         callback_data=f'check_simple_pal24_{local_payment_id}',
                     )
                 ],
-                [types.InlineKeyboardButton(text=texts.BACK, callback_data='subscription_purchase')],
+                [types.InlineKeyboardButton(text=texts.BACK, callback_data='subscription_purchase', style='danger')],
             ]
         )
 
@@ -1923,7 +1923,7 @@ async def check_simple_mulenpay_payment_status(
                     callback_data=f'check_simple_mulenpay_{local_payment_id}',
                 )
             ],
-            [types.InlineKeyboardButton(text=texts.BACK, callback_data='subscription_purchase')],
+            [types.InlineKeyboardButton(text=texts.BACK, callback_data='subscription_purchase', style='danger')],
         ]
     )
 
@@ -2004,7 +2004,7 @@ async def check_simple_cryptobot_payment_status(
                     callback_data=f'check_simple_cryptobot_{local_payment_id}',
                 )
             ],
-            [types.InlineKeyboardButton(text=texts.BACK, callback_data='subscription_purchase')],
+            [types.InlineKeyboardButton(text=texts.BACK, callback_data='subscription_purchase', style='danger')],
         ]
     )
 
@@ -2088,7 +2088,7 @@ async def check_simple_heleket_payment_status(
                     callback_data=f'check_simple_heleket_{local_payment_id}',
                 )
             ],
-            [types.InlineKeyboardButton(text=texts.BACK, callback_data='subscription_purchase')],
+            [types.InlineKeyboardButton(text=texts.BACK, callback_data='subscription_purchase', style='danger')],
         ]
     )
 
@@ -2151,7 +2151,7 @@ async def check_simple_wata_payment_status(
                     callback_data=f'check_simple_wata_{local_payment_id}',
                 )
             ],
-            [types.InlineKeyboardButton(text=texts.BACK, callback_data='subscription_purchase')],
+            [types.InlineKeyboardButton(text=texts.BACK, callback_data='subscription_purchase', style='danger')],
         ]
     )
 
@@ -2441,7 +2441,7 @@ async def confirm_simple_subscription_purchase(
         if happ_row:
             keyboard_rows.append(happ_row)
 
-        keyboard_rows.append([types.InlineKeyboardButton(text='Главное меню', callback_data='back_to_menu')])
+        keyboard_rows.append([types.InlineKeyboardButton(text='← Главное меню', callback_data='back_to_menu')])
 
         keyboard = types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
 

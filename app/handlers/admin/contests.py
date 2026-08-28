@@ -330,7 +330,7 @@ async def prompt_edit_summary_times(
                 types.InlineKeyboardButton(
                     text=texts.BACK,
                     callback_data=f'admin_contest_view_{contest_id}',
-                )
+                 style='danger')
             ]
         ]
     )

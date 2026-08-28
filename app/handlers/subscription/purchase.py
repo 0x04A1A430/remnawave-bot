@@ -480,29 +480,27 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
         message_template = texts.t(
             'SUBSCRIPTION_DAILY_OVERVIEW_TEMPLATE',
             """{full_name}
-💰 Баланс: {balance}
-📱 Подписка: {status_emoji} {status_display}{warning}{tariff_info_block}
+Баланс: {balance}
+Подписка: {status_emoji} {status_display}{warning}{tariff_info_block}
 
-📱 Информация о подписке
-🎭 Тип: {subscription_type}
-📈 Трафик: {traffic}
-🌍 Серверы: {servers}
-📱 Устройства: {devices_used} / {device_limit}""",
+<b>Информация о подписке</b>
+<blockquote expandable>Тип: {subscription_type}
+Трафик: {traffic}
+Устройства: {devices_used} / {device_limit}</blockquote>""",
         )
     else:
         message_template = texts.t(
             'SUBSCRIPTION_OVERVIEW_TEMPLATE',
             """{full_name}
-💰 Баланс: {balance}
-📱 Подписка: {status_emoji} {status_display}{warning}{tariff_info_block}
+Баланс: {balance}
+Подписка: {status_emoji} {status_display}{warning}{tariff_info_block}
 
-📱 Информация о подписке
-🎭 Тип: {subscription_type}
-📅 Действует до: {end_date}
-⏰ Осталось: {time_left}
-📈 Трафик: {traffic}
-🌍 Серверы: {servers}
-📱 Устройства: {devices_used} / {device_limit}""",
+<b>Информация о подписке</b>
+<blockquote expandable>Тип: {subscription_type}
+Действует до: {end_date}
+Осталось: {time_left}
+Трафик: {traffic}
+Устройства: {devices_used} / {device_limit}</blockquote>""",
         )
 
     if not show_devices:
@@ -807,7 +805,7 @@ def _get_trial_payment_keyboard(language: str, can_pay_from_balance: bool = Fals
         keyboard.append([types.InlineKeyboardButton(text=f'{platega_name}', callback_data='trial_payment_platega')])
 
     # Кнопка назад
-    keyboard.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='menu_trial')])
+    keyboard.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='menu_trial', style='danger')])
 
     return types.InlineKeyboardMarkup(inline_keyboard=keyboard)
 
@@ -824,7 +822,7 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
         keyboard = []
         if support_url:
             keyboard.append([types.InlineKeyboardButton(text='Обжаловать', url=support_url)])
-        keyboard.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='subscription')])
+        keyboard.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='subscription', style='danger')])
 
         await callback.message.edit_text(
             f'<b>Активация подписки ограничена</b>\n\n{reason}\n\n'
@@ -1214,9 +1212,9 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
                         ],
                         [
                             InlineKeyboardButton(
-                                text=texts.t('BACK_TO_MAIN_MENU_BUTTON', 'В главное меню'),
+                                text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '← В главное меню'),
                                 callback_data='back_to_menu',
-                            )
+                             style='danger')
                         ],
                     ]
                 )
@@ -1244,9 +1242,9 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
                         ],
                         [
                             InlineKeyboardButton(
-                                text=texts.t('BACK_TO_MAIN_MENU_BUTTON', 'В главное меню'),
+                                text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '← В главное меню'),
                                 callback_data='back_to_menu',
-                            )
+                             style='danger')
                         ],
                     ]
                 )
@@ -1268,9 +1266,9 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
                 rows.append(
                     [
                         InlineKeyboardButton(
-                            text=texts.t('BACK_TO_MAIN_MENU_BUTTON', 'В главное меню'),
+                            text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '← В главное меню'),
                             callback_data='back_to_menu',
-                        )
+                         style='danger')
                     ]
                 )
                 connect_keyboard = InlineKeyboardMarkup(inline_keyboard=rows)
@@ -1292,9 +1290,9 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
                 rows.append(
                     [
                         InlineKeyboardButton(
-                            text=texts.t('BACK_TO_MAIN_MENU_BUTTON', 'В главное меню'),
+                            text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '← В главное меню'),
                             callback_data='back_to_menu',
-                        )
+                         style='danger')
                     ]
                 )
                 connect_keyboard = InlineKeyboardMarkup(inline_keyboard=rows)
@@ -1312,9 +1310,9 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
                         ],
                         [
                             InlineKeyboardButton(
-                                text=texts.t('BACK_TO_MAIN_MENU_BUTTON', 'В главное меню'),
+                                text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '← В главное меню'),
                                 callback_data='back_to_menu',
-                            )
+                             style='danger')
                         ],
                     ]
                 )
@@ -1787,7 +1785,7 @@ async def handle_extend_subscription(
             reply_markup=types.InlineKeyboardMarkup(
                 inline_keyboard=[
                     [types.InlineKeyboardButton(text='Выбрать тариф', callback_data='tariff_switch')],
-                    [types.InlineKeyboardButton(text=texts.BACK, callback_data='menu_subscription')],
+                    [types.InlineKeyboardButton(text=texts.BACK, callback_data='menu_subscription', style='danger')],
                 ]
             ),
             parse_mode='HTML',
@@ -2296,7 +2294,7 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
         keyboard = []
         if support_url:
             keyboard.append([types.InlineKeyboardButton(text='Обжаловать', url=support_url)])
-        keyboard.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='subscription')])
+        keyboard.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='subscription', style='danger')])
 
         await callback.message.edit_text(
             f'<b>Покупка/продление подписки ограничено</b>\n\n{reason}\n\n'
@@ -2857,9 +2855,9 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
                         ],
                         [
                             InlineKeyboardButton(
-                                text=texts.t('BACK_TO_MAIN_MENU_BUTTON', 'В главное меню'),
+                                text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '← В главное меню'),
                                 callback_data='back_to_menu',
-                            )
+                             style='danger')
                         ],
                     ]
                 )
@@ -2887,9 +2885,9 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
                         ],
                         [
                             InlineKeyboardButton(
-                                text=texts.t('BACK_TO_MAIN_MENU_BUTTON', 'В главное меню'),
+                                text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '← В главное меню'),
                                 callback_data='back_to_menu',
-                            )
+                             style='danger')
                         ],
                     ]
                 )
@@ -2911,9 +2909,9 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
                 rows.append(
                     [
                         InlineKeyboardButton(
-                            text=texts.t('BACK_TO_MAIN_MENU_BUTTON', 'В главное меню'),
+                            text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '← В главное меню'),
                             callback_data='back_to_menu',
-                        )
+                         style='danger')
                     ]
                 )
                 connect_keyboard = InlineKeyboardMarkup(inline_keyboard=rows)
@@ -2935,9 +2933,9 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
                 rows.append(
                     [
                         InlineKeyboardButton(
-                            text=texts.t('BACK_TO_MAIN_MENU_BUTTON', 'В главное меню'),
+                            text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '← В главное меню'),
                             callback_data='back_to_menu',
-                        )
+                         style='danger')
                     ]
                 )
                 connect_keyboard = InlineKeyboardMarkup(inline_keyboard=rows)
@@ -2955,9 +2953,9 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
                         ],
                         [
                             InlineKeyboardButton(
-                                text=texts.t('BACK_TO_MAIN_MENU_BUTTON', 'В главное меню'),
+                                text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '← В главное меню'),
                                 callback_data='back_to_menu',
-                            )
+                             style='danger')
                         ],
                     ]
                 )
@@ -3704,9 +3702,9 @@ def _build_trial_success_keyboard(texts, subscription_link: str, connect_mode: s
                 ],
                 [
                     InlineKeyboardButton(
-                        text=texts.t('BACK_TO_MAIN_MENU_BUTTON', 'В главное меню'),
+                        text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '← В главное меню'),
                         callback_data='back_to_menu',
-                    )
+                     style='danger')
                 ],
             ]
         )
@@ -3727,9 +3725,9 @@ def _build_trial_success_keyboard(texts, subscription_link: str, connect_mode: s
                 ],
                 [
                     InlineKeyboardButton(
-                        text=texts.t('BACK_TO_MAIN_MENU_BUTTON', 'В главное меню'),
+                        text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '← В главное меню'),
                         callback_data='back_to_menu',
-                    )
+                     style='danger')
                 ],
             ]
         )
@@ -3751,9 +3749,9 @@ def _build_trial_success_keyboard(texts, subscription_link: str, connect_mode: s
         rows.append(
             [
                 InlineKeyboardButton(
-                    text=texts.t('BACK_TO_MAIN_MENU_BUTTON', 'В главное меню'),
+                    text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '← В главное меню'),
                     callback_data='back_to_menu',
-                )
+                 style='danger')
             ]
         )
         return InlineKeyboardMarkup(inline_keyboard=rows)
@@ -3775,9 +3773,9 @@ def _build_trial_success_keyboard(texts, subscription_link: str, connect_mode: s
         rows.append(
             [
                 InlineKeyboardButton(
-                    text=texts.t('BACK_TO_MAIN_MENU_BUTTON', 'В главное меню'),
+                    text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '← В главное меню'),
                     callback_data='back_to_menu',
-                )
+                 style='danger')
             ]
         )
         return InlineKeyboardMarkup(inline_keyboard=rows)
@@ -3794,9 +3792,9 @@ def _build_trial_success_keyboard(texts, subscription_link: str, connect_mode: s
             ],
             [
                 InlineKeyboardButton(
-                    text=texts.t('BACK_TO_MAIN_MENU_BUTTON', 'В главное меню'),
+                    text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '← В главное меню'),
                     callback_data='back_to_menu',
-                )
+                 style='danger')
             ],
         ]
     )
@@ -3962,7 +3960,7 @@ async def handle_trial_payment_method(callback: types.CallbackQuery, db_user: Us
                 reply_markup=InlineKeyboardMarkup(
                     inline_keyboard=[
                         [InlineKeyboardButton(text='Оплатить', url=qr_url)],
-                        [InlineKeyboardButton(text=texts.BACK, callback_data='trial_activate')],
+                        [InlineKeyboardButton(text=texts.BACK, callback_data='trial_activate', style='danger')],
                     ]
                 ),
                 parse_mode='HTML',
@@ -3996,7 +3994,7 @@ async def handle_trial_payment_method(callback: types.CallbackQuery, db_user: Us
                 reply_markup=InlineKeyboardMarkup(
                     inline_keyboard=[
                         [InlineKeyboardButton(text='Оплатить', url=payment_result['confirmation_url'])],
-                        [InlineKeyboardButton(text=texts.BACK, callback_data='trial_activate')],
+                        [InlineKeyboardButton(text=texts.BACK, callback_data='trial_activate', style='danger')],
                     ]
                 ),
                 parse_mode='HTML',
@@ -4057,7 +4055,7 @@ async def handle_trial_payment_method(callback: types.CallbackQuery, db_user: Us
                                 callback_data=f'check_trial_cryptobot_{pending_subscription.id}',
                             )
                         ],
-                        [InlineKeyboardButton(text=texts.BACK, callback_data='trial_activate')],
+                        [InlineKeyboardButton(text=texts.BACK, callback_data='trial_activate', style='danger')],
                     ]
                 ),
                 parse_mode='HTML',
@@ -4095,7 +4093,7 @@ async def handle_trial_payment_method(callback: types.CallbackQuery, db_user: Us
                                 callback_data=f'check_trial_heleket_{pending_subscription.id}',
                             )
                         ],
-                        [InlineKeyboardButton(text=texts.BACK, callback_data='trial_activate')],
+                        [InlineKeyboardButton(text=texts.BACK, callback_data='trial_activate', style='danger')],
                     ]
                 ),
                 parse_mode='HTML',
@@ -4132,7 +4130,7 @@ async def handle_trial_payment_method(callback: types.CallbackQuery, db_user: Us
                                 callback_data=f'check_trial_mulenpay_{pending_subscription.id}',
                             )
                         ],
-                        [InlineKeyboardButton(text=texts.BACK, callback_data='trial_activate')],
+                        [InlineKeyboardButton(text=texts.BACK, callback_data='trial_activate', style='danger')],
                     ]
                 ),
                 parse_mode='HTML',
@@ -4168,7 +4166,7 @@ async def handle_trial_payment_method(callback: types.CallbackQuery, db_user: Us
                                 callback_data=f'check_trial_pal24_{pending_subscription.id}',
                             )
                         ],
-                        [InlineKeyboardButton(text=texts.BACK, callback_data='trial_activate')],
+                        [InlineKeyboardButton(text=texts.BACK, callback_data='trial_activate', style='danger')],
                     ]
                 ),
                 parse_mode='HTML',
@@ -4204,7 +4202,7 @@ async def handle_trial_payment_method(callback: types.CallbackQuery, db_user: Us
                                 callback_data=f'check_trial_wata_{pending_subscription.id}',
                             )
                         ],
-                        [InlineKeyboardButton(text=texts.BACK, callback_data='trial_activate')],
+                        [InlineKeyboardButton(text=texts.BACK, callback_data='trial_activate', style='danger')],
                     ]
                 ),
                 parse_mode='HTML',
@@ -4253,7 +4251,7 @@ async def handle_trial_payment_method(callback: types.CallbackQuery, db_user: Us
                                 callback_data=f'check_trial_platega_{pending_subscription.id}',
                             )
                         ],
-                        [InlineKeyboardButton(text=texts.BACK, callback_data='trial_activate')],
+                        [InlineKeyboardButton(text=texts.BACK, callback_data='trial_activate', style='danger')],
                     ]
                 ),
                 parse_mode='HTML',
@@ -4640,7 +4638,7 @@ async def handle_simple_subscription_purchase(
                         callback_data='simple_subscription_other_payment_methods',
                     )
                 ],
-                [types.InlineKeyboardButton(text=texts.BACK, callback_data='subscription_purchase')],
+                [types.InlineKeyboardButton(text=texts.BACK, callback_data='subscription_purchase', style='danger')],
             ]
         )
     else:

@@ -320,10 +320,12 @@ async def _notify_user(
             await bot.send_message(
                 user.telegram_id,
                 (
-                    '✅ <b>Баланс пополнен</b>\n\n'
-                    f'💰 Сумма: {settings.format_price(amount_kopeks)}\n'
-                    f'💳 Текущий баланс: {settings.format_price(user.balance_kopeks)}\n'
-                    f'🆔 Транзакция: {transaction.id}'
+                    '<b>Баланс пополнен</b>\n\n'
+                    '<blockquote>'
+                    f'<b>Сумма:</b> {settings.format_price(amount_kopeks)}\n'
+                    f'<b>Текущий баланс:</b> {settings.format_price(user.balance_kopeks)}\n'
+                    f'<b>Транзакция:</b> {transaction.id}'
+                    '</blockquote>'
                 ),
                 parse_mode='HTML',
                 reply_markup=keyboard,

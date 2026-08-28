@@ -147,7 +147,7 @@ def _get_support_settings_keyboard(language: str) -> types.InlineKeyboardMarkup:
         ]
     )
 
-    rows.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='admin_submenu_support')])
+    rows.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='admin_submenu_support', style='danger')])
 
     return types.InlineKeyboardMarkup(inline_keyboard=rows)
 
@@ -220,7 +220,7 @@ async def start_set_sla_minutes(callback: types.CallbackQuery, db_user: User, db
         ),
         parse_mode='HTML',
         reply_markup=types.InlineKeyboardMarkup(
-            inline_keyboard=[[types.InlineKeyboardButton(text=texts.BACK, callback_data='admin_support_settings')]]
+            inline_keyboard=[[types.InlineKeyboardButton(text=texts.BACK, callback_data='admin_support_settings', style='danger')]]
         ),
     )
     await state.set_state(SupportAdvancedStates.waiting_for_sla_minutes)
@@ -268,7 +268,7 @@ async def start_add_moderator(callback: types.CallbackQuery, db_user: User, db: 
         ),
         parse_mode='HTML',
         reply_markup=types.InlineKeyboardMarkup(
-            inline_keyboard=[[types.InlineKeyboardButton(text=texts.BACK, callback_data='admin_support_settings')]]
+            inline_keyboard=[[types.InlineKeyboardButton(text=texts.BACK, callback_data='admin_support_settings', style='danger')]]
         ),
     )
     await state.set_state(SupportAdvancedStates.waiting_for_moderator_id)
@@ -286,7 +286,7 @@ async def start_remove_moderator(callback: types.CallbackQuery, db_user: User, d
         ),
         parse_mode='HTML',
         reply_markup=types.InlineKeyboardMarkup(
-            inline_keyboard=[[types.InlineKeyboardButton(text=texts.BACK, callback_data='admin_support_settings')]]
+            inline_keyboard=[[types.InlineKeyboardButton(text=texts.BACK, callback_data='admin_support_settings', style='danger')]]
         ),
     )
     await state.set_state(SupportAdvancedStates.waiting_for_moderator_id)
@@ -357,7 +357,7 @@ async def list_moderators(callback: types.CallbackQuery, db_user: User, db: Asyn
         + '\n'.join([f'• <code>{tid}</code>' for tid in moderators])
     )
     markup = types.InlineKeyboardMarkup(
-        inline_keyboard=[[types.InlineKeyboardButton(text=texts.BACK, callback_data='admin_support_settings')]]
+        inline_keyboard=[[types.InlineKeyboardButton(text=texts.BACK, callback_data='admin_support_settings', style='danger')]]
     )
     await callback.message.edit_text(text, parse_mode='HTML', reply_markup=markup)
     await callback.answer()
@@ -405,7 +405,7 @@ async def start_edit_desc(callback: types.CallbackQuery, db_user: User, db: Asyn
     from app.config import settings
 
     support_contact_display = settings.get_support_contact_display()
-    kb_rows.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='admin_support_settings')])
+    kb_rows.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='admin_support_settings', style='danger')])
 
     text_parts = [
         texts.t(

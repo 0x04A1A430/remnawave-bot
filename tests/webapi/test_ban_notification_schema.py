@@ -198,8 +198,8 @@ async def test_revoke_uses_its_own_template(monkeypatch: pytest.MonkeyPatch) -> 
     ban_text = service._bot.send_message.await_args.kwargs['text']
 
     assert revoke_text != ban_text
-    assert 'КЛЮЧИ ДОСТУПА ОБНОВЛЕНЫ' in revoke_text
-    assert 'ЗАБЛОКИРОВАН' in ban_text
+    assert 'Ключи доступа обновлены' in revoke_text
+    assert 'Аккаунт заблокирован' in ban_text
 
 
 @pytest.mark.asyncio

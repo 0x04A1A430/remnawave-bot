@@ -116,7 +116,7 @@ def get_admin_main_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                     callback_data='admin_payments',
                 ),
             ],
-            [make_button(text=texts.BACK, callback_data='back_to_menu')],
+            [make_button(text=texts.BACK, callback_data='back_to_menu', style='danger')],
         ]
     )
 
@@ -131,7 +131,7 @@ def get_admin_users_submenu_keyboard(language: str = 'ru') -> InlineKeyboardMark
                 make_button(text=texts.ADMIN_REFERRALS, callback_data='admin_referrals'),
             ],
             [make_button(text=texts.ADMIN_SUBSCRIPTIONS, callback_data='admin_subscriptions')],
-            [make_button(text=texts.BACK, callback_data='admin_panel')],
+            [make_button(text=texts.BACK, callback_data='admin_panel', style='danger')],
         ]
     )
 
@@ -167,7 +167,7 @@ def get_admin_promo_submenu_keyboard(language: str = 'ru') -> InlineKeyboardMark
                 )
             ],
             [make_button(text=texts.ADMIN_PROMO_GROUPS, callback_data='admin_promo_groups')],
-            [make_button(text=texts.BACK, callback_data='admin_panel')],
+            [make_button(text=texts.BACK, callback_data='admin_panel', style='danger')],
         ]
     )
 
@@ -218,7 +218,7 @@ def get_admin_communications_submenu_keyboard(
                     callback_data='user_messages_panel',
                 ),
             ],
-            [make_button(text=texts.BACK, callback_data='admin_panel')],
+            [make_button(text=texts.BACK, callback_data='admin_panel', style='danger')],
         ]
     )
 
@@ -258,7 +258,7 @@ def get_admin_support_submenu_keyboard(language: str = 'ru') -> InlineKeyboardMa
                     callback_data='admin_support_settings',
                 )
             ],
-            [make_button(text=texts.BACK, callback_data='admin_panel')],
+            [make_button(text=texts.BACK, callback_data='admin_panel', style='danger')],
         ]
     )
 
@@ -360,7 +360,7 @@ def get_admin_settings_submenu_keyboard(language: str = 'ru') -> InlineKeyboardM
                     callback_data='admin_remna_config',
                 )
             ],
-            [make_button(text=texts.BACK, callback_data='admin_panel')],
+            [make_button(text=texts.BACK, callback_data='admin_panel', style='danger')],
         ]
     )
 
@@ -407,7 +407,7 @@ def get_admin_system_submenu_keyboard(language: str = 'ru') -> InlineKeyboardMar
                     callback_data='admin_reports',
                 )
             ],
-            [make_button(text=texts.BACK, callback_data='admin_panel')],
+            [make_button(text=texts.BACK, callback_data='admin_panel', style='danger')],
         ]
     )
 
@@ -427,7 +427,7 @@ def get_admin_trials_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                     callback_data='admin_trials_reset',
                 )
             ],
-            [make_button(text=texts.BACK, callback_data='admin_panel')],
+            [make_button(text=texts.BACK, callback_data='admin_panel', style='danger')],
         ]
     )
 
@@ -467,7 +467,7 @@ def get_admin_reports_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                     callback_data='admin_reports_monthly',
                 )
             ],
-            [make_button(text=texts.BACK, callback_data='admin_panel')],
+            [make_button(text=texts.BACK, callback_data='admin_panel', style='danger')],
         ]
     )
 
@@ -577,7 +577,7 @@ def get_admin_users_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                     callback_data='admin_restore_deleted',
                 ),
             ],
-            [make_button(text=texts.BACK, callback_data='admin_submenu_users')],
+            [make_button(text=texts.BACK, callback_data='admin_submenu_users', style='danger')],
         ]
     )
 
@@ -627,7 +627,7 @@ def get_admin_users_filters_keyboard(language: str = 'ru') -> InlineKeyboardMark
                     callback_data='admin_users_campaign_filter',
                 )
             ],
-            [make_button(text=texts.BACK, callback_data='admin_users')],
+            [make_button(text=texts.BACK, callback_data='admin_users', style='danger')],
         ]
     )
 
@@ -666,7 +666,7 @@ def get_admin_subscriptions_keyboard(language: str = 'ru') -> InlineKeyboardMark
                 )
             ],
             [make_button(text=texts.ADMIN_STATISTICS, callback_data='admin_subs_stats')],
-            [make_button(text=texts.BACK, callback_data='admin_submenu_users')],
+            [make_button(text=texts.BACK, callback_data='admin_submenu_users', style='danger')],
         ]
     )
 
@@ -704,7 +704,7 @@ def get_admin_promocodes_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                     callback_data='admin_promo_general_stats',
                 )
             ],
-            [make_button(text=texts.BACK, callback_data='admin_submenu_promo')],
+            [make_button(text=texts.BACK, callback_data='admin_submenu_promo', style='danger')],
         ]
     )
 
@@ -742,7 +742,7 @@ def get_admin_campaigns_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                     callback_data='admin_campaigns_stats',
                 )
             ],
-            [make_button(text=texts.BACK, callback_data='admin_submenu_promo')],
+            [make_button(text=texts.BACK, callback_data='admin_submenu_promo', style='danger')],
         ]
     )
 
@@ -773,7 +773,7 @@ def get_admin_contests_root_keyboard(language: str = 'ru') -> InlineKeyboardMark
                 )
             ],
             [
-                make_button(text=texts.BACK, callback_data='admin_submenu_promo'),
+                make_button(text=texts.BACK, callback_data='admin_submenu_promo', style='danger'),
             ],
         ]
     )
@@ -806,7 +806,7 @@ def get_admin_contests_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                 make_button(
                     text=texts.BACK,
                     callback_data='admin_contests',
-                )
+                 style='danger')
             ],
         ]
     )
@@ -829,7 +829,7 @@ def get_contest_mode_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                     callback_data='admin_contest_mode_registered',
                 )
             ],
-            [make_button(text=texts.BACK, callback_data='admin_contests_referral')],
+            [make_button(text=texts.BACK, callback_data='admin_contests_referral', style='danger')],
         ]
     )
 
@@ -913,7 +913,7 @@ def get_daily_contest_manage_keyboard(
                 ),
             ],
             [
-                make_button(text=texts.BACK, callback_data='admin_contests_daily'),
+                make_button(text=texts.BACK, callback_data='admin_contests_daily', style='danger'),
             ],
         ]
     )
@@ -1115,7 +1115,7 @@ def get_campaign_edit_keyboard(
         )
     # bonus_type == "none" - только базовые кнопки (название и параметр)
 
-    keyboard.append([make_button(text=texts.BACK, callback_data=f'admin_campaign_manage_{campaign_id}')])
+    keyboard.append([make_button(text=texts.BACK, callback_data=f'admin_campaign_manage_{campaign_id}', style='danger')])
 
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
@@ -1145,7 +1145,7 @@ def get_campaign_bonus_type_keyboard(language: str = 'ru') -> InlineKeyboardMark
                     callback_data='campaign_bonus_none',
                 ),
             ],
-            [make_button(text=texts.BACK, callback_data='admin_campaigns')],
+            [make_button(text=texts.BACK, callback_data='admin_campaigns', style='danger')],
         ]
     )
 
@@ -1216,7 +1216,7 @@ def get_admin_messages_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                     callback_data='admin_pinned_message',
                 )
             ],
-            [make_button(text=texts.BACK, callback_data='admin_submenu_communications')],
+            [make_button(text=texts.BACK, callback_data='admin_submenu_communications', style='danger')],
         ]
     )
 
@@ -1268,7 +1268,7 @@ def get_pinned_message_keyboard(
                     callback_data='admin_pinned_message_delete',
                 )
             ],
-            [make_button(text=texts.BACK, callback_data='admin_messages')],
+            [make_button(text=texts.BACK, callback_data='admin_messages', style='danger')],
         ]
     )
 
@@ -1329,7 +1329,7 @@ def get_admin_monitoring_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                     callback_data='admin_mon_settings',
                 )
             ],
-            [make_button(text=texts.BACK, callback_data='admin_submenu_settings')],
+            [make_button(text=texts.BACK, callback_data='admin_submenu_settings', style='danger')],
         ]
     )
 
@@ -1371,7 +1371,7 @@ def get_admin_remnawave_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                     callback_data='admin_rw_traffic',
                 )
             ],
-            [make_button(text=texts.BACK, callback_data='admin_submenu_settings')],
+            [make_button(text=texts.BACK, callback_data='admin_submenu_settings', style='danger')],
         ]
     )
 
@@ -1407,7 +1407,7 @@ def get_admin_statistics_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                     callback_data='admin_stats_summary',
                 )
             ],
-            [make_button(text=texts.BACK, callback_data='admin_submenu_promo')],
+            [make_button(text=texts.BACK, callback_data='admin_submenu_promo', style='danger')],
         ]
     )
 
@@ -1518,7 +1518,7 @@ def get_user_management_keyboard(
             ]
         )
 
-    keyboard.append([make_button(text=texts.BACK, callback_data=back_callback)])
+    keyboard.append([make_button(text=texts.BACK, callback_data=back_callback, style='danger')])
 
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
@@ -1580,7 +1580,7 @@ def get_user_restrictions_keyboard(
         )
 
     # Кнопка назад
-    keyboard.append([make_button(text=texts.BACK, callback_data=f'admin_user_manage_{user_id}')])
+    keyboard.append([make_button(text=texts.BACK, callback_data=f'admin_user_manage_{user_id}', style='danger')])
 
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
@@ -1673,7 +1673,7 @@ def get_promocode_type_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                     callback_data='promo_type_discount',
                 )
             ],
-            [make_button(text=texts.BACK, callback_data='admin_promocodes')],
+            [make_button(text=texts.BACK, callback_data='admin_promocodes', style='danger')],
         ]
     )
 
@@ -1705,12 +1705,12 @@ def get_promocode_list_keyboard(
         pagination_row = []
 
         if page > 1:
-            pagination_row.append(make_button(text='←', callback_data=f'admin_promo_list_page_{page - 1}'))
+            pagination_row.append(make_button(text='←', callback_data=f'admin_promo_list_page_{page - 1}', style='primary'))
 
         pagination_row.append(make_button(text=f'{page}/{total_pages}', callback_data='current_page'))
 
         if page < total_pages:
-            pagination_row.append(make_button(text='→', callback_data=f'admin_promo_list_page_{page + 1}'))
+            pagination_row.append(make_button(text='→', callback_data=f'admin_promo_list_page_{page + 1}', style='primary'))
 
         keyboard.append(pagination_row)
 
@@ -1726,7 +1726,7 @@ def get_promocode_list_keyboard(
                     callback_data='admin_promo_create',
                 )
             ],
-            [make_button(text=texts.BACK, callback_data='admin_promocodes')],
+            [make_button(text=texts.BACK, callback_data='admin_promocodes', style='danger')],
         ]
     )
 
@@ -1784,7 +1784,7 @@ def get_broadcast_target_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                     callback_data='broadcast_by_tariff',
                 )
             ],
-            [make_button(text=texts.BACK, callback_data='admin_messages')],
+            [make_button(text=texts.BACK, callback_data='admin_messages', style='danger')],
         ]
     )
 
@@ -1840,7 +1840,7 @@ def get_custom_criteria_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                     callback_data='criteria_direct',
                 )
             ],
-            [make_button(text=texts.BACK, callback_data='admin_messages')],
+            [make_button(text=texts.BACK, callback_data='admin_messages', style='danger')],
         ]
     )
 
@@ -1853,12 +1853,12 @@ def get_broadcast_history_keyboard(page: int, total_pages: int, language: str = 
         pagination_row = []
 
         if page > 1:
-            pagination_row.append(make_button(text='←', callback_data=f'admin_msg_history_page_{page - 1}'))
+            pagination_row.append(make_button(text='←', callback_data=f'admin_msg_history_page_{page - 1}', style='primary'))
 
         pagination_row.append(make_button(text=f'{page}/{total_pages}', callback_data='current_page'))
 
         if page < total_pages:
-            pagination_row.append(make_button(text='→', callback_data=f'admin_msg_history_page_{page + 1}'))
+            pagination_row.append(make_button(text='→', callback_data=f'admin_msg_history_page_{page + 1}', style='primary'))
 
         keyboard.append(pagination_row)
 
@@ -1870,7 +1870,7 @@ def get_broadcast_history_keyboard(page: int, total_pages: int, language: str = 
                     callback_data='admin_msg_history',
                 )
             ],
-            [make_button(text=texts.BACK, callback_data='admin_messages')],
+            [make_button(text=texts.BACK, callback_data='admin_messages', style='danger')],
         ]
     )
 
@@ -1920,7 +1920,7 @@ def get_sync_options_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                 callback_data='sync_recommendations',
             )
         ],
-        [make_button(text=texts.BACK, callback_data='admin_remnawave')],
+        [make_button(text=texts.BACK, callback_data='admin_remnawave', style='danger')],
     ]
 
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
@@ -1985,9 +1985,9 @@ def get_sync_result_keyboard(sync_type: str, has_errors: bool = False, language:
             ],
             [
                 make_button(
-                    text=_t(texts, 'ADMIN_BACK_TO_MAIN', 'В главное меню'),
+                    text=_t(texts, 'ADMIN_BACK_TO_MAIN', '← В главное меню'),
                     callback_data='admin_remnawave',
-                )
+                 style='danger')
             ],
         ]
     )
@@ -2026,7 +2026,7 @@ def get_period_selection_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                     callback_data='period_all',
                 )
             ],
-            [make_button(text=texts.BACK, callback_data='admin_statistics')],
+            [make_button(text=texts.BACK, callback_data='admin_statistics', style='danger')],
         ]
     )
 
@@ -2056,7 +2056,7 @@ def get_node_management_keyboard(node_uuid: str, language: str = 'ru') -> Inline
                     callback_data=f'node_stats_{node_uuid}',
                 ),
             ],
-            [make_button(text=texts.BACK, callback_data='admin_rw_nodes')],
+            [make_button(text=texts.BACK, callback_data='admin_rw_nodes', style='danger')],
         ]
     )
 
@@ -2088,7 +2088,7 @@ def get_squad_management_keyboard(squad_uuid: str, language: str = 'ru') -> Inli
                     callback_data=f'squad_delete_{squad_uuid}',
                 ),
             ],
-            [make_button(text=texts.BACK, callback_data='admin_rw_squads')],
+            [make_button(text=texts.BACK, callback_data='admin_rw_squads', style='danger')],
         ]
     )
 
@@ -2187,7 +2187,7 @@ def get_monitoring_logs_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                     callback_data='admin_mon_clear_logs',
                 ),
             ],
-            [make_button(text=texts.BACK, callback_data='admin_monitoring')],
+            [make_button(text=texts.BACK, callback_data='admin_monitoring', style='danger')],
         ]
     )
 
@@ -2360,7 +2360,7 @@ def get_monitoring_status_keyboard(
     ]
     keyboard.append(test_row)
 
-    keyboard.append([make_button(text=texts.BACK, callback_data='admin_submenu_settings')])
+    keyboard.append([make_button(text=texts.BACK, callback_data='admin_submenu_settings', style='danger')])
 
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
@@ -2434,7 +2434,7 @@ def get_log_type_filter_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                     text=_t(texts, 'ADMIN_MONITORING_ALL_LOGS', 'Все логи'),
                     callback_data='admin_mon_logs',
                 ),
-                make_button(text=texts.BACK, callback_data='admin_monitoring'),
+                make_button(text=texts.BACK, callback_data='admin_monitoring', style='danger'),
             ],
         ]
     )
@@ -2465,7 +2465,7 @@ def get_admin_servers_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                     callback_data='admin_servers_stats',
                 ),
             ],
-            [make_button(text=texts.BACK, callback_data='admin_subscriptions')],
+            [make_button(text=texts.BACK, callback_data='admin_subscriptions', style='danger')],
         ]
     )
 
@@ -2511,7 +2511,7 @@ def get_server_edit_keyboard(server_id: int, is_available: bool, language: str =
                     text=_t(texts, 'ADMIN_SERVER_DELETE', 'Удалить'),
                     callback_data=f'admin_server_delete_{server_id}',
                 ),
-                make_button(text=texts.BACK, callback_data='admin_servers_list'),
+                make_button(text=texts.BACK, callback_data='admin_servers_list', style='danger'),
             ],
         ]
     )
@@ -2531,16 +2531,16 @@ def get_admin_pagination_keyboard(
         row = []
 
         if current_page > 1:
-            row.append(make_button(text='←', callback_data=f'{callback_prefix}_page_{current_page - 1}'))
+            row.append(make_button(text='←', callback_data=f'{callback_prefix}_page_{current_page - 1}', style='primary'))
 
         row.append(make_button(text=f'{current_page}/{total_pages}', callback_data='current_page'))
 
         if current_page < total_pages:
-            row.append(make_button(text='→', callback_data=f'{callback_prefix}_page_{current_page + 1}'))
+            row.append(make_button(text='→', callback_data=f'{callback_prefix}_page_{current_page + 1}', style='primary'))
 
         keyboard.append(row)
 
-    keyboard.append([make_button(text=texts.BACK, callback_data=back_callback)])
+    keyboard.append([make_button(text=texts.BACK, style='danger', callback_data=back_callback)])
 
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
@@ -2632,7 +2632,7 @@ def get_maintenance_keyboard(
                 text=_t(texts, 'ADMIN_REFRESH', 'Обновить'),
                 callback_data='maintenance_panel',
             ),
-            make_button(text=texts.BACK, callback_data='admin_submenu_settings'),
+            make_button(text=texts.BACK, callback_data='admin_submenu_settings', style='danger'),
         ]
     )
 
@@ -2648,7 +2648,7 @@ def get_sync_simplified_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                 callback_data='sync_all_users',
             )
         ],
-        [make_button(text=texts.BACK, callback_data='admin_remnawave')],
+        [make_button(text=texts.BACK, callback_data='admin_remnawave', style='danger')],
     ]
 
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
@@ -2693,7 +2693,7 @@ def get_welcome_text_keyboard(language: str = 'ru', is_enabled: bool = True) -> 
                 callback_data='show_placeholders_help',
             ),
         ],
-        [make_button(text=texts.BACK, callback_data='admin_submenu_communications')],
+        [make_button(text=texts.BACK, callback_data='admin_submenu_communications', style='danger')],
     ]
 
     return InlineKeyboardMarkup(inline_keyboard=keyboard)

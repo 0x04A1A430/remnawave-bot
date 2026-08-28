@@ -289,7 +289,7 @@ def _build_polls_keyboard(polls: list[Poll], language: str) -> types.InlineKeybo
             types.InlineKeyboardButton(
                 text=texts.BACK,
                 callback_data='admin_submenu_communications',
-            )
+             style='danger')
         ]
     )
 
@@ -392,7 +392,7 @@ def _build_target_keyboard(poll_id: int, language: str) -> types.InlineKeyboardM
                 types.InlineKeyboardButton(
                     text=texts.BACK,
                     callback_data=f'poll_view:{poll_id}',
-                )
+                 style='danger')
             ],
         ]
     )
@@ -442,7 +442,7 @@ def _build_custom_target_keyboard(poll_id: int, language: str) -> types.InlineKe
                     callback_data=f'poll_custom_target:{poll_id}:direct',
                 ),
             ],
-            [types.InlineKeyboardButton(text=texts.BACK, callback_data=f'poll_send:{poll_id}')],
+            [types.InlineKeyboardButton(text=texts.BACK, callback_data=f'poll_send:{poll_id}', style='danger')],
         ]
     )
 
@@ -461,7 +461,7 @@ def _build_send_confirmation_keyboard(poll_id: int, target: str, language: str) 
                 types.InlineKeyboardButton(
                     text=texts.BACK,
                     callback_data=f'poll_send:{poll_id}',
-                )
+                 style='danger')
             ],
         ]
     )
@@ -1165,7 +1165,7 @@ async def confirm_poll_delete(
                     types.InlineKeyboardButton(
                         text=texts.BACK,
                         callback_data=f'poll_view:{poll_id}',
-                    )
+                     style='danger')
                 ],
             ]
         ),

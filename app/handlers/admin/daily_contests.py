@@ -94,7 +94,7 @@ async def show_daily_contests(
                 )
             ]
         )
-    keyboard_rows.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='admin_contests')])
+    keyboard_rows.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='admin_contests', style='danger')])
 
     await callback.message.edit_text(
         '\n'.join(lines),
@@ -268,7 +268,7 @@ async def prompt_edit_field(
                 types.InlineKeyboardButton(
                     text=texts.BACK,
                     callback_data=f'admin_daily_contest_{template_id}',
-                )
+                 style='danger')
             ]
         ]
     )
@@ -326,7 +326,7 @@ async def process_edit_field(
                 types.InlineKeyboardButton(
                     text=texts.BACK,
                     callback_data=f'admin_daily_contest_{template_id}',
-                )
+                 style='danger')
             ]
         ]
     )
@@ -358,7 +358,7 @@ async def edit_payload(
                 types.InlineKeyboardButton(
                     text=texts.BACK,
                     callback_data=f'admin_daily_contest_{template_id}',
-                )
+                 style='danger')
             ]
         ]
     )
@@ -411,7 +411,7 @@ async def process_payload(
                 types.InlineKeyboardButton(
                     text=texts.BACK,
                     callback_data=f'admin_daily_contest_{template_id}',
-                )
+                 style='danger')
             ]
         ]
     )

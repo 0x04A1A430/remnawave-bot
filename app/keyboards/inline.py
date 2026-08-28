@@ -1011,9 +1011,9 @@ def get_happ_cryptolink_keyboard(
             ],
             [
                 make_button(
-                    text=texts.t('BACK_TO_MAIN_MENU_BUTTON', 'В главное меню'),
+                    text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '← В главное меню'),
                     callback_data='back_to_menu',
-                )
+                 style='danger')
             ],
         ]
     )
@@ -1094,16 +1094,18 @@ def get_server_status_keyboard(
         if current_page > 1:
             nav_row.append(
                 make_button(
-                    text=texts.t('SERVER_STATUS_PREV_PAGE', 'Назад'),
+                    text=texts.t('SERVER_STATUS_PREV_PAGE', '←'),
                     callback_data=f'server_status_page:{current_page - 1}',
+                    style='primary',
                 )
             )
 
         if current_page < total_pages:
             nav_row.append(
                 make_button(
-                    text=texts.t('SERVER_STATUS_NEXT_PAGE', 'Вперед '),
+                    text=texts.t('SERVER_STATUS_NEXT_PAGE', '→'),
                     callback_data=f'server_status_page:{current_page + 1}',
+                    style='primary',
                 )
             )
 
@@ -1422,6 +1424,7 @@ def get_subscription_confirm_keyboard_with_cart(
                 make_button(
                     text=texts.BACK,
                     callback_data='subscription_config_back',  # Изменили на возврат к настройке
+                    style='danger',
                 )
             ],
         ]
@@ -2581,8 +2584,9 @@ def get_pagination_keyboard(
         if current_page > 1:
             row.append(
                 make_button(
-                    text=texts.t('PAGINATION_PREV', ''),
+                    text=texts.t('PAGINATION_PREV', '←'),
                     callback_data=f'{callback_prefix}_page_{current_page - 1}',
+                    style='primary',
                 )
             )
 
@@ -2591,8 +2595,9 @@ def get_pagination_keyboard(
         if current_page < total_pages:
             row.append(
                 make_button(
-                    text=texts.t('PAGINATION_NEXT', ''),
+                    text=texts.t('PAGINATION_NEXT', '→'),
                     callback_data=f'{callback_prefix}_page_{current_page + 1}',
+                    style='primary',
                 )
             )
 
@@ -3079,6 +3084,7 @@ def get_reset_traffic_confirm_keyboard(
             make_button(
                 text=texts.BACK,
                 callback_data='subscription_settings',
+                style='danger',
             )
         ]
     )
@@ -3559,8 +3565,9 @@ def get_devices_management_keyboard(
         if pagination.has_prev:
             nav_row.append(
                 make_button(
-                    text=texts.t('PAGINATION_PREV', ''),
+                    text=texts.t('PAGINATION_PREV', '←'),
                     callback_data=f'devices_page_{pagination.prev_page}',
+                    style='primary',
                 )
             )
 
@@ -3574,8 +3581,9 @@ def get_devices_management_keyboard(
         if pagination.has_next:
             nav_row.append(
                 make_button(
-                    text=texts.t('PAGINATION_NEXT', ''),
+                    text=texts.t('PAGINATION_NEXT', '→'),
                     callback_data=f'devices_page_{pagination.next_page}',
+                    style='primary',
                 )
             )
 
@@ -3791,8 +3799,9 @@ def get_my_tickets_keyboard(
         if current_page > 1:
             nav_row.append(
                 make_button(
-                    text=texts.t('PAGINATION_PREV', ''),
+                    text=texts.t('PAGINATION_PREV', '←'),
                     callback_data=f'{page_prefix}{current_page - 1}',
+                    style='primary',
                 )
             )
 
@@ -3801,8 +3810,9 @@ def get_my_tickets_keyboard(
         if current_page < total_pages:
             nav_row.append(
                 make_button(
-                    text=texts.t('PAGINATION_NEXT', ''),
+                    text=texts.t('PAGINATION_NEXT', '→'),
                     callback_data=f'{page_prefix}{current_page + 1}',
+                    style='primary',
                 )
             )
 
@@ -3956,8 +3966,9 @@ def get_admin_tickets_keyboard(
         if current_page > 1:
             nav_row.append(
                 make_button(
-                    text=texts.t('PAGINATION_PREV', ''),
+                    text=texts.t('PAGINATION_PREV', '←'),
                     callback_data=f'admin_tickets_page_{scope}_{current_page - 1}',
+                    style='primary',
                 )
             )
 
@@ -3966,8 +3977,9 @@ def get_admin_tickets_keyboard(
         if current_page < total_pages:
             nav_row.append(
                 make_button(
-                    text=texts.t('PAGINATION_NEXT', ''),
+                    text=texts.t('PAGINATION_NEXT', '→'),
                     callback_data=f'admin_tickets_page_{scope}_{current_page + 1}',
+                    style='primary',
                 )
             )
 

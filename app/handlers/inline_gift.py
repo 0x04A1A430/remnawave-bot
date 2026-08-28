@@ -381,7 +381,7 @@ async def handle_gift_deeplink(message: types.Message, gift_code: str, state=Non
             await message.answer(
                 texts.t(
                     'INLINE_GIFT_WRONG_RECIPIENT',
-                    '🚫 Этот подарок предназначен другому пользователю.',
+                    'Этот подарок предназначен другому пользователю.',
                 )
             )
             return True
@@ -468,7 +468,7 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
             await callback.message.edit_text(
                 texts.t(
                     'INLINE_GIFT_WRONG_RECIPIENT',
-                    '🚫 Этот подарок предназначен другому пользователю.',
+                    'Этот подарок предназначен другому пользователю.',
                 ),
                 parse_mode='HTML',
             )
@@ -513,15 +513,15 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
 
                 success_text = texts.t(
                     'INLINE_GIFT_DISCOUNT_SUCCESS',
-                    '✅ <b>Скидка активирована!</b>\n\n<blockquote>Скидка {pct}% — промокод: <code>{code}</code></blockquote>',
+                    '<b>Скидка активирована!</b>\n\n<blockquote>Скидка {pct}% — промокод: <code>{code}</code></blockquote>',
                 ).format(pct=pct, code=promo_code_str)
                 back_kb = types.InlineKeyboardMarkup(
                     inline_keyboard=[
                         [
                             make_button(
-                                text=texts.t('MAIN_MENU_BUTTON', 'Главное меню'),
+                                text=texts.t('MAIN_MENU_BUTTON', '← Главное меню'),
                                 callback_data='back_to_menu',
-                            )
+                             style='danger')
                         ]
                     ]
                 )
@@ -559,9 +559,9 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
                     inline_keyboard=[
                         [
                             make_button(
-                                text=texts.t('MAIN_MENU_BUTTON', 'Главное меню'),
+                                text=texts.t('MAIN_MENU_BUTTON', '← Главное меню'),
                                 callback_data='back_to_menu',
-                            )
+                             style='danger')
                         ]
                     ]
                 )
@@ -627,9 +627,9 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
                     inline_keyboard=[
                         [
                             make_button(
-                                text=texts.t('MAIN_MENU_BUTTON', 'Главное меню'),
+                                text=texts.t('MAIN_MENU_BUTTON', '← Главное меню'),
                                 callback_data='back_to_menu',
-                            )
+                             style='danger')
                         ]
                     ]
                 )
@@ -677,9 +677,9 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
                     inline_keyboard=[
                         [
                             make_button(
-                                text=texts.t('MAIN_MENU_BUTTON', 'Главное меню'),
+                                text=texts.t('MAIN_MENU_BUTTON', '← Главное меню'),
                                 callback_data='back_to_menu',
-                            )
+                             style='danger')
                         ]
                     ]
                 )
@@ -907,9 +907,9 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
                     inline_keyboard=[
                         [
                             make_button(
-                                text=texts.t('MAIN_MENU_BUTTON', 'Главное меню'),
+                                text=texts.t('MAIN_MENU_BUTTON', '← Главное меню'),
                                 callback_data='back_to_menu',
-                            )
+                             style='danger')
                         ]
                     ]
                 )
@@ -1064,9 +1064,9 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
             inline_keyboard=[
                 [
                     make_button(
-                        text=texts.t('MAIN_MENU_BUTTON', 'Главное меню'),
+                        text=texts.t('MAIN_MENU_BUTTON', '← Главное меню'),
                         callback_data='back_to_menu',
-                    )
+                     style='danger')
                 ]
             ]
         )
@@ -1130,7 +1130,7 @@ async def handle_cancel_callback(callback: types.CallbackQuery) -> None:
     await _update_inline_button(
         callback.bot,
         inline_msg_id,
-        texts.t('INLINE_GIFT_CANCELLED_BUTTON', '✗ Отменено'),
+        texts.t('INLINE_GIFT_CANCELLED_BUTTON', 'Отменено'),
         0,
         1,
     )
@@ -1181,7 +1181,7 @@ async def show_pending_inline_gift(
             await message.answer(
                 texts.t(
                     'INLINE_GIFT_WRONG_RECIPIENT',
-                    '🚫 Этот подарок предназначен другому пользователю.',
+                    'Этот подарок предназначен другому пользователю.',
                 )
             )
             return
