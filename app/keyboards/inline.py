@@ -3538,18 +3538,16 @@ def get_devices_management_keyboard(
     keyboard = []
 
     for i, device in enumerate(devices):
-        local_name = (device.get('local_name') or '').strip()
-        if local_name:
-            device_info = local_name
-        else:
-            platform = device.get('platform', 'Unknown')
-            device_model = device.get('deviceModel', 'Unknown')
-            emoji_tag = _PLATFORM_EMOJI.get(platform, '')
-            device_info = format_device_label(platform, device_model)
-            if len(device_info) > 19:
-                device_info = device_info[:16] + '...'
-            if emoji_tag:
-                device_info = f'{emoji_tag} {device_info}'
+        platform = device.get('platform', 'Unknown')
+        device_model = device.get('deviceModel', 'Unknown')
+        os_version = device.get('osVersion') or device.get('os_version') or ''
+        app_version = device.get('appVersion') or device.get('app_version') or ''
+        emoji_tag = _PLATFORM_EMOJI.get(platform, '')
+        device_info = format_device_label(platform, device_model, os_version=os_version, app_version=app_version)
+        if len(device_info) > 30:
+            device_info = device_info[:27] + '...'
+        if emoji_tag:
+            device_info = f'{emoji_tag} {device_info}'
 
         keyboard.append(
             [
