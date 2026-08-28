@@ -963,6 +963,14 @@ async def main():
             except Exception as e:
                 logger.error('Ошибка остановки сервиса ротации логов', error=e)
 
+        logger.info('ℹ️ Остановка очереди повторной отправки писем...')
+        try:
+            from app.services.email_retry_service import email_retry_service
+
+            await email_retry_service.stop()
+        except Exception as e:
+            logger.warning('Ошибка остановки очереди повторной отправки писем', error=e)
+
         logger.info('ℹ️ Остановка журнала системных ошибок...')
         try:
             from app.services.system_error_log_service import system_error_log_service

@@ -4881,5 +4881,10 @@ class EmailQueueItem(Base):
     next_attempt_at = Column(AwareDateTime(), nullable=True)
     last_error = Column(Text, nullable=True)
 
+    # Докуда письмо вообще имеет смысл слать. У кода смены email жизнь 15 минут,
+    # у ссылки сброса пароля — час: доставленное позже письмо выглядит настоящим,
+    # но код в нём уже мёртвый, и это хуже, чем неприход. NULL = ограничения нет.
+    expires_at = Column(AwareDateTime(), nullable=True)
+
     created_at = Column(AwareDateTime(), server_default=func.now(), nullable=False, index=True)
     sent_at = Column(AwareDateTime(), nullable=True)

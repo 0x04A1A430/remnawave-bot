@@ -31,6 +31,7 @@ def upgrade() -> None:
         sa.Column('attempts', sa.Integer(), nullable=False, server_default='0'),
         sa.Column('next_attempt_at', sa.DateTime(timezone=True), nullable=True),
         sa.Column('last_error', sa.Text(), nullable=True),
+        sa.Column('expires_at', sa.DateTime(timezone=True), nullable=True),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.Column('sent_at', sa.DateTime(timezone=True), nullable=True),
     )
