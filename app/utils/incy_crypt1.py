@@ -46,6 +46,8 @@ _INCY_SCHEME = 'incy://'
 _IV_LEN = 12
 _PAYLOAD_VERSION = 1
 _PROVIDER_NAME_MAX_LEN = 128
+# Действия INCY, у которых хвост — ссылка подписки.
+_IMPORT_ACTIONS = frozenset({'import', 'add'})
 
 _key_cache: bytes | None = None
 _key_unavailable = False
@@ -120,17 +122,22 @@ def wrap_incy_deep_link(link: str | None, subscription_url: str | None = None) -
     if not link or not settings.INCY_CRYPTOLINK_ENABLED:
         return link
 
-    lowered = link.lower()
-    if not lowered.startswith(_INCY_SCHEME) or lowered.startswith(INCY_CRYPT1_DEEP_LINK_PREFIX):
-        return link
-    if '{{' in link:
+    if not link.lower().startswith(_INCY_SCHEME) or '{{' in link:
         return link
 
-    url = subscription_url
-    if not url:
-        # incy://import/<url> | incy://add/<url> — вытаскиваем сам url из хвоста
-        _, _, url = link[len(_INCY_SCHEME) :].partition('/')
-    if not url or not url.lower().startswith(('http://', 'https://')):
+    # incy://<действие>/<хвост>. Шифруется только импорт подписки: у служебных
+    # ссылок (incy://connect, incy://routing/..., уже готовая incy://crypt1/...)
+    # хвост не ссылка подписки, и подменять их на crypt1 нельзя — кнопка перестанет
+    # делать то, ради чего её добавили в конфиг.
+    action, _, tail = link[len(_INCY_SCHEME) :].partition('/')
+    if action.lower() not in _IMPORT_ACTIONS:
+        return link
+
+    # Хвост может быть закодирован в base64 (isNeedBase64Encoding) — crypt1 ждёт
+    # ссылку как есть, поэтому берём переданную ссылку подписки, а хвост нужен
+    # только когда вызывающий её не передал.
+    url = subscription_url or tail
+    if not url.lower().startswith(('http://', 'https://')):
         return link
 
     return encrypt_incy_link(url, settings.get_incy_provider_name()) or link

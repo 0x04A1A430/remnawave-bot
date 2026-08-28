@@ -98,6 +98,28 @@ class TestWrapIncyDeepLink:
         assert wrap_incy_deep_link('incy://connect', None) == 'incy://connect'
         assert wrap_incy_deep_link('incy://routing/add/base64data', None) == 'incy://routing/add/base64data'
 
+    @pytest.mark.parametrize(
+        'link',
+        [
+            'incy://connect',
+            'incy://routing/add/base64data',
+            f'{INCY_CRYPT1_DEEP_LINK_PREFIX}payload',
+        ],
+    )
+    def test_service_links_survive_a_known_subscription_url(self, incy_enabled, link):
+        # Both call sites always pass subscription_url, so the guard must key off the
+        # action in the link, not off whether a URL could be recovered from its tail:
+        # otherwise every incy:// button in the config collapses into the same
+        # import link and stops doing what it was added for.
+        assert wrap_incy_deep_link(link, SUB_URL) == link
+
+    def test_base64_payload_is_encrypted_from_the_known_url(self, incy_enabled):
+        # isNeedBase64Encoding puts base64 in the tail; crypt1 wants the plain URL.
+        assert decrypt(wrap_incy_deep_link('incy://import/YmFzZTY0', SUB_URL)) == {'url': SUB_URL, 'v': 1}
+
+    def test_base64_payload_without_a_known_url_is_untouched(self, incy_enabled):
+        assert wrap_incy_deep_link('incy://import/YmFzZTY0') == 'incy://import/YmFzZTY0'
+
     def test_disabled_setting_keeps_plain_link(self, monkeypatch):
         monkeypatch.setattr(settings, 'INCY_CRYPTOLINK_ENABLED', False)
         assert wrap_incy_deep_link(f'incy://import/{SUB_URL}', SUB_URL) == f'incy://import/{SUB_URL}'
