@@ -52,15 +52,20 @@ async def test_show_tariffs_list_single_tariff_skips_list_and_proceeds(monkeypat
     """Один тариф из get_tariffs_for_user → не рисуем список, сразу _proceed с skip_selection."""
     tariff = SimpleNamespace(id=42, name='Единственный')
     proceed = AsyncMock()
+    get_tariffs = AsyncMock(return_value=[tariff])
 
-    monkeypatch.setattr(m, 'get_tariffs_for_user', AsyncMock(return_value=[tariff]))
+    monkeypatch.setattr(m, 'get_tariffs_for_user', get_tariffs)
     monkeypatch.setattr(m, '_proceed_with_selected_tariff', proceed)
     monkeypatch.setattr(m, 'format_tariffs_list_text', MagicMock(return_value='LIST'))
     monkeypatch.setattr(m, 'get_tariffs_keyboard', MagicMock(return_value='KB'))
 
     callback = _callback()
-    await m.show_tariffs_list.__wrapped__(callback, _user(), AsyncMock(), _state())
+    db = AsyncMock()
+    await m.show_tariffs_list.__wrapped__(callback, _user(), db, _state())
 
+    # Guard: первым аргументом обязана быть сессия db, вторым — promo_group_id.
+    # Раньше сюда просачивался db_user ('User' has no attribute 'execute' в проде).
+    get_tariffs.assert_awaited_once_with(db, None)
     proceed.assert_awaited_once()
     assert proceed.await_args.args[4] == 42
     assert proceed.await_args.kwargs.get('skip_selection') is True
@@ -74,16 +79,20 @@ async def test_show_tariffs_list_multiple_tariffs_shows_list(monkeypatch):
         SimpleNamespace(id=2, name='B'),
     ]
     proceed = AsyncMock()
+    get_tariffs = AsyncMock(return_value=tariffs)
 
-    monkeypatch.setattr(m, 'get_tariffs_for_user', AsyncMock(return_value=tariffs))
+    monkeypatch.setattr(m, 'get_tariffs_for_user', get_tariffs)
     monkeypatch.setattr(m, '_proceed_with_selected_tariff', proceed)
     monkeypatch.setattr(m, 'format_tariffs_list_text', MagicMock(return_value='LIST TEXT'))
     monkeypatch.setattr(m, 'get_tariffs_keyboard', MagicMock(return_value='LIST KB'))
     monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: False)
 
     callback = _callback()
-    await m.show_tariffs_list.__wrapped__(callback, _user(), AsyncMock(), _state())
+    db = AsyncMock()
+    await m.show_tariffs_list.__wrapped__(callback, _user(), db, _state())
 
+    # Guard: и второй вызов тоже должен получать (db, promo_group_id).
+    get_tariffs.assert_awaited_with(db, None)
     proceed.assert_not_awaited()
     callback.message.edit_text.assert_awaited_once()
     assert callback.message.edit_text.await_args.args[0] == 'LIST TEXT'
