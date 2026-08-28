@@ -132,6 +132,12 @@ class NotificationDeliveryService:
     def _is_allowed_by_preferences(user: User, notification_type: NotificationType) -> bool:
         """Apply global, category and per-user notification switches centrally."""
         global_switch_exempt_types = {
+            # Ответ поддержки — реакция на обращение самого пользователя, а не
+            # рассылка: Telegram-канал шлёт его мимо роутера и ENABLE_NOTIFICATIONS
+            # не смотрит, гейт у него один — user_ticket_notifications_enabled.
+            # Без исключения email-юзер молча остаётся без ответа там, где
+            # Telegram-юзер его получает.
+            NotificationType.TICKET_REPLY,
             NotificationType.EMAIL_VERIFICATION,
             NotificationType.PASSWORD_RESET,
             NotificationType.EMAIL_CHANGE_CODE,

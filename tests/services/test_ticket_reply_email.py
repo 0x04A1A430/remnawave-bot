@@ -141,6 +141,44 @@ async def test_disabled_toggle_blocks_email(sent, last_message, monkeypatch: pyt
     assert sent == []
 
 
+async def test_global_notifications_switch_does_not_mute_support_replies(last_message, monkeypatch) -> None:
+    """ENABLE_NOTIFICATIONS не должен глушить ответ поддержки только email-юзеру.
+
+    Telegram-ветка шлёт уведомление мимо роутера и глобальный тумблер не смотрит:
+    её единственный гейт — user_ticket_notifications_enabled. Если email-канал
+    гейтить ещё и глобальным тумблером, при ENABLE_NOTIFICATIONS=false Telegram-юзер
+    ответ получит, а email-юзер молча останется без него.
+    """
+    from app.config import settings
+
+    monkeypatch.setattr(settings, 'ENABLE_NOTIFICATIONS', False)
+
+    emails: list = []
+
+    async def fake_email(user, notification_type, context):
+        emails.append(notification_type)
+        return True
+
+    monkeypatch.setattr(notification_delivery_service, '_send_email_notification', fake_email)
+
+    telegram: list = []
+
+    class FakeBot:
+        async def send_message(self, **kwargs):
+            telegram.append(kwargs)
+
+        async def send_photo(self, **kwargs):
+            telegram.append(kwargs)
+
+    await admin_tickets.notify_user_about_ticket_reply(None, _ticket(_user()), 'Ответ', None)
+    await admin_tickets.notify_user_about_ticket_reply(
+        FakeBot(), _ticket(_user(telegram_id=12345), ticket_id=43), 'Ответ', None
+    )
+
+    assert telegram, 'Telegram-юзер получает ответ независимо от глобального тумблера'
+    assert emails == [NotificationType.TICKET_REPLY], 'email-юзер должен получить тот же ответ'
+
+
 async def test_user_without_verified_email_is_skipped(sent, last_message) -> None:
     await admin_tickets.notify_user_about_ticket_reply(None, _ticket(_user(email_verified=False)), 'Ответ', None)
 
