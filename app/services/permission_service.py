@@ -75,6 +75,7 @@ PERMISSION_REGISTRY: dict[str, list[str]] = {
     'settings': ['read', 'edit'],
     'roles': ['read', 'create', 'edit', 'delete', 'assign'],
     'audit_log': ['read', 'export'],
+    'system_errors': ['read', 'manage'],
     'channels': ['read', 'edit'],
     'ban_system': ['read', 'edit', 'ban', 'unban'],
     'wheel': ['read', 'edit'],

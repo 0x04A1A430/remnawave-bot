@@ -963,6 +963,15 @@ async def main():
             except Exception as e:
                 logger.error('Ошибка остановки сервиса ротации логов', error=e)
 
+        logger.info('ℹ️ Остановка журнала системных ошибок...')
+        try:
+            from app.services.system_error_log_service import system_error_log_service
+
+            await system_error_log_service.stop()
+        except Exception as e:
+            # warning: error отсюда ушёл бы в тот же конвейер, который мы гасим
+            logger.warning('Ошибка остановки журнала системных ошибок', error=e)
+
         logger.info('ℹ️ Остановка очереди чеков NaloGO...')
         try:
             await nalogo_queue_service.stop()

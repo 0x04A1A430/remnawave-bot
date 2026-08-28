@@ -31,6 +31,7 @@ from app.services.gift_claim_service import (
 from app.services.guest_purchase_service import (
     GuestPurchaseError,
     _find_or_create_user,
+    activate_purchase as activate_guest_purchase,
     create_purchase,
     evaluate_guest_purchase_registration,
     validate_and_calculate,
