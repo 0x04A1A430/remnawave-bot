@@ -37,7 +37,15 @@ MAX_HEADING_LEVEL = 6
 
 
 def tracked_paths() -> list[Path]:
-    """Файлы под контролем версий — единственный воспроизводимый источник."""
+    """Файлы проекта: отслеживаемые плюс новые, которые git не игнорирует.
+
+    Брать только индекс (`git ls-files`) нельзя: новый файл попадал бы в
+    документ лишь ПОСЛЕ коммита, поэтому локально проверка была зелёной, а в CI
+    сразу после того же коммита краснела. Ровно так и вышло. `--others
+    --exclude-standard` добавляет ещё не добавленные в индекс файлы, не считая
+    игнорируемых, — состояние индекса перестаёт влиять на результат, а мусор из
+    рабочей копии по-прежнему отсекается через .gitignore.
+    """
     git = shutil.which('git')
     if git is None:
         raise RuntimeError('git не найден в PATH — список файлов взять неоткуда')
@@ -45,13 +53,13 @@ def tracked_paths() -> list[Path]:
     # Аргументы фиксированы, путь к git взят из PATH через which — внешнего
     # ввода здесь нет.
     result = subprocess.run(  # noqa: S603
-        [git, 'ls-files', '-z'],
+        [git, 'ls-files', '-z', '--cached', '--others', '--exclude-standard'],
         cwd=ROOT,
         capture_output=True,
         check=True,
         text=True,
     )
-    return sorted(Path(name) for name in result.stdout.split('\0') if name)
+    return sorted({Path(name) for name in result.stdout.split('\0') if name})
 
 
 def _first_docstring_line(node: ast.AST) -> str:

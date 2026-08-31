@@ -2618,7 +2618,7 @@
   Функции: `main`
 - `scripts/generate_structure_reference.py` — Python-модуль
   Классы: нет
-  Функции: `tracked_paths` — Файлы под контролем версий — единственный воспроизводимый источник., `describe_module` — Строки «Классы:» и «Функции:» для модуля., `render_entries`, `render`, `build`, `main`
+  Функции: `tracked_paths` — Файлы проекта: отслеживаемые плюс новые, которые git не игнорирует., `describe_module` — Строки «Классы:» и «Функции:» для модуля., `render_entries`, `render`, `build`, `main`
 
 ## tests
 
@@ -3321,6 +3321,9 @@
 - `tests/services/test_autopay_period.py` — Python-модуль
   Классы: нет
   Функции: `test_resolve_autopay_period_candidate_with_tariff`, `test_resolve_autopay_period_candidate_falls_back_to_global_when_tariff_has_no_periods` — When the tariff has no priced periods, validation falls back to the global allowlist, `test_resolve_autopay_period_candidate_falls_back_to_global_when_no_tariff` — Classic-mode (no tariff) subscriptions still need bounded periods — the global, `test_resolve_autopay_period_candidate_rejects_when_both_allowlists_empty` — Fail-closed: with no allowlist available anywhere, ANY candidate is rejected and the, `test_resolve_autopay_period_candidate_swallows_broken_tariff` — A tariff whose ``get_available_periods`` raises (corrupted period_prices, ORM lazy-load, `test_update_subscription_autopay_sentinel_does_not_touch_period_when_omitted` — Legacy callers (autopay.py:154, autopay.py:188, miniapp.py:3733) invoke with positional, `test_update_subscription_autopay_explicit_none_clears_period` — When the user clicks "По умолчанию" in the period picker, the handler passes, `test_update_subscription_autopay_explicit_int_sets_period`, `test_update_subscription_autopay_enable_cancels_sbp_recurring` — Взаимоисключение движков продления ЦЕНТРАЛИЗОВАНО в CRUD: включение, `test_update_subscription_autopay_disable_does_not_touch_sbp` — Выключение balance-autopay НЕ должно трогать СБП-автопродление —, `test_autopay_period_unset_sentinel_is_module_private` — The sentinel must stay a private object — exporting it would tempt callers to, `test_set_autopay_period_default_suffix_clears_override` — Suffix `default` → clear the per-subscription override (passes period_days=None)., `test_set_autopay_period_valid_int_writes_period` — Suffix matching a valid tariff period → write it to the subscription., `test_set_autopay_period_invalid_int_alerts_without_writing` — Suffix matching an integer NOT in the tariff allowlist → alert the user and do NOT
+- `tests/services/test_backup_covers_all_payments.py` — Python-модуль
+  Классы: нет
+  Функции: `test_every_payment_table_is_exported`, `test_export_list_has_no_phantom_payment_tables` — Обратная сторона: модель в списке, а таблицы уже нет., `test_payment_table_is_cleared_on_restore` — Восстановление «с заменой» должно чистить и таблицы платежей.
 - `tests/services/test_backup_schedule_skip.py` — Python-модуль
   Классы: нет
   Функции: `test_skips_all_missed_hourly_slots_in_one_step`, `test_skips_missed_15min_slots`, `test_future_next_run_advances_by_one_interval`
