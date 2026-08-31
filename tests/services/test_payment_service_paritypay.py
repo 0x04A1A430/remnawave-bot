@@ -503,3 +503,180 @@ def test_is_paritypay_enabled_requires_all_three_credentials(monkeypatch: pytest
 
     monkeypatch.setattr(settings, 'PARITYPAY_CALLBACK_SECRET', 'secret-2', raising=False)
     assert settings.is_paritypay_enabled() is True
+
+
+# ---------------------------------------------------------------------------
+# check_paritypay_payment_status — страховка на случай потерянного уведомления
+# ---------------------------------------------------------------------------
+
+
+class StubInvoiceApi:
+    """Заглушка чтения счёта: отдаёт заготовку либо бросает исключение."""
+
+    def __init__(self, invoice: dict[str, Any] | None = None, error: Exception | None = None) -> None:
+        self.invoice = invoice
+        self.error = error
+        self.calls: list[dict[str, Any]] = []
+
+    async def get_invoice(self, **kwargs: Any) -> dict[str, Any] | None:
+        self.calls.append(kwargs)
+        if self.error:
+            raise self.error
+        return self.invoice
+
+
+def _api_invoice(status: str = 'PAID', amount: Any = 1250.0) -> dict[str, Any]:
+    return {
+        'id': '9beea835-0937-4b5c-8f5a-c3a0d0e60346',
+        'order_id': 'pp123_abcdef12',
+        'amount': amount,
+        'status': status,
+        'link': 'https://pay.paritypay.net/9beea835',
+    }
+
+
+@pytest.mark.anyio('asyncio')
+async def test_api_check_credits_paid_invoice(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Уведомление потерялось — сверка обязана закрыть оплаченный счёт."""
+    payment = FakeParityPayPayment(amount_kopeks=125000)
+    payment.paritypay_payment_id = '9beea835-0937-4b5c-8f5a-c3a0d0e60346'
+    _patch_crud(monkeypatch, payment)
+    api = StubInvoiceApi(_api_invoice())
+    monkeypatch.setattr(paritypay_mixin_module, 'paritypay_service', api)
+
+    service = _make_service()
+    finalize = AsyncMock(return_value=True)
+    monkeypatch.setattr(service, '_finalize_paritypay_payment', finalize, raising=False)
+
+    result = await service.check_paritypay_payment_status(DummySession(), payment.order_id)
+
+    assert result is not None
+    assert payment.is_paid is True
+    assert payment.status == 'success'
+    finalize.assert_awaited_once()
+    # Читаем по id процессинга, раз он известен
+    assert api.calls[0]['invoice_id'] == '9beea835-0937-4b5c-8f5a-c3a0d0e60346'
+
+
+@pytest.mark.anyio('asyncio')
+async def test_api_check_falls_back_to_order_id(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Если id процессинга не сохранился, ищем по своему order_id."""
+    payment = FakeParityPayPayment()
+    payment.paritypay_payment_id = None
+    _patch_crud(monkeypatch, payment)
+    api = StubInvoiceApi(_api_invoice(status='NEW'))
+    monkeypatch.setattr(paritypay_mixin_module, 'paritypay_service', api)
+
+    service = _make_service()
+    await service.check_paritypay_payment_status(DummySession(), payment.order_id)
+
+    assert api.calls[0]['order_id'] == payment.order_id
+    assert api.calls[0]['invoice_id'] is None
+
+
+@pytest.mark.anyio('asyncio')
+async def test_api_check_amount_mismatch_blocks_credit(monkeypatch: pytest.MonkeyPatch) -> None:
+    payment = FakeParityPayPayment(amount_kopeks=125000)
+    payment.paritypay_payment_id = 'x'
+    update = _patch_crud(monkeypatch, payment)
+    monkeypatch.setattr(paritypay_mixin_module, 'paritypay_service', StubInvoiceApi(_api_invoice(amount=1249.99)))
+
+    service = _make_service()
+    finalize = AsyncMock(return_value=True)
+    monkeypatch.setattr(service, '_finalize_paritypay_payment', finalize, raising=False)
+
+    result = await service.check_paritypay_payment_status(DummySession(), payment.order_id)
+
+    assert result['is_paid'] is False
+    finalize.assert_not_awaited()
+    assert update.await_args.kwargs['status'] == 'amount_mismatch'
+
+
+@pytest.mark.anyio('asyncio')
+async def test_api_check_unparseable_amount_blocks_credit(monkeypatch: pytest.MonkeyPatch) -> None:
+    payment = FakeParityPayPayment()
+    payment.paritypay_payment_id = 'x'
+    _patch_crud(monkeypatch, payment)
+    monkeypatch.setattr(paritypay_mixin_module, 'paritypay_service', StubInvoiceApi(_api_invoice(amount='нет')))
+
+    service = _make_service()
+    finalize = AsyncMock(return_value=True)
+    monkeypatch.setattr(service, '_finalize_paritypay_payment', finalize, raising=False)
+
+    result = await service.check_paritypay_payment_status(DummySession(), payment.order_id)
+
+    assert result['is_paid'] is False
+    finalize.assert_not_awaited()
+
+
+@pytest.mark.anyio('asyncio')
+async def test_api_check_syncs_non_paid_status(monkeypatch: pytest.MonkeyPatch) -> None:
+    payment = FakeParityPayPayment()
+    payment.paritypay_payment_id = 'x'
+    update = _patch_crud(monkeypatch, payment)
+    monkeypatch.setattr(paritypay_mixin_module, 'paritypay_service', StubInvoiceApi(_api_invoice(status='EXPIRED')))
+
+    service = _make_service()
+    result = await service.check_paritypay_payment_status(DummySession(), payment.order_id)
+
+    assert result['is_paid'] is False
+    assert update.await_args.kwargs['status'] == 'expired'
+
+
+@pytest.mark.anyio('asyncio')
+async def test_api_check_handles_missing_invoice(monkeypatch: pytest.MonkeyPatch) -> None:
+    """404 у провайдера — счёта нет, зачислять нечего."""
+    payment = FakeParityPayPayment()
+    payment.paritypay_payment_id = 'x'
+    update = _patch_crud(monkeypatch, payment)
+    monkeypatch.setattr(paritypay_mixin_module, 'paritypay_service', StubInvoiceApi(None))
+
+    service = _make_service()
+    result = await service.check_paritypay_payment_status(DummySession(), payment.order_id)
+
+    assert result['is_paid'] is False
+    update.assert_not_awaited()
+
+
+@pytest.mark.anyio('asyncio')
+async def test_api_check_survives_api_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Провайдер недоступен — возвращаем текущее состояние, а не падаем."""
+    payment = FakeParityPayPayment()
+    payment.paritypay_payment_id = 'x'
+    _patch_crud(monkeypatch, payment)
+    monkeypatch.setattr(
+        paritypay_mixin_module, 'paritypay_service', StubInvoiceApi(error=ParityPayNetworkError('down'))
+    )
+
+    service = _make_service()
+    result = await service.check_paritypay_payment_status(DummySession(), payment.order_id)
+
+    assert result is not None
+    assert result['is_paid'] is False
+    assert payment.is_paid is False
+
+
+@pytest.mark.anyio('asyncio')
+async def test_api_check_skips_already_paid_and_final(monkeypatch: pytest.MonkeyPatch) -> None:
+    """К провайдеру не ходим: платёж уже закрыт."""
+    api = StubInvoiceApi(_api_invoice())
+    monkeypatch.setattr(paritypay_mixin_module, 'paritypay_service', api)
+    service = _make_service()
+
+    paid = FakeParityPayPayment(status='success', is_paid=True)
+    _patch_crud(monkeypatch, paid)
+    assert (await service.check_paritypay_payment_status(DummySession(), paid.order_id))['is_paid'] is True
+
+    refunded = FakeParityPayPayment(status='refunded')
+    _patch_crud(monkeypatch, refunded)
+    assert (await service.check_paritypay_payment_status(DummySession(), refunded.order_id))['is_paid'] is False
+
+    assert api.calls == []
+
+
+@pytest.mark.anyio('asyncio')
+async def test_api_check_unknown_order_returns_none(monkeypatch: pytest.MonkeyPatch) -> None:
+    _patch_crud(monkeypatch, None)
+    service = _make_service()
+
+    assert await service.check_paritypay_payment_status(DummySession(), 'pp-unknown') is None
