@@ -103,19 +103,14 @@ git clone https://github.com/Fr1ngg/remnawave-bedolaga-telegram-bot.git
 cd remnawave-bedolaga-telegram-bot
 ```
 
-2. **Создайте виртуальное окружение:**
+2. **Поставьте зависимости:**
 ```bash
-python -m venv venv
-source venv/bin/activate  # Linux/Mac
-# или
-venv\Scripts\activate  # Windows
+uv sync --group dev
 ```
 
-3. **Установите зависимости:**
-```bash
-pip install -r requirements.txt
-pip install -r requirements-dev.txt  # если есть dev зависимости
-```
+`uv` сам создаст `.venv` и поставит версии из `uv.lock` — те же, что в Docker
+и в CI. Активировать окружение вручную не нужно: команды запускаются через
+`uv run` (`uv run pytest`, `uv run ruff check .`).
 
 4. **Настройте окружение:**
 ```bash
