@@ -1238,6 +1238,7 @@ class UserService:
                 RioPayPayment,
                 RollyPayPayment,
                 SeverPayPayment,
+                TabPayPayment,
             )
 
             extra_payment_models = (
@@ -1253,6 +1254,7 @@ class UserService:
                 DonutPayment,
                 LavaPayment,
                 CisPayPayment,
+                TabPayPayment,
             )
             for model in extra_payment_models:
                 try:

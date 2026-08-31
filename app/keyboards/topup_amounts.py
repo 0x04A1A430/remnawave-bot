@@ -34,6 +34,8 @@ METHOD_CONFIG_IDS = {
     'lava_sbp': 'lava',
     'cispay_card': 'cispay',
     'cispay_sbp': 'cispay',
+    'tabpay_card': 'tabpay',
+    'tabpay_sbp': 'tabpay',
     'overpay_fps': 'overpay',
     'overpay_card': 'overpay',
     'overpay_int': 'overpay',

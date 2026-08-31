@@ -45,6 +45,7 @@ PROVIDERS = [
     'riopay',
     'rollypay',
     'severpay',
+    'tabpay',
     'wata',
     'yookassa',
 ]

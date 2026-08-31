@@ -1825,6 +1825,76 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
 
         routes_registered = True
 
+    # TabPay webhook (tabpay.org)
+    if settings.is_tabpay_configured():
+
+        @router.get(settings.TABPAY_WEBHOOK_PATH)
+        async def tabpay_health() -> JSONResponse:
+            return JSONResponse(
+                {
+                    'status': 'ok',
+                    'service': 'tabpay_webhook',
+                    'enabled': settings.is_tabpay_enabled(),
+                }
+            )
+
+        @router.post(settings.TABPAY_WEBHOOK_PATH)
+        async def tabpay_webhook(request: Request) -> JSONResponse:
+            # Сырые байты тела: подпись считается ДО разбора JSON, потому что
+            # пересобранный JSON меняет порядок ключей и пробелы.
+            raw_body = await request.body()
+
+            from app.services.tabpay_service import tabpay_service
+
+            # X-Signature-V2 — HMAC-SHA256 от «{X-Timestamp}.{тело}»; окно
+            # свежести метки закрывает переигрывание перехваченного вебхука.
+            if not tabpay_service.verify_webhook_signature(
+                raw_body,
+                request.headers.get('X-Timestamp'),
+                request.headers.get('X-Signature-V2'),
+            ):
+                logger.warning('TabPay webhook: invalid signature')
+                return JSONResponse({'status': 'error'}, status_code=status.HTTP_400_BAD_REQUEST)
+
+            try:
+                payload = json.loads(raw_body)
+            except Exception as parse_error:
+                logger.error('TabPay webhook: failed to parse JSON', parse_error=parse_error)
+                return JSONResponse({'status': 'error'}, status_code=status.HTTP_400_BAD_REQUEST)
+
+            if not isinstance(payload, dict):
+                logger.error('TabPay webhook: тело не является объектом JSON')
+                return JSONResponse({'status': 'error'}, status_code=status.HTTP_400_BAD_REQUEST)
+
+            # TabPay ждёт 2xx за 5 секунд, а зачисление тянет за собой транзакцию,
+            # уведомления и реферальные начисления. Подтверждаем доставку сразу
+            # после проверки подписи, работу доделываем фоном: обработчик берёт
+            # свою сессию БД и блокирует строку платежа, поэтому параллельные
+            # доставки безопасны. Потерянное фоном зачисление подхватит сверка
+            # по API (SUPPORTED_AUTO_CHECK_METHODS), а drain_webhook_bg_tasks
+            # не даёт задаче пропасть при остановке процесса.
+            async def _process_tabpay_bg() -> None:
+                try:
+                    success = await _process_payment_service_callback(
+                        payment_service,
+                        payload,
+                        'process_tabpay_callback',
+                    )
+                    if not success:
+                        logger.error(
+                            'TabPay webhook processing failed',
+                            order_id=payload.get('orderId'),
+                            payment_id=payload.get('id'),
+                            payment_status=payload.get('status'),
+                        )
+                except Exception as e:
+                    logger.exception('TabPay webhook processing error', error=e)
+
+            _spawn_webhook_bg(_process_tabpay_bg())
+            return JSONResponse({'status': 'ok'}, status_code=status.HTTP_200_OK)
+
+        routes_registered = True
+
     # Donut webhook (Donut P2P)
     if settings.is_donut_configured():
 
@@ -1902,6 +1972,7 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
                     'donut_enabled': settings.is_donut_enabled(),
                     'lava_enabled': settings.is_lava_enabled(),
                     'cispay_enabled': settings.is_cispay_enabled(),
+                    'tabpay_enabled': settings.is_tabpay_enabled(),
                 }
             )
 

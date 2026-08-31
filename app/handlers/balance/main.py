@@ -212,6 +212,13 @@ async def route_payment_by_method(
             await process_lava_payment_amount(message, db_user, db, amount_kopeks, state)
         return True
 
+    if payment_method in ('tabpay', 'tabpay_card', 'tabpay_sbp'):
+        from .tabpay import process_tabpay_payment_amount
+
+        async with AsyncSessionLocal() as db:
+            await process_tabpay_payment_amount(message, db_user, db, amount_kopeks, state)
+        return True
+
     if payment_method in ('cispay', 'cispay_card', 'cispay_sbp'):
         from .cispay import process_cispay_payment_amount
 
@@ -871,6 +878,12 @@ def register_balance_handlers(dp: Dispatcher):
     dp.callback_query.register(start_cispay_topup, F.data == 'topup_cispay')
     dp.callback_query.register(start_cispay_card_topup, F.data == 'topup_cispay_card')
     dp.callback_query.register(start_cispay_sbp_topup, F.data == 'topup_cispay_sbp')
+
+    from .tabpay import start_tabpay_card_topup, start_tabpay_sbp_topup, start_tabpay_topup
+
+    dp.callback_query.register(start_tabpay_topup, F.data == 'topup_tabpay')
+    dp.callback_query.register(start_tabpay_card_topup, F.data == 'topup_tabpay_card')
+    dp.callback_query.register(start_tabpay_sbp_topup, F.data == 'topup_tabpay_sbp')
 
     from .mulenpay import check_mulenpay_payment_status
 

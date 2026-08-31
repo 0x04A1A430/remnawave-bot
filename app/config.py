@@ -1034,6 +1034,26 @@ class Settings(BaseSettings):
     CISPAY_SBP_ENABLED: bool = False
     CISPAY_SBP_DISPLAY_NAME: str = 'СБП (CisPay)'
 
+    # TabPay (tabpay.org, СБП и карты с 3-D Secure)
+    TABPAY_ENABLED: bool = False
+    # X-Api-Key магазина (tp_...). Показывается в кабинете один раз, перевыпуск отзывает старый.
+    TABPAY_API_KEY: str | None = None
+    # «Секрет подписи» из вкладки Webhook — ключ HMAC для X-Signature-V2.
+    TABPAY_WEBHOOK_SECRET: str | None = None
+    TABPAY_BASE_URL: str = 'https://tabpay.org/api'
+    TABPAY_DISPLAY_NAME: str = 'TabPay'
+    TABPAY_MIN_AMOUNT_KOPEKS: int = 10000  # 100₽
+    TABPAY_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000₽
+    TABPAY_WEBHOOK_PATH: str = '/tabpay-webhook'
+    # Окно свежести X-Timestamp: защищает от переигрывания перехваченного вебхука.
+    # Требует синхронных часов на сервере (NTP), иначе свежие вебхуки не пройдут.
+    TABPAY_WEBHOOK_MAX_AGE_SECONDS: int = 300
+    # Sub-методы TabPay (поле method в запросе создания платежа)
+    TABPAY_CARD_ENABLED: bool = False
+    TABPAY_CARD_DISPLAY_NAME: str = 'Карта (TabPay)'
+    TABPAY_SBP_ENABLED: bool = False
+    TABPAY_SBP_DISPLAY_NAME: str = 'СБП (TabPay)'
+
     # Lava (Lava Business API, api.lava.ru)
     LAVA_ENABLED: bool = False
     LAVA_BASE_URL: str = 'https://api.lava.ru'
@@ -3104,6 +3124,42 @@ class Settings(BaseSettings):
 
     def get_cispay_sbp_display_name_html(self) -> str:
         return html.escape(self.get_cispay_sbp_display_name())
+
+    def is_tabpay_configured(self) -> bool:
+        """Есть ли учётные данные провайдера — без учёта флага включения."""
+        return bool(self.TABPAY_API_KEY and self.TABPAY_WEBHOOK_SECRET)
+
+    def is_tabpay_enabled(self) -> bool:
+        # Секрет вебхука обязателен наравне с API-ключом: без него подпись
+        # X-Signature-V2 не проверить, и вебхук пришлось бы принимать вслепую.
+        return bool(self.TABPAY_ENABLED and self.TABPAY_API_KEY and self.TABPAY_WEBHOOK_SECRET)
+
+    def get_tabpay_display_name(self) -> str:
+        name = (self.TABPAY_DISPLAY_NAME or '').strip()
+        return name or 'TabPay'
+
+    def get_tabpay_display_name_html(self) -> str:
+        return html.escape(self.get_tabpay_display_name())
+
+    def is_tabpay_card_enabled(self) -> bool:
+        return self.TABPAY_CARD_ENABLED and self.is_tabpay_enabled()
+
+    def get_tabpay_card_display_name(self) -> str:
+        name = (self.TABPAY_CARD_DISPLAY_NAME or '').strip()
+        return name or 'Карта (TabPay)'
+
+    def get_tabpay_card_display_name_html(self) -> str:
+        return html.escape(self.get_tabpay_card_display_name())
+
+    def is_tabpay_sbp_enabled(self) -> bool:
+        return self.TABPAY_SBP_ENABLED and self.is_tabpay_enabled()
+
+    def get_tabpay_sbp_display_name(self) -> str:
+        name = (self.TABPAY_SBP_DISPLAY_NAME or '').strip()
+        return name or 'СБП (TabPay)'
+
+    def get_tabpay_sbp_display_name_html(self) -> str:
+        return html.escape(self.get_tabpay_sbp_display_name())
 
     def is_donut_configured(self) -> bool:
         """Есть ли учётные данные провайдера — без учёта флага включения."""

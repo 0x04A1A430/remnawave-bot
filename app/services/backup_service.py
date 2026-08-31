@@ -1686,6 +1686,7 @@ class BackupService:
             'aurapay_payments',
             'etoplatezhi_payments',
             'antilopay_payments',
+            'tabpay_payments',
             'apple_transactions',
             'saved_payment_methods',
             # --- Content/config ---

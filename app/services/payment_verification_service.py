@@ -38,6 +38,7 @@ from app.database.models import (
     RioPayPayment,
     RollyPayPayment,
     SeverPayPayment,
+    TabPayPayment,
     Transaction,
     TransactionType,
     User,
@@ -90,6 +91,7 @@ SUPPORTED_MANUAL_CHECK_METHODS: frozenset[PaymentMethod] = frozenset(
         PaymentMethod.ROLLYPAY,
         PaymentMethod.AURAPAY,
         PaymentMethod.CISPAY,
+        PaymentMethod.TABPAY,
         # ETOPLATEZHI / ANTILOPAY / JUPITER / DONUT / LAVA — webhook-driven,
         # без API-метода синхронизации БД, manual check не реализован.
     }
@@ -117,6 +119,7 @@ SUPPORTED_AUTO_CHECK_METHODS: frozenset[PaymentMethod] = frozenset(
         PaymentMethod.ROLLYPAY,
         PaymentMethod.AURAPAY,
         PaymentMethod.CISPAY,
+        PaymentMethod.TABPAY,
     }
 )
 
@@ -166,6 +169,8 @@ def method_display_name(method: PaymentMethod) -> str:
         return settings.get_lava_display_name()
     if method == PaymentMethod.CISPAY:
         return settings.get_cispay_display_name()
+    if method == PaymentMethod.TABPAY:
+        return settings.get_tabpay_display_name()
     if method == PaymentMethod.TELEGRAM_STARS:
         return 'Telegram Stars'
     return method.value
@@ -216,6 +221,8 @@ def _method_is_enabled(method: PaymentMethod) -> bool:
         return settings.is_lava_enabled()
     if method == PaymentMethod.CISPAY:
         return settings.is_cispay_enabled()
+    if method == PaymentMethod.TABPAY:
+        return settings.is_tabpay_enabled()
     return False
 
 
@@ -526,6 +533,14 @@ def _is_cispay_pending(payment: CisPayPayment) -> bool:
         return False
     status = (payment.status or '').lower()
     return status == 'pending'
+
+
+def _is_tabpay_pending(payment: TabPayPayment) -> bool:
+    if payment.is_paid:
+        return False
+    from app.services.payment.tabpay import TABPAY_PENDING_STATUSES
+
+    return (payment.status or '').lower() in TABPAY_PENDING_STATUSES
 
 
 def _parse_cryptobot_amount_kopeks(payment: CryptoBotPayment) -> int:
@@ -1105,6 +1120,32 @@ async def _fetch_lava_payments(db: AsyncSession, cutoff: datetime) -> list[Pendi
     return records
 
 
+async def _fetch_tabpay_payments(db: AsyncSession, cutoff: datetime) -> list[PendingPayment]:
+    stmt = (
+        select(TabPayPayment)
+        .options(selectinload(TabPayPayment.user))
+        .where(TabPayPayment.created_at >= cutoff)
+        .order_by(desc(TabPayPayment.created_at))
+    )
+    result = await db.execute(stmt)
+    records: list[PendingPayment] = []
+    for payment in result.scalars().all():
+        if not _is_tabpay_pending(payment):
+            continue
+        record = _build_record(
+            PaymentMethod.TABPAY,
+            payment,
+            identifier=payment.order_id,
+            amount_kopeks=payment.amount_kopeks,
+            status=payment.status or '',
+            is_paid=bool(payment.is_paid),
+            expires_at=getattr(payment, 'expires_at', None),
+        )
+        if record:
+            records.append(record)
+    return records
+
+
 async def _fetch_cispay_payments(db: AsyncSession, cutoff: datetime) -> list[PendingPayment]:
     stmt = (
         select(CisPayPayment)
@@ -1189,6 +1230,7 @@ async def list_recent_pending_payments(
         await _fetch_donut_payments(db, cutoff),
         await _fetch_lava_payments(db, cutoff),
         await _fetch_cispay_payments(db, cutoff),
+        await _fetch_tabpay_payments(db, cutoff),
         await _fetch_stars_transactions(db, cutoff),
     )
 
@@ -1507,6 +1549,21 @@ async def get_payment_record(
             expires_at=getattr(payment, 'expires_at', None),
         )
 
+    if method == PaymentMethod.TABPAY:
+        payment = await db.get(TabPayPayment, local_payment_id)
+        if not payment:
+            return None
+        await db.refresh(payment, attribute_names=['user'])
+        return _build_record(
+            method,
+            payment,
+            identifier=payment.order_id,
+            amount_kopeks=payment.amount_kopeks,
+            status=payment.status or '',
+            is_paid=bool(payment.is_paid),
+            expires_at=getattr(payment, 'expires_at', None),
+        )
+
     if method == PaymentMethod.CISPAY:
         payment = await db.get(CisPayPayment, local_payment_id)
         if not payment:
@@ -1619,6 +1676,13 @@ async def run_manual_check(
             cispay_payment = await db.get(CisPayPayment, local_payment_id)
             if cispay_payment:
                 result = await payment_service.check_cispay_payment_status(db, cispay_payment.order_id)
+                payment = result.get('payment') if result else None
+            else:
+                payment = None
+        elif method == PaymentMethod.TABPAY:
+            tabpay_payment = await db.get(TabPayPayment, local_payment_id)
+            if tabpay_payment:
+                result = await payment_service.check_tabpay_payment_status(db, tabpay_payment.order_id)
                 payment = result.get('payment') if result else None
             else:
                 payment = None

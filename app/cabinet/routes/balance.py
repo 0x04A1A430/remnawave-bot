@@ -1053,6 +1053,38 @@ async def create_topup(
                     detail='Failed to create CisPay payment',
                 )
 
+        elif request.payment_method == 'tabpay':
+            if not settings.is_tabpay_enabled():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail='TabPay payment method is unavailable',
+                )
+
+            payment_service = PaymentService()
+            payment_method_type = request.payment_option or None
+            result = await payment_service.create_tabpay_payment(
+                db=db,
+                user_id=user.id,
+                amount_kopeks=request.amount_kopeks,
+                description=settings.get_balance_payment_description(
+                    request.amount_kopeks, telegram_user_id=user.telegram_id, user_db_id=user.id
+                ),
+                email=getattr(user, 'email', None),
+                language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
+                payment_method_type=payment_method_type,
+                return_url=cabinet_success_url,
+                fail_url=cabinet_failed_url,
+            )
+
+            if result and result.get('payment_url'):
+                payment_url = result.get('payment_url')
+                payment_id = str(result.get('local_payment_id') or result.get('order_id') or 'pending')
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail='Failed to create TabPay payment',
+                )
+
         else:
             # For other payment methods, redirect to bot
             raise HTTPException(
@@ -1255,6 +1287,20 @@ def _get_status_info(record: PendingPayment) -> tuple[str, str]:
         }
         return mapping.get(status, ('❓', 'Неизвестно'))
 
+    if record.method == PaymentMethod.TABPAY:
+        mapping = {
+            'pending': ('⏳', 'Ожидает оплаты'),
+            'processing': ('⌛', 'Оплачивается'),
+            'success': ('✅', 'Оплачено'),
+            'declined': ('❌', 'Отклонено'),
+            'expired': ('⌛', 'Истёк'),
+            'refunded': ('↩️', 'Возвращён'),
+            'canceled': ('❌', 'Отменён'),
+            'error': ('❌', 'Ошибка'),
+            'amount_mismatch': ('⚠️', 'Несовпадение суммы'),
+        }
+        return mapping.get(status, ('❓', 'Неизвестно'))
+
     return '❓', 'Неизвестно'
 
 
@@ -1289,6 +1335,9 @@ def _is_checkable(record: PendingPayment) -> bool:
         return status in {'pending'}
     if record.method == PaymentMethod.CISPAY:
         return status in {'pending'}
+    if record.method == PaymentMethod.TABPAY:
+        # PENDING держится 20 минут после начала оплаты, поэтому проверяем и его.
+        return status in {'pending', 'processing'}
     return False
 
 
