@@ -217,20 +217,11 @@ def registered_paths() -> dict[str, set[str]]:
 # Promocode/promo-group tests in tests/services/test_promocode_service.py,
 # tests/crud/test_promocode_crud.py, and tests/integration/test_promocode_promo_group_flow.py
 # all rely on these without importing them directly.
-pytest_plugins = ['tests.fixtures.promocode_fixtures']
-
-
-def pytest_configure(config: pytest.Config) -> None:
-    """Регистрируем маркеры для асинхронных тестов."""
-
-    config.addinivalue_line(
-        'markers',
-        'asyncio: запуск асинхронного теста через встроенный цикл событий',
-    )
-    config.addinivalue_line(
-        'markers',
-        'anyio: запуск асинхронного теста через встроенный цикл событий',
-    )
+pytest_plugins = [
+    'tests.fixtures.promocode_fixtures',
+    # Даёт фикстуру postgres_database тестам на настоящем PostgreSQL.
+    'tests.fixtures.postgres_db',
+]
 
 
 def _unwrap_test(obj):
