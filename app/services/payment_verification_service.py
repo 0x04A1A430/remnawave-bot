@@ -32,6 +32,7 @@ from app.database.models import (
     LavaPayment,
     MulenPayPayment,
     Pal24Payment,
+    ParityPayPayment,
     PaymentMethod,
     PayPearPayment,
     PlategaPayment,
@@ -92,6 +93,7 @@ SUPPORTED_MANUAL_CHECK_METHODS: frozenset[PaymentMethod] = frozenset(
         PaymentMethod.AURAPAY,
         PaymentMethod.CISPAY,
         PaymentMethod.TABPAY,
+        PaymentMethod.PARITYPAY,
         # ETOPLATEZHI / ANTILOPAY / JUPITER / DONUT / LAVA — webhook-driven,
         # без API-метода синхронизации БД, manual check не реализован.
     }
@@ -120,6 +122,7 @@ SUPPORTED_AUTO_CHECK_METHODS: frozenset[PaymentMethod] = frozenset(
         PaymentMethod.AURAPAY,
         PaymentMethod.CISPAY,
         PaymentMethod.TABPAY,
+        PaymentMethod.PARITYPAY,
     }
 )
 
@@ -171,6 +174,8 @@ def method_display_name(method: PaymentMethod) -> str:
         return settings.get_cispay_display_name()
     if method == PaymentMethod.TABPAY:
         return settings.get_tabpay_display_name()
+    if method == PaymentMethod.PARITYPAY:
+        return settings.get_paritypay_display_name()
     if method == PaymentMethod.TELEGRAM_STARS:
         return 'Telegram Stars'
     return method.value
@@ -223,6 +228,8 @@ def _method_is_enabled(method: PaymentMethod) -> bool:
         return settings.is_cispay_enabled()
     if method == PaymentMethod.TABPAY:
         return settings.is_tabpay_enabled()
+    if method == PaymentMethod.PARITYPAY:
+        return settings.is_paritypay_enabled()
     return False
 
 
@@ -533,6 +540,14 @@ def _is_cispay_pending(payment: CisPayPayment) -> bool:
         return False
     status = (payment.status or '').lower()
     return status == 'pending'
+
+
+def _is_paritypay_pending(payment: ParityPayPayment) -> bool:
+    if payment.is_paid:
+        return False
+    from app.services.payment.paritypay import PARITYPAY_PENDING_STATUSES
+
+    return (payment.status or '').lower() in PARITYPAY_PENDING_STATUSES
 
 
 def _is_tabpay_pending(payment: TabPayPayment) -> bool:
@@ -1120,6 +1135,32 @@ async def _fetch_lava_payments(db: AsyncSession, cutoff: datetime) -> list[Pendi
     return records
 
 
+async def _fetch_paritypay_payments(db: AsyncSession, cutoff: datetime) -> list[PendingPayment]:
+    stmt = (
+        select(ParityPayPayment)
+        .options(selectinload(ParityPayPayment.user))
+        .where(ParityPayPayment.created_at >= cutoff)
+        .order_by(desc(ParityPayPayment.created_at))
+    )
+    result = await db.execute(stmt)
+    records: list[PendingPayment] = []
+    for payment in result.scalars().all():
+        if not _is_paritypay_pending(payment):
+            continue
+        record = _build_record(
+            PaymentMethod.PARITYPAY,
+            payment,
+            identifier=payment.order_id,
+            amount_kopeks=payment.amount_kopeks,
+            status=payment.status or '',
+            is_paid=bool(payment.is_paid),
+            expires_at=getattr(payment, 'expires_at', None),
+        )
+        if record:
+            records.append(record)
+    return records
+
+
 async def _fetch_tabpay_payments(db: AsyncSession, cutoff: datetime) -> list[PendingPayment]:
     stmt = (
         select(TabPayPayment)
@@ -1231,6 +1272,7 @@ async def list_recent_pending_payments(
         await _fetch_lava_payments(db, cutoff),
         await _fetch_cispay_payments(db, cutoff),
         await _fetch_tabpay_payments(db, cutoff),
+        await _fetch_paritypay_payments(db, cutoff),
         await _fetch_stars_transactions(db, cutoff),
     )
 
@@ -1549,6 +1591,21 @@ async def get_payment_record(
             expires_at=getattr(payment, 'expires_at', None),
         )
 
+    if method == PaymentMethod.PARITYPAY:
+        payment = await db.get(ParityPayPayment, local_payment_id)
+        if not payment:
+            return None
+        await db.refresh(payment, attribute_names=['user'])
+        return _build_record(
+            method,
+            payment,
+            identifier=payment.order_id,
+            amount_kopeks=payment.amount_kopeks,
+            status=payment.status or '',
+            is_paid=bool(payment.is_paid),
+            expires_at=getattr(payment, 'expires_at', None),
+        )
+
     if method == PaymentMethod.TABPAY:
         payment = await db.get(TabPayPayment, local_payment_id)
         if not payment:
@@ -1683,6 +1740,13 @@ async def run_manual_check(
             tabpay_payment = await db.get(TabPayPayment, local_payment_id)
             if tabpay_payment:
                 result = await payment_service.check_tabpay_payment_status(db, tabpay_payment.order_id)
+                payment = result.get('payment') if result else None
+            else:
+                payment = None
+        elif method == PaymentMethod.PARITYPAY:
+            paritypay_payment = await db.get(ParityPayPayment, local_payment_id)
+            if paritypay_payment:
+                result = await payment_service.check_paritypay_payment_status(db, paritypay_payment.order_id)
                 payment = result.get('payment') if result else None
             else:
                 payment = None

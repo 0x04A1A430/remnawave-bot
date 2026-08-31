@@ -36,6 +36,8 @@ METHOD_CONFIG_IDS = {
     'cispay_sbp': 'cispay',
     'tabpay_card': 'tabpay',
     'tabpay_sbp': 'tabpay',
+    'paritypay_card': 'paritypay',
+    'paritypay_sbp': 'paritypay',
     'overpay_fps': 'overpay',
     'overpay_card': 'overpay',
     'overpay_int': 'overpay',

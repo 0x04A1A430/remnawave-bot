@@ -173,6 +173,7 @@ class PaymentMethod(Enum):
     JUPITER = 'jupiter'
     CISPAY = 'cispay'
     TABPAY = 'tabpay'
+    PARITYPAY = 'paritypay'
     DONUT = 'donut'
     LAVA = 'lava'
     MANUAL = 'manual'
@@ -1803,6 +1804,77 @@ class TabPayPayment(Base):
     def __repr__(self) -> str:  # pragma: no cover - debug helper
         return (
             f'<TabPayPayment(id={self.id}, order_id={self.order_id}, '
+            f'amount={self.amount_rubles}₽, status={self.status})>'
+        )
+
+
+class ParityPayPayment(Base):
+    """Платежи через ParityPay (api.paritypay.net v2, СБП и карты)."""
+
+    __tablename__ = 'paritypay_payments'
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True, index=True)
+
+    # Идентификаторы
+    order_id = Column(String(64), unique=True, nullable=False, index=True)  # Наш order_id
+    paritypay_payment_id = Column(String(64), unique=True, nullable=True, index=True)  # id счёта в процессинге
+
+    # Суммы. Провайдер считает в рублях дробным числом, у нас канон — копейки,
+    # поэтому конвертация только через Decimal.
+    amount_kopeks = Column(Integer, nullable=False)
+    # Сколько зачислено на баланс кассы за вычетом комиссии (поле credited)
+    credited_kopeks = Column(Integer, nullable=True)
+    currency = Column(String(10), nullable=False, default='RUB')
+    description = Column(Text, nullable=True)
+
+    # Статусы
+    status = Column(String(32), nullable=False, default='pending')
+    is_paid = Column(Boolean, default=False)
+
+    # Данные платежа
+    payment_url = Column(Text, nullable=True)
+    payment_method = Column(String(32), nullable=True)  # service: 'sbp' / 'card' / None
+
+    # Метаданные
+    metadata_json = Column(JSON, nullable=True)
+    callback_payload = Column(JSON, nullable=True)
+    # Ключи уже обработанных уведомлений вида "{id}:{STATUS}": повтор доставки
+    # приходит тем же телом, а REFUNDED следует за PAID по тому же счёту.
+    processed_events = Column(JSON, nullable=True)
+
+    # Временные метки
+    paid_at = Column(AwareDateTime(), nullable=True)
+    expires_at = Column(AwareDateTime(), nullable=True)
+    created_at = Column(AwareDateTime(), default=func.now())
+    updated_at = Column(AwareDateTime(), default=func.now(), onupdate=func.now())
+
+    # Связь с транзакцией
+    transaction_id = Column(Integer, ForeignKey('transactions.id'), nullable=True)
+
+    # Relationships
+    user = relationship('User', backref='paritypay_payments')
+    transaction = relationship('Transaction', backref='paritypay_payment')
+
+    @property
+    def amount_rubles(self) -> float:
+        return self.amount_kopeks / 100
+
+    @property
+    def is_pending(self) -> bool:
+        return self.status == 'pending'
+
+    @property
+    def is_success(self) -> bool:
+        return self.status == 'success' and self.is_paid
+
+    @property
+    def is_failed(self) -> bool:
+        return self.status in ['failed', 'declined', 'expired', 'refunded', 'amount_mismatch', 'error']
+
+    def __repr__(self) -> str:  # pragma: no cover - debug helper
+        return (
+            f'<ParityPayPayment(id={self.id}, order_id={self.order_id}, '
             f'amount={self.amount_rubles}₽, status={self.status})>'
         )
 

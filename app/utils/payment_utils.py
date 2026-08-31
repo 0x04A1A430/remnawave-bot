@@ -385,6 +385,46 @@ def get_available_payment_methods() -> list[dict[str, str]]:
             }
         )
 
+    if settings.is_paritypay_sbp_enabled():
+        sbp_name = settings.get_paritypay_sbp_display_name()
+        methods.append(
+            {
+                'id': 'paritypay_sbp',
+                'name': sbp_name,
+                'icon': '📱',
+                'description': f'через {sbp_name}',
+                'callback': 'topup_paritypay_sbp',
+            }
+        )
+
+    if settings.is_paritypay_card_enabled():
+        card_name = settings.get_paritypay_card_display_name()
+        methods.append(
+            {
+                'id': 'paritypay_card',
+                'name': card_name,
+                'icon': '💳',
+                'description': f'через {card_name}',
+                'callback': 'topup_paritypay_card',
+            }
+        )
+
+    if (
+        settings.is_paritypay_enabled()
+        and not settings.is_paritypay_sbp_enabled()
+        and not settings.is_paritypay_card_enabled()
+    ):
+        paritypay_name = settings.get_paritypay_display_name()
+        methods.append(
+            {
+                'id': 'paritypay',
+                'name': paritypay_name,
+                'icon': '💳',
+                'description': f'через {paritypay_name}',
+                'callback': 'topup_paritypay',
+            }
+        )
+
     if settings.is_etoplatezhi_sbp_enabled():
         sbp_name = settings.get_etoplatezhi_sbp_display_name()
         methods.append(
@@ -637,6 +677,12 @@ def is_payment_method_available(method_id: str) -> bool:
         return settings.is_tabpay_sbp_enabled()
     if method_id == 'tabpay_card':
         return settings.is_tabpay_card_enabled()
+    if method_id == 'paritypay':
+        return settings.is_paritypay_enabled()
+    if method_id == 'paritypay_sbp':
+        return settings.is_paritypay_sbp_enabled()
+    if method_id == 'paritypay_card':
+        return settings.is_paritypay_card_enabled()
     if method_id == 'etoplatezhi':
         return settings.is_etoplatezhi_enabled()
     if method_id == 'etoplatezhi_sbp':

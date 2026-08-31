@@ -1234,6 +1234,7 @@ class UserService:
                 JupiterPayment,
                 LavaPayment,
                 OverpayPayment,
+                ParityPayPayment,
                 PayPearPayment,
                 RioPayPayment,
                 RollyPayPayment,
@@ -1255,6 +1256,7 @@ class UserService:
                 LavaPayment,
                 CisPayPayment,
                 TabPayPayment,
+                ParityPayPayment,
             )
             for model in extra_payment_models:
                 try:

@@ -1687,6 +1687,7 @@ class BackupService:
             'etoplatezhi_payments',
             'antilopay_payments',
             'tabpay_payments',
+            'paritypay_payments',
             'apple_transactions',
             'saved_payment_methods',
             # --- Content/config ---

@@ -1054,6 +1054,26 @@ class Settings(BaseSettings):
     TABPAY_SBP_ENABLED: bool = False
     TABPAY_SBP_DISPLAY_NAME: str = 'СБП (TabPay)'
 
+    # ParityPay (api.paritypay.net, v2)
+    PARITYPAY_ENABLED: bool = False
+    PARITYPAY_SHOP_ID: str | None = None  # X-ShopId — UUID кассы
+    PARITYPAY_SECRET_KEY: str | None = None  # X-SecretKey — секретный ключ №1, запросы к API
+    # Секретный ключ №2 — только для проверки подписи HTTP-уведомлений (X-SIGNATURE).
+    # Отдельный от ключа запросов: утечка одного не даёт подделать другое.
+    PARITYPAY_CALLBACK_SECRET: str | None = None
+    PARITYPAY_BASE_URL: str = 'https://api.paritypay.net'
+    PARITYPAY_DISPLAY_NAME: str = 'ParityPay'
+    PARITYPAY_MIN_AMOUNT_KOPEKS: int = 10000  # 100₽
+    PARITYPAY_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000₽
+    PARITYPAY_WEBHOOK_PATH: str = '/paritypay-webhook'
+    # Время жизни счёта в минутах, поле expire; у провайдера по умолчанию 60
+    PARITYPAY_INVOICE_LIFETIME_MINUTES: int = 60
+    # Sub-методы ParityPay (поле service при создании счёта)
+    PARITYPAY_CARD_ENABLED: bool = False
+    PARITYPAY_CARD_DISPLAY_NAME: str = 'Карта (ParityPay)'
+    PARITYPAY_SBP_ENABLED: bool = False
+    PARITYPAY_SBP_DISPLAY_NAME: str = 'СБП (ParityPay)'
+
     # Lava (Lava Business API, api.lava.ru)
     LAVA_ENABLED: bool = False
     LAVA_BASE_URL: str = 'https://api.lava.ru'
@@ -3160,6 +3180,47 @@ class Settings(BaseSettings):
 
     def get_tabpay_sbp_display_name_html(self) -> str:
         return html.escape(self.get_tabpay_sbp_display_name())
+
+    def is_paritypay_configured(self) -> bool:
+        """Есть ли учётные данные провайдера — без учёта флага включения."""
+        return bool(self.PARITYPAY_SHOP_ID and self.PARITYPAY_SECRET_KEY and self.PARITYPAY_CALLBACK_SECRET)
+
+    def is_paritypay_enabled(self) -> bool:
+        # Ключ уведомлений обязателен наравне с ключом запросов: без него подпись
+        # X-SIGNATURE не проверить, и уведомление пришлось бы принимать вслепую.
+        return bool(
+            self.PARITYPAY_ENABLED
+            and self.PARITYPAY_SHOP_ID
+            and self.PARITYPAY_SECRET_KEY
+            and self.PARITYPAY_CALLBACK_SECRET
+        )
+
+    def get_paritypay_display_name(self) -> str:
+        name = (self.PARITYPAY_DISPLAY_NAME or '').strip()
+        return name or 'ParityPay'
+
+    def get_paritypay_display_name_html(self) -> str:
+        return html.escape(self.get_paritypay_display_name())
+
+    def is_paritypay_card_enabled(self) -> bool:
+        return self.PARITYPAY_CARD_ENABLED and self.is_paritypay_enabled()
+
+    def get_paritypay_card_display_name(self) -> str:
+        name = (self.PARITYPAY_CARD_DISPLAY_NAME or '').strip()
+        return name or 'Карта (ParityPay)'
+
+    def get_paritypay_card_display_name_html(self) -> str:
+        return html.escape(self.get_paritypay_card_display_name())
+
+    def is_paritypay_sbp_enabled(self) -> bool:
+        return self.PARITYPAY_SBP_ENABLED and self.is_paritypay_enabled()
+
+    def get_paritypay_sbp_display_name(self) -> str:
+        name = (self.PARITYPAY_SBP_DISPLAY_NAME or '').strip()
+        return name or 'СБП (ParityPay)'
+
+    def get_paritypay_sbp_display_name_html(self) -> str:
+        return html.escape(self.get_paritypay_sbp_display_name())
 
     def is_donut_configured(self) -> bool:
         """Есть ли учётные данные провайдера — без учёта флага включения."""

@@ -1825,6 +1825,62 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
 
         routes_registered = True
 
+    # ParityPay webhook (api.paritypay.net v2)
+    if settings.is_paritypay_configured():
+
+        @router.get(settings.PARITYPAY_WEBHOOK_PATH)
+        async def paritypay_health() -> JSONResponse:
+            return JSONResponse(
+                {
+                    'status': 'ok',
+                    'service': 'paritypay_webhook',
+                    'enabled': settings.is_paritypay_enabled(),
+                }
+            )
+
+        @router.post(settings.PARITYPAY_WEBHOOK_PATH)
+        async def paritypay_webhook(request: Request) -> JSONResponse:
+            raw_body = await request.body()
+
+            from app.services.paritypay_service import paritypay_service
+
+            # Подпись считается по РАЗОБРАННОМУ телу: поля сортируются по ключам,
+            # значения склеиваются. Разбор сохраняет исходный текст чисел, иначе
+            # Python перепишет 1200 как 1200.0 и подпись не сойдётся.
+            payload = paritypay_service.parse_callback_body(raw_body)
+            if payload is None:
+                return JSONResponse({'status': 'error'}, status_code=status.HTTP_400_BAD_REQUEST)
+
+            if not paritypay_service.verify_callback_signature(payload, request.headers.get('X-SIGNATURE')):
+                logger.warning('ParityPay webhook: invalid signature')
+                return JSONResponse({'status': 'error'}, status_code=status.HTTP_400_BAD_REQUEST)
+
+            # Провайдер ждёт HTTP 200 как подтверждение доставки и иначе повторяет
+            # до пяти раз. Подтверждаем сразу после проверки подписи, зачисление
+            # доделываем фоном: обработчик берёт свою сессию БД и блокирует строку
+            # платежа, поэтому параллельные доставки безопасны.
+            async def _process_paritypay_bg() -> None:
+                try:
+                    success = await _process_payment_service_callback(
+                        payment_service,
+                        payload,
+                        'process_paritypay_callback',
+                    )
+                    if not success:
+                        logger.error(
+                            'ParityPay webhook processing failed',
+                            order_id=payload.get('order_id'),
+                            payment_id=payload.get('id'),
+                            payment_status=payload.get('status'),
+                        )
+                except Exception as e:
+                    logger.exception('ParityPay webhook processing error', error=e)
+
+            _spawn_webhook_bg(_process_paritypay_bg())
+            return JSONResponse({'status': 'ok'}, status_code=status.HTTP_200_OK)
+
+        routes_registered = True
+
     # TabPay webhook (tabpay.org)
     if settings.is_tabpay_configured():
 
@@ -1973,6 +2029,7 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
                     'lava_enabled': settings.is_lava_enabled(),
                     'cispay_enabled': settings.is_cispay_enabled(),
                     'tabpay_enabled': settings.is_tabpay_enabled(),
+                    'paritypay_enabled': settings.is_paritypay_enabled(),
                 }
             )
 

@@ -177,6 +177,7 @@ Bedolaga поддерживает полный кросс-канальный ж�
 | 🍩 | **[Donut](https://t.me/donut_payment)** 🔸 | Карты, СБП по телефону, СБП QR (P2P) | RUB |
 | 🌋 | **Lava Business** | Карты, СБП (gate.lava.ru) | RUB |
 | 💳 | **TabPay** | СБП, карты с 3-D Secure (tabpay.org) | RUB |
+| 💳 | **ParityPay** | СБП, карты (api.paritypay.net) | RUB |
 | 🍎 | **Apple In-App Purchase** | Покупки через iOS App Store | USD |
 | 📲 | **Tribute** | Telegram-платежи | RUB |
 
