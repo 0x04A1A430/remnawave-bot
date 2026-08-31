@@ -2250,6 +2250,7 @@
 ### docs/handoffs
 
 - `docs/handoffs/handoff-2026-08-31-1659.md` — файл
+- `docs/handoffs/handoff-2026-08-31-1944.md` — файл
 
 ## migrations
 
