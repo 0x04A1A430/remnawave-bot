@@ -25,3 +25,8 @@ jobs:
 
       - name: Check linting
         run: uv run ruff check .
+
+      # Справка по структуре собирается из кода. Проверяем здесь, а не только
+      # тестом: так расхождение видно до прогона всего набора.
+      - name: Check structure reference is current
+        run: uv run python -m scripts.generate_structure_reference --check

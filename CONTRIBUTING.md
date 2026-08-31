@@ -135,11 +135,18 @@ bedolaga_bot/
 │   ├── utils/              # Утилиты
 │   ├── middlewares/        # Middleware
 │   └── external/           # Внешние API
-├── migrations/             # Миграции БД (если нужны)
+├── migrations/             # Миграции БД (alembic)
+├── scripts/                # Служебные скрипты (генераторы, бэкфилы)
 ├── tests/                  # Тесты (pytest)
 ├── docs/                   # Документация
-└── requirements.txt        # Зависимости
+├── pyproject.toml          # Зависимости и настройки инструментов
+└── uv.lock                 # Зафиксированные версии
 ```
+
+Полная карта модулей с классами и функциями —
+[docs/project_structure_reference.md](docs/project_structure_reference.md).
+Она собирается из кода: `make docs-structure`. Править руками не нужно, за
+свежестью следит тест.
 
 ## 🎨 Стандарты кода
 

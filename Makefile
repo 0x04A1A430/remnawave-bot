@@ -73,6 +73,10 @@ fix: ## Исправить код (ruff check --fix + format)
 	uv run ruff check . --fix
 	uv run ruff format .
 
+.PHONY: docs-structure
+docs-structure: ## Пересобрать docs/project_structure_reference.md из кода
+	uv run python -m scripts.generate_structure_reference
+
 .PHONY: migrate
 migrate: ## Применить миграции (alembic upgrade head)
 	uv run alembic upgrade head
