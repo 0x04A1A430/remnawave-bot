@@ -30,6 +30,7 @@ from collections.abc import AsyncIterator, Iterator, Sequence
 
 import pytest
 from sqlalchemy import Table, text
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
@@ -40,6 +41,10 @@ TEST_DATABASE_URL_ENV = 'TEST_DATABASE_URL'
 REQUIRE_POSTGRES_ENV = 'REQUIRE_POSTGRES_TESTS'
 
 _TRUE_VALUES = frozenset({'1', 'true', 'yes', 'y', 'on'})
+
+# Пересоздание схемы не должно ждать чужую транзакцию дольше нескольких
+# секунд: лучше внятная ошибка, чем бесконечное молчание.
+SCHEMA_LOCK_TIMEOUT_MS = 5000
 
 # Схему достаточно создать один раз за прогон: дальше тесты чистят свои таблицы
 # через TRUNCATE (9 мс против 0.8 с на пересоздание всех 118 таблиц).
@@ -91,14 +96,37 @@ def real_asyncpg() -> Iterator[None]:
 
 
 async def _recreate_schema(dsn: str) -> None:
-    """Сносит содержимое базы и создаёт схему проекта заново."""
+    """Сносит содержимое базы и создаёт схему проекта заново.
+
+    ``DROP SCHEMA`` берёт ACCESS EXCLUSIVE и потому ждёт КАЖДОЕ открытое
+    соединение к базе. Прерванный прогон (Ctrl-C, таймаут) оставляет за собой
+    транзакцию — и следующий запуск повисает молча, без единой строки в выводе.
+    Худший из возможных исходов: выглядит как «тесты идут», а на деле не
+    начались. Поэтому: сначала выгоняем чужие соединения, потом ограничиваем
+    ожидание. База тут выделенная под тесты — отключать в ней некого, кроме
+    таких же брошенных прогонов.
+    """
     engine = create_async_engine(dsn, poolclass=NullPool)
     try:
         async with engine.begin() as conn:
+            await conn.execute(
+                text(
+                    'SELECT pg_terminate_backend(pid) FROM pg_stat_activity '
+                    'WHERE datname = current_database() AND pid <> pg_backend_pid()'
+                )
+            )
+        async with engine.begin() as conn:
+            await conn.execute(text(f"SET LOCAL lock_timeout = '{SCHEMA_LOCK_TIMEOUT_MS}ms'"))
             await conn.execute(text('DROP SCHEMA IF EXISTS public CASCADE'))
             await conn.execute(text('CREATE SCHEMA public'))
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
+    except DBAPIError as error:
+        raise RuntimeError(
+            f'не удалось пересоздать схему в {TEST_DATABASE_URL_ENV}: {error}. '
+            'Обычно это чужое открытое соединение к тестовой базе — проверьте '
+            'pg_stat_activity или пересоздайте контейнер (make pg-test-up).'
+        ) from error
     finally:
         await engine.dispose()
 
@@ -182,26 +210,38 @@ async def postgres_sessions(
                 await session.close()
 
 
-async def wait_for_lock_waiter(session: AsyncSession, timeout: float = 5.0, poll: float = 0.02) -> None:
-    """Ждёт, пока в тестовой базе появится сессия, стоящая в очереди за блокировкой.
+async def lock_waiter_appeared(session: AsyncSession, timeout: float = 5.0, poll: float = 0.02) -> bool:
+    """Дождалась ли база сессии, стоящей в очереди за блокировкой.
 
-    Без этого тесты на конкурентность пришлось бы синхронизировать ``sleep``:
-    держатель блокировки не знает, успел ли соперник дойти до своего запроса.
-    Здесь ожидание видно самой базе — ``pg_stat_activity`` показывает бэкенд,
-    остановленный на ожидании блокировки.
+    Возвращает результат, а не бросает исключение. Это важно для тестов, где
+    главное утверждение — денежное: если синхронизация сама роняет тест, из
+    отчёта пропадает то, ради чего он написан («баланс зачислен дважды»), и
+    остаётся жалоба инструментовки. Пусть тест дойдёт до конца и скажет по
+    существу.
 
     Наблюдатель должен быть ТРЕТЬЕЙ сессией: держатель занят, ожидающий стоит.
     """
-    deadline = asyncio.get_running_loop().time() + timeout
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + timeout
     query = text(
         "SELECT count(*) FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock'"
     )
-    while asyncio.get_running_loop().time() < deadline:
+    while loop.time() < deadline:
         result = await session.execute(query)
         if (result.scalar() or 0) > 0:
-            return
+            return True
         # Наблюдатель не должен держать снимок: иначе он сам мешает уборке.
         await session.rollback()
         await asyncio.sleep(poll)
 
-    raise AssertionError(f'за {timeout} с никто не встал в очередь за блокировкой — конкуренции не возникло')
+    return False
+
+
+async def wait_for_lock_waiter(session: AsyncSession, timeout: float = 5.0, poll: float = 0.02) -> None:
+    """То же, но отсутствие соперника — сразу падение теста.
+
+    Годится там, где конкуренция и есть предмет проверки: если её не возникло,
+    тест ничего не проверил и обязан это сказать.
+    """
+    if not await lock_waiter_appeared(session, timeout=timeout, poll=poll):
+        raise AssertionError(f'за {timeout} с никто не встал в очередь за блокировкой — конкуренции не возникло')
