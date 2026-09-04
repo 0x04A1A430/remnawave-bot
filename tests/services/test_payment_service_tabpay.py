@@ -24,8 +24,8 @@ if str(ROOT_DIR) not in sys.path:
 
 import app.database.crud.tabpay as tabpay_crud_module
 import app.services.payment.tabpay as tabpay_mixin_module
-import app.services.payment_service as payment_service_module
 from app.config import settings
+from app.services import payment_service as payment_service_module
 from app.services.payment_service import PaymentService
 from app.services.tabpay_service import TabPayAPIError, TabPayNetworkError, TabPayService
 

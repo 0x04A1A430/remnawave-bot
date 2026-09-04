@@ -46,10 +46,6 @@ _TRUE_VALUES = frozenset({'1', 'true', 'yes', 'y', 'on'})
 # секунд: лучше внятная ошибка, чем бесконечное молчание.
 SCHEMA_LOCK_TIMEOUT_MS = 5000
 
-# Схему достаточно создать один раз за прогон: дальше тесты чистят свои таблицы
-# через TRUNCATE (9 мс против 0.8 с на пересоздание всех 118 таблиц).
-_schema_created_for: str | None = None
-
 
 def postgres_dsn() -> str | None:
     """URL тестовой базы из окружения или ``None``."""
@@ -138,14 +134,15 @@ def postgres_database() -> str:
     Фикстура синхронная намеренно: conftest создаёт отдельный цикл событий на
     каждый тест, поэтому движок нельзя переносить между тестами. Схема строится
     в собственном одноразовом цикле, движок тут же закрывается.
+
+    Схему достаточно создать один раз за прогон — это обеспечивает область
+    ``session``; дальше тесты чистят свои таблицы через TRUNCATE (9 мс против
+    0.8 с на пересоздание всех 118 таблиц).
     """
     dsn = require_postgres_dsn()
 
-    global _schema_created_for
-    if _schema_created_for != dsn:
-        with real_asyncpg():
-            asyncio.run(_recreate_schema(dsn))
-        _schema_created_for = dsn
+    with real_asyncpg():
+        asyncio.run(_recreate_schema(dsn))
     return dsn
 
 

@@ -31,8 +31,8 @@ import app.database.crud.user as user_crud
 import app.services.payment.common as payment_common
 import app.services.payment.paritypay as paritypay_mixin
 import app.services.payment.tabpay as tabpay_mixin
-import app.services.payment_service as payment_service_module
 from app.database.models import PaymentMethod, TransactionType
+from app.services import payment_service as payment_service_module
 from app.services.payment_service import PaymentService
 
 

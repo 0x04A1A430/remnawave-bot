@@ -22,8 +22,8 @@ if str(ROOT_DIR) not in sys.path:
 
 import app.database.crud.paritypay as paritypay_crud_module
 import app.services.payment.paritypay as paritypay_mixin_module
-import app.services.payment_service as payment_service_module
 from app.config import settings
+from app.services import payment_service as payment_service_module
 from app.services.paritypay_service import ParityPayAPIError, ParityPayNetworkError, ParityPayService
 from app.services.payment_service import PaymentService
 

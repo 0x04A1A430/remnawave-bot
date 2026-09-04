@@ -170,6 +170,9 @@ class SystemErrorLogService:
         try:
             logger.warning(message, error=str(error)[:200] if error else None)
         except Exception:
+            # Намеренно молча: это последний рубеж жалобы самого журнала ошибок.
+            # Пожаловаться на сбой предупреждения больше некому и нечем — любая
+            # попытка снова придёт сюда же.
             pass
 
     def _put_nowait(self, op: str, payload: dict[str, Any]) -> bool:

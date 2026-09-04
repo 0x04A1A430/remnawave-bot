@@ -79,6 +79,9 @@ def _mark_error_event(event_uid: str | None, status: str, error: Any = None) -> 
 
         system_error_log_service.mark(event_uid, status, error)
     except Exception:
+        # Намеренно молча: это уточнение статуса внутри самого конвейера логов.
+        # Любая жалоба отсюда (logger.error) вернулась бы в этот же процессор и
+        # ушла бы в рекурсию, а потеря статуса доставки того не стоит.
         pass
 
 

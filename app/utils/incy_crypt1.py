@@ -25,6 +25,7 @@
 from __future__ import annotations
 
 import base64
+import functools
 import hashlib
 import json
 import os
@@ -49,23 +50,17 @@ _PROVIDER_NAME_MAX_LEN = 128
 # Действия INCY, у которых хвост — ссылка подписки.
 _IMPORT_ACTIONS = frozenset({'import', 'add'})
 
-_key_cache: bytes | None = None
-_key_unavailable = False
 
-
+@functools.cache
 def _get_key() -> bytes | None:
-    """Возвращает K1, один раз сверив его отпечаток с опубликованным."""
-    global _key_cache, _key_unavailable
+    """Возвращает K1, один раз сверив его отпечаток с опубликованным.
 
-    if _key_cache is not None:
-        return _key_cache
-    if _key_unavailable:
-        return None
-
+    Кешируется и отрицательный ответ: при разошедшемся отпечатке предупреждение
+    пишется один раз за процесс, а не на каждую ссылку.
+    """
     key = base64.b64decode(_KEY_B64)
     fingerprint = hashlib.sha256(key).hexdigest()
     if fingerprint != _KEY_FINGERPRINT:
-        _key_unavailable = True
         logger.warning(
             'Отпечаток ключа INCY не совпал — шифрование отключено',
             expected=_KEY_FINGERPRINT,
@@ -73,7 +68,6 @@ def _get_key() -> bytes | None:
         )
         return None
 
-    _key_cache = key
     return key
 
 
