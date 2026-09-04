@@ -30,6 +30,7 @@ from ..services.email_template_overrides import (
     substitute_context_vars,
 )
 from ..services.email_templates import EmailNotificationTemplates
+from ..services.email_type_switch import can_disable_email_type, is_email_type_enabled, set_email_type_enabled
 
 
 logger = structlog.get_logger(__name__)
@@ -886,6 +887,12 @@ class EmailTemplateUpdate(BaseModel):
     body_html: str = Field(..., min_length=1)
 
 
+class EmailTemplateEnabledRequest(BaseModel):
+    """Включить/выключить отправку писем этого типа."""
+
+    enabled: bool
+
+
 class EmailTemplatePreviewRequest(BaseModel):
     """Request to preview an email template."""
 
@@ -938,6 +945,8 @@ async def list_template_types(
             {
                 **tpl_type,
                 'languages': languages,
+                'enabled': is_email_type_enabled(type_key),
+                'can_disable': can_disable_email_type(type_key),
             }
         )
 
@@ -1009,6 +1018,8 @@ async def get_templates_for_type(
         'context_vars': type_meta['context_vars'],
         'required_vars': REQUIRED_PLACEHOLDERS.get(notification_type, []),
         'common_context_vars': COMMON_CONTEXT_VARS,
+        'enabled': is_email_type_enabled(notification_type),
+        'can_disable': can_disable_email_type(notification_type),
         'languages': languages,
     }
 
@@ -1059,6 +1070,30 @@ async def update_template(
     )
 
     return {'status': 'ok', 'template': result}
+
+
+@router.patch('/{notification_type}/enabled', summary='Enable or disable sending emails of a type')
+async def set_template_enabled(
+    notification_type: str,
+    data: EmailTemplateEnabledRequest,
+    admin: User = Depends(require_permission('email_templates:edit')),
+    db: AsyncSession = Depends(get_cabinet_db),
+) -> dict[str, Any]:
+    """Выключатель писем по типу: отключённое письмо не отправляется никому."""
+    _validate_template_type(notification_type)
+    if not data.enabled and not can_disable_email_type(notification_type):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Это письмо нельзя отключить: без него пользователь не сможет войти или получить купленное',
+        )
+    disabled = await set_email_type_enabled(db, notification_type, data.enabled)
+    logger.info(
+        'Админ переключил отправку email-типа',
+        admin_id=admin.id,
+        notification_type=notification_type,
+        enabled=data.enabled,
+    )
+    return {'status': 'ok', 'enabled': notification_type not in disabled, 'disabled_types': sorted(disabled)}
 
 
 @router.delete('/{notification_type}/{language}', summary='Reset template to default')

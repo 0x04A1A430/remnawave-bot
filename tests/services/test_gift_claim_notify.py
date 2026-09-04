@@ -195,3 +195,22 @@ async def test_buyer_backstop_uses_its_own_template_and_admin_override() -> None
         await notify_gift_claim_available(purchase, tariff_name='Lite', period_days=30)
     assert send.call_args.kwargs['subject'] == 'Свой заголовок'
     assert send.call_args.kwargs['body_html'] == '<p>свой текст</p>'
+
+
+@pytest.mark.asyncio
+async def test_disabled_types_are_not_sent(monkeypatch) -> None:
+    """Выключатель писем: отключённый тип пропускается, остальные уходят."""
+    from app.config import settings
+
+    monkeypatch.setattr(settings, 'EMAIL_DISABLED_TYPES', 'guest_gift_link_buyer', raising=False)
+    send = MagicMock(return_value=True)
+    purchase = _gift(
+        gift_recipient_type='email',
+        gift_recipient_value='friend@example.com',
+        contact_type='email',
+        contact_value='buyer@example.com',
+    )
+    mods, cab = _patches(send)
+    with mods, cab:
+        await notify_gift_claim_available(purchase, tariff_name='Lite', period_days=30)
+    assert [c.kwargs['to_email'] for c in send.call_args_list] == ['friend@example.com']

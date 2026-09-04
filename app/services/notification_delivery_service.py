@@ -456,6 +456,12 @@ class NotificationDeliveryService:
             logger.debug('У пользователя нет подтверждённого email', user_id=user.id)
             return False
 
+        from app.cabinet.services.email_type_switch import is_email_type_enabled
+
+        if not is_email_type_enabled(notification_type.value):
+            logger.debug('Письмо этого типа отключено админом', notification_type=notification_type.value)
+            return False
+
         # Маркетинг уважает отписку; транзакционные письма — нет (иначе человек
         # перестал бы узнавать об оплате и окончании собственной подписки).
         unsubscribe_url = ''

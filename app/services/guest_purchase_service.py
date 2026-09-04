@@ -1244,6 +1244,12 @@ async def send_guest_notification(
     else:
         notification_type = NotificationType.GUEST_SUBSCRIPTION_DELIVERED
 
+    from app.cabinet.services.email_type_switch import is_email_type_enabled
+
+    if not is_email_type_enabled(notification_type.value):
+        logger.info('Гостевое письмо отключено админом', notification_type=notification_type.value)
+        return
+
     templates = EmailNotificationTemplates()
 
     # Check DB override first, then fall back to hardcoded template
@@ -1355,11 +1361,17 @@ async def notify_gift_claim_available(
 
     from app.cabinet.services.email_service import email_service
     from app.cabinet.services.email_templates import EmailNotificationTemplates
-    from app.services.notification_delivery_service import NotificationType
 
     # Recipient: reuse the gift-received template, but its CTA now points at the
     # claim page and it carries no credentials/subscription (none exist yet).
-    if purchase.gift_recipient_type == 'email' and purchase.gift_recipient_value:
+    from app.cabinet.services.email_type_switch import is_email_type_enabled
+    from app.services.notification_delivery_service import NotificationType
+
+    if (
+        purchase.gift_recipient_type == 'email'
+        and purchase.gift_recipient_value
+        and is_email_type_enabled(NotificationType.GUEST_GIFT_RECEIVED.value)
+    ):
         try:
             context = {
                 'tariff_name': tariff_name,
@@ -1395,7 +1407,11 @@ async def notify_gift_claim_available(
 
     # Buyer backstop: a durable copy of the link to forward, regardless of which
     # channel the recipient used or whether the buyer kept the success tab open.
-    if purchase.contact_type == 'email' and purchase.contact_value:
+    if (
+        purchase.contact_type == 'email'
+        and purchase.contact_value
+        and is_email_type_enabled(NotificationType.GUEST_GIFT_LINK_BUYER.value)
+    ):
         try:
             # Шаблон guest_gift_link_buyer: сохранённый в редакторе, иначе дефолтный.
             # Раньше текст был зашит здесь на двух языках и без обёртки.

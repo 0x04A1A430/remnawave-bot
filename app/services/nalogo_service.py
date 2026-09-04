@@ -756,6 +756,12 @@ async def _send_receipt_email(
         logger.warning('SMTP не настроен — чек NaloGO не отправлен на почту')
         return False
 
+    from app.cabinet.services.email_type_switch import is_email_type_enabled
+
+    if not is_email_type_enabled(NotificationType.NALOGO_RECEIPT.value):
+        logger.info('Письмо с чеком NaloGO отключено админом — не отправляем')
+        return False
+
     context = {'amount': amount_text, 'receipt_url': receipt_url, 'has_attachment': attachment is not None}
     rendered = await get_rendered_override(NotificationType.NALOGO_RECEIPT.value, language, context)
     if rendered:
