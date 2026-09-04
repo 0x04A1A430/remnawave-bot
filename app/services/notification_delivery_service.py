@@ -86,6 +86,9 @@ class NotificationType(Enum):
     WEBHOOK_DEVICE_DELETED = 'webhook_device_deleted'
     WEBHOOK_TORRENT_DETECTED = 'webhook_torrent_detected'
 
+    # Support tickets
+    TICKET_REPLY = 'ticket_reply'
+
     # Other
     BROADCAST = 'broadcast'
     PAYMENT_RECEIVED = 'payment_received'
@@ -129,6 +132,12 @@ class NotificationDeliveryService:
     def _is_allowed_by_preferences(user: User, notification_type: NotificationType) -> bool:
         """Apply global, category and per-user notification switches centrally."""
         global_switch_exempt_types = {
+            # Ответ поддержки — реакция на обращение самого пользователя, а не
+            # рассылка: Telegram-канал шлёт его мимо роутера и ENABLE_NOTIFICATIONS
+            # не смотрит, гейт у него один — user_ticket_notifications_enabled.
+            # Без исключения email-юзер молча остаётся без ответа там, где
+            # Telegram-юзер его получает.
+            NotificationType.TICKET_REPLY,
             NotificationType.EMAIL_VERIFICATION,
             NotificationType.PASSWORD_RESET,
             NotificationType.EMAIL_CHANGE_CODE,
@@ -221,6 +230,7 @@ class NotificationDeliveryService:
         bot: Bot | None = None,
         telegram_message: str | None = None,
         telegram_markup: Any | None = None,
+        use_websocket: bool = True,
     ) -> bool:
         """
         Send notification to user through appropriate channel.
@@ -232,6 +242,9 @@ class NotificationDeliveryService:
             bot: Telegram bot instance (required for Telegram users)
             telegram_message: Pre-formatted Telegram message (optional)
             telegram_markup: Telegram keyboard markup (optional)
+            use_websocket: Send the cabinet WebSocket event alongside the email.
+                Pass False when the caller already emits its own WebSocket event
+                for this notification, to avoid delivering it twice.
 
         Returns:
             True if notification was sent successfully through at least one channel
@@ -264,14 +277,14 @@ class NotificationDeliveryService:
             )
         if user.email and user.email_verified:
             # Email-only user - send via email and WebSocket
-            results = await asyncio.gather(
-                self._send_email_notification(user, notification_type, context),
-                self._send_websocket_notification(user, notification_type, context),
-                return_exceptions=True,
-            )
+            channels = [self._send_email_notification(user, notification_type, context)]
+            if use_websocket:
+                channels.append(self._send_websocket_notification(user, notification_type, context))
+
+            results = await asyncio.gather(*channels, return_exceptions=True)
 
             email_sent = results[0] is True
-            ws_sent = results[1] is True
+            ws_sent = len(results) > 1 and results[1] is True
 
             if email_sent or ws_sent:
                 logger.info(
@@ -881,6 +894,39 @@ class NotificationDeliveryService:
             bot=bot,
             telegram_message=telegram_message,
             telegram_markup=telegram_markup,
+        )
+
+    async def notify_ticket_reply(
+        self,
+        user: User,
+        ticket_id: int,
+        reply_preview: str,
+        has_photo: bool = False,
+        bot: Bot | None = None,
+        telegram_message: str | None = None,
+        telegram_markup: Any | None = None,
+    ) -> bool:
+        """Notify user about a support reply in their ticket.
+
+        Пользователь без ``telegram_id`` (регистрация по email) иначе узнаёт об
+        ответе поддержки, только если сам зайдёт в кабинет.
+        """
+        context = {
+            'ticket_id': ticket_id,
+            'reply_preview': reply_preview or '',
+            'has_photo': has_photo,
+        }
+
+        # WebSocket-событие об ответе кабинет шлёт сам (``ticket.admin_reply``),
+        # второе здесь дало бы дубль уведомления в интерфейсе.
+        return await self.send_notification(
+            user=user,
+            notification_type=NotificationType.TICKET_REPLY,
+            context=context,
+            bot=bot,
+            telegram_message=telegram_message,
+            telegram_markup=telegram_markup,
+            use_websocket=False,
         )
 
 

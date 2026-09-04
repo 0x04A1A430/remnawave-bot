@@ -1034,6 +1034,46 @@ class Settings(BaseSettings):
     CISPAY_SBP_ENABLED: bool = False
     CISPAY_SBP_DISPLAY_NAME: str = 'СБП (CisPay)'
 
+    # TabPay (tabpay.org, СБП и карты с 3-D Secure)
+    TABPAY_ENABLED: bool = False
+    # X-Api-Key магазина (tp_...). Показывается в кабинете один раз, перевыпуск отзывает старый.
+    TABPAY_API_KEY: str | None = None
+    # «Секрет подписи» из вкладки Webhook — ключ HMAC для X-Signature-V2.
+    TABPAY_WEBHOOK_SECRET: str | None = None
+    TABPAY_BASE_URL: str = 'https://tabpay.org/api'
+    TABPAY_DISPLAY_NAME: str = 'TabPay'
+    TABPAY_MIN_AMOUNT_KOPEKS: int = 10000  # 100₽
+    TABPAY_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000₽
+    TABPAY_WEBHOOK_PATH: str = '/tabpay-webhook'
+    # Окно свежести X-Timestamp: защищает от переигрывания перехваченного вебхука.
+    # Требует синхронных часов на сервере (NTP), иначе свежие вебхуки не пройдут.
+    TABPAY_WEBHOOK_MAX_AGE_SECONDS: int = 300
+    # Sub-методы TabPay (поле method в запросе создания платежа)
+    TABPAY_CARD_ENABLED: bool = False
+    TABPAY_CARD_DISPLAY_NAME: str = 'Карта (TabPay)'
+    TABPAY_SBP_ENABLED: bool = False
+    TABPAY_SBP_DISPLAY_NAME: str = 'СБП (TabPay)'
+
+    # ParityPay (api.paritypay.net, v2)
+    PARITYPAY_ENABLED: bool = False
+    PARITYPAY_SHOP_ID: str | None = None  # X-ShopId — UUID кассы
+    PARITYPAY_SECRET_KEY: str | None = None  # X-SecretKey — секретный ключ №1, запросы к API
+    # Секретный ключ №2 — только для проверки подписи HTTP-уведомлений (X-SIGNATURE).
+    # Отдельный от ключа запросов: утечка одного не даёт подделать другое.
+    PARITYPAY_CALLBACK_SECRET: str | None = None
+    PARITYPAY_BASE_URL: str = 'https://api.paritypay.net'
+    PARITYPAY_DISPLAY_NAME: str = 'ParityPay'
+    PARITYPAY_MIN_AMOUNT_KOPEKS: int = 10000  # 100₽
+    PARITYPAY_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000₽
+    PARITYPAY_WEBHOOK_PATH: str = '/paritypay-webhook'
+    # Время жизни счёта в минутах, поле expire; у провайдера по умолчанию 60
+    PARITYPAY_INVOICE_LIFETIME_MINUTES: int = 60
+    # Sub-методы ParityPay (поле service при создании счёта)
+    PARITYPAY_CARD_ENABLED: bool = False
+    PARITYPAY_CARD_DISPLAY_NAME: str = 'Карта (ParityPay)'
+    PARITYPAY_SBP_ENABLED: bool = False
+    PARITYPAY_SBP_DISPLAY_NAME: str = 'СБП (ParityPay)'
+
     # Lava (Lava Business API, api.lava.ru)
     LAVA_ENABLED: bool = False
     LAVA_BASE_URL: str = 'https://api.lava.ru'
@@ -1150,6 +1190,13 @@ class Settings(BaseSettings):
     HAPP_DOWNLOAD_LINK_MACOS: str | None = None
     HAPP_DOWNLOAD_LINK_WINDOWS: str | None = None
     HAPP_DOWNLOAD_LINK_PC: str | None = None
+    # У INCY есть свой формат шифрованных ссылок (incy://crypt1/...) — без него ссылка
+    # подписки уезжает в открытом виде, в отличие от happ-cryptolink. Выключатель на
+    # случай ротации ключа INCY: тогда кнопки вернутся к обычным incy://import/...
+    INCY_CRYPTOLINK_ENABLED: bool = True
+    # Необязательное имя провайдера внутри зашифрованной ссылки (поле "n"): INCY
+    # показывает его пользователю при добавлении подписки.
+    INCY_CRYPTOLINK_PROVIDER_NAME: str | None = None
     HIDE_SUBSCRIPTION_LINK: bool = False
     ENABLE_LOGO_MODE: bool = True
     LOGO_FILE: str = 'vpn_logo.png'
@@ -3098,6 +3145,83 @@ class Settings(BaseSettings):
     def get_cispay_sbp_display_name_html(self) -> str:
         return html.escape(self.get_cispay_sbp_display_name())
 
+    def is_tabpay_configured(self) -> bool:
+        """Есть ли учётные данные провайдера — без учёта флага включения."""
+        return bool(self.TABPAY_API_KEY and self.TABPAY_WEBHOOK_SECRET)
+
+    def is_tabpay_enabled(self) -> bool:
+        # Секрет вебхука обязателен наравне с API-ключом: без него подпись
+        # X-Signature-V2 не проверить, и вебхук пришлось бы принимать вслепую.
+        return bool(self.TABPAY_ENABLED and self.TABPAY_API_KEY and self.TABPAY_WEBHOOK_SECRET)
+
+    def get_tabpay_display_name(self) -> str:
+        name = (self.TABPAY_DISPLAY_NAME or '').strip()
+        return name or 'TabPay'
+
+    def get_tabpay_display_name_html(self) -> str:
+        return html.escape(self.get_tabpay_display_name())
+
+    def is_tabpay_card_enabled(self) -> bool:
+        return self.TABPAY_CARD_ENABLED and self.is_tabpay_enabled()
+
+    def get_tabpay_card_display_name(self) -> str:
+        name = (self.TABPAY_CARD_DISPLAY_NAME or '').strip()
+        return name or 'Карта (TabPay)'
+
+    def get_tabpay_card_display_name_html(self) -> str:
+        return html.escape(self.get_tabpay_card_display_name())
+
+    def is_tabpay_sbp_enabled(self) -> bool:
+        return self.TABPAY_SBP_ENABLED and self.is_tabpay_enabled()
+
+    def get_tabpay_sbp_display_name(self) -> str:
+        name = (self.TABPAY_SBP_DISPLAY_NAME or '').strip()
+        return name or 'СБП (TabPay)'
+
+    def get_tabpay_sbp_display_name_html(self) -> str:
+        return html.escape(self.get_tabpay_sbp_display_name())
+
+    def is_paritypay_configured(self) -> bool:
+        """Есть ли учётные данные провайдера — без учёта флага включения."""
+        return bool(self.PARITYPAY_SHOP_ID and self.PARITYPAY_SECRET_KEY and self.PARITYPAY_CALLBACK_SECRET)
+
+    def is_paritypay_enabled(self) -> bool:
+        # Ключ уведомлений обязателен наравне с ключом запросов: без него подпись
+        # X-SIGNATURE не проверить, и уведомление пришлось бы принимать вслепую.
+        return bool(
+            self.PARITYPAY_ENABLED
+            and self.PARITYPAY_SHOP_ID
+            and self.PARITYPAY_SECRET_KEY
+            and self.PARITYPAY_CALLBACK_SECRET
+        )
+
+    def get_paritypay_display_name(self) -> str:
+        name = (self.PARITYPAY_DISPLAY_NAME or '').strip()
+        return name or 'ParityPay'
+
+    def get_paritypay_display_name_html(self) -> str:
+        return html.escape(self.get_paritypay_display_name())
+
+    def is_paritypay_card_enabled(self) -> bool:
+        return self.PARITYPAY_CARD_ENABLED and self.is_paritypay_enabled()
+
+    def get_paritypay_card_display_name(self) -> str:
+        name = (self.PARITYPAY_CARD_DISPLAY_NAME or '').strip()
+        return name or 'Карта (ParityPay)'
+
+    def get_paritypay_card_display_name_html(self) -> str:
+        return html.escape(self.get_paritypay_card_display_name())
+
+    def is_paritypay_sbp_enabled(self) -> bool:
+        return self.PARITYPAY_SBP_ENABLED and self.is_paritypay_enabled()
+
+    def get_paritypay_sbp_display_name(self) -> str:
+        name = (self.PARITYPAY_SBP_DISPLAY_NAME or '').strip()
+        return name or 'СБП (ParityPay)'
+
+    def get_paritypay_sbp_display_name_html(self) -> str:
+        return html.escape(self.get_paritypay_sbp_display_name())
+
     def is_donut_configured(self) -> bool:
         """Есть ли учётные данные провайдера — без учёта флага включения."""
         return self.DONUT_TOKEN is not None and self.DONUT_SECRET is not None
@@ -3335,6 +3459,10 @@ class Settings(BaseSettings):
     def get_happ_cryptolink_redirect_template(self) -> str | None:
         template = (self.HAPP_CRYPTOLINK_REDIRECT_TEMPLATE or '').strip()
         return template or None
+
+    def get_incy_provider_name(self) -> str | None:
+        name = (self.INCY_CRYPTOLINK_PROVIDER_NAME or '').strip()
+        return name or None
 
     def get_happ_download_link(self, platform: str) -> str | None:
         platform_key = platform.lower()

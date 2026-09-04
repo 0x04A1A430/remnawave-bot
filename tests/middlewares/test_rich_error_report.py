@@ -54,7 +54,7 @@ async def test_send_error_uses_rich_and_clears_buffer():
 
     sent = await ge.send_error_to_admin_chat(bot, ValueError('boom'), context='Logger: app.x')
 
-    assert sent is True
+    assert sent == 'sent'
     bot.send_rich_message.assert_awaited_once()
     bot.send_document.assert_not_awaited()  # файл не нужен — всё инлайн
     assert ge._error_buffer == []
@@ -69,6 +69,6 @@ async def test_send_error_falls_back_to_document_when_rich_unavailable(monkeypat
 
     sent = await ge.send_error_to_admin_chat(bot, ValueError('boom'))
 
-    assert sent is True
+    assert sent == 'sent'
     bot.send_rich_message.assert_not_awaited()
     bot.send_document.assert_awaited_once()  # классический путь с .txt-файлом

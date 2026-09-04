@@ -39,6 +39,7 @@ from .admin_sales_stats import router as admin_sales_stats_router
 from .admin_servers import router as admin_servers_router
 from .admin_settings import router as admin_settings_router
 from .admin_stats import router as admin_stats_router
+from .admin_system_errors import router as admin_system_errors_router
 from .admin_tariffs import router as admin_tariffs_router
 from .admin_tickets import router as admin_tickets_router
 from .admin_traffic import router as admin_traffic_router
@@ -163,6 +164,7 @@ router.include_router(admin_apps_router)
 router.include_router(admin_roles_router)
 router.include_router(admin_policies_router)
 router.include_router(admin_audit_log_router)
+router.include_router(admin_system_errors_router)
 # Categories/tags/media routers MUST be before the main news router
 # to avoid /admin/news/{article_id} catching /admin/news/categories etc.
 router.include_router(admin_news_categories_router)

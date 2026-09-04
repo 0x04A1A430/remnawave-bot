@@ -1261,22 +1261,28 @@ wheels = [
 
 [[package]]
 name = "remnawave-bedolaga-telegram-bot"
-version = "4.1.0"
+version = "4.2.0"
 source = { virtual = "." }
 dependencies = [
+    { name = "aiofiles" },
     { name = "aiogram" },
+    { name = "aiohttp" },
     { name = "aiohttp-socks" },
     { name = "aiosqlite" },
     { name = "alembic" },
     { name = "app-store-server-library", extra = ["async"] },
     { name = "asyncpg" },
+    { name = "attrs" },
     { name = "bcrypt" },
     { name = "cryptography" },
     { name = "fastapi", extra = ["standard"] },
     { name = "greenlet" },
     { name = "httpx", extra = ["socks"] },
     { name = "packaging" },
+    { name = "pillow" },
     { name = "pycryptodome" },
+    { name = "pydantic" },
+    { name = "pydantic-settings" },
     { name = "pyjwt" },
     { name = "python-dateutil" },
     { name = "pyyaml" },
@@ -1285,7 +1291,9 @@ dependencies = [
     { name = "redis" },
     { name = "rich" },
     { name = "sqlalchemy" },
+    { name = "starlette" },
     { name = "structlog" },
+    { name = "uvicorn" },
     { name = "yookassa" },
 ]
 
@@ -1299,19 +1307,25 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "aiofiles", specifier = ">=25.1.0" },
     { name = "aiogram", specifier = ">=3.31.0" },
+    { name = "aiohttp", specifier = ">=3.14.3" },
     { name = "aiohttp-socks", specifier = ">=0.10.1" },
     { name = "aiosqlite", specifier = ">=0.22.1" },
     { name = "alembic", specifier = ">=1.18.4" },
     { name = "app-store-server-library", extras = ["async"], specifier = ">=3.1.1" },
     { name = "asyncpg", specifier = ">=0.31.0" },
+    { name = "attrs", specifier = ">=26.1.0" },
     { name = "bcrypt", specifier = ">=5.0.0" },
     { name = "cryptography", specifier = ">=48.0.1" },
     { name = "fastapi", extras = ["standard"], specifier = ">=0.139.2" },
     { name = "greenlet", specifier = ">=3.0" },
     { name = "httpx", extras = ["socks"], specifier = ">=0.27.0" },
     { name = "packaging", specifier = ">=26.0" },
+    { name = "pillow", specifier = ">=12.3.0" },
     { name = "pycryptodome", specifier = ">=3.21.0" },
+    { name = "pydantic", specifier = ">=2.13.4" },
+    { name = "pydantic-settings", specifier = ">=2.15.0" },
     { name = "pyjwt", specifier = ">=2.13.0" },
     { name = "python-dateutil", specifier = ">=2.9.0.post0" },
     { name = "pyyaml", specifier = ">=6.0.3" },
@@ -1320,7 +1334,9 @@ requires-dist = [
     { name = "redis", specifier = ">=7.1.1" },
     { name = "rich", specifier = ">=14.0" },
     { name = "sqlalchemy", specifier = ">=2.0.46" },
+    { name = "starlette", specifier = ">=1.6.0" },
     { name = "structlog", specifier = ">=25.1.0,<26" },
+    { name = "uvicorn", specifier = ">=0.52.4" },
     { name = "yookassa", specifier = ">=3.10.0" },
 ]
 

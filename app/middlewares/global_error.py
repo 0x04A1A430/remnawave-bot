@@ -236,7 +236,7 @@ def _build_rich_error_report(now: datetime, error_type: str, context: str) -> st
 
 async def send_error_to_admin_chat(
     bot: Bot, error: Exception, context: str = '', tb_override: str | None = None
-) -> bool:
+) -> str:
     """
     Отправляет уведомление об ошибке в админский чат с троттлингом.
 
@@ -247,7 +247,12 @@ async def send_error_to_admin_chat(
         tb_override: Готовый traceback (если вызывается не из except-блока)
 
     Returns:
-        bool: True если уведомление отправлено
+        str: исход доставки — 'sent' | 'throttled' | 'skipped' | 'failed'.
+
+        Раньше возвращался bool, но False означал сразу три разных вещи:
+        уведомления выключены, сработал троттлинг, реальный провал отправки.
+        Для записи в system_error_events их надо различать — иначе штатное
+        подавление дубликата выглядит как авария.
     """
     global _last_error_notification
 
@@ -259,7 +264,7 @@ async def send_error_to_admin_chat(
     enabled = getattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False)
 
     if not enabled or not chat_id:
-        return False
+        return 'skipped'
 
     error_type = type(error).__name__
     error_message = str(error)[:ERROR_MESSAGE_MAX_LENGTH]
@@ -276,7 +281,7 @@ async def send_error_to_admin_chat(
     now = datetime.now(tz=UTC)
     if _last_error_notification and (now - _last_error_notification) < _error_notification_cooldown:
         logger.debug('Ошибка добавлена в буфер, троттлинг активен', error_type=error_type)
-        return False
+        return 'throttled'
 
     _last_error_notification = now
 
@@ -302,7 +307,7 @@ async def send_error_to_admin_chat(
         ):
             _error_buffer.clear()
             logger.info('Rich-уведомление об ошибке отправлено в чат', chat_id=chat_id)
-            return True
+            return 'sent'
     except Exception as rich_error:
         # warning + строка: error-уровень отсюда сам бы ушёл в этот конвейер
         logger.warning('Сбой rich-рендера отчёта об ошибке', error=str(rich_error))
@@ -374,8 +379,8 @@ async def send_error_to_admin_chat(
         await bot.send_document(**message_kwargs)
         _error_buffer.clear()  # Clear only after successful send
         logger.info('Уведомление об ошибке отправлено в чат', chat_id=chat_id)
-        return True
+        return 'sent'
 
     except Exception as e:
         logger.error('Ошибка отправки уведомления об ошибке', e=e, _admin_notified=True)
-        return False
+        return 'failed'

@@ -321,6 +321,18 @@ async def main():
         daily_subscription_service.set_bot(bot)
         telegram_notifier.set_bot(bot)
 
+        # Хранилище ошибок: пишет события ДО попытки доставки в Telegram,
+        # поэтому они переживают недоступность всех путей до чата.
+        from app.services.system_error_log_service import system_error_log_service
+
+        await system_error_log_service.start()
+
+        # Очередь повторной отправки писем: без неё письмо, не ушедшее во время
+        # обрыва SMTP-канала, терялось молча — включая код регистрации.
+        from app.services.email_retry_service import email_retry_service
+
+        await email_retry_service.start()
+
         from app.services.channel_subscription_service import channel_subscription_service
 
         channel_subscription_service.bot = bot
@@ -950,6 +962,23 @@ async def main():
                 await log_rotation_service.stop()
             except Exception as e:
                 logger.error('Ошибка остановки сервиса ротации логов', error=e)
+
+        logger.info('ℹ️ Остановка очереди повторной отправки писем...')
+        try:
+            from app.services.email_retry_service import email_retry_service
+
+            await email_retry_service.stop()
+        except Exception as e:
+            logger.warning('Ошибка остановки очереди повторной отправки писем', error=e)
+
+        logger.info('ℹ️ Остановка журнала системных ошибок...')
+        try:
+            from app.services.system_error_log_service import system_error_log_service
+
+            await system_error_log_service.stop()
+        except Exception as e:
+            # warning: error отсюда ушёл бы в тот же конвейер, который мы гасим
+            logger.warning('Ошибка остановки журнала системных ошибок', error=e)
 
         logger.info('ℹ️ Остановка очереди чеков NaloGO...')
         try:
