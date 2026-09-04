@@ -1373,8 +1373,16 @@ async def notify_gift_claim_available(
                 'cabinet_email': '',
                 'cabinet_password': '',
             }
-            templates = EmailNotificationTemplates()
-            template = templates.get_template(NotificationType.GUEST_GIFT_RECEIVED, language, context)
+            # Сохранённый в редакторе шаблон, как и в остальных гостевых письмах;
+            # иначе получатель подарка по ссылке видел только стандартный.
+            from app.cabinet.services.email_template_overrides import get_rendered_override
+
+            rendered = await get_rendered_override(NotificationType.GUEST_GIFT_RECEIVED.value, language, context)
+            if rendered:
+                template = {'subject': rendered[0], 'body_html': rendered[1]}
+            else:
+                templates = EmailNotificationTemplates()
+                template = templates.get_template(NotificationType.GUEST_GIFT_RECEIVED, language, context)
             if template:
                 await asyncio.to_thread(
                     email_service.send_email,

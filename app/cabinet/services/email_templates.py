@@ -5,6 +5,7 @@ Supports multiple languages: ru, en, zh, ua, fa
 """
 
 import html
+from collections.abc import Callable
 from functools import partial
 from typing import Any
 
@@ -18,27 +19,38 @@ class EmailNotificationTemplates:
         self.service_name = settings.SMTP_FROM_NAME or 'VPN Service'
         self.cabinet_url = getattr(settings, 'CABINET_URL', '')
 
-    def get_template(
-        self,
-        notification_type: 'NotificationType',
-        language: str,
-        context: dict[str, Any],
-    ) -> dict[str, str] | None:
-        """
-        Get email template for notification type.
+    # WEBHOOK_* уведомления делят один generic-билдер: значение типа -> ключ
+    # копирайта в WEBHOOK_EMAIL_COPY. Ключи — строки, а не enum: NotificationType
+    # импортируется лениво (цикл модулей), а редактору этот список нужен на
+    # уровне класса, чтобы собирать свои записи из тех же текстов.
+    WEBHOOK_EMAIL_KINDS: dict[str, str] = {
+        'webhook_sub_expired': 'sub_expired',
+        'webhook_sub_disabled': 'sub_disabled',
+        'webhook_sub_enabled': 'sub_enabled',
+        'webhook_sub_limited': 'sub_limited',
+        'webhook_sub_traffic_reset': 'sub_traffic_reset',
+        'webhook_sub_deleted': 'sub_deleted',
+        'webhook_sub_revoked': 'sub_revoked',
+        'webhook_sub_expiring': 'sub_expiring',
+        'webhook_sub_first_connected': 'sub_first_connected',
+        'webhook_sub_bandwidth_threshold': 'sub_bandwidth_threshold',
+        'webhook_user_not_connected': 'user_not_connected',
+        'webhook_device_added': 'device_added',
+        'webhook_device_deleted': 'device_deleted',
+        'webhook_torrent_detected': 'torrent_detected',
+    }
 
-        Args:
-            notification_type: Type of notification
-            language: Language code (ru, en, zh, ua, fa)
-            context: Context data for template rendering
+    def _template_map(self) -> dict['NotificationType', Callable[[str, dict[str, Any]], dict[str, str]]]:
+        """Тип уведомления -> билдер письма. Единственный реестр email-шаблонов.
 
-        Returns:
-            Dict with 'subject', 'body_html', and optionally 'body_text'
+        Список типов в редакторе админки строится отсюда же (supported_types):
+        рукописная копия рядом отставала, и письма уходили со стандартным
+        шаблоном, который нельзя было поменять.
         """
         # Import here to avoid circular imports
         from app.services.notification_delivery_service import NotificationType
 
-        template_map = {
+        template_map: dict[NotificationType, Callable[[str, dict[str, Any]], dict[str, str]]] = {
             NotificationType.BALANCE_TOPUP: self._balance_topup_template,
             NotificationType.BALANCE_CHANGE: self._balance_change_template,
             NotificationType.SUBSCRIPTION_EXPIRING: self._subscription_expiring_template,
@@ -74,28 +86,34 @@ class EmailNotificationTemplates:
             NotificationType.GUEST_GIFT_RECEIVED: self._guest_gift_received_template,
             NotificationType.GUEST_CABINET_CREDENTIALS: self._guest_cabinet_credentials_template,
         }
-
-        # WEBHOOK_* уведомления делят один generic-билдер: тип -> ключ копирайта.
-        webhook_email_kinds = {
-            NotificationType.WEBHOOK_SUB_EXPIRED: 'sub_expired',
-            NotificationType.WEBHOOK_SUB_DISABLED: 'sub_disabled',
-            NotificationType.WEBHOOK_SUB_ENABLED: 'sub_enabled',
-            NotificationType.WEBHOOK_SUB_LIMITED: 'sub_limited',
-            NotificationType.WEBHOOK_SUB_TRAFFIC_RESET: 'sub_traffic_reset',
-            NotificationType.WEBHOOK_SUB_DELETED: 'sub_deleted',
-            NotificationType.WEBHOOK_SUB_REVOKED: 'sub_revoked',
-            NotificationType.WEBHOOK_SUB_EXPIRING: 'sub_expiring',
-            NotificationType.WEBHOOK_SUB_FIRST_CONNECTED: 'sub_first_connected',
-            NotificationType.WEBHOOK_SUB_BANDWIDTH_THRESHOLD: 'sub_bandwidth_threshold',
-            NotificationType.WEBHOOK_USER_NOT_CONNECTED: 'user_not_connected',
-            NotificationType.WEBHOOK_DEVICE_ADDED: 'device_added',
-            NotificationType.WEBHOOK_DEVICE_DELETED: 'device_deleted',
-            NotificationType.WEBHOOK_TORRENT_DETECTED: 'torrent_detected',
+        webhook_map = {
+            NotificationType(type_value): partial(self._webhook_event_email, kind)
+            for type_value, kind in self.WEBHOOK_EMAIL_KINDS.items()
         }
-        for webhook_type, webhook_kind in webhook_email_kinds.items():
-            template_map[webhook_type] = partial(self._webhook_event_email, webhook_kind)
+        return {**template_map, **webhook_map}
 
-        template_func = template_map.get(notification_type)
+    def supported_types(self) -> list['NotificationType']:
+        """Типы, у которых есть email-шаблон, — источник истины для списка редактора."""
+        return list(self._template_map())
+
+    def get_template(
+        self,
+        notification_type: 'NotificationType',
+        language: str,
+        context: dict[str, Any],
+    ) -> dict[str, str] | None:
+        """
+        Get email template for notification type.
+
+        Args:
+            notification_type: Type of notification
+            language: Language code (ru, en, zh, ua, fa)
+            context: Context data for template rendering
+
+        Returns:
+            Dict with 'subject', 'body_html', and optionally 'body_text'
+        """
+        template_func = self._template_map().get(notification_type)
         if not template_func:
             return None
 
@@ -567,7 +585,7 @@ class EmailNotificationTemplates:
             'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
         }
 
-    _WEBHOOK_EMAIL_COPY = {
+    WEBHOOK_EMAIL_COPY = {
         'sub_expired': {
             'zh': (
                 '订阅已到期',
@@ -806,7 +824,7 @@ class EmailNotificationTemplates:
         so email was silently skipped. This covers all of them.
         """
         lang = language if language in ('ru', 'en', 'zh', 'ua') else 'ru'
-        copy = self._WEBHOOK_EMAIL_COPY.get(kind, self._WEBHOOK_EMAIL_COPY['user_not_connected'])
+        copy = self.WEBHOOK_EMAIL_COPY.get(kind, self.WEBHOOK_EMAIL_COPY['user_not_connected'])
         subject, body = copy.get(lang, copy['ru'])
 
         device = str(context.get('device') or context.get('device_name') or '').strip()

@@ -35,22 +35,32 @@ def _gift(**overrides) -> SimpleNamespace:
     return SimpleNamespace(**base)
 
 
-def _patches(send_mock: MagicMock):
-    """Patch the lazily-imported email machinery + cabinet URL."""
+def _patches(send_mock: MagicMock, override: tuple[str, str] | None = None):
+    """Patch the lazily-imported email machinery + cabinet URL.
+
+    ``override`` — что вернёт сервис сохранённых в редакторе шаблонов
+    (None = override не задан, письмо строится по дефолтному шаблону).
+    """
     email_module = SimpleNamespace(email_service=SimpleNamespace(send_email=send_mock))
     templates_module = SimpleNamespace(
         EmailNotificationTemplates=lambda: SimpleNamespace(
             get_template=lambda *a, **k: {'subject': 's', 'body_html': 'b'}
         )
     )
-    notif_module = SimpleNamespace(NotificationType=SimpleNamespace(GUEST_GIFT_RECEIVED='guest_gift_received'))
+    override_calls: list[tuple] = []
+
+    async def get_rendered_override(notification_type, language, context, *a, **k):
+        override_calls.append((notification_type, language, context))
+        return override
+
+    overrides_module = SimpleNamespace(get_rendered_override=get_rendered_override, calls=override_calls)
     return (
         patch.dict(
             'sys.modules',
             {
                 'app.cabinet.services.email_service': email_module,
                 'app.cabinet.services.email_templates': templates_module,
-                'app.services.notification_delivery_service': notif_module,
+                'app.cabinet.services.email_template_overrides': overrides_module,
             },
         ),
         patch('app.services.guest_purchase_service.settings.CABINET_URL', 'https://cab.example'),
@@ -120,3 +130,43 @@ async def test_non_gift_purchase_is_a_noop() -> None:
     with mods, cab:
         await notify_gift_claim_available(purchase)
     send.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_email_recipient_gets_admin_override_when_saved() -> None:
+    """Жалоба из «Багов»: шаблон письма нельзя было поменять со стандартного.
+
+    Получатель подарка по email-ссылке получал письмо по дефолтному шаблону,
+    даже если админ сохранил свой в редакторе, — этот путь единственный из
+    гостевых не заглядывал в override.
+    """
+    send = MagicMock(return_value=True)
+    purchase = _gift(gift_recipient_type='email', gift_recipient_value='friend@example.com')
+    mods, cab = _patches(send, override=('Свой заголовок', '<p>свой текст</p>'))
+    with mods, cab:
+        await notify_gift_claim_available(purchase, tariff_name='Lite', period_days=30)
+
+    call = send.call_args_list[0]
+    assert call.kwargs['to_email'] == 'friend@example.com'
+    assert call.kwargs['subject'] == 'Свой заголовок'
+    assert call.kwargs['body_html'] == '<p>свой текст</p>'
+
+
+@pytest.mark.asyncio
+async def test_override_lookup_uses_the_gift_template_type_and_claim_context() -> None:
+    """Override ищется под тем же типом, что и дефолт, и с тем же контекстом (ссылка на claim)."""
+    send = MagicMock(return_value=True)
+    purchase = _gift(gift_recipient_type='email', gift_recipient_value='friend@example.com')
+    mods, cab = _patches(send)
+    with mods, cab:
+        await notify_gift_claim_available(purchase, tariff_name='Lite', period_days=30)
+        import sys
+
+        calls = sys.modules['app.cabinet.services.email_template_overrides'].calls
+
+    assert len(calls) == 1
+    notification_type, language, context = calls[0]
+    assert notification_type == 'guest_gift_received'
+    assert language == 'ru'
+    assert context['success_page_url'] == f'https://cab.example/buy/gift/{purchase.token}'
+    assert context['tariff_name'] == 'Lite'

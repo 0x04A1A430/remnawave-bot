@@ -30,6 +30,51 @@ router = APIRouter(prefix='/admin/email-templates', tags=['Admin Email Templates
 
 # ============ Template type metadata ============
 
+EDITOR_LANGUAGES = ('ru', 'en', 'zh', 'ua')
+
+_WEBHOOK_DESCRIPTION = {
+    'ru': 'Уведомление Remnawave: {subject}',
+    'en': 'Remnawave notification: {subject}',
+    'zh': 'Remnawave 通知：{subject}',
+    'ua': 'Сповіщення Remnawave: {subject}',
+}
+_WEBHOOK_SAMPLE_DEVICE = 'iPhone 15'
+
+
+def _webhook_uses_device(kind: str) -> bool:
+    copy = EmailNotificationTemplates.WEBHOOK_EMAIL_COPY[kind]
+    return any('{device}' in copy[lang][1] for lang in EDITOR_LANGUAGES)
+
+
+def _webhook_template_types() -> list[dict[str, Any]]:
+    """Записи редактора для WEBHOOK_* писем.
+
+    Собираются из тех же текстов, что и сами письма (WEBHOOK_EMAIL_KINDS +
+    WEBHOOK_EMAIL_COPY): рукописный список рядом с реестром шаблонов отставал,
+    и 14 уведомлений уходили со стандартным шаблоном без возможности его
+    поменять. Новый вебхук-тип попадает в редактор сам.
+    """
+    copy = EmailNotificationTemplates.WEBHOOK_EMAIL_COPY
+    return [
+        {
+            'type': type_value,
+            'label': {lang: copy[kind][lang][0] for lang in EDITOR_LANGUAGES},
+            'description': {
+                lang: _WEBHOOK_DESCRIPTION[lang].format(subject=copy[kind][lang][0]) for lang in EDITOR_LANGUAGES
+            },
+            'context_vars': ['device'] if _webhook_uses_device(kind) else [],
+        }
+        for type_value, kind in EmailNotificationTemplates.WEBHOOK_EMAIL_KINDS.items()
+    ]
+
+
+def _webhook_sample_contexts() -> dict[str, dict[str, Any]]:
+    return {
+        type_value: ({'device': _WEBHOOK_SAMPLE_DEVICE} if _webhook_uses_device(kind) else {})
+        for type_value, kind in EmailNotificationTemplates.WEBHOOK_EMAIL_KINDS.items()
+    }
+
+
 TEMPLATE_TYPES = [
     {
         'type': 'balance_topup',
@@ -116,6 +161,54 @@ TEMPLATE_TYPES = [
             'ua': 'Сповіщення про активацію підписки',
         },
         'context_vars': ['expires_at', 'tariff_name', 'traffic_limit_gb', 'device_limit'],
+    },
+    {
+        'type': 'winback_expired_1d',
+        'label': {
+            'ru': 'Подписка закончилась (возврат, 1 день)',
+            'en': 'Subscription Ended (Win-back, Day 1)',
+            'zh': '订阅已结束（挽回，第 1 天）',
+            'ua': 'Підписка закінчилася (повернення, 1 день)',
+        },
+        'description': {
+            'ru': 'Письмо через день после окончания подписки',
+            'en': 'Sent one day after the subscription ended',
+            'zh': '订阅结束一天后发送',
+            'ua': 'Лист через день після закінчення підписки',
+        },
+        'context_vars': ['end_date'],
+    },
+    {
+        'type': 'winback_discount',
+        'label': {
+            'ru': 'Скидка на продление (возврат)',
+            'en': 'Renewal Discount (Win-back)',
+            'zh': '续订折扣（挽回）',
+            'ua': 'Знижка на продовження (повернення)',
+        },
+        'description': {
+            'ru': 'Персональная скидка на продление после окончания подписки',
+            'en': 'Personal renewal discount after the subscription ended',
+            'zh': '订阅结束后的个人续订折扣',
+            'ua': 'Персональна знижка на продовження після закінчення підписки',
+        },
+        'context_vars': ['percent', 'expires_at'],
+    },
+    {
+        'type': 'winback_trial_ending',
+        'label': {
+            'ru': 'Пробная подписка скоро закончится',
+            'en': 'Trial Ending Soon',
+            'zh': '试用即将结束',
+            'ua': 'Пробна підписка скоро закінчиться',
+        },
+        'description': {
+            'ru': 'Напоминание за 2 часа до окончания тестовой подписки',
+            'en': 'Reminder 2 hours before the trial ends',
+            'zh': '试用结束前 2 小时提醒',
+            'ua': 'Нагадування за 2 години до кінця тестової підписки',
+        },
+        'context_vars': [],
     },
     {
         'type': 'autopay_success',
@@ -472,6 +565,23 @@ TEMPLATE_TYPES = [
         },
         'context_vars': ['tariff_name', 'period_days', 'cabinet_url', 'cabinet_email', 'cabinet_password'],
     },
+    {
+        'type': 'promo_offer',
+        'label': {
+            'ru': 'Персональное предложение',
+            'en': 'Personal Offer',
+            'zh': '专属优惠',
+            'ua': 'Персональна пропозиція',
+        },
+        'description': {
+            'ru': 'Промо-предложение, отправленное пользователю из админки',
+            'en': 'Promo offer sent to the user from the admin panel',
+            'zh': '从管理面板发送给用户的促销优惠',
+            'ua': 'Промопропозиція, надіслана користувачу з адмінки',
+        },
+        'context_vars': ['message_html', 'valid_hours', 'discount_percent'],
+    },
+    *_webhook_template_types(),
 ]
 
 SAMPLE_CONTEXTS: dict[str, dict[str, Any]] = {
@@ -572,6 +682,15 @@ SAMPLE_CONTEXTS: dict[str, dict[str, Any]] = {
         'cabinet_email': 'user@example.com',
         'cabinet_password': 'SecurePass123',
     },
+    'winback_expired_1d': {'end_date': '30.01.2026, 23:59'},
+    'winback_discount': {'percent': 20, 'expires_at': '05.02.2026, 23:59'},
+    'winback_trial_ending': {},
+    'promo_offer': {
+        'message_html': 'Вернитесь и получите <b>скидку 20%</b> на любой тариф.',
+        'valid_hours': 24,
+        'discount_percent': 20,
+    },
+    **_webhook_sample_contexts(),
 }
 
 AVAILABLE_LANGUAGES = ['ru', 'en', 'zh', 'ua', 'fa']
@@ -608,7 +727,7 @@ def _validate_template_type(notification_type: str) -> dict[str, Any]:
 # f'{context.get("amount_rubles", 0):.2f}', which raises on a string placeholder.
 # Omitted from the placeholder context — defaults render via formatted_* anyway,
 # and at send time the real numeric values substitute {amount_rubles} fine.
-_NUMERIC_FALLBACK_VARS = {'amount_rubles', 'new_balance_rubles', 'bonus_rubles'}
+_NUMERIC_FALLBACK_VARS = {'amount_rubles', 'new_balance_rubles', 'bonus_rubles', 'valid_hours', 'discount_percent'}
 
 
 def _placeholder_context(notification_type: str) -> dict[str, Any]:

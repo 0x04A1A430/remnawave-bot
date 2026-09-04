@@ -24,9 +24,28 @@ from app.cabinet.services.email_template_overrides import (
     get_rendered_override,
     substitute_context_vars,
 )
+from app.cabinet.services.email_templates import EmailNotificationTemplates
 
 
 ALL_TYPE_KEYS = [t['type'] for t in TEMPLATE_TYPES]
+
+
+# ============ Полнота списка редактора ============
+
+
+def test_editor_exposes_every_email_template_type():
+    """Жалоба из «Багов»: письма уходят, а поменять их шаблон нельзя.
+
+    «Пробная подписка скоро закончится» (winback_trial_ending), два других
+    winback-письма, промо-предложение и 14 уведомлений по вебхукам Remnawave
+    рендерились и отправлялись, но в списке редактора их не было — админ видел
+    только стандартный шаблон. Список редактора обязан совпадать с реестром
+    шаблонов: второй рукописный реестр рядом с первым неизбежно отстаёт.
+    """
+    renderable = {t.value for t in EmailNotificationTemplates().supported_types()}
+    exposed = set(ALL_TYPE_KEYS)
+    assert renderable - exposed == set(), f'есть email-шаблон, но в редакторе нет: {sorted(renderable - exposed)}'
+    assert exposed - renderable == set(), f'в редакторе есть, но email-шаблона нет: {sorted(exposed - renderable)}'
 
 
 # ============ Выдача шаблонов в редактор ============
