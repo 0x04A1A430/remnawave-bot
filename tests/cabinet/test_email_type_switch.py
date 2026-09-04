@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from fastapi import HTTPException
 
-from app.cabinet.routes.admin_email_templates import EmailTemplateEnabledRequest, set_template_enabled
+from app.cabinet.routes import admin_email_templates as routes
 from app.cabinet.services import email_type_switch
 from app.cabinet.services.email_type_switch import (
     ALWAYS_ON_EMAIL_TYPES,
@@ -68,8 +68,8 @@ async def test_set_enabled_writes_setting_through_configuration_service(monkeypa
 @pytest.mark.asyncio
 async def test_endpoint_refuses_to_disable_always_on_types(monkeypatch):
     with pytest.raises(HTTPException) as exc:
-        await set_template_enabled(
-            'password_reset', EmailTemplateEnabledRequest(enabled=False), admin=SimpleNamespace(id=1), db=None
+        await routes.set_template_enabled(
+            'password_reset', routes.EmailTemplateEnabledRequest(enabled=False), admin=SimpleNamespace(id=1), db=None
         )
     assert exc.value.status_code == 400
 
@@ -79,11 +79,9 @@ async def test_endpoint_refuses_to_disable_always_on_types(monkeypatch):
         calls.append((notification_type, enabled))
         return {notification_type} if not enabled else set()
 
-    import app.cabinet.routes.admin_email_templates as routes
-
     monkeypatch.setattr(routes, 'set_email_type_enabled', fake_set)
-    result = await set_template_enabled(
-        'promo_offer', EmailTemplateEnabledRequest(enabled=False), admin=SimpleNamespace(id=1), db=None
+    result = await routes.set_template_enabled(
+        'promo_offer', routes.EmailTemplateEnabledRequest(enabled=False), admin=SimpleNamespace(id=1), db=None
     )
     assert calls == [('promo_offer', False)]
     assert result['enabled'] is False

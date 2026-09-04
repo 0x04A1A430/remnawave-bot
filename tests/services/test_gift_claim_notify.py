@@ -14,16 +14,18 @@ Guarantees pinned here (unified claimable-gift model):
 
 from __future__ import annotations
 
+import importlib
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
 
+
 # Тесты подменяют app.cabinet.services.email_service заглушкой в sys.modules; если
 # пакет app.cabinet.services ещё не загружен, его __init__ импортирует
 # EmailService из заглушки и падает. Загружаем пакет и ленивые зависимости
 # заранее — тогда файл проходит и в одиночку, а не только после других тестов.
-import app.cabinet.services.email_type_switch  # noqa: F401
+importlib.import_module('app.cabinet.services.email_type_switch')
 from app.services.guest_purchase_service import notify_gift_claim_available
 
 
