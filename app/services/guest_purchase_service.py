@@ -1177,6 +1177,71 @@ async def _send_telegram_gift_notification(
         )
 
 
+async def _send_guest_main_email(
+    templates: 'EmailNotificationTemplates',
+    purchase: GuestPurchase,
+    notification_type: 'NotificationType',
+    language: str,
+    context: dict,
+    recipient_email: str,
+) -> None:
+    """Основное письмо гостевой покупки (доставка / активация / подарок).
+
+    Письмо с доступами кабинета уходит отдельно и от этого письма не зависит:
+    ни выключатель типа, ни отсутствие шаблона не должны его глушить — иначе
+    покупатель остался бы без пароля.
+    """
+    from app.cabinet.services.email_service import email_service
+    from app.cabinet.services.email_type_switch import is_email_type_enabled
+
+    if not is_email_type_enabled(notification_type.value):
+        logger.info('Гостевое письмо отключено админом', notification_type=notification_type.value)
+        return
+
+    # Check DB override first, then fall back to hardcoded template
+    template = None
+    try:
+        from app.cabinet.services.email_template_overrides import get_rendered_override
+
+        rendered = await get_rendered_override(notification_type.value, language, context)
+        if rendered:
+            subject, body_html = rendered
+            template = {
+                'subject': subject,
+                'body_html': body_html,
+            }
+    except Exception as e:
+        logger.debug('Failed to check template override', e=e)
+
+    if not template:
+        template = templates.get_template(notification_type, language, context)
+
+    if not template:
+        logger.warning('No email template found for guest notification', notification_type=notification_type.value)
+        return
+
+    result = await asyncio.to_thread(
+        email_service.send_email,
+        to_email=recipient_email,
+        subject=template['subject'],
+        body_html=template['body_html'],
+    )
+
+    if result:
+        logger.info(
+            'Guest purchase notification sent',
+            purchase_id=purchase.id,
+            notification_type=notification_type.value,
+            recipient_masked=_mask_email(recipient_email),
+        )
+    else:
+        logger.warning(
+            'Failed to send guest purchase notification',
+            purchase_id=purchase.id,
+            notification_type=notification_type.value,
+        )
+
+
 async def send_guest_notification(
     purchase: GuestPurchase,
     *,
@@ -1244,56 +1309,8 @@ async def send_guest_notification(
     else:
         notification_type = NotificationType.GUEST_SUBSCRIPTION_DELIVERED
 
-    from app.cabinet.services.email_type_switch import is_email_type_enabled
-
-    if not is_email_type_enabled(notification_type.value):
-        logger.info('Гостевое письмо отключено админом', notification_type=notification_type.value)
-        return
-
     templates = EmailNotificationTemplates()
-
-    # Check DB override first, then fall back to hardcoded template
-    template = None
-    try:
-        from app.cabinet.services.email_template_overrides import get_rendered_override
-
-        rendered = await get_rendered_override(notification_type.value, language, context)
-        if rendered:
-            subject, body_html = rendered
-            template = {
-                'subject': subject,
-                'body_html': body_html,
-            }
-    except Exception as e:
-        logger.debug('Failed to check template override', e=e)
-
-    if not template:
-        template = templates.get_template(notification_type, language, context)
-
-    if not template:
-        logger.warning('No email template found for guest notification', notification_type=notification_type.value)
-        return
-
-    result = await asyncio.to_thread(
-        email_service.send_email,
-        to_email=recipient_email,
-        subject=template['subject'],
-        body_html=template['body_html'],
-    )
-
-    if result:
-        logger.info(
-            'Guest purchase notification sent',
-            purchase_id=purchase.id,
-            notification_type=notification_type.value,
-            recipient_masked=_mask_email(recipient_email),
-        )
-    else:
-        logger.warning(
-            'Failed to send guest purchase notification',
-            purchase_id=purchase.id,
-            notification_type=notification_type.value,
-        )
+    await _send_guest_main_email(templates, purchase, notification_type, language, context, recipient_email)
 
     # Send separate credentials email for new accounts (self-purchases and gifts)
     if purchase.cabinet_password:

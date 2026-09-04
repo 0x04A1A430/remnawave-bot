@@ -3427,6 +3427,9 @@
 - `tests/services/test_grace_access_sqlite_safety.py` — Python-модуль
   Классы: нет
   Функции: `test_sqlite_delete_guard_preserves_open_snapshot_and_cascades_completed_history`, `test_sqlite_predelete_noop_write_blocks_a_concurrent_pending_insert`, `test_sqlite_user_lock_blocks_a_new_subscription_during_full_delete`, `test_sqlite_delete_guard_also_blocks_user_cascade`
+- `tests/services/test_guest_notification_switch.py` — Python-модуль
+  Классы: нет
+  Функции: `test_disabled_main_email_does_not_silence_credentials`, `test_enabled_main_email_sends_both`
 - `tests/services/test_guest_purchase_campaign.py` — Python-модуль
   Классы: нет
   Функции: `test_campaign_is_attributed_after_delivery`, `test_purchase_without_slug_is_skipped`, `test_gift_is_not_attributed_to_recipient` — Гифт активирует получатель, а по рекламе приходил покупатель — записать, `test_attribution_failure_does_not_propagate` — Подписка уже доставлена и оплачена — упасть здесь значит уронить

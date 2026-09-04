@@ -297,6 +297,16 @@ class NotificationDeliveryService:
                     ws_sent=ws_sent,
                 )
                 return True
+            from app.cabinet.services.email_type_switch import is_email_type_enabled
+
+            if not is_email_type_enabled(notification_type.value):
+                # Письмо выключено админом — это не сбой доставки.
+                logger.debug(
+                    'Уведомление email-пользователю пропущено: тип письма отключён',
+                    notification_type_value=notification_type.value,
+                    user_id=user.id,
+                )
+                return False
             logger.warning(
                 'Не удалось отправить уведомление email-пользователю',
                 notification_type_value=notification_type.value,
