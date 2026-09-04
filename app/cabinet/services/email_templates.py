@@ -154,134 +154,19 @@ class EmailNotificationTemplates:
         # Tier 3: Simple HTML fragment — use base template for structure
         return self._get_base_template(content, language)
 
-    _UNSUBSCRIBE_TEXTS = {
-        'ru': 'Отписаться от рассылок',
-        'en': 'Unsubscribe from marketing emails',
-        'zh': '退订营销邮件',
-        'ua': 'Відписатися від розсилок',
-        'fa': 'لغو اشتراک ایمیل‌های تبلیغاتی',
-    }
-
     def _get_base_template(self, content: str, language: str = 'ru', unsubscribe_url: str = '') -> str:
-        """Wrap content in base HTML template.
+        """Wrap content in the email layout — сохранённая в редакторе обёртка, иначе встроенная.
 
         ``unsubscribe_url`` непустой только у маркетинговых писем — у писем со
         сбросом пароля или чеком отписке взяться неоткуда.
         """
-        footer_texts = {
-            'ru': 'Это автоматическое сообщение. Пожалуйста, не отвечайте на это письмо.',
-            'en': 'This is an automated message. Please do not reply to this email.',
-            'zh': '这是一封自动发送的邮件，请勿回复。',
-            'ua': 'Це автоматичне повідомлення. Будь ласка, не відповідайте на цей лист.',
-            'fa': 'این یک پیام خودکار است. لطفاً به این ایمیل پاسخ ندهید.',
-        }
-        footer_text = footer_texts.get(language, footer_texts['ru'])
+        from .email_layout import render_email_layout, resolve_email_layout
 
-        unsubscribe_block = ''
-        if unsubscribe_url:
-            unsubscribe_label = self._UNSUBSCRIBE_TEXTS.get(language, self._UNSUBSCRIBE_TEXTS['ru'])
-            unsubscribe_block = (
-                f'<p><a href="{html.escape(unsubscribe_url, quote=True)}" '
-                f'style="color: #666;">{unsubscribe_label}</a></p>'
-            )
-
-        return f"""
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <style>
-        body {{
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-            line-height: 1.6;
-            color: #333;
-            background-color: #f5f5f5;
-            margin: 0;
-            padding: 0;
-        }}
-        .container {{
-            max-width: 600px;
-            margin: 0 auto;
-            padding: 20px;
-            background-color: #ffffff;
-        }}
-        .header {{
-            text-align: center;
-            padding: 20px 0;
-            border-bottom: 2px solid #007bff;
-        }}
-        .header h1 {{
-            color: #007bff;
-            margin: 0;
-            font-size: 24px;
-        }}
-        .content {{
-            padding: 30px 20px;
-        }}
-        .highlight {{
-            background-color: #f8f9fa;
-            border-left: 4px solid #007bff;
-            padding: 15px;
-            margin: 20px 0;
-        }}
-        .success {{
-            border-left-color: #28a745;
-        }}
-        .warning {{
-            border-left-color: #ffc107;
-        }}
-        .danger {{
-            border-left-color: #dc3545;
-        }}
-        .button {{
-            display: inline-block;
-            padding: 12px 24px;
-            background-color: #007bff;
-            color: white !important;
-            text-decoration: none;
-            border-radius: 5px;
-            margin: 20px 0;
-            font-weight: bold;
-        }}
-        .button:hover {{
-            background-color: #0056b3;
-        }}
-        .footer {{
-            margin-top: 30px;
-            padding-top: 20px;
-            border-top: 1px solid #eee;
-            font-size: 12px;
-            color: #666;
-            text-align: center;
-        }}
-        .amount {{
-            font-size: 24px;
-            font-weight: bold;
-            color: #28a745;
-        }}
-        .amount.negative {{
-            color: #dc3545;
-        }}
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>{self.service_name}</h1>
-        </div>
-        <div class="content">
-            {content}
-        </div>
-        <div class="footer">
-            <p>&copy; {self.service_name}</p>
-            <p>{footer_text}</p>
-            {unsubscribe_block}
-        </div>
-    </div>
-</body>
-</html>
-"""
+        return render_email_layout(
+            resolve_email_layout(language),
+            language,
+            {'content': content, 'unsubscribe_url': unsubscribe_url, 'service_name': self.service_name},
+        )
 
     def _get_cabinet_button(self, language: str) -> str:
         """Get cabinet link button HTML."""

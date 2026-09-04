@@ -514,6 +514,9 @@
 - `app/cabinet/services/__init__.py` — Python-модуль
   Классы: нет
   Функции: нет
+- `app/cabinet/services/email_layout.py` — Python-модуль
+  Классы: нет
+  Функции: `layout_is_valid` — Обёртка без {content} проглотила бы тело каждого письма., `unsubscribe_block` — Ссылка отписки — только у маркетинговых писем, у остальных пусто., `build_layout_context` — Реальные значения плейсхолдеров обёртки для языка., `render_email_layout` — Подставляет плейсхолдеры обёртки. Недостающие берутся из build_layout_context., `extract_content_fragment` — Тело письма из готового HTML по маркерам, None если маркеров нет., `reset_email_layout_cache`, `set_cached_email_layouts` — Заменяет кэш; обёртки без {content} отбрасываются с предупреждением., `get_cached_email_layout` — Обёртка для языка; нет своей — русская; нет и её — None (встроенная)., `resolve_email_layout`, `is_layout_cache_stale`, `refresh_email_layout_cache` — Подтягивает сохранённые обёртки, если кэш устарел (или force после сохранения).
 - `app/cabinet/services/email_service.py` — Python-модуль
   Классы: `EmailService` (24 методов)
   Функции: нет
@@ -2814,6 +2817,9 @@
 - `tests/cabinet/test_email_from_header.py` — Python-модуль
   Классы: нет
   Функции: `test_non_ascii_from_name_keeps_single_valid_address`, `test_ascii_from_name_unaffected`
+- `tests/cabinet/test_email_layout.py` — Python-модуль
+  Классы: нет
+  Функции: `test_default_layout_is_the_previous_wrapper` — Без сохранённой обёртки письма выглядят ровно как раньше., `test_default_layout_contains_every_placeholder_the_editor_offers`, `test_custom_layout_applies_to_default_templates`, `test_custom_layout_falls_back_to_ru_for_other_languages`, `test_custom_layout_applies_to_editor_fragments_but_not_full_documents`, `test_layout_without_content_slot_is_ignored` — Обёртка без {content} проглотила бы тело каждого письма — её не берём., `test_render_keeps_content_raw_and_escapes_text_values`, `test_cache_is_stale_until_loaded_and_fresh_after`, `test_rendered_override_refreshes_layout_cache_first` — Каждая отправка проходит через get_rendered_override — там и подтягивается обёртка., `test_refresh_survives_database_errors` — Недоступная база — это «обёртки нет», а не потерянное письмо., `test_editor_lists_layout_first_with_placeholders_intact`, `test_layout_preview_puts_sample_letter_inside_custom_layout`, `test_saving_layout_without_content_slot_is_rejected`, `test_saving_layout_refreshes_cache_and_uses_fixed_subject`
 - `tests/cabinet/test_email_login_deleted_oracle.py` — Python-модуль
   Классы: нет
   Функции: `test_email_login_does_not_return_account_deleted_code` — REGRESSION: /email/login must not expose `code: account_deleted`., `test_email_login_returns_generic_401_for_deleted_users` — The DELETED branch in /email/login must raise 401 with 'Invalid email or password'., `test_email_login_status_check_runs_before_email_verification_gate` — REGRESSION: status check must come before the email-verification gate.

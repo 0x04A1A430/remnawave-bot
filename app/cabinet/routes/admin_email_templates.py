@@ -11,6 +11,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database.models import User
 
 from ..dependencies import get_cabinet_db, require_permission
+from ..services.email_layout import (
+    DEFAULT_EMAIL_LAYOUT,
+    EMAIL_LAYOUT_TYPE,
+    LAYOUT_CONTEXT_VARS,
+    extract_content_fragment,
+    layout_is_valid,
+    refresh_email_layout_cache,
+    render_email_layout,
+)
 from ..services.email_template_overrides import (
     COMMON_CONTEXT_VARS,
     build_common_context,
@@ -31,6 +40,29 @@ router = APIRouter(prefix='/admin/email-templates', tags=['Admin Email Templates
 # ============ Template type metadata ============
 
 EDITOR_LANGUAGES = ('ru', 'en', 'zh', 'ua')
+
+# Общая обёртка писем — псевдо-тип в том же редакторе. Не NotificationType:
+# это не письмо, а каркас, в который встают все письма (см. email_layout).
+LAYOUT_TEMPLATE_META: dict[str, Any] = {
+    'type': EMAIL_LAYOUT_TYPE,
+    'label': {
+        'ru': 'Общая обёртка писем',
+        'en': 'Email Layout (all emails)',
+        'zh': '邮件通用外框（所有邮件）',
+        'ua': 'Загальна обгортка листів',
+    },
+    'description': {
+        'ru': 'Каркас всех писем: шапка, стили, подвал. Тело письма встаёт в {content}. '
+        'Если для языка нет своей обёртки, берётся русская; без сохранённой — встроенная.',
+        'en': 'The frame of every email: header, styles, footer. The email body goes into {content}. '
+        'Languages without their own layout use the Russian one; without any saved layout the built-in is used.',
+        'zh': '所有邮件的外框：页眉、样式、页脚。邮件正文放入 {content}。'
+        '没有自己外框的语言使用俄语外框；未保存任何外框时使用内置外框。',
+        'ua': 'Каркас усіх листів: шапка, стилі, підвал. Тіло листа стає у {content}. '
+        'Якщо для мови немає своєї обгортки, береться російська; без збереженої — вбудована.',
+    },
+    'context_vars': LAYOUT_CONTEXT_VARS,
+}
 
 _WEBHOOK_DESCRIPTION = {
     'ru': 'Уведомление Remnawave: {subject}',
@@ -616,7 +648,19 @@ TEMPLATE_TYPES = [
     *_webhook_template_types(),
 ]
 
+# Список редактора: обёртка первой, дальше типы писем.
+EDITOR_TEMPLATE_TYPES: list[dict[str, Any]] = [LAYOUT_TEMPLATE_META, *TEMPLATE_TYPES]
+
+# Пример письма для превью обёртки — без плейсхолдеров, чтобы превью показывало
+# ровно этот фрагмент внутри каркаса.
+SAMPLE_LAYOUT_CONTENT = (
+    '<h2>Пример письма</h2>'
+    '<div class="highlight"><p>Здесь будет текст уведомления — тема и содержимое зависят от типа письма.</p></div>'
+    '<p style="text-align: center;"><a href="#" class="button">Открыть личный кабинет</a></p>'
+)
+
 SAMPLE_CONTEXTS: dict[str, dict[str, Any]] = {
+    EMAIL_LAYOUT_TYPE: {'content': SAMPLE_LAYOUT_CONTENT},
     'balance_topup': {
         'formatted_amount': '500.00 ₽',
         'formatted_balance': '1500.00 ₽',
@@ -752,7 +796,7 @@ def _build_sample_context(notification_type: str) -> dict[str, Any]:
 
 
 def _get_type_meta(notification_type: str) -> dict[str, Any] | None:
-    return next((t for t in TEMPLATE_TYPES if t['type'] == notification_type), None)
+    return next((t for t in EDITOR_TEMPLATE_TYPES if t['type'] == notification_type), None)
 
 
 def _validate_template_type(notification_type: str) -> dict[str, Any]:
@@ -789,6 +833,13 @@ def _placeholder_context(notification_type: str) -> dict[str, Any]:
 def _get_default_template(notification_type: str, language: str, context: dict[str, Any]) -> dict[str, str] | None:
     """Render the built-in default template, or None if unavailable."""
     from app.services.notification_delivery_service import NotificationType
+
+    if notification_type == EMAIL_LAYOUT_TYPE:
+        # Обёртка без маркеров тела: редактор показывает её как есть, с {content}.
+        return {
+            'subject': '',
+            'body_html': render_email_layout(DEFAULT_EMAIL_LAYOUT, language, context, mark_content=False),
+        }
 
     try:
         ntype_enum = NotificationType(notification_type)
@@ -858,7 +909,7 @@ async def list_template_types(
         override_map[ntype][o['language']] = o['is_active']
 
     result = []
-    for tpl_type in TEMPLATE_TYPES:
+    for tpl_type in EDITOR_TEMPLATE_TYPES:
         type_key = tpl_type['type']
         languages = {}
         for lang in AVAILABLE_LANGUAGES:
@@ -909,6 +960,10 @@ async def get_templates_for_type(
         if default_template:
             default_subject = default_template.get('subject', '')
             default_body_html = default_template.get('body_html', '')
+            # Редактор правит тело письма, а не обёртку: отдаём фрагмент по
+            # маркерам, чтобы вырезание не зависело от разметки обёртки.
+            if notification_type != EMAIL_LAYOUT_TYPE:
+                default_body_html = extract_content_fragment(default_body_html) or default_body_html
 
         # Check for override
         override = override_map.get(lang)
@@ -956,13 +1011,22 @@ async def update_template(
             detail=f'Invalid language: {language}. Available: {AVAILABLE_LANGUAGES}',
         )
 
+    is_layout = notification_type == EMAIL_LAYOUT_TYPE
+    if is_layout and not layout_is_valid(data.body_html):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='В обёртке нет плейсхолдера {content} — без него письма остались бы без текста',
+        )
     result = await save_template_override(
         notification_type=notification_type,
         language=language,
-        subject=data.subject,
+        # У обёртки нет темы — колонка обязательная, кладём имя типа.
+        subject=EMAIL_LAYOUT_TYPE if is_layout else data.subject,
         body_html=data.body_html,
         db=db,
     )
+    if is_layout:
+        await refresh_email_layout_cache(db, force=True)
 
     logger.info(
         'Админ обновил email шаблон /', admin_id=admin.id, notification_type=notification_type, language=language
@@ -982,6 +1046,8 @@ async def reset_template(
     _validate_template_type(notification_type)
 
     deleted = await delete_template_override(notification_type, language, db)
+    if notification_type == EMAIL_LAYOUT_TYPE:
+        await refresh_email_layout_cache(db, force=True)
 
     if deleted:
         logger.info(
@@ -1009,8 +1075,14 @@ async def preview_template(
 
     language = data.language if data.language in AVAILABLE_LANGUAGES else 'ru'
     sample_context = _build_sample_context(notification_type)
+    # Превью письма идёт в сохранённой обёртке — подтянуть её, если кэш устарел.
+    await refresh_email_layout_cache()
 
-    if data.body_html:
+    if notification_type == EMAIL_LAYOUT_TYPE and data.body_html:
+        # Превью самой обёртки: пример письма встаёт в {content} как HTML.
+        rendered_html = render_email_layout(data.body_html, language, sample_context)
+        subject = ''
+    elif data.body_html:
         # Preview custom content — substitute sample values, then wrap
         # (auto-detects styled vs simple HTML)
         body_html = substitute_context_vars(data.body_html, sample_context)
@@ -1059,8 +1131,13 @@ async def send_test_email(
 
     language = data.language if data.language in AVAILABLE_LANGUAGES else 'ru'
     sample_context = _build_sample_context(notification_type)
+    await refresh_email_layout_cache(db)
 
-    if data.body_html:
+    if notification_type == EMAIL_LAYOUT_TYPE and data.body_html:
+        # Тест самой обёртки (возможно, несохранённой): пример письма внутри.
+        body_html = render_email_layout(data.body_html, language, sample_context)
+        subject = notification_type
+    elif data.body_html:
         # Test the current editor content (possibly unsaved)
         body_html = substitute_context_vars(data.body_html, sample_context)
         body_html = EmailNotificationTemplates()._wrap_override_template(body_html, language)
