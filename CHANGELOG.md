@@ -1,5 +1,42 @@
 # Changelog
 
+## [4.3.0](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v4.2.0...v4.3.0) (2026-09-04)
+
+
+### New Features
+
+* **email:** очередь повторной отправки писем ([0042731](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/0042731c1ab561c4e6624124ee10bf9bba82df16))
+* **email:** очередь повторной отправки писем ([5929c18](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/5929c18a380c56550778808dafa43834b4f05647))
+* **errors:** журнал системных ошибок со статусом доставки ([e702700](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/e70270021051dec1eb05643e1df211bf6ec1aab3))
+* **errors:** журнал системных ошибок со статусом доставки ([cfad920](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/cfad920b1e9c12eb4fe338e770c424c675297858))
+* **payments:** интеграция ParityPay ([f1c0ad7](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/f1c0ad7c0f191eb6ecace3cae9b6c1644d93aff1))
+* **payments:** интеграция TabPay ([068b816](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/068b8168100210f95744ee67cc853543d3023bba))
+* **subscription:** шифрованные ссылки INCY (incy://crypt1/) ([c87c350](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/c87c350c1cd9e5f5068c218c6ede35b3e0a39bde))
+* **subscription:** шифрованные ссылки INCY (incy://crypt1/) ([af40973](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/af40973e85e41f84b2aeb32a725a0b86bd9f5959))
+* **tickets:** доставлять ответ поддержки на email юзерам без Telegram ([6403951](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/6403951568bdb541aa36bfa1de67766b7d4feeeb))
+* **tickets:** доставлять ответ поддержки на email юзерам без Telegram ([2235eb5](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/2235eb5baf2f118ac09d332c84ef1de730b79542))
+
+
+### Bug Fixes
+
+* **backup:** платежи восьми шлюзов не попадали в резервную копию ([6227130](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/6227130411f34b394cf0bf1f6157777d13940d2e))
+* **cabinet:** вернуть активацию гостевой покупки — эндпоинт падал NameError ([1b008dc](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/1b008dc90be9c023254c71ce934ff41c1e83891d))
+* **docs:** справка по структуре не должна зависеть от состояния индекса ([b13ec78](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/b13ec781d80a777dce766a7cab87cfa70320afea))
+* **email:** ограничить повторы сроком годности письма и не хранить тело дольше нужного ([45d4a3a](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/45d4a3ac4fb06f897b96b3fa3168da9602ef043f))
+* **errors:** не писать секреты в журнал, завести права, сливать очередь при остановке ([5ddd2a3](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/5ddd2a3872cbaf197260c4be41995e8fc1d8851d))
+* **quality:** разобрать замечания CodeQL по новому коду ([397869d](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/397869d72e1aa6483d5814fae2589b6a7fcaf76f))
+* **subscription:** применять DEFAULT_AUTOPAY_ENABLED и в classic-режиме ([a2afbf9](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/a2afbf91999e98e6b79b6a9328e5d807dfece1ae))
+* **subscription:** шифровать только incy-ссылки импорта подписки ([9c38c43](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/9c38c4306a8e3ad8720a9a0d0091fc56d0679061))
+* **tickets:** не глушить ответ поддержки глобальным тумблером и завести шаблон в редакторе ([7902361](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/790236143e3f92592ba49f5af1d48329763516e3))
+
+
+### Documentation
+
+* **handoff:** состояние интеграций TabPay и ParityPay ([6e69046](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/6e690461f9757d40c852c807950e49484298417f))
+* **handoff:** тесты на PostgreSQL, прогон в CI и аудит тихих дыр ([01a1060](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/01a1060a08c2f771e78379349ff9c55ead1d9804))
+* **readme:** добавить CisPay в список провайдеров и закрыть пропуск тестом ([33d3913](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/33d3913309c2a9f07e6fa1387c00a25911e56122))
+* **structure:** собирать справку по структуре из кода, а не вести руками ([74e6647](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/74e664781c741e8682c665d42ffc2bca6271067a))
+
 ## [4.2.0](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v4.1.0...v4.2.0) (2026-08-27)
 
 
