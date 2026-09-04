@@ -1,5 +1,8 @@
 """Tests for notify_gift_claim_available — the gift claim-link delivery.
 
+Письма строятся настоящими EmailNotificationTemplates (стабы только у SMTP и
+у сервиса сохранённых шаблонов), так что проверки на ссылку в теле — реальные.
+
 Guarantees pinned here (unified claimable-gift model):
   - The claim link is ALWAYS sent to the buyer (durable backstop) when the buyer
     used email, so the link is never lost if they close the success page.
@@ -42,11 +45,6 @@ def _patches(send_mock: MagicMock, override: tuple[str, str] | None = None):
     (None = override не задан, письмо строится по дефолтному шаблону).
     """
     email_module = SimpleNamespace(email_service=SimpleNamespace(send_email=send_mock))
-    templates_module = SimpleNamespace(
-        EmailNotificationTemplates=lambda: SimpleNamespace(
-            get_template=lambda *a, **k: {'subject': 's', 'body_html': 'b'}
-        )
-    )
     override_calls: list[tuple] = []
 
     async def get_rendered_override(notification_type, language, context, *a, **k):
@@ -59,7 +57,6 @@ def _patches(send_mock: MagicMock, override: tuple[str, str] | None = None):
             'sys.modules',
             {
                 'app.cabinet.services.email_service': email_module,
-                'app.cabinet.services.email_templates': templates_module,
                 'app.cabinet.services.email_template_overrides': overrides_module,
             },
         ),
@@ -170,3 +167,31 @@ async def test_override_lookup_uses_the_gift_template_type_and_claim_context() -
     assert language == 'ru'
     assert context['success_page_url'] == f'https://cab.example/buy/gift/{purchase.token}'
     assert context['tariff_name'] == 'Lite'
+
+
+@pytest.mark.asyncio
+async def test_buyer_backstop_uses_its_own_template_and_admin_override() -> None:
+    """Письмо покупателю со ссылкой раньше было зашито в код на двух языках —
+    теперь это тип guest_gift_link_buyer с дефолтным шаблоном и override из редактора."""
+    send = MagicMock(return_value=True)
+    purchase = _gift(contact_type='email', contact_value='buyer@example.com')
+
+    mods, cab = _patches(send)
+    with mods, cab:
+        await notify_gift_claim_available(purchase, tariff_name='Lite', period_days=30)
+        import sys
+
+        calls = sys.modules['app.cabinet.services.email_template_overrides'].calls
+    assert [c[0] for c in calls] == ['guest_gift_link_buyer']
+    assert calls[0][2]['claim_url'] == f'https://cab.example/buy/gift/{purchase.token}'
+    body = send.call_args.kwargs['body_html']
+    assert f'/buy/gift/{purchase.token}' in body
+    assert 'Lite' in body
+    assert '<!doctype' in body.lower(), 'письмо покупателю обязано идти в фирменной обёртке'
+
+    send.reset_mock()
+    mods, cab = _patches(send, override=('Свой заголовок', '<p>свой текст</p>'))
+    with mods, cab:
+        await notify_gift_claim_available(purchase, tariff_name='Lite', period_days=30)
+    assert send.call_args.kwargs['subject'] == 'Свой заголовок'
+    assert send.call_args.kwargs['body_html'] == '<p>свой текст</p>'

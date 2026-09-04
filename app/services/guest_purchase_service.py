@@ -1397,21 +1397,32 @@ async def notify_gift_claim_available(
     # channel the recipient used or whether the buyer kept the success tab open.
     if purchase.contact_type == 'email' and purchase.contact_value:
         try:
-            is_ru = (language or 'ru').startswith('ru')
-            subject = 'Ссылка на ваш подарок' if is_ru else 'Your gift link'
-            body = (
-                '<p>Спасибо за покупку подарка! Перешлите эту ссылку тому, '
-                'кому предназначен подарок — он активирует его сам:</p>'
-                if is_ru
-                else '<p>Thanks for your gift purchase! Forward this link to the '
-                'person it is for — they activate it themselves:</p>'
-            ) + f'<p><a href="{claim_url}">{claim_url}</a></p>'
-            await asyncio.to_thread(
-                email_service.send_email,
-                to_email=purchase.contact_value,
-                subject=subject,
-                body_html=body,
+            # Шаблон guest_gift_link_buyer: сохранённый в редакторе, иначе дефолтный.
+            # Раньше текст был зашит здесь на двух языках и без обёртки.
+            buyer_context = {
+                'claim_url': claim_url,
+                'tariff_name': tariff_name,
+                'period_days': period_days if period_days is not None else purchase.period_days,
+                'cabinet_url': cabinet_base,
+            }
+            from app.cabinet.services.email_template_overrides import get_rendered_override
+
+            rendered = await get_rendered_override(
+                NotificationType.GUEST_GIFT_LINK_BUYER.value, language, buyer_context
             )
+            if rendered:
+                buyer_template = {'subject': rendered[0], 'body_html': rendered[1]}
+            else:
+                buyer_template = EmailNotificationTemplates().get_template(
+                    NotificationType.GUEST_GIFT_LINK_BUYER, language, buyer_context
+                )
+            if buyer_template:
+                await asyncio.to_thread(
+                    email_service.send_email,
+                    to_email=purchase.contact_value,
+                    subject=buyer_template['subject'],
+                    body_html=buyer_template['body_html'],
+                )
         except Exception:
             logger.warning('Failed to send gift link to buyer', purchase_id=purchase.id, exc_info=True)
 

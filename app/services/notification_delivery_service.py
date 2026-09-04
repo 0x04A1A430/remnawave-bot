@@ -92,6 +92,7 @@ class NotificationType(Enum):
     # Other
     BROADCAST = 'broadcast'
     PAYMENT_RECEIVED = 'payment_received'
+    NALOGO_RECEIPT = 'nalogo_receipt'
     PROMO_OFFER = 'promo_offer'
 
     # Guest purchase notifications
@@ -99,6 +100,7 @@ class NotificationType(Enum):
     GUEST_ACTIVATION_REQUIRED = 'guest_activation_required'
     GUEST_GIFT_RECEIVED = 'guest_gift_received'
     GUEST_CABINET_CREDENTIALS = 'guest_cabinet_credentials'
+    GUEST_GIFT_LINK_BUYER = 'guest_gift_link_buyer'
 
 
 # Письма, которые почтовые провайдеры считают массовой рассылкой: только они

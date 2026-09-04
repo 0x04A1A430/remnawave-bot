@@ -581,6 +581,38 @@ TEMPLATE_TYPES = [
         },
         'context_vars': ['message_html', 'valid_hours', 'discount_percent'],
     },
+    {
+        'type': 'nalogo_receipt',
+        'label': {
+            'ru': 'Чек NaloGO по платежу',
+            'en': 'NaloGO Payment Receipt',
+            'zh': 'NaloGO 付款收据',
+            'ua': 'Чек NaloGO за платежем',
+        },
+        'description': {
+            'ru': 'Чек из сервиса «Мой налог» после оплаты: файл во вложении, ссылка в тексте',
+            'en': 'Receipt from the “Moy Nalog” service after a payment: file attached, link in the text',
+            'zh': '付款后来自“Мой налог”服务的收据：附件文件，正文含链接',
+            'ua': 'Чек із сервісу «Мой налог» після оплати: файл у вкладенні, посилання в тексті',
+        },
+        'context_vars': ['amount', 'receipt_url'],
+    },
+    {
+        'type': 'guest_gift_link_buyer',
+        'label': {
+            'ru': 'Ссылка на подарок покупателю',
+            'en': 'Gift Link for the Buyer',
+            'zh': '发给购买者的礼物链接',
+            'ua': 'Посилання на подарунок покупцю',
+        },
+        'description': {
+            'ru': 'Письмо покупателю подарка со ссылкой на активацию, чтобы переслать получателю',
+            'en': 'Sent to the gift buyer with the claim link to forward to the recipient',
+            'zh': '发送给礼物购买者，附带可转发给接收者的领取链接',
+            'ua': 'Лист покупцю подарунка з посиланням на активацію, щоб переслати отримувачу',
+        },
+        'context_vars': ['claim_url', 'tariff_name', 'period_days'],
+    },
     *_webhook_template_types(),
 ]
 
@@ -689,6 +721,16 @@ SAMPLE_CONTEXTS: dict[str, dict[str, Any]] = {
         'message_html': 'Вернитесь и получите <b>скидку 20%</b> на любой тариф.',
         'valid_hours': 24,
         'discount_percent': 20,
+    },
+    'nalogo_receipt': {
+        'amount': '500.00 ₽',
+        'receipt_url': 'https://lknpd.nalog.ru/api/v1/receipt/123456789012/20260904abc/print',
+        'has_attachment': True,
+    },
+    'guest_gift_link_buyer': {
+        'claim_url': 'https://example.com/buy/gift/abc123',
+        'tariff_name': 'Premium',
+        'period_days': 30,
     },
     **_webhook_sample_contexts(),
 }
