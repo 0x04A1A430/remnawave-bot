@@ -4,7 +4,15 @@ import asyncio
 import re
 import secrets
 from datetime import UTC, datetime, timedelta
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
+
+
+if TYPE_CHECKING:
+    # Только для аннотаций: в рантайме эти модули импортируются лениво (цикл
+    # cabinet services -> services -> cabinet).
+    from app.cabinet.services.email_templates import EmailNotificationTemplates
+    from app.services.notification_delivery_service import NotificationType
+
 
 import structlog
 from sqlalchemy import func, or_, select, update

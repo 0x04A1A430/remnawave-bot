@@ -21,6 +21,12 @@ import pytest
 
 from app.services.guest_purchase_service import notify_gift_claim_available
 
+# Тесты подменяют app.cabinet.services.email_service заглушкой в sys.modules; если
+# пакет app.cabinet.services ещё не загружен, его __init__ импортирует
+# EmailService из заглушки и падает. Загружаем пакет и ленивые зависимости
+# заранее — тогда файл проходит и в одиночку, а не только после других тестов.
+import app.cabinet.services.email_type_switch  # noqa: E402, F401
+
 
 def _gift(**overrides) -> SimpleNamespace:
     base = dict(
