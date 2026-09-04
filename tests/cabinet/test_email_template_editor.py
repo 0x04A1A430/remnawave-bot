@@ -24,9 +24,28 @@ from app.cabinet.services.email_template_overrides import (
     get_rendered_override,
     substitute_context_vars,
 )
+from app.cabinet.services.email_templates import EmailNotificationTemplates
 
 
 ALL_TYPE_KEYS = [t['type'] for t in TEMPLATE_TYPES]
+
+
+# ============ Полнота списка редактора ============
+
+
+def test_editor_exposes_every_email_template_type():
+    """Жалоба из «Багов»: письма уходят, а поменять их шаблон нельзя.
+
+    «Пробная подписка скоро закончится» (winback_trial_ending), два других
+    winback-письма, промо-предложение и 14 уведомлений по вебхукам Remnawave
+    рендерились и отправлялись, но в списке редактора их не было — админ видел
+    только стандартный шаблон. Список редактора обязан совпадать с реестром
+    шаблонов: второй рукописный реестр рядом с первым неизбежно отстаёт.
+    """
+    renderable = {t.value for t in EmailNotificationTemplates().supported_types()}
+    exposed = set(ALL_TYPE_KEYS)
+    assert renderable - exposed == set(), f'есть email-шаблон, но в редакторе нет: {sorted(renderable - exposed)}'
+    assert exposed - renderable == set(), f'в редакторе есть, но email-шаблона нет: {sorted(exposed - renderable)}'
 
 
 # ============ Выдача шаблонов в редактор ============
@@ -287,3 +306,43 @@ async def test_preview_default_template_uses_sample_values():
     result = await preview_template('email_verification', data, _admin=None)
     assert '{verification_url}' not in result['body_html']
     assert 'example.com' in result['body_html']
+
+
+# ============ Обязательные плейсхолдеры проверяются при сохранении ============
+
+
+@pytest.mark.asyncio
+async def test_saving_template_without_required_placeholder_is_rejected_with_clear_error():
+    """Раньше такой override молча подменялся стандартным письмом при отправке —
+    админ видел «мой шаблон не работает». Теперь редактор отказывает сразу."""
+    from types import SimpleNamespace
+
+    from fastapi import HTTPException
+
+    from app.cabinet.routes.admin_email_templates import EmailTemplateUpdate, update_template
+
+    data = EmailTemplateUpdate(subject='Подтвердите почту', body_html='<p>Без ссылки</p>')
+    with pytest.raises(HTTPException) as exc:
+        await update_template('email_verification', 'ru', data, admin=SimpleNamespace(id=1), db=None)
+    assert exc.value.status_code == 400
+    assert '{verification_url}' in exc.value.detail
+
+
+@pytest.mark.asyncio
+async def test_saving_template_with_required_placeholder_passes(monkeypatch):
+    from types import SimpleNamespace
+
+    from app.cabinet.routes import admin_email_templates as routes
+
+    saved = {}
+
+    async def fake_save(**kwargs):
+        saved.update(kwargs)
+        return {**kwargs, 'is_active': True}
+
+    monkeypatch.setattr(routes, 'save_template_override', fake_save)
+    data = routes.EmailTemplateUpdate(
+        subject='Подтвердите почту', body_html='<a href="{verification_url}">Подтвердить</a>'
+    )
+    await routes.update_template('email_verification', 'ru', data, admin=SimpleNamespace(id=1), db=None)
+    assert saved['body_html'] == data.body_html

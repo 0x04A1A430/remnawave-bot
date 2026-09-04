@@ -97,6 +97,7 @@ class _EmailRecipient:
     email: str
     user_name: str
     user_id: int = 0
+    language: str = 'ru'
 
 
 @dataclass(slots=True)
@@ -896,7 +897,11 @@ class EmailBroadcastService:
                     if not user_name:
                         user_name = email.split('@')[0]
 
-                    recipients.append(_EmailRecipient(email=email, user_name=user_name, user_id=user.id))
+                    recipients.append(
+                        _EmailRecipient(
+                            email=email, user_name=user_name, user_id=user.id, language=user.language or 'ru'
+                        )
+                    )
 
                 offset += batch_size
 
@@ -930,14 +935,14 @@ class EmailBroadcastService:
                 if cancel_event.is_set():
                     return None
 
-                html_content = self._render_template(config.email_html_content, recipient)
-                subject = self._render_template(config.email_subject, recipient)
-
                 # Системные рассылки отписке не подлежат — заголовок им не ставим.
                 unsubscribe_url = (
                     build_unsubscribe_url(recipient.user_id, recipient.email)
                     if config.category in ('news', 'promo')
                     else ''
+                )
+                subject, html_content = self.render_email(
+                    config.email_subject, config.email_html_content, recipient, unsubscribe_url
                 )
 
                 try:
@@ -998,14 +1003,38 @@ class EmailBroadcastService:
         return sent_count, failed_count, False
 
     @staticmethod
-    def _render_template(template: str, recipient: _EmailRecipient) -> str:
+    def _render_template(template: str, recipient: _EmailRecipient, unsubscribe_url: str = '') -> str:
         """Подставляет переменные в шаблон email."""
         if not template:
             return template
 
         result = template.replace('{{user_name}}', recipient.user_name)
         result = result.replace('{{email}}', recipient.email)
+        result = result.replace('{{unsubscribe_url}}', unsubscribe_url)
         return result
+
+    @staticmethod
+    def render_email(
+        subject: str, html_content: str, recipient: _EmailRecipient, unsubscribe_url: str = ''
+    ) -> tuple[str, str]:
+        """Тема и тело письма рассылки для адресата — ровно то, что уйдёт.
+
+        После подстановки переменных фрагмент HTML встаёт в общую обёртку писем
+        (как шаблоны из редактора: полный документ уходит как есть, стилизованный
+        фрагмент — в минимальной обёртке). Раньше рассылка уходила голым HTML и
+        обходила обёртку, которую админ настроил для всех остальных писем.
+        """
+        from app.cabinet.services.email_templates import EmailNotificationTemplates
+
+        render = EmailBroadcastService._render_template
+        fragment = render(html_content, recipient, unsubscribe_url)
+        body_html = EmailNotificationTemplates()._wrap_override_template(
+            fragment,
+            recipient.language,
+            unsubscribe_url=unsubscribe_url,
+            context={'username': recipient.user_name, 'email': recipient.email, 'unsubscribe_url': unsubscribe_url},
+        )
+        return render(subject, recipient, unsubscribe_url), body_html
 
     async def _mark_finished(
         self,
