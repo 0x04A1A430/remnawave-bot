@@ -665,3 +665,35 @@ async def test_receipt_email_is_branded_and_uses_admin_override(monkeypatch):
     )
     _to, subject, body_html, _bt, _att = send_mock.call_args.args
     assert (subject, body_html) == ('Свой чек', '<p>свой текст</p>')
+
+
+async def test_receipt_filename_comes_from_setting(monkeypatch):
+    """Имя файла чека — настройка NALOGO_RECEIPT_FILENAME; битый шаблон не ломает отправку."""
+    monkeypatch.setattr(settings, 'ADMIN_NOTIFICATIONS_CHAT_ID', None, raising=False)
+    monkeypatch.setattr(
+        'app.services.nalogo_service._download_receipt_file',
+        AsyncMock(return_value=(b'jpeg-bytes', 'image/jpeg; charset=binary')),
+    )
+    import importlib
+
+    overrides_module = importlib.import_module('app.cabinet.services.email_template_overrides')
+    monkeypatch.setattr(overrides_module, 'get_rendered_override', AsyncMock(return_value=None))
+    send_mock = _patch_email(monkeypatch)
+
+    async def send(pattern):
+        monkeypatch.setattr(settings, 'NALOGO_RECEIPT_FILENAME', pattern, raising=False)
+        send_mock.reset_mock()
+        await send_nalogo_receipt_notifications(
+            bot=_bot(),
+            nalogo_service=_nalogo(),
+            receipt_uuid='uuid-1',
+            amount_kopeks=10000,
+            telegram_user_id=None,
+            user_email='buyer@example.com',
+        )
+        return send_mock.call_args.args[4][0][0]
+
+    assert await send('Чек ZeroPing {uuid}') == 'Чек ZeroPing uuid-1.jpg'
+    assert await send('../{uuid}:x') == 'uuid-1_x.jpg'
+    assert await send('{nope}') == 'receipt_uuid-1.jpg'
+    assert await send('') == 'receipt_uuid-1.jpg'

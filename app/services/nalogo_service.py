@@ -1,3 +1,4 @@
+import re
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
@@ -709,6 +710,24 @@ async def _download_receipt_file(receipt_url: str) -> tuple[bytes, str] | None:
             return data, content_type
 
 
+_RECEIPT_FILENAME_FORBIDDEN = re.compile(r'[\\/:*?"<>|\r\n\t]+')
+
+
+def _receipt_file_stem(receipt_uuid: str) -> str:
+    """Имя файла чека без расширения по настройке NALOGO_RECEIPT_FILENAME.
+
+    ``{uuid}`` — id чека. Битый шаблон, пустое имя или одни запрещённые символы
+    дают прежнее ``receipt_<uuid>``: имя файла не повод потерять чек.
+    """
+    pattern = str(getattr(settings, 'NALOGO_RECEIPT_FILENAME', '') or '').strip()
+    try:
+        stem = pattern.format(uuid=receipt_uuid) if pattern else ''
+    except (KeyError, IndexError, ValueError):
+        stem = ''
+    stem = _RECEIPT_FILENAME_FORBIDDEN.sub('_', stem).strip(' ._')
+    return stem or f'receipt_{receipt_uuid}'
+
+
 async def _send_receipt_email(
     to_email: str,
     amount_text: str,
@@ -811,12 +830,13 @@ async def send_nalogo_receipt_notifications(
         downloaded = await _download_receipt_file(receipt_url)
         if downloaded is not None:
             data, content_type = downloaded
+            stem = _receipt_file_stem(str(receipt_uuid))
             if 'pdf' in content_type:
-                filename, receipt_is_image = f'receipt_{receipt_uuid}.pdf', False
+                filename, receipt_is_image = f'{stem}.pdf', False
             elif 'png' in content_type:
-                filename, receipt_is_image = f'receipt_{receipt_uuid}.png', True
+                filename, receipt_is_image = f'{stem}.png', True
             else:  # печатная форма lknpd отдаётся как jpeg
-                filename, receipt_is_image = f'receipt_{receipt_uuid}.jpg', True
+                filename, receipt_is_image = f'{stem}.jpg', True
             receipt_file = types.BufferedInputFile(data, filename=filename)
             email_attachment = (filename, data, content_type.split(';')[0].strip())
     except Exception as download_error:

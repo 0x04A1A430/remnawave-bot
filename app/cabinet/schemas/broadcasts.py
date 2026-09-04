@@ -241,3 +241,16 @@ class EmailPreviewResponse(BaseModel):
 
     target: str
     count: int
+
+
+class EmailRenderRequest(BaseModel):
+    """Письмо рассылки так, как его получит адресат (в общей обёртке)."""
+
+    subject: str = ''
+    html_content: str = ''
+    language: str = 'ru'
+
+
+class EmailRenderResponse(BaseModel):
+    subject: str
+    body_html: str

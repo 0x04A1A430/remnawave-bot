@@ -648,6 +648,24 @@ TEMPLATE_TYPES = [
     *_webhook_template_types(),
 ]
 
+# Плейсхолдеры, без которых письмо бесполезно: шаблон без них редактор не
+# сохраняет (раньше бот молча подменял такой override стандартным письмом).
+REQUIRED_PLACEHOLDERS: dict[str, list[str]] = {
+    'email_verification': ['verification_url'],
+    'password_reset': ['reset_url'],
+    'email_change_code': ['code'],
+    'guest_cabinet_credentials': ['cabinet_email', 'cabinet_password'],
+}
+
+
+def _missing_required_placeholders(notification_type: str, subject: str, body_html: str) -> list[str]:
+    return [
+        var
+        for var in REQUIRED_PLACEHOLDERS.get(notification_type, [])
+        if f'{{{var}}}' not in body_html and f'{{{var}}}' not in subject
+    ]
+
+
 # Список редактора: обёртка первой, дальше типы писем.
 EDITOR_TEMPLATE_TYPES: list[dict[str, Any]] = [LAYOUT_TEMPLATE_META, *TEMPLATE_TYPES]
 
@@ -989,6 +1007,7 @@ async def get_templates_for_type(
         'label': type_meta['label'],
         'description': type_meta['description'],
         'context_vars': type_meta['context_vars'],
+        'required_vars': REQUIRED_PLACEHOLDERS.get(notification_type, []),
         'common_context_vars': COMMON_CONTEXT_VARS,
         'languages': languages,
     }
@@ -1011,6 +1030,13 @@ async def update_template(
             detail=f'Invalid language: {language}. Available: {AVAILABLE_LANGUAGES}',
         )
 
+    missing = _missing_required_placeholders(notification_type, data.subject, data.body_html)
+    if missing:
+        listed = ', '.join(f'{{{var}}}' for var in missing)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f'В шаблоне нет обязательных плейсхолдеров: {listed} — без них письмо бесполезно',
+        )
     is_layout = notification_type == EMAIL_LAYOUT_TYPE
     if is_layout and not layout_is_valid(data.body_html):
         raise HTTPException(
@@ -1086,7 +1112,9 @@ async def preview_template(
         # Preview custom content — substitute sample values, then wrap
         # (auto-detects styled vs simple HTML)
         body_html = substitute_context_vars(data.body_html, sample_context)
-        rendered_html = EmailNotificationTemplates()._wrap_override_template(body_html, language)
+        rendered_html = EmailNotificationTemplates()._wrap_override_template(
+            body_html, language, context=sample_context
+        )
         subject = substitute_context_vars(data.subject, sample_context, escape=False) or notification_type
     else:
         # Preview default template
@@ -1140,7 +1168,7 @@ async def send_test_email(
     elif data.body_html:
         # Test the current editor content (possibly unsaved)
         body_html = substitute_context_vars(data.body_html, sample_context)
-        body_html = EmailNotificationTemplates()._wrap_override_template(body_html, language)
+        body_html = EmailNotificationTemplates()._wrap_override_template(body_html, language, context=sample_context)
         subject = substitute_context_vars(data.subject, sample_context, escape=False) or notification_type
     else:
         # Check for DB override (get_rendered_override substitutes sample context vars)

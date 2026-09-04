@@ -138,6 +138,28 @@ def test_layout_can_use_bare_unsubscribe_url_for_its_own_link_text():
     assert 'href="">Хватит писем' in transactional
 
 
+def test_layout_sees_recipient_vars_from_default_and_override_paths():
+    """{username}/{email} доступны в обёртке — рендер письма отдаёт ей получателя."""
+    set_cached_email_layouts({'ru': '<html><body><p>Привет, {username} ({email})</p>{content}</body></html>'})
+    templates = EmailNotificationTemplates()
+    default = templates.get_template(
+        NotificationType.SUBSCRIPTION_EXPIRED, 'ru', {'username': 'Вася', 'email': 'v@x.ru'}
+    )['body_html']
+    assert 'Привет, Вася (v@x.ru)' in default
+    fragment = templates._wrap_override_template('<p>x</p>', 'ru', context={'username': 'Петя', 'email': 'p@x.ru'})
+    assert 'Привет, Петя (p@x.ru)' in fragment
+    # Без получателя плейсхолдеры не утекают литералом.
+    assert '{username}' not in templates._get_base_template('<p>x</p>', 'ru')
+
+
+def test_override_fragment_keeps_unsubscribe_link():
+    """Маркетинговый override третьего уровня раньше терял ссылку отписки в подвале."""
+    body = EmailNotificationTemplates()._wrap_override_template(
+        '<p>promo</p>', 'ru', unsubscribe_url='https://x/unsub?u=1'
+    )
+    assert 'https://x/unsub?u=1' in body and 'Отписаться от рассылок' in body
+
+
 # ============ Кэш обёртки ============
 
 

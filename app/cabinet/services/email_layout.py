@@ -42,6 +42,10 @@ LAYOUT_CONTEXT_VARS = [
     'unsubscribe_url',
     'cabinet_url',
     'support_username',
+    # Данные получателя: рендер письма передаёт их в обёртку вместе с телом.
+    'username',
+    'email',
+    'date',
 ]
 # HTML-значения — не экранируем.
 _RAW_VARS = frozenset({'content', 'unsubscribe_block'})
@@ -178,7 +182,15 @@ def unsubscribe_block(unsubscribe_url: str, language: str) -> str:
 
 
 def build_layout_context(language: str, *, content: str = '', unsubscribe_url: str = '') -> dict[str, str]:
-    """Реальные значения плейсхолдеров обёртки для языка."""
+    """Реальные значения плейсхолдеров обёртки для языка.
+
+    Данные получателя здесь пустые — их подмешивает рендер письма; пустая
+    строка гарантирует, что литерал {username} не уйдёт в письмо.
+    """
+    from datetime import UTC, datetime
+
+    from app.utils.timezone import format_email_datetime
+
     return {
         'content': content,
         'service_name': settings.SMTP_FROM_NAME or 'VPN Service',
@@ -188,6 +200,9 @@ def build_layout_context(language: str, *, content: str = '', unsubscribe_url: s
         'unsubscribe_url': unsubscribe_url or '',
         'cabinet_url': getattr(settings, 'CABINET_URL', '') or '',
         'support_username': getattr(settings, 'SUPPORT_USERNAME', '') or '',
+        'username': '',
+        'email': '',
+        'date': format_email_datetime(datetime.now(UTC), fmt='%d.%m.%Y'),
     }
 
 

@@ -15,9 +15,15 @@ from app.config import settings
 class EmailNotificationTemplates:
     """HTML email templates for user notifications."""
 
+    # Плейсхолдеры получателя, которые обёртка берёт из контекста письма.
+    _LAYOUT_RECIPIENT_VARS = ('username', 'email', 'date')
+
     def __init__(self):
         self.service_name = settings.SMTP_FROM_NAME or 'VPN Service'
         self.cabinet_url = getattr(settings, 'CABINET_URL', '')
+        # Контекст текущего рендера — чтобы обёртка знала получателя
+        # ({username}, {email}), не протаскивая его через все 50 билдеров.
+        self._render_context: dict[str, Any] | None = None
 
     # WEBHOOK_* уведомления делят один generic-билдер: значение типа -> ключ
     # копирайта в WEBHOOK_EMAIL_COPY. Ключи — строки, а не enum: NotificationType
@@ -119,10 +125,24 @@ class EmailNotificationTemplates:
         if not template_func:
             return None
 
-        return template_func(language, context)
+        self._render_context = context
+        try:
+            return template_func(language, context)
+        finally:
+            self._render_context = None
 
-    def _wrap_override_template(self, content: str, language: str = 'ru') -> str:
+    def _wrap_override_template(
+        self,
+        content: str,
+        language: str = 'ru',
+        *,
+        unsubscribe_url: str = '',
+        context: dict[str, Any] | None = None,
+    ) -> str:
         """Wrap override template content appropriately based on its structure.
+
+        ``unsubscribe_url`` и ``context`` (данные получателя) нужны только
+        обёртке третьего уровня — у полного документа всё уже внутри.
 
         Three-tier detection:
         1. Full HTML document (<!DOCTYPE or <html>) — return as-is, no wrapping
@@ -152,7 +172,11 @@ class EmailNotificationTemplates:
 </html>"""
 
         # Tier 3: Simple HTML fragment — use base template for structure
-        return self._get_base_template(content, language)
+        self._render_context = context
+        try:
+            return self._get_base_template(content, language, unsubscribe_url)
+        finally:
+            self._render_context = None
 
     def _get_base_template(self, content: str, language: str = 'ru', unsubscribe_url: str = '') -> str:
         """Wrap content in the email layout — сохранённая в редакторе обёртка, иначе встроенная.
@@ -162,10 +186,15 @@ class EmailNotificationTemplates:
         """
         from .email_layout import render_email_layout, resolve_email_layout
 
+        recipient = {
+            key: value
+            for key, value in (self._render_context or {}).items()
+            if key in self._LAYOUT_RECIPIENT_VARS and value not in (None, '')
+        }
         return render_email_layout(
             resolve_email_layout(language),
             language,
-            {'content': content, 'unsubscribe_url': unsubscribe_url, 'service_name': self.service_name},
+            {**recipient, 'content': content, 'unsubscribe_url': unsubscribe_url, 'service_name': self.service_name},
         )
 
     def _get_cabinet_button(self, language: str) -> str:
