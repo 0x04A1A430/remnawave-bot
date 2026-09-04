@@ -128,6 +128,16 @@ def test_render_keeps_content_raw_and_escapes_text_values():
     assert email_layout.extract_content_fragment(rendered) == '<b>x</b>'
 
 
+def test_layout_can_use_bare_unsubscribe_url_for_its_own_link_text():
+    """Свой текст отписки вместо готового блока: {unsubscribe_url} доступен в обёртке."""
+    set_cached_email_layouts({'ru': '<html><body>{content}<a href="{unsubscribe_url}">Хватит писем</a></body></html>'})
+    templates = EmailNotificationTemplates()
+    marketing = templates._get_base_template('<p>x</p>', 'ru', 'https://x/unsub?a=1&b=2')
+    assert 'href="https://x/unsub?a=1&amp;b=2">Хватит писем' in marketing
+    transactional = templates._get_base_template('<p>x</p>', 'ru')
+    assert 'href="">Хватит писем' in transactional
+
+
 # ============ Кэш обёртки ============
 
 

@@ -34,7 +34,15 @@ LAYOUT_CACHE_TTL_SECONDS = 60
 
 # Плейсхолдеры обёртки в порядке подстановки: content первым, чтобы переменные
 # внутри вставленного письма ({cabinet_url} и т.п.) тоже подставились.
-LAYOUT_CONTEXT_VARS = ['content', 'service_name', 'footer_text', 'unsubscribe_block', 'cabinet_url', 'support_username']
+LAYOUT_CONTEXT_VARS = [
+    'content',
+    'service_name',
+    'footer_text',
+    'unsubscribe_block',
+    'unsubscribe_url',
+    'cabinet_url',
+    'support_username',
+]
 # HTML-значения — не экранируем.
 _RAW_VARS = frozenset({'content', 'unsubscribe_block'})
 
@@ -176,6 +184,8 @@ def build_layout_context(language: str, *, content: str = '', unsubscribe_url: s
         'service_name': settings.SMTP_FROM_NAME or 'VPN Service',
         'footer_text': FOOTER_TEXTS.get(language, FOOTER_TEXTS['ru']),
         'unsubscribe_block': unsubscribe_block(unsubscribe_url, language),
+        # Голая ссылка — для своего текста отписки вместо готового блока.
+        'unsubscribe_url': unsubscribe_url or '',
         'cabinet_url': getattr(settings, 'CABINET_URL', '') or '',
         'support_username': getattr(settings, 'SUPPORT_USERNAME', '') or '',
     }
