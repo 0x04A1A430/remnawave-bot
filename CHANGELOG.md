@@ -1,5 +1,29 @@
 # Changelog
 
+## [4.4.0](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v4.3.0...v4.4.0) (2026-09-04)
+
+
+### New Features
+
+* **email:** {unsubscribe_url} доступен в общей обёртке писем ([10ae6c7](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/10ae6c78317e095f36bbb36a700ff4c60e832a4d))
+* **email:** выключатель писем по типу в редакторе шаблонов ([4a730da](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/4a730dac19733a3bf9a8eae62851a6d7f47a7f2d))
+* **email:** кастомизируется всё — рассылки, получатель в обёртке, имя файла чека ([768a6cc](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/768a6cc2fc3caf08265b0040a45e608656ebc722))
+* **email:** общая обёртка писем редактируется в админке ([0ed886a](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/0ed886ad85aa8667ba4709aa3f773d3a061a1ed1))
+
+
+### Bug Fixes
+
+* **email:** все письма с шаблоном редактируются в админке ([685cf8e](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/685cf8ebe3f4cc3324d6ada632250415c2740fbd))
+* **email:** выключатель не глушит письмо с доступами кабинета ([4ce0a78](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/4ce0a7824171a61b078596ea78ebacb9c5b33c19))
+* **email:** имена аннотаций помощника — под TYPE_CHECKING; тесты писем проходят в одиночку ([4c63f8d](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/4c63f8da8cd7ec4a7c3552fb3975aa2233add905))
+* **email:** чек NaloGO и ссылка покупателю подарка — через редактор шаблонов ([189d32e](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/189d32eb2976017269e8a80278a6c89f05de4a5d))
+* **quality:** разобрать замечания CodeQL по тестам писем ([8f277e0](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/8f277e01d25ca8f7416a8267893b715e882052f5))
+
+
+### Documentation
+
+* **structure:** обновить справку под тест обёртки ([1c4dbdf](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/1c4dbdf1ab434271eebea3bc806cfb87b97ae254))
+
 ## [4.3.0](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v4.2.0...v4.3.0) (2026-09-04)
 
 
