@@ -337,8 +337,14 @@ async def process_platega_payment_amount(
     local_payment_id = payment_result.get('local_payment_id')
     transaction_id = payment_result.get('transaction_id')
 
+    method_name = settings.get_platega_method_display_title(method_code)
+    amount_label = settings.format_price(amount_kopeks)
+
+    # Шаблон может быть как новым ({amount}), так и старым из пользовательских
+    # локалей ({method}) — передаём оба набора плейсхолдеров, лишние kwargs
+    # str.format молча игнорирует. Иначе старые /app/locales падают с KeyError.
     pay_label = texts.t('PLATEGA_PAY_BUTTON', 'Пополнить на {amount}').format(
-        amount=settings.format_price(amount_kopeks)
+        amount=amount_label, method=method_name, method_name=method_name
     )
 
     keyboard_rows = [
@@ -387,8 +393,10 @@ async def process_platega_payment_amount(
 
     invoice_message = await message.answer(
         instructions_template.format(
-            amount=settings.format_price(amount_kopeks),
+            amount=amount_label,
             transaction=transaction_id or local_payment_id,
+            method=method_name,
+            method_name=method_name,
         ),
         reply_markup=keyboard,
         parse_mode='HTML',
