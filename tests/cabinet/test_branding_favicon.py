@@ -19,7 +19,7 @@ from structlog.testing import capture_logs
 from app.cabinet.routes import branding as branding_routes
 from app.cabinet.utils import brand_monogram
 from app.cabinet.utils.brand_monogram import MONOGRAM_PNG_SIZE, monogram_png, monogram_svg
-from app.cabinet.utils.favicon_tile import FAVICON_TILE_SIZE
+from app.cabinet.utils.favicon_tile import FAVICON_CORNER_RATIO, FAVICON_TILE_SIZE
 from app.config import settings
 
 
@@ -103,10 +103,19 @@ def _write_logo(path: Path, size: int = 40, color: str = '#2ee6a6') -> None:
     Image.new('RGBA', (size, size), color).save(path)
 
 
+def test_corner_ratio_stays_below_the_safari_plate_threshold() -> None:
+    # Safari в тёмной теме подрисовывает иконке с прозрачными углами белую
+    # плитку-подложку, если скругление заметное: при 0,16 стороны и больше
+    # подложка есть, при 0,12 — нет (Safari 26.6, замерено на живых вкладках).
+    # Эту иконку видит только Safari, поэтому радиус меньше, чем у плитки в
+    # шапке кабинета (0,3), и поднимать его «для красоты» нельзя.
+    assert 0 < FAVICON_CORNER_RATIO <= 0.12
+
+
 async def test_with_logo_serves_a_rounded_tile_with_short_cache(tmp_path: Path, monkeypatch) -> None:
     # Safari берёт иконку только по этой ссылке и смену через JS не видит, а
     # скруглённую плитку из логотипа кабинет рисует уже на canvas — Safari
-    # оставался с квадратом. Скругляем здесь, как плитку логотипа в шапке.
+    # оставался с квадратом. Скругляем здесь.
     logo = tmp_path / 'logo.png'
     _write_logo(logo)
     monkeypatch.setattr(branding_routes, 'get_logo_path', lambda: logo)
