@@ -2964,6 +2964,9 @@
 - `tests/cabinet/test_telegram_auth_jwks.py` — Python-модуль
   Классы: нет
   Функции: `test_build_public_keys_handles_mixed_jwks` — Real Telegram JWKS (RSA + EC + OKP + EC-secp256k1) must not raise., `test_build_public_keys_loads_ec_and_okp_keys` — EC P-256 + Ed25519 + EC secp256k1 keys should all parse with pyjwt 2.11+., `test_build_public_keys_skips_unsupported_kty` — Unknown kty (e.g. future-Telegram-quantum key) is silently skipped, not crashes., `test_build_public_keys_skips_jwk_without_kid` — JWK без kid не может быть selected'ом по header'у токена — пропускаем., `test_build_public_keys_returns_tuple_compatible_with_pyjwt_decode` — Возврат должен быть (public_key, alg) — иначе validate_telegram_oidc_token упадёт., `test_build_public_keys_defaults_alg_when_jwk_omits_it` — JWK без поля `alg` → берём _KTY_DEFAULT_ALG[kty]; alg всё равно не пустой.
+- `tests/cabinet/test_telegram_consent_keeps_credential.py` — Python-модуль
+  Классы: нет
+  Функции: `test_widget_428_leaves_the_payload_unconsumed`, `test_widget_retry_with_consent_consumes_payload_once_and_creates_account`, `test_widget_existing_user_is_still_one_time`, `test_oidc_428_leaves_the_token_unconsumed`, `test_oidc_retry_with_consent_consumes_token_once_and_creates_account`, `test_oidc_existing_user_is_still_one_time`
 - `tests/cabinet/test_telegram_widget_replay.py` — Python-модуль
   Классы: нет
   Функции: `test_widget_login_is_one_time_and_24h`, `test_widget_link_is_one_time_and_24h`
