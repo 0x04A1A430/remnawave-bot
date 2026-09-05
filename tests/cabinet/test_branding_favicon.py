@@ -89,14 +89,16 @@ def test_monogram_png_is_a_square_raster_with_the_letter_drawn() -> None:
     assert image.size == (MONOGRAM_PNG_SIZE, MONOGRAM_PNG_SIZE)
     # Буква действительно нарисована: разные буквы дают разные картинки,
     # а пустое имя — ту же монограмму, что «V».
-    assert monogram_png('Z') != monogram_png('V')
-    assert monogram_png('   ') == monogram_png('V')
-    assert monogram_png('я') == monogram_png('Я')
+    letters = {key: monogram_png(key) for key in ('Z', 'V', '   ', 'я', 'Я', 'Ж')}
+    assert letters['Z'] != letters['V']
+    assert letters['   '] == letters['V']
+    assert letters['я'] == letters['Я']
     # Кириллица есть в шрифте: у встроенного шрифта Pillow её нет, и любая
     # русская буква рисовалась бы одним и тем же «квадратом» вместо буквы.
-    assert monogram_png('Я') != monogram_png('Ж')
+    assert letters['Я'] != letters['Ж']
     # Кеш: один и тот же объект байтов на повторный вызов.
-    assert monogram_png('Z') is monogram_png('Z')
+    again = monogram_png('Z')
+    assert again is letters['Z']
 
 
 def _write_logo(path: Path, size: int = 40, color: str = '#2ee6a6') -> None:
