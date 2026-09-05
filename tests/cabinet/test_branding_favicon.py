@@ -8,13 +8,18 @@ Safari берёт фавикон только при первой загрузк
 
 from __future__ import annotations
 
+from io import BytesIO
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 from fastapi.responses import FileResponse
+from PIL import Image
+from structlog.testing import capture_logs
 
 from app.cabinet.routes import branding as branding_routes
-from app.cabinet.utils.brand_monogram import monogram_svg
+from app.cabinet.utils import brand_monogram
+from app.cabinet.utils.brand_monogram import MONOGRAM_PNG_SIZE, monogram_png, monogram_svg
+from app.cabinet.utils.favicon_tile import FAVICON_TILE_SIZE
 from app.config import settings
 
 
@@ -22,14 +27,15 @@ def _name(value: str | None) -> AsyncMock:
     return AsyncMock(return_value=value)
 
 
-async def test_without_logo_returns_monogram_of_the_first_letter(monkeypatch) -> None:
+async def test_without_logo_returns_png_monogram_of_the_first_letter(monkeypatch) -> None:
+    # Именно PNG: SVG-фавикон Safari рисует монохромной плиткой с буквой, теряя цвета.
     monkeypatch.setattr(branding_routes, 'get_logo_path', lambda: None)
 
     with patch('app.cabinet.routes.branding.get_setting_value', _name('zeroping')):
         response = await branding_routes.get_favicon(db=AsyncMock())
 
-    assert response.media_type == 'image/svg+xml'
-    assert response.body.decode() == monogram_svg('Z')
+    assert response.media_type == 'image/png'
+    assert response.body == monogram_png('Z')
     assert response.headers['cache-control'] == 'public, max-age=300'
     assert response.headers['x-content-type-options'] == 'nosniff'
     assert response.headers['vary'] == 'Origin'
@@ -41,7 +47,7 @@ async def test_empty_name_falls_back_to_v(monkeypatch) -> None:
     with patch('app.cabinet.routes.branding.get_setting_value', _name('')):
         response = await branding_routes.get_favicon(db=AsyncMock())
 
-    assert response.body.decode() == monogram_svg('V')
+    assert response.body == monogram_png('V')
 
 
 async def test_unset_name_uses_build_default(monkeypatch) -> None:
@@ -53,20 +59,116 @@ async def test_unset_name_uses_build_default(monkeypatch) -> None:
     with patch('app.cabinet.routes.branding.get_setting_value', _name(None)):
         response = await branding_routes.get_favicon(db=AsyncMock())
 
-    assert response.body.decode() == monogram_svg('C')  # «Cabinet»
+    assert response.body == monogram_png('C')  # «Cabinet»
 
 
-async def test_with_logo_serves_the_logo_with_short_cache(tmp_path: Path, monkeypatch) -> None:
+async def test_render_failure_falls_back_to_svg(monkeypatch) -> None:
+    # Pillow не смог отрисовать (нет шрифта, битая буква) — отдаём SVG, а не 500,
+    # и оставляем след в логе: молча деградировать нельзя.
+    monkeypatch.setattr(branding_routes, 'get_logo_path', lambda: None)
+
+    def broken(letter: str | None) -> bytes:
+        raise RuntimeError('no font')
+
+    monkeypatch.setattr(brand_monogram, 'monogram_png', broken)
+    with (
+        patch('app.cabinet.routes.branding.get_setting_value', _name('zeroping')),
+        capture_logs() as logs,
+    ):
+        response = await branding_routes.get_favicon(db=AsyncMock())
+
+    assert response.media_type == 'image/svg+xml'
+    assert response.body.decode() == monogram_svg('Z')
+    assert any(log['log_level'] == 'warning' and 'монограмм' in log['event'] for log in logs)
+
+
+def test_monogram_png_is_a_square_raster_with_the_letter_drawn() -> None:
+    png = monogram_png('Z')
+    assert png.startswith(b'\x89PNG\r\n\x1a\n')
+    image = Image.open(BytesIO(png))
+    assert image.size == (MONOGRAM_PNG_SIZE, MONOGRAM_PNG_SIZE)
+    # Буква действительно нарисована: разные буквы дают разные картинки,
+    # а пустое имя — ту же монограмму, что «V».
+    assert monogram_png('Z') != monogram_png('V')
+    assert monogram_png('   ') == monogram_png('V')
+    assert monogram_png('я') == monogram_png('Я')
+    # Кириллица есть в шрифте: у встроенного шрифта Pillow её нет, и любая
+    # русская буква рисовалась бы одним и тем же «квадратом» вместо буквы.
+    assert monogram_png('Я') != monogram_png('Ж')
+    # Кеш: один и тот же объект байтов на повторный вызов.
+    assert monogram_png('Z') is monogram_png('Z')
+
+
+def _write_logo(path: Path, size: int = 40, color: str = '#2ee6a6') -> None:
+    Image.new('RGBA', (size, size), color).save(path)
+
+
+async def test_with_logo_serves_a_rounded_tile_with_short_cache(tmp_path: Path, monkeypatch) -> None:
+    # Safari берёт иконку только по этой ссылке и смену через JS не видит, а
+    # скруглённую плитку из логотипа кабинет рисует уже на canvas — Safari
+    # оставался с квадратом. Скругляем здесь, как плитку логотипа в шапке.
     logo = tmp_path / 'logo.png'
-    logo.write_bytes(b'\x89PNG\r\n\x1a\n')
+    _write_logo(logo)
+    monkeypatch.setattr(branding_routes, 'get_logo_path', lambda: logo)
+
+    response = await branding_routes.get_favicon(db=AsyncMock())
+
+    assert response.media_type == 'image/png'
+    assert response.headers['cache-control'] == 'public, max-age=300'
+    assert response.headers['vary'] == 'Origin'
+    image = Image.open(BytesIO(response.body)).convert('RGBA')
+    assert image.size == (FAVICON_TILE_SIZE, FAVICON_TILE_SIZE)
+    assert image.getpixel((0, 0))[3] == 0, 'угол прозрачный'
+    assert image.getpixel((FAVICON_TILE_SIZE - 1, FAVICON_TILE_SIZE - 1))[3] == 0
+    center = image.getpixel((FAVICON_TILE_SIZE // 2, FAVICON_TILE_SIZE // 2))
+    assert center[3] == 255 and center[:3] == (0x2E, 0xE6, 0xA6), 'центр — сам логотип'
+
+
+async def test_rounded_tile_is_cached_until_the_logo_file_changes(tmp_path: Path, monkeypatch) -> None:
+    logo = tmp_path / 'logo.png'
+    _write_logo(logo)
+    monkeypatch.setattr(branding_routes, 'get_logo_path', lambda: logo)
+
+    first = await branding_routes.get_favicon(db=AsyncMock())
+    second = await branding_routes.get_favicon(db=AsyncMock())
+    assert first.body is second.body
+
+    _write_logo(logo, color='#ff0000')
+    # Новая загрузка в админке — новый файл с новым mtime; подстрахуемся от той же секунды.
+    import os
+
+    os.utime(logo, ns=(logo.stat().st_atime_ns, logo.stat().st_mtime_ns + 1_000_000))
+    third = await branding_routes.get_favicon(db=AsyncMock())
+    assert third.body != first.body
+    assert Image.open(BytesIO(third.body)).convert('RGBA').getpixel((128, 128))[:3] == (255, 0, 0)
+
+
+async def test_svg_logo_is_served_as_is(tmp_path: Path, monkeypatch) -> None:
+    # SVG Pillow не растеризует — отдаём файл как есть (лучше, чем ничего).
+    logo = tmp_path / 'logo.svg'
+    logo.write_text('<svg xmlns="http://www.w3.org/2000/svg"/>')
     monkeypatch.setattr(branding_routes, 'get_logo_path', lambda: logo)
 
     response = await branding_routes.get_favicon(db=AsyncMock())
 
     assert isinstance(response, FileResponse)
     assert Path(response.path) == logo
-    assert response.media_type == 'image/png'
+    assert response.media_type == 'image/svg+xml'
     assert response.headers['cache-control'] == 'public, max-age=300'
+
+
+async def test_unreadable_logo_falls_back_to_the_raw_file(tmp_path: Path, monkeypatch) -> None:
+    logo = tmp_path / 'logo.png'
+    logo.write_bytes(b'\x89PNG\r\n\x1a\n')  # обрезанный файл
+    monkeypatch.setattr(branding_routes, 'get_logo_path', lambda: logo)
+
+    with capture_logs() as logs:
+        response = await branding_routes.get_favicon(db=AsyncMock())
+
+    assert isinstance(response, FileResponse)
+    assert Path(response.path) == logo
+    assert response.media_type == 'image/png'
+    assert any(log['log_level'] == 'warning' and 'плитк' in log['event'] for log in logs)
 
 
 async def test_logo_endpoint_keeps_its_hour_cache(tmp_path: Path, monkeypatch) -> None:
@@ -89,4 +191,6 @@ def test_monogram_escapes_and_uppercases() -> None:
     assert '>Я</text>' in monogram_svg('я')
     assert '>&amp;</text>' in monogram_svg('&')
     assert '>V</text>' in monogram_svg('   ')
-    assert monogram_svg('Z').startswith('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">')
+    assert monogram_svg('Z').startswith(
+        '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">'
+    )

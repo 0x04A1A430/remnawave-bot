@@ -543,16 +543,25 @@
   Функции: нет
 - `app/cabinet/utils/brand_monogram.py` — Python-модуль
   Классы: нет
-  Функции: `monogram_letter` — Первая буква строки заглавной; при пустой строке — ``fallback``., `monogram_svg`
+  Функции: `monogram_letter` — Первая буква строки заглавной; при пустой строке — ``fallback``., `monogram_svg`, `monogram_png` — PNG-монограмма в геометрии SVG. Рисуется один раз на букву.
 - `app/cabinet/utils/device_ownership.py` — Python-модуль
   Классы: нет
   Функции: `verify_hwid_belongs_to_user` — Best-effort check that `hwid` is on one of the user's RemnaWave panels.
+- `app/cabinet/utils/favicon_tile.py` — Python-модуль
+  Классы: нет
+  Функции: `is_raster_logo`, `rounded_logo_tile` — PNG ``size``×``size``: логотип вписан по принципу object-fit: cover, углы прозрачные., `cached_rounded_logo_tile` — Плитка по файлу логотипа; перерисовывается только когда файл заменили.
+- `app/cabinet/utils/fonts/`
 - `app/cabinet/utils/links.py` — Python-модуль
   Классы: нет
   Функции: `get_campaign_deep_link` — Generate a Telegram deep link for a campaign., `get_campaign_web_link` — Generate a web app link for a campaign.
 - `app/cabinet/utils/locale.py` — Python-модуль
   Классы: нет
   Функции: `resolve_locale_text` — Resolve a localized text dict to a single string for the given language., `ensure_locale_dict` — Coerce a value to a locale dict. Plain strings become ``{'ru': value}``., `validate_locale_dict` — Validate that all keys are supported locales and values respect length limits.
+
+##### app/cabinet/utils/fonts
+
+- `app/cabinet/utils/fonts/OFL.txt` — файл
+- `app/cabinet/utils/fonts/manrope-variable.ttf` — файл
 
 ### app/database
 
@@ -2804,7 +2813,7 @@
   Функции: `test_enable_autopay_cancels_active_sbp_recurring`, `test_disable_autopay_does_not_cancel_sbp` — Disabling balance-autopay must NOT touch SBP — only the enable path, `test_enable_autopay_rejected_for_trial_does_not_cancel_sbp` — A rejected enable (trial subscription -> 400) must not fire the
 - `tests/cabinet/test_branding_favicon.py` — Python-модуль
   Классы: нет
-  Функции: `test_without_logo_returns_monogram_of_the_first_letter`, `test_empty_name_falls_back_to_v`, `test_unset_name_uses_build_default`, `test_with_logo_serves_the_logo_with_short_cache`, `test_logo_endpoint_keeps_its_hour_cache`, `test_monogram_escapes_and_uppercases`
+  Функции: `test_without_logo_returns_png_monogram_of_the_first_letter`, `test_empty_name_falls_back_to_v`, `test_unset_name_uses_build_default`, `test_render_failure_falls_back_to_svg`, `test_monogram_png_is_a_square_raster_with_the_letter_drawn`, `test_with_logo_serves_a_rounded_tile_with_short_cache`, `test_rounded_tile_is_cached_until_the_logo_file_changes`, `test_svg_logo_is_served_as_is`, `test_unreadable_logo_falls_back_to_the_raw_file`, `test_logo_endpoint_keeps_its_hour_cache`, `test_monogram_escapes_and_uppercases`
 - `tests/cabinet/test_broadcast_media_validation.py` — Python-модуль
   Классы: нет
   Функции: `test_send_rejects_media_caption_over_1024`, `test_send_checks_the_caption_that_is_actually_sent` — Если у медиа своя подпись, ограничение относится к ней, а не к message_text., `test_media_file_id_must_look_like_a_telegram_file_id`

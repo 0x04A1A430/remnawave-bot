@@ -19,6 +19,7 @@ from app.database.models import SystemSetting, User
 from app.services.gift_purchase_service import GIFT_ENABLED_KEY, is_gift_enabled
 
 from ..dependencies import get_cabinet_db, get_current_cabinet_user, require_permission
+from ..utils import brand_monogram, favicon_tile
 from ..utils.brand_monogram import monogram_letter, monogram_svg
 
 
@@ -470,6 +471,22 @@ async def get_logo():
     return _logo_file_response(logo_path, max_age=_LOGO_MAX_AGE_SECONDS)
 
 
+async def _logo_favicon_response(logo_path: Path) -> Response:
+    """Скруглённая плитка из логотипа (как в шапке кабинета); SVG и нечитаемый файл — как есть."""
+    if favicon_tile.is_raster_logo(logo_path):
+        try:
+            tile = await asyncio.to_thread(favicon_tile.cached_rounded_logo_tile, logo_path)
+        except Exception:
+            logger.warning(
+                'Не удалось скруглить плитку фавикона из логотипа, отдаём файл как есть',
+                path=str(logo_path),
+                exc_info=True,
+            )
+        else:
+            return Response(content=tile, media_type='image/png', headers=_image_headers(_FAVICON_MAX_AGE_SECONDS))
+    return _logo_file_response(logo_path, max_age=_FAVICON_MAX_AGE_SECONDS)
+
+
 @router.get('/favicon')
 async def get_favicon(
     db: AsyncSession = Depends(get_cabinet_db),
@@ -480,17 +497,22 @@ async def get_favicon(
     смену через JS (Chrome и Firefox замечают), поэтому статическая ссылка в
     index.html кабинета ведёт сюда, а не на монограмму сборки. Никогда не 404:
     на месте несуществующей иконки Safari показывает пустоту.
+
+    Монограмма — PNG, не SVG: SVG-фавикон Safari рисует монохромной плиткой с
+    буквой, теряя цвета. SVG остаётся запасным ответом, если PNG не отрисовался.
     """
     logo_path = get_logo_path()
     if logo_path is not None and await asyncio.to_thread(logo_path.exists):
-        return _logo_file_response(logo_path, max_age=_FAVICON_MAX_AGE_SECONDS)
+        return await _logo_favicon_response(logo_path)
 
     name = await _resolve_branding_name(db)
-    return Response(
-        content=monogram_svg(name),
-        media_type='image/svg+xml',
-        headers=_image_headers(_FAVICON_MAX_AGE_SECONDS),
-    )
+    headers = _image_headers(_FAVICON_MAX_AGE_SECONDS)
+    try:
+        png = await asyncio.to_thread(brand_monogram.monogram_png, name)
+    except Exception:
+        logger.warning('Не удалось отрисовать PNG-монограмму фавикона, отдаём SVG', name=name, exc_info=True)
+        return Response(content=monogram_svg(name), media_type='image/svg+xml', headers=headers)
+    return Response(content=png, media_type='image/png', headers=headers)
 
 
 @router.get('/bot-logo')
