@@ -151,7 +151,8 @@ async def test_rounded_tile_is_cached_until_the_logo_file_changes(tmp_path: Path
     os.utime(logo, ns=(logo.stat().st_atime_ns, logo.stat().st_mtime_ns + 1_000_000))
     third = await branding_routes.get_favicon(db=AsyncMock())
     assert third.body != first.body
-    assert Image.open(BytesIO(third.body)).convert('RGBA').getpixel((128, 128))[:3] == (255, 0, 0)
+    center = Image.open(BytesIO(third.body)).convert('RGBA').getpixel((128, 128))
+    assert center[:3] == (255, 0, 0)
 
 
 async def test_svg_logo_is_served_as_is(tmp_path: Path, monkeypatch) -> None:
