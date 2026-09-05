@@ -1,6 +1,7 @@
 """Admin routes for managing email notification templates."""
 
 import asyncio
+import re
 from typing import Any
 
 import structlog
@@ -22,6 +23,8 @@ from ..services.email_layout import (
 )
 from ..services.email_template_overrides import (
     COMMON_CONTEXT_VARS,
+    LEGACY_PLACEHOLDER_ALIASES,
+    apply_legacy_aliases,
     build_common_context,
     delete_template_override,
     get_all_overrides,
@@ -659,6 +662,19 @@ REQUIRED_PLACEHOLDERS: dict[str, list[str]] = {
 }
 
 
+_PLACEHOLDER_RE = re.compile(r'\{([a-z_]+)\}')
+
+
+def _unknown_placeholders(notification_type: str, subject: str, body_html: str) -> list[str]:
+    """Плейсхолдеры, которых бот не подставит: опечатка ушла бы в письмо литералом."""
+    type_meta = _get_type_meta(notification_type) or {}
+    known = set(type_meta.get('context_vars', [])) | set(COMMON_CONTEXT_VARS) | set(LEGACY_PLACEHOLDER_ALIASES)
+    if notification_type == EMAIL_LAYOUT_TYPE:
+        known |= set(LAYOUT_CONTEXT_VARS)
+    used = set(_PLACEHOLDER_RE.findall(subject)) | set(_PLACEHOLDER_RE.findall(body_html))
+    return sorted(used - known)
+
+
 def _missing_required_placeholders(notification_type: str, subject: str, body_html: str) -> list[str]:
     return [
         var
@@ -806,12 +822,18 @@ COMMON_SAMPLE_CONTEXT = {'username': 'John', 'email': 'user@example.com'}
 
 
 def _build_sample_context(notification_type: str) -> dict[str, Any]:
-    """Common (real instance values) + recipient samples + per-type samples."""
-    return {
-        **build_common_context(),
-        **COMMON_SAMPLE_CONTEXT,
-        **SAMPLE_CONTEXTS.get(notification_type, {}),
-    }
+    """Common (real instance values) + recipient samples + per-type samples.
+
+    Старые имена плейсхолдеров подставляются так же, как при отправке, — иначе
+    тестовое письмо показывало «{amount}» литералом там, где боевое работало.
+    """
+    return apply_legacy_aliases(
+        {
+            **build_common_context(),
+            **COMMON_SAMPLE_CONTEXT,
+            **SAMPLE_CONTEXTS.get(notification_type, {}),
+        }
+    )
 
 
 def _get_type_meta(notification_type: str) -> dict[str, Any] | None:
@@ -1041,6 +1063,13 @@ async def update_template(
             detail=f'Invalid language: {language}. Available: {AVAILABLE_LANGUAGES}',
         )
 
+    unknown = _unknown_placeholders(notification_type, data.subject, data.body_html)
+    if unknown:
+        listed = ', '.join(f'{{{var}}}' for var in unknown)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f'Неизвестные плейсхолдеры: {listed} — бот их не подставит, и они уйдут в письмо как есть',
+        )
     missing = _missing_required_placeholders(notification_type, data.subject, data.body_html)
     if missing:
         listed = ', '.join(f'{{{var}}}' for var in missing)

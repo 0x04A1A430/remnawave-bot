@@ -104,6 +104,7 @@ from ..schemas.auth import (
     TelegramOIDCAuthRequest,
     TelegramWidgetAuthRequest,
     TokenResponse,
+    UserAvatarResponse,
     UserResponse,
 )
 from ..services.email_service import email_service
@@ -294,6 +295,39 @@ async def _require_legal_consent(
         )
 
     return requirement.documents
+
+
+async def _consume_widget_payload(widget_data: dict) -> None:
+    """Погасить одноразовый payload Login Widget.
+
+    SECURITY: one-time use. A widget payload can travel in the redirect URL
+    (browser history / referrer / access logs); without a replay guard a
+    captured payload would be a reusable login credential for the whole window.
+
+    Вызывать строго ПОСЛЕ гейта согласия: на 428 кабинет рисует чекбоксы и
+    повторяет запрос с тем же payload, поэтому 428 не должен его гасить.
+    """
+    widget_replay = hashlib.sha256(f'tg_widget:{widget_data.get("hash", "")}'.encode()).hexdigest()
+    if await TokenReplayCache.is_token_replayed(widget_replay, ttl=86400):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail='This Telegram authorization has already been used. Please log in again.',
+        )
+
+
+async def _consume_oidc_token(id_token: str, claims: dict) -> None:
+    """Погасить одноразовый OIDC id_token (replay detection).
+
+    Как и у виджета — только после гейта согласия, иначе повтор с галочками
+    получит 401 «уже использован» и новый пользователь не войдёт вовсе.
+    """
+    token_hash = hashlib.sha256(id_token.encode()).hexdigest()
+    token_ttl = max(int(claims.get('exp', 0) - datetime.now(UTC).timestamp()), 60)
+    if await TokenReplayCache.is_token_replayed(token_hash, ttl=min(token_ttl, 600)):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail='Invalid or expired Telegram OIDC token',
+        )
 
 
 async def _process_campaign_bonus(
@@ -784,15 +818,7 @@ async def auth_telegram_widget(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail='Invalid or expired Telegram authentication data',
         )
-    # SECURITY: one-time use. A widget payload can travel in the redirect URL
-    # (browser history / referrer / access logs); without a replay guard a
-    # captured payload would be a reusable login credential for the whole window.
-    widget_replay = hashlib.sha256(f'tg_widget:{widget_data.get("hash", "")}'.encode()).hexdigest()
-    if await TokenReplayCache.is_token_replayed(widget_replay, ttl=86400):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail='This Telegram authorization has already been used. Please log in again.',
-        )
+    # Одноразовость payload гасится ниже, после гейта согласия — см. _consume_widget_payload.
 
     user = await get_user_by_telegram_id(db, request.id)
     access_decision = await _gate_cabinet_identity(
@@ -844,8 +870,11 @@ async def auth_telegram_widget(
 
     is_new_user = not user
     consent_documents: list[str] = []
-    if not user:
+    if is_new_user:
+        # Согласие проверяем ДО того, как погасить payload: 428 просит повторить запрос с ним же.
         consent_documents = await _require_legal_consent(db, accepted=request.accepted_legal_documents, language='ru')
+    await _consume_widget_payload(widget_data)
+    if is_new_user:
         # Create new user from Telegram data
         logger.info(
             'Creating new user from cabinet: telegram_id=, username', request_id=request.id, username=request.username
@@ -960,14 +989,7 @@ async def auth_telegram_oidc(
             detail='Invalid or expired Telegram OIDC token',
         )
 
-    # Replay detection: reject if this exact token was already used
-    token_hash = hashlib.sha256(request.id_token.encode()).hexdigest()
-    token_ttl = max(int(claims.get('exp', 0) - datetime.now(UTC).timestamp()), 60)
-    if await TokenReplayCache.is_token_replayed(token_hash, ttl=min(token_ttl, 600)):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail='Invalid or expired Telegram OIDC token',
-        )
+    # Replay detection гасит id_token ниже, после гейта согласия — см. _consume_oidc_token.
 
     # Extract user info from OIDC claims
     try:
@@ -1037,10 +1059,13 @@ async def auth_telegram_oidc(
 
     is_new_user = not user
     consent_documents: list[str] = []
-    if not user:
+    if is_new_user:
+        # Согласие проверяем ДО того, как погасить id_token: 428 просит повторить запрос с ним же.
         consent_documents = await _require_legal_consent(
             db, accepted=request.accepted_legal_documents, language=language or 'ru'
         )
+    await _consume_oidc_token(request.id_token, claims)
+    if is_new_user:
         logger.info('Creating new user from cabinet OIDC', telegram_id=telegram_id, username=username)
         user = await create_user(
             db=db,
@@ -2095,6 +2120,32 @@ async def get_current_user(
 ):
     """Get current authenticated user info."""
     return _user_to_response(user)
+
+
+@router.get('/me/avatar', response_model=UserAvatarResponse)
+async def get_my_avatar(
+    request: Request,
+    user: User = Depends(get_current_cabinet_user),
+) -> UserAvatarResponse:
+    """Фото профиля Telegram для шапки кабинета.
+
+    initData Mini App несёт photo_url не всегда, а при входе с сайта его нет
+    вовсе, поэтому спрашиваем Telegram сами. Ссылка подписана и живёт сутки,
+    как у вложений тикетов: сырой file_id наружу не уходит.
+    """
+    if not user.telegram_id:
+        return UserAvatarResponse(photo_url=None)
+
+    from app.bot_factory import create_bot
+    from app.services.user_avatar_service import get_avatar_file_id
+
+    from .media import _build_media_url
+
+    async with create_bot() as bot:
+        file_id = await get_avatar_file_id(bot, user.telegram_id)
+    if not file_id:
+        return UserAvatarResponse(photo_url=None)
+    return UserAvatarResponse(photo_url=_build_media_url(request, file_id))
 
 
 @router.get('/me/permissions')

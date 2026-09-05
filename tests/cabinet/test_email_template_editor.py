@@ -346,3 +346,72 @@ async def test_saving_template_with_required_placeholder_passes(monkeypatch):
     )
     await routes.update_template('email_verification', 'ru', data, admin=SimpleNamespace(id=1), db=None)
     assert saved['body_html'] == data.body_html
+
+
+# ============ Старые имена плейсхолдеров ============
+
+
+def test_legacy_placeholder_names_resolve_in_sample_context():
+    """7 марта редактор переименовал переменные; шаблоны на старых именах должны жить."""
+    from app.cabinet.routes.admin_email_templates import _build_sample_context
+
+    renewed = _build_sample_context('subscription_renewed')
+    assert renewed['new_end_date'] == renewed['new_expires_at']
+    activated = _build_sample_context('subscription_activated')
+    assert activated['end_date'] == activated['expires_at']
+    topup = _build_sample_context('balance_topup')
+    assert topup['amount'] == topup['formatted_amount'] and topup['balance'] == topup['formatted_balance']
+    low = _build_sample_context('autopay_insufficient_funds')
+    assert low['formatted_required'] == low['required_amount'] and low['balance'] == low['current_balance']
+
+
+@pytest.mark.asyncio
+async def test_override_with_legacy_placeholder_renders_value(monkeypatch):
+    """Шаблон пользователя с {new_end_date} — в письме дата, а не литерал."""
+    from app.cabinet.services import email_template_overrides as overrides
+
+    async def fake_override(*a, **k):
+        return {
+            'subject': 'Продлено до {new_end_date}',
+            'body_html': '<p>Активна до {new_end_date}, тариф {tariff_name}</p>',
+        }
+
+    monkeypatch.setattr(overrides, 'get_template_override', fake_override)
+    subject, body = await overrides.get_rendered_override(
+        'subscription_renewed', 'ru', {'new_expires_at': '28.02.2026', 'tariff_name': 'Premium'}
+    )
+    assert subject == 'Продлено до 28.02.2026'
+    assert 'Активна до 28.02.2026, тариф Premium' in body
+    assert '{new_end_date}' not in body
+
+
+@pytest.mark.asyncio
+async def test_saving_template_with_unknown_placeholder_is_rejected():
+    from types import SimpleNamespace
+
+    from fastapi import HTTPException
+
+    from app.cabinet.routes.admin_email_templates import EmailTemplateUpdate, update_template
+
+    data = EmailTemplateUpdate(subject='x', body_html='<p>До {new_end_dat}</p>')
+    with pytest.raises(HTTPException) as exc:
+        await update_template('subscription_renewed', 'ru', data, admin=SimpleNamespace(id=1), db=None)
+    assert exc.value.status_code == 400 and '{new_end_dat}' in exc.value.detail
+
+
+@pytest.mark.asyncio
+async def test_saving_template_with_legacy_placeholder_is_allowed(monkeypatch):
+    from types import SimpleNamespace
+
+    from app.cabinet.routes import admin_email_templates as routes
+
+    saved = {}
+
+    async def fake_save(**kwargs):
+        saved.update(kwargs)
+        return {**kwargs, 'is_active': True}
+
+    monkeypatch.setattr(routes, 'save_template_override', fake_save)
+    data = routes.EmailTemplateUpdate(subject='x', body_html='<p>До {new_end_date}, {service_name}</p>')
+    await routes.update_template('subscription_renewed', 'ru', data, admin=SimpleNamespace(id=1), db=None)
+    assert saved['body_html'] == data.body_html

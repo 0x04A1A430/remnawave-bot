@@ -33,6 +33,39 @@ COMMON_CONTEXT_VARS = [
 ]
 
 
+# Старые имена плейсхолдеров -> актуальные. 2026-03-07 (v3.25.0) редактор
+# переименовал переменные под реальные ключи контекста, а шаблоны, сохранённые
+# на старых именах, молча уходили с литералом «{new_end_date}». Подставляется
+# в чокпойнте рендера override и в sample-контексте редактора — одинаково.
+LEGACY_PLACEHOLDER_ALIASES: dict[str, str] = {
+    'new_end_date': 'new_expires_at',
+    'end_date': 'expires_at',
+    'amount': 'formatted_amount',
+    'balance': 'formatted_balance',
+    'formatted_required': 'required_amount',
+    'reason': 'comment',
+}
+# Тот же старый ключ мог означать разное у разных типов: пробуем по порядку.
+_LEGACY_FALLBACKS: dict[str, tuple[str, ...]] = {
+    'balance': ('formatted_balance', 'current_balance'),
+    'formatted_balance': ('current_balance',),
+    'formatted_amount': ('formatted_bonus',),
+    'amount': ('formatted_amount', 'formatted_bonus', 'formatted_reward'),
+}
+
+
+def apply_legacy_aliases(context: dict[str, Any]) -> dict[str, Any]:
+    """Возвращает копию контекста со старыми именами плейсхолдеров, если есть новые."""
+    result = dict(context)
+    for old, sources in {**{k: (v,) for k, v in LEGACY_PLACEHOLDER_ALIASES.items()}, **_LEGACY_FALLBACKS}.items():
+        if result.get(old) in (None, ''):
+            for source in sources:
+                if result.get(source) not in (None, ''):
+                    result[old] = result[source]
+                    break
+    return result
+
+
 def build_common_context() -> dict[str, Any]:
     """Values for the type-independent placeholders.
 
@@ -277,7 +310,8 @@ async def get_rendered_override(
 
     templates = EmailNotificationTemplates()
     # Type-independent placeholders work in every template; caller context wins.
-    context = {**build_common_context(), **(context or {})}
+    # Старые имена ({new_end_date}, {amount}, ...) продолжают работать.
+    context = apply_legacy_aliases({**build_common_context(), **(context or {})})
 
     if notification_type == EMAIL_LAYOUT_TYPE:
         # Превью/тест самой обёртки: в {content} встаёт пример письма как HTML.

@@ -8,7 +8,7 @@ from typing import Literal
 
 import structlog
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,6 +19,8 @@ from app.database.models import SystemSetting, User
 from app.services.gift_purchase_service import GIFT_ENABLED_KEY, is_gift_enabled
 
 from ..dependencies import get_cabinet_db, get_current_cabinet_user, require_permission
+from ..utils import brand_monogram, favicon_tile
+from ..utils.brand_monogram import monogram_letter, monogram_svg
 
 
 logger = structlog.get_logger(__name__)
@@ -392,6 +394,50 @@ def has_custom_logo() -> bool:
 # ============ Routes ============
 
 
+_LOGO_MEDIA_TYPES = {
+    '.png': 'image/png',
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.webp': 'image/webp',
+    '.svg': 'image/svg+xml',
+}
+_LOGO_MAX_AGE_SECONDS = 3600
+# Фавикон живёт в <link rel="icon"> кабинета, а Safari перезапрашивает иконку
+# редко: кеш короткий, чтобы новый логотип из админки доехал без пересборки.
+_FAVICON_MAX_AGE_SECONDS = 300
+
+
+async def _resolve_branding_name(db: AsyncSession) -> str:
+    """Имя из настроек; фолбэк только если оно не задано вовсе (пустая строка — значение)."""
+    name = await get_setting_value(db, BRANDING_NAME_KEY)
+    if name is None:
+        name = getattr(settings, 'CABINET_BRANDING_NAME', None) or os.getenv('VITE_APP_NAME', 'Cabinet')
+    return name
+
+
+def _image_headers(max_age: int) -> dict[str, str]:
+    return {
+        'Cache-Control': f'public, max-age={max_age}',
+        # Одну и ту же картинку браузер запрашивает двумя способами: <link rel="icon">
+        # и <img> — без заголовка Origin, fetch() кабинета — с ним. CORS-заголовки
+        # появляются только в ответ на Origin, и без Vary кеш отдаёт fetch()
+        # ответ от no-cors запроса — браузер блокирует его как CORS-ошибку.
+        'Vary': 'Origin',
+        # The logo may be an SVG (admin-uploaded). Rendering via <img> never
+        # runs SVG scripts, but opening /branding/logo as a top-level document
+        # would. Block that XSS surface: nosniff + a sandboxed CSP that forbids
+        # script execution. CSP on this image response is ignored when loaded
+        # as an <img> subresource, so logo display is unaffected.
+        'X-Content-Type-Options': 'nosniff',
+        'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; sandbox",
+    }
+
+
+def _logo_file_response(logo_path: Path, *, max_age: int) -> FileResponse:
+    media_type = _LOGO_MEDIA_TYPES.get(logo_path.suffix.lower(), 'image/png')
+    return FileResponse(logo_path, media_type=media_type, headers=_image_headers(max_age))
+
+
 @router.get('', response_model=BrandingResponse)
 async def get_branding(
     db: AsyncSession = Depends(get_cabinet_db),
@@ -400,21 +446,13 @@ async def get_branding(
     Get current branding settings.
     This is a public endpoint - no authentication required.
     """
-    # Get name from database or use default from env/settings
-    name = await get_setting_value(db, BRANDING_NAME_KEY)
-    if name is None:  # Only use fallback if not set at all (empty string is valid)
-        name = getattr(settings, 'CABINET_BRANDING_NAME', None) or os.getenv('VITE_APP_NAME', 'Cabinet')
-
-    # Check for custom logo
+    name = await _resolve_branding_name(db)
     custom_logo = has_custom_logo()
-
-    # Get first letter for logo fallback (use "V" if name is empty)
-    logo_letter = name[0].upper() if name else 'V'
 
     return BrandingResponse(
         name=name,
         logo_url='/cabinet/branding/logo' if custom_logo else None,
-        logo_letter=logo_letter,
+        logo_letter=monogram_letter(name),
         has_custom_logo=custom_logo,
     )
 
@@ -430,31 +468,51 @@ async def get_logo():
     if logo_path is None or not await asyncio.to_thread(logo_path.exists):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No custom logo set')
 
-    # Determine media type from file extension
-    suffix = logo_path.suffix.lower()
-    media_types = {
-        '.png': 'image/png',
-        '.jpg': 'image/jpeg',
-        '.jpeg': 'image/jpeg',
-        '.webp': 'image/webp',
-        '.svg': 'image/svg+xml',
-    }
-    media_type = media_types.get(suffix, 'image/png')
+    return _logo_file_response(logo_path, max_age=_LOGO_MAX_AGE_SECONDS)
 
-    return FileResponse(
-        logo_path,
-        media_type=media_type,
-        headers={
-            'Cache-Control': 'public, max-age=3600',
-            # The logo may be an SVG (admin-uploaded). Rendering via <img> never
-            # runs SVG scripts, but opening /branding/logo as a top-level document
-            # would. Block that XSS surface: nosniff + a sandboxed CSP that forbids
-            # script execution. CSP on this image response is ignored when loaded
-            # as an <img> subresource, so logo display is unaffected.
-            'X-Content-Type-Options': 'nosniff',
-            'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; sandbox",
-        },
-    )
+
+async def _logo_favicon_response(logo_path: Path) -> Response:
+    """Скруглённая плитка из логотипа (как в шапке кабинета); SVG и нечитаемый файл — как есть."""
+    if favicon_tile.is_raster_logo(logo_path):
+        try:
+            tile = await asyncio.to_thread(favicon_tile.cached_rounded_logo_tile, logo_path)
+        except Exception:
+            logger.warning(
+                'Не удалось скруглить плитку фавикона из логотипа, отдаём файл как есть',
+                path=str(logo_path),
+                exc_info=True,
+            )
+        else:
+            return Response(content=tile, media_type='image/png', headers=_image_headers(_FAVICON_MAX_AGE_SECONDS))
+    return _logo_file_response(logo_path, max_age=_FAVICON_MAX_AGE_SECONDS)
+
+
+@router.get('/favicon')
+async def get_favicon(
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Иконка для <link rel="icon"> кабинета: логотип из админки или монограмма.
+
+    Safari берёт фавикон только при первой загрузке страницы и не замечает
+    смену через JS (Chrome и Firefox замечают), поэтому статическая ссылка в
+    index.html кабинета ведёт сюда, а не на монограмму сборки. Никогда не 404:
+    на месте несуществующей иконки Safari показывает пустоту.
+
+    Монограмма — PNG, не SVG: SVG-фавикон Safari рисует монохромной плиткой с
+    буквой, теряя цвета. SVG остаётся запасным ответом, если PNG не отрисовался.
+    """
+    logo_path = get_logo_path()
+    if logo_path is not None and await asyncio.to_thread(logo_path.exists):
+        return await _logo_favicon_response(logo_path)
+
+    name = await _resolve_branding_name(db)
+    headers = _image_headers(_FAVICON_MAX_AGE_SECONDS)
+    try:
+        png = await asyncio.to_thread(brand_monogram.monogram_png, name)
+    except Exception:
+        logger.warning('Не удалось отрисовать PNG-монограмму фавикона, отдаём SVG', name=name, exc_info=True)
+        return Response(content=monogram_svg(name), media_type='image/svg+xml', headers=headers)
+    return Response(content=png, media_type='image/png', headers=headers)
 
 
 @router.get('/bot-logo')

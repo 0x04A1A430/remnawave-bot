@@ -225,6 +225,24 @@ async def _get_tariff_user_counts(db: AsyncSession) -> dict:
     return {row.tariff_id: row.count for row in result.all()}
 
 
+# Telegram: подпись к фото/видео/документу не длиннее 1024 символов (текстовое
+# сообщение — до 4096). Проверяем на входе: иначе каждый получатель получает
+# MEDIA_CAPTION_TOO_LONG, а админ — failed = total без объяснений.
+_MEDIA_CAPTION_LIMIT = 1024
+
+
+def _ensure_media_caption_fits(caption: str) -> None:
+    """Отклонить рассылку с медиа, чью подпись Telegram не примет."""
+    if len(caption) > _MEDIA_CAPTION_LIMIT:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f'Текст слишком длинный для сообщения с медиа. Максимум {_MEDIA_CAPTION_LIMIT} символов, '
+                f'сейчас {len(caption)}. Сократите текст или уберите медиафайл.'
+            ),
+        )
+
+
 def _validate_target(target: str, tariff_ids: set) -> bool:
     """Validate target value."""
     if target in FILTER_LABELS:
@@ -414,12 +432,8 @@ async def create_broadcast(
 
     media_payload = request.media
 
-    # Validate caption length for media messages (Telegram limit: 1024 chars)
-    if media_payload and len(message_text) > 1024:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f'Текст слишком длинный для сообщения с медиа. Максимум 1024 символов, сейчас {len(message_text)}. Сократите текст или уберите медиафайл.',
-        )
+    if media_payload:
+        _ensure_media_caption_fits(media_payload.caption or message_text)
 
     # Create broadcast record
     broadcast = BroadcastHistory(
@@ -611,6 +625,10 @@ async def create_combined_broadcast(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail='Message text is required for Telegram broadcast',
             )
+
+        # Та же граница, что у POST '' выше: именно этот эндпоинт использует кабинет.
+        if request.media:
+            _ensure_media_caption_fits(request.media.caption or request.message_text.strip())
 
         # Validate buttons
         if not _validate_buttons(request.selected_buttons):

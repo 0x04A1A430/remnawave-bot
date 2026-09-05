@@ -155,6 +155,12 @@ class UserResponse(BaseModel):
         from_attributes = True
 
 
+class UserAvatarResponse(BaseModel):
+    """Фото профиля Telegram для шапки кабинета: подписанная ссылка на прокси медиа или null."""
+
+    photo_url: str | None = None
+
+
 class EmailRegisterStandaloneRequest(BaseModel):
     """Request to register new account with email (no Telegram required)."""
 
