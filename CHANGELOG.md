@@ -1,5 +1,28 @@
 # Changelog
 
+## [4.5.0](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v4.4.0...v4.5.0) (2026-09-05)
+
+
+### New Features
+
+* **cabinet:** GET /branding/favicon — иконка вкладки, которую видит Safari ([46a7590](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/46a7590c34ba778efbbcfcb4c1a617bc1a175c40))
+* **cabinet:** фото профиля для шапки отдаёт бот через GET /auth/me/avatar ([17b3825](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/17b382532f94a4c89220124f1dde25a88b5c454f))
+
+
+### Bug Fixes
+
+* **broadcast:** отказ Telegram больше не теряется, подпись к медиа проверяется на входе ([10731de](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/10731de95170c1176600498269eb79f2a95388fe))
+* **cabinet:** вход через Telegram с веба для нового пользователя с гейтом согласия ([58e9050](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/58e9050c8d34a6ec7ae725b8706be46be1536448))
+* **cabinet:** радиус плитки фавикона 0,12 — Safari не подрисовывает белую подложку ([1625627](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/16256275222763579ca959c96346e38983a8ccc6))
+* **cabinet:** фавикон — PNG-монограмма без логотипа и скруглённая плитка с ним ([ed6296e](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/ed6296e2e937234a208bce31777ae47220e2ea9b))
+* **email:** старые имена плейсхолдеров продолжают работать, опечатки не сохраняются ([eb57b19](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/eb57b19bc18185025b82ea8cc466fc438b233b96))
+
+
+### Documentation
+
+* пересобрать справочник структуры после новых тестов согласия ([354292b](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/354292b9baeefef3fbb15be3e7fd86589380d5a0))
+* пересобрать справочник структуры после тестов плитки фавикона ([9de0173](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/9de0173d6d7838a5b77442645e3b30c15309633f))
+
 ## [4.4.0](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v4.3.0...v4.4.0) (2026-09-04)
 
 
