@@ -104,6 +104,7 @@ from ..schemas.auth import (
     TelegramOIDCAuthRequest,
     TelegramWidgetAuthRequest,
     TokenResponse,
+    UserAvatarResponse,
     UserResponse,
 )
 from ..services.email_service import email_service
@@ -2119,6 +2120,32 @@ async def get_current_user(
 ):
     """Get current authenticated user info."""
     return _user_to_response(user)
+
+
+@router.get('/me/avatar', response_model=UserAvatarResponse)
+async def get_my_avatar(
+    request: Request,
+    user: User = Depends(get_current_cabinet_user),
+) -> UserAvatarResponse:
+    """Фото профиля Telegram для шапки кабинета.
+
+    initData Mini App несёт photo_url не всегда, а при входе с сайта его нет
+    вовсе, поэтому спрашиваем Telegram сами. Ссылка подписана и живёт сутки,
+    как у вложений тикетов: сырой file_id наружу не уходит.
+    """
+    if not user.telegram_id:
+        return UserAvatarResponse(photo_url=None)
+
+    from app.bot_factory import create_bot
+    from app.services.user_avatar_service import get_avatar_file_id
+
+    from .media import _build_media_url
+
+    async with create_bot() as bot:
+        file_id = await get_avatar_file_id(bot, user.telegram_id)
+    if not file_id:
+        return UserAvatarResponse(photo_url=None)
+    return UserAvatarResponse(photo_url=_build_media_url(request, file_id))
 
 
 @router.get('/me/permissions')

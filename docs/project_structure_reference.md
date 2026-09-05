@@ -293,7 +293,7 @@
   Функции: `list_withdrawals` — List all withdrawal requests., `get_withdrawal_detail` — Get detailed withdrawal request with risk analysis., `approve_withdrawal` — Approve a withdrawal request., `reject_withdrawal` — Reject a withdrawal request., `complete_withdrawal` — Mark a withdrawal as completed (money transferred).
 - `app/cabinet/routes/auth.py` — Python-модуль
   Классы: нет
-  Функции: `auth_telegram` — Authenticate using Telegram WebApp initData., `auth_telegram_widget` — Authenticate using Telegram Login Widget data., `auth_telegram_oidc` — Authenticate using Telegram OIDC id_token (popup flow)., `register_email` — Register/link email to existing Telegram account., `verify_email_merge` — Confirm an email account merge with the code mailed to the existing account., `register_email_standalone` — Register new account with email and password., `verify_email` — Verify email with token and return auth tokens., `resend_verification` — Resend verification email., `login_email` — Login with email and password., `refresh_token` — Refresh access token using refresh token., `logout` — Logout and revoke refresh token., `auto_login` — Auto-login using a short-lived JWT from guest purchase success page., `forgot_password` — Request password reset., `reset_password` — Reset password with token., `get_current_user` — Get current authenticated user info., `get_my_permissions` — Get current user's RBAC permissions, roles, and level., `check_is_admin` — Check if current user is an admin (legacy config or RBAC)., `request_email_change` — Request email change., `verify_email_change` — Verify email change with code., `cancel_email_change` — Cancel pending email change., `get_email_change_status` — Get pending email change status., `request_deep_link_token` — Generate a one-time deep link auth token., `poll_deep_link_token` — Poll for deep link auth completion.
+  Функции: `auth_telegram` — Authenticate using Telegram WebApp initData., `auth_telegram_widget` — Authenticate using Telegram Login Widget data., `auth_telegram_oidc` — Authenticate using Telegram OIDC id_token (popup flow)., `register_email` — Register/link email to existing Telegram account., `verify_email_merge` — Confirm an email account merge with the code mailed to the existing account., `register_email_standalone` — Register new account with email and password., `verify_email` — Verify email with token and return auth tokens., `resend_verification` — Resend verification email., `login_email` — Login with email and password., `refresh_token` — Refresh access token using refresh token., `logout` — Logout and revoke refresh token., `auto_login` — Auto-login using a short-lived JWT from guest purchase success page., `forgot_password` — Request password reset., `reset_password` — Reset password with token., `get_current_user` — Get current authenticated user info., `get_my_avatar` — Фото профиля Telegram для шапки кабинета., `get_my_permissions` — Get current user's RBAC permissions, roles, and level., `check_is_admin` — Check if current user is an admin (legacy config or RBAC)., `request_email_change` — Request email change., `verify_email_change` — Verify email change with code., `cancel_email_change` — Cancel pending email change., `get_email_change_status` — Get pending email change status., `request_deep_link_token` — Generate a one-time deep link auth token., `poll_deep_link_token` — Poll for deep link auth completion.
 - `app/cabinet/routes/balance.py` — Python-модуль
   Классы: нет
   Функции: `get_balance` — Get current user's balance., `get_transactions` — Get transaction history., `get_payment_methods` — Get available payment methods for the current user., `create_stars_invoice` — Создать Telegram Stars invoice для пополнения баланса., `create_topup` — Create payment for balance top-up., `get_pending_payments` — Get user's pending payments for manual verification., `get_latest_payment_by_method` — Get user's most recent payment for a given method (any status, not just pending)., `get_pending_payment_details` — Get details of a specific pending payment., `check_payment_status` — Manually check and update payment status., `get_saved_cards` — Get user's saved payment methods (cards) for recurrent payments., `delete_saved_card` — Unlink (deactivate) a saved payment method.
@@ -431,7 +431,7 @@
   Классы: `ApplePurchaseRequest` (1 методов), `ApplePurchaseResponse`, `AppleAccountTokenResponse`
   Функции: нет
 - `app/cabinet/schemas/auth.py` — Python-модуль
-  Классы: `TelegramAuthRequest`, `TelegramWidgetAuthRequest`, `TelegramOIDCAuthRequest`, `EmailRegisterRequest`, `EmailVerifyRequest`, `EmailLoginRequest`, `RefreshTokenRequest`, `PasswordForgotRequest`, `PasswordResetRequest`, `AutoLoginRequest`, `TokenResponse`, `UserResponse`, `EmailRegisterStandaloneRequest`, `CampaignBonusInfo`, `AuthResponse`, `RegisterResponse`, `EmailChangeRequest`, `EmailChangeVerifyRequest`, `EmailMergeVerifyRequest`, `EmailChangeResponse`, `DeepLinkTokenResponse`, `DeepLinkPollRequest`
+  Классы: `TelegramAuthRequest`, `TelegramWidgetAuthRequest`, `TelegramOIDCAuthRequest`, `EmailRegisterRequest`, `EmailVerifyRequest`, `EmailLoginRequest`, `RefreshTokenRequest`, `PasswordForgotRequest`, `PasswordResetRequest`, `AutoLoginRequest`, `TokenResponse`, `UserResponse`, `UserAvatarResponse`, `EmailRegisterStandaloneRequest`, `CampaignBonusInfo`, `AuthResponse`, `RegisterResponse`, `EmailChangeRequest`, `EmailChangeVerifyRequest`, `EmailMergeVerifyRequest`, `EmailChangeResponse`, `DeepLinkTokenResponse`, `DeepLinkPollRequest`
   Функции: нет
 - `app/cabinet/schemas/balance.py` — Python-модуль
   Классы: `BalanceResponse`, `TransactionResponse`, `TransactionListResponse`, `PaymentOptionResponse`, `PaymentMethodResponse`, `TopUpRequest`, `TopUpResponse`, `StarsInvoiceRequest`, `StarsInvoiceResponse`, `PendingPaymentResponse`, `PendingPaymentListResponse`, `ManualCheckResponse`, `SavedCardResponse`, `SavedCardsListResponse`
@@ -459,6 +459,9 @@
   Функции: нет
 - `app/cabinet/schemas/info_pages.py` — Python-модуль
   Классы: `InfoPageResponse`, `InfoPageListItem`, `InfoPageCreateRequest`, `InfoPageUpdateRequest`, `ReorderItem`, `ReorderRequest`
+  Функции: нет
+- `app/cabinet/schemas/media.py` — Python-модуль
+  Классы: нет
   Функции: нет
 - `app/cabinet/schemas/news.py` — Python-модуль
   Классы: `NewsArticleResponse`, `NewsArticleListItem`, `NewsListResponse`, `NewsCreateRequest` (5 методов), `NewsUpdateRequest` (4 методов), `NewsToggleResponse`
@@ -1669,6 +1672,9 @@
 - `app/services/user_action_log_service.py` — Python-модуль
   Классы: нет
   Функции: `normalize_cabinet_path` — Сворачивает числовые сегменты пути в {id} для группировки однотипных действий., `should_log_cabinet_action`, `schedule_cabinet_action_log` — Fire-and-forget запись действия юзера в кабинете — не задерживает запрос.
+- `app/services/user_avatar_service.py` — Python-модуль
+  Классы: нет
+  Функции: `pick_avatar_file_id` — Самый маленький размер, который ещё не мылится в шапке; иначе самый крупный., `get_avatar_file_id` — file_id текущего фото профиля или None. Никогда не бросает: аватар — не повод ронять кабинет.
 - `app/services/user_cart_service.py` — Python-модуль
   Классы: `UserCartService` (15 методов)
   Функции: нет
@@ -2793,6 +2799,9 @@
 - `tests/cabinet/test_autopay_cancels_sbp.py` — Python-модуль
   Классы: нет
   Функции: `test_enable_autopay_cancels_active_sbp_recurring`, `test_disable_autopay_does_not_cancel_sbp` — Disabling balance-autopay must NOT touch SBP — only the enable path, `test_enable_autopay_rejected_for_trial_does_not_cancel_sbp` — A rejected enable (trial subscription -> 400) must not fire the
+- `tests/cabinet/test_broadcast_media_validation.py` — Python-модуль
+  Классы: нет
+  Функции: `test_send_rejects_media_caption_over_1024`, `test_send_checks_the_caption_that_is_actually_sent` — Если у медиа своя подпись, ограничение относится к ней, а не к message_text., `test_media_file_id_must_look_like_a_telegram_file_id`
 - `tests/cabinet/test_bulk_actions_admin_identity.py` — Python-модуль
   Классы: нет
   Функции: `test_subscription_batch_survives_rollback_inside_loop` — Откат на первой подписке не должен уносить весь ответ в 500., `test_user_batch_survives_rollback_inside_loop` — То же для режима по пользователям: id админа читается на каждой итерации., `test_streamed_batch_survives_rollback_inside_loop` — SSE-поток не должен обрываться на финальном логе после отката., `test_delete_user_permission_check_runs_before_snapshot` — Снимок id не должен обгонять проверку прав: отказ обязан остаться отказом., `test_stream_helpers_take_plain_admin_id` — Генераторы принимают int, а не ORM-объект: протухать в них нечему.
@@ -2889,6 +2898,9 @@
 - `tests/cabinet/test_media_xss_hardening.py` — Python-модуль
   Классы: нет
   Функции: `test_raster_images_served_inline_with_their_type`, `test_non_raster_forced_to_download_as_octet_stream`, `test_html_is_never_text_html`, `test_svg_is_never_image_svg_xml`, `test_hardening_headers_always_present`, `test_filename_sanitized_against_header_injection`, `test_empty_filename_falls_back`, `test_blocked_upload_lists_cover_active_content`
+- `tests/cabinet/test_my_avatar.py` — Python-модуль
+  Классы: нет
+  Функции: `test_picks_the_smallest_size_that_is_still_sharp`, `test_falls_back_to_the_largest_when_all_are_small`, `test_no_photos_means_no_avatar`, `test_file_id_is_cached_including_the_absence_of_a_photo`, `test_telegram_error_does_not_break_the_cabinet`, `test_route_returns_signed_media_url`, `test_route_without_telegram_account_returns_nothing`
 - `tests/cabinet/test_oauth_email_merge_revival.py` — Python-модуль
   Классы: нет
   Функции: `db`, `test_email_merge_revives_deleted_user_when_both_verified` — REGRESSION: with BOTH IdP and local row email_verified, a DELETED row gets revived., `test_email_merge_blocks_409_when_local_email_unverified` — SECURITY: local row with email_verified=False must NOT be merged., `test_email_merge_active_user_links_without_revive` — An ACTIVE local user found by email gets the provider linked, NOT revived.
@@ -3355,6 +3367,9 @@
 - `tests/services/test_ban_notification_global_switch.py` — Python-модуль
   Классы: нет
   Функции: `service`, `test_typed_ban_is_silent_when_notifications_are_off`, `test_typed_ban_is_delivered_when_notifications_are_on` — Обратная сторона: рубильник не должен глушить включённые уведомления., `test_switch_is_checked_before_touching_the_database` — Выход обязан быть до поиска пользователя, как у соседних методов., `test_every_send_method_respects_the_switch` — Ни один способ уведомить пользователя не должен обходить рубильник.
+- `tests/services/test_broadcast_bad_request_logging.py` — Python-модуль
+  Классы: нет
+  Функции: `test_bad_request_is_logged_once_per_cause_with_telegram_text`, `test_each_distinct_cause_gets_its_own_error_entry`, `test_blocked_users_are_still_counted_quietly` — «chat not found» — это не сбой рассылки, а ушедший пользователь: без error.
 - `tests/services/test_broadcast_email_render.py` — Python-модуль
   Классы: нет
   Функции: `test_fragment_gets_branded_layout_with_recipient_and_unsubscribe`, `test_custom_layout_applies_to_broadcasts_too`, `test_full_document_is_sent_as_is_with_unsubscribe_placeholder`, `test_system_broadcast_has_no_unsubscribe_link`, `test_email_render_endpoint_matches_delivery`
