@@ -5,6 +5,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
+from .media import TELEGRAM_FILE_ID_PATTERN
+
 
 # ============ Channel Types ============
 
@@ -106,7 +108,9 @@ class BroadcastMediaRequest(BaseModel):
     """Media attachment for broadcast."""
 
     type: str = Field(..., pattern=r'^(photo|video|document)$')
-    file_id: str
+    # Только то, что вернул /cabinet/media/upload: URL или пустая строка упали бы
+    # у каждого получателя уже на отправке.
+    file_id: str = Field(..., pattern=TELEGRAM_FILE_ID_PATTERN)
     caption: str | None = None
 
 
