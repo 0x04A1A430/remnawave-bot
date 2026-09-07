@@ -2,9 +2,18 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
 
 from app.database.crud import reachability as crud
+from app.services.reachability.batches import (
+    batch_cost_kopeks,
+    batch_done_targets,
+    batch_status_from_jobs,
+    chunk_targets,
+    estimate_batch_minutes,
+)
 
 
 pytestmark = pytest.mark.asyncio
@@ -44,13 +53,59 @@ async def test_jobs_for_batch_are_ordered_and_carry_legs(session_factory) -> Non
 
     async with session_factory() as db:
         batch = await crud.create_batch(
-            db, status='pending', started_by_user_id=None, scope={'kind': 'manual', 'host_refs': []},
-            request={}, total_targets=2, estimated_kopeks=None,
+            db,
+            status='pending',
+            started_by_user_id=None,
+            scope={'kind': 'manual', 'host_refs': []},
+            request={},
+            total_targets=2,
+            estimated_kopeks=None,
         )
         await db.commit()
         batch_id = batch.id
-    ids = [await make_job(session_factory, 'probe', {'target': 'x'}, [EU], ['mts|пфо|on'], batch_id=batch_id) for _ in range(2)]
+    ids = [
+        await make_job(session_factory, 'probe', {'target': 'x'}, [EU], ['mts|пфо|on'], batch_id=batch_id)
+        for _ in range(2)
+    ]
     async with session_factory() as db:
         jobs = await crud.jobs_for_batch(db, batch_id)
         assert [job.id for job in jobs] == ids and all(job.legs == [] for job in jobs)
         assert (await crud.get_batch(db, batch_id)).jobs[0].id == ids[0]
+
+
+# ---------------------------------------------------------------- правила
+
+
+def test_chunk_targets_by_ten() -> None:
+    assert chunk_targets(list(range(23))) == [list(range(10)), list(range(10, 20)), [20, 21, 22]]
+    assert chunk_targets([]) == []
+
+
+def test_estimate_minutes_grows_with_rounds_and_units() -> None:
+    # Один раунд: 3 + 0,8·15 = 15 минут; два чанка идут параллельно — тот же раунд; четыре — два раунда.
+    assert estimate_batch_minutes(1, 15) == 15
+    assert estimate_batch_minutes(2, 15) == 15
+    assert estimate_batch_minutes(4, 15) == 30
+    assert estimate_batch_minutes(1, 1) >= 1
+    assert estimate_batch_minutes(0, 0) >= 1
+
+
+def _job(status: str, cost: int | None = None, targets: int = 1) -> SimpleNamespace:
+    return SimpleNamespace(status=status, cost_kopeks=cost, targets=[{}] * targets)
+
+
+def test_batch_status_rules() -> None:
+    assert batch_status_from_jobs([_job('done'), _job('running')], cancelling=False) is None
+    assert batch_status_from_jobs([_job('done'), _job('pending')], cancelling=True) is None
+    assert batch_status_from_jobs([_job('done'), _job('done')], cancelling=False) == 'done'
+    assert batch_status_from_jobs([_job('done'), _job('failed')], cancelling=False) == 'done'
+    assert batch_status_from_jobs([_job('failed'), _job('failed')], cancelling=False) == 'failed'
+    assert batch_status_from_jobs([_job('done'), _job('cancelled')], cancelling=False) == 'cancelled'
+    assert batch_status_from_jobs([_job('done')], cancelling=True) == 'cancelled'
+    assert batch_status_from_jobs([], cancelling=False) == 'done'
+
+
+def test_batch_cost_and_done_targets() -> None:
+    jobs = [_job('done', 640, 10), _job('cancelled', 200, 10), _job('pending', None, 3)]
+    assert batch_cost_kopeks(jobs) == 840 and batch_done_targets(jobs) == 20
+    assert batch_cost_kopeks([_job('pending')]) is None
