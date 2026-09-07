@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database.crud import reachability as crud
 from app.database.models import ReachabilityJob
 from app.external.bschek_api import BschekAPIError
+from app.services.reachability.batches import batch_done_targets
 from app.services.reachability.cores import XRAY_CORES
 from app.services.reachability.jobs import KIND_SCAN, KIND_VLESS
 from app.services.reachability.pricing import credits_to_kopeks
@@ -76,6 +77,19 @@ async def _active_jobs(db: AsyncSession) -> list[dict[str, Any]]:
     return active
 
 
+async def _active_batch(db: AsyncSession) -> dict[str, Any] | None:
+    batch = await crud.get_active_batch(db)
+    if batch is None:
+        return None
+    jobs = await crud.jobs_for_batch(db, batch.id)
+    return {
+        'id': batch.id,
+        'total_targets': batch.total_targets,
+        'done_targets': batch_done_targets(jobs),
+        'started_at': batch.started_at,
+    }
+
+
 async def reference_status(service: ReachabilityService, db: AsyncSession) -> dict[str, Any]:
     short_uuid = service.reference_short_uuid()
     if not short_uuid:
@@ -116,6 +130,7 @@ async def collect_status(service: ReachabilityService, db: AsyncSession) -> dict
         'health_message': None if healthy else health_message,
         **account_summary(account),
         'active_jobs': await _active_jobs(db),
+        'active_batch': await _active_batch(db),
         'reference': reference,
         'cost_limit_kopeks': service.cost_limit_kopeks(),
         'cores': dict(XRAY_CORES),
