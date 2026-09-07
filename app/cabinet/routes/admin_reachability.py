@@ -463,18 +463,6 @@ async def cancel_job(
     return _job_out(job)
 
 
-@router.post('/jobs/{job_id}/retrieve', response_model=JobOut)
-async def retrieve_job(
-    job_id: int,
-    admin: User = Depends(require_permission('reachability:run')),
-    db: AsyncSession = Depends(get_cabinet_db),
-) -> JobOut:
-    try:
-        return _job_out(await _service().retrieve_job(db, job_id))
-    except Exception as exc:
-        raise _http(exc) from exc
-
-
 # ============ Пачка проверок ============
 
 
