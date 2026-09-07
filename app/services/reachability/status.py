@@ -28,21 +28,29 @@ class StatusSource(Protocol):
     Протокол вместо импорта класса сервиса — иначе сервис и статус импортируют друг друга.
     """
 
-    def is_enabled(self) -> bool: ...
+    def is_enabled(self) -> bool:
+        pass
 
-    def is_configured(self) -> bool: ...
+    def is_configured(self) -> bool:
+        pass
 
-    def health(self) -> tuple[bool, str | None]: ...
+    def health(self) -> tuple[bool, str | None]:
+        pass
 
-    async def account(self) -> dict: ...
+    async def account(self) -> dict:
+        pass
 
-    def reference_short_uuid(self) -> str | None: ...
+    def reference_short_uuid(self) -> str | None:
+        pass
 
-    async def subscription_configs(self, db: AsyncSession, *, short_uuid: str | None = None) -> SubscriptionConfigs: ...
+    async def subscription_configs(self, db: AsyncSession, *, short_uuid: str | None = None) -> SubscriptionConfigs:
+        pass
 
-    def cost_limit_kopeks(self) -> int: ...
+    def cost_limit_kopeks(self) -> int:
+        pass
 
-    def default_sni(self) -> str: ...
+    def default_sni(self) -> str:
+        pass
 
 
 class AccountCache:

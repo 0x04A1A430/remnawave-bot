@@ -75,11 +75,13 @@ def batch_done_targets(jobs: Iterable[Any]) -> int:
 
 
 class _Invalidatable(Protocol):
-    def invalidate(self) -> None: ...
+    def invalidate(self) -> None:
+        pass
 
 
 class _BatchRunner(Protocol):
-    def spawn_batch(self, batch_id: int) -> Any: ...
+    def spawn_batch(self, batch_id: int) -> Any:
+        pass
 
 
 class BatchService(Protocol):
@@ -91,11 +93,14 @@ class BatchService(Protocol):
     runner: _BatchRunner
     _account: _Invalidatable
 
-    async def preview(self, db: AsyncSession, payload: dict) -> PreviewResult: ...
+    async def preview(self, db: AsyncSession, payload: dict) -> PreviewResult:
+        pass
 
-    def cost_limit_kopeks(self) -> int: ...
+    def cost_limit_kopeks(self) -> int:
+        pass
 
-    def _job_fields(self, preview: PreviewResult, payload: dict, admin_id: int) -> dict[str, Any]: ...
+    def _job_fields(self, preview: PreviewResult, payload: dict, admin_id: int) -> dict[str, Any]:
+        pass
 
 
 @dataclass(frozen=True)
