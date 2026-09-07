@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -548,8 +549,7 @@ async def test_poll_timeout_leaves_job_running_and_sweep_resumes_it(session_fact
 
     await runner.sweep()
     assert runner.is_active(job_id)
-    for task in list(runner._tasks.values()):
-        await task
+    await asyncio.gather(*runner._tasks.values())
     assert not runner.is_active(job_id)
     assert (await load(session_factory, job_id)).status == STATUS_DONE
 
@@ -595,7 +595,7 @@ async def test_spawn_tracks_task_until_done(session_factory) -> None:
     job_id = await make_job(session_factory, KIND_PROBE, fx['request'], [EU], ['mts|пфо|on'])
     task = runner.spawn(job_id)
     assert runner.is_active(job_id)
-    await task
+    await asyncio.gather(task)
     assert not runner.is_active(job_id)
     assert (await load(session_factory, job_id)).status == STATUS_DONE
 

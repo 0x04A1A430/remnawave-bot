@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+import asyncio
+
 import pytest
 
 from app.database.crud import reachability as crud
@@ -72,8 +74,7 @@ async def test_create_batch_makes_one_job_per_chunk_and_spawns_driver(session_fa
         assert (batch.total_targets, batch.scope['kind'], batch.estimated_kopeks) == (23, 'problems', 54)
         assert batch.scope['host_refs'][:2] == ['h1', 'h2']
         assert service.runner.is_batch_active(batch.id)
-    for task in [*service.runner._batch_tasks.values(), *service.runner._tasks.values()]:
-        await task
+    await asyncio.gather(*service.runner._batch_tasks.values(), *service.runner._tasks.values())
     async with session_factory() as db:
         done = await service.get_batch(db, batch.id)
         assert done.status == 'done' and done.cost_kopeks == 18 * 3
@@ -113,7 +114,6 @@ async def test_cancel_batch_before_start_finishes_it_cancelled(session_factory) 
         await db.commit()
         cancelled = await service.cancel_batch(db, batch.id)
         assert cancelled.phase == 'cancelling'
-    for task in list(service.runner._batch_tasks.values()):
-        await task
+    await asyncio.gather(*service.runner._batch_tasks.values())
     async with session_factory() as db:
         assert (await service.get_batch(db, batch.id)).status == 'cancelled'

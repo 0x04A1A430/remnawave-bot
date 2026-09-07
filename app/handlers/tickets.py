@@ -559,10 +559,8 @@ async def view_ticket(callback: types.CallbackQuery, db_user: User, db: AsyncSes
             nav_row.append(
                 types.InlineKeyboardButton(text='➡️', callback_data=f'ticket_view_page_{ticket_id}_{page + 1}')
             )
-        try:
+        if getattr(keyboard, 'inline_keyboard', None) is not None:
             keyboard.inline_keyboard.insert(0, nav_row)
-        except Exception:
-            pass
     # Показываем как текст (чтобы не упереться в caption лимит)
     page_text = pages[page - 1]
     await safe_edit_or_resend(callback.message, page_text, keyboard)
@@ -734,8 +732,9 @@ async def handle_ticket_reply(message: types.Message, state: FSMContext, db_user
                 pass
             return
         await state.update_data(rl_ts_reply=now_ts)
-    except Exception:
-        pass
+    except Exception as exc:
+        # Антиспам — вспомогательный механизм: без состояния ответ всё равно обрабатывается.
+        logger.debug('Антиспам ответа на тикет: состояние не обновлено', error=str(exc))
 
     """Обработать ответ на тикет"""
     # Поддержка фото для ответа пользователя

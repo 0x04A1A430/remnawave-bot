@@ -635,8 +635,7 @@ class ReachabilityService:
         task, self._background = self._background, None
         if task is not None:
             task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await task
+            await asyncio.wait([task])
 
 
 reachability_service = ReachabilityService()
