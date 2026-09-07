@@ -47,6 +47,8 @@ TRANSIENT_CODES = frozenset(
 BUSY_CODES = frozenset({'test_in_progress', 'scan_in_progress', 'busy', 'too_many_active'})
 # Отменять уже нечего: итог возьмёт контрольный GET.
 CANCEL_OK_CODES = frozenset({'cannot_cancel_running', 'not_running', 'not_found'})
+# Пробу можно остановить, пока она идёт у API: ключ уже ушёл, результат ещё не пришёл.
+PROBE_CANCELLABLE_PHASES = frozenset({'waiting', 'retrieving'})
 _SCAN_PENDING_STATES = ('queued', 'running')
 _NO_DPI_ON_MESSAGE = 'Под фильтр Белого списка не попала ни одна симка'
 
@@ -317,7 +319,10 @@ class JobRunner:
 
     async def _retrieve_probe(self, db: AsyncSession, job: ReachabilityJob) -> dict | None:
         """Повтор тем же ключом: часто первые 2 минуты, потом реже; None — доберёт обходчик."""
-        await self._update(db, job, phase=PHASE_RETRIEVING)
+        # Отмену мог поставить другой запрос, пока мы ждали API: фазу «отменяем» не затирать.
+        await db.refresh(job, attribute_names=['phase'])
+        if job.phase != PHASE_CANCELLING:
+            await self._update(db, job, phase=PHASE_RETRIEVING)
         started = self._clock()
         while self._clock() - started < self.cfg.probe_retrieve_max:
             fast = self._clock() - started < self.cfg.probe_retrieve_fast_window
@@ -344,10 +349,13 @@ class JobRunner:
             return
         legs = build_probe_legs(job.targets or [], job.request or {}, result, checked_at=self._now())
         await crud.replace_legs(db, job.id, legs)
+        # Отмену ставит другой запрос, пока этот ждёт ответа API: фазу перечитываем из базы.
+        await db.refresh(job, attribute_names=['phase'])
+        cancelled = job.phase == PHASE_CANCELLING
         await self._update(
             db,
             job,
-            status=STATUS_DONE,
+            status=STATUS_CANCELLED if cancelled else STATUS_DONE,
             phase=None,
             result={'response': result},
             cost_kopeks=credits_to_kopeks(result.get('cost_credits')),
@@ -404,7 +412,7 @@ class JobRunner:
         limit, cost = self._cost_limit(), job.cost_kopeks
         if not limit or not cost or cost <= limit:
             return False
-        await self._try_cancel_remote(job.kind, int(job.external_id))
+        await self._try_cancel_remote(job)
         message = (
             f'Цена теста {format_rubles(cost)} выше потолка {format_rubles(limit)}; тест отменён сразу, списания нет'
         )
@@ -495,24 +503,33 @@ class JobRunner:
 
     # ------------------------------------------------------------ отмена
 
-    async def _try_cancel_remote(self, kind: str, external_id: int) -> None:
+    async def _try_cancel_remote(self, job: ReachabilityJob) -> None:
+        """Отмена у API: пробу — её ключом, тест и скан — их идентификатором. «Уже нечего» — не ошибка."""
+
         def call(api: BschekAPI) -> Awaitable[dict]:
-            return api.cancel_vless(external_id) if kind == KIND_VLESS else api.cancel_scan(external_id)
+            if job.kind == KIND_PROBE:
+                return api.cancel_probe(job.idempotency_key)
+            external_id = int(job.external_id)
+            return api.cancel_vless(external_id) if job.kind == KIND_VLESS else api.cancel_scan(external_id)
 
         try:
             await self._call(call, paid=False)
         except BschekAPIError as exc:
-            if exc.code not in CANCEL_OK_CODES:
+            if exc.code not in CANCEL_OK_CODES and exc.status != 404:
                 raise
 
     async def cancel(self, db: AsyncSession, job: ReachabilityJob) -> ReachabilityJob:
-        """Дёрнуть отмену у API и пометить фазу; итог (статус, цена) поставит поллер или обходчик по GET."""
+        """Дёрнуть отмену у API и пометить фазу; итог (статус, цена) поставит поллер или обходчик.
+
+        Проба: висящий POST вернётся сам с тем, что успели измерить, платим только за это.
+        """
         if job.status not in crud.ACTIVE_STATUSES:
             raise JobNotCancellable('Задача уже завершена')
         if job.kind == KIND_PROBE:
-            raise JobNotCancellable('Синхронную пробу нельзя отменить: у API нет такой операции')
-        if job.external_id is None:
+            if job.phase not in PROBE_CANCELLABLE_PHASES:
+                raise JobNotCancellable('Проверка ещё не отправлена, подождите пару секунд')
+        elif job.external_id is None:
             raise JobNotCancellable('Задача ещё не отправлена, подождите пару секунд')
         await self._update(db, job, phase=PHASE_CANCELLING)
-        await self._try_cancel_remote(job.kind, int(job.external_id))
+        await self._try_cancel_remote(job)
         return job
