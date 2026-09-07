@@ -585,7 +585,7 @@
   Классы: нет
   Функции: `run_alembic_upgrade` — Run ``alembic upgrade head``, handling fresh and legacy databases., `stamp_alembic_head` — Stamp the DB as being at head without running migrations (for existing DBs).
 - `app/database/models.py` — Python-модуль
-  Классы: `AwareDateTime` (2 методов), `UserStatus`, `SubscriptionStatus`, `TransactionType`, `PromoCodeType`, `PaymentMethod`, `MainMenuButtonActionType`, `MainMenuButtonVisibility`, `WheelPrizeType`, `WheelSpinPaymentType`, `YooKassaPayment` (6 методов), `SavedPaymentMethod` (1 методов), `CryptoBotPayment` (5 методов), `AppleTransaction` (2 методов), `AppleIAPAccount` (1 методов), `AppleNotification` (1 методов), `AppleIAPAbuseEvent` (1 методов), `HeleketPayment` (5 методов), `MulenPayPayment` (2 методов), `Pal24Payment` (3 методов), `WataPayment` (2 методов), `PlategaPayment` (2 методов), `PlategaSubscription` (1 методов), `LavaSubscription` (1 методов), `CloudPaymentsPayment` (5 методов), `FreekassaPayment` (5 методов), `KassaAiPayment` (5 методов), `RioPayPayment` (5 методов), `SeverPayPayment` (5 методов), `PayPearPayment` (5 методов), `RollyPayPayment` (5 методов), `OverpayPayment` (5 методов), `AuraPayPayment` (5 методов), `EtoplatezhiPayment` (5 методов), `AntilopayPayment` (5 методов), `JupiterPayment` (5 методов), `DonutPayment` (5 методов), `LavaPayment` (5 методов), `CisPayPayment` (5 методов), `TabPayPayment` (5 методов), `ParityPayPayment` (5 методов), `PromoGroup` (3 методов), `UserPromoGroup` (1 методов), `Tariff` (20 методов), `PartnerStatus`, `User` (12 методов), `Subscription` (15 методов), `GraceAccessSessionModel`, `TrafficPurchase` (1 методов), `Transaction` (1 методов), `SubscriptionConversion` (2 методов), `PromoCode` (2 методов), `PromoCodeUse`, `CouponStatus`, `CouponBatch` (2 методов), `Coupon` (1 методов), `ReferralRewardType`, `ReferralRewardTrigger`, `ReferralRewardMode`, `ReferralRewardLevel` (1 методов), `ReferralEarning` (1 методов), `WithdrawalRequestStatus`, `WithdrawalRequest` (1 методов), `PartnerApplication`, `ReferralContest` (1 методов), `ReferralContestEvent` (1 методов), `ReferralContestVirtualParticipant` (1 методов), `ContestTemplate`, `ContestRound`, `ContestAttempt`, `Squad` (1 методов), `ServiceRule`, `PrivacyPolicy`, `PublicOffer`, `LegalConsent`, `RecurrentPayments`, `FaqSetting`, `FaqPage`, `SystemSetting`, `EmailTemplate`, `MonitoringLog`, `SentNotification`, `SubscriptionEvent`, `DiscountOffer`, `PromoOfferTemplate`, `SubscriptionTemporaryAccess`, `PromoOfferLog`, `BroadcastHistory`, `Poll`, `PollQuestion`, `PollOption`, `PollResponse`, `PollAnswer`, `ServerSquad` (3 методов), `SubscriptionServer`, `SupportAuditLog`, `UserMessage` (1 методов), `WelcomeText`, `PinnedMessage`, `AdvertisingCampaign` (4 методов), `AdvertisingCampaignRegistration` (1 методов), `TicketStatus`, `Ticket` (8 методов), `TicketMessage` (3 методов), `WebApiToken` (1 методов), `MainMenuButton` (3 методов), `MenuLayoutHistory` (1 методов), `ButtonClickLog` (1 методов), `Webhook` (1 методов), `WebhookDelivery` (1 методов), `CabinetRefreshToken` (4 методов), `WheelConfig` (1 методов), `WheelPrize` (1 методов), `WheelSpin` (3 методов), `TicketNotification` (1 методов), `PaymentMethodConfig` (1 методов), `RequiredChannel` (1 методов), `UserChannelSubscription` (1 методов), `AdminRole` (1 методов), `UserRole` (1 методов), `AccessPolicy` (1 методов), `AdminAuditLog` (1 методов), `LandingPage` (1 методов), `GuestPurchaseStatus`, `GuestPurchase` (1 методов), `NewsArticle` (1 методов), `NewsCategory` (1 методов), `NewsTag` (1 методов), `YandexClientIdMap`, `InfoPage`, `UserDeviceAlias`, `SystemErrorEvent`, `EmailQueueItem`, `ReachabilityJob`, `ReachabilityLeg`, `ReachabilityTargetPref`
+  Классы: `AwareDateTime` (2 методов), `UserStatus`, `SubscriptionStatus`, `TransactionType`, `PromoCodeType`, `PaymentMethod`, `MainMenuButtonActionType`, `MainMenuButtonVisibility`, `WheelPrizeType`, `WheelSpinPaymentType`, `YooKassaPayment` (6 методов), `SavedPaymentMethod` (1 методов), `CryptoBotPayment` (5 методов), `AppleTransaction` (2 методов), `AppleIAPAccount` (1 методов), `AppleNotification` (1 методов), `AppleIAPAbuseEvent` (1 методов), `HeleketPayment` (5 методов), `MulenPayPayment` (2 методов), `Pal24Payment` (3 методов), `WataPayment` (2 методов), `PlategaPayment` (2 методов), `PlategaSubscription` (1 методов), `LavaSubscription` (1 методов), `CloudPaymentsPayment` (5 методов), `FreekassaPayment` (5 методов), `KassaAiPayment` (5 методов), `RioPayPayment` (5 методов), `SeverPayPayment` (5 методов), `PayPearPayment` (5 методов), `RollyPayPayment` (5 методов), `OverpayPayment` (5 методов), `AuraPayPayment` (5 методов), `EtoplatezhiPayment` (5 методов), `AntilopayPayment` (5 методов), `JupiterPayment` (5 методов), `DonutPayment` (5 методов), `LavaPayment` (5 методов), `CisPayPayment` (5 методов), `TabPayPayment` (5 методов), `ParityPayPayment` (5 методов), `PromoGroup` (3 методов), `UserPromoGroup` (1 методов), `Tariff` (20 методов), `PartnerStatus`, `User` (12 методов), `Subscription` (15 методов), `GraceAccessSessionModel`, `TrafficPurchase` (1 методов), `Transaction` (1 методов), `SubscriptionConversion` (2 методов), `PromoCode` (2 методов), `PromoCodeUse`, `CouponStatus`, `CouponBatch` (2 методов), `Coupon` (1 методов), `ReferralRewardType`, `ReferralRewardTrigger`, `ReferralRewardMode`, `ReferralRewardLevel` (1 методов), `ReferralEarning` (1 методов), `WithdrawalRequestStatus`, `WithdrawalRequest` (1 методов), `PartnerApplication`, `ReferralContest` (1 методов), `ReferralContestEvent` (1 методов), `ReferralContestVirtualParticipant` (1 методов), `ContestTemplate`, `ContestRound`, `ContestAttempt`, `Squad` (1 методов), `ServiceRule`, `PrivacyPolicy`, `PublicOffer`, `LegalConsent`, `RecurrentPayments`, `FaqSetting`, `FaqPage`, `SystemSetting`, `EmailTemplate`, `MonitoringLog`, `SentNotification`, `SubscriptionEvent`, `DiscountOffer`, `PromoOfferTemplate`, `SubscriptionTemporaryAccess`, `PromoOfferLog`, `BroadcastHistory`, `Poll`, `PollQuestion`, `PollOption`, `PollResponse`, `PollAnswer`, `ServerSquad` (3 методов), `SubscriptionServer`, `SupportAuditLog`, `UserMessage` (1 методов), `WelcomeText`, `PinnedMessage`, `AdvertisingCampaign` (4 методов), `AdvertisingCampaignRegistration` (1 методов), `TicketStatus`, `Ticket` (8 методов), `TicketMessage` (3 методов), `WebApiToken` (1 методов), `MainMenuButton` (3 методов), `MenuLayoutHistory` (1 методов), `ButtonClickLog` (1 методов), `Webhook` (1 методов), `WebhookDelivery` (1 методов), `CabinetRefreshToken` (4 методов), `WheelConfig` (1 методов), `WheelPrize` (1 методов), `WheelSpin` (3 методов), `TicketNotification` (1 методов), `PaymentMethodConfig` (1 методов), `RequiredChannel` (1 методов), `UserChannelSubscription` (1 методов), `AdminRole` (1 методов), `UserRole` (1 методов), `AccessPolicy` (1 методов), `AdminAuditLog` (1 методов), `LandingPage` (1 методов), `GuestPurchaseStatus`, `GuestPurchase` (1 методов), `NewsArticle` (1 методов), `NewsCategory` (1 методов), `NewsTag` (1 методов), `YandexClientIdMap`, `InfoPage`, `UserDeviceAlias`, `SystemErrorEvent`, `EmailQueueItem`, `ReachabilityBatch`, `ReachabilityJob`, `ReachabilityLeg`, `ReachabilityTargetPref`
   Функции: нет
 
 #### app/database/crud
@@ -718,7 +718,7 @@
   Функции: нет
 - `app/database/crud/reachability.py` — Python-модуль
   Классы: нет
-  Функции: `create_job`, `get_job`, `update_job`, `list_jobs`, `get_active_job`, `list_unfinished_jobs`, `replace_legs`, `latest_legs` — Последний лег на каждую пару (target_key, op_key)., `get_pref`, `upsert_pref`, `list_prefs`, `last_vless_leg_price_kopeks` — Цена одного лега VLESS по последней завершённой задаче (cost / (серверы × симки)).
+  Функции: `create_job`, `get_job`, `update_job`, `list_jobs`, `get_active_job`, `list_unfinished_jobs`, `replace_legs`, `latest_legs` — Последний лег на каждую пару (target_key, op_key)., `get_pref`, `upsert_pref`, `list_prefs`, `last_vless_leg_price_kopeks` — Цена одного лега VLESS по последней завершённой задаче (cost / (серверы × симки))., `create_batch`, `get_batch`, `update_batch`, `list_batches`, `list_unfinished_batches`, `get_active_batch`, `jobs_for_batch`
 - `app/database/crud/recurrent_payments.py` — Python-модуль
   Классы: нет
   Функции: `get_recurrent_payments`, `upsert_recurrent_payments`, `set_recurrent_payments_enabled`
@@ -828,7 +828,7 @@
   Классы: `BanSystemAPIError` (1 методов), `BanSystemAPI` (34 методов)
   Функции: нет
 - `app/external/bschek_api.py` — Python-модуль
-  Классы: `BschekAPIError` (1 методов), `BschekGatewayError`, `BschekAPI` (18 методов)
+  Классы: `BschekAPIError` (1 методов), `BschekGatewayError`, `BschekAPI` (19 методов)
   Функции: `build_operators_params` — Query для GET /operators. aiohttp сам percent-encode'ит кириллицу.
 - `app/external/cryptobot.py` — Python-модуль
   Классы: `CryptoBotService` (9 методов)
@@ -1869,11 +1869,11 @@
   Классы: `PaidCallGate` (3 методов)
   Функции: нет
 - `app/services/reachability/jobs.py` — Python-модуль
-  Классы: `RunnerConfig`, `JobNotCancellable`, `JobRunner` (35 методов)
+  Классы: `RunnerConfig`, `JobNotCancellable`, `JobRunner` (36 методов)
   Функции: нет
 - `app/services/reachability/legs.py` — Python-модуль
   Классы: нет
-  Функции: `build_probe_legs` — Леги probe: ``by_target[цель].by_operator[op_key]`` → по одному легу на пару., `vless_op_key` — У лега VLESS нет op_key — собираем ``оператор|округ|on/off`` из его полей., `build_vless_legs` — Леги VLESS: сервер ищется по ``server_addr`` (= target_key), запасной путь — по имени., `merge_skipped` — Наши пропуски (расчёт по каталогу) + пропуски из ответа API. Всегда новый словарь.
+  Функции: `build_probe_legs` — Леги probe: ``by_target[цель].by_operator[op_key]`` → по одному легу на пару., `vless_op_key` — У лега VLESS нет op_key — собираем ``оператор|округ|on/off`` из его полей., `build_vless_legs` — Леги VLESS: сервер ищется по ``server_addr`` (= target_key), запасной путь — по имени., `merge_skipped` — Наши пропуски (расчёт по каталогу) + пропуски из ответа API. Всегда новый словарь., `partial_probe_progress` — Срез частичного результата пробы из 409 request_in_progress — для «проверяем…» в кабинете.
 - `app/services/reachability/links.py` — Python-модуль
   Классы: `ParsedLink`, `RejectedLink`
   Функции: `parse_links`, `expand_raw_input` — Строки поля «Конфиг или подписка»: ссылки и URL как есть, base64-блоб — в ссылки.
@@ -1909,7 +1909,7 @@
   Функции: `parse_selector`
 - `app/services/reachability/verdict.py` — Python-модуль
   Классы: нет
-  Функции: `probe_leg_verdict`, `vless_leg_verdict`, `matches_expectation` — True/False, когда ожидание есть; None — справочная строка без ожидания.
+  Функции: `probe_leg_verdict`, `compact_probe_verdict` — Вердикт по компактной ячейке частичного результата (409): SNI → TCP → ICMP, как у полной формы., `vless_leg_verdict`, `matches_expectation` — True/False, когда ожидание есть; None — справочная строка без ожидания.
 - `app/services/reachability/xray_json.py` — Python-модуль
   Классы: нет
   Функции: `links_from_xray_json` — Ссылки из JSON-подписки; не JSON или без прокси-outbound — пусто.
@@ -2708,6 +2708,9 @@
 - `migrations/alembic/versions/0115_create_reachability_tables.py` — Python-модуль
   Классы: нет
   Функции: `upgrade`, `downgrade`
+- `migrations/alembic/versions/0116_reachability_batches.py` — Python-модуль
+  Классы: нет
+  Функции: `upgrade`, `downgrade`
 
 ## scripts
 
@@ -3186,6 +3189,9 @@
 - `tests/database/test_postgres_fixture_guard.py` — Python-модуль
   Классы: нет
   Функции: `test_missing_url_skips_by_default` — Окружение без PostgreSQL не должно ронять прогон., `test_missing_url_fails_when_postgres_is_required` — С поднятым флагом отсутствие базы — падение, а не пропуск., `test_requirement_flag_accepts_usual_spellings`, `test_requirement_flag_ignores_everything_else`, `test_blank_url_counts_as_absent` — Пустая переменная — это отсутствие базы, а не адрес из пробелов., `test_ci_workflow_runs_postgres_tests_for_real` — CI обязан поднимать базу и требовать, чтобы тесты на ней прошли.
+- `tests/database/test_reachability_batches_schema_parity.py` — Python-модуль
+  Классы: нет
+  Функции: `both`, `test_columns_match`, `test_indexes_match`, `test_column_types_match`, `test_jobs_reference_batches`, `test_downgrade_removes_batches`
 - `tests/database/test_reachability_crud.py` — Python-модуль
   Классы: нет
   Функции: `test_create_get_and_update_job`, `test_idempotency_key_is_unique`, `test_active_job_is_found_per_kind_only_while_running`, `test_list_jobs_filters_and_counts`, `test_latest_legs_returns_newest_per_target_and_unit`, `test_replace_legs_drops_previous_legs_of_the_job`, `test_prefs_upsert_and_list`, `test_last_vless_leg_price_uses_latest_done_vless_job`
@@ -4036,17 +4042,20 @@
   Классы: нет
   Функции: `session_factory`
 - `tests/services/reachability/fakes.py` — Python-модуль
-  Классы: `FakeClock` (3 методов), `FakeAPI` (11 методов)
+  Классы: `FakeClock` (3 методов), `FakeAPI` (12 методов)
   Функции: нет
 - `tests/services/reachability/test_background.py` — Python-модуль
   Классы: нет
   Функции: `test_start_background_is_idempotent_and_stop_cancels`, `test_failed_background_is_restarted_on_next_start`, `test_stop_without_start_is_noop`
+- `tests/services/reachability/test_batches.py` — Python-модуль
+  Классы: нет
+  Функции: `test_batch_crud_roundtrip`, `test_jobs_for_batch_are_ordered_and_carry_legs`
 - `tests/services/reachability/test_gate.py` — Python-модуль
   Классы: `FakeClock` (3 методов)
   Функции: `test_spaces_calls_by_min_interval`, `test_retries_rate_limited_with_retry_after_and_same_call`, `test_gives_up_after_max_rate_limit_retries`, `test_other_errors_pass_through_immediately`, `test_lock_is_not_held_during_the_call`
 - `tests/services/reachability/test_jobs.py` — Python-модуль
   Классы: нет
-  Функции: `body`, `make_job`, `make_runner`, `load`, `test_probe_happy_path_stores_result_cost_and_legs`, `test_probe_gateway_timeout_then_in_progress_then_result`, `test_probe_left_retrieving_when_result_never_comes`, `test_probe_retrieve_keeps_last_api_answer_on_job` — Пока результат не пришёл, в задаче виден последний ответ API — иначе «идёт» ничего не объясняет., `test_probe_older_than_cap_fails_instead_of_retrying_forever` — Обходчик не должен поднимать пробу вечно: старше потолка — падение с внятной причиной, без вызовов API., `test_probe_younger_than_cap_keeps_retrieving_on_resume`, `test_probe_retrieve_slows_down_after_fast_window`, `test_probe_no_dpi_on_race_fails_without_charge`, `test_probe_validation_error_fails_with_api_message`, `test_probe_transient_503_is_retried_with_same_key`, `test_probe_transient_errors_give_up_after_retries`, `test_unexpected_exception_marks_internal_error`, `test_run_skips_finished_and_missing_jobs`, `test_vless_happy_path`, `test_vless_over_cost_limit_is_cancelled_right_after_submit`, `test_vless_busy_fails_fast_and_retryable`, `test_vless_gateway_error_on_submit_is_replayed_with_same_key`, `test_vless_not_found_state_fails_job`, `test_vless_cancel_marks_phase_and_resume_finalizes_as_cancelled` — Отмена только дёргает API и ставит фазу; финал ставит поллер/обходчик по GET., `test_vless_cancelled_before_any_leg_started_is_cancelled_by_phase` — Незапущенные леги в результате отсутствуют: пустой результат при фазе cancelling — отмена., `test_cancel_tolerates_test_already_finishing`, `test_cancel_rejects_probe_and_finished_jobs`, `test_scan_happy_path`, `test_scan_cancelled_state_from_get`, `test_scan_failed_state_propagates_error_and_retryable`, `test_scan_lost_on_service_side_fails_job`, `test_scan_cancel_calls_api`, `test_poll_timeout_leaves_job_running_and_sweep_resumes_it`, `test_sweep_skips_fresh_and_active_jobs`, `test_sweeper_loop_runs_until_stopped`, `test_spawn_tracks_task_until_done`
+  Функции: `body`, `make_job`, `make_runner`, `load`, `test_probe_happy_path_stores_result_cost_and_legs`, `test_probe_gateway_timeout_then_in_progress_then_result`, `test_probe_left_retrieving_when_result_never_comes`, `test_probe_retrieve_keeps_last_api_answer_on_job` — Пока результат не пришёл, в задаче виден последний ответ API — иначе «идёт» ничего не объясняет., `test_probe_older_than_cap_fails_instead_of_retrying_forever` — Обходчик не должен поднимать пробу вечно: старше потолка — падение с внятной причиной, без вызовов API., `test_probe_younger_than_cap_keeps_retrieving_on_resume`, `test_probe_retrieve_slows_down_after_fast_window`, `test_probe_no_dpi_on_race_fails_without_charge`, `test_probe_validation_error_fails_with_api_message`, `test_probe_transient_503_is_retried_with_same_key`, `test_probe_transient_errors_give_up_after_retries`, `test_unexpected_exception_marks_internal_error`, `test_run_skips_finished_and_missing_jobs`, `test_vless_happy_path`, `test_vless_over_cost_limit_is_cancelled_right_after_submit`, `test_vless_busy_fails_fast_and_retryable`, `test_vless_gateway_error_on_submit_is_replayed_with_same_key`, `test_vless_not_found_state_fails_job`, `test_vless_cancel_marks_phase_and_resume_finalizes_as_cancelled` — Отмена только дёргает API и ставит фазу; финал ставит поллер/обходчик по GET., `test_vless_cancelled_before_any_leg_started_is_cancelled_by_phase` — Незапущенные леги в результате отсутствуют: пустой результат при фазе cancelling — отмена., `test_cancel_tolerates_test_already_finishing`, `test_cancel_rejects_probe_and_finished_jobs`, `test_scan_happy_path`, `test_scan_cancelled_state_from_get`, `test_scan_failed_state_propagates_error_and_retryable`, `test_scan_lost_on_service_side_fails_job`, `test_scan_cancel_calls_api`, `test_poll_timeout_leaves_job_running_and_sweep_resumes_it`, `test_sweep_skips_fresh_and_active_jobs`, `test_sweeper_loop_runs_until_stopped`, `test_spawn_tracks_task_until_done`, `test_scan_progress_is_stored_while_running` — Пока скан идёт, его progress из GET лежит в задаче — кабинет показывает, сколько адресов уже проверено.
 - `tests/services/reachability/test_legs.py` — Python-модуль
   Классы: нет
   Функции: `test_probe_legs_from_recorded_full_response`, `test_probe_legs_for_unknown_target_fall_back_to_api_key`, `test_probe_legs_match_api_target_case_insensitively`, `test_vless_legs_match_by_server_addr_and_compose_op_key`, `test_vless_legs_fall_back_to_server_name_then_raw_address`, `test_vless_op_key_from_leg_fields`, `test_merge_skipped_keeps_ours_and_adds_api_lists_without_mutation`
@@ -4056,9 +4065,15 @@
 - `tests/services/reachability/test_panel_links.py` — Python-модуль
   Классы: `FakePanel` (4 методов)
   Функции: `test_protected_endpoint_wins_when_it_has_links`, `test_falls_back_to_legacy_info_when_protected_fails_or_is_empty`, `test_falls_back_to_public_subscription_with_client_user_agent`, `test_everything_empty_gives_empty_list_not_error`, `test_prefer_public_takes_client_view_first_and_repeats_with_hwid_headers`, `test_decode_subscription_body_understands_xray_json`, `test_decode_subscription_body_accepts_plain_base64_and_garbage`
+- `tests/services/reachability/test_partial_progress.py` — Python-модуль
+  Классы: нет
+  Функции: `test_compact_verdict_prefers_sni_then_tcp_then_icmp`, `test_partial_progress_keeps_order_and_marks_only_done_legs`, `test_partial_progress_tolerates_missing_fields`, `test_runner_stores_partial_progress_while_probe_runs` — Пока результат не пришёл, в задаче лежит частичный результат — кабинет показывает «проверяем…» по симкам., `test_runner_leaves_no_partial_when_api_gave_none` — Голый 409 без легов — след ответа есть, «partial» не выдумывается.
 - `tests/services/reachability/test_pricing.py` — Python-модуль
   Классы: нет
   Функции: `test_credits_are_kopeks`, `test_vless_estimate_uses_last_leg_price_or_default`, `test_cost_limit_zero_means_unlimited`, `test_cost_limit_exceeded_carries_numbers`, `test_format_rubles`
+- `tests/services/reachability/test_probe_cancel.py` — Python-модуль
+  Классы: нет
+  Функции: `test_cancel_probe_marks_cancelled_with_partial_cost`, `test_cancel_probe_when_api_says_already_finished_is_fine`, `test_cancel_probe_before_submit_is_rejected`
 - `tests/services/reachability/test_requests.py` — Python-модуль
   Классы: нет
   Функции: `test_probe_request_has_targets_units_probes_and_sni_hosts`, `test_probe_request_without_sni_omits_sni_hosts_and_skips_cidr_targets`, `test_probe_request_normalizes_partial_probes_dict`, `test_probe_request_rejects_no_probes_and_no_targets`, `test_vless_request_joins_raw_links_and_limits_20`, `test_scan_request`, `test_probe_request_limits_targets_to_api_maximum`, `test_sni_hosts_prefer_sni_and_skip_bare_ip_targets` — Имя для TLS-SNI — SNI цели, а без него домен; у голого IP имени нет (RFC 6066)., `test_probe_request_with_sni_but_only_ip_targets_fails_fast_without_default`, `test_explicit_sni_hosts_win_over_target_names_and_allow_bare_ip_targets`, `test_default_sni_is_used_when_targets_have_no_names`, `test_normalize_sni_hosts_dedupes_lowercases_and_limits_to_five`, `test_scan_request_takes_explicit_names_or_default`
