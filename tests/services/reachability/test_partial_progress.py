@@ -13,9 +13,6 @@ from tests.services.reachability.fakes import FakeAPI, FakeClock
 from tests.services.reachability.test_jobs import EU, load, make_job, make_runner
 
 
-pytestmark = pytest.mark.asyncio
-
-
 def test_compact_verdict_prefers_sni_then_tcp_then_icmp() -> None:
     assert compact_probe_verdict({'sni': {'ok': True}, 'tcp': {'ok': False}}) == 'reachable'
     assert compact_probe_verdict({'sni': {'ok': False}, 'tcp': {'ok': True}}) == 'reachable'
@@ -97,6 +94,7 @@ IN_PROGRESS = {
 }
 
 
+@pytest.mark.asyncio
 async def test_runner_stores_partial_progress_while_probe_runs(session_factory) -> None:
     """Пока результат не пришёл, в задаче лежит частичный результат — кабинет показывает «проверяем…» по симкам."""
     api = FakeAPI(
@@ -115,6 +113,7 @@ async def test_runner_stores_partial_progress_while_probe_runs(session_factory) 
     assert job.result['retrieve']['code'] == 'request_in_progress'
 
 
+@pytest.mark.asyncio
 async def test_runner_leaves_no_partial_when_api_gave_none(session_factory) -> None:
     """Голый 409 без легов — след ответа есть, «partial» не выдумывается."""
     api = FakeAPI({'probe': [BschekAPIError(code='request_in_progress', message='wait', status=409)]})

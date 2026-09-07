@@ -10,6 +10,7 @@ submitting → waiting (probe идёт) / polling (VLESS, скан) / retrieving
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import time
 from collections.abc import Awaitable, Callable, Coroutine
 from dataclasses import dataclass
@@ -20,8 +21,9 @@ import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.crud import reachability as crud
-from app.database.models import ReachabilityJob
+from app.database.models import ReachabilityBatch, ReachabilityJob
 from app.external.bschek_api import BschekAPI, BschekAPIError, BschekGatewayError
+from app.services.reachability.batches import batch_cost_kopeks, batch_status_from_jobs
 from app.services.reachability.gate import PaidCallGate
 from app.services.reachability.legs import build_probe_legs, build_vless_legs, merge_skipped, partial_probe_progress
 from app.services.reachability.pricing import credits_to_kopeks, format_rubles
@@ -76,6 +78,9 @@ class RunnerConfig:
     internal_error_replay_wait: float = 60.0
     sweep_interval: float = 60.0
     sweep_min_age_sec: float = 30.0
+    # Пачка: не более стольких проб одновременно (лимит API на пробы с несколькими целями) и пауза между итерациями.
+    batch_parallel: int = 3
+    batch_poll_interval: float = 2.0
 
 
 class JobNotCancellable(Exception):
@@ -117,6 +122,7 @@ class JobRunner:
         self._clock = clock
         self._now = now
         self._tasks: dict[int, asyncio.Task] = {}
+        self._batch_tasks: dict[int, asyncio.Task] = {}
         self._running = False
 
     # ------------------------------------------------------------ фон
@@ -159,6 +165,11 @@ class JobRunner:
             if self.is_active(job.id) or (stamp is not None and stamp.timestamp() > threshold):
                 continue
             self.spawn_resume(job.id)
+        async with self._session_factory() as db:
+            batches = await crud.list_unfinished_batches(db)
+        for batch in batches:
+            if not self.is_batch_active(batch.id):
+                self.spawn_batch(batch.id)
 
     async def sweeper_loop(self) -> None:
         self._running = True
@@ -171,6 +182,77 @@ class JobRunner:
 
     def stop(self) -> None:
         self._running = False
+
+    # ------------------------------------------------------------ пачка
+
+    def spawn_batch(self, batch_id: int) -> asyncio.Task:
+        task = asyncio.create_task(self.run_batch(batch_id))
+        self._batch_tasks[batch_id] = task
+
+        def _forget(done: asyncio.Task) -> None:
+            if self._batch_tasks.get(batch_id) is done:
+                self._batch_tasks.pop(batch_id, None)
+
+        task.add_done_callback(_forget)
+        return task
+
+    def is_batch_active(self, batch_id: int) -> bool:
+        task = self._batch_tasks.get(batch_id)
+        return task is not None and not task.done()
+
+    async def run_batch(self, batch_id: int) -> None:
+        """Гнать задачи пачки не более ``batch_parallel`` одновременно; когда все завершены — подвести итог."""
+        while True:
+            async with self._session_factory() as db:
+                batch = await crud.get_batch(db, batch_id)
+                if batch is None or batch.status in crud.TERMINAL_STATUSES:
+                    return
+                jobs = await crud.jobs_for_batch(db, batch_id)
+                cancelling = batch.phase == PHASE_CANCELLING
+                final = batch_status_from_jobs(jobs, cancelling=cancelling)
+                if final is not None:
+                    await crud.update_batch(
+                        db,
+                        batch,
+                        status=final,
+                        phase=None,
+                        cost_kopeks=batch_cost_kopeks(jobs),
+                        finished_at=self._now(),
+                    )
+                    await db.commit()
+                    logger.info('Пачка проверок завершена', batch_id=batch_id, status=final)
+                    return
+                if batch.status == STATUS_PENDING:
+                    await crud.update_batch(db, batch, status=STATUS_RUNNING, started_at=self._now())
+                    await db.commit()
+                self._dispatch_batch_jobs(jobs, cancelling=cancelling)
+            pending = [task for task in self._tasks.values() if not task.done()]
+            if pending:
+                await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED)
+            await self._sleep(self.cfg.batch_poll_interval)
+
+    def _dispatch_batch_jobs(self, jobs: list[ReachabilityJob], *, cancelling: bool) -> None:
+        active = sum(1 for job in jobs if job.status == STATUS_RUNNING or self.is_active(job.id))
+        for job in jobs:
+            if job.status == STATUS_RUNNING and not self.is_active(job.id):
+                self.spawn_resume(job.id)
+            elif job.status == STATUS_PENDING and not cancelling and active < self.cfg.batch_parallel:
+                self.spawn(job.id)
+                active += 1
+
+    async def cancel_batch(self, db: AsyncSession, batch: ReachabilityBatch) -> ReachabilityBatch:
+        """Очередь гаснет сразу и бесплатно, идущие пробы останавливаются у API; итог подведёт драйвер."""
+        if batch.status not in crud.ACTIVE_STATUSES:
+            raise JobNotCancellable('Проверка уже завершена')
+        await crud.update_batch(db, batch, phase=PHASE_CANCELLING)
+        for job in await crud.jobs_for_batch(db, batch.id):
+            if job.status == STATUS_PENDING:
+                await crud.update_job(db, job, status=STATUS_CANCELLED, phase=None, finished_at=self._now())
+            elif job.status == STATUS_RUNNING:
+                with contextlib.suppress(JobNotCancellable):
+                    await self.cancel(db, job)
+        await db.commit()
+        return batch
 
     # ------------------------------------------------------------ каркас
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from types import SimpleNamespace
 
 import pytest
@@ -14,14 +15,16 @@ from app.services.reachability.batches import (
     chunk_targets,
     estimate_batch_minutes,
 )
-
-
-pytestmark = pytest.mark.asyncio
+from app.services.reachability.jobs import RunnerConfig
+from tests.fixtures.bschek_fixtures import load_bschek_fixture
+from tests.services.reachability.fakes import FakeAPI, FakeClock
+from tests.services.reachability.test_jobs import EU, make_job, make_runner
 
 
 # ---------------------------------------------------------------- CRUD
 
 
+@pytest.mark.asyncio
 async def test_batch_crud_roundtrip(session_factory) -> None:
     async with session_factory() as db:
         batch = await crud.create_batch(
@@ -48,9 +51,8 @@ async def test_batch_crud_roundtrip(session_factory) -> None:
         assert await crud.list_unfinished_batches(db) == []
 
 
+@pytest.mark.asyncio
 async def test_jobs_for_batch_are_ordered_and_carry_legs(session_factory) -> None:
-    from tests.services.reachability.test_jobs import EU, make_job
-
     async with session_factory() as db:
         batch = await crud.create_batch(
             db,
@@ -109,3 +111,86 @@ def test_batch_cost_and_done_targets() -> None:
     jobs = [_job('done', 640, 10), _job('cancelled', 200, 10), _job('pending', None, 3)]
     assert batch_cost_kopeks(jobs) == 840 and batch_done_targets(jobs) == 20
     assert batch_cost_kopeks([_job('pending')]) is None
+
+
+# ---------------------------------------------------------------- драйвер
+
+
+async def make_batch(session_factory, request: dict, targets: list[dict], count: int, **extra) -> tuple[int, list[int]]:
+    async with session_factory() as db:
+        batch = await crud.create_batch(
+            db,
+            status=extra.pop('status', 'pending'),
+            started_by_user_id=None,
+            scope={'kind': 'manual', 'host_refs': []},
+            request={'units': ['mts|пфо|on'], 'dpi': 'on', 'probes': {'tcp': True}, 'sni_hosts': []},
+            total_targets=count,
+            estimated_kopeks=100 * count,
+            **extra,
+        )
+        await db.commit()
+        batch_id = batch.id
+    job_ids = [
+        await make_job(session_factory, 'probe', request, targets, ['mts|пфо|on'], batch_id=batch_id)
+        for _ in range(count)
+    ]
+    return batch_id, job_ids
+
+
+@pytest.mark.asyncio
+async def test_batch_driver_runs_at_most_three_jobs_at_once(session_factory) -> None:
+    fx = load_bschek_fixture('p1_probe')
+    api = FakeAPI({'probe': [fx['body']]})
+    batch_id, _ = await make_batch(session_factory, fx['request'], [EU], 5)
+    runner = make_runner(session_factory, api, FakeClock())
+    peak = 0
+    original_spawn = runner.spawn
+
+    def counting_spawn(job_id: int):
+        nonlocal peak
+        task = original_spawn(job_id)
+        peak = max(peak, sum(1 for item in runner._tasks.values() if not item.done()))
+        return task
+
+    runner.spawn = counting_spawn
+    await runner.run_batch(batch_id)
+
+    async with session_factory() as db:
+        batch = await crud.get_batch(db, batch_id)
+        assert (batch.status, batch.phase, batch.cost_kopeks) == ('done', None, 18 * 5)
+        assert batch.started_at is not None and batch.finished_at is not None
+        assert all(job.status == 'done' for job in batch.jobs)
+    assert peak <= 3
+    assert len([call for call in api.calls if call[0] == 'probe']) == 5
+
+
+@pytest.mark.asyncio
+async def test_cancel_batch_stops_pending_jobs_and_finishes_cancelled(session_factory) -> None:
+    fx = load_bschek_fixture('p1_probe')
+    api = FakeAPI({'probe': [fx['body']]})
+    batch_id, _ = await make_batch(session_factory, fx['request'], [EU], 4)
+    runner = make_runner(session_factory, api, FakeClock())
+    async with session_factory() as db:
+        batch = await crud.get_batch(db, batch_id)
+        await runner.cancel_batch(db, batch)  # до старта: очередь гаснет локально, к API не ходим
+    await runner.run_batch(batch_id)
+
+    async with session_factory() as db:
+        batch = await crud.get_batch(db, batch_id)
+        assert (batch.status, batch.phase) == ('cancelled', None)
+        assert {job.status for job in batch.jobs} == {'cancelled'}
+    assert api.calls == []
+
+
+@pytest.mark.asyncio
+async def test_sweep_resumes_unfinished_batch(session_factory) -> None:
+    fx = load_bschek_fixture('p1_probe')
+    api = FakeAPI({'probe': [fx['body']]})
+    batch_id, _ = await make_batch(session_factory, fx['request'], [EU], 1, status='running')
+    runner = make_runner(session_factory, api, FakeClock(), config=RunnerConfig(sweep_min_age_sec=0))
+    await runner.sweep()
+    assert runner.is_batch_active(batch_id)
+    await asyncio.gather(*list(runner._batch_tasks.values()), *list(runner._tasks.values()))
+
+    async with session_factory() as db:
+        assert (await crud.get_batch(db, batch_id)).status == 'done'
