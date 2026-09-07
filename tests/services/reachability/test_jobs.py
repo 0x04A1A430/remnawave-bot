@@ -600,3 +600,18 @@ async def test_spawn_tracks_task_until_done(session_factory) -> None:
     await task
     assert not runner.is_active(job_id)
     assert (await load(session_factory, job_id)).status == STATUS_DONE
+
+
+async def test_scan_progress_is_stored_while_running(session_factory) -> None:
+    """Пока скан идёт, его progress из GET лежит в задаче — кабинет показывает, сколько адресов уже проверено."""
+    running = {
+        **body('s1_poll_00'),
+        'progress': {'done_ips': 128, 'total_ips': 512, 'percent': 25, 'units_done': 0, 'units_total': 2},
+    }
+    api = FakeAPI({'start_scan': [body('s1_submit')], 'get_scan': [running, body('s1_poll_03')]})
+    job_id = await make_job(session_factory, KIND_SCAN, {'cidr': '192.0.2.0/24'}, CIDR, ['dobro|цфо|on'])
+    await make_runner(session_factory, api, FakeClock()).run(job_id)
+
+    job = await load(session_factory, job_id)
+    assert job.status == STATUS_DONE
+    assert job.result['progress'] == running['progress']

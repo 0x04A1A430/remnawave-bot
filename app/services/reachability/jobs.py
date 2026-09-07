@@ -482,6 +482,9 @@ class JobRunner:
     async def _handle_scan_status(self, db: AsyncSession, job: ReachabilityJob, status: dict) -> bool:
         state = status.get('state')
         if state in _SCAN_PENDING_STATES:
+            progress = status.get('progress')
+            if isinstance(progress, dict) and progress != (job.result or {}).get('progress'):
+                await self._update(db, job, result={**(job.result or {}), 'progress': progress})
             return False
         merged = {**(job.result or {}), 'status': status}
         if state == 'failed':
