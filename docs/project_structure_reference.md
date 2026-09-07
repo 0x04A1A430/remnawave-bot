@@ -1863,8 +1863,8 @@
   Классы: нет
   Функции: нет
 - `app/services/reachability/batches.py` — Python-модуль
-  Классы: нет
-  Функции: `chunk_targets`, `estimate_batch_minutes` — Примерное время всей пачки: раунды по ``parallel`` чашек, раунд длится по числу симок., `batch_status_from_jobs` — None — пачка ещё идёт; иначе итог: отменена, не удалась целиком или завершена., `batch_cost_kopeks`, `batch_done_targets`
+  Классы: `BatchPreview`
+  Функции: `chunk_targets`, `estimate_batch_minutes` — Примерное время всей пачки: раунды по ``parallel`` чашек, раунд длится по числу симок., `batch_status_from_jobs` — None — пачка ещё идёт; иначе итог: отменена, не удалась целиком или завершена., `batch_cost_kopeks`, `batch_done_targets`, `preview_batch` — Цена и время всей пачки: превью каждой чашки (бесплатно, без троттла) и сумма., `create_batch` — Одна пачка и задача на каждую чашку; деньги проверяются до записи, драйвер стартует после коммита.
 - `app/services/reachability/cores.py` — Python-модуль
   Классы: нет
   Функции: нет
@@ -1872,7 +1872,7 @@
   Классы: `PaidCallGate` (3 методов)
   Функции: нет
 - `app/services/reachability/jobs.py` — Python-модуль
-  Классы: `RunnerConfig`, `JobNotCancellable`, `JobRunner` (36 методов)
+  Классы: `RunnerConfig`, `JobNotCancellable`, `JobRunner` (41 методов)
   Функции: нет
 - `app/services/reachability/legs.py` — Python-модуль
   Классы: нет
@@ -1893,7 +1893,7 @@
   Классы: `TargetResolutionError`, `HostView`, `NodeView`, `SubscriptionConfigs`, `TargetResolver` (15 методов)
   Функции: `target_from_host`, `target_from_node`, `target_from_link`, `target_from_cidr`
 - `app/services/reachability/service.py` — Python-модуль
-  Классы: `ReachabilityDisabled` (1 методов), `ReachabilityUnhealthy` (1 методов), `ReachabilityBusy` (1 методов), `PanelUnavailable` (1 методов), `JobNotFound`, `Health` (1 методов), `Quote`, `ParsedConfig`, `ParsedInput`, `PreviewResult`, `ReachabilityService` (45 методов)
+  Классы: `ReachabilityDisabled` (1 методов), `ReachabilityUnhealthy` (1 методов), `ReachabilityBusy` (1 методов), `PanelUnavailable` (1 методов), `JobNotFound`, `Health` (1 методов), `Quote`, `ParsedConfig`, `ParsedInput`, `PreviewResult`, `ReachabilityService` (50 методов)
   Функции: нет
 - `app/services/reachability/status.py` — Python-модуль
   Классы: `AccountCache` (3 методов)
@@ -4052,7 +4052,10 @@
   Функции: `test_start_background_is_idempotent_and_stop_cancels`, `test_failed_background_is_restarted_on_next_start`, `test_stop_without_start_is_noop`
 - `tests/services/reachability/test_batches.py` — Python-модуль
   Классы: нет
-  Функции: `test_batch_crud_roundtrip`, `test_jobs_for_batch_are_ordered_and_carry_legs`, `test_chunk_targets_by_ten`, `test_estimate_minutes_grows_with_rounds_and_units`, `test_batch_status_rules`, `test_batch_cost_and_done_targets`
+  Функции: `test_batch_crud_roundtrip`, `test_jobs_for_batch_are_ordered_and_carry_legs`, `test_chunk_targets_by_ten`, `test_estimate_minutes_grows_with_rounds_and_units`, `test_batch_status_rules`, `test_batch_cost_and_done_targets`, `make_batch`, `test_batch_driver_runs_at_most_three_jobs_at_once`, `test_cancel_batch_stops_pending_jobs_and_finishes_cancelled`, `test_sweep_resumes_unfinished_batch`
+- `tests/services/reachability/test_batches_service.py` — Python-модуль
+  Классы: `ManyHostsPanel` (1 методов)
+  Функции: `payload`, `test_preview_batch_sums_chunks_and_estimates_time`, `test_preview_batch_rejects_empty_and_oversized_scope`, `test_create_batch_makes_one_job_per_chunk_and_spawns_driver`, `test_create_batch_refuses_when_balance_is_short`, `test_cancel_batch_before_start_finishes_it_cancelled`
 - `tests/services/reachability/test_gate.py` — Python-модуль
   Классы: `FakeClock` (3 методов)
   Функции: `test_spaces_calls_by_min_interval`, `test_retries_rate_limited_with_retry_after_and_same_call`, `test_gives_up_after_max_rate_limit_retries`, `test_other_errors_pass_through_immediately`, `test_lock_is_not_held_during_the_call`

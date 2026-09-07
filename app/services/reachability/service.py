@@ -24,8 +24,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database.crud import reachability as crud
 from app.database.database import AsyncSessionLocal
-from app.database.models import ReachabilityJob, ReachabilityTargetPref, Subscription
+from app.database.models import ReachabilityBatch, ReachabilityJob, ReachabilityTargetPref, Subscription
 from app.external.bschek_api import BschekAPI, BschekAPIError
+from app.services.reachability import batches as batch_ops
 from app.services.reachability.gate import PaidCallGate
 from app.services.reachability.jobs import KIND_PROBE, KIND_SCAN, KIND_VLESS, JobNotCancellable, JobRunner
 from app.services.reachability.links import RejectedLink, expand_raw_input, parse_links
@@ -547,6 +548,36 @@ class ReachabilityService:
         if not self.runner.is_active(job.id):
             self.runner.spawn_resume(job.id)
         return job
+
+    # ------------------------------------------------------------ пачки проверок
+
+    async def preview_batch(self, db: AsyncSession, payload: dict) -> batch_ops.BatchPreview:
+        self._ensure_enabled()
+        return await batch_ops.preview_batch(self, db, payload)
+
+    async def create_batch(self, db: AsyncSession, payload: dict, admin_id: int) -> ReachabilityBatch:
+        self._ensure_enabled()
+        return await batch_ops.create_batch(self, db, payload, admin_id)
+
+    async def get_batch(self, db: AsyncSession, batch_id: int) -> ReachabilityBatch:
+        batch = await crud.get_batch(db, batch_id)
+        if batch is None:
+            raise JobNotFound(batch_id)
+        return batch
+
+    async def list_batches(
+        self, db: AsyncSession, *, offset: int = 0, limit: int = 20
+    ) -> tuple[list[ReachabilityBatch], int]:
+        return await crud.list_batches(db, offset=offset, limit=limit)
+
+    async def cancel_batch(self, db: AsyncSession, batch_id: int) -> ReachabilityBatch:
+        """Погасить очередь и остановить идущие пробы; итог пачке подведёт драйвер."""
+        self._ensure_enabled()
+        batch = await self.get_batch(db, batch_id)
+        await self.runner.cancel_batch(db, batch)
+        if not self.runner.is_batch_active(batch.id):
+            self.runner.spawn_batch(batch.id)
+        return batch
 
     async def status(self, db: AsyncSession) -> dict:
         return await collect_status(self, db)
