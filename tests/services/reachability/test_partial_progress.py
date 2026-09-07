@@ -6,7 +6,8 @@ from __future__ import annotations
 import pytest
 
 from app.external.bschek_api import BschekAPIError
-from app.services.reachability.jobs import KIND_PROBE, PHASE_RETRIEVING, RunnerConfig
+from app.services.reachability.jobs import PHASE_RETRIEVING, RunnerConfig
+from app.services.reachability.kinds import KIND_PROBE
 from app.services.reachability.legs import partial_probe_progress
 from app.services.reachability.verdict import compact_probe_verdict
 from tests.services.reachability.fakes import FakeAPI, FakeClock

@@ -13,9 +13,6 @@ from app.database.models import User
 from app.external.bschek_api import BschekAPIError, BschekGatewayError
 from app.services.reachability.gate import PaidCallGate
 from app.services.reachability.jobs import (
-    KIND_PROBE,
-    KIND_SCAN,
-    KIND_VLESS,
     PHASE_CANCELLING,
     PHASE_RETRIEVING,
     STATUS_CANCELLED,
@@ -26,6 +23,7 @@ from app.services.reachability.jobs import (
     JobRunner,
     RunnerConfig,
 )
+from app.services.reachability.kinds import KIND_PROBE, KIND_SCAN, KIND_VLESS
 from app.services.reachability.targets import Target
 from tests.fixtures.bschek_fixtures import load_bschek_fixture
 from tests.services.reachability.fakes import FakeAPI, FakeClock

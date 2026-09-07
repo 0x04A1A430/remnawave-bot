@@ -28,9 +28,11 @@ from app.database.models import ReachabilityBatch, ReachabilityJob, Reachability
 from app.external.bschek_api import BschekAPI, BschekAPIError
 from app.services.reachability import batches as batch_ops
 from app.services.reachability.gate import PaidCallGate
-from app.services.reachability.jobs import KIND_PROBE, KIND_SCAN, KIND_VLESS, JobNotCancellable, JobRunner
+from app.services.reachability.jobs import JobNotCancellable, JobRunner
+from app.services.reachability.kinds import KIND_PROBE, KIND_SCAN, KIND_VLESS
 from app.services.reachability.links import RejectedLink, expand_raw_input, parse_links
 from app.services.reachability.panel_links import fetch_panel_links
+from app.services.reachability.preview import PreviewResult
 from app.services.reachability.pricing import credits_to_kopeks, enforce_cost_limit, estimate_vless_kopeks
 from app.services.reachability.requests import (
     DEFAULT_SNI_HOST,
@@ -136,19 +138,6 @@ class ParsedInput:
     configs: list[ParsedConfig]
     rejected: list[RejectedLink]
     sources: list[dict]
-
-
-@dataclass(frozen=True)
-class PreviewResult:
-    kind: str
-    targets: list[Target]
-    units_resolved: list[str]
-    skipped: dict
-    cost_kopeks: int | None
-    estimate_is_exact: bool
-    warnings: list[str] = field(default_factory=list)
-    balance_kopeks: int | None = None
-    request: dict = field(default_factory=dict)
 
 
 def _skipped(expansion: Expansion) -> dict:

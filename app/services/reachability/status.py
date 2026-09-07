@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import Awaitable, Callable
-from typing import TYPE_CHECKING, Any
+from typing import Any, Protocol
 
 import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,14 +14,35 @@ from app.database.models import ReachabilityJob
 from app.external.bschek_api import BschekAPIError
 from app.services.reachability.batches import batch_done_targets
 from app.services.reachability.cores import XRAY_CORES
-from app.services.reachability.jobs import KIND_SCAN, KIND_VLESS
+from app.services.reachability.kinds import KIND_SCAN, KIND_VLESS
 from app.services.reachability.pricing import credits_to_kopeks
+from app.services.reachability.resolver import SubscriptionConfigs
 
-
-if TYPE_CHECKING:
-    from app.services.reachability.service import ReachabilityService
 
 logger = structlog.get_logger(__name__)
+
+
+class StatusSource(Protocol):
+    """Что статусу нужно от сервиса: флаги, здоровье, аккаунт, эталонная подписка, настройки.
+
+    Протокол вместо импорта класса сервиса — иначе сервис и статус импортируют друг друга.
+    """
+
+    def is_enabled(self) -> bool: ...
+
+    def is_configured(self) -> bool: ...
+
+    def health(self) -> tuple[bool, str | None]: ...
+
+    async def account(self) -> dict: ...
+
+    def reference_short_uuid(self) -> str | None: ...
+
+    async def subscription_configs(self, db: AsyncSession, *, short_uuid: str | None = None) -> SubscriptionConfigs: ...
+
+    def cost_limit_kopeks(self) -> int: ...
+
+    def default_sni(self) -> str: ...
 
 
 class AccountCache:
@@ -90,7 +111,7 @@ async def _active_batch(db: AsyncSession) -> dict[str, Any] | None:
     }
 
 
-async def reference_status(service: ReachabilityService, db: AsyncSession) -> dict[str, Any]:
+async def reference_status(service: StatusSource, db: AsyncSession) -> dict[str, Any]:
     short_uuid = service.reference_short_uuid()
     if not short_uuid:
         return {
@@ -113,7 +134,7 @@ async def reference_status(service: ReachabilityService, db: AsyncSession) -> di
     }
 
 
-async def collect_status(service: ReachabilityService, db: AsyncSession) -> dict[str, Any]:
+async def collect_status(service: StatusSource, db: AsyncSession) -> dict[str, Any]:
     enabled, configured = service.is_enabled(), service.is_configured()
     healthy, health_message = service.health()
     account: dict = {}

@@ -8,13 +8,13 @@ import pytest
 from app.database.crud import reachability as crud
 from app.external.bschek_api import BschekAPIError
 from app.services.reachability.jobs import (
-    KIND_PROBE,
     PHASE_CANCELLING,
     PHASE_WAITING,
     STATUS_CANCELLED,
     JobNotCancellable,
     RunnerConfig,
 )
+from app.services.reachability.kinds import KIND_PROBE
 from tests.fixtures.bschek_fixtures import load_bschek_fixture
 from tests.services.reachability.fakes import FakeAPI, FakeClock
 from tests.services.reachability.test_jobs import EU, load, make_job, make_runner

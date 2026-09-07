@@ -1863,7 +1863,7 @@
   Классы: нет
   Функции: нет
 - `app/services/reachability/batches.py` — Python-модуль
-  Классы: `BatchPreview`
+  Классы: `BatchService` (3 методов), `BatchPreview`
   Функции: `chunk_targets`, `estimate_batch_minutes` — Примерное время всей пачки: раунды по ``parallel`` чашек, раунд длится по числу симок., `batch_status_from_jobs` — None — пачка ещё идёт; иначе итог: отменена, не удалась целиком или завершена., `batch_cost_kopeks`, `batch_done_targets`, `preview_batch` — Цена и время всей пачки: превью каждой чашки (бесплатно, без троттла) и сумма., `create_batch` — Одна пачка и задача на каждую чашку; деньги проверяются до записи, драйвер стартует после коммита.
 - `app/services/reachability/cores.py` — Python-модуль
   Классы: нет
@@ -1874,6 +1874,9 @@
 - `app/services/reachability/jobs.py` — Python-модуль
   Классы: `RunnerConfig`, `JobNotCancellable`, `JobRunner` (41 методов)
   Функции: нет
+- `app/services/reachability/kinds.py` — Python-модуль
+  Классы: нет
+  Функции: нет
 - `app/services/reachability/legs.py` — Python-модуль
   Классы: нет
   Функции: `build_probe_legs` — Леги probe: ``by_target[цель].by_operator[op_key]`` → по одному легу на пару., `vless_op_key` — У лега VLESS нет op_key — собираем ``оператор|округ|on/off`` из его полей., `build_vless_legs` — Леги VLESS: сервер ищется по ``server_addr`` (= target_key), запасной путь — по имени., `merge_skipped` — Наши пропуски (расчёт по каталогу) + пропуски из ответа API. Всегда новый словарь., `partial_probe_progress` — Срез частичного результата пробы из 409 request_in_progress — для «проверяем…» в кабинете.
@@ -1883,6 +1886,9 @@
 - `app/services/reachability/panel_links.py` — Python-модуль
   Классы: нет
   Функции: `decode_subscription_body` — Тело публичной подписки: ссылки построчно, base64 от них или xray-json; страница — пусто., `hwid_required`, `fetch_panel_links` — Первый непустой список ссылок из трёх источников; ошибки источника — в лог, не наружу.
+- `app/services/reachability/preview.py` — Python-модуль
+  Классы: `PreviewResult`
+  Функции: нет
 - `app/services/reachability/pricing.py` — Python-модуль
   Классы: `CostLimitExceeded` (1 методов)
   Функции: `format_rubles`, `credits_to_kopeks`, `estimate_vless_kopeks`, `enforce_cost_limit`
@@ -1893,13 +1899,13 @@
   Классы: `TargetResolutionError`, `HostView`, `NodeView`, `SubscriptionConfigs`, `TargetResolver` (15 методов)
   Функции: `target_from_host`, `target_from_node`, `target_from_link`, `target_from_cidr`
 - `app/services/reachability/service.py` — Python-модуль
-  Классы: `ReachabilityDisabled` (1 методов), `ReachabilityUnhealthy` (1 методов), `ReachabilityBusy` (1 методов), `PanelUnavailable` (1 методов), `JobNotFound`, `Health` (1 методов), `Quote`, `ParsedConfig`, `ParsedInput`, `PreviewResult`, `ReachabilityService` (50 методов)
+  Классы: `ReachabilityDisabled` (1 методов), `ReachabilityUnhealthy` (1 методов), `ReachabilityBusy` (1 методов), `PanelUnavailable` (1 методов), `JobNotFound`, `Health` (1 методов), `Quote`, `ParsedConfig`, `ParsedInput`, `ReachabilityService` (50 методов)
   Функции: нет
 - `app/services/reachability/status.py` — Python-модуль
-  Классы: `AccountCache` (3 методов)
+  Классы: `StatusSource` (8 методов), `AccountCache` (3 методов)
   Функции: `account_summary` — Поля аккаунта для фронта; webhook_secret клиент уже отбросил., `reference_status`, `collect_status`
 - `app/services/reachability/subscriptions.py` — Python-модуль
-  Классы: `SubscriptionFetchError`
+  Классы: `SubscriptionFetchError`, `PublicOnlyResolver` (3 методов)
   Функции: `is_subscription_url`, `validate_public_url`, `fetch_subscription_links` — Ссылки конфигов по публичному URL подписки; страница или заглушка вместо них — ошибка.
 - `app/services/reachability/summary.py` — Python-модуль
   Классы: нет
@@ -4094,7 +4100,7 @@
   Функции: `make_service`, `test_disabled_integration_raises`, `test_missing_key_is_reported_as_not_configured`, `test_status_reports_balance_without_secret_and_reference`, `test_status_lists_active_jobs_and_missing_reference`, `test_auth_error_marks_integration_unhealthy_for_a_while`, `test_account_is_cached_between_calls`, `test_units_filters_locally_over_cached_catalog`, `test_hosts_nodes_and_configs_go_through_panel`, `test_panel_failure_becomes_panel_unavailable`, `test_subscription_configs_for_user_without_subscription_explains` — Пользователь без подписки панели — своя ошибка, а не жалоба на эталон из настроек., `test_subscription_configs_without_reference_raise`, `test_preview_probe_expands_units_reports_skipped_and_exact_price`, `test_preview_probe_warns_about_bs_host_without_sni_probe`, `test_preview_unknown_selector_is_rejected_before_api`, `test_preview_unknown_kind_is_rejected`, `test_preview_vless_is_an_estimate`, `test_preview_scan_uses_cidr_and_exact_price`, `test_preview_without_units_left_warns`, `test_create_job_writes_row_and_spawns_runner`, `test_create_job_returns_job_ready_for_response` — Роут сериализует созданную задачу сразу, включая ``legs``., `test_create_job_refuses_second_active_vless`, `test_create_job_enforces_cost_limit_and_units`, `test_create_job_refuses_when_balance_is_short`, `test_get_cancel_and_retrieve_jobs`, `test_retrieve_job_resumes_stuck_probe`, `test_summary_builds_matrix_from_latest_legs`, `test_summary_survives_panel_and_api_outage`, `test_update_pref_persists_and_changes_summary_purpose`, `test_background_sweeper_starts_and_stops`, `test_preview_probe_uses_explicit_sni_hosts_for_bare_ip`, `test_preview_probe_falls_back_to_built_in_default_sni`, `test_preview_scan_with_sni_takes_names_from_payload`, `test_parse_input_direct_links_become_custom_targets`, `test_parse_input_own_panel_url_resolves_through_panel_api`, `test_parse_input_foreign_url_is_fetched_and_referenced_by_url`, `test_parse_input_unreachable_url_is_rejected_not_raised`, `test_parse_input_base64_blob_expands_to_links`
 - `tests/services/reachability/test_subscriptions.py` — Python-модуль
   Классы: `FakeSession` (3 методов)
-  Функции: `test_is_subscription_url_and_validate_public_url`, `test_fetch_decodes_base64_body_with_client_user_agent`, `test_fetch_repeats_with_device_headers_when_panel_requires_hwid`, `test_fetch_accepts_plain_links_and_rejects_pages_errors_and_private_redirects`
+  Функции: `test_is_subscription_url_and_validate_public_url`, `test_fetch_decodes_base64_body_with_client_user_agent`, `test_fetch_repeats_with_device_headers_when_panel_requires_hwid`, `test_fetch_accepts_plain_links_and_rejects_pages_errors_and_private_redirects`, `test_public_only_resolver_passes_public_and_rejects_private`, `test_fetch_uses_public_only_resolver_for_the_real_connection` — Домен, глядящий во внутреннюю сеть, отсекается настоящим aiohttp ещё до соединения.
 - `tests/services/reachability/test_summary.py` — Python-модуль
   Классы: нет
   Функции: `test_rows_follow_panel_order_and_carry_purpose_and_cells`, `test_excluded_hosts_are_hidden_even_if_they_have_legs`, `test_legs_of_targets_missing_from_panel_go_last_with_pref_purpose`, `test_rows_are_new_objects_and_inputs_untouched`

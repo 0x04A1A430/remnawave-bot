@@ -9,7 +9,7 @@ from __future__ import annotations
 import math
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import Any, Protocol
 
 import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,13 +17,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database.crud import reachability as crud
 from app.database.crud.reachability import TERMINAL_STATUSES
 from app.database.models import ReachabilityBatch
+from app.services.reachability.kinds import KIND_PROBE
+from app.services.reachability.preview import PreviewResult
 from app.services.reachability.pricing import enforce_cost_limit
 from app.services.reachability.requests import MAX_PROBE_TARGETS
 from app.services.reachability.targets import Target
-
-
-if TYPE_CHECKING:
-    from app.services.reachability.service import PreviewResult, ReachabilityService
 
 
 logger = structlog.get_logger(__name__)
@@ -32,7 +30,6 @@ logger = structlog.get_logger(__name__)
 BATCH_PARALLEL = 3
 # Больше — это уже не «проверить серверы», а нагрузка на счёт и на API в часы.
 MAX_BATCH_TARGETS = 300
-KIND_PROBE = 'probe'
 _TEMPLATE_KEYS = ('units', 'dpi', 'probes', 'sni_hosts')
 # Полный флот в 15 симок проходит одну пробу за 10–15 минут: база плюс доля на каждую симку.
 MINUTES_PER_ROUND_BASE = 3.0
@@ -77,6 +74,30 @@ def batch_done_targets(jobs: Iterable[Any]) -> int:
 # ------------------------------------------------------------------ сервис
 
 
+class _Invalidatable(Protocol):
+    def invalidate(self) -> None: ...
+
+
+class _BatchRunner(Protocol):
+    def spawn_batch(self, batch_id: int) -> Any: ...
+
+
+class BatchService(Protocol):
+    """Что пачке нужно от сервиса: превью чашки, потолок, поля задачи, кэш баланса и драйвер.
+
+    Протокол вместо импорта класса сервиса — иначе сервис и пачки импортируют друг друга.
+    """
+
+    runner: _BatchRunner
+    _account: _Invalidatable
+
+    async def preview(self, db: AsyncSession, payload: dict) -> PreviewResult: ...
+
+    def cost_limit_kopeks(self) -> int: ...
+
+    def _job_fields(self, preview: PreviewResult, payload: dict, admin_id: int) -> dict[str, Any]: ...
+
+
 @dataclass(frozen=True)
 class BatchPreview:
     targets: list[Target]
@@ -97,7 +118,7 @@ def _host_refs(payload: dict) -> list[str]:
     return list(dict.fromkeys(refs))
 
 
-async def preview_batch(service: ReachabilityService, db: AsyncSession, payload: dict) -> BatchPreview:
+async def preview_batch(service: BatchService, db: AsyncSession, payload: dict) -> BatchPreview:
     """Цена и время всей пачки: превью каждой чашки (бесплатно, без троттла) и сумма."""
     refs = _host_refs(payload)
     template = {key: payload.get(key) for key in _TEMPLATE_KEYS}
@@ -120,9 +141,7 @@ async def preview_batch(service: ReachabilityService, db: AsyncSession, payload:
     )
 
 
-async def create_batch(
-    service: ReachabilityService, db: AsyncSession, payload: dict, admin_id: int
-) -> ReachabilityBatch:
+async def create_batch(service: BatchService, db: AsyncSession, payload: dict, admin_id: int) -> ReachabilityBatch:
     """Одна пачка и задача на каждую чашку; деньги проверяются до записи, драйвер стартует после коммита."""
     preview = await preview_batch(service, db, payload)
     if not preview.units_resolved:

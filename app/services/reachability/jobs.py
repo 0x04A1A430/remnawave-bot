@@ -25,15 +25,13 @@ from app.database.models import ReachabilityBatch, ReachabilityJob
 from app.external.bschek_api import BschekAPI, BschekAPIError, BschekGatewayError
 from app.services.reachability.batches import batch_cost_kopeks, batch_status_from_jobs
 from app.services.reachability.gate import PaidCallGate
+from app.services.reachability.kinds import KIND_PROBE, KIND_VLESS
 from app.services.reachability.legs import build_probe_legs, build_vless_legs, merge_skipped, partial_probe_progress
 from app.services.reachability.pricing import credits_to_kopeks, format_rubles
 
 
 logger = structlog.get_logger(__name__)
 
-KIND_PROBE = 'probe'
-KIND_VLESS = 'vless'
-KIND_SCAN = 'scan'
 STATUS_PENDING, STATUS_RUNNING, STATUS_DONE, STATUS_FAILED, STATUS_CANCELLED = crud.JOB_STATUSES
 PHASE_SUBMITTING = 'submitting'
 PHASE_WAITING = 'waiting'

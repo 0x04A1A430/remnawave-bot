@@ -48,12 +48,12 @@ class FakePanel:
         outer = self
 
         class _Ctx:
-            async def __aenter__(self_inner):
+            async def __aenter__(self):
                 if outer.broken:
                     raise RuntimeError('panel down')
                 return outer
 
-            async def __aexit__(self_inner, *exc):
+            async def __aexit__(self, *exc):
                 return None
 
         return _Ctx()
