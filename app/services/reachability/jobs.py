@@ -23,7 +23,7 @@ from app.database.crud import reachability as crud
 from app.database.models import ReachabilityJob
 from app.external.bschek_api import BschekAPI, BschekAPIError, BschekGatewayError
 from app.services.reachability.gate import PaidCallGate
-from app.services.reachability.legs import build_probe_legs, build_vless_legs, merge_skipped
+from app.services.reachability.legs import build_probe_legs, build_vless_legs, merge_skipped, partial_probe_progress
 from app.services.reachability.pricing import credits_to_kopeks, format_rubles
 
 
@@ -228,6 +228,14 @@ class JobRunner:
             f'а деньги списаться — напишите в поддержку BSCHEKER и назовите номер запроса {request_id}.'
         )
 
+    def _progress_fields(self, job: ReachabilityJob, exc: BschekAPIError) -> dict[str, Any]:
+        """След ответа и частичный результат (если API его прислал) поверх прежнего result."""
+        result = {**(job.result or {}), 'retrieve': self._trace(exc, job, self._now())}
+        details = exc.details or {}
+        if details.get('legs') or details.get('total'):
+            result['partial'] = partial_probe_progress(details)
+        return {'result': result}
+
     @staticmethod
     def _trace(exc: BschekAPIError, job: ReachabilityJob, now: datetime) -> dict[str, Any]:
         return {
@@ -302,6 +310,7 @@ class JobRunner:
         except BschekAPIError as exc:
             if exc.code != 'request_in_progress':
                 raise
+            await self._update(db, job, **self._progress_fields(job, exc))
             result = await self._retrieve_probe(db, job)
         if result is not None:
             await self._finish_probe(db, job, result)
@@ -319,9 +328,10 @@ class JobRunner:
             except BschekAPIError as exc:
                 if not isinstance(exc, BschekGatewayError) and exc.code != 'request_in_progress':
                     raise
-                trace = self._trace(exc, job, self._now())
-                logger.info('Повтор пробы тем же ключом без результата', job_id=job.id, **trace)
-                await self._update(db, job, result={**(job.result or {}), 'retrieve': trace})
+                logger.info(
+                    'Повтор пробы тем же ключом без результата', job_id=job.id, **self._trace(exc, job, self._now())
+                )
+                await self._update(db, job, **self._progress_fields(job, exc))
         logger.warning('Результат пробы не получен за отведённое время, доберёт обходчик', job_id=job.id)
         return None
 
