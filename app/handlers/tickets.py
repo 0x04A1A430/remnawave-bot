@@ -173,8 +173,8 @@ async def handle_ticket_message_input(message: types.Message, state: FSMContext,
             # Удаляем лишние части длинного сообщения
             try:
                 asyncio.create_task(_try_delete_message_later(message.bot, message.chat.id, message.message_id, 2.0))
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug('Антиспам тикетов: сообщение не поставлено на удаление', error=str(exc))
             return
     except Exception:
         pass
@@ -185,8 +185,8 @@ async def handle_ticket_message_input(message: types.Message, state: FSMContext,
         if last_ts and (now_ts - float(last_ts)) < 2:
             try:
                 asyncio.create_task(_try_delete_message_later(message.bot, message.chat.id, message.message_id, 2.0))
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug('Антиспам тикетов: сообщение не поставлено на удаление', error=str(exc))
             return
         await state.update_data(rl_ts_create=now_ts)
     except Exception:
@@ -716,8 +716,8 @@ async def handle_ticket_reply(message: types.Message, state: FSMContext, db_user
         if limited:
             try:
                 asyncio.create_task(_try_delete_message_later(message.bot, message.chat.id, message.message_id, 2.0))
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug('Антиспам тикетов: сообщение не поставлено на удаление', error=str(exc))
             return
     except Exception:
         pass
@@ -728,8 +728,8 @@ async def handle_ticket_reply(message: types.Message, state: FSMContext, db_user
         if last_ts and (now_ts - float(last_ts)) < 2:
             try:
                 asyncio.create_task(_try_delete_message_later(message.bot, message.chat.id, message.message_id, 2.0))
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug('Антиспам тикетов: сообщение не поставлено на удаление', error=str(exc))
             return
         await state.update_data(rl_ts_reply=now_ts)
     except Exception as exc:

@@ -26,9 +26,9 @@ ARG VCS_REF
 COPY --from=builder /app/.venv /app/.venv
 ENV PATH="/app/.venv/bin:$PATH"
 
-# Системный setuptools базового образа приложению не нужен (зависимости в .venv), а Trivy находит
-# в его версии CVE-2025-47273 — убираем из образа.
-RUN /usr/local/bin/python -m pip uninstall -y setuptools
+# Системные pip и setuptools базового образа приложению не нужны (зависимости в .venv), а Trivy
+# находит в них CVE (setuptools 70.3.0, msgpack внутри pip) — убираем из образа.
+RUN /usr/local/bin/python -m pip uninstall -y setuptools pip
 
 RUN groupadd -g 1000 app && \
     useradd -u 1000 -g 1000 -m -s /bin/bash app
