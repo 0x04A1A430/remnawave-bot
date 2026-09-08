@@ -1510,10 +1510,13 @@
   Классы: `SavedMedia`
   Функции: `ensure_upload_dirs` — Create images/, videos/, thumbnails/ subdirectories under upload_path., `detect_file_type` — Detect media type and extension from magic bytes., `save_image` — Validate, resize, and save an image file. Runs PIL operations in a thread., `save_video` — Validate and save a video file. Runs I/O in a thread., `delete_media_file` — Delete a media file by filename with path traversal protection.
 - `app/services/notification_delivery_service.py` — Python-модуль
-  Классы: `NotificationType`, `NotificationDeliveryService` (25 методов)
+  Классы: `NotificationDeliveryService` (25 методов)
   Функции: нет
 - `app/services/notification_settings_service.py` — Python-модуль
   Классы: `NotificationSettingsService` (28 методов)
+  Функции: нет
+- `app/services/notification_types.py` — Python-модуль
+  Классы: `NotificationType`
   Функции: нет
 - `app/services/overpay_certificate_service.py` — Python-модуль
   Классы: нет
@@ -3278,7 +3281,7 @@
 
 - `tests/database/crud/test_subscription.py` — Python-модуль
   Классы: нет
-  Функции: `test_create_trial_subscription_uses_all_available_squads_by_default`, `test_extend_subscription_convert_trial_false_keeps_trial` — Bug #629889 guardrail: extend_subscription(tariff_id=..., convert_trial=False), `test_extend_subscription_default_converts_trial_on_purchase` — Default convert_trial=True (a real tariff purchase) still clears is_trial., `test_reset_trials_deletes_panel_first_and_skips_panel_failures` — #630055-trial: панель удаляется ПЕРВОЙ; если удалить в панели не удалось —, `test_reset_trials_keeps_row_when_panel_id_is_unusable` — Непригодный локальный идентификатор (RemnaWaveInvalidUserIdError) — это битая, `test_reset_trials_disable_mode_keeps_panel_account` — REMNAWAVE_USER_DELETE_MODE=disable: аккаунт в панели отключается, а не удаляется,, `test_reset_trials_panel_not_configured_db_only` — Панель не настроена → orphan'ить нечего, чистим только БД, без вызовов панели., `test_is_trial_already_used_gate` — Единый гейт триала (раньше дублировался в 4 местах purchase.py)., `test_subscription_property_ignores_pending_trial_draft` — Незавершённый платный триал не должен подставляться как основная подписка.
+  Функции: `test_create_trial_subscription_uses_all_available_squads_by_default`, `test_extend_subscription_convert_trial_false_keeps_trial` — Bug #629889 guardrail: subscription_crud.extend_subscription(tariff_id=..., convert_trial=False), `test_extend_subscription_default_converts_trial_on_purchase` — Default convert_trial=True (a real tariff purchase) still clears is_trial., `test_reset_trials_deletes_panel_first_and_skips_panel_failures` — #630055-trial: панель удаляется ПЕРВОЙ; если удалить в панели не удалось —, `test_reset_trials_keeps_row_when_panel_id_is_unusable` — Непригодный локальный идентификатор (RemnaWaveInvalidUserIdError) — это битая, `test_reset_trials_disable_mode_keeps_panel_account` — REMNAWAVE_USER_DELETE_MODE=disable: аккаунт в панели отключается, а не удаляется,, `test_reset_trials_panel_not_configured_db_only` — Панель не настроена → orphan'ить нечего, чистим только БД, без вызовов панели., `test_is_trial_already_used_gate` — Единый гейт триала (раньше дублировался в 4 местах purchase.py)., `test_subscription_property_ignores_pending_trial_draft` — Незавершённый платный триал не должен подставляться как основная подписка.
 - `tests/database/crud/test_wipe_trial_panel_lookup.py` — Python-модуль
   Классы: нет
   Функции: `api`, `patched_service` — Подменяем SubscriptionService целиком: нужен только его API-клиент., `db`, `test_adopts_by_short_uuid_and_deletes_the_right_account` — Ключевой сценарий: id ещё не пробэкфилен, но панель знает shortUuid., `test_does_not_orphan_a_live_panel_account` — Пропустить панель и удалить строку — значит оставить ACTIVE-сироту., `test_panel_error_during_lookup_does_not_wipe_the_row` — Таймаут — не доказательство. Строку оставляем следующему запуску., `test_unknown_short_uuid_does_not_block_the_reset_forever` — Панель этот shortUuid забыла — удалять нечего, но и застревать нельзя., `test_row_that_never_had_a_panel_user_needs_no_lookup`, `test_existing_numeric_id_is_used_directly`, `test_disable_mode_deactivates_instead_of_deleting`, `test_disable_mode_keeps_single_tariff_user_identity` — Аккаунт остаётся (отключённым) — users.remnawave_id обязан остаться с ним:, `test_delete_mode_still_clears_single_tariff_user_identity` — Регресс-стража: в режиме delete аккаунта больше нет — ссылку на него стираем., `test_disable_mode_treats_gone_or_already_disabled_as_success`

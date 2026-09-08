@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-import dataclasses
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from typing import TYPE_CHECKING, Any
 
 import structlog
@@ -647,7 +646,7 @@ class PricingEngine:
         offer_discount = subtotal - after_offer
         final_total = after_offer
 
-        breakdown = dataclasses.asdict(
+        breakdown = asdict(
             TariffBreakdown(
                 tariff_id=tariff.id,
                 extra_devices=extra_devices,
@@ -802,7 +801,7 @@ class PricingEngine:
         )
 
         valid_servers = [d for d in server_details if d.get('id') is not None]
-        breakdown = dataclasses.asdict(
+        breakdown = asdict(
             ClassicBreakdown(
                 months_in_period=months,
                 servers=server_details,

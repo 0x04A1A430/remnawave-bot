@@ -10,6 +10,7 @@ from functools import partial
 from typing import Any
 
 from app.config import settings
+from app.services.notification_types import NotificationType
 
 
 class EmailNotificationTemplates:
@@ -53,9 +54,6 @@ class EmailNotificationTemplates:
         рукописная копия рядом отставала, и письма уходили со стандартным
         шаблоном, который нельзя было поменять.
         """
-        # Import here to avoid circular imports
-        from app.services.notification_delivery_service import NotificationType
-
         template_map: dict[NotificationType, Callable[[str, dict[str, Any]], dict[str, str]]] = {
             NotificationType.BALANCE_TOPUP: self._balance_topup_template,
             NotificationType.BALANCE_CHANGE: self._balance_change_template,
