@@ -17,6 +17,7 @@ from app.cabinet.auth.registration_access import (
     is_env_admin_recovery,
     raise_for_registration_decision,
 )
+from app.cabinet.auth.registration_throttle import enforce_email_registration_throttle
 from app.config import settings
 from app.database.crud.rbac import UserRoleCRUD
 from app.database.crud.system_setting import get_setting_value
@@ -1403,12 +1404,7 @@ async def register_email_standalone(
     """
     await require_email_auth_enabled(db)
     client_ip = get_client_ip(raw_request)
-    if await RateLimitCache.is_ip_rate_limited(client_ip, 'email_register', limit=5, window=60, fail_closed=True):
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail='Too many requests',
-            headers={'Retry-After': '60'},
-        )
+    await enforce_email_registration_throttle(client_ip)
     email_access = await evaluate_public_registration(
         db,
         channel=RegistrationChannel.CABINET_EMAIL,
