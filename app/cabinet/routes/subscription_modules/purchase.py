@@ -262,6 +262,9 @@ async def _build_tariff_response(
         'id': tariff.id,
         'name': tariff.name,
         'description': tariff.description,
+        # Тариф отмечен оператором как выгодный: кабинет обводит карточку рамкой,
+        # бот ставит подпись в кнопке списка.
+        'is_highlighted': bool(tariff.is_highlighted),
         'tier_level': tariff.tier_level,
         'traffic_limit_gb': tariff.traffic_limit_gb,
         'traffic_limit_label': traffic_label,

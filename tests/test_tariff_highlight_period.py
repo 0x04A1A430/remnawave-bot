@@ -1,4 +1,4 @@
-"""Выделение одного периода тарифа как самого выгодного.
+"""Выделение выгодного: сам тариф в списке и один период внутри тарифа.
 
 Механизма не было вовсе: клиент видел четыре одинаковые строки и выбирал самую
 дешёвую, хотя длинный период оператору выгоднее. Выделение живёт у тарифа, в днях,
@@ -166,3 +166,63 @@ async def test_highlight_cannot_point_at_a_missing_period(monkeypatch):
         assert tariff.highlight_period_days == 30
         tariff = await update_tariff(db, tariff, highlight_period_days=None)
         assert tariff.highlight_period_days is None
+
+
+# ==================== выделение самого тарифа ====================
+
+
+def test_highlighted_tariff_is_marked_in_the_list():
+    from app.handlers.subscription.tariff_purchase import get_tariffs_keyboard
+
+    tariffs = [
+        SimpleNamespace(id=1, name='Базовый', is_highlighted=False),
+        SimpleNamespace(id=2, name='Про', is_highlighted=True),
+    ]
+    labels = _labels(get_tariffs_keyboard(tariffs, 'ru'))
+
+    marked = [label for label in labels if BADGE in label]
+    assert len(marked) == 1, labels
+    assert 'Про' in marked[0]
+    assert 'Базовый' in labels
+
+
+def test_purchased_mark_wins_over_the_badge():
+    """Галочка «уже куплен» отвечает на другой вопрос и важнее подсказки о выгоде."""
+    from app.handlers.subscription.tariff_purchase import get_tariffs_keyboard
+
+    tariffs = [SimpleNamespace(id=2, name='Про', is_highlighted=True)]
+    labels = _labels(get_tariffs_keyboard(tariffs, 'ru', purchased_tariff_ids={2}))
+
+    assert any(label.startswith('✅') for label in labels)
+    assert not [label for label in labels if BADGE in label]
+
+
+def test_tariff_list_survives_objects_without_the_flag():
+    """Старые вызовы передают тарифы без нового поля — список не должен падать."""
+    from app.handlers.subscription.tariff_purchase import get_tariffs_keyboard
+
+    labels = _labels(get_tariffs_keyboard([SimpleNamespace(id=1, name='Базовый')], 'ru'))
+
+    assert 'Базовый' in labels
+
+
+@pytest.mark.asyncio
+async def test_tariff_highlight_is_stored_and_cleared(monkeypatch):
+    from app.database.crud.tariff import create_tariff, update_tariff
+    from app.database.models import PromoGroup, Subscription, Tariff, tariff_promo_groups
+    from tests.fixtures.sqlite_memory import memory_session
+
+    tables = (Tariff.__table__, PromoGroup.__table__, Subscription.__table__, tariff_promo_groups)
+
+    async with memory_session(monkeypatch, tables) as db:
+        tariff = await create_tariff(db=db, name='Про', period_prices={30: 60000}, is_highlighted=True)
+        assert tariff.is_highlighted is True
+
+        tariff = await update_tariff(db, tariff, name='Про+')
+        assert tariff.is_highlighted is True, 'не передан — не трогаем'
+
+        tariff = await update_tariff(db, tariff, is_highlighted=False)
+        assert tariff.is_highlighted is False
+
+        plain = await create_tariff(db=db, name='Базовый', period_prices={30: 60000})
+        assert plain.is_highlighted is False

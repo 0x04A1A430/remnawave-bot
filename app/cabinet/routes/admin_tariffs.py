@@ -251,6 +251,7 @@ async def get_tariff(
         display_order=tariff.display_order,
         period_prices=_period_prices_to_list(tariff.period_prices),
         highlight_period_days=tariff.highlight_period_days,
+        is_highlighted=tariff.is_highlighted,
         allowed_squads=allowed_squads,
         server_traffic_limits=server_limits_response,
         servers=servers,
@@ -313,6 +314,7 @@ async def create_new_tariff(
         tier_level=request.tier_level,
         period_prices=period_prices_dict,
         highlight_period_days=request.highlight_period_days,
+        is_highlighted=request.is_highlighted,
         allowed_squads=request.allowed_squads,
         server_traffic_limits=server_limits_dict,
         promo_group_ids=request.promo_group_ids or None,
@@ -374,6 +376,8 @@ async def update_existing_tariff(
         updates['description'] = request.description
     if request.is_active is not None:
         updates['is_active'] = request.is_active
+    if request.is_highlighted is not None:
+        updates['is_highlighted'] = request.is_highlighted
     if request.allow_traffic_topup is not None:
         updates['allow_traffic_topup'] = request.allow_traffic_topup
     if request.traffic_topup_enabled is not None:

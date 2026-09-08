@@ -192,6 +192,7 @@ async def create_tariff(
     server_traffic_limits: dict[str, dict] | None = None,
     period_prices: dict[int, int] | None = None,
     highlight_period_days: int | None = None,
+    is_highlighted: bool = False,
     tier_level: int = 1,
     is_trial_available: bool = False,
     allow_traffic_topup: bool = True,
@@ -236,6 +237,7 @@ async def create_tariff(
         server_traffic_limits=server_traffic_limits or {},
         period_prices=normalized_prices,
         highlight_period_days=_resolve_highlight_period(normalized_prices, highlight_period_days),
+        is_highlighted=is_highlighted,
         tier_level=max(1, tier_level),
         is_trial_available=is_trial_available,
         allow_traffic_topup=allow_traffic_topup,
@@ -306,6 +308,7 @@ async def update_tariff(
     server_traffic_limits: dict[str, dict] | None = None,
     period_prices: dict[int, int] | None = None,
     highlight_period_days: int | None = ...,  # ... = не передан, None = снять выделение
+    is_highlighted: bool | None = None,
     tier_level: int | None = None,
     is_trial_available: bool | None = None,
     trial_duration_days: int | None = ...,  # ... = не передан, None = сбросить к дефолту (TRIAL_DURATION_DAYS)
@@ -369,6 +372,8 @@ async def update_tariff(
         tariff.highlight_period_days = _resolve_highlight_period(
             tariff.period_prices or {}, tariff.highlight_period_days
         )
+    if is_highlighted is not None:
+        tariff.is_highlighted = is_highlighted
     if tier_level is not None:
         tariff.tier_level = max(1, tier_level)
     if is_trial_available is not None:

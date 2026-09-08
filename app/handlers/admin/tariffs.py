@@ -235,6 +235,13 @@ def get_tariff_view_keyboard(
         )
 
     # Переключение активности
+    highlight_label = (
+        '⭐ ❌ Снять выделение тарифа' if getattr(tariff, 'is_highlighted', False) else '⭐ Выделить тариф'
+    )
+    buttons.append(
+        [InlineKeyboardButton(text=highlight_label, callback_data=f'admin_tariff_toggle_highlight:{tariff.id}')]
+    )
+
     if tariff.is_active:
         buttons.append(
             [InlineKeyboardButton(text='❌ Деактивировать', callback_data=f'admin_tariff_toggle:{tariff.id}')]
@@ -287,6 +294,8 @@ def format_tariff_info(tariff: Tariff, language: str, subs_count: int = 0) -> st
     get_texts(language)
 
     status = '✅ Активен' if tariff.is_active else '❌ Неактивен'
+    if getattr(tariff, 'is_highlighted', False):
+        status += ' · ⭐ выделен'
     traffic = format_traffic(tariff.traffic_limit_gb)
     prices_display = _format_period_prices_display(tariff.period_prices or {}, tariff.highlight_period_days)
 
@@ -491,6 +500,32 @@ async def view_tariff(
         parse_mode='HTML',
     )
     await callback.answer()
+
+
+@admin_required
+@error_handler
+async def toggle_tariff_highlight(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+):
+    """Отмечает тариф как выгодный — в списке тарифов он показывается с подписью."""
+    tariff_id = int(callback.data.split(':')[1])
+    tariff = await get_tariff_by_id(db, tariff_id)
+
+    if not tariff:
+        await callback.answer('Тариф не найден', show_alert=True)
+        return
+
+    tariff = await update_tariff(db, tariff, is_highlighted=not getattr(tariff, 'is_highlighted', False))
+    subs_count = await get_tariff_subscriptions_count(db, tariff_id)
+
+    await callback.answer('Тариф выделен' if tariff.is_highlighted else 'Выделение снято', show_alert=True)
+    await callback.message.edit_text(
+        format_tariff_info(tariff, db_user.language, subs_count),
+        reply_markup=get_tariff_view_keyboard(tariff, db_user.language),
+        parse_mode='HTML',
+    )
 
 
 @admin_required
@@ -3007,6 +3042,7 @@ def register_handlers(dp: Dispatcher):
     # Редактирование цен
     dp.callback_query.register(start_edit_tariff_prices, F.data.startswith('admin_tariff_edit_prices:'))
     dp.callback_query.register(start_edit_tariff_highlight, F.data.startswith('admin_tariff_edit_highlight:'))
+    dp.callback_query.register(toggle_tariff_highlight, F.data.startswith('admin_tariff_toggle_highlight:'))
     dp.callback_query.register(set_tariff_highlight, F.data.startswith('admin_tariff_highlight_set:'))
     dp.message.register(process_edit_tariff_prices, AdminStates.editing_tariff_prices)
 

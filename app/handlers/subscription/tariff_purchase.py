@@ -236,11 +236,17 @@ def get_tariffs_keyboard(
         purchased_tariff_ids = set()
     buttons = []
 
+    badge = texts.t('TARIFF_BEST_VALUE_BADGE', '⭐ выгодно')
     for tariff in tariffs:
         if tariff.id in purchased_tariff_ids:
-            buttons.append([InlineKeyboardButton(text=f'✅ {tariff.name}', callback_data=f'tariff_select:{tariff.id}')])
+            # Уже купленный тариф важнее подсказки: галочка отвечает на вопрос
+            # «а этот у меня есть?», отметка выгоды тут уже ничего не решает.
+            title = f'✅ {tariff.name}'
+        elif getattr(tariff, 'is_highlighted', False):
+            title = f'{badge} · {tariff.name}'
         else:
-            buttons.append([InlineKeyboardButton(text=tariff.name, callback_data=f'tariff_select:{tariff.id}')])
+            title = tariff.name
+        buttons.append([InlineKeyboardButton(text=title, callback_data=f'tariff_select:{tariff.id}')])
 
     buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu')])
 
