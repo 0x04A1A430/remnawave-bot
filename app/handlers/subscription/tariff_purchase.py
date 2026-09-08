@@ -247,6 +247,21 @@ def get_tariffs_keyboard(
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
+def _period_button_text(tariff: Tariff, period: int, price_text: str, texts) -> str:
+    """Единый текст кнопки периода: подпись, цена и отметка выгодного периода.
+
+    Собирался в четырёх клавиатурах подряд одинаковой строкой — отметку пришлось
+    бы добавлять четыре раза и держать одинаковой на глаз.
+
+    В инлайн-кнопку рамку не нарисовать, поэтому выделение — подпись в начале
+    текста: она видна до цены и не теряется среди остальных строк.
+    """
+    label = f'{format_period(period)} — {price_text}'
+    if tariff.highlight_period_days is not None and int(tariff.highlight_period_days) == period:
+        return f'{texts.t("TARIFF_PERIOD_BEST_VALUE_BADGE", "⭐ выгодно")} · {label}'
+    return label
+
+
 def get_tariff_periods_keyboard(
     tariff: Tariff,
     language: str,
@@ -273,7 +288,7 @@ def get_tariff_periods_keyboard(
         else:
             price_text = format_price_kopeks(price)
 
-        button_text = f'{format_period(period)} — {price_text}'
+        button_text = _period_button_text(tariff, period, price_text, texts)
         buttons.append([InlineKeyboardButton(text=button_text, callback_data=f'tariff_period:{tariff.id}:{period}')])
 
     buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data=back_callback)])
@@ -307,7 +322,7 @@ def get_tariff_periods_keyboard_with_traffic(
         else:
             price_text = format_price_kopeks(price)
 
-        button_text = f'{format_period(period)} — {price_text}'
+        button_text = _period_button_text(tariff, period, price_text, texts)
         # Используем другой callback для перехода к настройке трафика
         buttons.append(
             [InlineKeyboardButton(text=button_text, callback_data=f'tariff_period_traffic:{tariff.id}:{period}')]
@@ -2579,7 +2594,7 @@ def get_tariff_extend_keyboard(
         else:
             price_text = format_price_kopeks(price)
 
-        button_text = f'{format_period(period)} — {price_text}'
+        button_text = _period_button_text(tariff, period, price_text, texts)
         # subscription_id ОБЯЗАН быть первым сегментом: иначе резолвер по callback
         # принял бы хвостовой {period} за subscription_id (см. issue #3012 —
         # период совпадал с id чужой подписки и продлевалась не та подписка).
@@ -3305,7 +3320,7 @@ def get_tariff_switch_periods_keyboard(
         else:
             price_text = format_price_kopeks(price)
 
-        button_text = f'{format_period(period)} — {price_text}'
+        button_text = _period_button_text(tariff, period, price_text, texts)
         buttons.append([InlineKeyboardButton(text=button_text, callback_data=f'tariff_sw_period:{tariff.id}:{period}')])
 
     buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data='tariff_switch')])

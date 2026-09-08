@@ -203,6 +203,9 @@ async def _build_tariff_response(
                 'price_label': settings.format_price(final_price),
                 'price_per_month_kopeks': per_month,
                 'price_per_month_label': settings.format_price(per_month),
+                # Период, отмеченный оператором как самый выгодный: кабинет
+                # обводит его рамкой, бот ставит подпись в кнопке.
+                'is_highlighted': tariff.highlight_period_days == period_days,
             }
 
             # Информация о доп. устройствах в цене
