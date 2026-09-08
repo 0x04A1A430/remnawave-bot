@@ -11,6 +11,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.cabinet.auth.email_auth_gate import require_email_auth_enabled
 from app.cabinet.auth.registration_access import (
     evaluate_public_registration,
     is_env_admin_recovery,
@@ -1145,6 +1146,7 @@ async def register_email(
     Sends verification email to the provided address.
     If the email belongs to another active user, offers account merge.
     """
+    await require_email_auth_enabled(db)
     # Rate limit
     client_ip = get_client_ip(raw_request)
     if await RateLimitCache.is_ip_rate_limited(client_ip, 'email_register', limit=5, window=60, fail_closed=True):
@@ -1320,6 +1322,7 @@ async def verify_email_merge(
     Proves the caller controls that account's inbox, then mints the merge token
     (consumed at POST /cabinet/auth/merge/{token}).
     """
+    await require_email_auth_enabled(db)
     # Rate-limit like the other OTP-verify endpoints (IP + per-account); on the
     # per-account cap, burn the pending merge so a brute force can't grind the
     # live code — the caller must restart (re-emailing the existing owner).
@@ -1398,6 +1401,7 @@ async def register_email_standalone(
 
     If TEST_EMAIL is configured, test email accounts are auto-verified.
     """
+    await require_email_auth_enabled(db)
     client_ip = get_client_ip(raw_request)
     if await RateLimitCache.is_ip_rate_limited(client_ip, 'email_register', limit=5, window=60, fail_closed=True):
         raise HTTPException(
@@ -1601,6 +1605,7 @@ async def verify_email(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Verify email with token and return auth tokens."""
+    await require_email_auth_enabled(db)
     client_ip = get_client_ip(raw_request)
     if await RateLimitCache.is_ip_rate_limited(client_ip, 'email_verify', limit=10, window=60, fail_closed=True):
         raise HTTPException(
@@ -1660,6 +1665,7 @@ async def resend_verification(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Resend verification email."""
+    await require_email_auth_enabled(db)
     if not user.email:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -1737,6 +1743,7 @@ async def login_email(
 
     Test email accounts (configured via TEST_EMAIL) bypass email verification.
     """
+    await require_email_auth_enabled(db)
     client_ip = get_client_ip(raw_request)
     if await RateLimitCache.is_ip_rate_limited(client_ip, 'email_login', limit=10, window=60, fail_closed=True):
         raise HTTPException(
@@ -2006,6 +2013,7 @@ async def forgot_password(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Request password reset."""
+    await require_email_auth_enabled(db)
     client_ip = get_client_ip(raw_request)
     if await RateLimitCache.is_ip_rate_limited(client_ip, 'password_forgot', limit=3, window=60, fail_closed=True):
         raise HTTPException(
@@ -2082,6 +2090,7 @@ async def reset_password(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Reset password with token."""
+    await require_email_auth_enabled(db)
     client_ip = get_client_ip(raw_request)
     if await RateLimitCache.is_ip_rate_limited(client_ip, 'password_reset', limit=5, window=60, fail_closed=True):
         raise HTTPException(

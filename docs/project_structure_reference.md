@@ -135,6 +135,9 @@
 - `app/cabinet/auth/__init__.py` — Python-модуль
   Классы: нет
   Функции: нет
+- `app/cabinet/auth/email_auth_gate.py` — Python-модуль
+  Классы: нет
+  Функции: `is_email_auth_enabled` — Строка в system_settings важнее значения из окружения., `require_email_auth_enabled` — Первый шаг любого email/password-роута: до rate-limit и до таблицы users.
 - `app/cabinet/auth/email_verification.py` — Python-модуль
   Классы: нет
   Функции: `generate_email_change_code` — Generate a 6-digit verification code for email change., `get_email_change_expires_at` — Get the expiration datetime for an email change code., `generate_verification_token` — Generate a secure random verification token., `generate_password_reset_token` — Generate a secure random password reset token., `get_verification_expires_at` — Get the expiration datetime for a verification token., `get_password_reset_expires_at` — Get the expiration datetime for a password reset token., `is_token_expired` — Check if a token has expired.
@@ -2933,6 +2936,9 @@
 - `tests/cabinet/test_device_ownership.py` — Python-модуль
   Классы: нет
   Функции: `test_collect_panel_user_ids_deduplicates_and_preserves_order` — user.remnawave_id first, then unique subscription ids in declared order., `test_collect_panel_user_ids_handles_classic_mode_user_only` — Classic mode: only user.remnawave_id, no subscriptions array., `test_collect_panel_user_ids_handles_multi_tariff_no_top_id` — Multi-tariff: top-level user.remnawave_id often None, sub ids only., `test_collect_panel_user_ids_returns_empty_when_no_panel_attached`, `test_collect_panel_user_ids_ignores_legacy_uuid_column` — Только remnawave_id: юзер с одними легаси-UUID панели не привязан., `test_verify_finds_hwid_on_first_panel`, `test_verify_finds_hwid_on_non_primary_subscription_panel` — REGRESSION: multi-tariff user with device on sub-B's panel user must pass., `test_verify_returns_false_when_hwid_on_no_panel`, `test_verify_short_circuits_after_first_hit` — We stop iterating panels as soon as we find the device — fewer remote calls., `test_verify_degrades_open_on_remnawave_failure` — Degrade-open contract: panel unreachable → True so renames don't break., `test_verify_does_not_degrade_open_on_unusable_panel_id` — Битая ссылка в НАШЕЙ БД — не сбой панели: такой id пропускается, проверка закрыта., `test_verify_skips_unusable_id_but_still_checks_remaining_panels` — Один непригодный id не должен обрывать обход остальных панелей юзера., `test_verify_returns_false_when_user_has_no_panel_id` — No panel id on user or any subscription → False (nothing to validate against).
+- `tests/cabinet/test_email_auth_gate.py` — Python-модуль
+  Классы: `Reached`
+  Функции: `test_db_row_overrides_env`, `test_env_applies_when_no_db_row`, `test_require_raises_403_with_machine_code`, `test_handler_refuses_before_touching_anything`, `test_handler_proceeds_when_enabled`, `test_every_email_and_password_route_is_gated` — Новый /email/* или /password/* роут без гейта — красный тест, а не дыра в проде., `test_linked_providers_follow_the_same_switch` — Список способов входа в профиле читает тот же переключатель, что UI и роуты.
 - `tests/cabinet/test_email_change_otp_security.py` — Python-модуль
   Классы: нет
   Функции: `test_verify_blocked_and_code_not_checked_when_ip_rate_limited`, `test_verify_per_account_cap_burns_pending_change`, `test_request_change_rejects_unowned_admin_email`, `test_verify_and_apply_rejects_wrong_code_and_applies_correct`
