@@ -211,3 +211,36 @@ async def test_linked_providers_follow_the_same_switch(monkeypatch):
         row.value = 'true'
         await db.commit()
         assert 'email' in await account_linking._get_active_providers(db)
+
+
+# --------------------------------------------------------------------------- формат строки в БД
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ('stored', 'expected'),
+    [('true', True), ('True', True), ('1', True), ('yes', True), ('false', False), ('0', False), ('no', False)],
+)
+async def test_db_value_parsed_like_settings_editor(monkeypatch, stored, expected):
+    """Строку пишут и админский переключатель ('true'), и общий редактор настроек, и
+    инструмент переноса .env в БД (сырое '1'). Читать надо тем же парсером, что редактор."""
+    from app.cabinet.auth import email_auth_gate as gate
+
+    async with memory_session(monkeypatch, [SystemSetting.__table__]) as db:
+        monkeypatch.setattr(gate.settings, 'CABINET_EMAIL_AUTH_ENABLED', not expected)
+        db.add(SystemSetting(key=gate.EMAIL_AUTH_ENABLED_KEY, value=stored))
+        await db.commit()
+        assert await gate.is_email_auth_enabled(db) is expected
+
+
+@pytest.mark.asyncio
+async def test_garbage_db_value_falls_back_to_env(monkeypatch):
+    from app.cabinet.auth import email_auth_gate as gate
+
+    async with memory_session(monkeypatch, [SystemSetting.__table__]) as db:
+        db.add(SystemSetting(key=gate.EMAIL_AUTH_ENABLED_KEY, value='maybe'))
+        await db.commit()
+        monkeypatch.setattr(gate.settings, 'CABINET_EMAIL_AUTH_ENABLED', False)
+        assert await gate.is_email_auth_enabled(db) is False
+        monkeypatch.setattr(gate.settings, 'CABINET_EMAIL_AUTH_ENABLED', True)
+        assert await gate.is_email_auth_enabled(db) is True
