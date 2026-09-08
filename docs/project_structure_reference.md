@@ -1527,6 +1527,9 @@
 - `app/services/pal24_service.py` — Python-модуль
   Классы: `Pal24Service` (9 методов)
   Функции: нет
+- `app/services/panel_expiry.py` — Python-модуль
+  Классы: нет
+  Функции: `panel_expire_at` — Что положить в ``expireAt`` панели. ``None`` — не отправлять поле вовсе.
 - `app/services/paritypay_service.py` — Python-модуль
   Классы: `ParityPayAPIError` (1 методов), `ParityPayNetworkError`, `ParityPayService` (18 методов)
   Функции: `amount_to_kopeks` — Сумма провайдера (рубли) -> целые копейки., `kopeks_to_amount` — Копейки -> рубли для тела запроса.
@@ -1635,7 +1638,7 @@
   Классы: `RetryItem`, `RemnaWaveRetryQueue` (8 методов)
   Функции: нет
 - `app/services/remnawave_service.py` — Python-модуль
-  Классы: `RemnaWaveConfigurationError`, `RemnaWaveService` (63 методов)
+  Классы: `RemnaWaveConfigurationError`, `RemnaWaveService` (62 методов)
   Функции: нет
 - `app/services/remnawave_sync_service.py` — Python-модуль
   Классы: `RemnaWaveAutoSyncStatus`, `RemnaWaveAutoSyncService` (13 методов)
@@ -3861,6 +3864,9 @@
 - `tests/services/test_panel_deletion_respects_delete_mode.py` — Python-модуль
   Классы: нет
   Функции: `test_panel_deletion_is_gated_or_explicitly_deliberate`, `test_deliberate_list_has_no_stale_entries` — Список исключений не должен пережить сами удаления.
+- `tests/services/test_panel_expire_at_not_rewritten.py` — Python-модуль
+  Классы: нет
+  Функции: `test_live_subscription_keeps_its_own_date`, `test_expired_subscription_does_not_touch_the_date_on_update` — Главное свойство: поле не отправляется, панель хранит настоящую дату., `test_new_panel_account_still_gets_an_acceptable_date` — При создании без даты нельзя, а прошедшую панель не примет., `test_future_date_survives_even_for_an_inactive_subscription` — Заблокированный пользователь с ещё не истёкшей подпиской: дату не занижаем., `test_no_writer_builds_the_date_by_hand`, `test_every_writer_uses_the_shared_rule`, `test_billing_target_leaves_the_date_alone_for_disabled`, `test_billing_target_keeps_the_real_date_for_a_live_subscription`, `test_restore_target_leaves_the_date_alone_for_disabled`, `test_payload_without_a_date_does_not_carry_it_from_the_base` — Базовый набор собран для другого перехода: оставленная дата затёрла бы настоящую.
 - `tests/services/test_paritypay_client.py` — Python-модуль
   Классы: `RecordingService` (2 методов)
   Функции: `anyio_backend`, `test_create_invoice_sends_rubles_not_kopeks` — 125000 копеек обязаны уйти как 1250.0 — иначе счёт будет на 125 000 ₽., `test_create_invoice_request_shape`, `test_create_invoice_never_sends_subscription_block` — Подписки не оформляем: блок subscription не должен появляться никогда., `test_create_invoice_omits_empty_optionals`, `test_create_invoice_rejects_response_without_link`, `test_create_invoice_rejects_response_without_id`, `test_get_invoice_by_id_and_by_order_id`, `test_get_invoice_prefers_id_over_order_id` — Спека: передаётся ОДИН из параметров, не оба., `test_get_invoice_without_identifiers_raises`, `test_headers_carry_shop_and_secret_key`, `test_base_url_strips_slash_and_falls_back`, `test_error_message_uses_error_field` — Формат ошибки провайдера — объект {"error": "текст"}., `test_request_404_allowed_returns_none`, `test_request_422_raises_business_error`, `test_request_400_raises`, `test_connection_error_and_timeout_become_network_error`

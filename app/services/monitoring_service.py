@@ -60,6 +60,7 @@ from app.services.notification_delivery_service import (
     notification_delivery_service,
 )
 from app.services.notification_settings_service import NotificationSettingsService
+from app.services.panel_expiry import panel_expire_at
 from app.services.promo_offer_service import promo_offer_service
 from app.services.subscription_service import SubscriptionService, get_traffic_reset_strategy
 from app.utils.cache import cache
@@ -689,9 +690,7 @@ class MonitoringService:
                 update_kwargs = dict(
                     user_id=panel_user_id,
                     status=RemnaWaveUserStatus.ACTIVE if is_active else RemnaWaveUserStatus.DISABLED,
-                    expire_at=subscription.end_date
-                    if is_active
-                    else max(subscription.end_date, current_time + timedelta(minutes=1)),
+                    expire_at=panel_expire_at(subscription.end_date, is_active=is_active, creating=False),
                     # _gb_to_bytes живёт в SubscriptionService — у MonitoringService своего
                     # никогда не было, и self._gb_to_bytes ронял весь метод AttributeError-ом
                     # ещё до запроса в панель (молча гасился общим except → return None).

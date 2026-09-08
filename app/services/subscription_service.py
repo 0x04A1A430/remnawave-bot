@@ -1,7 +1,7 @@
 import asyncio
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from typing import Any
 
 import structlog
@@ -22,6 +22,7 @@ from app.external.remnawave_api import (
     UserStatus,
     is_user_not_found_error,
 )
+from app.services.panel_expiry import panel_expire_at
 from app.utils.subscription_utils import (
     resolve_hwid_device_limit_for_payload,
 )
@@ -496,9 +497,6 @@ class SubscriptionService:
         )
         common_kwargs = dict(
             status=UserStatus.ACTIVE if is_actually_active else UserStatus.DISABLED,
-            expire_at=(
-                subscription.end_date if is_actually_active else max(subscription.end_date, now + timedelta(minutes=1))
-            ),
             traffic_limit_bytes=self._gb_to_bytes(subscription.traffic_limit_gb),
             traffic_limit_strategy=get_traffic_reset_strategy(subscription.tariff),
             telegram_id=user.telegram_id,
@@ -523,7 +521,11 @@ class SubscriptionService:
                         if not await api.reset_user_devices(existing.id):
                             logger.error('⚠️ Не удалось сбросить HWID', panel_user_id=existing.id)
 
-                    updated = await api.update_user(user_id=existing.id, **common_kwargs)
+                    updated = await api.update_user(
+                        user_id=existing.id,
+                        expire_at=panel_expire_at(subscription.end_date, is_active=is_actually_active, creating=False),
+                        **common_kwargs,
+                    )
                     if reset_traffic:
                         await self._reset_user_traffic(api, updated.id, user, reset_reason)
                     return updated
@@ -564,7 +566,11 @@ class SubscriptionService:
             if settings.RESET_DEVICES_ON_RENEWAL:
                 if not await api.reset_user_devices(adopted.id):
                     logger.error('⚠️ Не удалось сбросить HWID', panel_user_id=adopted.id)
-            updated = await api.update_user(user_id=adopted.id, **common_kwargs)
+            updated = await api.update_user(
+                user_id=adopted.id,
+                expire_at=panel_expire_at(subscription.end_date, is_active=is_actually_active, creating=False),
+                **common_kwargs,
+            )
             if reset_traffic:
                 await self._reset_user_traffic(api, updated.id, user, reset_reason)
             return updated
@@ -589,7 +595,11 @@ class SubscriptionService:
             suffix=f'_{short_suffix}',
         )
 
-        updated_user = await api.create_user(username=username, **common_kwargs)
+        updated_user = await api.create_user(
+            username=username,
+            expire_at=panel_expire_at(subscription.end_date, is_active=is_actually_active, creating=True, now=now),
+            **common_kwargs,
+        )
         if reset_traffic:
             await self._reset_user_traffic(api, updated_user.id, user, reset_reason)
         return updated_user
@@ -691,9 +701,6 @@ class SubscriptionService:
         )
         common_kwargs = dict(
             status=UserStatus.ACTIVE if is_actually_active else UserStatus.DISABLED,
-            expire_at=(
-                subscription.end_date if is_actually_active else max(subscription.end_date, now + timedelta(minutes=1))
-            ),
             traffic_limit_bytes=self._gb_to_bytes(subscription.traffic_limit_gb),
             traffic_limit_strategy=get_traffic_reset_strategy(subscription.tariff),
             telegram_id=user.telegram_id,
@@ -719,7 +726,11 @@ class SubscriptionService:
                 else:
                     logger.error('⚠️ Не удалось сбросить HWID', panel_user_id=remnawave_user.id)
 
-            updated_user = await api.update_user(user_id=remnawave_user.id, **common_kwargs)
+            updated_user = await api.update_user(
+                user_id=remnawave_user.id,
+                expire_at=panel_expire_at(subscription.end_date, is_active=is_actually_active, creating=False),
+                **common_kwargs,
+            )
             if reset_traffic:
                 await self._reset_user_traffic(api, updated_user.id, user, reset_reason)
             return updated_user
@@ -732,7 +743,11 @@ class SubscriptionService:
             email=user.email,
             user_id=user.id,
         )
-        updated_user = await api.create_user(username=username, **common_kwargs)
+        updated_user = await api.create_user(
+            username=username,
+            expire_at=panel_expire_at(subscription.end_date, is_active=is_actually_active, creating=True, now=now),
+            **common_kwargs,
+        )
         if reset_traffic:
             await self._reset_user_traffic(api, updated_user.id, user, reset_reason)
         return updated_user
@@ -861,9 +876,7 @@ class SubscriptionService:
                 update_kwargs = dict(
                     user_id=remnawave_id,
                     status=UserStatus.ACTIVE if is_actually_active else UserStatus.DISABLED,
-                    expire_at=subscription.end_date
-                    if is_actually_active
-                    else max(subscription.end_date, current_time + timedelta(minutes=1)),
+                    expire_at=panel_expire_at(subscription.end_date, is_active=is_actually_active, creating=False),
                     traffic_limit_bytes=self._gb_to_bytes(subscription.traffic_limit_gb),
                     traffic_limit_strategy=get_traffic_reset_strategy(subscription.tariff),
                     telegram_id=user.telegram_id,

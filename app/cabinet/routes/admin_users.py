@@ -60,6 +60,7 @@ from app.database.models import (
     WheelSpin,
     WithdrawalRequest,
 )
+from app.services.panel_expiry import panel_expire_at
 from app.services.permission_service import PermissionService
 from app.utils.subscription_utils import coerce_panel_device_limit
 from app.utils.timezone import panel_datetime_to_utc
@@ -418,9 +419,10 @@ async def _sync_subscription_to_panel(
         )
         panel_status = PanelUserStatus.ACTIVE if is_active else PanelUserStatus.DISABLED
 
-        expire_at = subscription.end_date
-        if expire_at and expire_at <= datetime.now(UTC):
-            expire_at = datetime.now(UTC) + timedelta(minutes=1)
+        # Живой подписке — её дата; истёкшей при обновлении дату в панели не
+        # трогаем (см. panel_expire_at), при создании ставим допустимый минимум.
+        expire_at_update = panel_expire_at(subscription.end_date, is_active=is_active, creating=False)
+        expire_at_create = panel_expire_at(subscription.end_date, is_active=is_active, creating=True)
 
         # При multi-tariff create-path ниже приклеивается `_<remnawave_short_id>`.
         # build_remnawave_subscription_username гарантирует, что итоговая строка
@@ -515,8 +517,8 @@ async def _sync_subscription_to_panel(
                     'traffic_limit_strategy': get_traffic_reset_strategy(subscription.tariff),
                     'description': description,
                 }
-                if expire_at:
-                    update_kwargs['expire_at'] = expire_at
+                if expire_at_update:
+                    update_kwargs['expire_at'] = expire_at_update
                 if subscription.connected_squads:
                     update_kwargs['active_internal_squads'] = subscription.connected_squads
                 if hwid_limit is not None:
@@ -553,7 +555,7 @@ async def _sync_subscription_to_panel(
                 # Create new user
                 create_kwargs = {
                     'username': username,
-                    'expire_at': expire_at or (datetime.now(UTC) + timedelta(days=30)),
+                    'expire_at': expire_at_create or (datetime.now(UTC) + timedelta(days=30)),
                     'status': panel_status,
                     'traffic_limit_bytes': traffic_limit_bytes,
                     'traffic_limit_strategy': get_traffic_reset_strategy(subscription.tariff),
@@ -4312,10 +4314,8 @@ async def sync_user_to_panel(
         )
         panel_status = PanelUserStatus.ACTIVE if is_active else PanelUserStatus.DISABLED
 
-        # Ensure expire_at is in future for panel
-        expire_at = sub.end_date
-        if expire_at and expire_at <= datetime.now(UTC):
-            expire_at = datetime.now(UTC) + timedelta(minutes=1)
+        expire_at_update = panel_expire_at(sub.end_date, is_active=is_active, creating=False)
+        expire_at_create = panel_expire_at(sub.end_date, is_active=is_active, creating=True)
 
         # Same precaution as the per-user sync above: multi-tariff create-path
         # appends `_<remnawave_short_id>`. Helper resрвирует место.
@@ -4391,9 +4391,9 @@ async def sync_user_to_panel(
                     update_kwargs['status'] = panel_status
                     changes['status'] = panel_status.value
 
-                if request.update_expire_date and expire_at:
-                    update_kwargs['expire_at'] = expire_at
-                    changes['expire_at'] = expire_at.isoformat()
+                if request.update_expire_date and expire_at_update:
+                    update_kwargs['expire_at'] = expire_at_update
+                    changes['expire_at'] = expire_at_update.isoformat()
 
                 if request.update_traffic_limit:
                     update_kwargs['traffic_limit_bytes'] = traffic_limit_bytes
@@ -4437,7 +4437,7 @@ async def sync_user_to_panel(
                 # Create new user in panel
                 create_kwargs = {
                     'username': username,
-                    'expire_at': expire_at or (datetime.now(UTC) + timedelta(days=30)),
+                    'expire_at': expire_at_create or (datetime.now(UTC) + timedelta(days=30)),
                     'status': panel_status,
                     'traffic_limit_bytes': traffic_limit_bytes,
                     'traffic_limit_strategy': get_traffic_reset_strategy(sub.tariff),
