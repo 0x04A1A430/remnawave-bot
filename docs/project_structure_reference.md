@@ -1697,6 +1697,9 @@
 - `app/services/tariff_custom_traffic.py` — Python-модуль
   Классы: нет
   Функции: `parse_positive_rubles_to_kopeks` — Parse a positive ruble amount without floating-point rounding., `parse_positive_gb` — Parse a positive whole-number traffic amount in gigabytes., `validate_custom_traffic_configuration` — Return user-facing validation errors for enabling custom traffic.
+- `app/services/tariff_switch_policy.py` — Python-модуль
+  Классы: нет
+  Функции: `remaining_days_for_switch` — Сколько дней остатка оплачивать при переключении тарифа., `should_reset_used_traffic` — Обнулять ли счётчик трафика при переключении тарифа.
 - `app/services/traffic_monitoring_service.py` — Python-модуль
   Классы: `TrafficViolation`, `TrafficMonitoringServiceV2` (35 методов), `TrafficMonitoringSchedulerV2` (8 методов), `TrafficMonitoringService` (6 методов), `TrafficMonitoringScheduler` (9 методов)
   Функции: нет
@@ -4062,6 +4065,12 @@
 - `tests/services/test_tariff_purchase_subscription_pinning.py` — Python-модуль
   Классы: нет
   Функции: `test_select_tariff_period_resolves_and_pins_target_subscription_id` — REGRESSION: ``select_tariff_period`` must resolve the existing, `test_confirm_tariff_purchase_reads_target_subscription_id_from_fsm` — REGRESSION: ``confirm_tariff_purchase`` must read, `test_confirm_tariff_purchase_guards_against_tariff_divergence` — If the FSM-pinned subscription's tariff_id no longer matches, `test_confirm_tariff_purchase_does_not_use_only_tariff_lookup` — Pre-fix shape: confirm_tariff_purchase ran a single
+- `tests/services/test_tariff_switch_flows_use_policy.py` — Python-модуль
+  Классы: нет
+  Функции: `test_flow_computes_remaining_days_through_policy`, `test_flow_asks_policy_before_resetting_traffic`, `test_no_new_direct_readers_of_the_traffic_switch` — Новый читатель выключателя обязан объясниться здесь.
+- `tests/services/test_tariff_switch_policy.py` — Python-модуль
+  Классы: `TestTrafficReset` (3 методов)
+  Функции: `test_live_subscription_costs_at_least_one_day` — Остаток в часах — не ноль: иначе переключение бесплатное., `test_expired_subscription_has_no_remaining_days` — Истёкшей подписке путь в покупку, а не в переключение., `test_naive_datetime_is_treated_as_utc` — SQLite отдаёт даты без таймзоны — сравнение не должно падать., `test_defaults_to_current_time`
 - `tests/services/test_telegram_stars_rate.py` — Python-модуль
   Классы: нет
   Функции: `test_default_stars_rate_is_one_ruble_per_star` — REGRESSION: default rate must stay at 1.0 ₽/⭐., `test_integer_ruble_amounts_round_trip_losslessly` — REGRESSION: at rate=1.0, integer ruble top-ups credit back exactly., `test_rubles_to_stars_rejects_invalid_rate` — Defensive check: zero/negative rate must raise rather than divide-by-zero., `test_rubles_to_stars_clamps_to_minimum_one_star` — Even at rate=1.0, a 0 ₽ request must return ≥1 ⭐ (Telegram requires positive amount)., `test_rate_change_is_propagated_through_telegram_stars_service` — `TelegramStarsService.calculate_*` helpers must defer to settings — no hardcoded copies.
