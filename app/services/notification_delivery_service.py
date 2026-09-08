@@ -56,6 +56,7 @@ class NotificationType(Enum):
     # Referral notifications
     REFERRAL_BONUS = 'referral_bonus'
     REFERRAL_REGISTERED = 'referral_registered'
+    REFERRAL_WELCOME = 'referral_welcome'
 
     # Partner notifications
     PARTNER_APPLICATION_APPROVED = 'partner_application_approved'
@@ -159,6 +160,7 @@ class NotificationDeliveryService:
         referral_types = {
             NotificationType.REFERRAL_BONUS,
             NotificationType.REFERRAL_REGISTERED,
+            NotificationType.REFERRAL_WELCOME,
         }
         if notification_type in referral_types and not settings.is_referral_notifications_enabled():
             logger.debug(
@@ -791,6 +793,52 @@ class NotificationDeliveryService:
             user=user,
             notification_type=NotificationType.REFERRAL_BONUS,
             context=context,
+            bot=bot,
+            telegram_message=telegram_message,
+            telegram_markup=telegram_markup,
+        )
+
+    async def notify_referral_registered(
+        self,
+        user: User,
+        referral_name: str,
+        bot: Bot | None = None,
+        telegram_message: str | None = None,
+        telegram_markup: Any | None = None,
+    ) -> bool:
+        """Notify the inviter that a new referral has registered.
+
+        Регистрация — не награда: денег и дней здесь нет, и шаблон бонуса для
+        неё не годится (уходило «Реферальный бонус: +0 ₽»).
+        """
+        return await self.send_notification(
+            user=user,
+            notification_type=NotificationType.REFERRAL_REGISTERED,
+            context={'referral_name': referral_name},
+            bot=bot,
+            telegram_message=telegram_message,
+            telegram_markup=telegram_markup,
+        )
+
+    async def notify_referral_welcome(
+        self,
+        user: User,
+        referrer_name: str,
+        bonus_promise: str = '',
+        bot: Bot | None = None,
+        telegram_message: str | None = None,
+        telegram_markup: Any | None = None,
+    ) -> bool:
+        """Welcome the newcomer who registered by a referral link.
+
+        ``bonus_promise`` — что приглашённому обещано, готовой фразой
+        («7 дн. подписки», «100 ₽ при первом пополнении от 500 ₽»);
+        пусто — обещать нечего, блок бонуса в письме не показывается.
+        """
+        return await self.send_notification(
+            user=user,
+            notification_type=NotificationType.REFERRAL_WELCOME,
+            context={'referrer_name': referrer_name, 'bonus_promise': bonus_promise},
             bot=bot,
             telegram_message=telegram_message,
             telegram_markup=telegram_markup,
