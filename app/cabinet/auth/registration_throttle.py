@@ -1,4 +1,4 @@
-"""Дроссель регистрации по email с одного IP.
+"""Дроссели регистрации по email и повторной отправки письма подтверждения.
 
 Одного минутного окна мало: скрипт ждёт минуту и продолжает — из отчёта про волну
 одноразовых почт за триалами. Поверх него часовое и суточное окна; все три
@@ -7,6 +7,8 @@
 """
 
 from __future__ import annotations
+
+import hashlib
 
 from fastapi import HTTPException, status
 
@@ -37,3 +39,46 @@ async def enforce_email_registration_throttle(client_ip: str) -> None:
                 detail='Too many requests',
                 headers={'Retry-After': str(window)},
             )
+
+
+def _resend_ip_windows() -> tuple[tuple[str, int, int], ...]:
+    return (
+        ('email_resend', settings.CABINET_EMAIL_RESEND_LIMIT_PER_MINUTE, MINUTE),
+        ('email_resend_hour', settings.CABINET_EMAIL_RESEND_LIMIT_PER_HOUR, HOUR),
+    )
+
+
+def _address_digest(email: str) -> str:
+    """Ключ лимита не должен быть самим адресом: он оседает в Redis и в его логах."""
+    return hashlib.sha256(email.strip().lower().encode()).hexdigest()[:32]
+
+
+async def enforce_verification_resend_throttle(client_ip: str, email: str) -> None:
+    """Дроссель кнопки «Отправить письмо ещё раз» на экране «Проверьте почту».
+
+    Экран открыт без входа в аккаунт, поэтому окна идут по IP — и отдельно по
+    самому адресу: лимит по IP не спасает чужой ящик, если его заваливают
+    письмами с разных адресов.
+
+    Redis недоступен — блокируем (fail_closed): ручка неаутентифицированная и
+    отправляет почту.
+    """
+    for action, limit, window in _resend_ip_windows():
+        if limit <= 0:
+            continue
+        if await RateLimitCache.is_ip_rate_limited(client_ip, action, limit=limit, window=window, fail_closed=True):
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail='Too many requests',
+                headers={'Retry-After': str(window)},
+            )
+
+    per_address = settings.CABINET_EMAIL_RESEND_PER_ADDRESS_PER_HOUR
+    if per_address > 0 and await RateLimitCache.is_subject_rate_limited(
+        _address_digest(email), 'email_resend', limit=per_address, window=HOUR, fail_closed=True
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail='Too many requests',
+            headers={'Retry-After': str(HOUR)},
+        )

@@ -93,6 +93,7 @@ GATED_HANDLERS = (
     'register_email_standalone',
     'verify_email',
     'resend_verification',
+    'resend_verification_public',
     'login_email',
     'forgot_password',
     'reset_password',
