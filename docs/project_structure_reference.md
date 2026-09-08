@@ -1342,6 +1342,9 @@
 - `app/middlewares/maintenance.py` — Python-модуль
   Классы: `MaintenanceMiddleware` (1 методов)
   Функции: нет
+- `app/middlewares/stale_callback_answer.py` — Python-модуль
+  Классы: `StaleCallbackAnswerMiddleware` (1 методов)
+  Функции: нет
 - `app/middlewares/subscription_checker.py` — Python-модуль
   Классы: `SubscriptionStatusMiddleware` (1 методов)
   Функции: нет
@@ -2057,6 +2060,9 @@
 - `app/utils/subscription_utils.py` — Python-модуль
   Классы: нет
   Функции: `cleanup_duplicate_subscriptions`, `get_display_subscription_link`, `get_happ_cryptolink_redirect_link`, `convert_subscription_link_to_happ_scheme`, `device_limit_needs_heal` — Return True if a stored ``device_limit`` is structurally invalid., `coerce_panel_device_limit` — Normalize ``hwidDeviceLimit`` from a RemnaWave panel response., `resolve_min_device_limit` — Нижняя граница, до которой пользователь может уменьшить лимит устройств., `resolve_hwid_device_limit` — Return a device limit value for RemnaWave payloads when selection is enabled., `resolve_hwid_device_limit_for_payload` — Return the device limit that should be sent to RemnaWave APIs., `resolve_simple_subscription_device_limit` — Return the effective device limit for simple subscription flows.
+- `app/utils/telegram_errors.py` — Python-модуль
+  Классы: нет
+  Функции: `is_stale_callback_query_error` — Telegram уже не ждёт ответ на это нажатие: пользователь давно увидел результат.
 - `app/utils/telegram_html.py` — Python-модуль
   Классы: нет
   Функции: `html_to_telegram`, `info_page_faq_to_telegram`, `stored_html_to_telegram_pages` — Сохранённый HTML страницы → куски, которые Telegram согласится разобрать., `trim_broken_markup` — Обрезает незакрытый тег или неполную HTML-сущность в конце куска., `split_telegram_text`
@@ -3428,6 +3434,9 @@
 - `tests/handlers/test_admin_tariff_custom_traffic_contract.py` — Python-модуль
   Классы: нет
   Функции: `test_tariff_card_exposes_custom_traffic_entry`, `test_tariff_summary_includes_custom_traffic_block`, `test_custom_traffic_module_is_registered_from_tariff_router`, `test_custom_traffic_screen_and_handlers_are_registered`, `test_generic_tariff_toggle_excludes_custom_traffic_callback`, `test_custom_traffic_fsm_states_exist`, `test_disable_path_updates_only_enabled_flag`, `test_field_handlers_use_existing_crud_boundary`
+- `tests/handlers/test_balance_quick_topup.py` — Python-модуль
+  Классы: нет
+  Функции: `test_answers_the_tap_before_calling_the_provider`, `test_stale_query_is_not_reported_as_topup_error` — Устаревший запрос по дороге — предупреждение декоратора, а не отчёт об ошибке., `test_provider_failure_is_reported_once_without_second_answer`, `test_unknown_method_is_reported_with_a_message`, `test_tribute_flow_owns_the_answer` — Сценарии, которым передаётся сам callback, отвечают на нажатие сами — родитель не лезет., `test_invalid_amount_alerts_immediately`
 - `tests/handlers/test_broadcast_custom_buttons.py` — Python-модуль
   Классы: нет
   Функции: `test_keyboard_passes_icon_custom_emoji_id`, `test_schema_roundtrips_icon_custom_emoji_id`, `test_schema_defaults_to_none_and_rejects_garbage`
@@ -3572,6 +3581,9 @@
 - `tests/middlewares/test_rich_error_report.py` — Python-модуль
   Классы: нет
   Функции: `test_rich_error_report_structure`, `test_rich_error_report_none_when_oversized`, `test_send_error_uses_rich_and_clears_buffer`, `test_send_error_falls_back_to_document_when_rich_unavailable`
+- `tests/middlewares/test_stale_callback_answer.py` — Python-модуль
+  Классы: нет
+  Функции: `test_phrase_matcher_covers_both_telegram_wordings`, `test_stale_answer_becomes_warning_and_returns_true`, `test_other_errors_on_answer_still_raise`, `test_stale_phrases_on_other_methods_are_not_swallowed` — Middleware узкий: только ответ на нажатие. Редактирование сообщения — не его дело., `test_successful_request_passes_through`, `test_bot_factory_installs_the_middleware_for_every_bot` — Все боты (основной, из кабинета, из фоновых задач) создаются фабрикой — защита общая.
 
 ### tests/services
 
