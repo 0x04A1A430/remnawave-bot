@@ -12,10 +12,12 @@ from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
+# Только модулем: тест подменяет его атрибуты (get_user_by_id и другие), и второй
+# импорт тех же имён через `from` разошёлся бы с подменой — CodeQL ровно об этом
+# и предупреждает (py/import-and-import-from).
 import app.services.subscription_service as subscription_service_mod
 from app.config import Settings
 from app.database.models import SubscriptionStatus
-from app.services.subscription_service import SubscriptionService, link_subscription_panel_identity
 
 
 USER_PANEL_ID = 777
@@ -64,9 +66,9 @@ def _db(*, holder) -> AsyncMock:
     return db
 
 
-def _service(monkeypatch, api, user) -> SubscriptionService:
+def _service(monkeypatch, api, user) -> subscription_service_mod.SubscriptionService:
     monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: False)
-    service = SubscriptionService()
+    service = subscription_service_mod.SubscriptionService()
     monkeypatch.setattr(subscription_service_mod, 'get_user_by_id', AsyncMock(return_value=user))
     monkeypatch.setattr(subscription_service_mod, 'resolve_hwid_device_limit_for_payload', lambda s: None)
 
@@ -112,6 +114,6 @@ async def test_link_is_noop_for_already_linked_row():
     db = _db(holder=None)
     subscription = _subscription(remnawave_id=555)
 
-    assert await link_subscription_panel_identity(db, subscription, USER_PANEL_ID) is False
+    assert await subscription_service_mod.link_subscription_panel_identity(db, subscription, USER_PANEL_ID) is False
     db.execute.assert_not_awaited()
     assert subscription.remnawave_id == 555
