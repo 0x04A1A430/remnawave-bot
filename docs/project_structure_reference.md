@@ -198,6 +198,9 @@
 - `app/cabinet/routes/admin_coupons.py` — Python-модуль
   Классы: нет
   Функции: `list_coupon_batches` — List coupon batches with redemption stats., `create_coupon_batch_endpoint` — Create a batch of one-time coupons and return the generated links., `get_coupon_batch` — Batch card with redemption stats., `export_coupon_batch_links` — Still-active coupon links of the batch (for handing to the partner)., `revoke_coupon_batch` — Revoke all still-active coupons of the batch (e.g. the partner did not pay)., `delete_batch` — Полностью удаляет партию вместе с её купонами.
+- `app/cabinet/routes/admin_email_queue.py` — Python-модуль
+  Классы: нет
+  Функции: `get_email_queue` — Сводка по очереди писем и последние письма в ней., `clear_email_queue` — Убрать письма из очереди. По умолчанию — целиком, вместе с историей.
 - `app/cabinet/routes/admin_email_templates.py` — Python-модуль
   Классы: `EmailTemplateUpdate`, `EmailTemplateEnabledRequest`, `EmailTemplatePreviewRequest`, `EmailTemplateSendTestRequest`
   Функции: `list_template_types` — List all available email template types with override status., `get_templates_for_type` — Get all language templates for a specific notification type., `update_template` — Save a custom email template override., `set_template_enabled` — Выключатель писем по типу: отключённое письмо не отправляется никому., `reset_template` — Delete custom template override, reverting to default., `preview_template` — Preview a rendered email template with sample data., `send_test_email` — Send a test email to the admin's email address.
@@ -1425,7 +1428,7 @@
   Классы: `DonutAPIError` (1 методов), `DonutService` (18 методов)
   Функции: нет
 - `app/services/email_retry_service.py` — Python-модуль
-  Классы: `EmailRetryService` (12 методов)
+  Классы: `EmailRetryService` (13 методов)
   Функции: нет
 - `app/services/etoplatezhi_service.py` — Python-модуль
   Классы: `EtoplatezhiService` (7 методов)
@@ -2879,6 +2882,9 @@
 - `tests/cabinet/test_admin_delete_user_subscription.py` — Python-модуль
   Классы: нет
   Функции: `test_route_registered` — Метод и путь закреплены: иначе маршрут можно переименовать с зелёным CI., `test_force_defaults_to_off` — Без явного force активную платную подписку снести нельзя., `test_deletes_expired_trial` — Базовый случай из отчёта: отработавший триал убирается из карточки., `test_foreign_subscription_not_found` — Подписка чужого пользователя не удаляется по одному лишь sub_id., `test_active_paid_needs_force` — Оплаченный активный доступ не сносится одним промахом., `test_open_grace_blocks_deletion` — Пока открыт временный доступ, подписку из-под него не вырывают.
+- `tests/cabinet/test_admin_email_queue.py` — Python-модуль
+  Классы: нет
+  Функции: `test_summary_counts_each_status`, `test_items_are_newest_first_and_carry_no_letter_body` — Тело письма — это код или ссылка входа: наружу его не отдаём., `test_clear_removes_the_queue_and_reports_the_count`, `test_clear_pending_only_leaves_history` — «Отменить ожидающие» не должно стирать историю доставленных и потерянных., `test_clear_defaults_to_wiping_everything` — Запрос без параметров чистит очередь целиком — дефолт проверяем по сигнатуре., `test_empty_queue_is_not_an_error`, `test_routes_are_registered`
 - `tests/cabinet/test_admin_grace_access.py` — Python-модуль
   Классы: `TestEnabling` (6 методов), `TestRejectedInput` (3 методов), `TestPartialUpdate` (3 методов), `TestEnvLock` (3 методов), `TestOverview` (9 методов), `TestSquadPicker` (4 методов)
   Функции: `test_routes_registered`, `test_each_url_reaches_its_own_handler`, `test_sessions_endpoint_also_requires_users_read` — Список отдаёт чужие telegram_id, @логины и имена., `test_configuration_endpoints_stay_on_settings_permissions`, `config` — Живые настройки grace с валидной конфигурацией; правки не утекают в другие тесты., `saved` — Перехват записи настроек: значение сразу видно и в ``settings``, как в проде., `empty_db`, `status_snapshot` — Счётчики сессий подменяются: раздел читает их из общего сборщика.
@@ -3704,7 +3710,7 @@
   Функции: `test_parse_extra_domains_tolerates_separators_case_and_at_sign`, `test_operator_extra_domains_block_even_without_fetched_list`, `test_parent_domain_matches_for_both_lists`, `test_disabled_flag_and_malformed_email`
 - `tests/services/test_email_retry_service.py` — Python-модуль
   Классы: нет
-  Функции: `test_backoff_outlives_short_lived_codes` — Фиксируем сам факт расхождения: без срока бэкофф шлёт письма после смерти кода., `test_expired_item_is_killed_without_sending`, `test_live_item_is_still_sent`, `test_item_without_expiry_is_unrestricted`, `test_auth_emails_declare_a_deadline` — Три письма с секретом внутри обязаны передавать срок годности в очередь., `test_body_is_purged_after_successful_delivery`, `test_body_is_purged_when_attempts_run_out`, `test_body_survives_between_attempts` — Пока попытки не исчерпаны, тело нужно — иначе повторять будет нечего., `test_stop_is_safe_without_start`
+  Функции: `test_backoff_outlives_short_lived_codes` — Фиксируем сам факт расхождения: без срока бэкофф шлёт письма после смерти кода., `test_expired_item_is_killed_without_sending`, `test_live_item_is_still_sent`, `test_item_without_expiry_is_unrestricted`, `test_auth_emails_declare_a_deadline` — Три письма с секретом внутри обязаны передавать срок годности в очередь., `test_body_is_purged_after_successful_delivery`, `test_body_is_purged_when_attempts_run_out`, `test_body_survives_between_attempts` — Пока попытки не исчерпаны, тело нужно — иначе повторять будет нечего., `test_stop_is_safe_without_start`, `test_pending_letters_are_closed_when_smtp_is_absent`, `test_absent_smtp_is_reported_once_not_per_letter` — Одно сообщение на всё время, и не ошибкой: это настройка, а не сбой доставки., `test_queue_resumes_after_smtp_appears`
 - `tests/services/test_email_topup_notifications.py` — Python-модуль
   Классы: нет
   Функции: `sent` — Перехватывает send_notification роутера., `test_topup_notification_sent_for_email_user`, `test_topup_notification_skipped_for_telegram_user`, `test_topup_notification_skipped_without_email`, `test_topup_notification_swallows_router_errors`, `test_topup_hook_notifies_before_auto_purchase` — Порядок каналов: письмо о пополнении уходит ДО автопокупки из корзины,, `test_auto_purchase_notification_activated`, `test_auto_purchase_notification_renewed`, `test_auto_purchase_notification_skipped_for_telegram_user`, `test_auto_purchase_notification_swallows_errors`, `test_real_topup_template_renders_with_helper_context`, `test_real_activated_template_renders_with_helper_context`, `test_real_renewed_template_renders_with_helper_context`, `test_trial_conversion_labeled_activated_not_renewed` — Пин: сайты автопокупки тарифа/суточного/extend не должны помечать
