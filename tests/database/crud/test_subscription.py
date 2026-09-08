@@ -143,7 +143,7 @@ def _trial_sub(sub_id, user_id, panel_user_id):
     )
 
 
-def _patch_reset_env(monkeypatch, *, subs, is_configured, delete_side_effect=None):
+def _patch_reset_env(monkeypatch, *, subs, is_configured, delete_side_effect=None, delete_mode='delete'):
     from contextlib import asynccontextmanager
     from types import SimpleNamespace
     from unittest.mock import AsyncMock, MagicMock
@@ -170,6 +170,9 @@ def _patch_reset_env(monkeypatch, *, subs, is_configured, delete_side_effect=Non
 
     fake_settings = MagicMock()
     fake_settings.is_multi_tariff_enabled.return_value = False  # single-tariff
+    # Заглушка настроек — MagicMock: незаданный геттер вернул бы объект-мок, и
+    # сравнение с 'delete' молча выбрало бы ветку disable. Режим задаём явно.
+    fake_settings.get_remnawave_user_delete_mode.return_value = delete_mode
     monkeypatch.setattr(crud, 'settings', fake_settings)
     monkeypatch.setattr(crud, 'decrement_subscription_server_counts', AsyncMock())
 
@@ -221,6 +224,25 @@ async def test_reset_trials_keeps_row_when_panel_id_is_unusable(monkeypatch):
 
     assert count == 1
     db.commit.assert_awaited()
+
+
+async def test_reset_trials_disable_mode_keeps_panel_account(monkeypatch):
+    """REMNAWAVE_USER_DELETE_MODE=disable: аккаунт в панели отключается, а не удаляется,
+    и ссылка на него на пользователе сохраняется — следующая покупка включит тот же."""
+    subs = [_trial_sub(1, 11, 9001)]
+    crud, db, fake_api = _patch_reset_env(monkeypatch, subs=subs, is_configured=True, delete_mode='disable')
+    fake_api.disable_user = AsyncMock(return_value=True)
+
+    count = await crud.reset_trials_for_users_without_paid_subscription(db)
+
+    assert count == 1
+    fake_api.delete_user.assert_not_awaited()
+    fake_api.disable_user.assert_awaited_once_with(9001)
+
+    from sqlalchemy.sql.dml import Update
+
+    updates = [call.args[0] for call in db.execute.await_args_list if isinstance(call.args[0], Update)]
+    assert updates == []
 
 
 async def test_reset_trials_panel_not_configured_db_only(monkeypatch):

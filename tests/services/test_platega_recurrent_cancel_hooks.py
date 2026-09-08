@@ -412,6 +412,8 @@ async def test_cancel_safe_wiring_proof_my_subscriptions_delete_execute(monkeypa
 
     subscription = SimpleNamespace(
         id=99,
+        user_id=1,
+        tariff_id=None,
         status=SubscriptionStatus.EXPIRED.value,
         actual_status=SubscriptionStatus.EXPIRED.value,
         remnawave_id=None,
@@ -426,9 +428,17 @@ async def test_cancel_safe_wiring_proof_my_subscriptions_delete_execute(monkeypa
     async def fake_decrement_counts(db, sub):
         return None
 
+    # Обработчик делегирует порядок общему сервису — патчим то, что зовёт ОН.
     monkeypatch.setattr(my_subscriptions, 'get_subscription_by_id_for_user', fake_get_subscription)
-    monkeypatch.setattr(my_subscriptions, 'decrement_subscription_server_counts', fake_decrement_counts)
     monkeypatch.setattr(my_subscriptions, 'show_my_subscriptions', AsyncMock())
+    monkeypatch.setattr(
+        'app.services.subscription_deletion_service.decrement_subscription_server_counts',
+        fake_decrement_counts,
+    )
+    monkeypatch.setattr(
+        'app.services.subscription_deletion_service._resolve_panel_target',
+        AsyncMock(return_value=(None, False)),
+    )
     monkeypatch.setattr(
         'app.services.grace_access_runtime.ensure_no_open_grace_for_subscriptions',
         fake_ensure_no_open_grace,
