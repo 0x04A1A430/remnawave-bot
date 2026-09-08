@@ -1677,7 +1677,7 @@
   Классы: `SubscriptionRenewalError`, `SubscriptionRenewalChargeError`, `SubscriptionRenewalPricing` (2 методов), `SubscriptionRenewalResult`, `RenewalPaymentDescriptor` (1 методов), `SubscriptionRenewalService` (1 методов)
   Функции: `build_renewal_period_id`, `build_payment_descriptor`, `encode_payment_payload`, `decode_payment_payload`, `build_payment_metadata`, `parse_payment_metadata`, `with_admin_notification_service`, `calculate_missing_amount`
 - `app/services/subscription_service.py` — Python-модуль
-  Классы: `PropagateSquadsResult`, `SubscriptionService` (30 методов)
+  Классы: `PropagateSquadsResult`, `SubscriptionService` (31 методов)
   Функции: `get_traffic_reset_strategy` — Получает стратегию сброса трафика., `reset_subscription_with_panel` — Обнулить подписку «как будто не оформляли» и снять доступ в панели RemnaWave,
 - `app/services/support_settings_service.py` — Python-модуль
   Классы: `SupportSettingsService` (28 методов)
@@ -3928,7 +3928,7 @@
   Классы: нет
   Функции: `temp_log_file` — Создаёт временный лог-файл для тестов., `sample_log_content` — Пример содержимого лог-файла с реферальными событиями., `test_parse_logs_basic` — Тест базового парсинга логов., `test_analyze_period_with_issues` — Тест анализа с проблемными случаями., `test_empty_log_file` — Тест работы с пустым лог-файлом., `test_nonexistent_log_file` — Тест работы с несуществующим лог-файлом., `test_analyze_today` — Тест метода analyze_today.
 - `tests/services/test_referral_grant_days.py` — Python-модуль
-  Классы: `TestDaysLandWhereConfigured` (3 методов), `TestMissingSubscription` (3 методов), `TestTrialIsNeverConverted` (2 методов), `TestPanelSyncFailure` (1 методов), `TestSubscriptionOnAnotherTariff` (3 методов), `TestStatesWhereDaysMustNotLand` (4 методов), `TestManySubscriptionsInMultiTariff` (5 методов), `TestClassicMode` (3 методов)
+  Классы: `TestDaysLandWhereConfigured` (3 методов), `TestMissingSubscription` (3 методов), `TestTrialIsNeverConverted` (2 методов), `TestPanelSyncFailure` (1 методов), `TestPanelRollback` (1 методов), `TestSubscriptionOnAnotherTariff` (3 методов), `TestStatesWhereDaysMustNotLand` (4 методов), `TestManySubscriptionsInMultiTariff` (5 методов), `TestClassicMode` (3 методов), `TestPanelSync` (3 методов)
   Функции: `no_panel_sync` — Remnawave в тестах не поднимается — синхронизация подменяется.
 - `tests/services/test_referral_ledger_orientation.py` — Python-модуль
   Классы: нет
@@ -4014,6 +4014,9 @@
 - `tests/services/test_subscription_extend_cabinet_mode.py` — Python-модуль
   Классы: нет
   Функции: `cabinet_mode` — Полностью настроенный cabinet-режим: и режим меню, и URL кабинета., `test_multi_tariff_cabinet_button_opens_that_subscription_renewal` — РЕГРЕССИЯ: раньше здесь была callback-кнопка, уводившая в бота., `test_single_tariff_cabinet_button_opens_cabinet` — Одиночный режим работал и раньше — поведение не должно поменяться., `test_multi_tariff_without_id_falls_back_to_subscription_list` — Без id конкретной подписки вести некуда — открываем список подписок., `test_bot_mode_keeps_callback_button` — Вне cabinet-режима кнопка обязана остаться обычным callback'ом., `test_cabinet_mode_without_url_falls_back_to_callback` — Cabinet-режим без ``MINIAPP_CUSTOM_URL`` не должен ломать кнопку., `test_dynamic_callback_keeps_subscription_section_styling` — Стиль берётся по секции ``subscription``, а не теряется из-за ``se:{id}``., `test_dynamic_callback_is_not_added_to_static_mapping` — ``se:{id}`` динамический — в статическом маппинге ему места нет., `test_call_sites_do_not_build_extend_callback_by_hand` — РЕГРЕССИЯ: каждый ручной ``f'se:{...}'`` — это ещё одна кнопка в бота., `test_expired_notification_keyboard_opens_cabinet` — Сквозная проверка на том самом уведомлении из отчёта пользователя.
+- `tests/services/test_subscription_service_sync.py` — Python-модуль
+  Классы: нет
+  Функции: `test_sync_picks_create_or_update_by_panel_id`, `test_missing_user_falls_to_create_which_reports_it` — Пользователя нет в базе: не падаем, create сам залогирует и вернёт None.
 - `tests/services/test_support_settings_sync.py` — Python-модуль
   Классы: нет
   Функции: `support_storage` — Изолированное JSON-хранилище + сброс кеша класса на каждый тест., `test_load_syncs_system_mode_into_settings` — REGRESSION: persisted-режим должен доезжать до settings при загрузке —, `test_mode_survives_restart_for_cabinet` — REGRESSION (сквозной сценарий): админ выключил тикеты в боте, бот, `test_load_syncs_menu_enabled_into_settings` — REGRESSION: у menu_enabled была ровно та же проблема., `test_set_support_menu_enabled_syncs_settings` — Сеттер меню тоже обязан обновлять settings (раньше не обновлял вовсе)., `test_absent_json_keeps_env_value` — Без сохранённого значения settings остаётся как задан в .env., `test_invalid_persisted_mode_does_not_clobber_settings` — Мусор в JSON не должен затирать settings невалидным режимом., `test_corrupt_json_does_not_clobber_settings` — Битый JSON: _load глотает ошибку, settings остаётся из .env.

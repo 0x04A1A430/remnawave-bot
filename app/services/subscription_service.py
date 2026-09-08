@@ -163,6 +163,34 @@ class SubscriptionService:
         async with self.api as api:
             yield api
 
+    async def sync_remnawave_user(
+        self,
+        db: AsyncSession,
+        subscription: Subscription,
+        *,
+        reset_traffic: bool = False,
+        reset_reason: str | None = None,
+    ) -> RemnaWaveUser | None:
+        """Создать пользователя панели или обновить — по тому, известен ли панели его id.
+
+        В мультитарифе id панели живёт у подписки, вне его — у пользователя (аккаунт в
+        панели один на человека). Нет id — create_remnawave_user (это upsert: пользователя,
+        которого панель уже знает, он обновит); есть — update_remnawave_user. Свежая подписка
+        (награда за реферала, купон, покупка) id ещё не имеет, и update для неё падал с
+        «RemnaWave id не найден»: человек оставался без пользователя в панели и без ссылки.
+        """
+        panel_id = subscription.remnawave_id
+        if not settings.is_multi_tariff_enabled():
+            user = await get_user_by_id(db, subscription.user_id)
+            panel_id = getattr(user, 'remnawave_id', None)
+        if panel_id:
+            return await self.update_remnawave_user(
+                db, subscription, reset_traffic=reset_traffic, reset_reason=reset_reason
+            )
+        return await self.create_remnawave_user(
+            db, subscription, reset_traffic=reset_traffic, reset_reason=reset_reason
+        )
+
     async def create_remnawave_user(
         self,
         db: AsyncSession,

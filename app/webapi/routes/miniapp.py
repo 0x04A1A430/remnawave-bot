@@ -6791,15 +6791,14 @@ async def purchase_tariff_endpoint(
         await db.commit()
         await db.refresh(subscription)
 
-    # Синхронизируем с RemnaWave
-    # При покупке тарифа ВСЕГДА сбрасываем трафик в панели
+    # Синхронизируем с RemnaWave: новая подписка панели ещё не известна — sync
+    # выберет create; существующая — update. При покупке тарифа ВСЕГДА сбрасываем трафик.
     service = SubscriptionService()
-    await service.update_remnawave_user(
+    await service.sync_remnawave_user(
         db,
         subscription,
         reset_traffic=True,
         reset_reason='покупка тарифа (miniapp)',
-        sync_squads=True,
     )
 
     # Сохраняем корзину для автопродления
