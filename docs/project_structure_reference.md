@@ -233,7 +233,7 @@
   Функции: `get_certificate_status`, `upload_certificate`, `delete_certificate`
 - `app/cabinet/routes/admin_partners.py` — Python-модуль
   Классы: `PartnerSettingsResponse`, `PartnerSettingsUpdateRequest`
-  Функции: `get_partner_settings` — Get partner system settings., `update_partner_settings` — Update partner system settings., `list_applications` — List partner applications., `approve_application` — Approve a partner application., `reject_application` — Reject a partner application., `get_partner_stats` — Get overall partner statistics., `list_partners` — List approved partners., `list_referral_levels` — Список уровней реферальных наград и текущая схема., `upsert_referral_level` — Создать или обновить правило уровня., `remove_referral_level` — Удалить правило уровня., `update_referral_depth` — Сколько звеньев цепочки получают награду., `import_legacy_referral_settings` — Перенести действующие настройки ``REFERRAL_*`` в уровень 1., `update_referral_levels_mode` — Что означает номер уровня: глубина цепочки или ранг партнёра., `update_referral_scheme` — Переключить схему наград., `get_partner_detail` — Get detailed partner info., `update_commission` — Update partner commission percent., `revoke_partner` — Revoke partner status., `assign_campaign` — Assign a campaign to a partner., `unassign_campaign` — Unassign a campaign from a partner.
+  Функции: `get_partner_settings` — Get partner system settings., `update_partner_settings` — Update partner system settings — в system_settings, с применением сразу., `list_applications` — List partner applications., `approve_application` — Approve a partner application., `reject_application` — Reject a partner application., `get_partner_stats` — Get overall partner statistics., `list_partners` — List approved partners., `list_referral_levels` — Список уровней реферальных наград и текущая схема., `upsert_referral_level` — Создать или обновить правило уровня., `remove_referral_level` — Удалить правило уровня., `update_referral_depth` — Сколько звеньев цепочки получают награду., `import_legacy_referral_settings` — Перенести действующие настройки ``REFERRAL_*`` в уровень 1., `update_referral_levels_mode` — Что означает номер уровня: глубина цепочки или ранг партнёра., `update_referral_scheme` — Переключить схему наград., `get_partner_detail` — Get detailed partner info., `update_commission` — Update partner commission percent., `revoke_partner` — Revoke partner status., `assign_campaign` — Assign a campaign to a partner., `unassign_campaign` — Unassign a campaign from a partner.
 - `app/cabinet/routes/admin_payment_methods.py` — Python-модуль
   Классы: `SubOptionInfo`, `PaymentMethodConfigResponse`, `PaymentMethodConfigUpdateRequest` (2 методов), `SortOrderRequest`, `PromoGroupSimple`
   Функции: `list_payment_methods` — List all payment method configurations., `list_promo_groups` — List all promo groups for filter selector., `get_payment_method` — Get a single payment method configuration., `update_payment_methods_order` — Batch update sort order for payment methods., `update_payment_method` — Update a payment method configuration.
@@ -284,7 +284,7 @@
   Функции: `list_tariffs` — Get list of all tariffs., `get_available_servers` — Get list of all servers for tariff selection., `get_available_external_squads` — Fetch external squads from RemnaWave panel., `update_tariff_order` — Update the display order of tariffs., `get_tariff` — Get detailed tariff info., `create_new_tariff` — Create a new tariff., `update_existing_tariff` — Update an existing tariff., `delete_existing_tariff` — Delete a tariff., `toggle_tariff` — Toggle tariff active status., `toggle_trial_tariff` — Toggle tariff trial availability., `get_tariff_stats` — Get tariff statistics., `sync_tariff_squads` — Sync squads from tariff to all active/trial subscriptions in Remnawave panel.
 - `app/cabinet/routes/admin_tickets.py` — Python-модуль
   Классы: `AdminTicketUserInfo`, `AdminTicketResponse`, `AdminTicketDetailResponse`, `AdminTicketListResponse`, `AdminReplyRequest` (1 методов), `AdminStatusUpdateRequest`, `AdminPriorityUpdateRequest`, `AdminStatsResponse`, `TicketSettingsResponse`, `TicketSettingsUpdateRequest`
-  Функции: `get_ticket_stats` — Get ticket statistics., `get_ticket_settings` — Get ticket system settings., `update_ticket_settings` — Update ticket system settings., `get_all_tickets` — Get all tickets for admin., `get_ticket_detail` — Get ticket with all messages for admin., `reply_to_ticket` — Reply to a ticket as admin., `update_ticket_status` — Update ticket status., `update_ticket_priority` — Update ticket priority.
+  Функции: `get_ticket_stats` — Get ticket statistics., `get_ticket_settings` — Get ticket system settings., `update_ticket_settings` — Update ticket system settings — SLA в system_settings, режим и уведомления в своём хранилище., `get_all_tickets` — Get all tickets for admin., `get_ticket_detail` — Get ticket with all messages for admin., `reply_to_ticket` — Reply to a ticket as admin., `update_ticket_status` — Update ticket status., `update_ticket_priority` — Update ticket priority.
 - `app/cabinet/routes/admin_traffic.py` — Python-модуль
   Классы: нет
   Функции: `get_traffic_usage` — Get paginated per-user traffic usage by node., `get_traffic_enrichment` — Return enrichment data: device counts, spending, dates, last node., `export_traffic_csv` — Generate CSV with traffic usage and send to admin's Telegram DM.
@@ -354,6 +354,9 @@
 - `app/cabinet/routes/referral.py` — Python-модуль
   Классы: нет
   Функции: `get_referral_info` — Get referral program info for current user., `get_referral_list` — Get list of invited users., `get_referral_earnings` — Get referral earnings history., `update_reward_choice` — Сохранить, что получать и куда класть дни., `get_referral_terms` — Get referral program terms.
+- `app/cabinet/routes/settings_form.py` — Python-модуль
+  Классы: нет
+  Функции: `save_settings_form` — Записать значения по ключам Settings; ``set_value`` сам применяет их в памяти., `env_locked_fields` — Имена полей формы, чьи ключи закреплены в .env (порядок — как в форме)., `form_updates` — Переданные (не None) поля формы → ключи Settings.
 - `app/cabinet/routes/site_verification.py` — Python-модуль
   Классы: нет
   Функции: `get_site_verification` — Return all configured site-verification tokens.
@@ -2903,6 +2906,9 @@
 - `tests/cabinet/test_admin_send_user_message.py` — Python-модуль
   Классы: нет
   Функции: `test_send_message_success`, `test_send_message_email_only_user_rejected` — Email-only юзер → 400 с кодом no_telegram_id, бот не создаётся., `test_send_message_forbidden_maps_to_400_and_closes_session` — Юзер заблокировал бота → 400 с кодом forbidden, сессия бота закрыта., `test_send_message_user_not_found`, `test_send_message_permission_registered` — users:send_message должен существовать в реестре RBAC — иначе
+- `tests/cabinet/test_admin_settings_forms_persist.py` — Python-модуль
+  Классы: `TestPartnerSettings` (3 методов), `TestTicketSettings` (1 методов)
+  Функции: `isolated_settings`, `test_no_cabinet_route_rewrites_dotenv` — Сторож: .env — не хранилище настроек; в контейнере это не тот файл или его нет.
 - `tests/cabinet/test_admin_traffic_period_days.py` — Python-модуль
   Классы: нет
   Функции: `test_dates_are_read_only_where_they_are_assigned` — Чтение start_dt/end_dt не должно жить вне ветки, которая их задаёт., `test_period_days_is_set_in_every_branch` — Обе ветки разбора дат обязаны задать period_days.
