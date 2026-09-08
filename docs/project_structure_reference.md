@@ -1565,7 +1565,7 @@
   Классы: нет
   Функции: `build_start_keyboard`, `send_poll_to_users`, `reward_user_for_poll`, `get_next_question`, `get_question_option`
 - `app/services/pricing_engine.py` — Python-модуль
-  Классы: `TariffBreakdown`, `ClassicBreakdown`, `RenewalPricing` (1 методов), `TariffSwitchResult` (2 методов), `PricingEngine` (19 методов)
+  Классы: `TariffBreakdown`, `ClassicBreakdown`, `RenewalPricing` (1 методов), `TariffSwitchResult` (2 методов), `PricingEngine` (20 методов)
   Функции: нет
 - `app/services/privacy_policy_service.py` — Python-модуль
   Классы: `PrivacyPolicyService` (9 методов)
@@ -2942,6 +2942,9 @@
 - `tests/cabinet/test_coupon_routes.py` — Python-модуль
   Классы: нет
   Функции: `test_coupon_routes_registered`, `test_coupons_permissions_registered`, `test_create_batch_returns_links_and_tokens`, `test_create_batch_rejects_inactive_tariff`, `test_create_batch_rejects_blank_name`, `test_get_batch_404_when_missing`, `test_links_export_counts_active_only`, `test_revoke_returns_count_and_updated_card`, `test_redeem_success_for_telegram_user_sends_no_email`, `test_redeem_notifies_email_only_user`, `test_redeem_maps_service_errors_to_structured_contract`, `test_public_status_returns_offer_for_active_coupon`, `test_public_status_is_uniform_404_for_consumed_coupon`, `test_public_status_rate_limited`, `test_public_status_rejects_malformed_token_without_db_hit`
+- `tests/cabinet/test_daily_price_display.py` — Python-модуль
+  Классы: `TestDailyGroupPrice` (3 методов), `TestPurchaseOptionsDailyPrice` (2 методов)
+  Функции: нет
 - `tests/cabinet/test_deleted_user_revival.py` — Python-модуль
   Классы: нет
   Функции: `db`, `test_dependencies_auto_revives_deleted_user_with_valid_init_data` — REGRESSION: signed initData proving same telegram_id → revive in place., `test_dependencies_rejects_deleted_user_without_init_data` — Without a fresh signature, return structured 403 — never auto-revive., `test_dependencies_rejects_deleted_user_with_mismatched_init_data` — initData proving DIFFERENT telegram_id → cross-account 401, NOT revival., `test_dependencies_blocks_revival_for_blacklisted_deleted_user` — A DELETED + blacklisted row must NOT be revived. Banned stays banned., `test_dependencies_blacklist_runs_before_status_check_for_no_init_data` — REGRESSION: blacklisted+DELETED without initData must still return, `test_dependencies_preserves_blocked_status_with_generic_message` — Status=BLOCKED is an admin action, not inactivity — generic 403., `test_dependencies_active_user_still_passes_through` — Negative-control: ACTIVE user is unaffected by all the new branches., `test_dependencies_auto_revive_persists_via_db_commit` — Pin the caller-owns-commit contract at the dependency boundary., `test_dependencies_rejects_deleted_user_with_invalid_init_data` — initData header present but signature INVALID → falls back to no-proof path., `test_dependencies_deleted_email_only_user_without_telegram_id` — Email-only DELETED user (telegram_id=None) → 403 account_deleted, no AttributeError.

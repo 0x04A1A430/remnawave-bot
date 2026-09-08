@@ -124,6 +124,23 @@ class PricingEngine:
         return after_offer, group_discount_value, offer_discount_value
 
     @staticmethod
+    def daily_group_price(daily_price_kopeks: int, user: User | None) -> tuple[int, int]:
+        """Суточная цена «за день» — только со скидкой промогруппы: (цена, процент группы).
+
+        Ровно столько списывается каждый день (daily_subscription_service) и ровно это
+        показывают опции покупки и ответ о подписке. Скидку промокода сервер сюда не
+        вкладывает: её накладывает кабинет для показа и списание — при покупке, один раз.
+        Иначе карточка накладывала промокод второй раз поверх серверной цены (−36 % вместо −20 %).
+        """
+        if daily_price_kopeks <= 0:
+            return daily_price_kopeks, 0
+        promo_group = PricingEngine.resolve_promo_group(user)
+        group_pct = promo_group.get_discount_percent('period', 1) if promo_group else 0
+        if group_pct <= 0:
+            return daily_price_kopeks, 0
+        return PricingEngine.apply_discount(daily_price_kopeks, group_pct), group_pct
+
+    @staticmethod
     def resolve_promo_group(user: User | None):
         """Resolve primary promo group: get_primary_promo_group() first, fallback to user.promo_group."""
         if not user:
