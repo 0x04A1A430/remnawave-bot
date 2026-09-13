@@ -1204,6 +1204,8 @@ async def runtime_lab(monkeypatch):
     runtime = rt.GraceAccessRuntime()
     runtime._mode = GraceAccessMode.ACTIVE
     runtime.bot = object()
+    # Хук после коммита берёт бота с общего синглтона — как в проде (main.py).
+    monkeypatch.setattr(rt.grace_access_runtime, 'bot', runtime.bot)
     try:
         yield SimpleNamespace(rt=rt, runtime=runtime, announce=announce)
     finally:
@@ -1278,5 +1280,44 @@ async def test_an_unchanged_reconciliation_is_silent(runtime_lab, monkeypatch):
     )
 
     await runtime_lab.runtime._process_open(42, drain=False, force_restore=False)
+
+    runtime_lab.announce.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_renewal_announces_grace_end_only_after_the_callers_commit(runtime_lab):
+    """Продление закрывает grace внутри чужой транзакции: объявлять — после её коммита."""
+    import asyncio
+
+    rt = runtime_lab.rt
+    async with rt.AsyncSessionLocal() as db:
+        rt.announce_grace_event_after_commit(db, 42, 'ended')
+        await db.execute(rt.select(rt.Subscription.id).where(rt.Subscription.id == 42))
+        await asyncio.sleep(0)
+        runtime_lab.announce.assert_not_awaited()
+
+        await db.commit()
+        await asyncio.sleep(0)
+        await asyncio.sleep(0)
+
+    runtime_lab.announce.assert_awaited_once_with(runtime_lab.runtime.bot, 42, 'ended')
+
+    # Хук одноразовый: следующий коммит той же сессии ничего не объявляет.
+    async with rt.AsyncSessionLocal() as db:
+        await db.commit()
+        await asyncio.sleep(0)
+    runtime_lab.announce.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_rolled_back_renewal_announces_nothing(runtime_lab):
+    import asyncio
+
+    rt = runtime_lab.rt
+    async with rt.AsyncSessionLocal() as db:
+        rt.announce_grace_event_after_commit(db, 42, 'ended')
+        await db.execute(rt.select(rt.Subscription.id).where(rt.Subscription.id == 42))
+        await db.rollback()
+        await asyncio.sleep(0)
 
     runtime_lab.announce.assert_not_awaited()

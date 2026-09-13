@@ -1213,12 +1213,42 @@ async def apply_recovered_grace_update_locked(
     if not completed:
         raise GracePanelError('Recovered grace session changed before it could be completed')
 
+    # Состояние сессии закоммитит вызывающий (продление, обычный апдейт панели):
+    # объявлять раньше нельзя — уведомление читает сессию из базы и увидело бы
+    # ещё открытую, а откат транзакции сделал бы объявление ложным.
+    announce_grace_event_after_commit(db, subscription_id, 'ended')
     logger.info(
         'Grace access completed by the canonical renewal update',
         subscription_id=subscription_id,
         source=source,
     )
     return True, updated
+
+
+#: Фоновые задачи уведомлений: без ссылки asyncio может собрать задачу до конца.
+_announce_tasks: set[asyncio.Task[None]] = set()
+
+
+def announce_grace_event_after_commit(db: AsyncSession, subscription_id: int, event: str) -> None:
+    """Объявить о событии grace, когда вызывающий закоммитит свою транзакцию.
+
+    Пути продления (CRUD, сервис подписок, обычный апдейт панели) закрывают grace
+    внутри чужой транзакции. Хук ``after_commit`` срабатывает один раз и только
+    на успешном коммите: откат — и объявления нет. Само уведомление — фоновая
+    задача: оно не должно ни задерживать продление, ни уронить его сбоем.
+    """
+    from sqlalchemy import event as sa_event
+
+    def _fire(_session: Any) -> None:
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            return
+        task = loop.create_task(announce_grace_event(grace_access_runtime.bot, subscription_id, event))
+        _announce_tasks.add(task)
+        task.add_done_callback(_announce_tasks.discard)
+
+    sa_event.listen(db.sync_session, 'after_commit', _fire, once=True)
 
 
 @asynccontextmanager
@@ -1270,12 +1300,10 @@ async def update_panel_user_grace_safe(
 ) -> Any:
     """Обычный панельный апдейт, не затирающий открытый grace; продление закрывает grace.
 
-    Уведомление о закрытии уходит после того, как лиза закоммитила состояние сессии,
-    поэтому сама запись вынесена в ``_update_panel_user_grace_safe_locked``.
+    О закрытии grace продлением объявляет ``apply_recovered_grace_update_locked``
+    хуком после коммита вызывающего — одинаково для всех путей продления.
     """
-    updated, completed = await _update_panel_user_grace_safe_locked(api, subscription_id, **update_kwargs)
-    if completed:
-        await announce_grace_event(grace_access_runtime.bot, subscription_id, 'ended')
+    updated, _completed = await _update_panel_user_grace_safe_locked(api, subscription_id, **update_kwargs)
     return updated
 
 
