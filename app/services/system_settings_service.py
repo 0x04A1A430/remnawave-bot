@@ -854,7 +854,7 @@ class BotConfigurationService:
             'example': 'Telegram и личный кабинет',
         },
         'GRACE_ACCESS_NOTIFY_USER': {
-            'description': 'Сообщать человеку в бота, что подписка закончилась, но на время grace оставлен доступ только к Telegram, и когда этот доступ закрылся.',
+            'description': 'Сообщать человеку в бота, что подписка закончилась, но на время grace оставлен доступ к тому, что названо в GRACE_ACCESS_ALLOWED_SERVICES, и когда этот доступ закрылся.',
             'format': 'Булево значение.',
             'example': 'true',
         },

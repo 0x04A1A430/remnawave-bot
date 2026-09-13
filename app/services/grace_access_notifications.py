@@ -131,6 +131,7 @@ async def _notify_admins(bot: Any, event: GraceEvent, subscription: Subscription
         grace_until=details.grace_until,
         hours=details.hours,
         quota_gb=details.quota_gb,
+        allowed=html.escape(grace_allowed_services(), quote=False),
         completion_reason=details.completion_reason,
         last_error=details.last_error,
     )

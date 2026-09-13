@@ -69,3 +69,14 @@ def test_ended_email_says_access_is_closed():
     template = EmailNotificationTemplates().get_template(NotificationType.GRACE_ACCESS_ENDED, 'en', CONTEXT)
 
     assert 'closed' in template['body_html'] and 'Telegram и личный кабинет' in template['body_html']
+
+
+@pytest.mark.parametrize('event', ['granted', 'ended'])
+@pytest.mark.parametrize('language', ['ru', 'en', 'zh', 'ua'])
+def test_operator_phrase_stands_in_a_case_neutral_slot_in_email(event, language):
+    """Фразу оператора нельзя склонять: слот после двоеточия подходит любой фразе."""
+    import re
+
+    _subject, body, _why = EmailNotificationTemplates.GRACE_EMAIL_COPY[event][language]
+
+    assert re.search(r'[:：]\s*<strong>\{allowed\}</strong>', body), f'{event}/{language}: {body}'

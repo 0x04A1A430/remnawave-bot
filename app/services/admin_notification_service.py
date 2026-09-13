@@ -1731,13 +1731,15 @@ class AdminNotificationService:
         grace_until: datetime,
         hours: int,
         quota_gb: float,
+        allowed: str,
         completion_reason: str | None = None,
         last_error: str | None = None,
     ) -> bool:
         """Выдача или завершение grace-доступа — в чат админов, категория «Продления».
 
         Владелец: «выдача втухлую — это тупо»: админ обязан видеть, кому, почему и до
-        какого срока бот временно оставил доступ только к Telegram, и чем это
+        какого срока бот временно оставил доступ к тому, что оператор назвал в
+        GRACE_ACCESS_ALLOWED_SERVICES (``allowed``, уже экранировано), и чем это
         закончилось — продлением, истечением срока или конфликтом с панелью.
         """
         try:
@@ -1761,7 +1763,7 @@ class AdminNotificationService:
 
 📋 <b>Подписка:</b> {subscription_line}
 ⚠️ <b>Почему:</b> {reason_line}
-🛟 <b>Что выдано:</b> только Telegram, {quota_text} на {hours} ч.
+🛟 <b>Что выдано:</b> {allowed}, {quota_text} на {hours} ч.
 ⏳ <b>Действует до:</b> {until_text}
 
 ⏰ <i>{format_local_datetime(datetime.now(UTC), '%d.%m.%Y %H:%M:%S')}</i>"""

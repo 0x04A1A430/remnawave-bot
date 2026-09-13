@@ -262,4 +262,33 @@ async def test_empty_phrase_falls_back_to_telegram(lab, monkeypatch):
 
     await notify.announce_grace_event(lab.bot, 10, 'granted')
 
-    assert 'только к Telegram и' in lab.user.await_args.kwargs['telegram_message']
+    assert 'только: Telegram.' in lab.user.await_args.kwargs['telegram_message']
+
+
+@pytest.mark.asyncio
+async def test_admins_see_the_operator_phrase_not_a_hardcoded_telegram(lab):
+    """Стенд 2026-09-14: человеку писали «Telegram и личный кабинет», админу — «только Telegram»."""
+    await _seed(lab.maker)
+
+    await notify.announce_grace_event(lab.bot, 10, 'granted')
+
+    text = lab.admin.await_args.args[0]
+    assert 'Telegram и личный кабинет' in text
+    assert 'только Telegram,' not in text
+
+
+@pytest.mark.parametrize('language', ['ru', 'en', 'zh', 'ua', 'fa'])
+@pytest.mark.parametrize('key', ['GRACE_ACCESS_GRANTED_EXPIRED', 'GRACE_ACCESS_GRANTED_LIMITED', 'GRACE_ACCESS_ENDED'])
+def test_operator_phrase_stands_in_a_case_neutral_slot(language, key):
+    """Фразу «что доступно» пишет оператор в именительном падеже, склонять её нельзя.
+
+    Стенд 2026-09-14: «доступ только к Telegram и личный кабинет». Слот после
+    двоеточия подходит любой фразе на любом языке.
+    """
+    import json
+    import re
+    from pathlib import Path
+
+    template = json.loads((Path('app/localization/locales') / f'{language}.json').read_text(encoding='utf-8'))[key]
+
+    assert re.search(r'[:：]\s*\{allowed\}', template), f'{language}.{key}: {{allowed}} должен стоять после двоеточия'

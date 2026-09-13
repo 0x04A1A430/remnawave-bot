@@ -842,44 +842,44 @@ class EmailNotificationTemplates:
         'granted': {
             'ru': (
                 'Подписка закончилась, но связь оставили',
-                '<p>Ваша подписка{tariff} {why}. На <strong>{hours} ч.</strong> у вас остаётся доступ только к <strong>{allowed}</strong> и {traffic_gb} ГБ трафика — чтобы вы могли продлить подписку.</p><p>Остальное не работает до продления. Доступ действует до <strong>{until}</strong>.</p>',
+                '<p>Ваша подписка{tariff} {why}. На <strong>{hours} ч.</strong> доступно только: <strong>{allowed}</strong>. Трафика на это время — {traffic_gb} ГБ, чтобы вы успели продлить подписку.</p><p>Остальное не работает до продления. Доступ действует до <strong>{until}</strong>.</p>',
                 {'expired': 'закончилась', 'limited': 'исчерпала трафик'},
             ),
             'en': (
                 'Subscription ended, but you are not cut off',
-                '<p>Your subscription{tariff} {why}. For <strong>{hours} h</strong> you keep access to <strong>{allowed}</strong> only, with {traffic_gb} GB of traffic, so you can renew.</p><p>Everything else stays off until you renew. Access lasts until <strong>{until}</strong>.</p>',
+                '<p>Your subscription{tariff} {why}. For <strong>{hours} h</strong> only this stays available: <strong>{allowed}</strong>. You have {traffic_gb} GB of traffic for it, so you can renew.</p><p>Everything else stays off until you renew. Access lasts until <strong>{until}</strong>.</p>',
                 {'expired': 'has ended', 'limited': 'has used up its traffic'},
             ),
             'zh': (
                 '订阅已到期，但未完全断开',
-                '<p>您的订阅{tariff}{why}。在 <strong>{hours} 小时</strong>内，您仅可访问 <strong>{allowed}</strong>，并有 {traffic_gb} GB 流量，以便续订。</p><p>续订前其他一切不可用。访问有效至 <strong>{until}</strong>。</p>',
+                '<p>您的订阅{tariff}{why}。在 <strong>{hours} 小时</strong>内仅可使用：<strong>{allowed}</strong>。此期间有 {traffic_gb} GB 流量，以便续订。</p><p>续订前其他一切不可用。访问有效至 <strong>{until}</strong>。</p>',
                 {'expired': '已到期', 'limited': '的流量已用完'},
             ),
             'ua': (
                 "Підписка закінчилась, але зв'язок залишили",
-                '<p>Ваша підписка{tariff} {why}. На <strong>{hours} год.</strong> у вас лишається доступ тільки до <strong>{allowed}</strong> і {traffic_gb} ГБ трафіку — щоб ви могли продовжити підписку.</p><p>Решта не працює до продовження. Доступ діє до <strong>{until}</strong>.</p>',
+                '<p>Ваша підписка{tariff} {why}. На <strong>{hours} год.</strong> доступно лише: <strong>{allowed}</strong>. Трафіку на цей час — {traffic_gb} ГБ, щоб ви встигли продовжити підписку.</p><p>Решта не працює до продовження. Доступ діє до <strong>{until}</strong>.</p>',
                 {'expired': 'закінчилась', 'limited': 'вичерпала трафік'},
             ),
         },
         'ended': {
             'ru': (
                 'Временный доступ закончился',
-                '<p>Подписка{tariff} так и не продлена, доступ к <strong>{allowed}</strong> закрыт.</p><p>Продлите подписку, чтобы вернуть VPN.</p>',
+                '<p>Подписка{tariff} так и не продлена, временный доступ закрыт. Больше не работает и то, что оставалось: <strong>{allowed}</strong>.</p><p>Продлите подписку, чтобы вернуть VPN.</p>',
                 {},
             ),
             'en': (
                 'Temporary access has ended',
-                '<p>Subscription{tariff} was not renewed, access to <strong>{allowed}</strong> is closed.</p><p>Renew to get your VPN back.</p>',
+                '<p>Subscription{tariff} was not renewed, temporary access is closed. What was still available is now off too: <strong>{allowed}</strong>.</p><p>Renew to get your VPN back.</p>',
                 {},
             ),
             'zh': (
                 '临时访问已结束',
-                '<p>订阅{tariff}未续订，对 <strong>{allowed}</strong> 的访问已关闭。</p><p>请续订以恢复 VPN。</p>',
+                '<p>订阅{tariff}未续订，临时访问已关闭。此前保留的部分现已不可用：<strong>{allowed}</strong>。</p><p>请续订以恢复 VPN。</p>',
                 {},
             ),
             'ua': (
                 'Тимчасовий доступ закінчився',
-                '<p>Підписку{tariff} так і не продовжено, доступ до <strong>{allowed}</strong> закрито.</p><p>Продовжте підписку, щоб повернути VPN.</p>',
+                '<p>Підписку{tariff} так і не продовжено, тимчасовий доступ закрито. Більше не працює і те, що залишалось: <strong>{allowed}</strong>.</p><p>Продовжте підписку, щоб повернути VPN.</p>',
                 {},
             ),
         },
