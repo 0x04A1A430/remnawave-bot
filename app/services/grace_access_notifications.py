@@ -13,6 +13,7 @@ grace. Ключи ``GRACE_ACCESS_NOTIFY_ADMINS`` / ``GRACE_ACCESS_NOTIFY_USER``
 
 from __future__ import annotations
 
+import html
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any, Literal
@@ -158,23 +159,46 @@ async def _notify_user(bot: Any, event: GraceEvent, subscription: Subscription, 
         return
 
     tariff = subscription.tariff
+    tariff_name = str(getattr(tariff, 'name', '') or '') if tariff else ''
+    # Всё, что попадает в HTML Telegram и письма, экранируется: фразу «что доступно»
+    # и имя тарифа пишет оператор, а разметку сообщения — мы.
+    allowed = html.escape(grace_allowed_services(), quote=False)
     context = {
-        'tariff_label': f' «{tariff.name}»' if settings.is_multi_tariff_enabled() and tariff else '',
+        'tariff_label': f' «{html.escape(tariff_name, quote=False)}»'
+        if settings.is_multi_tariff_enabled() and tariff_name
+        else '',
+        'allowed': allowed,
         'hours': details.hours,
         'traffic_gb': f'{details.quota_gb:g}',
         'until': format_local_datetime(details.grace_until, '%d.%m.%Y %H:%M'),
     }
     message = template.format(**context)
+    # Письму — сырые значения: его шаблон экранирует сам, а редактор писем
+    # подставляет их в свой текст.
+    email_context = {
+        'text_key': text_key,
+        'allowed': grace_allowed_services(),
+        'hours': details.hours,
+        'traffic_gb': f'{details.quota_gb:g}',
+        'until': context['until'],
+        'reason': details.reason,
+        'tariff_name': tariff_name,
+    }
     renew = build_subscription_extend_button(texts.get('WEBHOOK_RENEW_BUTTON', 'Renew subscription'), subscription.id)
     close = InlineKeyboardButton(text=texts.get('WEBHOOK_CLOSE_BUTTON', '✖️ Закрыть'), callback_data='webhook:close')
     await notification_delivery_service.send_notification(
         user=user,
         notification_type=notification_type,
-        context={'text_key': text_key, **context},
+        context=email_context,
         bot=bot,
         telegram_message=message,
         telegram_markup=InlineKeyboardMarkup(inline_keyboard=[[renew], [close]]),
     )
+
+
+def grace_allowed_services() -> str:
+    """Что остаётся доступным во время grace — словами оператора; пусто = Telegram."""
+    return (getattr(settings, 'GRACE_ACCESS_ALLOWED_SERVICES', '') or '').strip() or 'Telegram'
 
 
 def _as_utc(value: datetime) -> datetime:

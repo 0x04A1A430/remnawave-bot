@@ -848,6 +848,11 @@ class BotConfigurationService:
             'example': 'true',
             'dependencies': 'ADMIN_NOTIFICATIONS_ENABLED, ADMIN_NOTIFICATIONS_RENEWALS_ENABLED',
         },
+        'GRACE_ACCESS_ALLOWED_SERVICES': {
+            'description': 'Что остаётся доступным во время grace — так, как это увидит человек в сообщении бота и в письме: «Telegram», «Telegram и личный кабинет», «сайт проекта». Сам доступ определяют ноды сквада grace, бот только сообщает.',
+            'format': 'Короткая фраза.',
+            'example': 'Telegram и личный кабинет',
+        },
         'GRACE_ACCESS_NOTIFY_USER': {
             'description': 'Сообщать человеку в бота, что подписка закончилась, но на время grace оставлен доступ только к Telegram, и когда этот доступ закрылся.',
             'format': 'Булево значение.',

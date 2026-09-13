@@ -54,6 +54,9 @@ FIELD_KEYS: dict[str, str] = {
     'reconcile_interval_seconds': 'GRACE_ACCESS_RECONCILE_INTERVAL_SECONDS',
     'reconcile_batch_size': 'GRACE_ACCESS_RECONCILE_BATCH_SIZE',
     'candidate_lookback_minutes': 'GRACE_ACCESS_CANDIDATE_LOOKBACK_MINUTES',
+    'allowed_services': 'GRACE_ACCESS_ALLOWED_SERVICES',
+    'notify_admins': 'GRACE_ACCESS_NOTIFY_ADMINS',
+    'notify_user': 'GRACE_ACCESS_NOTIFY_USER',
 }
 
 # Read once at startup by GraceAccessRuntime.start / _run_loop, so a saved value sits
@@ -108,6 +111,10 @@ class GraceAccessConfig(BaseModel):
     reconcile_interval_seconds: int
     reconcile_batch_size: int
     candidate_lookback_minutes: int
+    # Что остаётся доступным во время grace — фраза оператора для сообщений человеку.
+    allowed_services: str
+    notify_admins: bool
+    notify_user: bool
 
 
 class GraceAccessRuntimeState(BaseModel):
@@ -173,6 +180,9 @@ class GraceAccessUpdate(BaseModel):
     reconcile_interval_seconds: int | None = Field(default=None, ge=5, le=86400)
     reconcile_batch_size: int | None = Field(default=None, ge=1, le=10000)
     candidate_lookback_minutes: int | None = Field(default=None, ge=1, le=10080)
+    allowed_services: str | None = Field(default=None, max_length=120)
+    notify_admins: bool | None = None
+    notify_user: bool | None = None
 
 
 class GraceSessionUser(BaseModel):
@@ -297,6 +307,9 @@ def _collect_issues(config: GraceAccessConfig, *, open_sessions: int, running_mo
 
     if config.traffic_gb < 1:
         issues.append(GraceAccessIssue(field='traffic_gb', code='traffic_required', severity=weight))
+    if config.notify_user and not (config.allowed_services or '').strip():
+        # Сообщение человеку начинается с «доступ только к …» — без фразы оно бессмысленно.
+        issues.append(GraceAccessIssue(field='allowed_services', code='allowed_required', severity=weight))
 
     # A non-mutating runtime never finishes what an earlier active run started: those
     # users keep the grace overlay in the panel until someone switches to drain or runs
@@ -333,6 +346,7 @@ def _validate_for_mode(config: GraceAccessConfig, *, running_mode: str) -> None:
         'squad_required': "'{field}' is required while grace is active",
         'squad_invalid': "'{field}' must contain a valid UUID",
         'traffic_required': "'traffic_gb' must be at least 1 while grace is active",
+        'allowed_required': "'allowed_services' must name what stays reachable while user notifications are on",
     }
     reasons = '; '.join(labels[issue.code].format(field=issue.field) for issue in blockers)
     raise HTTPException(status.HTTP_400_BAD_REQUEST, f'Grace access cannot run with this configuration: {reasons}')
@@ -543,6 +557,8 @@ async def update_grace_access(
     for field in ('expired_squad_uuid', 'limited_squad_uuid', 'external_squad_uuid'):
         if field in patch:
             patch[field] = _normalize_squad(patch[field] or '')
+    if 'allowed_services' in patch:
+        patch['allowed_services'] = ' '.join(str(patch['allowed_services'] or '').split())
 
     # Unchanged fields are dropped before the env-lock check: the page submits the whole
     # form, and rejecting it because one pinned field came back with its own value would

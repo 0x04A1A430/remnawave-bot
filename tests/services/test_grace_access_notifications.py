@@ -112,6 +112,7 @@ async def lab(monkeypatch):
     monkeypatch.setattr(settings, 'GRACE_ACCESS_NOTIFY_ADMINS', True)
     monkeypatch.setattr(settings, 'GRACE_ACCESS_NOTIFY_USER', True)
     monkeypatch.setattr(settings, 'GRACE_ACCESS_DURATION_HOURS', 72)
+    monkeypatch.setattr(settings, 'GRACE_ACCESS_ALLOWED_SERVICES', 'Telegram и личный кабинет')
     # Подпись тарифа в тексте — правило мультитарифа, как у вебхуков.
     monkeypatch.setattr(settings, 'SALES_MODE', 'tariffs')
     monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', True)
@@ -149,8 +150,12 @@ async def test_granted_tells_the_user_in_their_language_with_a_renew_button(lab)
     assert kwargs['notification_type'] is NotificationType.GRACE_ACCESS_GRANTED
     assert kwargs['bot'] is lab.bot
     message = kwargs['telegram_message']
-    assert 'Telegram' in message and '72' in message and '1 ГБ' in message and '«Стартовый»' in message
+    assert 'Telegram и личный кабинет' in message, 'что доступно — фраза оператора, не прибитый Telegram'
+    assert '72' in message and '1 ГБ' in message and '«Стартовый»' in message
     assert '{' not in message, 'все подстановки заполнены'
+    email = kwargs['context']
+    assert email['allowed'] == 'Telegram и личный кабинет' and email['reason'] == 'expired'
+    assert email['tariff_name'] == 'Стартовый' and email['hours'] == 72
     buttons = [button.text for row in kwargs['telegram_markup'].inline_keyboard for button in row]
     assert any('родл' in label.lower() for label in buttons), buttons
 
@@ -232,3 +237,29 @@ async def test_delivery_failure_never_reaches_the_caller(lab):
     await notify.announce_grace_event(lab.bot, 10, 'granted')
 
     assert lab.user.await_count == 1, 'сбой одного канала не глушит другой'
+
+
+@pytest.mark.asyncio
+async def test_operator_phrase_and_tariff_are_escaped_for_telegram_markup(lab, monkeypatch):
+    """Сообщение — HTML Telegram: угловые скобки из настройки ломали бы разметку."""
+    await _seed(lab.maker)
+    monkeypatch.setattr(settings, 'GRACE_ACCESS_ALLOWED_SERVICES', 'Telegram <b>и кабинет</b>')
+
+    await notify.announce_grace_event(lab.bot, 10, 'granted')
+
+    message = lab.user.await_args.kwargs['telegram_message']
+    assert '&lt;b&gt;и кабинет&lt;/b&gt;' in message
+    assert message.count('<b>') == 1, 'жирным остаётся только наш заголовок'
+    assert lab.user.await_args.kwargs['context']['allowed'] == 'Telegram <b>и кабинет</b>', (
+        'письму — сырое, оно экранирует само'
+    )
+
+
+@pytest.mark.asyncio
+async def test_empty_phrase_falls_back_to_telegram(lab, monkeypatch):
+    await _seed(lab.maker)
+    monkeypatch.setattr(settings, 'GRACE_ACCESS_ALLOWED_SERVICES', '   ')
+
+    await notify.announce_grace_event(lab.bot, 10, 'granted')
+
+    assert 'только к Telegram и' in lab.user.await_args.kwargs['telegram_message']
