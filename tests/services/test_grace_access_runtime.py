@@ -7,6 +7,7 @@ from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
+import pytest_asyncio
 
 from app.database.models import GraceAccessSessionModel
 from app.external.remnawave_api import (
@@ -1142,3 +1143,140 @@ def test_expired_target_matches_only_an_expired_panel_and_ignores_the_date() -> 
     assert _panel_matches_target(snapshot('EXPIRED'), target)
     assert not _panel_matches_target(snapshot('ACTIVE'), target)
     assert not _panel_matches_target(snapshot('DISABLED'), target), 'DISABLED — чужое решение, не наш EXPIRED'
+
+
+# ==================== уведомления из рантайма ====================
+
+
+class _StubCore:
+    def __init__(self, *, start=None, reconcile=None) -> None:
+        self._start = start
+        self._reconcile = reconcile
+
+    async def start_if_eligible(self, billing, reason):
+        return self._start
+
+    async def reconcile(self, *, limit=None):
+        return self._reconcile
+
+    async def drain(self, *, limit=None, force_restore=False):
+        return self._reconcile
+
+
+@pytest_asyncio.fixture
+async def runtime_lab(monkeypatch):
+    """Рантайм на реальной SQLite с подменённым ядром: проверяем только обвязку."""
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+    from app.database.models import Base, Subscription, User
+    from app.services import grace_access_runtime as rt
+    from app.services.grace_access_service import GraceAccessMode
+    from tests.fixtures.sqlite_memory import ensure_real_aiosqlite
+
+    ensure_real_aiosqlite(monkeypatch)
+    engine = create_async_engine('sqlite+aiosqlite:///:memory:')
+    async with engine.begin() as conn:
+        await conn.run_sync(lambda c: Base.metadata.create_all(c, tables=list(Base.metadata.sorted_tables)))
+    maker = async_sessionmaker(engine, expire_on_commit=False, autoflush=False)
+    async with maker() as db:
+        db.add(User(id=1, telegram_id=1001, first_name='U', language='ru', status='active', balance_kopeks=0))
+        await db.flush()
+        db.add(
+            Subscription(
+                id=42,
+                remnawave_short_id='sub42',
+                user_id=1,
+                status='expired',
+                is_trial=False,
+                start_date=NOW - timedelta(days=31),
+                end_date=NOW - timedelta(days=1),
+                traffic_limit_gb=10,
+                traffic_used_gb=1.0,
+                device_limit=3,
+                connected_squads=[REGULAR_SQUAD],
+                remnawave_id=PANEL_ID,
+            )
+        )
+        await db.commit()
+    monkeypatch.setattr(rt, 'AsyncSessionLocal', maker)
+    announce = AsyncMock()
+    monkeypatch.setattr(rt, 'announce_grace_event', announce)
+    runtime = rt.GraceAccessRuntime()
+    runtime._mode = GraceAccessMode.ACTIVE
+    runtime.bot = object()
+    try:
+        yield SimpleNamespace(rt=rt, runtime=runtime, announce=announce)
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_a_fresh_grant_is_announced_after_the_commit(runtime_lab, monkeypatch):
+    from app.services.grace_access_service import GraceStartDecision, GraceStartResult
+
+    session = SimpleNamespace(state=GraceSessionState.ACTIVE)
+    monkeypatch.setattr(
+        runtime_lab.rt,
+        '_build_core',
+        lambda db, subscription_id=None: _StubCore(start=GraceStartResult(GraceStartDecision.STARTED, session)),
+    )
+
+    await runtime_lab.runtime.consider_candidate(42, GraceReason.EXPIRED, source='worker')
+
+    runtime_lab.announce.assert_awaited_once_with(runtime_lab.runtime.bot, 42, 'granted')
+
+
+@pytest.mark.asyncio
+async def test_a_repeated_incident_is_not_announced_again(runtime_lab, monkeypatch):
+    from app.services.grace_access_service import GraceStartDecision, GraceStartResult
+
+    monkeypatch.setattr(
+        runtime_lab.rt,
+        '_build_core',
+        lambda db, subscription_id=None: _StubCore(start=GraceStartResult(GraceStartDecision.ALREADY_GRANTED, None)),
+    )
+
+    await runtime_lab.runtime.consider_candidate(42, GraceReason.EXPIRED, source='webhook')
+
+    runtime_lab.announce.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ('outcome', 'event'),
+    [
+        ({'activated': 1}, 'granted'),
+        ({'paid': 1}, 'ended'),
+        ({'timed_out': 1}, 'ended'),
+        ({'drained': 1}, 'ended'),
+        ({'revoked': 1}, 'ended'),
+        ({'conflicts': 1}, 'ended'),
+    ],
+)
+async def test_reconciliation_outcomes_are_announced(runtime_lab, monkeypatch, outcome, event):
+    from app.services.grace_access_service import GraceReconcileResult
+
+    monkeypatch.setattr(
+        runtime_lab.rt,
+        '_build_core',
+        lambda db, subscription_id=None: _StubCore(reconcile=GraceReconcileResult(inspected=1, **outcome)),
+    )
+
+    await runtime_lab.runtime._process_open(42, drain=False, force_restore=False)
+
+    runtime_lab.announce.assert_awaited_once_with(runtime_lab.runtime.bot, 42, event)
+
+
+@pytest.mark.asyncio
+async def test_an_unchanged_reconciliation_is_silent(runtime_lab, monkeypatch):
+    from app.services.grace_access_service import GraceReconcileResult
+
+    monkeypatch.setattr(
+        runtime_lab.rt,
+        '_build_core',
+        lambda db, subscription_id=None: _StubCore(reconcile=GraceReconcileResult(inspected=1, unchanged=1)),
+    )
+
+    await runtime_lab.runtime._process_open(42, drain=False, force_restore=False)
+
+    runtime_lab.announce.assert_not_awaited()

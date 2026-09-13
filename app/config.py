@@ -270,6 +270,11 @@ class Settings(BaseSettings):
     GRACE_ACCESS_TRIAL_ENABLED: bool = False
     GRACE_ACCESS_DAILY_ENABLED: bool = False
     GRACE_ACCESS_FREE_ENABLED: bool = False
+    # Уведомления о выдаче и завершении grace: админам в чат уведомлений (категория
+    # «Продления») и самому человеку в бота. Молчаливая выдача — «втухлую» — оставляла
+    # и админа, и человека в неведении, что доступ временный и только к Telegram.
+    GRACE_ACCESS_NOTIFY_ADMINS: bool = True
+    GRACE_ACCESS_NOTIFY_USER: bool = True
     GRACE_ACCESS_RECONCILE_INTERVAL_SECONDS: int = 60
     GRACE_ACCESS_RECONCILE_BATCH_SIZE: int = 200
     GRACE_ACCESS_CANDIDATE_LOOKBACK_MINUTES: int = 30

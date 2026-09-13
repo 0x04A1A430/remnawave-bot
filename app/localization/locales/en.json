@@ -2280,5 +2280,8 @@
   "GIFT_COPY_TEXT_HINT": "Tap the text below to copy all of it, then send it to the recipient.",
   "GIFT_COPY_TEXT_BODY": "🎁 I'm giving you a {tariff_name} subscription for {period_days} days.\n\nActivate: {claim_link}\n\nIf the link does not open, enter this code in the bot: {public_code}",
   "GIFT_ITEM_NOT_CLAIMABLE": "This gift has already been activated — there is nothing to share.",
-  "GIFT_MY_BACK_TO_CARD": "◀️ Back to gift"
+  "GIFT_MY_BACK_TO_CARD": "◀️ Back to gift",
+  "GRACE_ACCESS_GRANTED_EXPIRED": "🛟 <b>Subscription{tariff_label} has ended, but the bot stays reachable</b>\n\nFor {hours} h you have Telegram-only access and {traffic_gb} GB of traffic, so you can open the bot and renew. Other sites and apps will not work until you renew.\n\n⏳ Until {until}.",
+  "GRACE_ACCESS_GRANTED_LIMITED": "🛟 <b>Traffic on subscription{tariff_label} is used up, but the bot stays reachable</b>\n\nFor {hours} h you have Telegram-only access and {traffic_gb} GB of traffic, so you can buy more traffic or renew. Other sites and apps will not work until you pay.\n\n⏳ Until {until}.",
+  "GRACE_ACCESS_ENDED": "⌛ <b>Temporary Telegram access has ended</b>\n\nSubscription{tariff_label} was not renewed, access is closed. Renew to get your VPN back."
 }

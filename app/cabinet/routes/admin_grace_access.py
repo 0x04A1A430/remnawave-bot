@@ -212,11 +212,13 @@ class GraceSquadOption(BaseModel):
 class GraceSquadsResponse(BaseModel):
     """Squad picker source.
 
-    ``available=False`` means the panel could not be reached; the page then falls back
-    to a plain UUID field instead of pretending the panel has no squads at all.
+    ``available=False`` means neither the panel nor the bot's synced copy has squads;
+    the page then falls back to a plain identifier field instead of pretending the
+    panel has no squads at all. ``source`` says where a non-empty list came from.
     """
 
     available: bool
+    source: Literal['panel', 'synced'] | None = None
     items: list[GraceSquadOption]
 
 
@@ -388,30 +390,36 @@ async def get_grace_access_overview(
 @router.get('/squads', response_model=GraceSquadsResponse)
 async def list_grace_squads(
     admin: User = Depends(require_permission('settings:read')),
+    db: AsyncSession | None = Depends(get_cabinet_db),
 ):
-    """Squads offered by the panel, for picking the grace squads by name.
+    """Squads for picking the grace squads by name — live from the panel, else from the bot's own copy.
 
     Guarded by the same permission as the rest of this page on purpose: an admin who
     may configure grace must be able to see the list, without also being granted the
     full RemnaWave section.
+
+    Владелец: «указывать UUID сквада зачем, бот же сам их тянет при синхроне». Панель
+    недоступна — список берётся из ``server_squads``, которые синхронизация уже
+    привезла; ручной ввод остаётся только когда нет ни того, ни другого.
     """
     try:
         from app.services.remnawave_service import RemnaWaveService
 
         service = RemnaWaveService()
         if not service.is_configured:
-            return GraceSquadsResponse(available=False, items=[])
+            return await _synced_grace_squads(db)
         # Напрямую через клиент, а не через get_all_squads: тот глотает любую
         # ошибку и возвращает пустой список, из-за чего лежащая панель была бы
         # неотличима от панели без сквадов — и экран сказал бы не то.
         async with service.get_api_client() as api:
             squads = await api.get_internal_squads()
     except Exception as error:
-        logger.warning('Grace squad list unavailable; falling back to manual UUID entry', error=str(error))
-        return GraceSquadsResponse(available=False, items=[])
+        logger.warning('Grace squad list unavailable from the panel; using the synced copy', error=str(error))
+        return await _synced_grace_squads(db)
 
     return GraceSquadsResponse(
         available=True,
+        source='panel',
         items=[
             GraceSquadOption(
                 uuid=str(squad.uuid),
@@ -420,6 +428,30 @@ async def list_grace_squads(
             )
             for squad in squads
             if getattr(squad, 'uuid', None)
+        ],
+    )
+
+
+async def _synced_grace_squads(db: AsyncSession | None) -> GraceSquadsResponse:
+    """Сквады из последней синхронизации — те же, что показывает раздел «Сквады»."""
+    if not isinstance(db, AsyncSession):
+        return GraceSquadsResponse(available=False, items=[])
+    from app.database.crud.server_squad import get_all_server_squads
+
+    squads, _total = await get_all_server_squads(db, limit=1000)
+    if not squads:
+        return GraceSquadsResponse(available=False, items=[])
+    return GraceSquadsResponse(
+        available=True,
+        source='synced',
+        items=[
+            GraceSquadOption(
+                uuid=str(squad.squad_uuid),
+                name=str(squad.display_name or squad.original_name or ''),
+                members_count=int(squad.current_users or 0),
+            )
+            for squad in squads
+            if squad.squad_uuid
         ],
     )
 

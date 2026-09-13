@@ -37,6 +37,7 @@ from app.external.remnawave_api import (
     UserStatus as PanelUserStatus,
     coerce_panel_user_id,
 )
+from app.services.grace_access_notifications import announce_grace_event
 from app.services.grace_access_service import (
     GraceAccessMode,
     GraceAccessPolicy,
@@ -680,6 +681,9 @@ class GraceAccessRuntime:
         self._mode = GraceAccessMode.DISABLED
         self._open_offset = 0
         self._candidate_offset = 0
+        # Бот для уведомлений о выдаче/завершении; ставит main.py, как у мониторинга.
+        # Без него grace работает молча (CLI, тесты).
+        self.bot: Any = None
 
     @property
     def mode(self) -> GraceAccessMode:
@@ -803,6 +807,7 @@ class GraceAccessRuntime:
                             .values(grace_candidate_reason=None, grace_candidate_at=None)
                         )
                         await db.commit()
+            await self._announce_start(subscription_id, result)
             logger.info(
                 'Grace candidate processed',
                 subscription_id=subscription_id,
@@ -819,6 +824,23 @@ class GraceAccessRuntime:
                 source=source,
             )
             return None
+
+    async def _announce_start(self, subscription_id: int, result: GraceStartResult) -> None:
+        """Сообщить о свежей выдаче — уже после коммита, чтобы не объявлять то, что откатилось."""
+        if result.decision in {GraceStartDecision.STARTED, GraceStartDecision.RETRIED}:
+            await announce_grace_event(self.bot, subscription_id, 'granted')
+        elif (
+            result.decision is GraceStartDecision.SUPERSEDED
+            and result.session is not None
+            and result.session.state is GraceSessionState.COMPLETED
+        ):
+            await announce_grace_event(self.bot, subscription_id, 'ended')
+
+    async def _announce_reconcile(self, subscription_id: int, result: GraceReconcileResult) -> None:
+        if result.activated:
+            await announce_grace_event(self.bot, subscription_id, 'granted')
+        elif result.paid or result.timed_out or result.drained or result.revoked or result.conflicts:
+            await announce_grace_event(self.bot, subscription_id, 'ended')
 
     async def should_suppress_webhook(
         self,
@@ -1090,7 +1112,10 @@ class GraceAccessRuntime:
                     await core.drain(limit=1, force_restore=force_restore) if drain else await core.reconcile(limit=1)
                 )
                 await db.commit()
-                return result
+        # Уже после коммита и вне блокировки: уведомление не должно ни задерживать
+        # согласователь, ни объявлять состояние, которое не записалось.
+        await self._announce_reconcile(subscription_id, result)
+        return result
 
 
 async def get_open_grace_subscription_ids(db: AsyncSession) -> set[int]:
@@ -1243,6 +1268,22 @@ async def update_panel_user_grace_safe(
     subscription_id: int,
     **update_kwargs: Any,
 ) -> Any:
+    """Обычный панельный апдейт, не затирающий открытый grace; продление закрывает grace.
+
+    Уведомление о закрытии уходит после того, как лиза закоммитила состояние сессии,
+    поэтому сама запись вынесена в ``_update_panel_user_grace_safe_locked``.
+    """
+    updated, completed = await _update_panel_user_grace_safe_locked(api, subscription_id, **update_kwargs)
+    if completed:
+        await announce_grace_event(grace_access_runtime.bot, subscription_id, 'ended')
+    return updated
+
+
+async def _update_panel_user_grace_safe_locked(
+    api: Any,
+    subscription_id: int,
+    **update_kwargs: Any,
+) -> tuple[Any, bool]:
     """Apply a normal panel update without overwriting an open grace overlay.
 
     Metadata and device-limit changes are still allowed while grace is open.
@@ -1255,7 +1296,7 @@ async def update_panel_user_grace_safe(
         # поведение и стоимость как до фичи. Оверлеи в этих режимах не защищаются:
         # рутинный синк приводит панель к каноническому биллингу (остаточные
         # открытые сессии отрапортованы CRITICAL-логом на старте).
-        return await api.update_user(**update_kwargs)
+        return await api.update_user(**update_kwargs), False
     async with grace_sensitive_panel_update(subscription_id) as lease:
         if lease.subscription is None:
             raise GracePanelError(f'Subscription {subscription_id} disappeared before its Remnawave update')
@@ -1275,7 +1316,7 @@ async def update_panel_user_grace_safe(
             raise GracePanelError(f'Remnawave user id changed before subscription {subscription_id} update')
 
         if not lease.has_open_grace:
-            return await api.update_user(**update_kwargs)
+            return await api.update_user(**update_kwargs), False
 
         completed, updated = await apply_recovered_grace_update_locked(
             lease.db,
@@ -1285,11 +1326,11 @@ async def update_panel_user_grace_safe(
             source='grace_safe_panel_update',
         )
         if completed:
-            return updated
+            return updated, True
 
         protected_present = _GRACE_OWNED_UPDATE_FIELDS.intersection(update_kwargs)
         if not protected_present:
-            return await api.update_user(**update_kwargs)
+            return await api.update_user(**update_kwargs), False
         safe_kwargs = {key: value for key, value in update_kwargs.items() if key not in _GRACE_OWNED_UPDATE_FIELDS}
         logger.info(
             'Deferred grace-owned fields from routine Remnawave update',
@@ -1297,12 +1338,12 @@ async def update_panel_user_grace_safe(
             fields=sorted(protected_present),
         )
         if len(safe_kwargs) > 1:
-            return await api.update_user(**safe_kwargs)
+            return await api.update_user(**safe_kwargs), False
 
         current = await api.get_user_by_id(supplied_id)
         if current is None:
             raise GracePanelError(f'Remnawave user {supplied_id} disappeared while grace was open')
-        return current
+        return current, False
 
 
 def _create_payload_as_patch(create_kwargs: dict[str, Any]) -> dict[str, Any]:

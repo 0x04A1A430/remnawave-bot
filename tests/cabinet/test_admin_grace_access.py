@@ -466,7 +466,7 @@ class TestSquadPicker:
 
         monkeypatch.setattr(remnawave_service, 'RemnaWaveService', _Broken)
 
-        response = await route.list_grace_squads(admin=ADMIN)
+        response = await route.list_grace_squads(admin=ADMIN, db=None)
 
         assert response.available is False
         assert response.items == []
@@ -480,7 +480,7 @@ class TestSquadPicker:
 
         monkeypatch.setattr(remnawave_service, 'RemnaWaveService', _Unconfigured)
 
-        response = await route.list_grace_squads(admin=ADMIN)
+        response = await route.list_grace_squads(admin=ADMIN, db=None)
 
         assert response.available is False
 
@@ -497,10 +497,51 @@ class TestSquadPicker:
 
         monkeypatch.setattr(remnawave_service, 'RemnaWaveService', _Empty)
 
-        response = await route.list_grace_squads(admin=ADMIN)
+        response = await route.list_grace_squads(admin=ADMIN, db=None)
 
         assert response.available is True
         assert response.items == []
+
+    @pytest.mark.asyncio
+    async def test_unreachable_panel_falls_back_to_the_synced_squads(self, monkeypatch):
+        """Владелец: «указывать UUID сквада зачем, бот же сам их тянет при синхроне».
+
+        Панель лежит, но синхронизация уже привезла сквады в базу — список берётся
+        оттуда, и ручной ввод не нужен.
+        """
+        from types import SimpleNamespace
+
+        from app.database.crud import server_squad as server_squad_crud
+        from app.services import remnawave_service
+
+        class _Broken:
+            is_configured = True
+
+            def get_api_client(self):
+                raise RuntimeError('panel is down')
+
+        monkeypatch.setattr(remnawave_service, 'RemnaWaveService', _Broken)
+
+        async def _synced(db, available_only=False, page=1, limit=50):
+            return (
+                [
+                    SimpleNamespace(
+                        squad_uuid=VALID_UUID, display_name='Grace TG', original_name='grace', current_users=7
+                    ),
+                    SimpleNamespace(squad_uuid='', display_name='без uuid', original_name=None, current_users=0),
+                ],
+                2,
+            )
+
+        monkeypatch.setattr(server_squad_crud, 'get_all_server_squads', _synced)
+
+        from sqlalchemy.ext.asyncio import AsyncSession
+
+        response = await route.list_grace_squads(admin=ADMIN, db=AsyncSession.__new__(AsyncSession))
+
+        assert response.available is True
+        assert response.source == 'synced'
+        assert [(item.uuid, item.name, item.members_count) for item in response.items] == [(VALID_UUID, 'Grace TG', 7)]
 
     @pytest.mark.asyncio
     async def test_squads_without_uuid_are_dropped(self, monkeypatch):
@@ -514,7 +555,7 @@ class TestSquadPicker:
 
         monkeypatch.setattr(remnawave_service, 'RemnaWaveService', _Panel)
 
-        response = await route.list_grace_squads(admin=ADMIN)
+        response = await route.list_grace_squads(admin=ADMIN, db=None)
 
         assert response.available is True
         assert [item.uuid for item in response.items] == [VALID_UUID]
