@@ -452,6 +452,7 @@ async def list_users(
     has_subscription: bool | None = Query(None),
     purchase_count: int | None = Query(None, ge=0, le=0),
     traffic_used_percent_min: int | None = Query(None, ge=1, le=100),
+    online: bool | None = Query(None),
     sort_by: SortByEnum = Query(SortByEnum.CREATED_AT),
     admin: User = Depends(require_permission('users:read')),
     db: AsyncSession = Depends(get_cabinet_db),
@@ -465,7 +466,8 @@ async def list_users(
     - **email**: Search by email
     - **status**: Filter by user status (active, blocked, deleted)
     - **expires_within_days**: Active subscription ends within N days (daily tariffs excluded)
-    - **active_within_minutes**: Last activity within N minutes («online» segment)
+    - **active_within_minutes**: Last activity in the bot or cabinet within N minutes
+    - **online**: Only users connected to the VPN right now (by the panel's onlineAt)
     - **has_restrictions** / **has_subscription**: Restriction flags / any subscription at all
     - **purchase_count**: Only 0 is supported — users without a completed subscription payment
     - **traffic_used_percent_min**: Live subscription with at least N % of its traffic limit used (unlimited excluded)
@@ -492,6 +494,19 @@ async def list_users(
         except ValueError:
             tariff_ids = None
 
+    # «Онлайн» — подключение к VPN по панели, а не кнопки в боте (см. app/services/panel_online.py).
+    # Отметка «в сети» нужна каждой строке, поэтому список подключённых берём всегда;
+    # он кэшируется на 20 секунд. Без ответа панели фильтр «онлайн» не угадывает, а честно отказывает.
+    from app.services.panel_online import get_connected_accounts
+
+    connected = await get_connected_accounts()
+    if online and connected is None:
+        raise HTTPException(
+            status_code=503,
+            detail='Панель не ответила — не удалось узнать, кто сейчас подключён. Попробуйте ещё раз.',
+        )
+    online_filter = connected if online else None
+
     users = await get_users_list(
         db=db,
         offset=offset,
@@ -510,6 +525,7 @@ async def list_users(
         has_subscription=has_subscription,
         purchase_count=purchase_count,
         traffic_used_percent_min=traffic_used_percent_min,
+        connected=online_filter,
         order_by_balance=order_by_balance,
         order_by_traffic=order_by_traffic,
         order_by_last_activity=order_by_last_activity,
@@ -534,13 +550,19 @@ async def list_users(
         has_subscription=has_subscription,
         purchase_count=purchase_count,
         traffic_used_percent_min=traffic_used_percent_min,
+        connected=online_filter,
     )
 
     # Get spending stats for all users
     user_ids = [u.id for u in users]
     spending_stats = await get_users_spending_stats(db, user_ids) if user_ids else {}
 
-    items = [_build_user_list_item(u, spending_stats) for u in users]
+    items = [
+        _build_user_list_item(u, spending_stats).model_copy(
+            update={'is_online': connected.has_user(u) if connected is not None else None}
+        )
+        for u in users
+    ]
 
     return UsersListResponse(
         users=items,

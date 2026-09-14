@@ -1157,6 +1157,21 @@ class RemnaWaveAPI:
 
         return {'users': users, 'total': response['response']['total']}
 
+    async def get_users_by_last_online(self, start: int = 0, size: int = 1000) -> list[RemnaWaveUser]:
+        """Страница ``GET /api/users`` по убыванию ``userTraffic.onlineAt`` — как сортирует таблица панели.
+
+        Фильтр по ``onlineAt`` у панели — только точное равенство; «кто подключён сейчас»
+        выбирается этой сортировкой (никогда не подключавшиеся — в конце). ``size`` по
+        контракту 1..1000.
+        """
+        params = {
+            'start': max(0, start),
+            'size': max(1, min(size, 1000)),
+            'sorting': json.dumps([{'id': 'userTraffic.onlineAt', 'desc': True}]),
+        }
+        response = await self._make_request('GET', '/api/users', params=params)
+        return [self._parse_user(user) for user in response['response']['users']]
+
     async def get_all_users_page_stream(
         self,
         cursor: str | None = None,

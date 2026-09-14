@@ -861,7 +861,7 @@
   Классы: `Pal24APIError`, `Pal24Response` (2 методов), `Pal24Client` (14 методов)
   Функции: нет
 - `app/external/remnawave_api.py` — Python-модуль
-  Классы: `UserStatus`, `TrafficLimitStrategy`, `UserTraffic`, `RemnaWaveUser` (4 методов), `RemnaWaveInbound`, `RemnaWaveInternalSquad`, `RemnaWaveAccessibleNode`, `RemnaWaveHost`, `RemnaWaveNode` (2 методов), `SubscriptionInfo`, `SubscriptionPageConfig`, `RemnaWaveExternalSquad`, `RemnaWaveAPIError` (1 методов), `RemnaWaveTransientError`, `RemnaWaveInvalidUserIdError`, `RemnaWaveAPI` (107 методов)
+  Классы: `UserStatus`, `TrafficLimitStrategy`, `UserTraffic`, `RemnaWaveUser` (4 методов), `RemnaWaveInbound`, `RemnaWaveInternalSquad`, `RemnaWaveAccessibleNode`, `RemnaWaveHost`, `RemnaWaveNode` (2 методов), `SubscriptionInfo`, `SubscriptionPageConfig`, `RemnaWaveExternalSquad`, `RemnaWaveAPIError` (1 методов), `RemnaWaveTransientError`, `RemnaWaveInvalidUserIdError`, `RemnaWaveAPI` (108 методов)
   Функции: `is_valid_internal_squad_name` — Имя сквада, которое примет панель., `coerce_panel_user_id` — Привести локально хранимый идентификатор к числовому id панели., `is_expire_in_past_error` — Панель отвергла ``expireAt`` как прошедшую дату., `is_user_not_found_error` — Панель сообщила, что такого пользователя НЕТ (удалён / протух идентификатор)., `is_stale_external_squad_error` — Панель отвергла запись из-за ``externalSquadUuid`` (или не смогла её отличить)., `format_bytes`, `parse_bytes`, `test_api_connection`
 - `app/external/telegram_stars.py` — Python-модуль
   Классы: `TelegramStarsService` (6 методов)
@@ -1548,6 +1548,9 @@
 - `app/services/pal24_service.py` — Python-модуль
   Классы: `Pal24Service` (9 методов)
   Функции: нет
+- `app/services/panel_online.py` — Python-модуль
+  Классы: `ConnectedAccounts` (1 методов)
+  Функции: `fetch_connected_accounts` — Обойти список панели по убыванию ``onlineAt``, пока отметка свежее окна., `get_connected_accounts` — Подключённые сейчас; ``None`` — панель не настроена или не ответила (это «не знаем», не «никого»).
 - `app/services/panel_sync/`
 - `app/services/paritypay_service.py` — Python-модуль
   Классы: `ParityPayAPIError` (1 методов), `ParityPayNetworkError`, `ParityPayService` (18 методов)
@@ -3068,7 +3071,7 @@
   Функции: `test_resolver_route_is_registered_before_user_id_route`, `test_resolver_requires_users_read_permission`, `test_resolver_returns_the_exact_matching_subscription` — Would fail if the resolver returned a user-level or primary subscription ID., `test_resolver_accepts_a_short_uuid_for_subscriptions_without_a_panel_id` — Would fail if the resolver only understood numeric panel ids., `test_resolver_rejects_unusable_identifiers_without_any_lookup` — Would fail if garbage input were guessed from user data or hit the database., `test_resolver_rejects_an_identifier_present_only_on_the_legacy_user_field` — Would fail if the route reused legacy user-level resolution., `test_resolver_treats_a_physically_absent_deleted_subscription_as_not_found` — Would fail if absent/deleted records were accidentally resolved., `test_resolver_rejects_duplicate_subscription_mappings_as_a_conflict` — Would fail if corrupted mappings silently selected one subscription.
 - `tests/cabinet/test_admin_users_list_filters.py` — Python-модуль
   Классы: нет
-  Функции: `test_expires_within_days`, `test_active_within_minutes`, `test_has_restrictions`, `test_has_subscription`, `test_no_purchases`, `test_search_matches_email` — Одно поле поиска: адрес целиком и его кусок находят человека через `search`., `test_traffic_used_percent_min` — «Трафик на исходе»: израсходовано от N % лимита, исчерпанные тоже; безлимит и истёкшие — нет., `test_filters_combine`, `test_route_declares_new_filters`
+  Функции: `test_expires_within_days`, `test_active_within_minutes`, `test_has_restrictions`, `test_has_subscription`, `test_no_purchases`, `test_search_matches_email` — Одно поле поиска: адрес целиком и его кусок находят человека через `search`., `test_traffic_used_percent_min` — «Трафик на исходе»: израсходовано от N % лимита, исчерпанные тоже; безлимит и истёкшие — нет., `test_connected_now_matches_any_panel_key` — «Онлайн» = подключён к VPN: id панели у пользователя, у подписки или Telegram ID аккаунта., `test_route_marks_connected_rows_and_filters_online`, `test_route_refuses_online_filter_without_panel` — Панель молчит — «онлайн» не угадываем и не отдаём всех: честная ошибка, а строки без отметки., `test_filters_combine`, `test_route_declares_new_filters`
 - `tests/cabinet/test_autopay_cancels_sbp.py` — Python-модуль
   Классы: нет
   Функции: `test_enable_autopay_cancels_active_sbp_recurring`, `test_disable_autopay_does_not_cancel_sbp` — Disabling balance-autopay must NOT touch SBP — only the enable path, `test_enable_autopay_rejected_for_trial_does_not_cancel_sbp` — A rejected enable (trial subscription -> 400) must not fire the
@@ -4148,6 +4151,9 @@
 - `tests/services/test_panel_deletion_respects_delete_mode.py` — Python-модуль
   Классы: нет
   Функции: `test_panel_deletion_is_gated_or_explicitly_deliberate`, `test_deliberate_list_has_no_stale_entries` — Список исключений не должен пережить сами удаления.
+- `tests/services/test_panel_online.py` — Python-модуль
+  Классы: нет
+  Функции: `test_api_sorts_users_by_online_at_like_panel_table`, `test_collects_accounts_until_mark_is_older_than_window`, `test_never_connected_account_ends_the_list`, `test_pages_through_while_whole_page_is_online`, `test_page_limit_stops_runaway_listing`, `test_window_matches_panel_green_dot`, `test_user_is_connected_by_any_of_his_panel_keys`, `test_cached_between_calls_and_none_when_panel_fails`
 - `tests/services/test_paritypay_client.py` — Python-модуль
   Классы: `RecordingService` (2 методов)
   Функции: `anyio_backend`, `test_create_invoice_sends_rubles_not_kopeks` — 125000 копеек обязаны уйти как 1250.0 — иначе счёт будет на 125 000 ₽., `test_create_invoice_request_shape`, `test_create_invoice_never_sends_subscription_block` — Подписки не оформляем: блок subscription не должен появляться никогда., `test_create_invoice_omits_empty_optionals`, `test_create_invoice_rejects_response_without_link`, `test_create_invoice_rejects_response_without_id`, `test_get_invoice_by_id_and_by_order_id`, `test_get_invoice_prefers_id_over_order_id` — Спека: передаётся ОДИН из параметров, не оба., `test_get_invoice_without_identifiers_raises`, `test_headers_carry_shop_and_secret_key`, `test_base_url_strips_slash_and_falls_back`, `test_error_message_uses_error_field` — Формат ошибки провайдера — объект {"error": "текст"}., `test_request_404_allowed_returns_none`, `test_request_422_raises_business_error`, `test_request_400_raises`, `test_connection_error_and_timeout_become_network_error`

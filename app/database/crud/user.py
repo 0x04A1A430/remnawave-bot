@@ -2,9 +2,10 @@ import hmac
 import secrets
 import string
 from datetime import UTC, datetime, timedelta
+from typing import TYPE_CHECKING
 
 import structlog
-from sqlalchemy import and_, case, exists, func, nullslast, or_, select, text
+from sqlalchemy import and_, case, exists, false, func, nullslast, or_, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -31,6 +32,10 @@ from app.database.models import (
 from app.utils.text_search import contains_conditions
 from app.utils.timezone import local_day_start
 from app.utils.validators import sanitize_telegram_name
+
+
+if TYPE_CHECKING:
+    from app.services.panel_online import ConnectedAccounts
 
 
 logger = structlog.get_logger(__name__)
@@ -961,6 +966,7 @@ def _users_list_conditions(
     has_subscription: bool | None = None,
     purchase_count: int | None = None,
     traffic_used_percent_min: int | None = None,
+    connected: 'ConnectedAccounts | None' = None,
 ) -> list:
     """Условия WHERE списка пользователей админки — одни для списка и для счётчика.
 
@@ -1084,6 +1090,24 @@ def _users_list_conditions(
             )
         )
 
+    if connected is not None:
+        # «Онлайн» = подключён к VPN сейчас (список панели, см. app/services/panel_online.py).
+        # Ключи — как у ConnectedAccounts.has_user: id панели у пользователя, у подписки, Telegram ID.
+        keys = []
+        if connected.panel_ids:
+            keys.append(User.remnawave_id.in_(connected.panel_ids))
+            keys.append(
+                exists(
+                    select(Subscription.id).where(
+                        Subscription.user_id == User.id,
+                        Subscription.remnawave_id.in_(connected.panel_ids),
+                    )
+                )
+            )
+        if connected.telegram_ids:
+            keys.append(User.telegram_id.in_(connected.telegram_ids))
+        conditions.append(or_(*keys) if keys else false())
+
     return conditions
 
 
@@ -1105,6 +1129,7 @@ async def get_users_list(
     has_subscription: bool | None = None,
     purchase_count: int | None = None,
     traffic_used_percent_min: int | None = None,
+    connected: 'ConnectedAccounts | None' = None,
     order_by_balance: bool = False,
     order_by_traffic: bool = False,
     order_by_last_activity: bool = False,
@@ -1134,6 +1159,7 @@ async def get_users_list(
             has_subscription=has_subscription,
             purchase_count=purchase_count,
             traffic_used_percent_min=traffic_used_percent_min,
+            connected=connected,
         )
     )
 
@@ -1240,6 +1266,7 @@ async def get_users_count(
     has_subscription: bool | None = None,
     purchase_count: int | None = None,
     traffic_used_percent_min: int | None = None,
+    connected: 'ConnectedAccounts | None' = None,
 ) -> int:
     query = select(func.count(User.id)).where(
         *_users_list_conditions(
@@ -1257,6 +1284,7 @@ async def get_users_count(
             has_subscription=has_subscription,
             purchase_count=purchase_count,
             traffic_used_percent_min=traffic_used_percent_min,
+            connected=connected,
         )
     )
 

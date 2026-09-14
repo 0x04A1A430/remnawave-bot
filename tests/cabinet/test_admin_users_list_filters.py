@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import inspect
 from datetime import UTC, datetime, timedelta
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -23,6 +24,7 @@ from app.database.models import (
     User,
     UserStatus,
 )
+from app.services.panel_online import ConnectedAccounts
 from tests.fixtures.sqlite_memory import memory_session
 
 
@@ -159,6 +161,95 @@ async def test_traffic_used_percent_min(monkeypatch: pytest.MonkeyPatch) -> None
         assert await get_users_count(db, traffic_used_percent_min=80) == 2
 
 
+async def test_connected_now_matches_any_panel_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    """«Онлайн» = подключён к VPN: id панели у пользователя, у подписки или Telegram ID аккаунта."""
+    async with memory_session(monkeypatch, TABLES) as db:
+        by_user = _user(21, 'by_user', remnawave_id=7001)
+        by_sub = _user(22, 'by_sub')
+        by_telegram = _user(23, 'by_telegram')
+        offline = _user(24, 'offline', remnawave_id=7002)
+        db.add_all([by_user, by_sub, by_telegram, offline])
+        await db.flush()
+        sub = _subscription(by_sub, days_left=10)
+        sub.remnawave_id = 7003
+        db.add(sub)
+        await db.commit()
+
+        connected = ConnectedAccounts(panel_ids=frozenset({7001, 7003}), telegram_ids=frozenset({23}))
+        assert await _usernames(db, connected=connected) == ['by_sub', 'by_telegram', 'by_user']
+        assert await get_users_count(db, connected=connected) == 3
+
+        nobody = ConnectedAccounts(panel_ids=frozenset(), telegram_ids=frozenset())
+        assert await _usernames(db, connected=nobody) == []
+        assert await get_users_count(db, connected=nobody) == 0
+
+
+async def _list(db, **params):
+    from app.cabinet.routes import admin_users
+
+    defaults = {
+        'offset': 0,
+        'limit': 50,
+        'search': None,
+        'email': None,
+        'status': None,
+        'subscription_status': None,
+        'tariff_id': None,
+        'promo_group_id': None,
+        'campaign_id': None,
+        'partner_id': None,
+        'expires_within_days': None,
+        'active_within_minutes': None,
+        'has_restrictions': None,
+        'has_subscription': None,
+        'purchase_count': None,
+        'traffic_used_percent_min': None,
+        'online': None,
+        'sort_by': admin_users.SortByEnum.CREATED_AT,
+    }
+    return await admin_users.list_users(**{**defaults, **params}, admin=None, db=db)
+
+
+async def test_route_marks_connected_rows_and_filters_online(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.services import panel_online
+
+    async with memory_session(monkeypatch, TABLES) as db:
+        await _seed(db)
+        connected = ConnectedAccounts(panel_ids=frozenset(), telegram_ids=frozenset({2}))
+        monkeypatch.setattr(panel_online, 'get_connected_accounts', AsyncMock(return_value=connected))
+
+        everyone = await _list(db)
+        assert {row.username: row.is_online for row in everyone.users} == {
+            'soon': False,
+            'later': True,
+            'nobody': False,
+            'lapsed': False,
+        }
+
+        only_online = await _list(db, online=True)
+        assert [row.username for row in only_online.users] == ['later']
+        assert only_online.total == 1
+
+
+async def test_route_refuses_online_filter_without_panel(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Панель молчит — «онлайн» не угадываем и не отдаём всех: честная ошибка, а строки без отметки."""
+    from fastapi import HTTPException
+
+    from app.services import panel_online
+
+    async with memory_session(monkeypatch, TABLES) as db:
+        await _seed(db)
+        monkeypatch.setattr(panel_online, 'get_connected_accounts', AsyncMock(return_value=None))
+
+        with pytest.raises(HTTPException) as refused:
+            await _list(db, online=True)
+        assert refused.value.status_code == 503
+
+        everyone = await _list(db)
+        assert len(everyone.users) == 4
+        assert {row.is_online for row in everyone.users} == {None}
+
+
 async def test_filters_combine(monkeypatch: pytest.MonkeyPatch) -> None:
     async with memory_session(monkeypatch, TABLES) as db:
         await _seed(db)
@@ -177,4 +268,5 @@ def test_route_declares_new_filters() -> None:
         'has_subscription',
         'purchase_count',
         'traffic_used_percent_min',
+        'online',
     } <= params

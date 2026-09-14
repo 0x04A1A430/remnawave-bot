@@ -117,6 +117,8 @@ class UserListItem(BaseModel):
     balance_rubles: float
     created_at: datetime
     last_activity: datetime | None = None
+    # Подключён к VPN прямо сейчас (по панели); None — панель не ответила, неизвестно.
+    is_online: bool | None = None
 
     # Subscription summary
     has_subscription: bool = False
