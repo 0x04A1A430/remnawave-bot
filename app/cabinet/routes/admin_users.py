@@ -714,6 +714,14 @@ async def get_user_by_remnawave_identifier(
     )
 
 
+def _sales_mode_fields() -> dict:
+    """Режим продаж для карточки: в классике тарифа нет, в мультитарифе подписок несколько."""
+    return {
+        'sales_mode': settings.get_sales_mode(),
+        'multi_tariff_enabled': settings.is_multi_tariff_enabled(),
+    }
+
+
 @router.get('/{user_id}', response_model=UserDetailResponse)
 async def get_user_detail(
     user_id: int,
@@ -817,6 +825,7 @@ async def get_user_detail(
         campaign_id = campaign_reg.campaign.id
 
     return UserDetailResponse(
+        **_sales_mode_fields(),
         id=user.id,
         telegram_id=user.telegram_id,
         username=user.username,
