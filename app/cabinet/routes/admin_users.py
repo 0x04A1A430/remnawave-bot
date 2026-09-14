@@ -446,6 +446,11 @@ async def list_users(
     promo_group_id: int | None = Query(None),
     campaign_id: int | None = Query(None),
     partner_id: int | None = Query(None),
+    expires_within_days: int | None = Query(None, ge=0, le=365),
+    active_within_minutes: int | None = Query(None, ge=1, le=1440),
+    has_restrictions: bool | None = Query(None),
+    has_subscription: bool | None = Query(None),
+    purchase_count: int | None = Query(None, ge=0, le=0),
     sort_by: SortByEnum = Query(SortByEnum.CREATED_AT),
     admin: User = Depends(require_permission('users:read')),
     db: AsyncSession = Depends(get_cabinet_db),
@@ -455,9 +460,13 @@ async def list_users(
 
     - **offset**: Pagination offset
     - **limit**: Number of users per page (max 200)
-    - **search**: Search by telegram_id, username, first_name, last_name
+    - **search**: Search by telegram_id, username, first_name, last_name, email
     - **email**: Search by email
     - **status**: Filter by user status (active, blocked, deleted)
+    - **expires_within_days**: Active subscription ends within N days (daily tariffs excluded)
+    - **active_within_minutes**: Last activity within N minutes («online» segment)
+    - **has_restrictions** / **has_subscription**: Restriction flags / any subscription at all
+    - **purchase_count**: Only 0 is supported — users without a completed subscription payment
     - **sort_by**: Sort field (created_at, balance, traffic, last_activity, total_spent, purchase_count, subscription_end_date)
     """
     # Convert status enum to model enum
@@ -493,6 +502,11 @@ async def list_users(
         promo_group_id=promo_group_id,
         campaign_id=campaign_id,
         partner_id=partner_id,
+        expires_within_days=expires_within_days,
+        active_within_minutes=active_within_minutes,
+        has_restrictions=has_restrictions,
+        has_subscription=has_subscription,
+        purchase_count=purchase_count,
         order_by_balance=order_by_balance,
         order_by_traffic=order_by_traffic,
         order_by_last_activity=order_by_last_activity,
@@ -511,6 +525,11 @@ async def list_users(
         promo_group_id=promo_group_id,
         campaign_id=campaign_id,
         partner_id=partner_id,
+        expires_within_days=expires_within_days,
+        active_within_minutes=active_within_minutes,
+        has_restrictions=has_restrictions,
+        has_subscription=has_subscription,
+        purchase_count=purchase_count,
     )
 
     # Get spending stats for all users
