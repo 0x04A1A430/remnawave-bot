@@ -847,11 +847,8 @@ async def execute_merge(
         )
 
     # Рефералов считаем ДО переназначения цепочки (§9): после него они все у primary.
-    if secondary.referral_code:
-        primary_referrals = await _count_referrals(db, primary.id)
-        secondary_referrals = await _count_referrals(db, secondary.id)
-    else:
-        primary_referrals = secondary_referrals = 0
+    absorbed_referrals = await _count_referrals(db, secondary.id) if secondary.referral_code else 0
+    keep_absorbed_referral_code = absorbed_referrals > 0 and await _count_referrals(db, primary.id) == 0
 
     # 4. Суммируем баланс (включая отрицательный — долг не должен исчезать)
     transferred_kopeks = secondary.balance_kopeks
@@ -1205,7 +1202,7 @@ async def execute_merge(
     # 13a. Реферальный код — один на аккаунт. Остаётся тот, по которому люди уже
     # приходили: иначе разосланная ссылка поглощённого аккаунта умирает вместе с ним.
     # Оба в ходу или оба без рефералов — остаётся код инициатора.
-    if secondary.referral_code and secondary_referrals > 0 and primary_referrals == 0:
+    if keep_absorbed_referral_code:
         transferred_code = secondary.referral_code
         secondary.referral_code = None
         await db.flush()  # unique constraint
@@ -1214,7 +1211,7 @@ async def execute_merge(
             'Перенесён реферальный код (по нему уже приходили люди)',
             primary_id=primary.id,
             secondary_id=secondary.id,
-            referrals=secondary_referrals,
+            referrals=absorbed_referrals,
         )
 
     # 13b. Промогруппа — остаётся более высокая по приоритету: скидки не должны пропасть.
