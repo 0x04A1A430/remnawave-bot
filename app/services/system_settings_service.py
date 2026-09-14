@@ -842,6 +842,22 @@ class BotConfigurationService:
             'example': '72',
             'warning': 'По истечении срока панельное состояние возвращается к исходному из снимка сессии.',
         },
+        'GRACE_ACCESS_NOTIFY_ADMINS': {
+            'description': 'Сообщать админам в чат уведомлений о каждой выдаче и завершении grace-доступа: кому, почему, до какого срока и чем закончилось.',
+            'format': 'Булево значение.',
+            'example': 'true',
+            'dependencies': 'ADMIN_NOTIFICATIONS_ENABLED, ADMIN_NOTIFICATIONS_RENEWALS_ENABLED',
+        },
+        'GRACE_ACCESS_ALLOWED_SERVICES': {
+            'description': 'Что остаётся доступным во время grace — так, как это увидит человек в сообщении бота и в письме: «Telegram», «Telegram и личный кабинет», «сайт проекта». Сам доступ определяют ноды сквада grace, бот только сообщает.',
+            'format': 'Короткая фраза.',
+            'example': 'Telegram и личный кабинет',
+        },
+        'GRACE_ACCESS_NOTIFY_USER': {
+            'description': 'Сообщать человеку в бота, что подписка закончилась, но на время grace оставлен доступ к тому, что названо в GRACE_ACCESS_ALLOWED_SERVICES, и когда этот доступ закрылся.',
+            'format': 'Булево значение.',
+            'example': 'true',
+        },
         'SALES_MODE': {
             'description': (
                 'Режим продажи подписок. '
@@ -1147,7 +1163,10 @@ class BotConfigurationService:
             'dependencies': 'REMNAWAVE_AUTO_SYNC_TIMES',
         },
         'REMNAWAVE_AUTO_SYNC_TIMES': {
-            'description': ('Список времени в формате HH:MM, когда запускается автосинхронизация в течение суток.'),
+            'description': (
+                'Список времени в формате HH:MM в часовом поясе бота (TIMEZONE), '
+                'когда запускается автосинхронизация в течение суток.'
+            ),
             'format': 'Перечислите время через запятую или с новой строки (например, 03:00, 15:00).',
             'example': '03:00, 15:00',
             'warning': (
@@ -1296,10 +1315,10 @@ class BotConfigurationService:
             'dependencies': 'TRAFFIC_DAILY_CHECK_TIME, TRAFFIC_DAILY_THRESHOLD_GB',
         },
         'TRAFFIC_DAILY_CHECK_TIME': {
-            'description': 'Время суточной проверки трафика в формате HH:MM (UTC).',
+            'description': 'Время суточной проверки трафика в формате HH:MM в часовом поясе бота (TIMEZONE).',
             'format': 'Строка времени HH:MM.',
             'example': '00:00',
-            'warning': 'Время указывается в UTC.',
+            'warning': 'Время указывается в часовом поясе бота (TIMEZONE), а не в UTC.',
             'dependencies': 'TRAFFIC_DAILY_CHECK_ENABLED',
         },
         'TRAFFIC_DAILY_THRESHOLD_GB': {
