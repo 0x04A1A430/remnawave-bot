@@ -209,7 +209,7 @@
   Функции: `list_template_types` — List all available email template types with override status., `get_templates_for_type` — Get all language templates for a specific notification type., `update_template` — Save a custom email template override., `set_template_enabled` — Выключатель писем по типу: отключённое письмо не отправляется никому., `reset_template` — Delete custom template override, reverting to default., `preview_template` — Preview a rendered email template with sample data., `send_test_email` — Send a test email to the admin's email address.
 - `app/cabinet/routes/admin_grace_access.py` — Python-модуль
   Классы: `GraceAccessConfig`, `GraceAccessRuntimeState`, `GraceAccessStats`, `GraceAccessIssue`, `GraceSessionError`, `GraceAccessOverview`, `GraceAccessUpdate`, `GraceSessionUser`, `GraceSessionItem`, `GraceSessionsPage`, `GraceSquadOption`, `GraceSquadsResponse`
-  Функции: `get_grace_access_overview` — Configuration, running state and session health in one payload., `list_grace_squads` — Squads for picking the grace squads by name — live from the panel, else from the bot's own copy., `list_grace_sessions` — Grace sessions, newest first., `update_grace_access` — Apply a partial configuration change, validated as a whole.
+  Функции: `get_grace_access_overview` — Configuration, running state and session health in one payload., `list_grace_squads` — Squads for picking the grace squads by name — live from the panel, else from the bot's own copy., `list_grace_external_squads` — External squads for «Replace with a chosen one» — picked by name, not typed as a UUID., `list_grace_sessions` — Grace sessions, newest first., `update_grace_access` — Apply a partial configuration change, validated as a whole.
 - `app/cabinet/routes/admin_info_pages.py` — Python-модуль
   Классы: нет
   Функции: `list_all_info_pages` — Get all info pages (admin view, includes inactive)., `get_info_page_detail` — Get a single info page by ID (admin view)., `create_page` — Create a new info page., `update_page` — Update an existing info page., `remove_page` — Delete an info page., `reorder_pages` — Bulk update sort_order for info pages., `toggle_active` — Toggle the active status of an info page.
@@ -3010,7 +3010,7 @@
   Классы: нет
   Функции: `test_full_sync_route_answers_409_while_another_run_is_in_progress`
 - `tests/cabinet/test_admin_grace_access.py` — Python-модуль
-  Классы: `TestEnabling` (6 методов), `TestRejectedInput` (3 методов), `TestPartialUpdate` (3 методов), `TestEnvLock` (3 методов), `TestOverview` (9 методов), `TestSquadPicker` (5 методов)
+  Классы: `TestEnabling` (6 методов), `TestRejectedInput` (3 методов), `TestPartialUpdate` (3 методов), `TestEnvLock` (3 методов), `TestOverview` (9 методов), `TestExternalSquadPicker` (3 методов), `TestSquadPicker` (5 методов)
   Функции: `test_routes_registered`, `test_each_url_reaches_its_own_handler`, `test_sessions_endpoint_also_requires_users_read` — Список отдаёт чужие telegram_id, @логины и имена., `test_configuration_endpoints_stay_on_settings_permissions`, `config` — Живые настройки grace с валидной конфигурацией; правки не утекают в другие тесты., `saved` — Перехват записи настроек: значение сразу видно и в ``settings``, как в проде., `empty_db`, `status_snapshot` — Счётчики сессий подменяются: раздел читает их из общего сборщика.
 - `tests/cabinet/test_admin_grace_access_http.py` — Python-модуль
   Классы: нет

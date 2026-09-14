@@ -431,19 +431,46 @@ async def list_grace_squads(
         logger.warning('Grace squad list unavailable from the panel; using the synced copy', error=str(error))
         return await _synced_grace_squads(db)
 
-    return GraceSquadsResponse(
-        available=True,
-        source='panel',
-        items=[
-            GraceSquadOption(
-                uuid=str(squad.uuid),
-                name=str(squad.name or ''),
-                members_count=int(squad.members_count or 0),
-            )
-            for squad in squads
-            if getattr(squad, 'uuid', None)
-        ],
-    )
+    return GraceSquadsResponse(available=True, source='panel', items=_panel_squad_options(squads))
+
+
+@router.get('/external-squads', response_model=GraceSquadsResponse)
+async def list_grace_external_squads(
+    admin: User = Depends(require_permission('settings:read')),
+):
+    """External squads for «Replace with a chosen one» — picked by name, not typed as a UUID.
+
+    Владелец (2026-09-14): «есть 3 варианта по внешнему скваду, бот тоже их получает,
+    поэтому ввод вручную там тоже не нужен». Синхронизированной копии внешних
+    сквадов у бота нет (в отличие от внутренних), поэтому при недоступной панели
+    список недоступен и поле остаётся ручным — как и у внутренних без копии.
+    """
+    try:
+        from app.services.remnawave_service import RemnaWaveService
+
+        service = RemnaWaveService()
+        if not service.is_configured:
+            return GraceSquadsResponse(available=False, items=[])
+        async with service.get_api_client() as api:
+            squads = await api.get_external_squads()
+    except Exception as error:
+        logger.warning('Grace external squad list unavailable from the panel', error=str(error))
+        return GraceSquadsResponse(available=False, items=[])
+
+    return GraceSquadsResponse(available=True, source='panel', items=_panel_squad_options(squads))
+
+
+def _panel_squad_options(squads: list[Any]) -> list[GraceSquadOption]:
+    """Сквады панели (внутренние или внешние) как варианты выбора; без uuid выбрать нельзя."""
+    return [
+        GraceSquadOption(
+            uuid=str(squad.uuid),
+            name=str(squad.name or ''),
+            members_count=int(squad.members_count or 0),
+        )
+        for squad in squads
+        if getattr(squad, 'uuid', None)
+    ]
 
 
 async def _synced_grace_squads(db: AsyncSession | None) -> GraceSquadsResponse:

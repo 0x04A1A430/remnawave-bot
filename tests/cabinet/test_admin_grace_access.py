@@ -24,6 +24,7 @@ def test_routes_registered(registered_paths):
     assert '/cabinet/admin/grace-access' in registered_paths
     assert '/cabinet/admin/grace-access/sessions' in registered_paths
     assert '/cabinet/admin/grace-access/squads' in registered_paths
+    assert '/cabinet/admin/grace-access/external-squads' in registered_paths
 
 
 @pytest.mark.parametrize(
@@ -33,6 +34,7 @@ def test_routes_registered(registered_paths):
         ('PUT', '/admin/grace-access', 'update_grace_access'),
         ('GET', '/admin/grace-access/sessions', 'list_grace_sessions'),
         ('GET', '/admin/grace-access/squads', 'list_grace_squads'),
+        ('GET', '/admin/grace-access/external-squads', 'list_grace_external_squads'),
     ],
 )
 def test_each_url_reaches_its_own_handler(method, path, expected):
@@ -78,6 +80,7 @@ def test_configuration_endpoints_stay_on_settings_permissions():
     assert _required_permissions('get_grace_access_overview') == {'settings:read'}
     assert _required_permissions('update_grace_access') == {'settings:edit'}
     assert _required_permissions('list_grace_squads') == {'settings:read'}
+    assert _required_permissions('list_grace_external_squads') == {'settings:read'}
 
 
 @pytest.fixture
@@ -152,12 +155,20 @@ ADMIN = SimpleNamespace(id=1, telegram_id=1)
 class _ApiClient:
     """Асинхронный контекст, как у RemnaWaveService.get_api_client()."""
 
-    def __init__(self, squads=None):
+    def __init__(self, squads=None, external=None):
         self._squads = (
             squads
             if squads is not None
             else [
                 SimpleNamespace(uuid=VALID_UUID, name='Grace', members_count=4),
+                SimpleNamespace(uuid=None, name='без uuid', members_count=0),
+            ]
+        )
+        self._external = (
+            external
+            if external is not None
+            else [
+                SimpleNamespace(uuid=OTHER_UUID, name='Blocked hosts', members_count=2),
                 SimpleNamespace(uuid=None, name='без uuid', members_count=0),
             ]
         )
@@ -170,6 +181,9 @@ class _ApiClient:
 
     async def get_internal_squads(self):
         return self._squads
+
+    async def get_external_squads(self):
+        return self._external
 
 
 async def _update(db, **fields):
@@ -450,6 +464,61 @@ class TestOverview:
         overview = await route.get_grace_access_overview(admin=ADMIN, db=empty_db)
 
         assert overview.runtime.restart_required is False
+
+
+class TestExternalSquadPicker:
+    """Владелец (2026-09-14): «есть 3 варианта по внешнему скваду, бот тоже их получает,
+    поэтому ввод вручную там тоже не нужен» — «Заменить на указанный» выбирает из списка панели.
+    """
+
+    @pytest.mark.asyncio
+    async def test_external_squads_come_from_the_panel_by_name(self, monkeypatch):
+        from app.services import remnawave_service
+
+        class _Live:
+            is_configured = True
+
+            def get_api_client(self):
+                return _ApiClient()
+
+        monkeypatch.setattr(remnawave_service, 'RemnaWaveService', _Live)
+
+        response = await route.list_grace_external_squads(admin=ADMIN)
+
+        assert response.available is True and response.source == 'panel'
+        assert [(item.uuid, item.name, item.members_count) for item in response.items] == [
+            (OTHER_UUID, 'Blocked hosts', 2)
+        ], 'сквад без uuid выбрать нельзя — его в списке нет'
+
+    @pytest.mark.asyncio
+    async def test_unreachable_panel_degrades_to_manual_entry(self, monkeypatch):
+        """Синхронизированной копии внешних сквадов у бота нет — поле остаётся ручным."""
+        from app.services import remnawave_service
+
+        class _Broken:
+            is_configured = True
+
+            def get_api_client(self):
+                raise RuntimeError('panel is down')
+
+        monkeypatch.setattr(remnawave_service, 'RemnaWaveService', _Broken)
+
+        response = await route.list_grace_external_squads(admin=ADMIN)
+
+        assert response.available is False and response.items == []
+
+    @pytest.mark.asyncio
+    async def test_unconfigured_panel_is_not_an_error(self, monkeypatch):
+        from app.services import remnawave_service
+
+        class _Unconfigured:
+            is_configured = False
+
+        monkeypatch.setattr(remnawave_service, 'RemnaWaveService', _Unconfigured)
+
+        response = await route.list_grace_external_squads(admin=ADMIN)
+
+        assert response.available is False
 
 
 class TestSquadPicker:
