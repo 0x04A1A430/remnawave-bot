@@ -131,6 +131,34 @@ async def test_search_matches_email(monkeypatch: pytest.MonkeyPatch) -> None:
         assert await get_users_count(db, search='example.com') == 1
 
 
+async def test_traffic_used_percent_min(monkeypatch: pytest.MonkeyPatch) -> None:
+    """«Трафик на исходе»: израсходовано от N % лимита, исчерпанные тоже; безлимит и истёкшие — нет."""
+    async with memory_session(monkeypatch, TABLES) as db:
+        heavy = _user(11, 'heavy')
+        done = _user(12, 'done')
+        light = _user(13, 'light')
+        unlimited = _user(14, 'unlimited')
+        gone = _user(15, 'gone')
+        db.add_all([heavy, done, light, unlimited, gone])
+        await db.flush()
+        rows = [
+            (heavy, 85.0, 100, SubscriptionStatus.ACTIVE.value),
+            (done, 100.0, 100, SubscriptionStatus.LIMITED.value),
+            (light, 20.0, 100, SubscriptionStatus.ACTIVE.value),
+            (unlimited, 900.0, 0, SubscriptionStatus.ACTIVE.value),
+            (gone, 95.0, 100, SubscriptionStatus.EXPIRED.value),
+        ]
+        for user, used, limit, status in rows:
+            sub = _subscription(user, days_left=10, status=status)
+            sub.traffic_used_gb = used
+            sub.traffic_limit_gb = limit
+            db.add(sub)
+        await db.commit()
+
+        assert await _usernames(db, traffic_used_percent_min=80) == ['done', 'heavy']
+        assert await get_users_count(db, traffic_used_percent_min=80) == 2
+
+
 async def test_filters_combine(monkeypatch: pytest.MonkeyPatch) -> None:
     async with memory_session(monkeypatch, TABLES) as db:
         await _seed(db)
@@ -148,4 +176,5 @@ def test_route_declares_new_filters() -> None:
         'has_restrictions',
         'has_subscription',
         'purchase_count',
+        'traffic_used_percent_min',
     } <= params

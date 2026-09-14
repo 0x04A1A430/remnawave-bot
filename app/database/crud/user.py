@@ -960,6 +960,7 @@ def _users_list_conditions(
     has_restrictions: bool | None = None,
     has_subscription: bool | None = None,
     purchase_count: int | None = None,
+    traffic_used_percent_min: int | None = None,
 ) -> list:
     """Условия WHERE списка пользователей админки — одни для списка и для счётчика.
 
@@ -1062,6 +1063,27 @@ def _users_list_conditions(
             )
         )
 
+    if traffic_used_percent_min is not None:
+        # «Трафик на исходе»: живая подписка с лимитом, израсходованным от N %. Исчерпанная
+        # (LIMITED) тоже здесь — ей трафик нужен больше всех; безлимит (0) не считается.
+        threshold = traffic_used_percent_min / 100
+        conditions.append(
+            exists(
+                select(Subscription.id).where(
+                    Subscription.user_id == User.id,
+                    Subscription.status.in_(
+                        (
+                            SubscriptionStatus.ACTIVE.value,
+                            SubscriptionStatus.TRIAL.value,
+                            SubscriptionStatus.LIMITED.value,
+                        )
+                    ),
+                    Subscription.traffic_limit_gb > 0,
+                    Subscription.traffic_used_gb >= Subscription.traffic_limit_gb * threshold,
+                )
+            )
+        )
+
     return conditions
 
 
@@ -1082,6 +1104,7 @@ async def get_users_list(
     has_restrictions: bool | None = None,
     has_subscription: bool | None = None,
     purchase_count: int | None = None,
+    traffic_used_percent_min: int | None = None,
     order_by_balance: bool = False,
     order_by_traffic: bool = False,
     order_by_last_activity: bool = False,
@@ -1110,6 +1133,7 @@ async def get_users_list(
             has_restrictions=has_restrictions,
             has_subscription=has_subscription,
             purchase_count=purchase_count,
+            traffic_used_percent_min=traffic_used_percent_min,
         )
     )
 
@@ -1215,6 +1239,7 @@ async def get_users_count(
     has_restrictions: bool | None = None,
     has_subscription: bool | None = None,
     purchase_count: int | None = None,
+    traffic_used_percent_min: int | None = None,
 ) -> int:
     query = select(func.count(User.id)).where(
         *_users_list_conditions(
@@ -1231,6 +1256,7 @@ async def get_users_count(
             has_restrictions=has_restrictions,
             has_subscription=has_subscription,
             purchase_count=purchase_count,
+            traffic_used_percent_min=traffic_used_percent_min,
         )
     )
 

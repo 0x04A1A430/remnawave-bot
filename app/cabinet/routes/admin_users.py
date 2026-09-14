@@ -451,6 +451,7 @@ async def list_users(
     has_restrictions: bool | None = Query(None),
     has_subscription: bool | None = Query(None),
     purchase_count: int | None = Query(None, ge=0, le=0),
+    traffic_used_percent_min: int | None = Query(None, ge=1, le=100),
     sort_by: SortByEnum = Query(SortByEnum.CREATED_AT),
     admin: User = Depends(require_permission('users:read')),
     db: AsyncSession = Depends(get_cabinet_db),
@@ -467,6 +468,7 @@ async def list_users(
     - **active_within_minutes**: Last activity within N minutes («online» segment)
     - **has_restrictions** / **has_subscription**: Restriction flags / any subscription at all
     - **purchase_count**: Only 0 is supported — users without a completed subscription payment
+    - **traffic_used_percent_min**: Live subscription with at least N % of its traffic limit used (unlimited excluded)
     - **sort_by**: Sort field (created_at, balance, traffic, last_activity, total_spent, purchase_count, subscription_end_date)
     """
     # Convert status enum to model enum
@@ -507,6 +509,7 @@ async def list_users(
         has_restrictions=has_restrictions,
         has_subscription=has_subscription,
         purchase_count=purchase_count,
+        traffic_used_percent_min=traffic_used_percent_min,
         order_by_balance=order_by_balance,
         order_by_traffic=order_by_traffic,
         order_by_last_activity=order_by_last_activity,
@@ -530,6 +533,7 @@ async def list_users(
         has_restrictions=has_restrictions,
         has_subscription=has_subscription,
         purchase_count=purchase_count,
+        traffic_used_percent_min=traffic_used_percent_min,
     )
 
     # Get spending stats for all users
