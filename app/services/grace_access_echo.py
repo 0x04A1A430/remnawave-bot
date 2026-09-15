@@ -21,7 +21,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import ServerSquad, Subscription, Tariff
-from app.services.grace_access_runtime import SQLAlchemyGraceSessionStore
+from app.services.grace_access_codec import list_sessions_for_subscription
 from app.services.grace_access_service import GraceEchoRepair, plan_grace_echo_repair
 
 
@@ -51,7 +51,7 @@ async def _sellable_squads(db: AsyncSession) -> frozenset[str]:
 
 
 async def _plan(db: AsyncSession, subscription: Subscription) -> GraceEchoRepair | None:
-    sessions = await SQLAlchemyGraceSessionStore(db).list_for_subscription(subscription.id)
+    sessions = await list_sessions_for_subscription(db, subscription.id)
     if not sessions:
         return None
     squads = tuple(subscription.connected_squads or ())

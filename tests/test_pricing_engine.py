@@ -9,12 +9,10 @@ from app.services.pricing_engine import PricingEngine, RenewalPricing
 def _no_grace_history(monkeypatch):
     """Цена классики смотрит историю грейса (сквады до оверлея); у этих подписок её нет."""
 
-    async def no_sessions(self, subscription_id):
+    async def no_sessions(db, subscription_id):
         return []
 
-    monkeypatch.setattr(
-        'app.services.grace_access_runtime.SQLAlchemyGraceSessionStore.list_for_subscription', no_sessions
-    )
+    monkeypatch.setattr('app.services.grace_access_echo.list_sessions_for_subscription', no_sessions)
 
 
 def test_renewal_pricing_is_frozen():

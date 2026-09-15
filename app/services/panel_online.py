@@ -23,6 +23,8 @@ from typing import Protocol
 
 import structlog
 
+from app.services.connected_accounts import ConnectedAccounts
+
 
 logger = structlog.get_logger(__name__)
 
@@ -50,26 +52,6 @@ class _PanelUser(Protocol):
 class _PanelUsersSource(Protocol):
     async def get_users_by_last_online(self, start: int, size: int) -> list[_PanelUser]:
         """Аккаунты панели по убыванию времени последнего подключения."""
-
-
-@dataclass(frozen=True)
-class ConnectedAccounts:
-    """Панельные аккаунты, подключённые прямо сейчас, и Telegram ID их владельцев."""
-
-    panel_ids: frozenset[int]
-    telegram_ids: frozenset[int]
-
-    def has_user(self, user) -> bool:
-        """Подключён ли пользователь бота хоть одним своим аккаунтом в панели.
-
-        Ключи те же, что у фильтра списка (``_users_list_conditions``): id панели у
-        пользователя (одиночный тариф), у любой подписки (мультитариф) и Telegram ID.
-        """
-        if user.remnawave_id in self.panel_ids:
-            return True
-        if any(sub.remnawave_id in self.panel_ids for sub in user.subscriptions or ()):
-            return True
-        return user.telegram_id is not None and user.telegram_id in self.telegram_ids
 
 
 def _aware(moment: datetime) -> datetime:

@@ -101,6 +101,9 @@
   Классы: `TelegramNotifierProcessor` (8 методов)
   Функции: нет
 - `app/middlewares/`
+- `app/referral_levels.py` — Python-модуль
+  Классы: нет
+  Функции: нет
 - `app/services/`
 - `app/states.py` — Python-модуль
   Классы: `RegistrationStates`, `SubscriptionStates`, `GiftPurchaseStates`, `GiftActivationStates`, `BalanceStates`, `PromoCodeStates`, `AdminStates`, `SupportStates`, `TicketStates`, `AdminTicketStates`, `SupportSettingsStates`, `BotConfigStates`, `PricingStates`, `AutoPayStates`, `SquadCreateStates`, `SquadRenameStates`, `SquadMigrationStates`, `RemnaWaveSyncStates`, `ContestStates`, `AdminSubmenuStates`, `BlacklistStates`, `ReferralWithdrawalStates`
@@ -861,8 +864,11 @@
   Классы: `Pal24APIError`, `Pal24Response` (2 методов), `Pal24Client` (14 методов)
   Функции: нет
 - `app/external/remnawave_api.py` — Python-модуль
-  Классы: `UserStatus`, `TrafficLimitStrategy`, `UserTraffic`, `RemnaWaveUser` (4 методов), `RemnaWaveInbound`, `RemnaWaveInternalSquad`, `RemnaWaveAccessibleNode`, `RemnaWaveHost`, `RemnaWaveNode` (2 методов), `SubscriptionInfo`, `SubscriptionPageConfig`, `RemnaWaveExternalSquad`, `RemnaWaveAPIError` (1 методов), `RemnaWaveTransientError`, `RemnaWaveInvalidUserIdError`, `RemnaWaveAPI` (108 методов)
-  Функции: `is_valid_internal_squad_name` — Имя сквада, которое примет панель., `coerce_panel_user_id` — Привести локально хранимый идентификатор к числовому id панели., `is_expire_in_past_error` — Панель отвергла ``expireAt`` как прошедшую дату., `is_user_not_found_error` — Панель сообщила, что такого пользователя НЕТ (удалён / протух идентификатор)., `is_stale_external_squad_error` — Панель отвергла запись из-за ``externalSquadUuid`` (или не смогла её отличить)., `format_bytes`, `parse_bytes`, `test_api_connection`
+  Классы: `UserStatus`, `TrafficLimitStrategy`, `UserTraffic`, `RemnaWaveUser` (4 методов), `RemnaWaveInbound`, `RemnaWaveInternalSquad`, `RemnaWaveAccessibleNode`, `RemnaWaveHost`, `RemnaWaveNode` (2 методов), `SubscriptionInfo`, `SubscriptionPageConfig`, `RemnaWaveExternalSquad`, `RemnaWaveTransientError`, `RemnaWaveAPI` (108 методов)
+  Функции: `is_valid_internal_squad_name` — Имя сквада, которое примет панель., `is_expire_in_past_error` — Панель отвергла ``expireAt`` как прошедшую дату., `is_user_not_found_error` — Панель сообщила, что такого пользователя НЕТ (удалён / протух идентификатор)., `is_stale_external_squad_error` — Панель отвергла запись из-за ``externalSquadUuid`` (или не смогла её отличить)., `format_bytes`, `parse_bytes`, `test_api_connection`
+- `app/external/remnawave_errors.py` — Python-модуль
+  Классы: `RemnaWaveAPIError` (1 методов), `RemnaWaveInvalidUserIdError`
+  Функции: `coerce_panel_user_id` — Привести локально хранимый идентификатор к числовому id панели.
 - `app/external/telegram_stars.py` — Python-модуль
   Классы: `TelegramStarsService` (6 методов)
   Функции: нет
@@ -1429,6 +1435,9 @@
 - `app/services/cloudpayments_service.py` — Python-модуль
   Классы: `CloudPaymentsAPIError` (1 методов), `CloudPaymentsService` (16 методов)
   Функции: нет
+- `app/services/connected_accounts.py` — Python-модуль
+  Классы: `ConnectedAccounts` (1 методов)
+  Функции: нет
 - `app/services/contest_rotation_service.py` — Python-модуль
   Классы: `ContestRotationService` (15 методов)
   Функции: нет
@@ -1472,6 +1481,9 @@
 - `app/services/gift_purchase_service.py` — Python-модуль
   Классы: `GiftQuote` (2 методов), `GiftTariffOffer`, `GiftRecipient`, `GiftPurchaseResult`, `GiftError`, `GiftFeatureDisabledError`, `GiftTariffUnavailableError`, `GiftPeriodUnavailableError`, `GiftPurchaseRestrictedError`, `GiftInsufficientBalanceError` (1 методов), `GiftPriceChangedError` (1 методов), `GiftIdempotencyConflictError`
   Функции: `is_gift_enabled` — Check if the gift feature is enabled via system settings., `list_gift_offers` — List eligible tariffs and their personalized quotes for gift purchase., `quote_gift_purchase` — Calculate personalized quote for a specific tariff and period., `purchase_gift_from_balance` — Atomically purchase a gift subscription from user balance with database idempotency.
+- `app/services/grace_access_codec.py` — Python-модуль
+  Классы: `GraceSnapshotError`
+  Функции: `list_sessions_for_subscription` — Все сессии подписки, открытые и закрытые, — её история грейсов.
 - `app/services/grace_access_echo.py` — Python-модуль
   Классы: нет
   Функции: `terms_without_grace_echo` — Сквады и лимит подписки, какими они были до оверлея грейса. Только чтение., `undo_grace_overlay_echo` — Вернуть поля, в которых осел оверлей грейса. Возвращает имена изменённых полей.
@@ -1479,7 +1491,7 @@
   Классы: нет
   Функции: `announce_grace_event` — Сообщить о выдаче или завершении grace. Никогда не бросает., `grace_allowed_services` — Что остаётся доступным во время grace — словами оператора; пусто = Telegram.
 - `app/services/grace_access_runtime.py` — Python-модуль
-  Классы: `GraceSnapshotError`, `GracePanelError`, `GraceAccessDeletionBlocked` (1 методов), `GracePanelUpdateLease` (1 методов), `SQLAlchemyGraceSessionStore` (7 методов), `SQLAlchemyGraceBillingGateway` (2 методов), `RemnawaveGracePanelGateway` (8 методов), `GraceAccessRuntime` (18 методов)
+  Классы: `GracePanelError`, `GraceAccessDeletionBlocked` (1 методов), `GracePanelUpdateLease` (1 методов), `SQLAlchemyGraceSessionStore` (6 методов), `SQLAlchemyGraceBillingGateway` (2 методов), `RemnawaveGracePanelGateway` (8 методов), `GraceAccessRuntime` (18 методов)
   Функции: `get_open_grace_subscription_ids` — One-query guard shared by both directions of full synchronization., `lock_grace_sensitive_panel_updates` — Serialize an outbound panel PATCH with grace creation/reconciliation., `apply_recovered_grace_update_locked` — Apply one canonical panel PATCH and finish a recovered grace session., `announce_grace_event_after_commit` — Объявить о событии grace, когда вызывающий закоммитит свою транзакцию., `grace_sensitive_panel_update` — Hold a grace lock and expose billing state read only after lock acquisition., `update_panel_user_grace_safe` — Обычный панельный апдейт, не затирающий открытый grace; продление закрывает grace., `create_panel_user_grace_safe` — Create a panel user only while the subscription cannot have an overlay., `grace_sensitive_global_panel_update` — Block all grace creation while one all-users panel mutation runs., `set_panel_user_enabled_state_grace_safe` — Serialize an intentional enable/disable and its grace suppression marker., `ensure_no_open_grace_for_subscriptions` — Fail before an irreversible panel/DB delete can orphan an overlay., `ensure_no_open_grace_for_user` — User-level version of the pre-delete guard., `ensure_no_open_grace_for_users` — Acquire every affected subscription lock in deterministic order., `collect_grace_status` — Session counters and the newest failures, as one read-only snapshot.
 - `app/services/grace_access_service.py` — Python-модуль
   Классы: `GraceReason`, `GraceSubscriptionKind`, `GraceAccessMode` (1 методов), `GraceSessionState`, `GraceCompletionReason`, `GraceRestoreOutcome`, `GracePanelTransitionPending`, `GracePanelTransitionConflict`, `GraceStartDecision`, `GraceAccessPolicy` (2 методов), `GraceBillingState`, `GracePanelSnapshot`, `GracePanelOverlay`, `GraceAccessSession`, `GraceStartResult`, `GraceReconcileResult`, `GraceSessionStore` (5 методов), `GracePanelGateway` (4 методов), `GraceBillingGateway` (1 методов), `GraceAccessService` (14 методов), `GraceEchoRepair`
@@ -1552,7 +1564,7 @@
   Классы: `Pal24Service` (9 методов)
   Функции: нет
 - `app/services/panel_online.py` — Python-модуль
-  Классы: `ConnectedAccounts` (1 методов)
+  Классы: нет
   Функции: `fetch_connected_accounts` — Обойти список панели по убыванию ``onlineAt``, пока отметка свежее окна., `get_connected_accounts` — Подключённые сейчас; ``None`` — панель не настроена или не ответила (это «не знаем», не «никого»).
 - `app/services/panel_sync/`
 - `app/services/paritypay_service.py` — Python-модуль
@@ -4498,7 +4510,7 @@
   Функции: `test_bulk_sync_does_not_reactivate_a_blocked_user`, `test_cabinet_sync_does_not_reactivate_a_blocked_user`
 - `tests/services/panel_sync/test_expiry.py` — Python-модуль
   Классы: нет
-  Функции: `test_live_subscription_keeps_its_own_date`, `test_expired_subscription_does_not_touch_the_date_on_update` — Главное свойство: поле не отправляется, панель хранит настоящую дату., `test_new_panel_account_gets_the_real_date_even_if_it_has_passed` — При СОЗДАНИИ панель принимает прошедшую дату — выдумывать не надо., `test_future_date_survives_even_for_an_inactive_subscription` — Заблокированный пользователь с ещё не истёкшей подпиской: дату не занижаем., `test_blocked_but_not_expired_subscription_still_pushes_its_real_date` — Блокировка — не истечение: дата в будущем, панель её примет и должна знать., `test_expired_subscription_extinguishes_a_future_date_in_the_panel` — Панель держит будущее — гасим ближайшим допустимым моментом., `test_expired_subscription_leaves_a_past_date_in_the_panel_alone` — В панели уже прошлое — это и есть настоящая история, переписывать нечего., `test_expired_subscription_without_a_known_panel_date_is_left_alone` — Что стоит в панели, неизвестно — молчим, как и раньше., `test_naive_panel_date_is_read_as_utc` — Панель отдаёт UTC; наивное значение нельзя считать локальным временем., `test_nobody_builds_the_date_by_hand`, `test_the_debt_list_only_names_modules_that_still_build_the_request` — Перевели модуль — убрать его отсюда, иначе список перестанет что-то значить., `test_every_module_sending_a_date_uses_the_shared_rule` — Кто сам кладёт дату в запрос к панели — обязан взять её из общего правила., `test_billing_target_leaves_the_date_alone_for_disabled`, `test_billing_target_keeps_the_real_date_for_a_live_subscription`, `test_restore_target_leaves_the_date_alone_for_disabled`, `test_payload_without_a_date_does_not_carry_it_from_the_base` — Базовый набор собран для другого перехода: оставленная дата затёрла бы настоящую., `test_our_own_extinguished_date_is_not_moved_again`, `test_a_date_a_few_minutes_ahead_is_left_alone_too` — Отключённой подписке пять минут ничего не решают: доступ закрывает статус., `test_a_genuinely_live_panel_date_is_still_extinguished`
+  Функции: `test_live_subscription_keeps_its_own_date`, `test_expired_subscription_does_not_touch_the_date_on_update` — Главное свойство: поле не отправляется, панель хранит настоящую дату., `test_new_panel_account_gets_the_real_date_even_if_it_has_passed` — При СОЗДАНИИ панель принимает прошедшую дату — выдумывать не надо., `test_future_date_survives_even_for_an_inactive_subscription` — Заблокированный пользователь с ещё не истёкшей подпиской: дату не занижаем., `test_blocked_but_not_expired_subscription_still_pushes_its_real_date` — Блокировка — не истечение: дата в будущем, панель её примет и должна знать., `test_expired_subscription_extinguishes_a_future_date_in_the_panel` — Панель держит будущее — гасим ближайшим допустимым моментом., `test_expired_subscription_leaves_a_past_date_in_the_panel_alone` — В панели уже прошлое — это и есть настоящая история, переписывать нечего., `test_expired_subscription_without_a_known_panel_date_is_left_alone` — Что стоит в панели, неизвестно — молчим, как и раньше., `test_naive_panel_date_is_read_as_utc` — Панель отдаёт UTC; наивное значение нельзя считать локальным временем., `test_snapshot_stores_never_write_to_the_panel`, `test_nobody_builds_the_date_by_hand`, `test_the_debt_list_only_names_modules_that_still_build_the_request` — Перевели модуль — убрать его отсюда, иначе список перестанет что-то значить., `test_every_module_sending_a_date_uses_the_shared_rule` — Кто сам кладёт дату в запрос к панели — обязан взять её из общего правила., `test_billing_target_leaves_the_date_alone_for_disabled`, `test_billing_target_keeps_the_real_date_for_a_live_subscription`, `test_restore_target_leaves_the_date_alone_for_disabled`, `test_payload_without_a_date_does_not_carry_it_from_the_base` — Базовый набор собран для другого перехода: оставленная дата затёрла бы настоящую., `test_our_own_extinguished_date_is_not_moved_again`, `test_a_date_a_few_minutes_ahead_is_left_alone_too` — Отключённой подписке пять минут ничего не решают: доступ закрывает статус., `test_a_genuinely_live_panel_date_is_still_extinguished`
 - `tests/services/panel_sync/test_fields.py` — Python-модуль
   Классы: нет
   Функции: `test_account_metadata_includes_tag_alongside_description`, `test_narrow_push_without_flags_sends_only_account_metadata`, `test_flags_add_exactly_their_fields`, `test_extra_fields_are_merged_without_losing_metadata`

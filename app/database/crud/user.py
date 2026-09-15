@@ -35,7 +35,7 @@ from app.utils.validators import sanitize_telegram_name
 
 
 if TYPE_CHECKING:
-    from app.services.panel_online import ConnectedAccounts
+    from app.services.connected_accounts import ConnectedAccounts
 
 
 logger = structlog.get_logger(__name__)
