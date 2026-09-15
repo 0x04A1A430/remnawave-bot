@@ -211,6 +211,31 @@ class SQLAlchemyGraceSessionStore:
             await _repair_missing_panel_id(self._db, model)
         return _model_to_session(model)
 
+    async def list_for_subscription(self, subscription_id: int) -> list[GraceAccessSession]:
+        """Все сессии подписки, открытые и закрытые, — её история грейсов.
+
+        Нечитаемую строку (снимок старой версии без данных) пропускаем: история
+        нужна, чтобы вернуть затёртое оверлеем, и одна битая сессия не должна
+        ронять продление.
+        """
+        result = await self._db.execute(
+            select(GraceAccessSessionModel).where(GraceAccessSessionModel.subscription_id == subscription_id)
+        )
+        sessions: list[GraceAccessSession] = []
+        for model in result.scalars().all():
+            if model.remnawave_id is None:
+                await _repair_missing_panel_id(self._db, model)
+            try:
+                sessions.append(_model_to_session(model))
+            except ValueError as error:  # GraceSnapshotError — тоже ValueError
+                logger.warning(
+                    'Грейс-сессия нечитаема — в истории подписки её не учитываем',
+                    grace_session_id=model.id,
+                    subscription_id=subscription_id,
+                    error=str(error)[:200],
+                )
+        return sessions
+
     async def create(self, session: GraceAccessSession) -> GraceAccessSession:
         model = _session_to_model(session)
         try:
@@ -218,6 +243,13 @@ class SQLAlchemyGraceSessionStore:
                 self._db.add(model)
                 await self._db.flush()
                 await _mark_subscription_grace_open(self._db, session.subscription_id, open_=True)
+                # Дата оверлея — до PATCH в панель и навсегда: снимок панели с ней —
+                # оверлей, даже если его обработают после досрочного закрытия грейса.
+                await self._db.execute(
+                    update(Subscription)
+                    .where(Subscription.id == session.subscription_id)
+                    .values(grace_overlay_expire_at=_as_utc(session.overlay.expire_at))
+                )
             # PENDING must be durable before the external PATCH.  If the process
             # dies after this commit, reconciliation can safely finish or undo it.
             await self._db.commit()

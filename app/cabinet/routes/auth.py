@@ -42,6 +42,7 @@ from app.services.campaign_service import AdvertisingCampaignService
 from app.services.disposable_email_service import disposable_email_service
 from app.services.panel_sync import (
     ADMIN_PULL,
+    GRACE_MARKER_FIELDS,
     panel_status_for_new_subscription,
     project_onto_subscription,
     read_panel_user,
@@ -587,6 +588,9 @@ async def _sync_subscription_from_panel_by_email(db: AsyncSession, user: User) -
                 device_limit = coerce_panel_device_limit(panel_user.hwid_device_limit, default=0)
 
                 if existing_sub:
+                    # Признак грейса — из базы после снимка панели: объект мог
+                    # прийти из сессии раньше, а грейс — открыться между ними.
+                    await db.refresh(existing_sub, list(GRACE_MARKER_FIELDS))
                     # Вход по почте усыновляет уже существующий аккаунт панели:
                     # здесь панель — источник истины целиком, включая лимиты.
                     project_onto_subscription(

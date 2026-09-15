@@ -154,3 +154,46 @@ async def test_a_save_that_lost_the_race_does_not_touch_the_marker(monkeypatch):
 
         assert winner.state is GraceSessionState.ACTIVE
         assert await _marker(db) is True
+
+
+@pytest.mark.asyncio
+async def test_the_overlay_date_is_written_with_the_session_and_outlives_it(monkeypatch):
+    """Дата оверлея ложится на подписку вместе с сессией (до PATCH) и не стирается при закрытии.
+
+    Снимок панели, снятый при открытой сессии, может обрабатываться уже после
+    досрочного закрытия грейса: признак снят, хвост — другая дата. Дата оверлея
+    остаётся — по ней снимок узнаётся как оверлей.
+    """
+    from app.services.grace_access_runtime import SQLAlchemyGraceSessionStore
+    from tests.fixtures.sqlite_memory import memory_session
+
+    tables = [User.__table__, Subscription.__table__, GraceAccessSessionModel.__table__]
+    async with memory_session(monkeypatch, tables) as db:
+        db.add(User(id=1, telegram_id=100, remnawave_id=PANEL_ID))
+        db.add(
+            Subscription(
+                id=42, user_id=1, status='active', end_date=NOW - timedelta(minutes=1), remnawave_short_id='sid42'
+            )
+        )
+        await db.commit()
+
+        store = SQLAlchemyGraceSessionStore(db)
+        created = await store.create(_session())
+        overlay_date = (
+            await db.execute(select(Subscription.grace_overlay_expire_at).where(Subscription.id == 42))
+        ).scalar_one()
+        assert abs((overlay_date.replace(tzinfo=UTC) - created.overlay.expire_at).total_seconds()) < 1
+
+        await store.save(
+            replace(
+                created,
+                state=GraceSessionState.COMPLETED,
+                completion_reason=GraceCompletionReason.CONFLICT,
+                completed_at=NOW + timedelta(minutes=5),
+            )
+        )
+        await db.commit()
+        kept = (
+            await db.execute(select(Subscription.grace_overlay_expire_at).where(Subscription.id == 42))
+        ).scalar_one()
+        assert kept is not None, 'после досрочного закрытия дата оверлея нужна, чтобы узнать запоздалый снимок'

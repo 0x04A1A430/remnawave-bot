@@ -107,11 +107,11 @@ async def test_alive_in_the_panel_is_not_expired_and_takes_the_panel_date(monkey
     subscription = _subscription(user)
     api = _FakeApi(_panel_user('ACTIVE', NOW + timedelta(days=20)))
     service = _service(api)
-    expire = AsyncMock()
+    expire = AsyncMock(return_value=True)
     monkeypatch.setattr(monitoring_module, 'get_expired_subscriptions', AsyncMock(return_value=[subscription]))
     monkeypatch.setattr(monitoring_module, 'get_user_by_id', AsyncMock(return_value=user))
-    monkeypatch.setattr('app.database.crud.subscription.expire_subscription', expire)
-    db = SimpleNamespace(execute=AsyncMock(), commit=AsyncMock())
+    monkeypatch.setattr('app.database.crud.subscription.expire_subscription_if_still_due', expire)
+    db = SimpleNamespace(execute=AsyncMock(), commit=AsyncMock(), refresh=AsyncMock())
 
     await service._check_expired_subscriptions(db)
 
@@ -131,11 +131,11 @@ async def test_expired_in_the_panel_is_expired_in_the_bot(monkeypatch) -> None:
     subscription = _subscription(user)
     api = _FakeApi(_panel_user('EXPIRED', NOW - timedelta(minutes=5)))
     service = _service(api)
-    expire = AsyncMock()
+    expire = AsyncMock(return_value=True)
     monkeypatch.setattr(monitoring_module, 'get_expired_subscriptions', AsyncMock(return_value=[subscription]))
     monkeypatch.setattr(monitoring_module, 'get_user_by_id', AsyncMock(return_value=user))
-    monkeypatch.setattr('app.database.crud.subscription.expire_subscription', expire)
-    db = SimpleNamespace(execute=AsyncMock(), commit=AsyncMock())
+    monkeypatch.setattr('app.database.crud.subscription.expire_subscription_if_still_due', expire)
+    db = SimpleNamespace(execute=AsyncMock(), commit=AsyncMock(), refresh=AsyncMock())
 
     await service._check_expired_subscriptions(db)
 
@@ -153,11 +153,11 @@ async def test_silent_panel_falls_back_to_the_bot_date(monkeypatch) -> None:
     api = _FakeApi(None)
     api.get_user_by_id = AsyncMock(side_effect=RuntimeError('panel down'))
     service = _service(api)
-    expire = AsyncMock()
+    expire = AsyncMock(return_value=True)
     monkeypatch.setattr(monitoring_module, 'get_expired_subscriptions', AsyncMock(return_value=[subscription]))
     monkeypatch.setattr(monitoring_module, 'get_user_by_id', AsyncMock(return_value=user))
-    monkeypatch.setattr('app.database.crud.subscription.expire_subscription', expire)
-    db = SimpleNamespace(execute=AsyncMock(), commit=AsyncMock())
+    monkeypatch.setattr('app.database.crud.subscription.expire_subscription_if_still_due', expire)
+    db = SimpleNamespace(execute=AsyncMock(), commit=AsyncMock(), refresh=AsyncMock())
 
     await service._check_expired_subscriptions(db)
 
@@ -190,11 +190,11 @@ async def test_open_grace_overlay_is_not_taken_for_a_panel_renewal(monkeypatch) 
     subscription.traffic_limit_gb = 0
     api = _FakeApi(_grace_overlay_panel_user(NOW + timedelta(hours=72)))
     service = _service(api)
-    expire = AsyncMock()
+    expire = AsyncMock(return_value=True)
     monkeypatch.setattr(monitoring_module, 'get_expired_subscriptions', AsyncMock(return_value=[subscription]))
     monkeypatch.setattr(monitoring_module, 'get_user_by_id', AsyncMock(return_value=user))
-    monkeypatch.setattr('app.database.crud.subscription.expire_subscription', expire)
-    db = SimpleNamespace(execute=AsyncMock(), commit=AsyncMock())
+    monkeypatch.setattr('app.database.crud.subscription.expire_subscription_if_still_due', expire)
+    db = SimpleNamespace(execute=AsyncMock(), commit=AsyncMock(), refresh=AsyncMock())
 
     await service._check_expired_subscriptions(db)
 
@@ -215,11 +215,11 @@ async def test_grace_tail_left_in_the_panel_is_not_a_renewal_either(monkeypatch)
     subscription.grace_tail_expire_at = tail
     api = _FakeApi(_panel_user('ACTIVE', tail))
     service = _service(api)
-    expire = AsyncMock()
+    expire = AsyncMock(return_value=True)
     monkeypatch.setattr(monitoring_module, 'get_expired_subscriptions', AsyncMock(return_value=[subscription]))
     monkeypatch.setattr(monitoring_module, 'get_user_by_id', AsyncMock(return_value=user))
-    monkeypatch.setattr('app.database.crud.subscription.expire_subscription', expire)
-    db = SimpleNamespace(execute=AsyncMock(), commit=AsyncMock())
+    monkeypatch.setattr('app.database.crud.subscription.expire_subscription_if_still_due', expire)
+    db = SimpleNamespace(execute=AsyncMock(), commit=AsyncMock(), refresh=AsyncMock())
 
     await service._check_expired_subscriptions(db)
 

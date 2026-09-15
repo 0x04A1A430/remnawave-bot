@@ -321,8 +321,8 @@ async def test_monitoring_does_not_adopt_someone_elses_paid_date(monkeypatch) ->
     async def client():
         yield api
 
-    service = SimpleNamespace(is_configured=True, get_api_client=client)
-    monitor = SimpleNamespace(subscription_service=service)
+    monitor = MonitoringService.__new__(MonitoringService)
+    monitor.subscription_service = SimpleNamespace(is_configured=True, get_api_client=client)
     async with memory_session(monkeypatch, TABLES) as db:
         user_a, sub_a = await _seed_issue_3245(db)
         sub_a.status = SubscriptionStatus.ACTIVE.value

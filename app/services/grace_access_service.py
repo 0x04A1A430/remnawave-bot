@@ -1009,6 +1009,8 @@ def build_panel_overlay(
     )
 
 
+_GIB = 1024**3
+
 #: Панель хранит миллисекунды — эхо её даты в боте может отличаться на доли секунды.
 _OVERLAY_ECHO_TOLERANCE = timedelta(seconds=2)
 
@@ -1024,6 +1026,105 @@ def billing_echoes_overlay(session: GraceAccessSession, current: GraceBillingSta
     if current.end_at is None:
         return False
     return abs(_as_utc(current.end_at) - _as_utc(session.overlay.expire_at)) <= _OVERLAY_ECHO_TOLERANCE
+
+
+@dataclass(frozen=True, slots=True)
+class GraceEchoRepair:
+    """Что вернуть в подписку, где осел оверлей грейса. ``None`` — поле не трогать."""
+
+    squad_uuids: tuple[str, ...]
+    traffic_limit_bytes: int | None
+    end_at: datetime | None
+
+
+def plan_grace_echo_repair(
+    *,
+    squad_uuids: Sequence[str],
+    traffic_limit_gb: int,
+    end_at: datetime | None,
+    sessions: Sequence[GraceAccessSession],
+    sellable_squads: frozenset[str],
+) -> GraceEchoRepair | None:
+    """Вернуть подписке то, что грейс-оверлей в ней затёр.
+
+    v4.10–4.11: мониторинг принимал оверлей за продление панели и записывал его
+    в подписку — дату конца грейса, сквад грейса, лимит «расход + квота». Настоящие
+    значения лежат в ``billing_before`` сессии.
+
+    Опорных признаков два, и каждый даёт только грейс:
+
+    * дата окончания подписки равна дате оверлея какой-то сессии — «сейчас + срок
+      грейса» с точностью до миллисекунд, ни продление, ни админ такую не дают.
+      Поэтому зовут это ДО расчёта нового срока, пока дата ещё на месте;
+    * серверы подписки — ровно сквады оверлея, и ни один из них нигде не продаётся
+      (``sellable_squads``: доступные к покупке и пробные серверы, сквады тарифов), а
+      грейс хоть раз закрылся «оплатой». Это жалоба №2: человек заплатил ещё на
+      старом коде, дата ушла от конца грейса, а сквад грейса остался. Дату тогда не
+      трогаем — её сдвинула оплата.
+
+    Одного совпадения сквада мало: сквад грейса может быть и обычным продаваемым
+    сервером, а «расход + квота» — совпасть случайно.
+
+    Если человек не продлил сразу, у «даты грейса» ему выдавался второй грейс, и
+    его снимок уже с оверлеем, — источник — последний снимок, который сам не оверлей.
+    Лимит сравнивается в целых гигабайтах: в подписку он приходил из панели
+    округлённым вниз, а «расход + квота» почти никогда не делится нацело.
+    """
+    if not sessions:
+        return None
+    overlay_dates = [_as_utc(session.overlay.expire_at) for session in sessions]
+
+    def date_is_overlay(value: datetime | None) -> bool:
+        return value is not None and any(
+            abs(_as_utc(value) - date) <= _OVERLAY_ECHO_TOLERANCE for date in overlay_dates
+        )
+
+    date_echoed = date_is_overlay(end_at)
+    if not date_echoed and not squads_are_only_grace_echo(squad_uuids, sessions, sellable_squads=sellable_squads):
+        return None
+    grace_squads = {squad for session in sessions for squad in session.overlay.squad_uuids}
+    newest_first = sorted(sessions, key=lambda session: _as_utc(session.started_at), reverse=True)
+    source = next(
+        (
+            session.billing_before
+            for session in newest_first
+            if not date_is_overlay(session.billing_before.end_at)
+            and not grace_squads.intersection(session.billing_before.squad_uuids)
+        ),
+        None,
+    )
+    if source is None:
+        return None
+    current = tuple(squad_uuids)
+    if grace_squads.intersection(current):
+        # Сквад грейса уходит, свои серверы возвращаются; добавленное покупкой — остаётся.
+        kept = tuple(squad for squad in current if squad not in grace_squads)
+        squads = tuple(dict.fromkeys((*source.squad_uuids, *kept)))
+    else:
+        squads = current
+    overlay_limits_gb = {session.overlay.traffic_limit_bytes // _GIB for session in sessions}
+    limit_echoed = traffic_limit_gb in overlay_limits_gb and traffic_limit_gb > 0
+    return GraceEchoRepair(
+        squad_uuids=squads,
+        traffic_limit_bytes=source.traffic_limit_bytes if limit_echoed else None,
+        end_at=source.end_at if date_echoed else None,
+    )
+
+
+def squads_are_only_grace_echo(
+    squad_uuids: Sequence[str], sessions: Sequence[GraceAccessSession], *, sellable_squads: frozenset[str]
+) -> bool:
+    """Серверы подписки мог дать только грейс: ровно сквады оверлея, нигде не продаются.
+
+    Плюс грейс хоть раз закрылся «оплатой» — так v4.10–4.11 закрывали сессию, приняв
+    оверлей за продление. Список серверов, где рядом есть что-то ещё, — уже не эхо.
+    """
+    current = frozenset(squad_uuids)
+    if not current or current & sellable_squads:
+        return False
+    if not any(frozenset(session.overlay.squad_uuids) == current for session in sessions):
+        return False
+    return any(session.completion_reason == GraceCompletionReason.PAID for session in sessions)
 
 
 def billing_has_recovered(session: GraceAccessSession, current: GraceBillingState) -> bool:

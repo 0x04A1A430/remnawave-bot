@@ -24,10 +24,12 @@ from app.services.panel_sync.payload import PanelPayload, build_panel_payload
 from app.services.panel_sync.projection import (
     ADMIN_PULL,
     BULK_SNAPSHOT,
+    GRACE_MARKER_FIELDS,
     ROUTINE,
     WEBHOOK,
     PanelSnapshot,
     ProjectionPolicy,
+    panel_date_is_grace_overlay,
     panel_date_is_grace_tail,
     panel_status_for_new_subscription,
     project_onto_subscription,
@@ -47,6 +49,7 @@ from app.services.panel_sync.writer import (
 __all__ = [
     'ADMIN_PULL',
     'BULK_SNAPSHOT',
+    'GRACE_MARKER_FIELDS',
     'ROUTINE',
     'WEBHOOK',
     'PanelAccountOwnedByAnotherUser',
@@ -64,6 +67,7 @@ __all__ = [
     'is_subscription_live',
     'link_subscription_panel_identity',
     'panel_date_is_closing',
+    'panel_date_is_grace_overlay',
     'panel_date_is_grace_tail',
     'panel_expire_at',
     'panel_id_is_free_for',

@@ -63,6 +63,7 @@ from app.database.models import (
 )
 from app.services.panel_sync import (
     ADMIN_PULL,
+    GRACE_MARKER_FIELDS,
     ROUTINE,
     PanelAccountOwnedByAnotherUser,
     find_foreign_panel_owner,
@@ -4045,6 +4046,10 @@ async def sync_user_from_panel(
                         f'Panel value applied — check if auto-purchase extended subscription.'
                     )
 
+                # Подписка загружена до запроса в панель: грейс мог открыться между
+                # ними, а снимок — уже показывать его оверлей. Признак, прочитанный
+                # после снимка, это видит (хранилище пишет его до оверлея в панели).
+                await db.refresh(sync_sub, list(GRACE_MARKER_FIELDS))
                 changed_fields = project_onto_subscription(
                     sync_sub,
                     snapshot,

@@ -504,6 +504,11 @@ class PlategaPaymentMixin:
                 )
                 return
 
+            # Оверлей грейса, осевший в подписке, — не её срок: иначе новый период
+            # отсчитывался бы от конца грейса.
+            from app.services.grace_access_echo import undo_grace_overlay_echo
+
+            await undo_grace_overlay_echo(db, subscription)
             subscription.extend_subscription(record.charge_days)
             # Условия тарифа на новый период: база тарифа + активные докупки.
             from app.database.crud.subscription import reconcile_tariff_traffic_limit
