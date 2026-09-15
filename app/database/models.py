@@ -2546,6 +2546,12 @@ class Subscription(Base):
     # истёкшая подписка «истекала» заново в конец грейса, воркер видел свежее
     # истечение и выдавал грейс снова (проверено на стенде 2026-09-14).
     grace_tail_expire_at = Column(AwareDateTime(), nullable=True)
+    # Грейс-сессия открыта (pending/active/restoring): в панели стоит оверлей
+    # грейса — его дата, статус, сквад и лимит. Импорт «панель — истина» эти поля
+    # в бота не переносит, мониторинг не принимает ACTIVE панели за продление.
+    # Ведёт хранилище грейс-сессий в той же транзакции, что и состояние сессии,
+    # поэтому защищён любой путь импорта, а не только помнящий про ``grace_open``.
+    grace_session_open = Column(Boolean, nullable=False, default=False, server_default=text('false'))
 
     remnawave_short_uuid = Column(String(255), nullable=True)
     # Панельный идентификатор пользователя. С Remnawave 3.0.0 это числовой id —

@@ -681,6 +681,15 @@ class GraceAccessService:
             action, _ = await self._restore_and_complete(session, GraceCompletionReason.REVOKED)
             return action
 
+        # Эхо оверлея в биллинге — не смена инцидента: дата грейса попала в бота
+        # импортом из панели. Не отправляем её в панель «каноническим» состоянием
+        # и не закрываем грейс — он доработает до конца и восстановит снимок.
+        if billing_echoes_overlay(session, billing):
+            logger.error(
+                'Биллинг повторяет оверлей грейса — импорт перенёс его в бота; грейс продолжается',
+                grace_session_id=session.id,
+                subscription_id=session.subscription_id,
+            )
         # The recipient or canonical incident changed while grace was open
         # (admin cancellation/shortening, tariff change, panel identity
         # replacement, squads/device/limit change).  Never continue an overlay
@@ -689,8 +698,9 @@ class GraceAccessService:
         # user by compare-and-set and leave unrelated panel changes untouched.
         # ``session.remnawave_id`` is always a positive int, so a subscription
         # that lost its panel link (``None``) can never match it by accident.
-        if not billing_incident_is_eligible(billing, session.reason) or not billing_still_matches_session(
-            session, billing
+        if not billing_echoes_overlay(session, billing) and (
+            not billing_incident_is_eligible(billing, session.reason)
+            or not billing_still_matches_session(session, billing)
         ):
             if billing.remnawave_id == session.remnawave_id:
                 await self._panel.apply_billing_state(
@@ -999,8 +1009,27 @@ def build_panel_overlay(
     )
 
 
+#: Панель хранит миллисекунды — эхо её даты в боте может отличаться на доли секунды.
+_OVERLAY_ECHO_TOLERANCE = timedelta(seconds=2)
+
+
+def billing_echoes_overlay(session: GraceAccessSession, current: GraceBillingState) -> bool:
+    """В биллинге стоит дата, которую грейс сам выставил в панели.
+
+    Так выглядит оверлей, перенесённый импортом «панель — истина» в бота. Это не
+    продление и не правка извне: 2026-09-15 такое эхо закрывало грейс «человек
+    продлил» и отправляло в панель сквад грейса как обычный тариф. Настоящее
+    продление уводит дату от ``grace_until`` — оно всегда отличается.
+    """
+    if current.end_at is None:
+        return False
+    return abs(_as_utc(current.end_at) - _as_utc(session.overlay.expire_at)) <= _OVERLAY_ECHO_TOLERANCE
+
+
 def billing_has_recovered(session: GraceAccessSession, current: GraceBillingState) -> bool:
     """Detect a real renewal or traffic purchase in the canonical billing state."""
+    if billing_echoes_overlay(session, current):
+        return False
     if _normalize_status(current.user_status) != 'active':
         return False
     if _normalize_status(current.status) not in {'active', 'trial'}:

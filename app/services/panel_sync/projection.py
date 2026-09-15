@@ -187,7 +187,7 @@ def read_panel_user(panel_user) -> PanelSnapshot:
 _GRACE_TAIL_TOLERANCE_SECONDS = 2
 
 
-def _panel_date_is_grace_tail(subscription, snapshot: PanelSnapshot) -> bool:
+def panel_date_is_grace_tail(subscription, snapshot: PanelSnapshot) -> bool:
     """Совпадает ли дата в панели с той, что грейс-доступ там оставил."""
     tail = getattr(subscription, 'grace_tail_expire_at', None)
     if tail is None or snapshot.expire_at is None:
@@ -319,12 +319,16 @@ def project_onto_subscription(
             subscription.traffic_used_gb = snapshot.traffic_used_gb
             changed.add('traffic_used_gb')
 
-    if grace_open:
-        # Грейс — временное состояние, которое бот держит сам: дату, статус и
-        # сквады панель в это время не переписывает.
+    if grace_open or getattr(subscription, 'grace_session_open', False):
+        # Грейс — временное состояние, которое бот держит сам: дату, статус,
+        # лимит и сквады панель в это время не переписывает. Признак лежит на
+        # самой подписке (его ведёт хранилище грейс-сессий в той же транзакции),
+        # поэтому защищён любой вызывающий, даже забывший передать ``grace_open``:
+        # 2026-09-15 мониторинг так перенёс в бота дату и сквад грейса, и воркер
+        # принял это за продление.
         return changed
 
-    if _panel_date_is_grace_tail(subscription, snapshot):
+    if panel_date_is_grace_tail(subscription, snapshot):
         # Хвост грейса: в панели стоит дата, которую оставил сам грейс-доступ
         # (прошедшую дату PATCH не принимает, настоящую не вернуть). Это не
         # правка в панели и не продление — дату и статус подписки не трогаем,

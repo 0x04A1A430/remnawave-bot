@@ -156,6 +156,16 @@ async def _repair_missing_panel_id(db: AsyncSession, model: GraceAccessSessionMo
     return True
 
 
+async def _mark_subscription_grace_open(db: AsyncSession, subscription_id: int, *, open_: bool) -> None:
+    """Признак открытого грейса на подписке — в той же транзакции, что и сессия.
+
+    Импорт «панель — истина» (``project_onto_subscription``) и мониторинг читают
+    его сами: пока открыт, оверлей грейса в панели не выдаётся за продление.
+    Пишет только хранилище — единственный, кто меняет состояние сессии.
+    """
+    await db.execute(update(Subscription).where(Subscription.id == subscription_id).values(grace_session_open=open_))
+
+
 class SQLAlchemyGraceSessionStore:
     """SQLAlchemy adapter for the persistence-neutral grace core."""
 
@@ -207,6 +217,7 @@ class SQLAlchemyGraceSessionStore:
             async with self._db.begin_nested():
                 self._db.add(model)
                 await self._db.flush()
+                await _mark_subscription_grace_open(self._db, session.subscription_id, open_=True)
             # PENDING must be durable before the external PATCH.  If the process
             # dies after this commit, reconciliation can safely finish or undo it.
             await self._db.commit()
@@ -264,6 +275,11 @@ class SQLAlchemyGraceSessionStore:
             # retries idempotent and, critically, never regresses COMPLETED.
             return _model_to_session(current_model)
 
+        await _mark_subscription_grace_open(
+            self._db,
+            session.subscription_id,
+            open_=session.state is not GraceSessionState.COMPLETED,
+        )
         saved = replace(session, version=session.version + 1)
         if session.state is GraceSessionState.RESTORING:
             # RESTORING is a durable checkpoint before the external restore

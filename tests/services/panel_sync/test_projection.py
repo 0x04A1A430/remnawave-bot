@@ -40,6 +40,7 @@ def _sub(**kw):
         grace_candidate_reason=None,
         grace_candidate_at=None,
         grace_tail_expire_at=None,
+        grace_session_open=False,
         updated_at=None,
         last_webhook_update_at=None,
     )
@@ -530,6 +531,46 @@ def test_reads_limits_from_both_shapes_of_the_answer():
 # (``grace_tail_expire_at``). Импорт «панель — истина», увидев в панели ровно её,
 # не двигает дату окончания и статус в боте — иначе истёкшая подписка «истекала»
 # заново в конец грейса, воркер видел свежее истечение и выдавал грейс снова.
+
+
+def test_open_grace_marked_on_the_subscription_is_never_imported():
+    """Баг 2026-09-15: мониторинг, гася истёкшую подписку, спросил панель «может,
+    продлили?» — увидел ACTIVE до конца грейса и перенёс в бота дату, статус,
+    сквад грейса и лимит «расход + 1 ГБ». Воркер решил «человек продлил».
+
+    Признак открытого грейса лежит на самой подписке — ни одному вызывающему не
+    нужно помнить про ``grace_open``.
+    """
+    grace_until = NOW + timedelta(hours=72)
+    subscription = _sub(
+        status=SubscriptionStatus.ACTIVE.value,
+        end_date=NOW - timedelta(minutes=30),
+        traffic_limit_gb=0,
+        connected_squads=['tariff-squad'],
+        grace_session_open=True,
+    )
+
+    for policy in (BULK_SNAPSHOT, WEBHOOK, ADMIN_PULL):
+        changed = project_onto_subscription(
+            subscription,
+            PanelSnapshot(
+                status='ACTIVE',
+                expire_at=grace_until,
+                traffic_used_gb=102.2,
+                traffic_limit_gb=103,
+                squads=('grace-squad',),
+            ),
+            now=NOW,
+            policy=policy,
+        )
+
+        assert subscription.end_date == NOW - timedelta(minutes=30)
+        assert subscription.status == SubscriptionStatus.ACTIVE.value
+        assert subscription.traffic_limit_gb == 0
+        assert subscription.connected_squads == ['tariff-squad']
+        # Расход настоящий — его переносим и во время грейса.
+        assert subscription.traffic_used_gb == 102.2
+        assert changed <= {'traffic_used_gb'}
 
 
 def test_grace_tail_date_is_not_imported_after_grace_ended():

@@ -892,15 +892,19 @@ async def _housekeep_expired_purchases(
     # продление возвращает подписку к условиям тарифа, в том числе ту, которой
     # прежняя ошибка (база из FIXED_TRAFFIC_LIMIT_GB) выдала безлимит.
     tariff_base = await _tariff_base_traffic_limit(db, subscription)
-    if tariff_base:
+    if tariff_base is not None:
+        # Тариф без лимита (0) — тоже условие тарифа: подписка безлимитная, даже
+        # если в ней остался чужой лимит (грейс ставил «расход + 1 ГБ», правка
+        # админом). Раньше ноль проходил мимо, и безлимит не возвращался при
+        # продлении (жалоба 2026-09-15). Докупки с безлимитом не складываются.
         purchased, _ = await _apply_base_limit_preserving_active_purchases(db, subscription, tariff_base, now=now)
         return purchased
 
     current_total = subscription.traffic_limit_gb or 0
 
-    # Безлимит (тариф без лимита или классическая подписка с нулём) — housekeeping
-    # только истёкших, инвариант не трогаем
-    if tariff_base == 0 or current_total == 0:
+    # Классическая безлимитная подписка (без тарифа, лимит 0) — housekeeping
+    # только истёкших, инвариант не трогаем. Тарифную решает база тарифа выше.
+    if current_total == 0:
         await db.execute(
             delete(TrafficPurchase)
             .where(

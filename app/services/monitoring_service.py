@@ -61,6 +61,7 @@ from app.services.notification_delivery_service import (
 from app.services.notification_settings_service import NotificationSettingsService
 from app.services.panel_sync import (
     is_subscription_live,
+    panel_date_is_grace_tail,
     project_onto_subscription,
     push_subscription,
     read_panel_user,
@@ -632,7 +633,18 @@ class MonitoringService:
         будущем, срок продлили в обход бота (руками в панели, вебхуков нет,
         расписание раз в сутки) — берём дату и статус оттуда и подписку не гасим.
         Панель молчит, аккаунта нет или он истёк — гасим по своей дате, как раньше.
+
+        Во время грейса (и в его хвосте) ACTIVE в панели — это оверлей грейса, а не
+        продление: его дата, сквад и лимит в бота не переносятся, подписка гасится
+        по своей дате. 2026-09-15 мониторинг принял оверлей за продление, и воркер
+        закрыл грейс «человек продлил», оставив аккаунт в скваде грейса.
         """
+        if getattr(subscription, 'grace_session_open', False):
+            logger.info(
+                'Открыт грейс — ACTIVE в панели это его оверлей, гасим по своей дате',
+                subscription_id=subscription.id,
+            )
+            return False
         service = getattr(self, 'subscription_service', None)
         if service is None or not getattr(service, 'is_configured', False):
             return False
@@ -656,6 +668,10 @@ class MonitoringService:
         snapshot = read_panel_user(identity.panel_user)
         now = datetime.now(UTC)
         if snapshot.status != 'ACTIVE' or snapshot.expire_at is None or snapshot.expire_at <= now:
+            return False
+        if panel_date_is_grace_tail(subscription, snapshot):
+            # Грейс закончился, а панель ещё несколько минут ACTIVE с его погашенной
+            # датой — это не продление.
             return False
         changed = project_onto_subscription(subscription, snapshot, now=now)
         if changed:
