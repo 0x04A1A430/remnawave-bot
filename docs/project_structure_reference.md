@@ -2488,6 +2488,7 @@
 - `docs/menu_stats_api_usage.md` — файл
 - `docs/miniapp-setup.md` — файл
 - `docs/mobile-support-websocket-v1.md` — файл
+- `docs/payments-payer-data.md` — файл
 - `docs/persistent_cart_system.md` — файл
 - `docs/project_structure_reference.md` — файл
 - `docs/referral_program_setting.md` — файл
