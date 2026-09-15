@@ -60,6 +60,7 @@ from app.services.notification_delivery_service import (
 )
 from app.services.notification_settings_service import NotificationSettingsService
 from app.services.panel_sync import (
+    PanelAccountOwnedByAnotherUser,
     is_subscription_live,
     panel_date_is_grace_tail,
     project_onto_subscription,
@@ -653,8 +654,10 @@ class MonitoringService:
             return False
         try:
             async with service.get_api_client() as api:
+                # С базой: аккаунт другого человека (та же почта у второй записи,
+                # #3245) не наш — его оплаченный срок себе не забираем.
                 identity = await resolve_panel_identity(
-                    api, user, subscription, multi_tariff=settings.is_multi_tariff_enabled()
+                    api, user, subscription, multi_tariff=settings.is_multi_tariff_enabled(), db=db
                 )
         except Exception as error:
             logger.warning(
@@ -796,6 +799,16 @@ class MonitoringService:
                 # и уход в пересоздание плодил бы дубли в панели.
                 return await self.subscription_service.recreate_deleted_panel_user(db, subscription, user=user)
             logger.error('Ошибка обновления RemnaWave пользователя', error=e)
+            return None
+        except PanelAccountOwnedByAnotherUser as e:
+            # Две записи одного человека (#3245) — не сбой панели; оператор видит
+            # предупреждение поиска, а чужой аккаунт остаётся нетронутым.
+            logger.warning(
+                'Аккаунт панели закреплён за другим пользователем бота — не трогаем',
+                subscription_id=subscription.id,
+                panel_user_id=e.panel_user_id,
+                owner_user_id=e.owner_user_id,
+            )
             return None
         except Exception as e:
             logger.error('Ошибка обновления RemnaWave пользователя', error=e)

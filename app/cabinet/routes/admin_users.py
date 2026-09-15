@@ -64,6 +64,8 @@ from app.database.models import (
 from app.services.panel_sync import (
     ADMIN_PULL,
     ROUTINE,
+    PanelAccountOwnedByAnotherUser,
+    find_foreign_panel_owner,
     is_subscription_live,
     project_onto_subscription,
     read_panel_user,
@@ -3952,6 +3954,25 @@ async def sync_user_from_panel(
                     errors=['No user found in Remnawave panel by panel id, telegram_id, or email'],
                 )
 
+            # По почте/Telegram находится и аккаунт второй записи того же человека
+            # (#3245): перенос сюда подарил бы этой записи чужую оплату, а запись
+            # users.remnawave_id упала бы на уникальности.
+            owner = await find_foreign_panel_owner(
+                db, user, selected_sub, panel_user.id, multi_tariff=settings.is_multi_tariff_enabled()
+            )
+            if owner is not None and owner.user_id != user.id:
+                logger.warning(
+                    'Sync from panel refused: panel account belongs to another bot user',
+                    user_id=user.id,
+                    panel_user_id=panel_user.id,
+                    owner_user_id=owner.user_id,
+                )
+                message = (
+                    f'Аккаунт в панели принадлежит другому пользователю бота (ID {owner.user_id}). '
+                    'Похоже, у человека две записи в боте — объедините их или удалите лишнюю.'
+                )
+                return SyncFromPanelResponse(success=False, message=message, errors=[message])
+
             # Build panel info. active_internal_squads is a list[dict] (see the
             # diagnostic in get_user_sync_status / auth.py); the previous .uuid/str
             # checks matched nothing, so panel squads were never extracted and the
@@ -4210,6 +4231,15 @@ async def sync_user_to_panel(
 
     except HTTPException:
         raise
+    except PanelAccountOwnedByAnotherUser as e:
+        # Две записи одного человека (#3245): не сбой панели, а вопрос к админу.
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f'Аккаунт в панели принадлежит другому пользователю бота (ID {e.owner_user_id}). '
+                'Похоже, у человека две записи в боте — объедините их или удалите лишнюю.'
+            ),
+        )
     except Exception as e:
         logger.error('Error syncing user to panel', user_id=user_id, error=e)
         raise HTTPException(

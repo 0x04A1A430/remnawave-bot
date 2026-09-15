@@ -545,36 +545,24 @@ async def _sync_subscription_from_panel_by_email(db: AsyncSession, user: User) -
             for panel_user in panel_users_to_sync:
                 logger.info('Syncing panel subscription for email', email=user.email, panel_user_id=panel_user.id)
 
-                # Check if another user already owns this remnawave_id
-                if settings.is_multi_tariff_enabled():
-                    from sqlalchemy import select as _select
+                # Аккаунт уже закреплён за другим человеком — не забираем. Раньше в
+                # одиночном режиме смотрели только users.remnawave_id и пропускали
+                # аккаунт, который держит строка подписки второй записи того же
+                # человека (#3245): вход по почте забирал себе чужую оплату.
+                from app.services.panel_sync import find_foreign_panel_owner
 
-                    from app.database.models import Subscription as _Subscription
-
-                    _sub_result = await db.execute(
-                        _select(_Subscription).where(_Subscription.remnawave_id == panel_user.id)
+                owner = await find_foreign_panel_owner(
+                    db, user, None, panel_user.id, multi_tariff=settings.is_multi_tariff_enabled()
+                )
+                if owner is not None and owner.user_id != user.id:
+                    logger.warning(
+                        'Panel user already belongs to another bot user, skipping',
+                        email=user.email,
+                        panel_user_id=panel_user.id,
+                        existing_owner_id=owner.user_id,
+                        existing_owner_subscription_id=owner.subscription_id,
                     )
-                    _existing_sub = _sub_result.scalar_one_or_none()
-                    if _existing_sub and _existing_sub.user_id != user.id:
-                        logger.warning(
-                            'Panel user already owned by another user subscription, skipping',
-                            email=user.email,
-                            panel_user_id=panel_user.id,
-                            existing_owner_id=_existing_sub.user_id,
-                        )
-                        continue
-                else:
-                    from app.database.crud.user import get_user_by_remnawave_id
-
-                    existing_owner = await get_user_by_remnawave_id(db, panel_user.id)
-                    if existing_owner and existing_owner.id != user.id:
-                        logger.warning(
-                            'Panel user already belongs to another user, skipping',
-                            email=user.email,
-                            panel_user_id=panel_user.id,
-                            existing_owner_id=existing_owner.id,
-                        )
-                        continue
+                    continue
 
                 # Link user to panel (only in single-tariff mode)
                 if not settings.is_multi_tariff_enabled():

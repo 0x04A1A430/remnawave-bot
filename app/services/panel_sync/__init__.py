@@ -11,7 +11,10 @@
 
 from app.services.panel_sync.expiry import panel_date_is_closing, panel_expire_at, stale_panel_expire_at
 from app.services.panel_sync.identity import (
+    PanelAccountOwnedByAnotherUser,
     PanelIdentity,
+    PanelOwner,
+    find_foreign_panel_owner,
     link_subscription_panel_identity,
     panel_id_is_free_for,
     resolve_panel_identity,
@@ -46,13 +49,16 @@ __all__ = [
     'BULK_SNAPSHOT',
     'ROUTINE',
     'WEBHOOK',
+    'PanelAccountOwnedByAnotherUser',
     'PanelIdentity',
+    'PanelOwner',
     'PanelPayload',
     'PanelSnapshot',
     'PanelWriteResult',
     'ProjectionPolicy',
     'SyncStats',
     'build_panel_payload',
+    'find_foreign_panel_owner',
     'get_traffic_reset_strategy',
     'is_subscription_expired',
     'is_subscription_live',
