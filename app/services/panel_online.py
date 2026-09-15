@@ -43,11 +43,13 @@ class _PanelUser(Protocol):
     telegram_id: int | None
 
     @property
-    def online_at(self) -> datetime | None: ...
+    def online_at(self) -> datetime | None:
+        """Когда аккаунт последний раз был подключён к VPN (по панели)."""
 
 
 class _PanelUsersSource(Protocol):
-    async def get_users_by_last_online(self, start: int, size: int) -> list[_PanelUser]: ...
+    async def get_users_by_last_online(self, start: int, size: int) -> list[_PanelUser]:
+        """Аккаунты панели по убыванию времени последнего подключения."""
 
 
 @dataclass(frozen=True)
