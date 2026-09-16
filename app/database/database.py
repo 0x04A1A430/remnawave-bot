@@ -9,12 +9,7 @@ import structlog
 from sqlalchemy import bindparam, event, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import InterfaceError, OperationalError
-from sqlalchemy.ext.asyncio import (
-    AsyncEngine,
-    AsyncSession,
-    async_sessionmaker,
-    create_async_engine,
-)
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import AsyncAdaptedQueuePool, NullPool
 
 from app.config import settings
@@ -79,6 +74,12 @@ _pg_connect_args = {
     'command_timeout': 30,  # Уменьшен с 60, быстрее обнаруживать зависшие запросы
     'timeout': 10,  # Уменьшен с 60, быстрый провал при недоступности PostgreSQL
 }
+_sqlite_connect_args = {
+    # Grace-safe panel writes deliberately hold a SQLite writer transaction
+    # across one HTTP request.  Let competing local work wait instead of
+    # failing with a short default "database is locked" timeout.
+    'timeout': 60,
+}
 
 engine = create_async_engine(
     DATABASE_URL,
@@ -87,12 +88,30 @@ engine = create_async_engine(
     future=True,
     # Кеш скомпилированных запросов (правильное размещение)
     query_cache_size=500,
-    connect_args=_pg_connect_args if not IS_SQLITE else {},
+    connect_args=_pg_connect_args if not IS_SQLITE else _sqlite_connect_args,
     execution_options={
         'isolation_level': 'READ COMMITTED',
     },
     **pool_kwargs,
 )
+
+if IS_SQLITE:
+
+    @event.listens_for(engine.sync_engine, 'connect')
+    def _configure_sqlite_connection(dbapi_connection, _connection_record) -> None:
+        """Enable concurrency settings on every SQLite connection.
+
+        PRAGMA foreign_keys здесь сознательно НЕ включаем: у существующих
+        SQLite-инсталляций могут быть orphan-строки из старых версий схемы,
+        и глобальный флип enforcement ломал бы их DELETE/UPDATE. Защита
+        grace-снимка держится на DB-триггере, а не на FK.
+        """
+        cursor = dbapi_connection.cursor()
+        try:
+            cursor.execute('PRAGMA busy_timeout=60000')
+            cursor.execute('PRAGMA journal_mode=WAL')
+        finally:
+            cursor.close()
 
 # ============================================================================
 # SESSION FACTORY WITH OPTIMIZATIONS
@@ -110,13 +129,7 @@ AsyncSessionLocal = async_sessionmaker(
 # RETRY LOGIC FOR DATABASE OPERATIONS
 # ============================================================================
 
-RETRYABLE_EXCEPTIONS = (
-    OperationalError,
-    InterfaceError,
-    ConnectionRefusedError,
-    OSError,
-    TimeoutError,
-)
+RETRYABLE_EXCEPTIONS = (OperationalError, InterfaceError, ConnectionRefusedError, OSError, TimeoutError)
 DEFAULT_RETRY_ATTEMPTS = 3
 DEFAULT_RETRY_DELAY = 0.5  # секунды
 
@@ -157,11 +170,7 @@ def with_db_retry(
                         await asyncio.sleep(current_delay)
                         current_delay *= backoff
                     else:
-                        logger.error(
-                            'Ошибка БД: все попыток исчерпаны. Последняя ошибка',
-                            attempts=attempts,
-                            e=str(e),
-                        )
+                        logger.error('Ошибка БД: все попыток исчерпаны. Последняя ошибка', attempts=attempts, e=str(e))
 
             raise last_exception  # type: ignore[misc]
 
@@ -188,12 +197,7 @@ async def execute_with_retry(
         except RETRYABLE_EXCEPTIONS as e:
             last_exception = e
             if attempt < attempts:
-                logger.warning(
-                    'SQL retry (попытка /)',
-                    attempt=attempt,
-                    attempts=attempts,
-                    e=str(e)[:100],
-                )
+                logger.warning('SQL retry (попытка /)', attempt=attempt, attempts=attempts, e=str(e)[:100])
                 await asyncio.sleep(delay)
                 delay *= 2
 
@@ -209,16 +213,15 @@ if settings.DEBUG:
     @event.listens_for(Engine, 'before_cursor_execute')
     def before_cursor_execute(conn, cursor, statement, parameters, context, executemany):
         conn.info.setdefault('query_start_time', []).append(time.time())
-        logger.debug('Executing query: ...', statement=statement[:100])
+        logger.debug('🔍 Executing query: ...', statement=statement[:100])
 
     @event.listens_for(Engine, 'after_cursor_execute')
     def after_cursor_execute(conn, cursor, statement, parameters, context, executemany):
         total = time.time() - conn.info['query_start_time'].pop(-1)
         if total > 0.1:  # Логируем медленные запросы > 100ms
-            logger.warning('Slow query (s): ...', total=round(total, 3), statement=statement[:100])
+            logger.warning('🐌 Slow query (s): ...', total=round(total, 3), statement=statement[:100])
         else:
-            logger.debug('Query executed in', total=round(total, 3))
-
+            logger.debug('⚡ Query executed in', total=round(total, 3))
 
 # ============================================================================
 # ADVANCED SESSION MANAGER WITH READ REPLICAS
@@ -471,7 +474,8 @@ async def sync_postgres_sequences() -> bool:
     try:
         async with engine.begin() as conn:
             result = await conn.execute(
-                text("""
+                text(
+                    """
                     SELECT
                         cols.table_schema,
                         cols.table_name,
@@ -483,7 +487,8 @@ async def sync_postgres_sequences() -> bool:
                     FROM information_schema.columns AS cols
                     WHERE cols.column_default LIKE 'nextval(%'
                       AND cols.table_schema NOT IN ('pg_catalog', 'information_schema')
-                    """)
+                    """
+                )
             )
 
             sequences = result.fetchall()
@@ -500,11 +505,7 @@ async def sync_postgres_sequences() -> bool:
                 q_schema = _quote_ident(table_schema)
                 q_table = _quote_ident(table_name)
 
-                max_result = await conn.execute(
-                    text(f'SELECT COALESCE(MAX({q_col}), 0) FROM {q_schema}.{q_table}')  # nosec B608
-                    # Идентификаторы нельзя параметризовать; они экранируются _quote_ident,
-                    # а источник — information_schema, а не пользовательский ввод.
-                )
+                max_result = await conn.execute(text(f'SELECT COALESCE(MAX({q_col}), 0) FROM {q_schema}.{q_table}'))
                 max_value = max_result.scalar() or 0
 
                 # pg_get_serial_sequence returns e.g. '"public"."users_id_seq"'.
@@ -522,9 +523,7 @@ async def sync_postgres_sequences() -> bool:
                 q_seq_schema = _quote_ident(seq_schema)
                 q_seq_name = _quote_ident(seq_name)
                 current_result = await conn.execute(
-                    # Идентификаторы нельзя параметризовать; они экранируются _quote_ident,
-                    # а источник — pg_get_serial_sequence, а не пользовательский ввод.
-                    text(f'SELECT last_value, is_called FROM {q_seq_schema}.{q_seq_name}')  # nosec B608
+                    text(f'SELECT last_value, is_called FROM {q_seq_schema}.{q_seq_name}')
                 )
                 current_row = current_result.fetchone()
 
@@ -535,9 +534,11 @@ async def sync_postgres_sequences() -> bool:
                         continue
 
                 await conn.execute(
-                    text("""
+                    text(
+                        """
                         SELECT setval(:sequence_name, :new_value, TRUE)
-                        """),
+                        """
+                    ),
                     {'sequence_name': sequence_path, 'new_value': max_value},
                 )
                 logger.info(
@@ -582,7 +583,7 @@ def _pool_counters(pool):
         'checked_out': checked_out,
         'overflow': overflow,
         'total_connections': total_connections,
-        'utilization_percent': ((checked_out / total_connections * 100) if total_connections else 0.0),
+        'utilization_percent': (checked_out / total_connections * 100) if total_connections else 0.0,
     }
 
 

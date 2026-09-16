@@ -18,6 +18,8 @@ def test_resolve_maps_callback_methods_to_config_ids():
     assert resolve_config_method_id('kassa_ai_sberpay') == 'kassa_ai'
     assert resolve_config_method_id('aurapay_card') == 'aurapay'
     assert resolve_config_method_id('donut_sbp_qr') == 'donut'
+    assert resolve_config_method_id('tabpay_sbp') == 'tabpay'
+    assert resolve_config_method_id('paritypay_card') == 'paritypay'
     assert resolve_config_method_id('platega_m2') == 'platega'
 
 
@@ -39,9 +41,7 @@ def test_format_quick_amount():
     assert format_quick_amount(12550) == '125.50 ₽'
 
 
-async def test_keyboard_builds_amount_buttons_within_limits(
-    monkeypatch: pytest.MonkeyPatch,
-):
+async def test_keyboard_builds_amount_buttons_within_limits(monkeypatch: pytest.MonkeyPatch):
     config = SimpleNamespace(
         quick_amounts=[10000, 30000, 50000],
         min_amount_kopeks=20000,
@@ -57,11 +57,7 @@ async def test_keyboard_builds_amount_buttons_within_limits(
     keyboard = await get_topup_amount_keyboard('stars', db=object(), back_callback='back_to_menu')
 
     callbacks = [button.callback_data for row in keyboard.inline_keyboard for button in row]
-    assert callbacks == [
-        'topup_amount|stars|30000',
-        'topup_amount|stars|50000',
-        'back_to_menu',
-    ]
+    assert callbacks == ['topup_amount|stars|30000', 'topup_amount|stars|50000', 'back_to_menu']
     assert keyboard.inline_keyboard[0][0].text == '300 ₽'
 
 
@@ -83,9 +79,7 @@ async def test_keyboard_chunks_amounts_two_per_row(monkeypatch: pytest.MonkeyPat
     assert keyboard.inline_keyboard[-1][0].callback_data == 'menu_balance'
 
 
-async def test_keyboard_min_amount_override_raises_lower_bound(
-    monkeypatch: pytest.MonkeyPatch,
-):
+async def test_keyboard_min_amount_override_raises_lower_bound(monkeypatch: pytest.MonkeyPatch):
     config = SimpleNamespace(
         quick_amounts=[10000, 30000, 50000],
         min_amount_kopeks=10000,
@@ -113,9 +107,7 @@ async def test_keyboard_min_amount_override_raises_lower_bound(
     ]
 
 
-async def test_keyboard_falls_back_to_back_only_on_db_error(
-    monkeypatch: pytest.MonkeyPatch,
-):
+async def test_keyboard_falls_back_to_back_only_on_db_error(monkeypatch: pytest.MonkeyPatch):
     async def failing_get_config(db, method_id):
         raise RuntimeError('db is down')
 

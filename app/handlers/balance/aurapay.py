@@ -131,11 +131,7 @@ async def _create_aurapay_payment_and_respond(
             parse_mode='HTML',
         )
 
-    logger.info(
-        'AuraPay payment created',
-        telegram_id=db_user.telegram_id,
-        amount_rub=amount_rub,
-    )
+    logger.info('AuraPay payment created', telegram_id=db_user.telegram_id, amount_rub=amount_rub)
 
 
 @error_handler

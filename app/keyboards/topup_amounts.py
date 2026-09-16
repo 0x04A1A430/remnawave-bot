@@ -39,6 +39,10 @@ METHOD_CONFIG_IDS = {
     'lava_sbp': 'lava',
     'cispay_card': 'cispay',
     'cispay_sbp': 'cispay',
+    'tabpay_card': 'tabpay',
+    'tabpay_sbp': 'tabpay',
+    'paritypay_card': 'paritypay',
+    'paritypay_sbp': 'paritypay',
     'overpay_fps': 'overpay',
     'overpay_card': 'overpay',
     'overpay_int': 'overpay',
@@ -92,12 +96,7 @@ async def get_topup_amount_keyboard(
             async with AsyncSessionLocal() as session:
                 amounts = await _load_quick_amounts(session, method, min_amount_kopeks)
     except Exception as error:
-        logger.warning(
-            'Не удалось загрузить быстрые суммы пополнения',
-            method=method,
-            error=error,
-            exc_info=True,
-        )
+        logger.warning('Не удалось загрузить быстрые суммы пополнения', method=method, error=error, exc_info=True)
 
     texts = get_texts(language)
     keyboard: list[list[InlineKeyboardButton]] = []

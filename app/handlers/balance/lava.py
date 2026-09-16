@@ -112,7 +112,7 @@ async def _create_lava_payment_and_respond(
             [InlineKeyboardButton(text=pay_button_text, url=payment_url, style='success')],
             [
                 InlineKeyboardButton(
-                    text=texts.t('BACK_BUTTON', 'Назад'),
+                    text=texts.t('BACK_BUTTON', '◀️ Назад'),
                     callback_data='menu_balance',
                     style='danger',
                 )

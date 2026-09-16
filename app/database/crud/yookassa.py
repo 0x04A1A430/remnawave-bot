@@ -104,12 +104,7 @@ async def update_yookassa_payment_status(
     captured_at: datetime | None = None,
     payment_method_type: str | None = None,
 ) -> YooKassaPayment | None:
-    update_data = {
-        'status': status,
-        'is_paid': is_paid,
-        'is_captured': is_captured,
-        'updated_at': datetime.now(UTC),
-    }
+    update_data = {'status': status, 'is_paid': is_paid, 'is_captured': is_captured, 'updated_at': datetime.now(UTC)}
 
     if captured_at:
         update_data['captured_at'] = captured_at
@@ -152,10 +147,7 @@ async def link_yookassa_payment_to_transaction(
 
     result = await db.execute(
         select(YooKassaPayment)
-        .options(
-            selectinload(YooKassaPayment.user),
-            selectinload(YooKassaPayment.transaction),
-        )
+        .options(selectinload(YooKassaPayment.user), selectinload(YooKassaPayment.transaction))
         .where(YooKassaPayment.yookassa_payment_id == yookassa_payment_id)
     )
     payment = result.scalar_one_or_none()
@@ -235,12 +227,9 @@ async def get_yookassa_payments_stats(db: AsyncSession, user_id: int | None = No
     query = select(
         func.count(YooKassaPayment.id).label('total_payments'),
         func.sum(YooKassaPayment.amount_kopeks).label('total_amount_kopeks'),
-        func.sum(
-            case(
-                (YooKassaPayment.status == 'succeeded', YooKassaPayment.amount_kopeks),
-                else_=0,
-            )
-        ).label('succeeded_amount_kopeks'),
+        func.sum(case((YooKassaPayment.status == 'succeeded', YooKassaPayment.amount_kopeks), else_=0)).label(
+            'succeeded_amount_kopeks'
+        ),
         func.count(case((YooKassaPayment.status == 'succeeded', 1), else_=None)).label('succeeded_count'),
         func.count(case((YooKassaPayment.status == 'pending', 1), else_=None)).label('pending_count'),
         func.count(case((YooKassaPayment.status.in_(['canceled', 'failed']), 1), else_=None)).label('failed_count'),
@@ -261,5 +250,5 @@ async def get_yookassa_payments_stats(db: AsyncSession, user_id: int | None = No
         'succeeded_count': stats.succeeded_count or 0,
         'pending_count': stats.pending_count or 0,
         'failed_count': stats.failed_count or 0,
-        'success_rate': ((stats.succeeded_count / stats.total_payments * 100) if stats.total_payments > 0 else 0),
+        'success_rate': (stats.succeeded_count / stats.total_payments * 100) if stats.total_payments > 0 else 0,
     }

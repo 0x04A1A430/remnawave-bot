@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-import dataclasses
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from typing import TYPE_CHECKING, Any
 
 import structlog
@@ -124,6 +123,23 @@ class PricingEngine:
         return after_offer, group_discount_value, offer_discount_value
 
     @staticmethod
+    def daily_group_price(daily_price_kopeks: int, user: User | None) -> tuple[int, int]:
+        """Суточная цена «за день» — только со скидкой промогруппы: (цена, процент группы).
+
+        Ровно столько списывается каждый день (daily_subscription_service) и ровно это
+        показывают опции покупки и ответ о подписке. Скидку промокода сервер сюда не
+        вкладывает: её накладывает кабинет для показа и списание — при покупке, один раз.
+        Иначе карточка накладывала промокод второй раз поверх серверной цены (−36 % вместо −20 %).
+        """
+        if daily_price_kopeks <= 0:
+            return daily_price_kopeks, 0
+        promo_group = PricingEngine.resolve_promo_group(user)
+        group_pct = promo_group.get_discount_percent('period', 1) if promo_group else 0
+        if group_pct <= 0:
+            return daily_price_kopeks, 0
+        return PricingEngine.apply_discount(daily_price_kopeks, group_pct), group_pct
+
+    @staticmethod
     def resolve_promo_group(user: User | None):
         """Resolve primary promo group: get_primary_promo_group() first, fallback to user.promo_group."""
         if not user:
@@ -133,21 +149,6 @@ class PricingEngine:
             if pg is not None:
                 return pg
         return getattr(user, 'promo_group', None)
-
-    @staticmethod
-    def _get_personal_price_kopeks(user: User | None) -> int | None:
-        """Персональная цена подписки пользователя в копейках (или None).
-
-        Если задана — заменяет базовую цену тарифа; промо-скидки отключаются.
-        """
-        if not user:
-            return None
-        price = getattr(user, 'personal_price_kopeks', None)
-        if price is None:
-            return None
-        if not isinstance(price, (int, float)) or isinstance(price, bool):
-            return None
-        return max(0, int(price))
 
     @staticmethod
     def get_addon_discount_percent(
@@ -441,11 +442,7 @@ class PricingEngine:
         try:
             servers = await get_server_squads_by_uuids(db, country_uuids)
         except Exception as e:  # intentional broad catch: pricing must not crash on DB errors, servers_price=0 is safe (user pays less)
-            logger.error(
-                'Ошибка пакетной загрузки серверов',
-                error=str(e),
-                squad_uuids=country_uuids,
-            )
+            logger.error('Ошибка пакетной загрузки серверов', error=str(e), squad_uuids=country_uuids)
             return 0, [{'uuid': uuid, 'id': None, 'price': 0, 'status': 'error'} for uuid in country_uuids]
 
         server_map = {s.squad_uuid: s for s in servers}
@@ -600,13 +597,6 @@ class PricingEngine:
                     if custom_price is not None:
                         base_price = int(custom_price)
 
-        # Персональная цена подписки (задаётся админом в меню пользователя):
-        # заменяет базовую цену тарифа. При этом промо-скидки не применяются —
-        # админ явно назначил фиксированную цену.
-        personal_price = self._get_personal_price_kopeks(user)
-        if personal_price is not None:
-            base_price = personal_price
-
         # --- Extra devices (monthly × months) ---
         device_price_per_unit = (
             tariff.device_price_kopeks if tariff.device_price_kopeks is not None else settings.PRICE_PER_DEVICE
@@ -628,7 +618,7 @@ class PricingEngine:
         # --- Per-category group discounts ---
         period_pct = 0
         devices_pct = 0
-        promo_group = None if personal_price is not None else self.resolve_promo_group(user)
+        promo_group = self.resolve_promo_group(user)
         # Only apply promo group discount if the tariff is available for this group
         if promo_group is not None and not tariff.is_available_for_promo_group(promo_group.id):
             promo_group = None
@@ -636,9 +626,7 @@ class PricingEngine:
             period_pct = promo_group.get_discount_percent('period', period_days)
             devices_pct = promo_group.get_discount_percent('devices', period_days)
 
-        offer_pct = 0
-        if personal_price is None and user:
-            offer_pct = get_user_active_promo_discount_percent(user)
+        offer_pct = get_user_active_promo_discount_percent(user) if user else 0
 
         discounted_base = self.apply_discount(base_price, period_pct)
         discounted_devices = self.apply_discount(devices_price, devices_pct)
@@ -658,7 +646,7 @@ class PricingEngine:
         offer_discount = subtotal - after_offer
         final_total = after_offer
 
-        breakdown = dataclasses.asdict(
+        breakdown = asdict(
             TariffBreakdown(
                 tariff_id=tariff.id,
                 extra_devices=extra_devices,
@@ -813,7 +801,7 @@ class PricingEngine:
         )
 
         valid_servers = [d for d in server_details if d.get('id') is not None]
-        breakdown = dataclasses.asdict(
+        breakdown = asdict(
             ClassicBreakdown(
                 months_in_period=months,
                 servers=server_details,
@@ -872,11 +860,13 @@ class PricingEngine:
         Thin wrapper that extracts raw params from a Subscription
         and delegates to _calculate_classic_core.
         """
-        connected_squads: list[str] = subscription.connected_squads or []
+        # Сквады и лимит — без оверлея грейса, осевшего в подписке (v4.10–4.11):
+        # продление вернёт свои серверы, и цена считается по ним, а не по скваду грейса.
+        from app.services.grace_access_echo import terms_without_grace_echo
+
+        connected_squads, own_traffic_limit_gb = await terms_without_grace_echo(db, subscription)
         traffic_limit_gb = (
-            subscription.traffic_limit_gb
-            if subscription.traffic_limit_gb is not None
-            else settings.DEFAULT_TRAFFIC_LIMIT_GB
+            own_traffic_limit_gb if own_traffic_limit_gb is not None else settings.DEFAULT_TRAFFIC_LIMIT_GB
         )
         purchased_traffic_gb = subscription.purchased_traffic_gb or 0
         device_limit = subscription.device_limit or 0

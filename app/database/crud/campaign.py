@@ -61,7 +61,7 @@ async def create_campaign(
     await db.refresh(campaign)
 
     logger.info(
-        'Создана рекламная кампания',
+        '📣 Создана рекламная кампания',
         campaign_name=campaign.name,
         start_parameter=campaign.start_parameter,
         bonus_type=campaign.bonus_type,
@@ -176,18 +176,14 @@ async def update_campaign(
     await db.commit()
     await db.refresh(campaign)
 
-    logger.info(
-        'Обновлена рекламная кампания',
-        campaign_name=campaign.name,
-        update_data=update_data,
-    )
+    logger.info('✏️ Обновлена рекламная кампания', campaign_name=campaign.name, update_data=update_data)
     return campaign
 
 
 async def delete_campaign(db: AsyncSession, campaign: AdvertisingCampaign) -> bool:
     await db.execute(delete(AdvertisingCampaign).where(AdvertisingCampaign.id == campaign.id))
     await db.commit()
-    logger.info('Удалена рекламная кампания', campaign_name=campaign.name)
+    logger.info('🗑️ Удалена рекламная кампания', campaign_name=campaign.name)
     return True
 
 
@@ -301,7 +297,7 @@ async def record_campaign_registration(
     await db.commit()
     await db.refresh(registration)
 
-    logger.info('Регистрируем пользователя в кампании', user_id=user_id, campaign_id=campaign_id)
+    logger.info('📈 Регистрируем пользователя в кампании', user_id=user_id, campaign_id=campaign_id)
     return registration, True
 
 

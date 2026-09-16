@@ -24,8 +24,8 @@ import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = "0007"
-down_revision: Union[str, None] = "0006"
+revision: str = '0007'
+down_revision: Union[str, None] = '0006'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -34,13 +34,15 @@ def upgrade() -> None:
     conn = op.get_bind()
 
     # Find all naive timestamp columns in public schema
-    result = conn.execute(sa.text("""
+    result = conn.execute(
+        sa.text("""
             SELECT table_name, column_name
             FROM information_schema.columns
             WHERE table_schema = 'public'
               AND data_type = 'timestamp without time zone'
             ORDER BY table_name, column_name
-        """))
+        """)
+    )
     columns = result.fetchall()
 
     if not columns:
@@ -54,7 +56,7 @@ def upgrade() -> None:
             sa.text(
                 f'ALTER TABLE "{table_name}" '
                 f'ALTER COLUMN "{column_name}" TYPE TIMESTAMPTZ '
-                f"USING \"{column_name}\" AT TIME ZONE 'UTC'"
+                f'USING "{column_name}" AT TIME ZONE \'UTC\''
             )
         )
 

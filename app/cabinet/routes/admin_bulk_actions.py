@@ -17,6 +17,7 @@ from app.database.crud.subscription import (
     extend_subscription,
     get_subscription_by_id,
     reactivate_subscription,
+    reconcile_tariff_traffic_limit,
 )
 from app.database.crud.tariff import get_tariff_by_id
 from app.database.crud.user import add_user_balance, get_user_by_id
@@ -153,12 +154,7 @@ async def _do_extend_subscription(
     days = params.days  # already validated
     sub = _resolve_subscription(user, sub_override)
     if not sub:
-        return BulkUserResult(
-            user_id=user.id,
-            success=False,
-            message='No subscription found',
-            username=user.username,
-        )
+        return BulkUserResult(user_id=user.id, success=False, message='No subscription found', username=user.username)
 
     if dry_run:
         return BulkUserResult(
@@ -189,12 +185,7 @@ async def _do_cancel_subscription(
 ) -> BulkUserResult:
     sub = _resolve_subscription(user, sub_override)
     if not sub:
-        return BulkUserResult(
-            user_id=user.id,
-            success=False,
-            message='No subscription found',
-            username=user.username,
-        )
+        return BulkUserResult(user_id=user.id, success=False, message='No subscription found', username=user.username)
 
     if dry_run:
         return BulkUserResult(
@@ -206,6 +197,7 @@ async def _do_cancel_subscription(
 
     sub.status = SubscriptionStatus.EXPIRED.value
     sub.end_date = datetime.now(UTC)
+    sub.grace_suppressed_until = sub.end_date
     # For daily tariffs: mark as paused to prevent auto-resume by DailySubscriptionService
     if sub.tariff and getattr(sub.tariff, 'is_daily', False):
         sub.is_daily_paused = True
@@ -230,12 +222,7 @@ async def _do_activate_subscription(
 ) -> BulkUserResult:
     sub = _resolve_subscription(user, sub_override)
     if not sub:
-        return BulkUserResult(
-            user_id=user.id,
-            success=False,
-            message='No subscription found',
-            username=user.username,
-        )
+        return BulkUserResult(user_id=user.id, success=False, message='No subscription found', username=user.username)
 
     # Проверка дубликата в мультитарифном режиме
     if settings.is_multi_tariff_enabled() and sub.tariff_id:
@@ -258,10 +245,16 @@ async def _do_activate_subscription(
             username=user.username,
         )
 
+    # Оверлей грейса, осевший в подписке (v4.10–4.11), — не её срок: вернуть до расчёта.
+    from app.services.grace_access_echo import undo_grace_overlay_echo
+
+    await undo_grace_overlay_echo(db, sub)
     sub.status = SubscriptionStatus.ACTIVE.value
     if sub.end_date and sub.end_date <= datetime.now(UTC):
         # Extend by 30 days if expired
         sub.end_date = datetime.now(UTC) + timedelta(days=30)
+    # Условия тарифа на новый срок: база тарифа + активные докупки.
+    await reconcile_tariff_traffic_limit(db, sub)
     await db.commit()
     await db.refresh(sub)
     await _sync_subscription_to_panel(db, user, sub)
@@ -284,12 +277,7 @@ async def _do_change_tariff(
 ) -> BulkUserResult:
     sub = _resolve_subscription(user, sub_override)
     if not sub:
-        return BulkUserResult(
-            user_id=user.id,
-            success=False,
-            message='No subscription found',
-            username=user.username,
-        )
+        return BulkUserResult(user_id=user.id, success=False, message='No subscription found', username=user.username)
 
     # Проверка дубликата в мультитарифном режиме
     if settings.is_multi_tariff_enabled() and tariff.id != sub.tariff_id:
@@ -388,12 +376,7 @@ async def _do_add_traffic(
     traffic_gb = params.traffic_gb  # already validated
     sub = _resolve_subscription(user, sub_override)
     if not sub:
-        return BulkUserResult(
-            user_id=user.id,
-            success=False,
-            message='No subscription found',
-            username=user.username,
-        )
+        return BulkUserResult(user_id=user.id, success=False, message='No subscription found', username=user.username)
 
     if dry_run:
         return BulkUserResult(
@@ -411,13 +394,15 @@ async def _do_add_traffic(
     await _sync_subscription_to_panel(db, user, sub)
 
     # Explicitly enable user on panel (PATCH may not clear LIMITED status)
-    _enable_uuid = sub.remnawave_uuid if settings.is_multi_tariff_enabled() else getattr(user, 'remnawave_uuid', None)
-    if _enable_uuid and sub.status == 'active':
+    _enable_panel_user_id = (
+        sub.remnawave_id if settings.is_multi_tariff_enabled() else getattr(user, 'remnawave_id', None)
+    )
+    if _enable_panel_user_id and sub.status == 'active':
         try:
             from app.services.subscription_service import SubscriptionService
 
             subscription_service = SubscriptionService()
-            await subscription_service.enable_remnawave_user(_enable_uuid)
+            await subscription_service.enable_remnawave_user(_enable_panel_user_id)
         except Exception:
             pass  # "User already enabled" is expected for active subscriptions
 
@@ -513,12 +498,7 @@ async def _do_set_devices(
     device_limit = params.device_limit  # already validated
     sub = _resolve_subscription(user, sub_override)
     if not sub:
-        return BulkUserResult(
-            user_id=user.id,
-            success=False,
-            message='No subscription found',
-            username=user.username,
-        )
+        return BulkUserResult(user_id=user.id, success=False, message='No subscription found', username=user.username)
 
     if dry_run:
         return BulkUserResult(
@@ -550,12 +530,7 @@ async def _do_delete_subscription(
 ) -> BulkUserResult:
     sub = _resolve_subscription(user, sub_override)
     if not sub:
-        return BulkUserResult(
-            user_id=user.id,
-            success=False,
-            message='No subscription found',
-            username=user.username,
-        )
+        return BulkUserResult(user_id=user.id, success=False, message='No subscription found', username=user.username)
 
     tariff_name = sub.tariff.name if sub.tariff else f'#{sub.id}'
 
@@ -596,23 +571,14 @@ async def _do_delete_subscription(
             subscriptions=blocked_subscriptions,
         )
 
-    # Deactivate in RemnaWave panel first
-    _sub_uuid = sub.remnawave_uuid if settings.is_multi_tariff_enabled() else getattr(user, 'remnawave_uuid', None)
-    if _sub_uuid:
-        try:
-            from app.services.subscription_service import SubscriptionService
-
-            subscription_service = SubscriptionService()
-            await subscription_service.disable_remnawave_user(_sub_uuid)
-        except Exception as e:
-            logger.warning(
-                'Failed to disable user in RemnaWave during subscription delete',
-                error=e,
-            )
-
-    # Лучшие усилия: останавливаем СБП-автопродление Platega и автопродление Lava,
-    # пока строка ещё существует — запись platega_subscriptions CASCADE-удаляется
-    # вместе с подпиской, и после удаления отменять на стороне провайдера было бы нечего.
+    # Best-effort: stop Platega SBP autopay before the row disappears — the
+    # platega_subscriptions record CASCADE-deletes with it, so cancelling
+    # after the delete would find nothing to cancel on Platega's side.
+    # NOTE: this commits its own transaction internally, which releases the
+    # grace-guard's Postgres advisory lock acquired just above. It therefore
+    # runs BEFORE any irreversible panel/DB step, and the guard is
+    # re-acquired immediately below — closing that window before anything
+    # that can't be undone happens.
     from app.services.payment.lava import cancel_lava_recurring_for_subscription_safe
     from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
 
@@ -629,6 +595,18 @@ async def _do_delete_subscription(
             username=blocked_username,
             subscriptions=blocked_subscriptions,
         )
+
+    # Deactivate in RemnaWave panel first
+    _sub_panel_user_id = sub.remnawave_id if settings.is_multi_tariff_enabled() else getattr(user, 'remnawave_id', None)
+    if _sub_panel_user_id:
+        try:
+            from app.services.subscription_service import SubscriptionService
+
+            subscription_service = SubscriptionService()
+            await subscription_service.disable_remnawave_user(_sub_panel_user_id, db=db)
+        except Exception as e:
+            logger.warning('Failed to disable user in RemnaWave during subscription delete', error=e)
+
     # Delete related records then subscription
     await db.execute(sa_delete(SubscriptionServer).where(SubscriptionServer.subscription_id == sub.id))
     await db.execute(sa_delete(TrafficPurchase).where(TrafficPurchase.subscription_id == sub.id))
@@ -952,20 +930,12 @@ async def _execute_for_subscription(
     try:
         sub = await get_subscription_by_id(db, sub_id)
         if not sub:
-            return BulkUserResult(
-                user_id=0,
-                subscription_id=sub_id,
-                success=False,
-                message='Subscription not found',
-            )
+            return BulkUserResult(user_id=0, subscription_id=sub_id, success=False, message='Subscription not found')
 
         user = sub.user
         if not user:
             return BulkUserResult(
-                user_id=0,
-                subscription_id=sub_id,
-                success=False,
-                message='User not found for subscription',
+                user_id=0, subscription_id=sub_id, success=False, message='User not found for subscription'
             )
 
         if action == BulkActionType.CHANGE_TARIFF:
@@ -975,10 +945,7 @@ async def _execute_for_subscription(
             result = await handler(db, user, params, dry_run, sub_override=sub)
         else:
             result = BulkUserResult(
-                user_id=user.id,
-                subscription_id=sub_id,
-                success=False,
-                message=f'Unknown action: {action}',
+                user_id=user.id, subscription_id=sub_id, success=False, message=f'Unknown action: {action}'
             )
 
         result.subscription_id = sub_id
@@ -991,22 +958,12 @@ async def _execute_for_subscription(
         return result
 
     except Exception as exc:
-        logger.error(
-            'Bulk action failed for subscription',
-            subscription_id=sub_id,
-            action=action,
-            error=str(exc),
-        )
+        logger.error('Bulk action failed for subscription', subscription_id=sub_id, action=action, error=str(exc))
         try:
             await db.rollback()
         except Exception:
             pass
-        return BulkUserResult(
-            user_id=0,
-            subscription_id=sub_id,
-            success=False,
-            message='Action failed: internal error',
-        )
+        return BulkUserResult(user_id=0, subscription_id=sub_id, success=False, message='Action failed: internal error')
 
 
 # ---------------------------------------------------------------------------
@@ -1079,10 +1036,7 @@ async def bulk_execute(
             result = await _execute_for_subscription(db, sid, action, params, tariff, dry_run)
 
             results.append(result)
-            if result.message in (
-                'Subscription not found',
-                'User not found for subscription',
-            ):
+            if result.message in ('Subscription not found', 'User not found for subscription'):
                 skipped_count += 1
             elif result.success:
                 success_count += 1
@@ -1196,7 +1150,7 @@ async def _stream_bulk_execute(
             'success': result.success,
             'message': result.message,
             'username': result.username,
-            'subscriptions': ([s.model_dump() for s in result.subscriptions] if result.subscriptions else None),
+            'subscriptions': [s.model_dump() for s in result.subscriptions] if result.subscriptions else None,
         }
         yield f'data: {json.dumps(progress, ensure_ascii=False)}\n\n'
 
@@ -1241,10 +1195,7 @@ async def _stream_bulk_execute_subscriptions(
     for i, sid in enumerate(sub_ids):
         result = await _execute_for_subscription(db, sid, action, params, tariff, dry_run)
 
-        if result.message in (
-            'Subscription not found',
-            'User not found for subscription',
-        ):
+        if result.message in ('Subscription not found', 'User not found for subscription'):
             skipped_count += 1
         elif result.success:
             success_count += 1
@@ -1260,7 +1211,7 @@ async def _stream_bulk_execute_subscriptions(
             'success': result.success,
             'message': result.message,
             'username': result.username,
-            'subscriptions': ([s.model_dump() for s in result.subscriptions] if result.subscriptions else None),
+            'subscriptions': [s.model_dump() for s in result.subscriptions] if result.subscriptions else None,
         }
         yield f'data: {json.dumps(progress, ensure_ascii=False)}\n\n'
 

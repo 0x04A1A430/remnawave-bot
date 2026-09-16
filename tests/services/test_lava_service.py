@@ -48,10 +48,7 @@ class _FakeResponse:
 
     def __init__(self, status: int = 200, payload: dict | None = None) -> None:
         self.status = status
-        self._payload = payload or {
-            'status': 'success',
-            'data': {'id': 'inv_1', 'url': 'https://pay'},
-        }
+        self._payload = payload or {'status': 'success', 'data': {'id': 'inv_1', 'url': 'https://pay'}}
 
     async def json(self, content_type: Any = None) -> dict:
         return self._payload
@@ -95,9 +92,7 @@ async def test_outgoing_signature_is_in_header_not_body(service: LavaService) ->
 
 
 @pytest.mark.asyncio
-async def test_outgoing_signature_is_hmac_of_raw_body_bytes(
-    service: LavaService,
-) -> None:
+async def test_outgoing_signature_is_hmac_of_raw_body_bytes(service: LavaService) -> None:
     """Signature header value = HMAC-SHA256(raw_body_bytes, LAVA_SECRET_KEY) hex."""
     captured: dict[str, Any] = {}
     fake_session = MagicMock()
@@ -120,9 +115,7 @@ async def test_outgoing_signature_is_hmac_of_raw_body_bytes(
 
 
 @pytest.mark.asyncio
-async def test_outgoing_body_uses_payload_key_order_not_sorted(
-    service: LavaService,
-) -> None:
+async def test_outgoing_body_uses_payload_key_order_not_sorted(service: LavaService) -> None:
     """We must NOT sort keys outgoing — sorted body + HMAC of raw would not match."""
     captured: dict[str, Any] = {}
     fake_session = MagicMock()
@@ -150,10 +143,7 @@ async def test_http_error_raises_lava_api_error(service: LavaService) -> None:
     fake_session = MagicMock()
 
     def _post(*_a: Any, **_kw: Any) -> _FakeResponse:
-        return _FakeResponse(
-            status=401,
-            payload={'status': 'error', 'error': 'Invalid signature', 'code': 'sig'},
-        )
+        return _FakeResponse(status=401, payload={'status': 'error', 'error': 'Invalid signature', 'code': 'sig'})
 
     fake_session.post = _post
     fake_session.closed = False

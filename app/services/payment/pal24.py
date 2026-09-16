@@ -269,10 +269,7 @@ class Pal24PaymentMixin:
                             )
                             return False
                     except (ValueError, TypeError) as e:
-                        logger.warning(
-                            'Pal24: не удалось распарсить сумму из callback',
-                            error=str(e),
-                        )
+                        logger.warning('Pal24: не удалось распарсить сумму из callback', error=str(e))
 
                 metadata = getattr(payment, 'metadata_json', {}) or {}
                 if not isinstance(metadata, dict):
@@ -333,11 +330,7 @@ class Pal24PaymentMixin:
                 balance_currency=callback.get('BalanceCurrency') or callback.get('balance_currency'),
                 payer_account=callback.get('AccountNumber') or callback.get('account') or callback.get('Account'),
             )
-            logger.info(
-                'Обновили Pal24 платеж до статуса',
-                bill_id=payment.bill_id,
-                status=status,
-            )
+            logger.info('Обновили Pal24 платеж до статуса', bill_id=payment.bill_id, status=status)
             return True
 
         except Exception as error:
@@ -368,9 +361,7 @@ class Pal24PaymentMixin:
                     await self.bot.delete_message(chat_id, message_id)
                 except Exception as delete_error:  # pragma: no cover - depends on rights
                     logger.warning(
-                        'Не удалось удалить счёт PayPalych',
-                        message_id=message_id,
-                        delete_error=delete_error,
+                        'Не удалось удалить счёт PayPalych', message_id=message_id, delete_error=delete_error
                     )
                 else:
                     metadata.pop('invoice_message', None)
@@ -382,18 +373,11 @@ class Pal24PaymentMixin:
                 payment.updated_at = datetime.now(UTC)
                 await db.flush()
             except Exception as error:  # pragma: no cover - diagnostics
-                logger.warning(
-                    'Не удалось обновить метаданные PayPalych после удаления счёта',
-                    error=error,
-                )
+                logger.warning('Не удалось обновить метаданные PayPalych после удаления счёта', error=error)
 
         # FOR UPDATE lock already acquired by caller — just check idempotency
         if payment.transaction_id:
-            logger.info(
-                'Pal24 платеж уже привязан к транзакции',
-                bill_id=payment.bill_id,
-                trigger=trigger,
-            )
+            logger.info('Pal24 платеж уже привязан к транзакции', bill_id=payment.bill_id, trigger=trigger)
             return True
 
         # --- Guest purchase flow (landing page) ---
@@ -449,7 +433,7 @@ class Pal24PaymentMixin:
         promo_group = user.get_primary_promo_group()
         subscription = getattr(user, 'subscription', None)
         referrer_info = format_referrer_info(user)
-        topup_status = 'Первое пополнение' if was_first_topup else 'Пополнение'
+        topup_status = '🆕 Первое пополнение' if was_first_topup else '🔄 Пополнение'
 
         await db.commit()
 
@@ -506,10 +490,11 @@ class Pal24PaymentMixin:
                 await self.bot.send_message(
                     user.telegram_id,
                     (
-                        '<b>Пополнение успешно!</b>\n\n'
-                        f'Сумма: {settings.format_price(payment.amount_kopeks)}\n'
-                        'Способ: PayPalych\n'
-                        f'Транзакция: {transaction.id}'
+                        '✅ <b>Пополнение успешно!</b>\n\n'
+                        f'💰 Сумма: {settings.format_price(payment.amount_kopeks)}\n'
+                        '🦊 Способ: PayPalych\n'
+                        f'🆔 Транзакция: {transaction.id}\n\n'
+                        'Баланс пополнен автоматически!'
                     ),
                     parse_mode='HTML',
                     reply_markup=keyboard,
@@ -523,14 +508,11 @@ class Pal24PaymentMixin:
             await send_cart_notification_after_topup(user, payment.amount_kopeks, db, getattr(self, 'bot', None))
         except Exception as error:
             logger.error(
-                'Ошибка при работе с сохраненной корзиной для пользователя',
-                user_id=user.id,
-                error=error,
-                exc_info=True,
+                'Ошибка при работе с сохраненной корзиной для пользователя', user_id=user.id, error=error, exc_info=True
             )
 
         logger.info(
-            'Обработан Pal24 платеж для пользователя',
+            '✅ Обработан Pal24 платеж для пользователя',
             bill_id=payment.bill_id,
             user_id=payment.user_id,
             trigger=trigger,
@@ -577,10 +559,7 @@ class Pal24PaymentMixin:
                     try:
                         payment_response = await service.get_payment_status(payment_id_str)
                     except Pal24APIError:
-                        logger.debug(
-                            'Pal24 payment_id не найден или невалиден',
-                            payment_id=payment_id_str,
-                        )
+                        logger.debug('Pal24 payment_id не найден или невалиден', payment_id=payment_id_str)
                     else:
                         if payment_response:
                             remote_payloads['payment_status'] = payment_response
@@ -702,11 +681,7 @@ class Pal24PaymentMixin:
                             if finalized:
                                 payment = await payment_module.get_pal24_payment_by_id(db, local_payment_id)
                 except Exception as error:
-                    logger.error(
-                        'Ошибка автоматического начисления по Pal24 статусу',
-                        error=error,
-                        exc_info=True,
-                    )
+                    logger.error('Ошибка автоматического начисления по Pal24 статусу', error=error, exc_info=True)
 
             links_map, selected_method = self._build_links_map(payment, remote_payloads)
             primary_url = (
@@ -811,14 +786,7 @@ class Pal24PaymentMixin:
                 lower_keys = {str(key).lower() for key in value.keys()}
                 has_status = any(key in lower_keys for key in ('status', 'payment_status'))
                 has_identifier = any(
-                    key in lower_keys
-                    for key in (
-                        'id',
-                        'payment_id',
-                        'bill_id',
-                        'from_card',
-                        'account_amount',
-                    )
+                    key in lower_keys for key in ('id', 'payment_id', 'bill_id', 'from_card', 'account_amount')
                 )
                 if has_status and has_identifier and value not in candidates:
                     candidates.append(value)

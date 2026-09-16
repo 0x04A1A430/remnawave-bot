@@ -18,11 +18,8 @@ from app.database.crud.ticket_notification import TicketNotificationCRUD
 from app.database.models import Ticket, TicketMessage, User
 
 from ..dependencies import get_cabinet_db, require_permission
-from ..schemas.tickets import (
-    TicketMediaItem,
-    TicketMessageResponse,
-    _validate_media_bundle,
-)
+from ..schemas.tickets import TicketMediaItem, TicketMessageResponse, _validate_media_bundle
+from .settings_form import env_locked_fields, form_updates, save_settings_form
 
 
 logger = structlog.get_logger(__name__)
@@ -143,6 +140,17 @@ class TicketSettingsResponse(BaseModel):
     # Cabinet notifications settings
     cabinet_user_notifications_enabled: bool = True
     cabinet_admin_notifications_enabled: bool = True
+    # Поля, закреплённые в .env: из кабинета их не изменить, база их не перекрывает.
+    env_locked: list[str] = []
+
+
+# Поле формы → ключ Settings. Хранение и применение — через system_settings (settings_form).
+TICKET_SETTING_KEYS: dict[str, str] = {
+    'sla_enabled': 'SUPPORT_TICKET_SLA_ENABLED',
+    'sla_minutes': 'SUPPORT_TICKET_SLA_MINUTES',
+    'sla_check_interval_seconds': 'SUPPORT_TICKET_SLA_CHECK_INTERVAL_SECONDS',
+    'sla_reminder_cooldown_minutes': 'SUPPORT_TICKET_SLA_REMINDER_COOLDOWN_MINUTES',
+}
 
 
 class TicketSettingsUpdateRequest(BaseModel):
@@ -179,7 +187,7 @@ def _message_to_response(message: TicketMessage) -> TicketMessageResponse:
         has_media=bool(message.media_file_id) or bool(items),
         media_type=message.media_type,
         media_file_id=message.media_file_id,
-        media_token=(make_media_token(message.media_file_id) if message.media_file_id else None),
+        media_token=make_media_token(message.media_file_id) if message.media_file_id else None,
         media_caption=message.media_caption,
         media_items=items,
         created_at=message.created_at,
@@ -263,9 +271,10 @@ async def get_ticket_settings(
         sla_minutes=settings.SUPPORT_TICKET_SLA_MINUTES,
         sla_check_interval_seconds=settings.SUPPORT_TICKET_SLA_CHECK_INTERVAL_SECONDS,
         sla_reminder_cooldown_minutes=settings.SUPPORT_TICKET_SLA_REMINDER_COOLDOWN_MINUTES,
-        support_system_mode=settings.get_support_system_mode(),
+        support_system_mode=SupportSettingsService.get_system_mode(),
         cabinet_user_notifications_enabled=SupportSettingsService.get_cabinet_user_notifications_enabled(),
         cabinet_admin_notifications_enabled=SupportSettingsService.get_cabinet_admin_notifications_enabled(),
+        env_locked=env_locked_fields(TICKET_SETTING_KEYS),
     )
 
 
@@ -275,10 +284,7 @@ async def update_ticket_settings(
     admin: User = Depends(require_permission('tickets:settings')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
-    """Update ticket system settings."""
-    import asyncio
-    from pathlib import Path
-
+    """Update ticket system settings — всё в system_settings: SLA формой, режим и уведомления через сервис."""
     from app.services.support_settings_service import SupportSettingsService
 
     # Validate support_system_mode
@@ -290,74 +296,31 @@ async def update_ticket_settings(
                 detail='Invalid support_system_mode. Must be: tickets, contact, or both',
             )
 
-    # Update in-memory settings
-    if request.sla_enabled is not None:
-        settings.SUPPORT_TICKET_SLA_ENABLED = request.sla_enabled
-    if request.sla_minutes is not None:
-        settings.SUPPORT_TICKET_SLA_MINUTES = request.sla_minutes
-    if request.sla_check_interval_seconds is not None:
-        settings.SUPPORT_TICKET_SLA_CHECK_INTERVAL_SECONDS = request.sla_check_interval_seconds
-    if request.sla_reminder_cooldown_minutes is not None:
-        settings.SUPPORT_TICKET_SLA_REMINDER_COOLDOWN_MINUTES = request.sla_reminder_cooldown_minutes
+    updates = form_updates(TICKET_SETTING_KEYS, request.model_dump(exclude_none=True))
+    await save_settings_form(db, updates)
+
     if request.support_system_mode is not None:
-        SupportSettingsService.set_system_mode(request.support_system_mode.strip().lower())
-
-    # Update cabinet notification settings
+        await SupportSettingsService.set_system_mode(db, request.support_system_mode.strip().lower())
     if request.cabinet_user_notifications_enabled is not None:
-        SupportSettingsService.set_cabinet_user_notifications_enabled(request.cabinet_user_notifications_enabled)
+        await SupportSettingsService.set_cabinet_user_notifications_enabled(
+            db, request.cabinet_user_notifications_enabled
+        )
     if request.cabinet_admin_notifications_enabled is not None:
-        SupportSettingsService.set_cabinet_admin_notifications_enabled(request.cabinet_admin_notifications_enabled)
+        await SupportSettingsService.set_cabinet_admin_notifications_enabled(
+            db, request.cabinet_admin_notifications_enabled
+        )
 
-    # Try to persist to .env file
-    try:
-        env_file = Path('.env')
-        if await asyncio.to_thread(env_file.exists):
-            lines = (await asyncio.to_thread(env_file.read_text)).splitlines()
-            updates = {}
-
-            if request.sla_enabled is not None:
-                updates['SUPPORT_TICKET_SLA_ENABLED'] = str(request.sla_enabled).lower()
-            if request.sla_minutes is not None:
-                updates['SUPPORT_TICKET_SLA_MINUTES'] = str(request.sla_minutes)
-            if request.sla_check_interval_seconds is not None:
-                updates['SUPPORT_TICKET_SLA_CHECK_INTERVAL_SECONDS'] = str(request.sla_check_interval_seconds)
-            if request.sla_reminder_cooldown_minutes is not None:
-                updates['SUPPORT_TICKET_SLA_REMINDER_COOLDOWN_MINUTES'] = str(request.sla_reminder_cooldown_minutes)
-            if request.support_system_mode is not None:
-                updates['SUPPORT_SYSTEM_MODE'] = request.support_system_mode.strip().lower()
-
-            new_lines = []
-            updated_keys = set()
-
-            for line in lines:
-                updated = False
-                for key, value in updates.items():
-                    if line.startswith(f'{key}='):
-                        new_lines.append(f'{key}={value}')
-                        updated_keys.add(key)
-                        updated = True
-                        break
-                if not updated:
-                    new_lines.append(line)
-
-            # Add any keys that weren't found
-            for key, value in updates.items():
-                if key not in updated_keys:
-                    new_lines.append(f'{key}={value}')
-
-            await asyncio.to_thread(env_file.write_text, '\n'.join(new_lines) + '\n')
-            logger.info('Updated ticket settings in .env file')
-    except Exception as e:
-        logger.warning('Failed to update .env file', error=e)
+    logger.info('Admin updated ticket settings', admin_id=admin.id, keys=sorted(updates))
 
     return TicketSettingsResponse(
         sla_enabled=settings.SUPPORT_TICKET_SLA_ENABLED,
         sla_minutes=settings.SUPPORT_TICKET_SLA_MINUTES,
         sla_check_interval_seconds=settings.SUPPORT_TICKET_SLA_CHECK_INTERVAL_SECONDS,
         sla_reminder_cooldown_minutes=settings.SUPPORT_TICKET_SLA_REMINDER_COOLDOWN_MINUTES,
-        support_system_mode=settings.get_support_system_mode(),
+        support_system_mode=SupportSettingsService.get_system_mode(),
         cabinet_user_notifications_enabled=SupportSettingsService.get_cabinet_user_notifications_enabled(),
         cabinet_admin_notifications_enabled=SupportSettingsService.get_cabinet_admin_notifications_enabled(),
+        env_locked=env_locked_fields(TICKET_SETTING_KEYS),
     )
 
 
@@ -449,7 +412,7 @@ async def get_ticket_detail(
         created_at=ticket.created_at,
         updated_at=ticket.updated_at or ticket.created_at,
         closed_at=ticket.closed_at,
-        is_reply_blocked=(ticket.is_reply_blocked if hasattr(ticket, 'is_reply_blocked') else False),
+        is_reply_blocked=ticket.is_reply_blocked if hasattr(ticket, 'is_reply_blocked') else False,
         user=user_info,
         messages=messages_response,
     )
@@ -487,7 +450,12 @@ async def reply_to_ticket(
 
     message = TicketMessage(
         ticket_id=ticket.id,
-        user_id=ticket.user_id,
+        # Автор сообщения — реально ответивший админ, а не владелец тикета:
+        # иначе при нескольких сотрудниках поддержки невозможно установить,
+        # кто отвечал (#3029). Бот-путь (handlers/admin/tickets.py) пишет id
+        # админа с самого начала — выравниваем семантику. Отображение стороны
+        # сообщения везде идёт по is_from_admin, а не по user_id.
+        user_id=admin.id,
         message_text=request.message,
         is_from_admin=True,
         has_media=has_media,
@@ -609,7 +577,7 @@ async def update_ticket_status(
         created_at=ticket.created_at,
         updated_at=ticket.updated_at or ticket.created_at,
         closed_at=ticket.closed_at,
-        is_reply_blocked=(ticket.is_reply_blocked if hasattr(ticket, 'is_reply_blocked') else False),
+        is_reply_blocked=ticket.is_reply_blocked if hasattr(ticket, 'is_reply_blocked') else False,
         user=user_info,
         messages=messages_response,
     )
@@ -664,7 +632,7 @@ async def update_ticket_priority(
         created_at=ticket.created_at,
         updated_at=ticket.updated_at or ticket.created_at,
         closed_at=ticket.closed_at,
-        is_reply_blocked=(ticket.is_reply_blocked if hasattr(ticket, 'is_reply_blocked') else False),
+        is_reply_blocked=ticket.is_reply_blocked if hasattr(ticket, 'is_reply_blocked') else False,
         user=user_info,
         messages=messages_response,
     )

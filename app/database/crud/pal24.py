@@ -155,9 +155,5 @@ async def link_pal24_payment_to_transaction(
     await db.execute(update(Pal24Payment).where(Pal24Payment.id == payment.id).values(transaction_id=transaction_id))
     await db.flush()
     await db.refresh(payment)
-    logger.info(
-        'Pal24 платеж привязан к транзакции',
-        bill_id=payment.bill_id,
-        transaction_id=transaction_id,
-    )
+    logger.info('Pal24 платеж привязан к транзакции', bill_id=payment.bill_id, transaction_id=transaction_id)
     return payment

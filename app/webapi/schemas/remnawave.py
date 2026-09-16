@@ -5,6 +5,12 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+from app.external.remnawave_api import (
+    INTERNAL_SQUAD_NAME_MAX_LENGTH,
+    INTERNAL_SQUAD_NAME_MIN_LENGTH,
+    INTERNAL_SQUAD_NAME_PATTERN,
+)
+
 
 class RemnaWaveConnectionStatus(BaseModel):
     status: str
@@ -61,15 +67,31 @@ class RemnaWaveNodeActionResponse(BaseModel):
     detail: str | None = None
 
 
+class RemnaWaveNodeUsageItem(BaseModel):
+    """Пользовательский трафик по ноде за период.
+
+    Раньше это был нетипизированный passthrough legacy-эндпоинта панели
+    (`{userUuid, username, nodeUuid, total, date}`). В Remnawave 3.0.0 legacy
+    удалён, разбивки по дням в замене нет, а идентичность пользователя стала
+    числовой — поэтому форма фиксируется здесь, на стороне бота: `date` больше
+    не отдаётся, `userUuid` заменён на `user_id`.
+    """
+
+    user_id: int | None = None
+    username: str | None = None
+    node_uuid: str | None = None
+    total_bytes: int = 0
+
+
 class RemnaWaveNodeStatisticsResponse(BaseModel):
     node: RemnaWaveNode
     realtime: dict[str, Any] | None = None
-    usage_history: list[dict[str, Any]] = Field(default_factory=list)
+    usage_history: list[RemnaWaveNodeUsageItem] = Field(default_factory=list)
     last_updated: datetime | None = None
 
 
 class RemnaWaveNodeUsageResponse(BaseModel):
-    items: list[dict[str, Any]] = Field(default_factory=list)
+    items: list[RemnaWaveNodeUsageItem] = Field(default_factory=list)
 
 
 class RemnaWaveBandwidth(BaseModel):
@@ -135,19 +157,26 @@ class RemnaWaveSquadListResponse(BaseModel):
     total: int
 
 
+_SQUAD_NAME = dict(
+    min_length=INTERNAL_SQUAD_NAME_MIN_LENGTH,
+    max_length=INTERNAL_SQUAD_NAME_MAX_LENGTH,
+    pattern=INTERNAL_SQUAD_NAME_PATTERN,
+)
+
+
 class RemnaWaveSquadCreateRequest(BaseModel):
-    name: str
+    name: str = Field(..., **_SQUAD_NAME)
     inbound_uuids: list[str] = Field(default_factory=list)
 
 
 class RemnaWaveSquadUpdateRequest(BaseModel):
-    name: str | None = None
+    name: str | None = Field(None, **_SQUAD_NAME)
     inbound_uuids: list[str] | None = None
 
 
 class RemnaWaveSquadActionRequest(BaseModel):
     action: Literal['add_all_users', 'remove_all_users', 'delete', 'rename', 'update_inbounds']
-    name: str | None = None
+    name: str | None = Field(None, **_SQUAD_NAME)
     inbound_uuids: list[str] | None = None
 
 

@@ -26,25 +26,11 @@ from app.database.crud.apple_iap import (
     mark_apple_notification_processed,
     mark_apple_transaction_refunded,
 )
-from app.database.crud.transaction import (
-    create_transaction,
-    emit_transaction_side_effects,
-)
+from app.database.crud.transaction import create_transaction, emit_transaction_side_effects
 from app.database.crud.user import lock_user_for_pricing, lock_user_for_update
 from app.database.database import AsyncSessionLocal
-from app.database.models import (
-    AppleNotification,
-    AppleTransaction,
-    PaymentMethod,
-    Transaction,
-    TransactionType,
-    User,
-)
-from app.external.apple_iap import (
-    AppleIAPConfigurationError,
-    AppleIAPService,
-    parse_apple_timestamp,
-)
+from app.database.models import AppleNotification, AppleTransaction, PaymentMethod, Transaction, TransactionType, User
+from app.external.apple_iap import AppleIAPConfigurationError, AppleIAPService, parse_apple_timestamp
 from app.utils.user_utils import format_referrer_info
 
 
@@ -256,10 +242,7 @@ class AppleIAPFulfillmentService:
                 transaction_id=transaction_id,
                 product_id=product_id,
                 ip_address=ip_address,
-                details_json={
-                    'configured': configured_environment,
-                    'actual': actual_environment,
-                },
+                details_json={'configured': configured_environment, 'actual': actual_environment},
             )
             await db.commit()
             return AppleFulfillmentResult(False, 'environment_mismatch')
@@ -415,10 +398,7 @@ class AppleIAPFulfillmentService:
         )
 
         logger.info(
-            'Apple IAP purchase credited',
-            transaction_id=transaction_id,
-            user_id=user_id,
-            amount_kopeks=amount_kopeks,
+            'Apple IAP purchase credited', transaction_id=transaction_id, user_id=user_id, amount_kopeks=amount_kopeks
         )
         return AppleFulfillmentResult(True, 'credited', apple_txn, transaction)
 
@@ -476,22 +456,14 @@ class AppleIAPFulfillmentService:
                 external_id=external_id,
             )
         except Exception as error:
-            logger.error(
-                'Ошибка emit_transaction_side_effects Apple IAP',
-                error=error,
-                exc_info=True,
-            )
+            logger.error('Ошибка emit_transaction_side_effects Apple IAP', error=error, exc_info=True)
 
         try:
             from app.services.referral_service import process_referral_topup
 
             await process_referral_topup(db, user.id, amount_kopeks, bot=self.bot)
         except Exception as error:
-            logger.error(
-                'Ошибка обработки реферального пополнения Apple IAP',
-                error=error,
-                exc_info=True,
-            )
+            logger.error('Ошибка обработки реферального пополнения Apple IAP', error=error, exc_info=True)
 
         if was_first_topup and not user.has_made_first_topup and not user.referred_by_id:
             user.has_made_first_topup = True
@@ -500,10 +472,7 @@ class AppleIAPFulfillmentService:
         await db.refresh(user)
 
         if self.bot is None:
-            logger.debug(
-                'Apple IAP bot is not configured; skipping bot-dependent notifications',
-                user_id=user.id,
-            )
+            logger.debug('Apple IAP bot is not configured; skipping bot-dependent notifications', user_id=user.id)
             return
 
         try:
@@ -521,11 +490,7 @@ class AppleIAPFulfillmentService:
                 db=db,
             )
         except Exception as error:
-            logger.error(
-                'Ошибка отправки админ уведомления Apple IAP',
-                error=error,
-                exc_info=True,
-            )
+            logger.error('Ошибка отправки админ уведомления Apple IAP', error=error, exc_info=True)
 
         try:
             from app.services.payment.common import send_cart_notification_after_topup
@@ -533,10 +498,7 @@ class AppleIAPFulfillmentService:
             await send_cart_notification_after_topup(user, amount_kopeks, db, self.bot)
         except Exception as error:
             logger.error(
-                'Ошибка при работе с сохраненной корзиной Apple IAP',
-                user_id=user.id,
-                error=error,
-                exc_info=True,
+                'Ошибка при работе с сохраненной корзиной Apple IAP', user_id=user.id, error=error, exc_info=True
             )
 
 
@@ -554,11 +516,7 @@ class AppleIAPNotificationService:
         try:
             notification = self.apple_service.verify_notification(signed_payload)
         except AppleIAPConfigurationError as error:
-            logger.error(
-                'Apple IAP notification configuration error',
-                error=str(error),
-                exc_info=True,
-            )
+            logger.error('Apple IAP notification configuration error', error=str(error), exc_info=True)
             return False, 'configuration_error'
 
         if not notification:
@@ -846,10 +804,7 @@ class AppleIAPNotificationService:
         user = await lock_user_for_pricing(db, apple_txn.user_id)
         refund_amount = min(apple_txn.amount_kopeks, user.balance_kopeks)
         if refund_amount < apple_txn.amount_kopeks:
-            from app.database.crud.subscription import (
-                deactivate_subscription,
-                get_active_subscriptions_by_user_id,
-            )
+            from app.database.crud.subscription import deactivate_subscription, get_active_subscriptions_by_user_id
 
             active_subs = await get_active_subscriptions_by_user_id(db, user.id)
             for sub in active_subs:
@@ -861,10 +816,7 @@ class AppleIAPNotificationService:
                 severity='critical',
                 transaction_id=apple_txn.transaction_id,
                 product_id=apple_txn.product_id,
-                details_json={
-                    'credited': apple_txn.amount_kopeks,
-                    'debited': refund_amount,
-                },
+                details_json={'credited': apple_txn.amount_kopeks, 'debited': refund_amount},
             )
 
         if refund_amount > 0:

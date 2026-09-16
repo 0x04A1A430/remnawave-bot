@@ -387,7 +387,7 @@ async def claim_promo_offer(
         details={
             'context': 'discount_claim',
             'discount_percent': discount_percent,
-            'discount_expires_at': (discount_expires_at.isoformat() if discount_expires_at else None),
+            'discount_expires_at': discount_expires_at.isoformat() if discount_expires_at else None,
         },
     )
     await db.refresh(user)

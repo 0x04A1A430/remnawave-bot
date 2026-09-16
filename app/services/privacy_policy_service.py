@@ -87,7 +87,7 @@ class PrivacyPolicyService:
             content,
             enable_if_new=enable_if_new,
         )
-        logger.info('Политика конфиденциальности обновлена для языка', lang=lang)
+        logger.info('✅ Политика конфиденциальности обновлена для языка', lang=lang)
         return policy
 
     @classmethod

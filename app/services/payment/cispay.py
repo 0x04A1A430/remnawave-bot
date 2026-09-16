@@ -25,7 +25,7 @@ CISPAY_STATUS_MAP: dict[str, tuple[str, bool]] = {
     'REFUNDED': ('refunded', False),
 }
 
-# Sub-метод бота -> payment_method cispay
+# Sub-метод бота -> payment_method cisPay
 CISPAY_METHOD_MAP: dict[str, str] = {
     'sbp': 'SBP',
     'card': 'CARD',
@@ -177,7 +177,11 @@ class CisPayPaymentMixin:
         db: AsyncSession,
         payload: dict[str, Any],
     ) -> bool:
-        """Обрабатывает вебхук от cispay (подпись уже проверена в webserver)."""
+        """Обрабатывает вебхук от cisPay (подпись уже проверена в webserver).
+
+        Тело: id, store_id, order_id, payment_method, status, amount (копейки),
+        currency, charged_amount, merchant_revenue, paid_at, timestamp.
+        """
         try:
             our_order_id = payload.get('order_id')
             cispay_payment_id = payload.get('id')
@@ -203,7 +207,7 @@ class CisPayPaymentMixin:
                 logger.info('cisPay callback: платеж уже обработан', order_id=payment.order_id)
                 return True
 
-            # Терминальные неуспешные статусы — провайдер не должен иметь возможность
+            # Терминальные неуспешные статусы стики — провайдер не должен иметь возможность
             # «починить» отклонённый/просроченный платёж повторным вебхуком.
             if payment.status in {'amount_mismatch', 'declined', 'expired', 'refunded', 'error'}:
                 logger.warning(
@@ -233,7 +237,8 @@ class CisPayPaymentMixin:
                 received_amount = payload.get('amount')
                 if received_amount is None:
                     # Поле обязательно по спеке. Оставляем платёж в pending (статус не терминальный)
-                    # и отвечаем не-2xx: провайдер повторит вебхук.
+                    # и отвечаем не-2xx: cisPay повторит вебхук, а ручная/фоновая сверка через
+                    # GET /payments/status тоже сможет его закрыть.
                     logger.error(
                         'cisPay callback: PAID без поля amount, зачисление отменено',
                         order_id=payment.order_id,
@@ -272,14 +277,13 @@ class CisPayPaymentMixin:
                     try:
                         payment.charged_amount_kopeks = int(charged_amount)
                     except (TypeError, ValueError):
-                        # строка не конвертируется в int — оставляем прежнее значение
                         pass
                 payment.callback_payload = callback_payload
                 payment.updated_at = datetime.now(UTC)
                 await db.flush()
                 return await self._finalize_cispay_payment(db, payment, trigger='webhook')
 
-            await cispay_crud.update_cispay_payment_status(
+            payment = await cispay_crud.update_cispay_payment_status(
                 db=db,
                 payment=payment,
                 status=internal_status,
@@ -413,7 +417,7 @@ class CisPayPaymentMixin:
             external_id=transaction_external_id,
         )
 
-        topup_status = 'Первое пополнение' if was_first_topup else 'Пополнение'
+        topup_status = '\U0001f195 Первое пополнение' if was_first_topup else '\U0001f504 Пополнение'
 
         try:
             from app.services.referral_service import process_referral_topup
@@ -456,10 +460,10 @@ class CisPayPaymentMixin:
                 await self.bot.send_message(
                     user.telegram_id,
                     (
-                        'Пополнение успешно!\n\n'
-                        f'Сумма: {settings.format_price(payment.amount_kopeks)}\n'
-                        f'Способ: {display_name}\n'
-                        f'Транзакция: {transaction.id}\n\n'
+                        '✅ <b>Пополнение успешно!</b>\n\n'
+                        f'\U0001f4b0 Сумма: {settings.format_price(payment.amount_kopeks)}\n'
+                        f'\U0001f4b3 Способ: {display_name}\n'
+                        f'\U0001f194 Транзакция: {transaction.id}\n\n'
                         'Баланс пополнен автоматически!'
                     ),
                     parse_mode='HTML',
@@ -503,7 +507,11 @@ class CisPayPaymentMixin:
         db: AsyncSession,
         order_id: str,
     ) -> dict[str, Any] | None:
-        """Проверяет статус платежа через API cisPay и синхронизирует БД."""
+        """Проверяет статус платежа через API cisPay и синхронизирует БД.
+
+        Используется для ручной проверки из админки и фоновой сверки —
+        если вебхук потерялся, оплаченный платёж всё равно будет зачислен.
+        """
         try:
             cispay_crud = import_module('app.database.crud.cispay')
             payment = await cispay_crud.get_cispay_payment_by_order_id(db, order_id)
@@ -536,8 +544,12 @@ class CisPayPaymentMixin:
                     internal_status, is_paid = CISPAY_STATUS_MAP.get(cispay_status, ('pending', False))
 
                     if is_paid:
+                        # Сверяем сумму — API возвращает amount в копейках (нетто).
+                        # Как и в вебхуке, без подтверждённой суммы не зачисляем.
                         api_amount = status_data.get('amount')
                         if api_amount is None:
+                            # amount обязателен в PaymentStatusResponse — его отсутствие
+                            # означает сломанный ответ. Оставляем pending до следующей сверки.
                             logger.error(
                                 'cisPay API check: PAID без поля amount, зачисление отменено',
                                 order_id=payment.order_id,
@@ -593,6 +605,7 @@ class CisPayPaymentMixin:
 
                         logger.info('cisPay payment confirmed via API', order_id=payment.order_id)
 
+                        # Обновляем поля без промежуточного commit — он снял бы FOR UPDATE lock
                         payment.status = 'success'
                         payment.is_paid = True
                         payment.paid_at = datetime.now(UTC)

@@ -8,10 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.crud.contest import create_attempt, get_attempt, update_attempt
-from app.database.crud.subscription import (
-    extend_subscription,
-    get_subscription_by_user_id,
-)
+from app.database.crud.subscription import extend_subscription, get_subscription_by_user_id
 from app.database.crud.user import get_user_by_id
 from app.database.models import ContestAttempt, ContestRound, ContestTemplate
 from app.services.contests.enums import PrizeType
@@ -111,7 +108,7 @@ class ContestAttemptService:
             return AttemptResult(
                 success=True,
                 is_winner=True,
-                message=f'Победа! {prize_msg}' if prize_msg else 'Победа!',
+                message=f'🎉 Победа! {prize_msg}' if prize_msg else '🎉 Победа!',
             )
 
         return AttemptResult(
@@ -198,7 +195,7 @@ class ContestAttemptService:
             return AttemptResult(
                 success=True,
                 is_winner=True,
-                message=f'Победа! {prize_msg}' if prize_msg else 'Победа!',
+                message=f'🎉 Победа! {prize_msg}' if prize_msg else '🎉 Победа!',
             )
 
         return AttemptResult(
@@ -297,9 +294,7 @@ class ContestAttemptService:
 
         if prize_type == PrizeType.DAYS.value:
             if settings.is_multi_tariff_enabled():
-                from app.database.crud.subscription import (
-                    get_active_subscriptions_by_user_id,
-                )
+                from app.database.crud.subscription import get_active_subscriptions_by_user_id
 
                 active_subs = await get_active_subscriptions_by_user_id(db, user_id)
                 # Contest prize: prefer non-daily subscription with most days left
@@ -334,7 +329,7 @@ class ContestAttemptService:
                 )
 
         elif prize_type == PrizeType.CUSTOM.value:
-            return f'{prize_value}'
+            return f'🎁 {prize_value}'
 
         return ''
 

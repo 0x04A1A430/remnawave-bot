@@ -38,7 +38,7 @@ MAX_WHOLESALE_PRICE_RUBLES = 10_000_000
 _batch_creation_in_progress: set[int] = set()
 
 _CANCEL_KEYBOARD = types.InlineKeyboardMarkup(
-    inline_keyboard=[[types.InlineKeyboardButton(text='Отмена', callback_data='admin_coupons')]]
+    inline_keyboard=[[types.InlineKeyboardButton(text='❌ Отмена', callback_data='admin_coupons')]]
 )
 
 
@@ -113,12 +113,12 @@ async def _load_batch(callback: types.CallbackQuery, db: AsyncSession) -> Coupon
     try:
         batch_id = int(callback.data.split('_')[-1])
     except ValueError:
-        await callback.answer('Ошибка получения ID партии', show_alert=True)
+        await callback.answer('❌ Ошибка получения ID партии', show_alert=True)
         return None
 
     batch = await get_coupon_batch_by_id(db, batch_id)
     if not batch:
-        await callback.answer('Партия не найдена', show_alert=True)
+        await callback.answer('❌ Партия не найдена', show_alert=True)
         return None
     return batch
 
@@ -208,14 +208,14 @@ async def handle_coupon_list_page(callback: types.CallbackQuery, db_user: User, 
 async def start_coupon_batch_creation(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
     tariffs = await get_all_active_tariffs(db)
     if not tariffs:
-        await callback.answer('Нет активных тарифов. Сначала создайте тариф.', show_alert=True)
+        await callback.answer('❌ Нет активных тарифов. Сначала создайте тариф.', show_alert=True)
         return
 
     keyboard = [
         [types.InlineKeyboardButton(text=tariff.name, callback_data=f'coupon_batch_tariff_{tariff.id}')]
         for tariff in tariffs
     ]
-    keyboard.append([types.InlineKeyboardButton(text='Отмена', callback_data='admin_coupons')])
+    keyboard.append([types.InlineKeyboardButton(text='❌ Отмена', callback_data='admin_coupons')])
 
     await callback.message.edit_text(
         '🎟 <b>Создание партии купонов</b>\n\nВыберите тариф, который будут выдавать купоны:',
@@ -230,12 +230,12 @@ async def select_coupon_batch_tariff(callback: types.CallbackQuery, db_user: Use
     try:
         tariff_id = int(callback.data.split('_')[-1])
     except ValueError:
-        await callback.answer('Ошибка получения ID тарифа', show_alert=True)
+        await callback.answer('❌ Ошибка получения ID тарифа', show_alert=True)
         return
 
     tariff = await get_tariff_by_id(db, tariff_id)
     if not tariff or not tariff.is_active:
-        await callback.answer('Тариф не найден или неактивен', show_alert=True)
+        await callback.answer('❌ Тариф не найден или неактивен', show_alert=True)
         return
 
     await state.update_data(coupon_tariff_id=tariff.id, coupon_tariff_name=tariff.name)
@@ -253,7 +253,7 @@ async def select_coupon_batch_tariff(callback: types.CallbackQuery, db_user: Use
 @admin_required
 @error_handler
 async def process_coupon_batch_days(message: types.Message, db_user: User, state: FSMContext):
-    days = await _read_int(message, 1, MAX_PERIOD_DAYS, f'Введите целое число дней от 1 до {MAX_PERIOD_DAYS}')
+    days = await _read_int(message, 1, MAX_PERIOD_DAYS, f'❌ Введите целое число дней от 1 до {MAX_PERIOD_DAYS}')
     if days is None:
         return
 
@@ -267,9 +267,9 @@ async def process_coupon_batch_days(message: types.Message, db_user: User, state
 
 @admin_required
 @error_handler
-async def process_coupon_batch_count(message: types.Message, state: FSMContext):
+async def process_coupon_batch_count(message: types.Message, db_user: User, state: FSMContext):
     count = await _read_int(
-        message, 1, MAX_COUPONS_PER_BATCH, f'Введите целое число купонов от 1 до {MAX_COUPONS_PER_BATCH}'
+        message, 1, MAX_COUPONS_PER_BATCH, f'❌ Введите целое число купонов от 1 до {MAX_COUPONS_PER_BATCH}'
     )
     if count is None:
         return
@@ -284,10 +284,10 @@ async def process_coupon_batch_count(message: types.Message, state: FSMContext):
 
 @admin_required
 @error_handler
-async def process_coupon_batch_name(message: types.Message, state: FSMContext):
+async def process_coupon_batch_name(message: types.Message, db_user: User, state: FSMContext):
     name = (message.text or '').strip()
     if not name or len(name) > 255:
-        await message.answer('Название должно быть от 1 до 255 символов', reply_markup=_CANCEL_KEYBOARD)
+        await message.answer('❌ Название должно быть от 1 до 255 символов', reply_markup=_CANCEL_KEYBOARD)
         return
 
     await state.update_data(coupon_batch_name=name)
@@ -300,16 +300,16 @@ async def process_coupon_batch_name(message: types.Message, state: FSMContext):
 
 @admin_required
 @error_handler
-async def process_coupon_batch_price(message: types.Message, state: FSMContext):
+async def process_coupon_batch_price(message: types.Message, db_user: User, state: FSMContext):
     try:
         rubles = float((message.text or '').strip().replace(',', '.').replace(' ', ''))
     except ValueError:
-        await message.answer('Введите цену числом (например, 150 или 99.50)', reply_markup=_CANCEL_KEYBOARD)
+        await message.answer('❌ Введите цену числом (например, 150 или 99.50)', reply_markup=_CANCEL_KEYBOARD)
         return
     # Inverted range check: also rejects NaN (all comparisons with NaN are False)
     if not 0 <= rubles <= MAX_WHOLESALE_PRICE_RUBLES:
         await message.answer(
-            f'Цена должна быть от 0 до {MAX_WHOLESALE_PRICE_RUBLES} рублей', reply_markup=_CANCEL_KEYBOARD
+            f'❌ Цена должна быть от 0 до {MAX_WHOLESALE_PRICE_RUBLES} рублей', reply_markup=_CANCEL_KEYBOARD
         )
         return
 
@@ -323,9 +323,9 @@ async def process_coupon_batch_price(message: types.Message, state: FSMContext):
 
 @admin_required
 @error_handler
-async def process_coupon_batch_expiry(message: types.Message, state: FSMContext):
+async def process_coupon_batch_expiry(message: types.Message, db_user: User, state: FSMContext):
     expiry_days = await _read_int(
-        message, 0, MAX_PERIOD_DAYS, f'Введите число дней от 0 до {MAX_PERIOD_DAYS} (0 — бессрочно)'
+        message, 0, MAX_PERIOD_DAYS, f'❌ Введите число дней от 0 до {MAX_PERIOD_DAYS} (0 — бессрочно)'
     )
     if expiry_days is None:
         return
@@ -342,8 +342,8 @@ async def process_coupon_batch_expiry(message: types.Message, state: FSMContext)
 
 @admin_required
 @error_handler
-async def process_coupon_batch_per_user(message: types.Message, state: FSMContext):
-    max_per_user = await _read_int(message, 0, MAX_COUPONS_PER_BATCH, 'Введите число от 0 (без ограничения)')
+async def process_coupon_batch_per_user(message: types.Message, db_user: User, state: FSMContext):
+    max_per_user = await _read_int(message, 0, MAX_COUPONS_PER_BATCH, '❌ Введите число от 0 (без ограничения)')
     if max_per_user is None:
         return
 
@@ -369,7 +369,7 @@ async def process_coupon_batch_per_user(message: types.Message, state: FSMContex
         reply_markup=types.InlineKeyboardMarkup(
             inline_keyboard=[
                 [types.InlineKeyboardButton(text='✅ Создать', callback_data='admin_coupon_create_confirm')],
-                [types.InlineKeyboardButton(text='Отмена', callback_data='admin_coupons')],
+                [types.InlineKeyboardButton(text='❌ Отмена', callback_data='admin_coupons')],
             ]
         ),
     )
@@ -384,7 +384,7 @@ async def confirm_coupon_batch_creation(
     # them, so two concurrently-dispatched taps can't both pass (the FSM
     # check→clear below is not atomic on its own).
     if db_user.id in _batch_creation_in_progress:
-        await callback.answer('Партия уже создаётся, подождите', show_alert=True)
+        await callback.answer('⏳ Партия уже создаётся, подождите', show_alert=True)
         return
     _batch_creation_in_progress.add(db_user.id)
     try:
@@ -393,7 +393,7 @@ async def confirm_coupon_batch_creation(
         # would create a batch from half-entered state of a NEW wizard run.
         current_state = await state.get_state()
         if current_state != AdminStates.creating_coupon_batch_expiry.state:
-            await callback.answer('Данные создания устарели, начните заново', show_alert=True)
+            await callback.answer('❌ Данные создания устарели, начните заново', show_alert=True)
             return
 
         data = await state.get_data()
@@ -404,7 +404,7 @@ async def confirm_coupon_batch_creation(
         expiry_days = data.get('coupon_expiry_days')
 
         if not all([tariff_id, period_days, count, name]) or expiry_days is None:
-            await callback.answer('Данные создания устарели, начните заново', show_alert=True)
+            await callback.answer('❌ Данные создания устарели, начните заново', show_alert=True)
             await state.clear()
             return
 
@@ -414,7 +414,7 @@ async def confirm_coupon_batch_creation(
 
         tariff = await get_tariff_by_id(db, tariff_id)
         if not tariff or not tariff.is_active:
-            await callback.answer('Тариф не найден или неактивен', show_alert=True)
+            await callback.answer('❌ Тариф не найден или неактивен', show_alert=True)
             return
 
         valid_until = datetime.now(UTC) + timedelta(days=expiry_days) if expiry_days else None
@@ -442,7 +442,7 @@ async def confirm_coupon_batch_creation(
 
         await _show_batch_card(callback, db, batch)
         await _send_batch_links_file(callback, db, batch)
-        await callback.answer('Партия создана')
+        await callback.answer('✅ Партия создана')
     finally:
         _batch_creation_in_progress.discard(db_user.id)
 
@@ -466,7 +466,7 @@ async def _send_batch_links_file(callback: types.CallbackQuery, db: AsyncSession
     """
     tokens = await get_batch_coupon_tokens(db, batch.id, status=CouponStatus.ACTIVE.value)
     if not tokens:
-        await callback.answer('В партии нет активных купонов', show_alert=True)
+        await callback.answer('❌ В партии нет активных купонов', show_alert=True)
         return False
 
     # The username is synced into settings at startup; get_me() is a fallback
@@ -516,7 +516,7 @@ async def ask_revoke_coupon_batch(callback: types.CallbackQuery, db_user: User, 
                         text='⛔ Да, отозвать', callback_data=f'admin_coupon_revoke_confirm_{batch.id}'
                     )
                 ],
-                [types.InlineKeyboardButton(text='Отмена', callback_data=f'admin_coupon_manage_{batch.id}')],
+                [types.InlineKeyboardButton(text='❌ Отмена', callback_data=f'admin_coupon_manage_{batch.id}')],
             ]
         ),
     )
@@ -539,7 +539,7 @@ async def confirm_revoke_coupon_batch(callback: types.CallbackQuery, db_user: Us
     )
 
     await _show_batch_card(callback, db, batch)
-    await callback.answer(f'Отозвано купонов: {revoked_count}')
+    await callback.answer(f'⛔ Отозвано купонов: {revoked_count}')
 
 
 @admin_required
@@ -573,7 +573,7 @@ async def ask_delete_coupon_batch(callback: types.CallbackQuery, db_user: User, 
                         text='🗑 Да, удалить', callback_data=f'admin_coupon_delete_confirm_{batch.id}'
                     )
                 ],
-                [types.InlineKeyboardButton(text='Отмена', callback_data=f'admin_coupon_manage_{batch.id}')],
+                [types.InlineKeyboardButton(text='❌ Отмена', callback_data=f'admin_coupon_manage_{batch.id}')],
             ]
         ),
     )
@@ -591,7 +591,7 @@ async def confirm_delete_coupon_batch(callback: types.CallbackQuery, db_user: Us
     total = await delete_coupon_batch(db, batch)
     logger.info('Админ удалил партию купонов', admin_id=db_user.id, batch_id=batch_id, deleted_coupons=total)
 
-    await callback.answer(f'Партия #{batch_id} удалена', show_alert=True)
+    await callback.answer(f'🗑 Партия #{batch_id} удалена', show_alert=True)
     await show_coupons_menu(callback, db_user, db, None)
 
 

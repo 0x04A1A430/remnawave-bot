@@ -131,11 +131,7 @@ async def _create_antilopay_payment_and_respond(
             parse_mode='HTML',
         )
 
-    logger.info(
-        'Antilopay payment created',
-        telegram_id=db_user.telegram_id,
-        amount_rub=amount_rub,
-    )
+    logger.info('Antilopay payment created', telegram_id=db_user.telegram_id, amount_rub=amount_rub)
 
 
 @error_handler
@@ -205,12 +201,7 @@ async def process_antilopay_payment_amount(
     )
 
 
-ANTILOPAY_PAYMENT_METHODS = {
-    'antilopay',
-    'antilopay_sbp',
-    'antilopay_card',
-    'antilopay_sberpay',
-}
+ANTILOPAY_PAYMENT_METHODS = {'antilopay', 'antilopay_sbp', 'antilopay_card', 'antilopay_sberpay'}
 
 ANTILOPAY_SERVICE_MAP: dict[str, str | None] = {
     'antilopay': None,

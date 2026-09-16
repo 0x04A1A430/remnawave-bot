@@ -103,14 +103,7 @@ def validate_traffic_amount(traffic_str: str) -> int | None:
     if traffic_str in ['UNLIMITED', 'БЕЗЛИМИТ', '∞']:
         return 0
 
-    units = {
-        'MB': 1,
-        'GB': 1024,
-        'TB': 1024 * 1024,
-        'МБ': 1,
-        'ГБ': 1024,
-        'ТБ': 1024 * 1024,
-    }
+    units = {'MB': 1, 'GB': 1024, 'TB': 1024 * 1024, 'МБ': 1, 'ГБ': 1024, 'ТБ': 1024 * 1024}
 
     for unit, multiplier in units.items():
         if traffic_str.endswith(unit):
@@ -240,7 +233,11 @@ def validate_html_tags(text: str) -> tuple[bool, str]:
     if not text:
         return True, ''
 
-    tag_pattern = r'<(/?)([a-zA-Z][a-zA-Z0-9-]*)[^>]*>'
+    # [^<>], а не [^>]: на тексте из множества «<a» без закрывающей скобки
+    # второй вариант перебирает хвост заново с каждого «<». Замер на 80 КБ —
+    # 0.84 с здесь и 10 с в проверке структуры ниже, а длина HTML правовых
+    # страниц из кабинета ничем не ограничена.
+    tag_pattern = r'<(/?)([a-zA-Z][a-zA-Z0-9-]*)[^<>]*>'
     tags = re.findall(tag_pattern, text)
 
     for is_closing, tag_name in tags:
@@ -253,7 +250,7 @@ def validate_html_tags(text: str) -> tuple[bool, str]:
 
 
 def validate_html_structure(text: str) -> tuple[bool, str]:
-    tag_pattern = r'<(/?)([a-zA-Z][a-zA-Z0-9-]*)[^>]*?/?>'
+    tag_pattern = r'<(/?)([a-zA-Z][a-zA-Z0-9-]*)[^<>]*?/?>'
 
     matches = re.finditer(tag_pattern, text)
     tag_stack = []
@@ -274,10 +271,7 @@ def validate_html_structure(text: str) -> tuple[bool, str]:
 
             last_tag = tag_stack.pop()
             if last_tag != tag_name:
-                return (
-                    False,
-                    f'Неправильная вложенность тегов: ожидался </{last_tag}>, найден </{tag_name}>',
-                )
+                return False, f'Неправильная вложенность тегов: ожидался </{last_tag}>, найден </{tag_name}>'
 
     if tag_stack:
         return False, f'Незакрытый тег: <{tag_stack[-1]}>'
@@ -315,17 +309,17 @@ def get_html_help_text() -> str:
 • <code>&lt;a href="url"&gt;ссылка&lt;/a&gt;</code>
 • <code>&lt;blockquote&gt;цитата&lt;/blockquote&gt;</code>
 • <code>&lt;tg-spoiler&gt;спойлер&lt;/tg-spoiler&gt;</code>
-• <code>&lt;tg-emoji emoji-id="123"&gt;&lt;/tg-emoji&gt;</code>
+• <code>&lt;tg-emoji emoji-id="123"&gt;😀&lt;/tg-emoji&gt;</code>
 
-<b>️ Важные правила:</b>
+<b>⚠️ Важные правила:</b>
 • Каждый открывающий тег должен быть закрыт
 • Теги должны быть правильно вложены
 • Атрибуты ссылок берите в кавычки
 
-<b>Неправильно:</b>
+<b>❌ Неправильно:</b>
 <code>&lt;b&gt;жирный &lt;i&gt;курсив&lt;/b&gt;&lt;/i&gt;</code>
 
-<b>Правильно:</b>
+<b>✅ Правильно:</b>
 <code>&lt;b&gt;жирный &lt;i&gt;курсив&lt;/i&gt;&lt;/b&gt;</code>"""
 
 
@@ -334,11 +328,7 @@ def validate_rules_content(text: str) -> tuple[bool, str, str | None]:
         return False, 'Текст правил не может быть пустым', None
 
     if len(text) > 4000:
-        return (
-            False,
-            f'Текст слишком длинный: {len(text)} символов (максимум 4000)',
-            None,
-        )
+        return False, f'Текст слишком длинный: {len(text)} символов (максимум 4000)', None
 
     is_valid_html, html_error = validate_html_tags(text)
     if not is_valid_html:

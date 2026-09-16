@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import binascii
+import contextlib
 import hashlib
 import json
 import mimetypes
@@ -16,13 +17,14 @@ from typing import Any
 import structlog
 from aiogram.types import BufferedInputFile
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
-from sqlalchemy import desc, select
+from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from starlette.websockets import WebSocketState
 
 from app.bot_factory import create_bot
 from app.cabinet.auth.jwt_handler import get_token_payload
+from app.cabinet.auth.registration_access import evaluate_public_registration
 from app.cabinet.auth.telegram_auth import validate_telegram_init_data
 from app.cabinet.routes.media import (
     _BLOCKED_UPLOAD_CONTENT_TYPES,
@@ -44,15 +46,21 @@ from app.services.blacklist_service import blacklist_service
 from app.services.maintenance_service import maintenance_service
 from app.services.permission_service import PermissionService
 from app.services.rbac_bootstrap_service import is_user_admin_by_env
+from app.services.registration_access_service import (
+    RegistrationAccessDecision,
+    RegistrationAccessReason,
+    RegistrationChannel,
+)
 from app.services.support_settings_service import SupportSettingsService
 from app.services.user_revival_service import NotDeletedError, revive_deleted_user
+from app.utils.websocket_errors import is_client_gone
 
 
 logger = structlog.get_logger(__name__)
 
 router = APIRouter()
 
-SUPPORTED_SUBPROTOCOL = '@xilarobot.support.mobile.v1'
+SUPPORTED_SUBPROTOCOL = 'bedolaga.support.mobile.v1'
 ERROR_CODES = {
     'AUTH_REQUIRED',
     'AUTH_EXPIRED',
@@ -317,6 +325,9 @@ class SupportWsSession:
     idempotency_results: dict[str, dict[str, Any]] = field(default_factory=dict)
     send_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
+    def __hash__(self) -> int:
+        return id(self)
+
     async def send_json(self, data: dict[str, Any]) -> None:
         # Broadcasts run from another user's task; serialize with the session's own
         # receive-loop sends so two coroutines never interleave frames on one socket.
@@ -393,9 +404,32 @@ async def _apply_cabinet_account_guards(
             return _shared_error('FORBIDDEN', 'User is blacklisted', resource_type='auth')
 
     status_value = _user_status_value(user)
+    access_decision = None
+    if status_value != UserStatus.ACTIVE.value:
+        if is_user_admin_by_env(user).is_admin:
+            # Env config outranks any status flag — see get_current_cabinet_user.
+            access_decision = RegistrationAccessDecision(True, RegistrationAccessReason.VERIFIED_ADMIN)
+        elif not settings.INVITE_ONLY_ENABLED:
+            access_decision = RegistrationAccessDecision(True, RegistrationAccessReason.INVITE_ONLY_DISABLED)
+        else:
+            access_decision = await evaluate_public_registration(
+                db,
+                channel=RegistrationChannel.CABINET_SUPPORT_WS,
+                existing_user=user,
+                telegram_id=user.telegram_id,
+                email=user.email,
+                email_verified=bool(user.email_verified),
+                verified_admin=False,
+            )
     if status_value != UserStatus.ACTIVE.value:
         can_auto_revive = (
-            status_value == UserStatus.DELETED.value and user.telegram_id is not None and init_data_matches_user
+            status_value == UserStatus.DELETED.value
+            and user.telegram_id is not None
+            and (
+                init_data_matches_user
+                or bool(access_decision and access_decision.reason is RegistrationAccessReason.VERIFIED_ADMIN)
+            )
+            and bool(access_decision and access_decision.allowed)
         )
         if can_auto_revive:
             try:
@@ -404,6 +438,11 @@ async def _apply_cabinet_account_guards(
                 await db.refresh(user)
             except NotDeletedError:
                 logger.info('Support WS auto-revival race: user already revived', user_id=user.id)
+        elif access_decision and access_decision.reason is RegistrationAccessReason.VERIFIED_ADMIN:
+            user.status = UserStatus.ACTIVE.value
+            user.updated_at = datetime.now(UTC)
+            await db.commit()
+            await db.refresh(user)
         elif status_value == UserStatus.DELETED.value:
             return _shared_error(
                 'FORBIDDEN', 'Account is deleted and must be restored through the bot', resource_type='auth'
@@ -690,18 +729,23 @@ async def _handle_ticket_list(db: AsyncSession, session: SupportWsSession, paylo
     offset = _parse_int(cursor, 'cursor', minimum=0) if cursor not in (None, '') else 0
     updated_after = _parse_iso_datetime(payload.get('updatedAfter'))
     query = select(Ticket).options(selectinload(Ticket.messages), selectinload(Ticket.user))
+    count_query = select(func.count()).select_from(Ticket)
 
     if context.role == 'owner' or payload.get('mineOnly') is True:
         query = query.where(Ticket.user_id == context.user_id)
+        count_query = count_query.where(Ticket.user_id == context.user_id)
     elif not await _has_permission(db, context, 'tickets:read'):
         raise PermissionError('tickets:read is required')
 
     if status_filters:
         query = query.where(Ticket.status.in_(status_filters))
+        count_query = count_query.where(Ticket.status.in_(status_filters))
     if priority_filters:
         query = query.where(Ticket.priority.in_(priority_filters))
+        count_query = count_query.where(Ticket.priority.in_(priority_filters))
     if updated_after is not None:
         query = query.where(Ticket.updated_at > updated_after)
+        count_query = count_query.where(Ticket.updated_at > updated_after)
 
     assigned_to = payload.get('assignedTo')
     if assigned_to not in (None, '', 'null'):
@@ -880,6 +924,7 @@ async def _handle_ticket_reply(db: AsyncSession, session: SupportWsSession, payl
         media_type=primary.get('type') if primary else None,
         media_file_id=primary.get('file_id') if primary else None,
         media_caption=primary.get('caption') if primary else None,
+        media_items=media_items or None,
         created_at=_utc_now(),
     )
     db.add(message)
@@ -1053,8 +1098,6 @@ async def _upload_to_telegram(upload: UploadTransfer) -> dict[str, Any]:
         try:
             await bot.delete_message(chat_id=target_chat_id, message_id=message.message_id)
         except Exception:
-            # удаление чернового сообщения best-effort: если оно уже недоступно,
-            # ничего страшного — это не влияет на результат загрузки медиа
             pass
         return {
             'mediaId': str(media.file_id),
@@ -1380,7 +1423,9 @@ def _map_exception(command: str, exc: Exception) -> dict[str, Any]:
             'upload' if message.startswith('UPLOAD_') else 'download' if message.startswith('DOWNLOAD_') else 'ticket'
         )
         return _shared_error(message, message.replace('_', ' ').title(), resource_type=resource_type)
-    logger.exception('Support WS command failed', command=command, error=message)
+    # exception() вне блока except печатает пустой traceback «NoneType: None» —
+    # исключение сюда приходит аргументом, поэтому передаём его явно.
+    logger.error('Support WS command failed', command=command, error=message, exc_info=exc)
     return _shared_error('INTERNAL_ERROR', 'Internal support websocket error', retryable=True)
 
 
@@ -1443,7 +1488,15 @@ async def support_mobile_websocket_endpoint(websocket: WebSocket):
         await _reject_upgrade(websocket, 401, error['code'] if error else 'AUTH_REQUIRED')
         return
 
-    await websocket.accept(subprotocol=SUPPORTED_SUBPROTOCOL)
+    try:
+        await websocket.accept(subprotocol=SUPPORTED_SUBPROTOCOL)
+    except Exception as exc:
+        # Приложение закрыли, пока шло рукопожатие, — разговор окончен, аварии нет.
+        if is_client_gone(exc):
+            logger.debug('Support WS: client gone before accept')
+            return
+        raise
+
     session = SupportWsSession(websocket=websocket, context=context)
     await support_ws_manager.connect(session)
     try:
@@ -1507,17 +1560,16 @@ async def support_mobile_websocket_endpoint(websocket: WebSocket):
                     command = command if 'command' in locals() else 'unknown'
                     request_id = request_id if 'request_id' in locals() else ''
                     await session.send_json(_command_result(command, request_id, error=_map_exception(command, exc)))
-                except Exception:
-                    logger.exception('Support WS failed to send command error')
+                except Exception as send_error:
+                    if not is_client_gone(send_error):
+                        logger.exception('Support WS failed to send command error')
                     break
     finally:
         await support_ws_manager.disconnect(session)
         if websocket.client_state != WebSocketState.DISCONNECTED:
-            try:
+            # Сокет мог закрыться сам, пока мы шли к finally — повторное закрытие не ошибка.
+            with contextlib.suppress(RuntimeError):
                 await websocket.close()
-            except RuntimeError:
-                # сокет уже закрыт либо никогда не устанавливался — нечего закрывать
-                pass
 
 
 # ---------------------------------------------------------------------------
@@ -1530,6 +1582,7 @@ async def support_mobile_websocket_endpoint(websocket: WebSocket):
 # whitelisted support-v1 events (message.created / ticket.status.updated).
 # ---------------------------------------------------------------------------
 
+_bridge_registered = False
 _bridge_tasks: set[asyncio.Task[Any]] = set()
 
 
@@ -1653,14 +1706,13 @@ def _bridge_listener_status_changed(event_data: dict[str, Any]) -> None:
 
 def register_support_ticket_event_bridge() -> None:
     """Attach the support-socket bridge to the global event emitter (idempotent)."""
+    global _bridge_registered
+    if _bridge_registered:
+        return
     from app.services.event_emitter import event_emitter
 
-    # Сначала снимаем, потом вешаем: повторный вызов заменяет обработчики,
-    # а не дублирует их (это и есть идемпотентность без флага-глобала).
-    event_emitter.off('ticket.message_added', _bridge_listener_message_added)
     event_emitter.on('ticket.message_added', _bridge_listener_message_added)
-    event_emitter.off('ticket.created', _bridge_listener_ticket_created)
     event_emitter.on('ticket.created', _bridge_listener_ticket_created)
-    event_emitter.off('ticket.status_changed', _bridge_listener_status_changed)
     event_emitter.on('ticket.status_changed', _bridge_listener_status_changed)
+    _bridge_registered = True
     logger.info('Support ticket event bridge registered')

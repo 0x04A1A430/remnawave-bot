@@ -173,23 +173,12 @@ async def _post_collect(payload: dict[str, str], kind: str, cid: str) -> bool:
                 await asyncio.sleep(RETRY_DELAY)
                 continue
 
-            logger.error(
-                'collect rejected',
-                kind=kind,
-                cid=masked,
-                status=resp.status_code,
-                body=resp.text[:200],
-            )
+            logger.error('collect rejected', kind=kind, cid=masked, status=resp.status_code, body=resp.text[:200])
             return False
 
         except Exception as exc:
             logger.warning(
-                'collect request error',
-                kind=kind,
-                attempt=attempt,
-                max=MAX_RETRIES,
-                cid=masked,
-                error=str(exc),
+                'collect request error', kind=kind, attempt=attempt, max=MAX_RETRIES, cid=masked, error=str(exc)
             )
             if attempt < MAX_RETRIES:
                 await asyncio.sleep(RETRY_DELAY)
@@ -239,9 +228,11 @@ async def _fire_bg(event_name: str, event_fn, user_id: int, **kwargs) -> None:
         async with AsyncSessionLocal() as db:
             await event_fn(db, user_id, **kwargs)
     except Exception as exc:
+        # Не 'event': structlog занимает это имя под само сообщение, и вызов
+        # падал TypeError — прямо в обработчике ошибки, подменяя её собой.
         logger.warning(
             'YandexOfflineConv background event failed',
-            event=event_name,
+            conversion_event=event_name,
             user_id=user_id,
             error=str(exc),
         )
@@ -466,17 +457,10 @@ async def _upload_offline_conversion_yclid(yclid: str, amount_rubles: float, ts:
                 except Exception:
                     ok = False
                 if ok:
-                    logger.info(
-                        'offline conversion uploaded',
-                        yclid=masked,
-                        amount=amount_rubles,
-                    )
+                    logger.info('offline conversion uploaded', yclid=masked, amount=amount_rubles)
                     return True
                 logger.error(
-                    'offline conversion not accepted',
-                    yclid=masked,
-                    status=resp.status_code,
-                    body=resp.text[:200],
+                    'offline conversion not accepted', yclid=masked, status=resp.status_code, body=resp.text[:200]
                 )
                 return False
 
@@ -491,21 +475,12 @@ async def _upload_offline_conversion_yclid(yclid: str, amount_rubles: float, ts:
                 await asyncio.sleep(RETRY_DELAY)
                 continue
 
-            logger.error(
-                'offline conversion rejected',
-                yclid=masked,
-                status=resp.status_code,
-                body=resp.text[:200],
-            )
+            logger.error('offline conversion rejected', yclid=masked, status=resp.status_code, body=resp.text[:200])
             return False
 
         except Exception as exc:
             logger.warning(
-                'offline conversion request error',
-                attempt=attempt,
-                max=MAX_RETRIES,
-                yclid=masked,
-                error=str(exc),
+                'offline conversion request error', attempt=attempt, max=MAX_RETRIES, yclid=masked, error=str(exc)
             )
             if attempt < MAX_RETRIES:
                 await asyncio.sleep(RETRY_DELAY)
@@ -554,11 +529,7 @@ async def on_purchase(db: AsyncSession, user_id: int, amount_kopeks: int) -> Non
         if yclid:
             await _upload_offline_conversion_yclid(yclid, amount_kopeks / 100, int(time.time()))
     except Exception as exc:
-        logger.error(
-            'purchase offline conversion (yclid) failed',
-            user_id=user_id,
-            error=str(exc),
-        )
+        logger.error('purchase offline conversion (yclid) failed', user_id=user_id, error=str(exc))
 
 
 def parse_cid_from_start_param(param: str) -> tuple[str | None, str]:

@@ -130,9 +130,7 @@ async def get_pending_jupiter_payments(db: AsyncSession, user_id: int) -> list[J
     return list(result.scalars().all())
 
 
-async def get_expired_pending_jupiter_payments(
-    db: AsyncSession,
-) -> list[JupiterPayment]:
+async def get_expired_pending_jupiter_payments(db: AsyncSession) -> list[JupiterPayment]:
     """Возвращает просроченные платежи в статусе pending."""
     now = datetime.now(UTC)
     result = await db.execute(

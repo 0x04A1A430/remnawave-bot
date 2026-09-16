@@ -106,9 +106,9 @@ class KassaAiPaymentMixin:
                 amount=amount_rubles,
                 currency=currency,
                 email=target_email,
-                payment_system_id=(
-                    payment_system_id if payment_system_id is not None else settings.KASSA_AI_PAYMENT_SYSTEM_ID
-                ),
+                payment_system_id=payment_system_id
+                if payment_system_id is not None
+                else settings.KASSA_AI_PAYMENT_SYSTEM_ID,
                 success_url=return_url,
                 fail_url=return_url,
                 notification_url=webhook_url,
@@ -119,11 +119,7 @@ class KassaAiPaymentMixin:
                 logger.error('KassaAI API не вернул URL платежа')
                 return None
 
-            logger.info(
-                'KassaAI API: создан заказ order_id url',
-                order_id=order_id,
-                payment_url=payment_url,
-            )
+            logger.info('KassaAI API: создан заказ order_id url', order_id=order_id, payment_url=payment_url)
 
             # Импортируем CRUD модуль
             kassa_ai_crud = import_module('app.database.crud.kassa_ai')
@@ -137,9 +133,9 @@ class KassaAiPaymentMixin:
                 currency=currency,
                 description=description,
                 payment_url=payment_url,
-                payment_system_id=(
-                    payment_system_id if payment_system_id is not None else settings.KASSA_AI_PAYMENT_SYSTEM_ID
-                ),
+                payment_system_id=payment_system_id
+                if payment_system_id is not None
+                else settings.KASSA_AI_PAYMENT_SYSTEM_ID,
                 expires_at=expires_at,
                 metadata_json=metadata,
             )
@@ -210,10 +206,7 @@ class KassaAiPaymentMixin:
             # Lock payment row immediately to prevent concurrent webhook processing (TOCTOU race)
             locked = await kassa_ai_crud.get_kassa_ai_payment_by_id_for_update(db, payment.id)
             if not locked:
-                logger.error(
-                    'KassaAI webhook: не удалось заблокировать платёж',
-                    payment_id=payment.id,
-                )
+                logger.error('KassaAI webhook: не удалось заблокировать платёж', payment_id=payment.id)
                 return False
             payment = locked
 
@@ -270,11 +263,7 @@ class KassaAiPaymentMixin:
 
         # FOR UPDATE lock already acquired by caller — just check idempotency
         if payment.transaction_id:
-            logger.info(
-                'KassaAI платеж уже привязан к транзакции',
-                order_id=payment.order_id,
-                trigger=trigger,
-            )
+            logger.info('KassaAI платеж уже привязан к транзакции', order_id=payment.order_id, trigger=trigger)
             return True
 
         # --- Guest purchase flow (landing page) ---
@@ -396,10 +385,11 @@ class KassaAiPaymentMixin:
 
                 keyboard = await self.build_topup_success_keyboard(user)
                 message = (
-                    '<b>Пополнение успешно!</b>\n\n'
-                    f'Сумма: {settings.format_price(payment.amount_kopeks)}\n'
-                    f'Способ: {display_name}\n'
-                    f'Транзакция: {transaction.id}'
+                    '✅ <b>Пополнение успешно!</b>\n\n'
+                    f'💰 Сумма: {settings.format_price(payment.amount_kopeks)}\n'
+                    f'💳 Способ: {display_name}\n'
+                    f'🆔 Транзакция: {transaction.id}\n\n'
+                    'Баланс пополнен автоматически!'
                 )
 
                 await self.bot.send_message(
@@ -418,14 +408,11 @@ class KassaAiPaymentMixin:
             await send_cart_notification_after_topup(user, payment.amount_kopeks, db, getattr(self, 'bot', None))
         except Exception as error:
             logger.error(
-                'Ошибка при работе с сохраненной корзиной для пользователя',
-                user_id=user.id,
-                error=error,
-                exc_info=True,
+                'Ошибка при работе с сохраненной корзиной для пользователя', user_id=user.id, error=error, exc_info=True
             )
 
         logger.info(
-            'Обработан KassaAI платеж для пользователя',
+            '✅ Обработан KassaAI платеж для пользователя',
             order_id=payment.order_id,
             user_id=payment.user_id,
             trigger=trigger,
@@ -511,16 +498,10 @@ class KassaAiPaymentMixin:
                     # Lock payment row before finalization to prevent concurrent double-processing
                     locked = await kassa_ai_crud.get_kassa_ai_payment_by_id_for_update(db, payment.id)
                     if not locked:
-                        logger.error(
-                            'KassaAI status check: не удалось заблокировать платёж',
-                            payment_id=payment.id,
-                        )
+                        logger.error('KassaAI status check: не удалось заблокировать платёж', payment_id=payment.id)
                     elif locked.is_paid:
                         # Another concurrent handler already processed — skip
-                        logger.info(
-                            'KassaAI платеж уже оплачен после блокировки',
-                            order_id=locked.order_id,
-                        )
+                        logger.info('KassaAI платеж уже оплачен после блокировки', order_id=locked.order_id)
                         payment = locked
                     else:
                         payment = locked

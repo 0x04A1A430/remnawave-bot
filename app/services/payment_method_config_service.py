@@ -1,7 +1,5 @@
 """Service for managing payment method display configurations in cabinet."""
 
-import re
-
 import structlog
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,19 +10,6 @@ from app.database.models import PaymentMethodConfig, PromoGroup
 
 
 logger = structlog.get_logger(__name__)
-
-
-# Вырезает Telegram-теги <tg-emoji ...>…</tg-emoji>, оставляя внутренний текст
-# (эмодзи/название). Бот рендерит эти теги в Telegram, а в веб-кабинете они
-# показываются сырьём, поэтому при формировании веб-ответов они удаляются.
-_TG_EMOJI_TAG_RE = re.compile(r'</?tg-emoji[^>]*>')
-
-
-def strip_tg_emoji(value: str | None) -> str | None:
-    """Remove Telegram-only <tg-emoji …>…</tg-emoji> tags from a string."""
-    if not value:
-        return value
-    return _TG_EMOJI_TAG_RE.sub('', value).strip()
 
 
 # ============ Display-name override cache ============
@@ -288,6 +273,26 @@ def _get_method_defaults() -> dict:
                 {'id': 'sbp', 'name': 'СБП'},
             ],
         },
+        'paritypay': {
+            'default_display_name': settings.get_paritypay_display_name(),
+            'is_configured': settings.is_paritypay_enabled(),
+            'default_min': settings.PARITYPAY_MIN_AMOUNT_KOPEKS,
+            'default_max': settings.PARITYPAY_MAX_AMOUNT_KOPEKS,
+            'available_sub_options': [
+                {'id': 'card', 'name': 'Карта'},
+                {'id': 'sbp', 'name': 'СБП'},
+            ],
+        },
+        'tabpay': {
+            'default_display_name': settings.get_tabpay_display_name(),
+            'is_configured': settings.is_tabpay_enabled(),
+            'default_min': settings.TABPAY_MIN_AMOUNT_KOPEKS,
+            'default_max': settings.TABPAY_MAX_AMOUNT_KOPEKS,
+            'available_sub_options': [
+                {'id': 'card', 'name': 'Карта'},
+                {'id': 'sbp', 'name': 'СБП'},
+            ],
+        },
     }
 
 
@@ -304,7 +309,7 @@ def _get_platega_sub_options() -> list[dict] | None:
             options.append(
                 {
                     'id': str(method_code),
-                    'name': info.get('name') or info.get('title') or f'Platega {method_code}',
+                    'name': info.get('title') or info.get('name') or f'Platega {method_code}',
                 }
             )
         return options or None
@@ -350,6 +355,8 @@ DEFAULT_METHOD_ORDER = [
     'donut',
     'lava',
     'cispay',
+    'tabpay',
+    'paritypay',
 ]
 
 
@@ -374,8 +381,9 @@ def normalize_quick_amounts(values: list | None) -> list[int] | None:
         unique.add(value)
     if len(unique) > MAX_QUICK_AMOUNTS:
         raise ValueError(f'quick_amounts cannot have more than {MAX_QUICK_AMOUNTS} items')
-    if not unique:
-        return None
+    # Пустой список — валидное значение «кнопки отключены», НЕ схлопываем в None
+    # (None = «использовать дефолты»). Кабинетный фронт для сброса шлёт явный
+    # флаг reset_quick_amounts, а не пустой список.
     return sorted(unique)
 
 
@@ -384,7 +392,8 @@ def get_effective_quick_amounts(
     min_amount_kopeks: int,
     max_amount_kopeks: int,
 ) -> list[int]:
-    source = quick_amounts or DEFAULT_QUICK_AMOUNTS
+    # None → дефолты; [] → админ отключил кнопки быстрых сумм (пустой результат)
+    source = DEFAULT_QUICK_AMOUNTS if quick_amounts is None else quick_amounts
     return [amount for amount in source if min_amount_kopeks <= amount <= max_amount_kopeks]
 
 
@@ -469,28 +478,7 @@ async def ensure_payment_method_configs(db: AsyncSession) -> None:
             db.add(config)
 
         await db.commit()
-        logger.info(
-            'Added missing payment method(s).',
-            missing_methods_count=len(missing_methods),
-        )
-
-    # Re-sync enabled flags from env vars on every startup: конфиг бота
-    # (CRYPTOBOT_ENABLED, PLATEGA_ENABLED, TELEGRAM_STARS_ENABLED, ...) — единый
-    # источник того, какие способы оплаты видны в кабинете. Чинит кейс, когда
-    # методы были засеяны ДО включения провайдера в .env (is_enabled=false).
-    defaults = _get_method_defaults()
-    all_result = await db.execute(select(PaymentMethodConfig))
-    all_configs = list(all_result.scalars().all())
-    changed = 0
-    for config in all_configs:
-        method_def = defaults.get(config.method_id, {})
-        desired = bool(method_def.get('is_configured', False))
-        if config.is_enabled != desired:
-            config.is_enabled = desired
-            changed += 1
-    if changed:
-        await db.commit()
-        logger.info('Re-synced payment method enabled flags from env', changed=changed)
+        logger.info('Added missing payment method(s).', missing_methods_count=len(missing_methods))
 
 
 # ============ CRUD ============
@@ -674,16 +662,15 @@ async def get_enabled_methods_for_user(
             for opt in available_sub_options:
                 opt_id = opt['id']
                 if config.sub_options.get(opt_id, True):
-                    clean_opt = {**opt, 'name': strip_tg_emoji(opt.get('name')) or opt.get('name')}
-                    enabled_options.append(clean_opt)
+                    enabled_options.append(opt)
             if enabled_options:
                 options = enabled_options
 
         result.append(
             {
                 'id': method_id,
-                'name': strip_tg_emoji(display_name) or display_name,
-                'description': strip_tg_emoji(config.description),
+                'name': display_name,
+                'description': config.description,
                 'min_amount_kopeks': min_amount,
                 'max_amount_kopeks': max_amount,
                 'options': options,

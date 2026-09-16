@@ -106,10 +106,7 @@ def _validate_create_payload(payload: PromoCodeCreateRequest) -> None:
         payload.type in {PromoCodeType.SUBSCRIPTION_DAYS, PromoCodeType.TRIAL_SUBSCRIPTION}
         and payload.subscription_days <= 0
     ):
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST,
-            'Subscription days must be positive for this promo code type',
-        )
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, 'Subscription days must be positive for this promo code type')
 
     if normalized_valid_from and normalized_valid_until and normalized_valid_from > normalized_valid_until:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, 'valid_from cannot be greater than valid_until')
@@ -270,10 +267,7 @@ async def update_promocode_endpoint(
         if normalized_code != promocode.code:
             existing = await get_promocode_by_code(db, normalized_code)
             if existing and existing.id != promocode_id:
-                raise HTTPException(
-                    status.HTTP_400_BAD_REQUEST,
-                    'Promo code with this code already exists',
-                )
+                raise HTTPException(status.HTTP_400_BAD_REQUEST, 'Promo code with this code already exists')
         updates['code'] = normalized_code
 
     if payload.type is not None:

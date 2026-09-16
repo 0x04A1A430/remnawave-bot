@@ -34,9 +34,7 @@ def _make_service() -> PaymentService:
 
 
 @pytest.mark.anyio('asyncio')
-async def test_create_tribute_payment_requires_enabled(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+async def test_create_tribute_payment_requires_enabled(monkeypatch: pytest.MonkeyPatch) -> None:
     service = _make_service()
     monkeypatch.setattr(settings, 'TRIBUTE_ENABLED', False, raising=False)
 
@@ -76,9 +74,7 @@ def test_verify_tribute_webhook_signature(monkeypatch: pytest.MonkeyPatch) -> No
     assert service.verify_tribute_webhook(payload, 'invalid') is False
 
 
-def test_verify_tribute_webhook_returns_false_without_key(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_verify_tribute_webhook_returns_false_without_key(monkeypatch: pytest.MonkeyPatch) -> None:
     service = _make_service()
     monkeypatch.setattr(settings, 'TRIBUTE_API_KEY', '', raising=False)
 

@@ -10,7 +10,7 @@ from app.config import settings
 from app.database.crud.user import get_user_by_telegram_id
 from app.external.telegram_stars import TelegramStarsService
 from app.localization.loader import DEFAULT_LANGUAGE
-from app.localization.texts import get_texts
+from app.localization.texts import Texts, get_texts
 from app.services.payment_service import PaymentService
 
 
@@ -40,7 +40,7 @@ async def _handle_wheel_spin_payment(
         # Если спин по этому charge_id уже есть — платёж уже обработан, второй приз не выдаём.
         if charge_id and await get_wheel_spin_by_charge_id(db, charge_id):
             logger.info(
-                'Stars wheel spin already processed (idempotent skip)',
+                '🎰 Stars wheel spin already processed (idempotent skip)',
                 user_id=user.id,
                 charge_id=charge_id,
             )
@@ -50,7 +50,7 @@ async def _handle_wheel_spin_payment(
 
         if not config.is_enabled:
             await message.answer(
-                'Колесо удачи временно недоступно. Звезды будут возвращены.',
+                '❌ Колесо удачи временно недоступно. Звезды будут возвращены.',
             )
             return False
 
@@ -58,9 +58,7 @@ async def _handle_wheel_spin_payment(
         from app.database.crud.subscription import get_subscription_by_user_id
 
         if settings.is_multi_tariff_enabled():
-            from app.database.crud.subscription import (
-                get_active_subscriptions_by_user_id,
-            )
+            from app.database.crud.subscription import get_active_subscriptions_by_user_id
 
             active_subs = await get_active_subscriptions_by_user_id(db, user.id)
             # Wheel eligibility: any active non-daily subscription qualifies
@@ -85,8 +83,8 @@ async def _handle_wheel_spin_payment(
             )
             await db.commit()
             await message.answer(
-                'Для использования колеса удачи необходима активная подписка.\n'
-                f'{stars_amount} Stars возвращены на баланс в виде {kopeks_fallback / 100:.0f} ₽.',
+                '❌ Для использования колеса удачи необходима активная подписка.\n'
+                f'💰 {stars_amount} Stars возвращены на баланс в виде {kopeks_fallback / 100:.0f} ₽.',
             )
             logger.warning(
                 'Wheel spin without subscription, refunded to balance',
@@ -101,7 +99,7 @@ async def _handle_wheel_spin_payment(
 
         if not prizes:
             await message.answer(
-                'Призы не настроены. Обратитесь в поддержку.',
+                '❌ Призы не настроены. Обратитесь в поддержку.',
             )
             return False
 
@@ -125,8 +123,8 @@ async def _handle_wheel_spin_payment(
                 )
                 await db.commit()
                 await message.answer(
-                    'Достигнут дневной лимит спинов.\n'
-                    f'{stars_amount} Stars возвращены на баланс в виде {kopeks_fallback / 100:.0f} ₽.',
+                    '❌ Достигнут дневной лимит спинов.\n'
+                    f'💰 {stars_amount} Stars возвращены на баланс в виде {kopeks_fallback / 100:.0f} ₽.',
                 )
                 logger.warning(
                     'Wheel spin over daily limit, refunded to balance',
@@ -157,15 +155,14 @@ async def _handle_wheel_spin_payment(
             from sqlalchemy import text
 
             result = await db.execute(
-                text('SELECT id FROM promocodes WHERE code = :code'),
-                {'code': generated_promocode},
+                text('SELECT id FROM promocodes WHERE code = :code'), {'code': generated_promocode}
             )
             row = result.fetchone()
             if row:
                 promocode_id = row[0]
 
         logger.info(
-            'Creating wheel spin',
+            '🎰 Creating wheel spin',
             user_id=user.id,
             telegram_id=user.telegram_id,
             display_name=selected_prize.display_name,
@@ -193,13 +190,13 @@ async def _handle_wheel_spin_payment(
             # transaction — rolling back here undoes our duplicate grant entirely.
             await db.rollback()
             logger.info(
-                'Stars wheel spin duplicate charge id (idempotent skip)',
+                '🎰 Stars wheel spin duplicate charge id (idempotent skip)',
                 user_id=user.id,
                 charge_id=charge_id,
             )
             return True
 
-        logger.info('Wheel spin created', spin_id=spin.id, user_id=spin.user_id)
+        logger.info('🎰 Wheel spin created', spin_id=spin.id, user_id=spin.user_id)
 
         # Ensure all changes are committed (subscription days, traffic GB, etc.)
         await db.commit()
@@ -207,17 +204,17 @@ async def _handle_wheel_spin_payment(
         # Отправляем результат
         prize_message = wheel_service._get_prize_message(selected_prize, generated_promocode)
 
-        emoji = selected_prize.emoji or ''
+        emoji = selected_prize.emoji or '🎁'
         await message.answer(
-            f'<b>Колесо удачи!</b>\n\n'
+            f'🎰 <b>Колесо удачи!</b>\n\n'
             f'{emoji} <b>{html.escape(selected_prize.display_name)}</b>\n\n'
             f'{prize_message}\n\n'
-            f'Потрачено: {stars_amount} Stars',
+            f'⭐ Потрачено: {stars_amount} Stars',
             parse_mode='HTML',
         )
 
         logger.info(
-            'Wheel spin via Stars',
+            '🎰 Wheel spin via Stars',
             user_id=user.id,
             display_name=selected_prize.display_name,
             stars_amount=stars_amount,
@@ -227,7 +224,7 @@ async def _handle_wheel_spin_payment(
     except Exception as e:
         logger.error('Ошибка обработки wheel spin payment', error=e, exc_info=True)
         await message.answer(
-            'Произошла ошибка при обработке спина. Обратитесь в поддержку.',
+            '❌ Произошла ошибка при обработке спина. Обратитесь в поддержку.',
         )
         return False
 
@@ -253,7 +250,7 @@ async def _handle_trial_payment(
         if len(parts) < 2:
             logger.error('Невалидный trial payload', payload=payload)
             await message.answer(
-                'Ошибка: неверный формат платежа. Обратитесь в поддержку.',
+                '❌ Ошибка: неверный формат платежа. Обратитесь в поддержку.',
             )
             return False
 
@@ -262,7 +259,7 @@ async def _handle_trial_payment(
         except ValueError:
             logger.error('Невалидный subscription_id в trial payload', payload=payload)
             await message.answer(
-                'Ошибка: неверный ID подписки. Обратитесь в поддержку.',
+                '❌ Ошибка: неверный ID подписки. Обратитесь в поддержку.',
             )
             return False
 
@@ -276,7 +273,7 @@ async def _handle_trial_payment(
             user_id=user.id,
             type=TransactionType.SUBSCRIPTION_PAYMENT,
             amount_kopeks=amount_kopeks,
-            description=f'Оплата пробной подписки через Telegram Stars ({stars_amount} )',
+            description=f'Оплата пробной подписки через Telegram Stars ({stars_amount} ⭐)',
             payment_method=PaymentMethod.TELEGRAM_STARS,
             external_id=f'trial_stars_{subscription_id}',
             is_completed=True,
@@ -306,7 +303,7 @@ async def _handle_trial_payment(
                 transaction_type=TransactionType.REFUND,
             )
             await message.answer(
-                'Не удалось активировать пробную подписку. Средства возвращены на баланс.',
+                '❌ Не удалось активировать пробную подписку. Средства возвращены на баланс.',
             )
             return False
 
@@ -343,16 +340,16 @@ async def _handle_trial_payment(
 
         # Отправляем сообщение пользователю
         await message.answer(
-            f'<b>Пробная подписка активирована!</b>\n\n'
-            f'Потрачено: {stars_amount} Stars\n'
-            f'Период: {settings.TRIAL_DURATION_DAYS} дней\n'
-            f'Устройств: {subscription.device_limit}\n\n'
+            f'🎉 <b>Пробная подписка активирована!</b>\n\n'
+            f'⭐ Потрачено: {stars_amount} Stars\n'
+            f'📅 Период: {settings.TRIAL_DURATION_DAYS} дней\n'
+            f'📱 Устройств: {Texts.format_device_limit(subscription.device_limit)}\n\n'
             f'Используйте меню для подключения к VPN.',
             parse_mode='HTML',
         )
 
         logger.info(
-            'Платный триал активирован через Stars',
+            '✅ Платный триал активирован через Stars',
             user_id=user.id,
             subscription_id=subscription.id,
             stars_amount=stars_amount,
@@ -362,7 +359,7 @@ async def _handle_trial_payment(
     except Exception as e:
         logger.error('Ошибка обработки trial payment', error=e, exc_info=True)
         await message.answer(
-            'Произошла ошибка при активации пробной подписки. Обратитесь в поддержку.',
+            '❌ Произошла ошибка при активации пробной подписки. Обратитесь в поддержку.',
         )
         return False
 
@@ -385,11 +382,8 @@ async def _handle_guest_purchase_payment(
     try:
         purchase_token = payload[len('guest_purchase_') :]
         if not purchase_token or not _PURCHASE_TOKEN_RE.match(purchase_token):
-            logger.error(
-                'Invalid purchase_token format in guest_purchase payload',
-                payload=payload,
-            )
-            await message.answer('Ошибка: неверный формат платежа.')
+            logger.error('Invalid purchase_token format in guest_purchase payload', payload=payload)
+            await message.answer('❌ Ошибка: неверный формат платежа.')
             return
 
         # Verify Stars amount matches expected price (±5% tolerance for conversion rounding)
@@ -402,9 +396,9 @@ async def _handle_guest_purchase_payment(
                     'Stars amount mismatch for guest purchase',
                     paid_stars=stars_amount,
                     expected_stars=expected_stars,
-                    purchase_token_prefix=purchase_token[:5],
+                    purchase_id=existing.id,
                 )
-                await message.answer('Сумма оплаты не совпадает с ожидаемой.')
+                await message.answer('❌ Сумма оплаты не совпадает с ожидаемой.')
                 return
 
         # Calculate kopeks from stars
@@ -428,28 +422,25 @@ async def _handle_guest_purchase_payment(
 
         if result is True:
             await message.answer(
-                '<b>Подарочная подписка успешно оплачена!</b>\n\n'
-                f'Потрачено: {stars_amount} Stars\n\n'
+                '🎁 <b>Подарочная подписка успешно оплачена!</b>\n\n'
+                f'⭐ Потрачено: {stars_amount} Stars\n\n'
                 'Подарок будет доставлен получателю.',
                 parse_mode='HTML',
             )
             logger.info(
-                'Guest purchase fulfilled via Stars',
+                '✅ Guest purchase fulfilled via Stars',
                 user_id=user.id,
                 stars_amount=stars_amount,
-                purchase_token_prefix=purchase_token[:5],
+                purchase_id=existing.id if existing else None,
             )
         else:
-            logger.error(
-                'try_fulfill_guest_purchase returned None for Stars gift',
-                payload=payload,
-            )
-            await message.answer('Ошибка обработки платежа. Обратитесь в поддержку.')
+            logger.error('try_fulfill_guest_purchase returned None for Stars gift', payload=payload)
+            await message.answer('❌ Ошибка обработки платежа. Обратитесь в поддержку.')
 
     except Exception as e:
         logger.error('Error handling guest purchase Stars payment', error=e, exc_info=True)
         await message.answer(
-            'Произошла ошибка при обработке подарочной подписки. Обратитесь в поддержку.',
+            '❌ Произошла ошибка при обработке подарочной подписки. Обратитесь в поддержку.',
         )
 
 
@@ -458,20 +449,13 @@ async def handle_pre_checkout_query(query: types.PreCheckoutQuery):
 
     try:
         logger.info(
-            'Pre-checkout query',
+            '📋 Pre-checkout query',
             from_user_id=query.from_user.id,
             total_amount=query.total_amount,
             invoice_payload=query.invoice_payload,
         )
 
-        allowed_prefixes = (
-            'balance_',
-            'admin_stars_test_',
-            'simple_sub_',
-            'wheel_spin_',
-            'trial_',
-            'guest_purchase_',
-        )
+        allowed_prefixes = ('balance_', 'admin_stars_test_', 'simple_sub_', 'wheel_spin_', 'trial_', 'guest_purchase_')
 
         if not query.invoice_payload or not query.invoice_payload.startswith(allowed_prefixes):
             logger.warning('Невалидный payload', invoice_payload=query.invoice_payload)
@@ -512,7 +496,7 @@ async def handle_pre_checkout_query(query: types.PreCheckoutQuery):
             return
 
         await query.answer(ok=True)
-        logger.info('Pre-checkout одобрен для пользователя', from_user_id=query.from_user.id)
+        logger.info('✅ Pre-checkout одобрен для пользователя', from_user_id=query.from_user.id)
 
     except Exception as e:
         logger.error('Ошибка в pre_checkout_query', error=e, exc_info=True)
@@ -533,7 +517,7 @@ async def handle_successful_payment(message: types.Message, db: AsyncSession, st
         user_id = message.from_user.id
 
         logger.info(
-            'Успешный Stars платеж',
+            '💳 Успешный Stars платеж',
             user_id=user_id,
             total_amount=payment.total_amount,
             invoice_payload=payment.invoice_payload,
@@ -548,7 +532,7 @@ async def handle_successful_payment(message: types.Message, db: AsyncSession, st
             await message.answer(
                 texts.t(
                     'STARS_PAYMENT_USER_NOT_FOUND',
-                    'Ошибка: пользователь не найден. Обратитесь в поддержку.',
+                    '❌ Ошибка: пользователь не найден. Обратитесь в поддержку.',
                 )
             )
             return
@@ -607,9 +591,7 @@ async def handle_successful_payment(message: types.Message, db: AsyncSession, st
                     await message.bot.delete_message(chat_id, message_id)
                 except Exception as delete_error:  # pragma: no cover - зависит от прав бота
                     logger.warning(
-                        'Не удалось удалить сообщение после оплаты Stars',
-                        label=label,
-                        delete_error=delete_error,
+                        'Не удалось удалить сообщение после оплаты Stars', label=label, delete_error=delete_error
                     )
 
         success = await payment_service.process_stars_payment(
@@ -639,11 +621,11 @@ async def handle_successful_payment(message: types.Message, db: AsyncSession, st
             await message.answer(
                 texts.t(
                     'STARS_PAYMENT_SUCCESS',
-                    '<b>Платеж успешно обработан!</b>\n\n'
-                    'Потрачено звезд: {stars_spent}\n'
-                    'Зачислено на баланс: {amount} ₽\n'
-                    'ID транзакции: {transaction_id}...\n\n'
-                    'Спасибо за пополнение! ',
+                    '🎉 <b>Платеж успешно обработан!</b>\n\n'
+                    '⭐ Потрачено звезд: {stars_spent}\n'
+                    '💰 Зачислено на баланс: {amount} ₽\n'
+                    '🆔 ID транзакции: {transaction_id}...\n\n'
+                    'Спасибо за пополнение! 🚀',
                 ).format(
                     stars_spent=payment.total_amount,
                     amount=amount_text,
@@ -654,7 +636,7 @@ async def handle_successful_payment(message: types.Message, db: AsyncSession, st
             )
 
             logger.info(
-                'Stars платеж успешно обработан',
+                '✅ Stars платеж успешно обработан',
                 user_id=user.id,
                 total_amount=payment.total_amount,
                 format_price=settings.format_price(amount_kopeks),
@@ -664,7 +646,8 @@ async def handle_successful_payment(message: types.Message, db: AsyncSession, st
             await message.answer(
                 texts.t(
                     'STARS_PAYMENT_ENROLLMENT_ERROR',
-                    'Произошла ошибка при зачислении средств. Обратитесь в поддержку, платеж будет проверен вручную.',
+                    '❌ Произошла ошибка при зачислении средств. '
+                    'Обратитесь в поддержку, платеж будет проверен вручную.',
                 )
             )
 
@@ -673,7 +656,7 @@ async def handle_successful_payment(message: types.Message, db: AsyncSession, st
         await message.answer(
             texts.t(
                 'STARS_PAYMENT_PROCESSING_ERROR',
-                'Техническая ошибка при обработке платежа. Обратитесь в поддержку для решения проблемы.',
+                '❌ Техническая ошибка при обработке платежа. Обратитесь в поддержку для решения проблемы.',
             )
         )
 
@@ -683,4 +666,4 @@ def register_stars_handlers(dp: Dispatcher):
 
     dp.message.register(handle_successful_payment, F.successful_payment)
 
-    logger.info('Зарегистрированы обработчики Telegram Stars платежей')
+    logger.info('🌟 Зарегистрированы обработчики Telegram Stars платежей')

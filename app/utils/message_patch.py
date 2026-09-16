@@ -72,9 +72,7 @@ def _prepare_logo_for_send(path: Path) -> Path:
     """
     try:
         size = path.stat().st_size
-        from PIL import (
-            Image,
-        )  # local import — keeps import time fast for setups without Pillow loaded
+        from PIL import Image  # local import — keeps import time fast for setups without Pillow loaded
 
         with Image.open(path) as img:
             width, height = img.size
@@ -89,7 +87,7 @@ def _prepare_logo_for_send(path: Path) -> Path:
             # original raised "[Errno 13] Permission denied" and every send fell back to the
             # oversized original. Hash the resolved source path so distinct logos don't
             # collide or reuse a stale temp file.
-            cache_key = hashlib.sha1(str(path.resolve()).encode(), usedforsecurity=False).hexdigest()[:10]
+            cache_key = hashlib.sha1(str(path.resolve()).encode()).hexdigest()[:10]
             resized_path = Path(tempfile.gettempdir()) / f'{path.stem}.{cache_key}{_LOGO_RESIZED_SUFFIX}'
             # If the cached resized copy exists and is newer than the source, reuse it.
             if (
@@ -129,7 +127,9 @@ def _prepare_logo_for_send(path: Path) -> Path:
 
 # Telegram API: caption limit is 1024 characters AFTER HTML entity parsing (tags stripped)
 TELEGRAM_CAPTION_LIMIT = 1024
-_HTML_TAG_RE = re.compile(r'<[^>]+>')
+# [^<>] держит вырезание тегов линейным: [^>] на строке из одних '<'
+# перебирает хвост заново с каждой позиции.
+_HTML_TAG_RE = re.compile(r'<[^<>]+>')
 
 
 def caption_exceeds_telegram_limit(text: str | None) -> bool:
@@ -194,9 +194,6 @@ _original_edit_text = Message.edit_text
 
 
 async def _text_answer(self: Message, text: str = None, **kwargs):
-    import sys
-
-    print('DEBUG TEXT:', repr(text[:200] if text else None), file=sys.stderr, flush=True)
     """Обёртка над оригинальным Message.answer с подавлением web page preview."""
     kwargs.setdefault('disable_web_page_preview', True)
     return await _original_answer(self, text, **kwargs)
@@ -221,11 +218,11 @@ def _get_language(message: Message) -> str | None:
 def _default_privacy_hint(language: str | None) -> str:
     if language and language.lower().startswith('en'):
         return (
-            'Telegram blocked the contact request button because of your privacy settings. '
+            '⚠️ Telegram blocked the contact request button because of your privacy settings. '
             'Please allow sharing your contact information or send the required details manually.'
         )
     return (
-        'Telegram запретил кнопку запроса контакта из-за настроек приватности. '
+        '⚠️ Telegram запретил кнопку запроса контакта из-за настроек приватности. '
         'Разрешите отправку контакта в настройках Telegram или отправьте данные вручную.'
     )
 
@@ -291,7 +288,7 @@ async def _answer_with_photo(self: Message, text: str = None, **kwargs):
         pass
     language = _get_language(self)
 
-    if LOGO_PATH.exists():
+    if LOGO_PATH.exists():  # noqa: ASYNC240 — stat локального файла, один системный вызов
         try:
             result = await self.answer_photo(get_logo_media(), caption=text, **kwargs)
             _cache_logo_file_id(result)
@@ -370,7 +367,7 @@ async def _edit_with_photo(self: Message, text: str, **kwargs):
                 return await _text_answer(self, text, **kwargs)
         except Exception:
             pass
-        if LOGO_PATH.exists():
+        if LOGO_PATH.exists():  # noqa: ASYNC240 — stat локального файла, один системный вызов
             media = get_logo_media()
         else:
             media = self.photo[-1].file_id

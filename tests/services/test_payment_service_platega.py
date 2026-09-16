@@ -14,7 +14,6 @@ ROOT_DIR = Path(__file__).resolve().parents[2]
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
-import app.services.payment_service as payment_service_module
 from app.config import settings
 from app.services.payment_service import PaymentService
 
@@ -97,8 +96,7 @@ async def test_create_platega_payment_success(monkeypatch: pytest.MonkeyPatch) -
         return DummyLocalPayment(payment_id=777)
 
     monkeypatch.setattr(
-        payment_service_module,
-        'create_platega_payment',
+        'app.services.payment_service.create_platega_payment',
         fake_create_platega_payment,
         raising=False,
     )
@@ -185,8 +183,7 @@ async def test_create_platega_payment_handles_service_errors(monkeypatch: pytest
         pytest.fail('local payment must not be created when Platega call fails')
 
     monkeypatch.setattr(
-        payment_service_module,
-        'create_platega_payment',
+        'app.services.payment_service.create_platega_payment',
         fake_create_platega_payment,
         raising=False,
     )
@@ -228,8 +225,6 @@ def test_get_platega_active_methods_returns_default(monkeypatch: pytest.MonkeyPa
 
 def test_platega_method_display_helpers() -> None:
     assert settings.get_platega_method_display_name(11) == 'Карты (RUB)'
-    title = settings.get_platega_method_display_title(11)
-    assert '<tg-emoji' in title
-    assert 'Карты (RUB)' in title
+    assert settings.get_platega_method_display_title(11) == '💳 Карты (RUB)'
     assert settings.get_platega_method_display_name(999) == 'Метод 999'
     assert settings.get_platega_method_display_title(999) == 'Platega 999'

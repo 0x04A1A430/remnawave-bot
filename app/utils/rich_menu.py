@@ -354,6 +354,34 @@ def _input_rich_message(rich_html: str, language: str | None) -> InputRichMessag
     )
 
 
+def _apply_inline_buttons(
+    rich_html: str,
+    keyboard: InlineKeyboardMarkup,
+    *,
+    for_edit: bool = False,
+) -> tuple[str, InlineKeyboardMarkup | None]:
+    """Переносит клавиатуру внутрь полотна, если это включено настройкой.
+
+    Возвращает пару (html, reply_markup). При переносе клавиатуры под сообщением
+    не остаётся: дублировать кнопки незачем. Для РЕДАКТИРОВАНИЯ отдаётся пустая
+    клавиатура, а не None: у editMessageText отсутствующий reply_markup означает
+    «не трогать», и прежние кнопки остались бы висеть рядом с новыми.
+
+    Если хотя бы одну кнопку перенести нельзя, клавиатура остаётся снаружи
+    целиком — половина кнопок внутри означала бы потерянные кнопки.
+    """
+    if not settings.MAIN_MENU_RICH_INLINE_BUTTONS:
+        return rich_html, keyboard
+
+    # Главное меню всегда уходит в личный чат, поэтому Mini App здесь допустим.
+    buttons_html = render_keyboard_as_rich_html(keyboard, allow_web_app=True)
+    if buttons_html is None:
+        return rich_html, keyboard
+
+    empty = InlineKeyboardMarkup(inline_keyboard=[]) if for_edit else None
+    return rich_html + buttons_html, empty
+
+
 async def _send_rich_menu(
     bot: Bot,
     chat_id: int,
@@ -363,6 +391,7 @@ async def _send_rich_menu(
 ) -> None:
     global _effect_unavailable
 
+    rich_html, keyboard = _apply_inline_buttons(rich_html, keyboard)
     effect_id = (settings.MAIN_MENU_RICH_EFFECT_ID or '').strip() or None
     if _effect_unavailable:
         effect_id = None
@@ -447,6 +476,15 @@ async def try_send_rich_main_menu(
     except TelegramNetworkError as error:
         logger.warning('Сетевая ошибка при отправке rich-меню', error=str(error), chat_id=chat_id)
         return False
+    except Exception:
+        # Всё, что не является ошибкой Telegram API, тоже не должно ронять хендлер.
+        # Свежий сервер может вернуть тип rich-блока, которого установленная aiogram
+        # ещё не знает: строгий discriminated union RichBlock отвергает его, aiogram
+        # оборачивает это в ClientDecodeError, а он наследуется от AiogramError, а НЕ
+        # от TelegramAPIError — то есть пролетает мимо всех except выше. Сообщение при
+        # этом уже доставлено, но пользователь не увидел бы ни rich, ни классики.
+        logger.exception('Непредвиденная ошибка rich-меню, фоллбек на классику', chat_id=chat_id)
+        return False
 
 
 async def try_answer_rich_main_menu(
@@ -487,6 +525,7 @@ async def try_edit_rich_main_menu(
 
     chat_id = message.chat.id
     language = db_user.language
+    rich_html, keyboard = _apply_inline_buttons(rich_html, keyboard, for_edit=True)
 
     is_editable_as_rich = (
         not isinstance(message, InaccessibleMessage)
@@ -563,4 +602,13 @@ async def try_edit_rich_main_menu(
         return False
     except TelegramNetworkError as error:
         logger.warning('Сетевая ошибка при показе rich-меню', error=str(error), chat_id=chat_id)
+        return False
+    except Exception:
+        # Всё, что не является ошибкой Telegram API, тоже не должно ронять хендлер.
+        # Свежий сервер может вернуть тип rich-блока, которого установленная aiogram
+        # ещё не знает: строгий discriminated union RichBlock отвергает его, aiogram
+        # оборачивает это в ClientDecodeError, а он наследуется от AiogramError, а НЕ
+        # от TelegramAPIError — то есть пролетает мимо всех except выше. Сообщение при
+        # этом уже доставлено, но пользователь не увидел бы ни rich, ни классики.
+        logger.exception('Непредвиденная ошибка rich-меню, фоллбек на классику', chat_id=chat_id)
         return False

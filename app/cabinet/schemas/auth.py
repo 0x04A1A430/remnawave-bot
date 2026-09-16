@@ -10,25 +10,18 @@ class TelegramAuthRequest(BaseModel):
 
     init_data: str = Field(..., max_length=4096, description='Telegram WebApp initData string')
     campaign_slug: str | None = Field(
-        None,
-        min_length=1,
-        max_length=64,
-        pattern=r'^[a-zA-Z0-9_-]+$',
-        description='Campaign slug from web link',
+        None, min_length=1, max_length=64, pattern=r'^[a-zA-Z0-9_-]+$', description='Campaign slug from web link'
     )
     referral_code: str | None = Field(
-        None,
-        max_length=32,
-        pattern=r'^[a-zA-Z0-9_-]+$',
-        description='Referral code of inviter',
+        None, max_length=32, pattern=r'^[a-zA-Z0-9_-]+$', description='Referral code of inviter'
     )
     accepted_legal_documents: list[str] | None = Field(
         None,
         max_length=8,
         description=(
-            'Список документов, с которыми пользователь согласился при регистрации '
-            '(см. GET /cabinet/info/legal-consent). Пусто только при отключённой защите; '
-            'для открытых документов обязательно.'
+            'Ключи документов, с которыми пользователь согласился на экране первой авторизации '
+            '(см. GET /cabinet/info/legal-consent). Нужны только при создании НОВОГО аккаунта; '
+            'для существующего игнорируются.'
         ),
     )
 
@@ -44,25 +37,18 @@ class TelegramWidgetAuthRequest(BaseModel):
     auth_date: int = Field(..., description='Unix timestamp of authentication')
     hash: str = Field(..., min_length=64, max_length=64, description='Authentication hash')
     campaign_slug: str | None = Field(
-        None,
-        min_length=1,
-        max_length=64,
-        pattern=r'^[a-zA-Z0-9_-]+$',
-        description='Campaign slug from web link',
+        None, min_length=1, max_length=64, pattern=r'^[a-zA-Z0-9_-]+$', description='Campaign slug from web link'
     )
     referral_code: str | None = Field(
-        None,
-        max_length=32,
-        pattern=r'^[a-zA-Z0-9_-]+$',
-        description='Referral code of inviter',
+        None, max_length=32, pattern=r'^[a-zA-Z0-9_-]+$', description='Referral code of inviter'
     )
     accepted_legal_documents: list[str] | None = Field(
         None,
         max_length=8,
         description=(
-            'Список документов, с которыми пользователь согласился при регистрации '
-            '(см. GET /cabinet/info/legal-consent). Пусто только при отключённой защите; '
-            'для открытых документов обязательно.'
+            'Ключи документов, с которыми пользователь согласился на экране первой авторизации '
+            '(см. GET /cabinet/info/legal-consent). Нужны только при создании НОВОГО аккаунта; '
+            'для существующего игнорируются.'
         ),
     )
 
@@ -72,25 +58,18 @@ class TelegramOIDCAuthRequest(BaseModel):
 
     id_token: str = Field(..., max_length=4096, description='JWT id_token from Telegram OIDC popup')
     campaign_slug: str | None = Field(
-        None,
-        min_length=1,
-        max_length=64,
-        pattern=r'^[a-zA-Z0-9_-]+$',
-        description='Campaign slug from web link',
+        None, min_length=1, max_length=64, pattern=r'^[a-zA-Z0-9_-]+$', description='Campaign slug from web link'
     )
     referral_code: str | None = Field(
-        None,
-        max_length=32,
-        pattern=r'^[a-zA-Z0-9_-]+$',
-        description='Referral code of inviter',
+        None, max_length=32, pattern=r'^[a-zA-Z0-9_-]+$', description='Referral code of inviter'
     )
     accepted_legal_documents: list[str] | None = Field(
         None,
         max_length=8,
         description=(
-            'Список документов, с которыми пользователь согласился при регистрации '
-            '(см. GET /cabinet/info/legal-consent). Пусто только при отключённой защите; '
-            'для открытых документов обязательно.'
+            'Ключи документов, с которыми пользователь согласился на экране первой авторизации '
+            '(см. GET /cabinet/info/legal-consent). Нужны только при создании НОВОГО аккаунта; '
+            'для существующего игнорируются.'
         ),
     )
 
@@ -107,11 +86,7 @@ class EmailVerifyRequest(BaseModel):
 
     token: str = Field(..., max_length=2048, description='Email verification token')
     campaign_slug: str | None = Field(
-        None,
-        min_length=1,
-        max_length=64,
-        pattern=r'^[a-zA-Z0-9_-]+$',
-        description='Campaign slug from web link',
+        None, min_length=1, max_length=64, pattern=r'^[a-zA-Z0-9_-]+$', description='Campaign slug from web link'
     )
 
 
@@ -121,11 +96,7 @@ class EmailLoginRequest(BaseModel):
     email: EmailStr = Field(..., description='Email address')
     password: str = Field(..., min_length=1, max_length=128, description='Password')
     campaign_slug: str | None = Field(
-        None,
-        min_length=1,
-        max_length=64,
-        pattern=r'^[a-zA-Z0-9_-]+$',
-        description='Campaign slug from web link',
+        None, min_length=1, max_length=64, pattern=r'^[a-zA-Z0-9_-]+$', description='Campaign slug from web link'
     )
 
 
@@ -133,6 +104,12 @@ class RefreshTokenRequest(BaseModel):
     """Request to refresh access token."""
 
     refresh_token: str = Field(..., max_length=2048, description='Refresh token')
+
+
+class VerificationResendRequest(BaseModel):
+    """Request to resend the verification email from the «check your inbox» screen."""
+
+    email: EmailStr = Field(..., description='Email address awaiting verification')
 
 
 class PasswordForgotRequest(BaseModel):
@@ -184,38 +161,31 @@ class UserResponse(BaseModel):
         from_attributes = True
 
 
+class UserAvatarResponse(BaseModel):
+    """Фото профиля Telegram для шапки кабинета: подписанная ссылка на прокси медиа или null."""
+
+    photo_url: str | None = None
+
+
 class EmailRegisterStandaloneRequest(BaseModel):
     """Request to register new account with email (no Telegram required)."""
 
     email: EmailStr = Field(..., description='Email address')
     password: str = Field(..., min_length=8, max_length=128, description='Password (min 8 chars)')
     first_name: str | None = Field(None, max_length=64, description='First name')
-    language: str = Field(
-        'ru',
-        max_length=5,
-        pattern=r'^[a-z]{2}$',
-        description='Preferred language (ISO 639-1)',
-    )
+    language: str = Field('ru', max_length=5, pattern=r'^[a-z]{2}$', description='Preferred language (ISO 639-1)')
     referral_code: str | None = Field(
-        None,
-        max_length=32,
-        pattern=r'^[a-zA-Z0-9_-]+$',
-        description='Referral code of inviter',
+        None, max_length=32, pattern=r'^[a-zA-Z0-9_-]+$', description='Referral code of inviter'
     )
     campaign_slug: str | None = Field(
-        None,
-        min_length=1,
-        max_length=64,
-        pattern=r'^[a-zA-Z0-9_-]+$',
-        description='Campaign slug from web link',
+        None, min_length=1, max_length=64, pattern=r'^[a-zA-Z0-9_-]+$', description='Campaign slug from web link'
     )
     accepted_legal_documents: list[str] | None = Field(
         None,
         max_length=8,
         description=(
-            'Список документов, с которыми пользователь согласился при регистрации '
-            '(см. GET /cabinet/info/legal-consent). Пусто только при отключённой защите; '
-            'для открытых документов обязательно.'
+            'Ключи документов, с которыми пользователь согласился на экране первой авторизации '
+            '(см. GET /cabinet/info/legal-consent).'
         ),
     )
 
@@ -258,25 +228,13 @@ class EmailChangeRequest(BaseModel):
 class EmailChangeVerifyRequest(BaseModel):
     """Request to verify email change with code."""
 
-    code: str = Field(
-        ...,
-        min_length=6,
-        max_length=6,
-        pattern=r'^\d{6}$',
-        description='6-digit verification code',
-    )
+    code: str = Field(..., min_length=6, max_length=6, pattern=r'^\d{6}$', description='6-digit verification code')
 
 
 class EmailMergeVerifyRequest(BaseModel):
     """Request to confirm an email account merge with the emailed code."""
 
-    code: str = Field(
-        ...,
-        min_length=6,
-        max_length=6,
-        pattern=r'^\d{6}$',
-        description='6-digit confirmation code',
-    )
+    code: str = Field(..., min_length=6, max_length=6, pattern=r'^\d{6}$', description='6-digit confirmation code')
 
 
 class EmailChangeResponse(BaseModel):

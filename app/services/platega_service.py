@@ -5,12 +5,16 @@ from __future__ import annotations
 import asyncio
 import json
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import aiohttp
 import structlog
 
 from app.config import settings
+
+
+if TYPE_CHECKING:
+    from app.services.payment.payer_identity import PayerIdentity
 
 
 logger = structlog.get_logger(__name__)
@@ -71,6 +75,7 @@ class PlategaService:
     async def create_payment(
         self,
         *,
+        payer: PayerIdentity,
         payment_method: int,
         amount: float,
         currency: str,
@@ -85,6 +90,9 @@ class PlategaService:
                 'amount': round(amount, 2),
                 'currency': currency,
             },
+            # docs.platega.io: metadata.userId / userName обязательны для части
+            # категорий магазинов — без userId отключается антифрод и приём платежей.
+            'metadata': payer.platega_metadata(),
         }
 
         if description:
@@ -102,30 +110,7 @@ class PlategaService:
         # отвечает полем `url` и нужен мерчантам, у которых карточные каскады
         # работают только в v2 (#2934: v1 отдаёт 400 «No available card cascades»).
         endpoint = '/v2/transaction/process' if self.api_version == 'v2' else '/transaction/process'
-        data, http_status = await self._request('POST', endpoint, json_data=body, return_status=True)
-
-        # Авто-fallback v1→v2: если создание через v1 не удалось (HTTP-ошибка,
-        # чаще всего 400 «No available card cascades» для карточных методов,
-        # либо транспортный сбой status=None), повторяем тот же запрос на v2.
-        # Это убирает зависимость от PLATEGA_API_VERSION для карточных каскадов.
-        if self.api_version != 'v2' and (http_status is None or http_status >= 400):
-            logger.info(
-                'Platega create через v1 не удался — повторяем на v2',
-                v1_status=http_status,
-                payment_method=payment_method,
-            )
-            data, http_status = await self._request(
-                'POST', '/v2/transaction/process', json_data=body, return_status=True
-            )
-
-        if http_status is not None and http_status >= 400:
-            logger.error(
-                'Platega create_payment: провайдер вернул HTTP-ошибку',
-                http_status=http_status,
-                data=data,
-            )
-            return None
-        return data
+        return await self._request('POST', endpoint, json_data=body)
 
     async def get_transaction(self, transaction_id: str) -> dict[str, Any] | None:
         # Статусный GET не версионируется: в доках Platega путь один — /transaction/{id}.
@@ -135,6 +120,7 @@ class PlategaService:
     async def create_subscription(
         self,
         *,
+        payer: PayerIdentity,
         amount: float,
         currency: str,
         interval: int,
@@ -146,7 +132,12 @@ class PlategaService:
                 'amount': self._format_amount(amount),
                 'currency': currency,
                 'interval': interval,
+                # docs.platega.io «Создать подписку»: intervalCount обязателен. Каденс
+                # считается «одно списание за interval» (resolve_platega_interval).
+                'intervalCount': 1,
             },
+            # Тот же POST /transaction/process — metadata обязательна и здесь.
+            'metadata': payer.platega_metadata(),
         }
 
         if description:

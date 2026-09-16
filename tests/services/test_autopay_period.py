@@ -37,10 +37,7 @@ if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
 from app.database.crud import subscription as subscription_crud
-from app.database.crud.subscription import (
-    _AUTOPAY_PERIOD_UNSET,
-    update_subscription_autopay,
-)
+from app.database.crud.subscription import _AUTOPAY_PERIOD_UNSET, update_subscription_autopay
 from app.handlers.subscription import autopay as autopay_handler
 from app.services import monitoring_service
 from app.services.monitoring_service import resolve_autopay_period_candidate
@@ -84,9 +81,7 @@ def test_resolve_autopay_period_candidate_with_tariff(candidate, available, expe
     assert resolve_autopay_period_candidate(candidate, tariff) == expected
 
 
-def test_resolve_autopay_period_candidate_falls_back_to_global_when_tariff_has_no_periods(
-    monkeypatch,
-):
+def test_resolve_autopay_period_candidate_falls_back_to_global_when_tariff_has_no_periods(monkeypatch):
     """When the tariff has no priced periods, validation falls back to the global allowlist
     rather than fail-open. Closes the gap where an env-default value drifted past validation
     just because the tariff was misconfigured."""
@@ -98,9 +93,7 @@ def test_resolve_autopay_period_candidate_falls_back_to_global_when_tariff_has_n
     assert resolve_autopay_period_candidate(45, tariff) is None
 
 
-def test_resolve_autopay_period_candidate_falls_back_to_global_when_no_tariff(
-    monkeypatch,
-):
+def test_resolve_autopay_period_candidate_falls_back_to_global_when_no_tariff(monkeypatch):
     """Classic-mode (no tariff) subscriptions still need bounded periods — the global
     renewal-periods allowlist gates them. Without this guard a malicious DB write or env
     typo could ship 999-day extensions."""
@@ -110,12 +103,9 @@ def test_resolve_autopay_period_candidate_falls_back_to_global_when_no_tariff(
     assert resolve_autopay_period_candidate(999, None) is None
 
 
-def test_resolve_autopay_period_candidate_rejects_when_both_allowlists_empty(
-    monkeypatch,
-):
+def test_resolve_autopay_period_candidate_rejects_when_both_allowlists_empty(monkeypatch):
     """Fail-closed: with no allowlist available anywhere, ANY candidate is rejected and the
-    caller falls through to the next tier (tariff.get_shortest_period() / 30-day floor).
-    """
+    caller falls through to the next tier (tariff.get_shortest_period() / 30-day floor)."""
     monkeypatch.setattr(monitoring_service, 'settings', _StubSettings([]))
 
     assert resolve_autopay_period_candidate(30, None) is None
@@ -124,8 +114,7 @@ def test_resolve_autopay_period_candidate_rejects_when_both_allowlists_empty(
 
 def test_resolve_autopay_period_candidate_swallows_broken_tariff(monkeypatch):
     """A tariff whose ``get_available_periods`` raises (corrupted period_prices, ORM lazy-load
-    failure on detached session) must NOT crash autopay — fall through to global allowlist.
-    """
+    failure on detached session) must NOT crash autopay — fall through to global allowlist."""
 
     class BrokenTariff:
         def get_available_periods(self):
@@ -139,9 +128,9 @@ def test_resolve_autopay_period_candidate_swallows_broken_tariff(monkeypatch):
 
 async def test_update_subscription_autopay_sentinel_does_not_touch_period_when_omitted():
     """Legacy callers (autopay.py:154, autopay.py:188, miniapp.py:3733) invoke with positional
-    args only. They MUST not touch autopay_period_days — the sentinel default protects them.
-    """
+    args only. They MUST not touch autopay_period_days — the sentinel default protects them."""
     subscription = SimpleNamespace(
+        id=1,
         user_id=42,
         autopay_enabled=False,
         autopay_days_before=3,
@@ -164,6 +153,7 @@ async def test_update_subscription_autopay_explicit_none_clears_period():
     """When the user clicks "По умолчанию" in the period picker, the handler passes
     period_days=None — explicit clear, distinct from the sentinel default."""
     subscription = SimpleNamespace(
+        id=1,
         user_id=42,
         autopay_enabled=True,
         autopay_days_before=3,
@@ -181,6 +171,7 @@ async def test_update_subscription_autopay_explicit_none_clears_period():
 
 async def test_update_subscription_autopay_explicit_int_sets_period():
     subscription = SimpleNamespace(
+        id=1,
         user_id=42,
         autopay_enabled=True,
         autopay_days_before=3,
@@ -194,6 +185,61 @@ async def test_update_subscription_autopay_explicit_int_sets_period():
     await update_subscription_autopay(db, subscription, enabled=True, period_days=180)
 
     assert subscription.autopay_period_days == 180
+
+
+async def test_update_subscription_autopay_enable_cancels_sbp_recurring(monkeypatch):
+    """Взаимоисключение движков продления ЦЕНТРАЛИЗОВАНО в CRUD: включение
+    balance-autopay через ЛЮБУЮ поверхность (бот, миниапп, админ-тогл) должно
+    отменять активное СБП-автопродление Platega — иначе оба движка списывают
+    параллельно (двойное списание за цикл).
+    """
+    subscription = SimpleNamespace(
+        id=77,
+        user_id=42,
+        autopay_enabled=False,
+        autopay_days_before=3,
+        autopay_period_days=None,
+        updated_at=None,
+    )
+    db = MagicMock()
+    db.commit = AsyncMock()
+    db.refresh = AsyncMock()
+
+    mock_cancel = AsyncMock()
+    monkeypatch.setattr(
+        'app.services.payment.platega.cancel_platega_recurring_for_subscription_safe',
+        mock_cancel,
+    )
+
+    await update_subscription_autopay(db, subscription, enabled=True)
+
+    mock_cancel.assert_awaited_once_with(db, 77)
+
+
+async def test_update_subscription_autopay_disable_does_not_touch_sbp(monkeypatch):
+    """Выключение balance-autopay НЕ должно трогать СБП-автопродление —
+    взаимоисключение работает только на включении."""
+    subscription = SimpleNamespace(
+        id=77,
+        user_id=42,
+        autopay_enabled=True,
+        autopay_days_before=3,
+        autopay_period_days=None,
+        updated_at=None,
+    )
+    db = MagicMock()
+    db.commit = AsyncMock()
+    db.refresh = AsyncMock()
+
+    mock_cancel = AsyncMock()
+    monkeypatch.setattr(
+        'app.services.payment.platega.cancel_platega_recurring_for_subscription_safe',
+        mock_cancel,
+    )
+
+    await update_subscription_autopay(db, subscription, enabled=False)
+
+    mock_cancel.assert_not_awaited()
 
 
 def test_autopay_period_unset_sentinel_is_module_private():
@@ -242,8 +288,7 @@ async def test_set_autopay_period_default_suffix_clears_override(monkeypatch):
 
 async def test_set_autopay_period_valid_int_writes_period(monkeypatch):
     """Suffix matching a valid tariff period → write it to the subscription.
-    Also pins state forwarding to the menu redraw (see default-suffix test docstring).
-    """
+    Also pins state forwarding to the menu redraw (see default-suffix test docstring)."""
     subscription = SimpleNamespace(id=1, autopay_enabled=True, tariff=_make_tariff([30, 90, 180]))
     db = MagicMock()
     db.refresh = AsyncMock()
@@ -274,8 +319,7 @@ async def test_set_autopay_period_valid_int_writes_period(monkeypatch):
 
 async def test_set_autopay_period_invalid_int_alerts_without_writing(monkeypatch):
     """Suffix matching an integer NOT in the tariff allowlist → alert the user and do NOT
-    write. This is the safety net for tariff edits that removed a previously-valid period.
-    """
+    write. This is the safety net for tariff edits that removed a previously-valid period."""
     subscription = SimpleNamespace(id=1, autopay_enabled=True, tariff=_make_tariff([30, 90]))
     db = MagicMock()
     db.refresh = AsyncMock()

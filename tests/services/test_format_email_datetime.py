@@ -18,9 +18,10 @@ pin:
   4. Negative-control: the raw-ISO leak the user reported MUST NOT
      return — passing an aware datetime never produces a string
      containing microseconds.
-  5. Producer call sites in ``notification_delivery_service`` and
-     ``subscription_auto_purchase_service`` actually invoke the
-     helper (source-level pin against regression).
+  5. Producer call sites in ``notification_delivery_service`` invoke the
+     helper (source-level pin against regression). ``subscription_auto_purchase_service``
+     deliberately does NOT: its dates go to the cabinet over WebSocket as
+     machine ISO, the cabinet formats them itself (2026-09-12).
 """
 
 from __future__ import annotations
@@ -64,9 +65,7 @@ def test_explicit_fmt_arg_overrides_settings(monkeypatch: pytest.MonkeyPatch) ->
     assert format_email_datetime(dt, fmt='%Y-%m-%d') == '2026-05-20'
 
 
-def test_settings_override_takes_effect_without_restart(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_settings_override_takes_effect_without_restart(monkeypatch: pytest.MonkeyPatch) -> None:
     """An admin who updates ``EMAIL_DATE_FORMAT`` via system_settings
     UI sees the new format on the very next notification. We pin
     this by mutating the setting and observing the change.
@@ -82,9 +81,7 @@ def test_settings_override_takes_effect_without_restart(
     assert format_email_datetime(dt) == '2026/05/20 07:32:00'
 
 
-def test_empty_or_invalid_setting_falls_back_to_default(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_empty_or_invalid_setting_falls_back_to_default(monkeypatch: pytest.MonkeyPatch) -> None:
     """Operator misconfiguration (empty / non-string) must not crash
     the email pipeline. Fall back to the documented default.
     """
@@ -252,21 +249,22 @@ def test_notification_delivery_service_uses_format_email_datetime() -> None:
     assert 'format_email_datetime(new_expires_at)' in source
 
 
-def test_auto_purchase_service_uses_format_email_datetime() -> None:
-    """All ``expires_at`` / ``new_expires_at`` kwarg call sites in
-    ``subscription_auto_purchase_service`` must use the helper, not
-    raw ``.isoformat()`` which also leaks microseconds + offset.
+def test_auto_purchase_service_sends_machine_dates_to_the_cabinet() -> None:
+    """Даты в WebSocket-событиях кабинета — не для человека.
+
+    Прежняя версия этого теста требовала ``format_email_datetime`` во всех
+    ``expires_at`` / ``new_expires_at`` вызовах сервиса — и кабинет получал
+    «27.11.2030, 12:00», которую ``new Date`` не разбирает: «Действует до:
+    Invalid Date» в 4.8.0. Теперь сервис передаёт сами ``datetime``, ISO в
+    UTC делает ``notify_user_*`` (контракт — tests/cabinet/test_websocket_dates_are_iso.py).
     """
     path = Path(__file__).resolve().parents[2] / 'app' / 'services' / 'subscription_auto_purchase_service.py'
     source = path.read_text(encoding='utf-8')
 
-    # Pre-fix shape — must NOT return.
+    assert 'expires_at=format_email_datetime(' not in source
+    # Ручной .isoformat() тоже не нужен — конвертирует сама функция уведомления.
     assert '.isoformat() if new_end_date else' not in source
     assert ".isoformat() if subscription.end_date else ''" not in source
-
-    # Helper must be imported AND called.
-    assert 'from app.utils.timezone import format_email_datetime' in source
-    assert 'format_email_datetime(' in source
 
 
 def test_helper_signature_is_stable() -> None:

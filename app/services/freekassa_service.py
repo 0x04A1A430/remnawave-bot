@@ -106,19 +106,12 @@ async def get_public_ip() -> str:
                                 logger.info('Определён публичный IP сервера', ip=ip)
                                 return ip
                 except Exception as e:
-                    logger.debug(
-                        'Не удалось получить IP от сервиса',
-                        service_url=service_url,
-                        error=e,
-                    )
+                    logger.debug('Не удалось получить IP от сервиса', service_url=service_url, error=e)
                     continue
 
         # Fallback на известный рабочий IP если ничего не получилось
         fallback_ip = '185.92.183.173'
-        logger.warning(
-            'Не удалось определить публичный IP, используем fallback',
-            fallback_ip=fallback_ip,
-        )
+        logger.warning('Не удалось определить публичный IP, используем fallback', fallback_ip=fallback_ip)
         _cached_public_ip = fallback_ip
         return fallback_ip
 
@@ -186,7 +179,7 @@ class FreekassaService:
         # Приводим amount к int, если это целое число
         final_amount = int(amount) if float(amount).is_integer() else amount
         sign_string = f'{self.shop_id}:{final_amount}:{self.secret1}:{currency}:{order_id}'
-        return hashlib.md5(sign_string.encode(), usedforsecurity=False).hexdigest()  # provider-defined algorithm
+        return hashlib.md5(sign_string.encode()).hexdigest()
 
     def verify_webhook_signature(self, shop_id: int, amount: float, order_id: str, sign: str) -> bool:
         """
@@ -195,9 +188,7 @@ class FreekassaService:
         """
         # Приводим amount к int, если это целое число
         final_amount = int(amount) if float(amount).is_integer() else amount
-        expected_sign = hashlib.md5(
-            f'{shop_id}:{final_amount}:{self.secret2}:{order_id}'.encode(), usedforsecurity=False
-        ).hexdigest()  # provider-defined algorithm
+        expected_sign = hashlib.md5(f'{shop_id}:{final_amount}:{self.secret2}:{order_id}'.encode()).hexdigest()
         return hmac.compare_digest(sign.lower(), expected_sign.lower())
 
     def verify_webhook_ip(self, ip: str) -> bool:
@@ -251,14 +242,10 @@ class FreekassaService:
 
                 data_json = json.dumps(params).encode('utf-8')
                 req = urllib.request.Request(
-                    f'{API_BASE_URL}/orders/create',
-                    data=data_json,
-                    headers={'Content-Type': 'application/json'},
+                    f'{API_BASE_URL}/orders/create', data=data_json, headers={'Content-Type': 'application/json'}
                 )
 
-                # Схема зафиксирована константой API_BASE_URL ('https://...'), пользовательский
-                # ввод попадает только в JSON-тело запроса, а не в URL.
-                with urllib.request.urlopen(req, timeout=30) as response:  # nosec B310
+                with urllib.request.urlopen(req, timeout=30) as response:
                     resp_body = response.read().decode('utf-8')
                     data = json.loads(resp_body)
 

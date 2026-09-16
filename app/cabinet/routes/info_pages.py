@@ -4,11 +4,7 @@ import structlog
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database.crud.info_pages import (
-    get_all_info_pages,
-    get_info_page_by_slug,
-    get_tab_replacements,
-)
+from app.database.crud.info_pages import get_all_info_pages, get_info_page_by_slug, get_tab_replacements
 from app.utils.display_mode import is_visible_in_web
 
 from ..dependencies import get_cabinet_db

@@ -21,6 +21,7 @@ from app.config import settings
 from app.database.crud.referral import create_referral_earning, get_user_campaign_id
 from app.database.crud.user import add_user_balance
 from app.database.models import ReferralEarning, User
+from app.utils.timezone import local_date, local_day_bounds
 
 
 logger = structlog.get_logger(__name__)
@@ -115,8 +116,8 @@ class DiagnosticReport:
             'total_ref_clicks': self.total_ref_clicks,
             'unique_users_clicked': self.unique_users_clicked,
             'lost_referrals': [lr.to_dict() for lr in self.lost_referrals],
-            'analysis_period_start': (self.analysis_period_start.isoformat() if self.analysis_period_start else None),
-            'analysis_period_end': (self.analysis_period_end.isoformat() if self.analysis_period_end else None),
+            'analysis_period_start': self.analysis_period_start.isoformat() if self.analysis_period_start else None,
+            'analysis_period_end': self.analysis_period_end.isoformat() if self.analysis_period_end else None,
             'total_lines_parsed': self.total_lines_parsed,
             'lines_in_period': self.lines_in_period,
         }
@@ -220,7 +221,7 @@ class MissingBonus:
             'referrer_username': self.referrer_username,
             'referrer_full_name': self.referrer_full_name,
             'first_topup_amount_kopeks': self.first_topup_amount_kopeks,
-            'first_topup_date': (self.first_topup_date.isoformat() if self.first_topup_date else None),
+            'first_topup_date': self.first_topup_date.isoformat() if self.first_topup_date else None,
             'missing_referral_bonus': self.missing_referral_bonus,
             'missing_referrer_bonus': self.missing_referrer_bonus,
             'referral_bonus_amount': self.referral_bonus_amount,
@@ -263,6 +264,10 @@ class MissingBonusReport:
     total_missing_to_referrals: int = 0  # Всего не начислено рефералам
     total_missing_to_referrers: int = 0  # Всего не начислено рефереерам
 
+    # Проверка неприменима: включена многоуровневая схема, а весь детектор и
+    # доначисление считают суммы по легаси-ключам REFERRAL_*.
+    unsupported_scheme: bool = False
+
     def to_dict(self) -> dict:
         """Сериализация для Redis."""
         return {
@@ -271,6 +276,7 @@ class MissingBonusReport:
             'missing_bonuses': [mb.to_dict() for mb in self.missing_bonuses],
             'total_missing_to_referrals': self.total_missing_to_referrals,
             'total_missing_to_referrers': self.total_missing_to_referrers,
+            'unsupported_scheme': self.unsupported_scheme,
         }
 
     @classmethod
@@ -283,6 +289,7 @@ class MissingBonusReport:
             missing_bonuses=missing_bonuses,
             total_missing_to_referrals=data.get('total_missing_to_referrals', 0),
             total_missing_to_referrers=data.get('total_missing_to_referrers', 0),
+            unsupported_scheme=data.get('unsupported_scheme', False),
         )
 
 
@@ -305,22 +312,22 @@ class ReferralDiagnosticsService:
 
     def _find_log_file(self) -> Path:
         """Ищет существующий лог-файл, предпочитая свежие."""
-        today = datetime.now(UTC).date()
+        today = local_date()
         candidates = []
 
         for path_str in self.LOG_PATHS:
             path = Path(path_str)
             if path.exists() and path.stat().st_size > 0:
-                mtime = datetime.fromtimestamp(path.stat().st_mtime, tz=UTC).date()
+                mtime = local_date(datetime.fromtimestamp(path.stat().st_mtime, tz=UTC))
                 is_fresh = mtime >= today - timedelta(days=1)
                 candidates.append((path, is_fresh, path.stat().st_mtime))
-                logger.info('Найден лог', path=path, is_fresh=is_fresh)
+                logger.info('📁 Найден лог', path=path, is_fresh=is_fresh)
 
         candidates.sort(key=lambda x: (not x[1], -x[2]))
 
         if candidates:
             selected = candidates[0][0]
-            logger.info('Выбран лог-файл', selected=selected)
+            logger.info('✅ Выбран лог-файл', selected=selected)
             return selected
 
         return Path('logs/current/bot.log')
@@ -339,8 +346,7 @@ class ReferralDiagnosticsService:
 
     async def analyze_today(self, db: AsyncSession) -> DiagnosticReport:
         """Анализирует реферальные события за сегодня."""
-        today = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
-        tomorrow = today + timedelta(days=1)
+        today, tomorrow = local_day_bounds()
         return await self.analyze_period(db, today, tomorrow)
 
     async def analyze_period(self, db: AsyncSession, start_date: datetime, end_date: datetime) -> DiagnosticReport:
@@ -378,7 +384,7 @@ class ReferralDiagnosticsService:
         Returns:
             DiagnosticReport с результатами анализа всего файла
         """
-        logger.info('Начинаю анализ файла', file_path=file_path)
+        logger.info('📂 Начинаю анализ файла', file_path=file_path)
 
         # Парсим весь файл без фильтра по дате
         # Используем широкий диапазон дат (все время)
@@ -402,7 +408,7 @@ class ReferralDiagnosticsService:
             lost_referrals = await self._find_lost_referrals(db, list(user_clicks.values()))
 
             logger.info(
-                'Анализ файла завершён',
+                '✅ Анализ файла завершён',
                 total_lines=total_lines,
                 clicks_count=len(clicks),
                 lost_referrals_count=len(lost_referrals),
@@ -431,24 +437,20 @@ class ReferralDiagnosticsService:
         lines_in_period = 0
 
         if not self.log_path.exists():
-            logger.warning('Лог-файл не найден', log_path=self.log_path)
+            logger.warning('❌ Лог-файл не найден', log_path=self.log_path)
             return clicks, 0, 0
 
         file_size = self.log_path.stat().st_size
-        logger.info(
-            'Читаю лог-файл: ( MB)',
-            log_path=self.log_path,
-            file_size=round(file_size / 1024 / 1024, 2),
-        )
+        logger.info('📂 Читаю лог-файл: ( MB)', log_path=self.log_path, file_size=round(file_size / 1024 / 1024, 2))
 
         # Паттерн timestamp
         timestamp_pattern = re.compile(r'^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}),\d+ - .+ - .+ - (.+)$')
 
         # Паттерны для поиска реф-кликов
         # /start refXXX или /start ref_refXXX
-        start_pattern = re.compile(r'Сообщение от ID:(\d+).*?/start\s+(ref[\w_]+)')
+        start_pattern = re.compile(r'📩 Сообщение от ID:(\d+).*?/start\s+(ref[\w_]+)')
         # Сохранение payload
-        payload_pattern = re.compile(r"Сохранен start payload '(ref[\w_]+)' для пользователя\s*(\d+)")
+        payload_pattern = re.compile(r"💾 Сохранен start payload '(ref[\w_]+)' для пользователя\s*(\d+)")
 
         # Для быстрой фильтрации по дате (только если не пропускаем фильтр)
         use_date_prefix = not skip_date_filter and (end_date - start_date).days <= 31
@@ -514,7 +516,7 @@ class ReferralDiagnosticsService:
             logger.error('Ошибка парсинга логов', error=e, exc_info=True)
 
         logger.info(
-            'Парсинг завершён',
+            '📊 Парсинг завершён',
             total_lines=total_lines,
             lines_in_period=lines_in_period,
             clicks_count=len(clicks),
@@ -554,7 +556,7 @@ class ReferralDiagnosticsService:
                 # Это старый пользователь, который просто зашёл по чужой ссылке
                 is_lost = False
                 logger.debug(
-                    'Пропускаем: пользователь создан раньше клика',
+                    '⏭️ Пропускаем: пользователь создан раньше клика',
                     telegram_id=click.telegram_id,
                     created_at=user.created_at,
                     timestamp=click.timestamp,
@@ -583,7 +585,7 @@ class ReferralDiagnosticsService:
                     )
                 )
 
-        logger.info('Найдено потерянных рефералов', lost_count=len(lost))
+        logger.info('🔍 Найдено потерянных рефералов', lost_count=len(lost))
         return lost
 
     async def _add_to_active_contests(
@@ -600,10 +602,7 @@ class ReferralDiagnosticsService:
         - Реферал зарегистрирован в период конкурса
         - Событие ещё не было добавлено
         """
-        from app.database.crud.referral_contest import (
-            add_contest_event,
-            get_contests_for_events,
-        )
+        from app.database.crud.referral_contest import add_contest_event, get_contests_for_events
 
         if not settings.is_contests_enabled():
             return
@@ -625,9 +624,7 @@ class ReferralDiagnosticsService:
 
                 if user_created_at < contest_start or user_created_at > contest_end:
                     logger.debug(
-                        'Реферал зарегистрирован вне периода конкурса',
-                        referral_id=referral.id,
-                        contest_id=contest.id,
+                        'Реферал зарегистрирован вне периода конкурса', referral_id=referral.id, contest_id=contest.id
                     )
                     continue
 
@@ -641,7 +638,7 @@ class ReferralDiagnosticsService:
                 )
                 if event:
                     logger.info(
-                        'Восстановленный реферал добавлен в конкурс реферер реферал',
+                        '🏆 Восстановленный реферал добавлен в конкурс реферер реферал',
                         contest_id=contest.id,
                         referrer_id=referrer.id,
                         referral_id=referral.id,
@@ -673,16 +670,9 @@ class ReferralDiagnosticsService:
                     event_type='restored_referral_registration',
                 )
                 if event:
-                    logger.info(
-                        'Восстановленный реферал (регистрация) добавлен в конкурс',
-                        contest_id=contest.id,
-                    )
+                    logger.info('🏆 Восстановленный реферал (регистрация) добавлен в конкурс', contest_id=contest.id)
             except Exception as exc:
-                logger.error(
-                    'Не удалось добавить в конкурс регистрации',
-                    contest_id=contest.id,
-                    error=exc,
-                )
+                logger.error('Не удалось добавить в конкурс регистрации', contest_id=contest.id, error=exc)
 
     async def fix_lost_referrals(
         self, db: AsyncSession, lost_referrals: list[LostReferral], apply: bool = False
@@ -701,7 +691,7 @@ class ReferralDiagnosticsService:
         report = FixReport()
 
         if not lost_referrals:
-            logger.info('Нет потерянных рефералов для исправления')
+            logger.info('🔍 Нет потерянных рефералов для исправления')
             return report
 
         # Получаем всех пользователей и рефереров
@@ -743,7 +733,7 @@ class ReferralDiagnosticsService:
                     if apply:
                         user.referred_by_id = referrer.id
                         logger.info(
-                            'Установлен referred_by_id= для пользователя',
+                            '✅ Установлен referred_by_id= для пользователя',
                             referrer_id=referrer.id,
                             telegram_id=user.telegram_id,
                         )
@@ -756,16 +746,22 @@ class ReferralDiagnosticsService:
 
                 first_topup_result = await db.execute(
                     select(Transaction)
-                    .where(
-                        Transaction.user_id == user.id,
-                        Transaction.type == TransactionType.DEPOSIT.value,
-                    )
+                    .where(Transaction.user_id == user.id, Transaction.type == TransactionType.DEPOSIT.value)
                     .order_by(Transaction.created_at.asc())
                     .limit(1)
                 )
                 first_topup = first_topup_result.scalar_one_or_none()
 
-                if first_topup and first_topup.amount_kopeks >= settings.REFERRAL_MINIMUM_TOPUP_KOPEKS:
+                # Восстановление ПРИВЯЗКИ реферала выше безопасно при любой схеме.
+                # Доначисление бонусов — нет: ниже суммы считаются по легаси-ключам
+                # REFERRAL_*, которые в многоуровневой схеме ничем не управляют.
+                bonus_backfill_supported = not settings.is_referral_levels_scheme()
+
+                if (
+                    bonus_backfill_supported
+                    and first_topup
+                    and first_topup.amount_kopeks >= settings.REFERRAL_MINIMUM_TOPUP_KOPEKS
+                ):
                     detail.had_first_topup = True
                     detail.topup_amount_kopeks = first_topup.amount_kopeks
 
@@ -800,15 +796,13 @@ class ReferralDiagnosticsService:
                                 )
                                 user.has_made_first_topup = True
                                 logger.info(
-                                    'Начислен бонус рефералу ₽',
+                                    '💰 Начислен бонус рефералу ₽',
                                     telegram_id=user.telegram_id,
                                     REFERRAL_FIRST_TOPUP_BONUS_KOPEKS=settings.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS / 100,
                                 )
 
                         # 4. Начисляем бонус рефереру
-                        from app.utils.user_utils import (
-                            get_effective_referral_commission_percent,
-                        )
+                        from app.utils.user_utils import get_effective_referral_commission_percent
 
                         commission_percent = get_effective_referral_commission_percent(referrer)
                         commission_amount = int(first_topup.amount_kopeks * commission_percent / 100)
@@ -840,7 +834,7 @@ class ReferralDiagnosticsService:
                                 )
 
                                 logger.info(
-                                    'Начислен бонус рефереру ₽',
+                                    '💰 Начислен бонус рефереру ₽',
                                     telegram_id=referrer.telegram_id or referrer.id,
                                     inviter_bonus=inviter_bonus / 100,
                                 )
@@ -853,12 +847,7 @@ class ReferralDiagnosticsService:
                 report.details.append(detail)
 
             except Exception as e:
-                logger.error(
-                    'Ошибка исправления реферала',
-                    telegram_id=lost.telegram_id,
-                    error=e,
-                    exc_info=True,
-                )
+                logger.error('❌ Ошибка исправления реферала', telegram_id=lost.telegram_id, error=e, exc_info=True)
                 detail.error = str(e)
                 report.errors += 1
                 report.details.append(detail)
@@ -866,16 +855,13 @@ class ReferralDiagnosticsService:
         if apply:
             await db.commit()
             logger.info(
-                'Исправлено рефералов: начислено бонусов: ₽ + ₽',
+                '✅ Исправлено рефералов: начислено бонусов: ₽ + ₽',
                 users_fixed=report.users_fixed,
                 bonuses_to_referrals=report.bonuses_to_referrals / 100,
                 bonuses_to_referrers=report.bonuses_to_referrers / 100,
             )
         else:
-            logger.info(
-                'Предпросмотр: рефералов будут исправлены',
-                users_fixed=report.users_fixed,
-            )
+            logger.info('📋 Предпросмотр: рефералов будут исправлены', users_fixed=report.users_fixed)
 
         return report
 
@@ -896,13 +882,23 @@ class ReferralDiagnosticsService:
 
         report = MissingBonusReport()
 
+        # Детектор ищет ОТСУТСТВИЕ строки с легаси-причиной и считает суммы по
+        # ключам REFERRAL_*. В многоуровневой схеме начисление могло пройти по
+        # другому поводу (регистрация, каждое пополнение) или вовсе днями — такую
+        # пару детектор считает «пропущенной» и доначислил бы деньги ПОВЕРХ уже
+        # выданного. Поэтому на схеме 'levels' проверка не выполняется вовсе.
+        if settings.is_referral_levels_scheme():
+            report.unsupported_scheme = True
+            logger.info('Проверка пропущенных бонусов пропущена: включена многоуровневая схема')
+            return report
+
         # 1. Находим всех рефералов (у кого есть referred_by_id)
         referrals_result = await db.execute(select(User).where(User.referred_by_id.isnot(None)))
         referrals = referrals_result.scalars().all()
         report.total_referrals_checked = len(referrals)
 
         if not referrals:
-            logger.info('Нет рефералов для проверки')
+            logger.info('📊 Нет рефералов для проверки')
             return report
 
         # 2. Собираем ID рефереров
@@ -979,7 +975,7 @@ class ReferralDiagnosticsService:
             report.total_missing_to_referrers += missing.referrer_bonus_amount
 
         logger.info(
-            'Проверка бонусов завершена',
+            '📊 Проверка бонусов завершена',
             total_referrals_checked=report.total_referrals_checked,
             referrals_with_topup=report.referrals_with_topup,
             missing_bonuses_count=len(report.missing_bonuses),
@@ -1006,6 +1002,16 @@ class ReferralDiagnosticsService:
         report = FixReport()
 
         if not missing_bonuses:
+            return report
+
+        # Вторая линия защиты: отчёт мог быть построен ДО переключения схемы и
+        # пролежать в Redis. Начислять по нему легаси-суммы на многоуровневой
+        # установке — это выплата поверх уже выданного, деньгами и повторно.
+        if settings.is_referral_levels_scheme():
+            logger.warning(
+                'Доначисление бонусов отклонено: включена многоуровневая схема',
+                missing_count=len(missing_bonuses),
+            )
             return report
 
         # Загружаем пользователей
@@ -1055,7 +1061,7 @@ class ReferralDiagnosticsService:
                         )
                         referral.has_made_first_topup = True
                         logger.info(
-                            'Начислен бонус рефералу ₽',
+                            '💰 Начислен бонус рефералу ₽',
                             telegram_id=referral.telegram_id,
                             referral_bonus_amount=missing.referral_bonus_amount / 100,
                         )
@@ -1086,7 +1092,7 @@ class ReferralDiagnosticsService:
                             campaign_id=campaign_id,
                         )
                         logger.info(
-                            'Начислен бонус рефереру ₽',
+                            '💰 Начислен бонус рефереру ₽',
                             telegram_id=referrer.telegram_id,
                             referrer_bonus_amount=missing.referrer_bonus_amount / 100,
                         )
@@ -1098,7 +1104,7 @@ class ReferralDiagnosticsService:
                 report.details.append(detail)
 
             except Exception as e:
-                logger.error('Ошибка начисления бонуса', error=e, exc_info=True)
+                logger.error('❌ Ошибка начисления бонуса', error=e, exc_info=True)
                 detail.error = str(e)
                 report.errors += 1
                 report.details.append(detail)
@@ -1106,7 +1112,7 @@ class ReferralDiagnosticsService:
         if apply:
             await db.commit()
             logger.info(
-                'Начислено бонусов: ₽ рефералам + ₽ рефереерам',
+                '✅ Начислено бонусов: ₽ рефералам + ₽ рефереерам',
                 bonuses_to_referrals=report.bonuses_to_referrals / 100,
                 bonuses_to_referrers=report.bonuses_to_referrers / 100,
             )

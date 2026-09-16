@@ -23,10 +23,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from app.services.guest_purchase_service import (
-    GuestPurchaseError,
-    validate_and_calculate,
-)
+from app.services.guest_purchase_service import GuestPurchaseError, validate_and_calculate
 
 
 def _daily_tariff(tariff_id: int = 1, daily_price_kopeks: int = 5000) -> SimpleNamespace:

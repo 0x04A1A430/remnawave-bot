@@ -92,6 +92,7 @@ def test_is_coupon_token_rejects_wrong_shapes() -> None:
 # --- Redemption: validation and status handling ---------------------------
 
 
+@pytest.mark.asyncio
 async def test_invalid_format_never_touches_db() -> None:
     db = AsyncMock()
     with pytest.raises(CouponRedemptionError) as err:
@@ -100,6 +101,7 @@ async def test_invalid_format_never_touches_db() -> None:
     db.execute.assert_not_called()
 
 
+@pytest.mark.asyncio
 async def test_unknown_token_is_invalid() -> None:
     db = AsyncMock()
     lookup = AsyncMock(return_value=None)
@@ -110,6 +112,7 @@ async def test_unknown_token_is_invalid() -> None:
     lookup.assert_awaited_once_with(db, VALID_TOKEN)
 
 
+@pytest.mark.asyncio
 async def test_token_is_normalized_before_lookup() -> None:
     db = AsyncMock()
     lookup = AsyncMock(return_value=None)
@@ -119,6 +122,7 @@ async def test_token_is_normalized_before_lookup() -> None:
     lookup.assert_awaited_once_with(db, VALID_TOKEN)
 
 
+@pytest.mark.asyncio
 async def test_rejection_never_takes_the_row_lock() -> None:
     """Failed links must not hold FOR UPDATE for the rest of the /start handler."""
     db = AsyncMock()
@@ -129,6 +133,7 @@ async def test_rejection_never_takes_the_row_lock() -> None:
     db.refresh.assert_not_called()
 
 
+@pytest.mark.asyncio
 async def test_redeemed_by_same_user_is_distinguishable() -> None:
     coupon = _coupon(status=CouponStatus.REDEEMED.value, redeemed_by=7)
     with patch('app.services.coupon_service.get_coupon_by_token', AsyncMock(return_value=coupon)):
@@ -137,6 +142,7 @@ async def test_redeemed_by_same_user_is_distinguishable() -> None:
     assert err.value.code == 'already_redeemed_by_you'
 
 
+@pytest.mark.asyncio
 async def test_redeemed_by_other_user_is_uniform_invalid() -> None:
     coupon = _coupon(status=CouponStatus.REDEEMED.value, redeemed_by=8)
     with patch('app.services.coupon_service.get_coupon_by_token', AsyncMock(return_value=coupon)):
@@ -145,6 +151,7 @@ async def test_redeemed_by_other_user_is_uniform_invalid() -> None:
     assert err.value.code == 'invalid'
 
 
+@pytest.mark.asyncio
 async def test_revoked_coupon_is_uniform_invalid() -> None:
     coupon = _coupon(status=CouponStatus.REVOKED.value)
     with patch('app.services.coupon_service.get_coupon_by_token', AsyncMock(return_value=coupon)):
@@ -153,6 +160,7 @@ async def test_revoked_coupon_is_uniform_invalid() -> None:
     assert err.value.code == 'invalid'
 
 
+@pytest.mark.asyncio
 async def test_expired_batch_raises_expired() -> None:
     coupon = _coupon(batch=_batch(is_expired=True))
     with patch('app.services.coupon_service.get_coupon_by_token', AsyncMock(return_value=coupon)):
@@ -162,6 +170,7 @@ async def test_expired_batch_raises_expired() -> None:
     assert coupon.status == CouponStatus.ACTIVE.value
 
 
+@pytest.mark.asyncio
 async def test_missing_tariff_is_internal_error() -> None:
     coupon = _coupon(batch=_batch(tariff=None))
     with patch('app.services.coupon_service.get_coupon_by_token', AsyncMock(return_value=coupon)):
@@ -171,8 +180,9 @@ async def test_missing_tariff_is_internal_error() -> None:
     assert coupon.status == CouponStatus.ACTIVE.value
 
 
+@pytest.mark.asyncio
 async def test_concurrent_claim_lost_after_lock_is_rejected() -> None:
-    """The locked re-read must re-check the status вЂ” a concurrent redemption may win."""
+    """The locked re-read must re-check the status — a concurrent redemption may win."""
     coupon = _coupon()
     db = AsyncMock()
 
@@ -191,6 +201,7 @@ async def test_concurrent_claim_lost_after_lock_is_rejected() -> None:
 # --- Redemption: happy path and failure atomicity -------------------------
 
 
+@pytest.mark.asyncio
 async def test_success_claims_under_lock_and_flips_before_remnawave_sync() -> None:
     coupon = _coupon()
     user = _user()
@@ -202,11 +213,11 @@ async def test_success_claims_under_lock_and_flips_before_remnawave_sync() -> No
 
     async def fake_sync(self, db_arg, sub):
         # create_remnawave_user() commits the session internally, so by this
-        # point the coupon MUST already be claimed вЂ” otherwise the grant could
+        # point the coupon MUST already be claimed — otherwise the grant could
         # commit while the coupon is still ACTIVE (double-payout window).
         status_at_sync.append(coupon.status)
-        # 3.0.0: create_remnawave_user РѕС‚РґР°С‘С‚ RemnaWaveUser СЃ С‡РёСЃР»РѕРІС‹Рј `id`;
-        # РїРѕР»СЏ `uuid` Сѓ РїР°РЅРµР»СЊРЅРѕРіРѕ СЋР·РµСЂР° Р±РѕР»СЊС€Рµ РЅРµС‚.
+        # 3.0.0: create_remnawave_user отдаёт RemnaWaveUser с числовым `id`;
+        # поля `uuid` у панельного юзера больше нет.
         return SimpleNamespace(id=4242)
 
     with (
@@ -230,9 +241,10 @@ async def test_success_claims_under_lock_and_flips_before_remnawave_sync() -> No
     assert result.device_limit == 2
 
 
+@pytest.mark.asyncio
 async def test_failed_remnawave_sync_aborts_redemption() -> None:
     """create_remnawave_user swallows API errors and returns None WITHOUT
-    committing вЂ” the redemption must roll back so the coupon is not burned
+    committing — the redemption must roll back so the coupon is not burned
     while the user got no working panel account."""
     coupon = _coupon()
     db = AsyncMock()
@@ -254,6 +266,7 @@ async def test_failed_remnawave_sync_aborts_redemption() -> None:
     db.commit.assert_not_called()
 
 
+@pytest.mark.asyncio
 async def test_grant_failure_rolls_back_and_raises_internal() -> None:
     coupon = _coupon()
     db = AsyncMock()
@@ -275,6 +288,7 @@ async def test_grant_failure_rolls_back_and_raises_internal() -> None:
 # --- Grant branches (single-tariff mode mirrors gift activation) ----------
 
 
+@pytest.mark.asyncio
 async def test_grant_extends_active_subscription(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(type(settings), 'is_multi_tariff_enabled', lambda self: False)
     existing = SimpleNamespace(end_date=datetime.now(UTC) + timedelta(days=5), tariff_id=3)
@@ -293,6 +307,7 @@ async def test_grant_extends_active_subscription(monkeypatch: pytest.MonkeyPatch
     assert kwargs['tariff_id'] == 3
 
 
+@pytest.mark.asyncio
 async def test_grant_replaces_expired_subscription(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(type(settings), 'is_multi_tariff_enabled', lambda self: False)
     existing = SimpleNamespace(end_date=datetime.now(UTC) - timedelta(days=1), tariff_id=99)
@@ -312,6 +327,7 @@ async def test_grant_replaces_expired_subscription(monkeypatch: pytest.MonkeyPat
     assert subscription.tariff_id == 3, 'replaced subscription must be reassigned to the batch tariff'
 
 
+@pytest.mark.asyncio
 async def test_grant_creates_subscription_when_none_exists(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(type(settings), 'is_multi_tariff_enabled', lambda self: False)
     create = AsyncMock(return_value='created')
@@ -330,6 +346,7 @@ async def test_grant_creates_subscription_when_none_exists(monkeypatch: pytest.M
     assert kwargs['commit'] is False
 
 
+@pytest.mark.asyncio
 async def test_grant_multi_tariff_looks_up_by_tariff(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(type(settings), 'is_multi_tariff_enabled', lambda self: True)
     lookup = AsyncMock(return_value=None)

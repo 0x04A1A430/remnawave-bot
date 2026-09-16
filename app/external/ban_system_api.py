@@ -1,7 +1,7 @@
 """
 Ban System API Client.
 
-Client for interacting with the ban monitoring system.
+Client for interacting with the BedolagaBan monitoring system.
 """
 
 from typing import Any
@@ -16,12 +16,7 @@ logger = structlog.get_logger(__name__)
 class BanSystemAPIError(Exception):
     """Ban System API error."""
 
-    def __init__(
-        self,
-        message: str,
-        status_code: int | None = None,
-        response_data: dict | None = None,
-    ):
+    def __init__(self, message: str, status_code: int | None = None, response_data: dict | None = None):
         self.message = message
         self.status_code = status_code
         self.response_data = response_data
@@ -83,11 +78,7 @@ class BanSystemAPI:
                 response_text = await response.text()
 
                 if response.status >= 400:
-                    logger.error(
-                        'Ban System API error',
-                        status=response.status,
-                        response_text=response_text,
-                    )
+                    logger.error('Ban System API error', status=response.status, response_text=response_text)
                     raise BanSystemAPIError(
                         message=f'API error {response.status}: {response_text}',
                         status_code=response.status,
@@ -162,9 +153,7 @@ class BanSystemAPI:
         GET /api/users/over-limit
         """
         return await self._request(
-            'GET',
-            '/api/users/over-limit',
-            params={'limit': limit, 'window': str(window).lower()},
+            'GET', '/api/users/over-limit', params={'limit': limit, 'window': str(window).lower()}
         )
 
     async def search_users(self, query: str) -> dict[str, Any]:
@@ -242,9 +231,7 @@ class BanSystemAPI:
         GET /api/nodes
         """
         return await self._request(
-            'GET',
-            '/api/nodes',
-            params={'include_agent_stats': str(include_agent_stats).lower()},
+            'GET', '/api/nodes', params={'include_agent_stats': str(include_agent_stats).lower()}
         )
 
     # === Agents ===
@@ -297,11 +284,7 @@ class BanSystemAPI:
 
         GET /api/agents/{node_name}/history
         """
-        return await self._request(
-            'GET',
-            f'/api/agents/{node_name}/history',
-            params={'hours': hours, 'limit': limit},
-        )
+        return await self._request('GET', f'/api/agents/{node_name}/history', params={'hours': hours, 'limit': limit})
 
     # === Traffic ===
 

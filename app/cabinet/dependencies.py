@@ -7,12 +7,20 @@ from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.cabinet.auth.registration_access import evaluate_public_registration
 from app.config import settings
 from app.database.crud.user import get_user_by_id
 from app.database.database import AsyncSessionLocal
 from app.database.models import User, UserStatus
 from app.services.blacklist_service import blacklist_service
 from app.services.maintenance_service import maintenance_service
+from app.services.rbac_bootstrap_service import is_user_admin_by_env
+from app.services.registration_access_service import (
+    RegistrationAccessDecision,
+    RegistrationAccessReason,
+    RegistrationChannel,
+)
+from app.services.user_action_log_service import mark_user_seen, schedule_cabinet_action_log
 from app.services.user_revival_service import NotDeletedError, revive_deleted_user
 
 from .auth.jwt_handler import get_token_payload
@@ -145,12 +153,40 @@ async def get_current_cabinet_user(
                 },
             )
 
+    access_decision = None
+    if user.status != UserStatus.ACTIVE.value:
+        if is_user_admin_by_env(user).is_admin:
+            # Same precedence as RegistrationAccessService: the env config is the root
+            # of trust and outranks any status flag, whether or not invite-only is on.
+            # Blocking such an account is refused at every write site, so a non-ACTIVE
+            # admin here is a stale row — usually the broadcast auto-block after the
+            # owner muted the bot — and must not cost them the cabinet.
+            access_decision = RegistrationAccessDecision(True, RegistrationAccessReason.VERIFIED_ADMIN)
+        elif not settings.INVITE_ONLY_ENABLED:
+            access_decision = RegistrationAccessDecision(True, RegistrationAccessReason.INVITE_ONLY_DISABLED)
+        else:
+            access_decision = await evaluate_public_registration(
+                db,
+                channel=RegistrationChannel.CABINET_SESSION,
+                existing_user=user,
+                telegram_id=user.telegram_id,
+                email=user.email,
+                email_verified=bool(user.email_verified),
+                verified_admin=False,
+            )
+
     if user.status != UserStatus.ACTIVE.value:
         # DELETED users with a cryptographically-valid Telegram initData
         # proving the same Telegram identity may be auto-revived: the
         # signature on initData is the moral equivalent of a fresh login.
         can_auto_revive = (
-            user.status == UserStatus.DELETED.value and user.telegram_id is not None and init_data_matches_user
+            user.status == UserStatus.DELETED.value
+            and user.telegram_id is not None
+            and (
+                init_data_matches_user
+                or bool(access_decision and access_decision.reason is RegistrationAccessReason.VERIFIED_ADMIN)
+            )
+            and bool(access_decision and access_decision.allowed)
         )
         if can_auto_revive:
             try:
@@ -163,10 +199,12 @@ async def get_current_cabinet_user(
                 await db.refresh(user)
             except NotDeletedError:
                 # Raced — another request already revived. Treat as success.
-                logger.info(
-                    'Auto-revival race: user already revived by concurrent request',
-                    user_id=user.id,
-                )
+                logger.info('Auto-revival race: user already revived by concurrent request', user_id=user.id)
+        elif access_decision and access_decision.reason is RegistrationAccessReason.VERIFIED_ADMIN:
+            user.status = UserStatus.ACTIVE.value
+            user.updated_at = datetime.now(UTC)
+            await db.commit()
+            await db.refresh(user)
         elif user.status == UserStatus.DELETED.value:
             # DELETED but no proof of identity (no initData or token-only
             # request) → structured friendly error so the frontend can
@@ -199,10 +237,7 @@ async def get_current_cabinet_user(
     # Check maintenance mode (allow admins to pass)
     if maintenance_service.is_maintenance_active():
         # Проверяем админа по telegram_id ИЛИ email
-        is_admin = settings.is_admin(
-            telegram_id=user.telegram_id,
-            email=user.email if user.email_verified else None,
-        )
+        is_admin = settings.is_admin(telegram_id=user.telegram_id, email=user.email if user.email_verified else None)
         if not is_admin:
             status_info = maintenance_service.get_status_info()
             raise HTTPException(
@@ -220,13 +255,10 @@ async def get_current_cabinet_user(
         if user.telegram_id is not None:
             # Skip admin check
             is_admin = settings.is_admin(
-                telegram_id=user.telegram_id,
-                email=user.email if user.email_verified else None,
+                telegram_id=user.telegram_id, email=user.email if user.email_verified else None
             )
             if not is_admin:
-                from app.services.channel_subscription_service import (
-                    channel_subscription_service,
-                )
+                from app.services.channel_subscription_service import channel_subscription_service
 
                 channels_with_status = await channel_subscription_service.get_channels_with_status(user.telegram_id)
                 is_subscribed = (
@@ -243,19 +275,22 @@ async def get_current_cabinet_user(
                         },
                     )
 
-    # Throttled update of cabinet_last_login (at most every 5 minutes)
+    # Троттлинг меток (не чаще раза в пять минут): last_activity двигают все
+    # поверхности — по ней карточка показывает «последнюю активность», а сторож
+    # неактивных решает, кого удалять; cabinet_last_login — только кабинет.
     now = datetime.now(UTC)
+    touched = mark_user_seen(user, now=now)
     if not user.cabinet_last_login or (now - user.cabinet_last_login).total_seconds() > 300:
+        user.cabinet_last_login = now
+        touched = True
+    if touched:
         try:
-            user.cabinet_last_login = now
             await db.commit()
         except Exception:
             pass
 
     # Лог действий юзера в кабинете (мутации) для таймлайна «Активность».
     # Fire-and-forget: гейты (флаг, метод, исключения путей) внутри хелпера.
-    from app.services.user_action_log_service import schedule_cabinet_action_log
-
     schedule_cabinet_action_log(user.id, request.method, request.url.path)
 
     return user

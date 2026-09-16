@@ -44,7 +44,7 @@ def _get_risk_level(risk_score: int) -> str:
 
 @router.get('', response_model=AdminWithdrawalListResponse)
 async def list_withdrawals(
-    withdrawal_status: (Literal['pending', 'approved', 'rejected', 'completed', 'cancelled'] | None) = Query(
+    withdrawal_status: Literal['pending', 'approved', 'rejected', 'completed', 'cancelled'] | None = Query(
         None, alias='status'
     ),
     offset: int = Query(0, ge=0),
@@ -201,9 +201,7 @@ async def approve_withdrawal(
     try:
         from app.bot_factory import create_bot
         from app.config import settings
-        from app.services.notification_delivery_service import (
-            notification_delivery_service,
-        )
+        from app.services.notification_delivery_service import notification_delivery_service
 
         if settings.BOT_TOKEN:
             withdrawal = await db.get(WithdrawalRequest, withdrawal_id)
@@ -211,7 +209,7 @@ async def approve_withdrawal(
             if user and withdrawal:
                 formatted_amount = settings.format_price(withdrawal.amount_kopeks)
                 comment_text = f'\n{request.comment}' if request.comment else ''
-                tg_message = f'Ваш запрос на вывод {formatted_amount} одобрен.{comment_text}'
+                tg_message = f'✅ Ваш запрос на вывод {formatted_amount} одобрен.{comment_text}'
                 bot = create_bot()
                 try:
                     await notification_delivery_service.notify_withdrawal_approved(
@@ -254,9 +252,7 @@ async def reject_withdrawal(
     try:
         from app.bot_factory import create_bot
         from app.config import settings
-        from app.services.notification_delivery_service import (
-            notification_delivery_service,
-        )
+        from app.services.notification_delivery_service import notification_delivery_service
 
         if settings.BOT_TOKEN:
             withdrawal = await db.get(WithdrawalRequest, withdrawal_id)
@@ -264,7 +260,7 @@ async def reject_withdrawal(
             if user and withdrawal:
                 formatted_amount = settings.format_price(withdrawal.amount_kopeks)
                 comment_text = f'\nПричина: {request.comment}' if request.comment else ''
-                tg_message = f'Ваш запрос на вывод {formatted_amount} отклонён.{comment_text}'
+                tg_message = f'❌ Ваш запрос на вывод {formatted_amount} отклонён.{comment_text}'
                 bot = create_bot()
                 try:
                     await notification_delivery_service.notify_withdrawal_rejected(

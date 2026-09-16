@@ -47,9 +47,7 @@ def test_available_options_with_int(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.mark.anyio('asyncio')
-async def test_int_disabled_mid_flow_rejects_and_clears_state(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+async def test_int_disabled_mid_flow_rejects_and_clears_state(monkeypatch: pytest.MonkeyPatch) -> None:
     _enable_overpay(monkeypatch)
     monkeypatch.setattr(settings, 'OVERPAY_INT_ENABLED', False, raising=False)
     monkeypatch.setattr(settings, 'OVERPAY_MIN_AMOUNT_KOPEKS', 10000, raising=False)

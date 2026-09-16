@@ -60,7 +60,7 @@ async def _check_topup_restriction(callback: types.CallbackQuery, db_user: User)
         keyboard.append([InlineKeyboardButton(text='Обжаловать', url=support_url)])
     keyboard.append([InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance', style='danger')])
     await callback.message.edit_text(
-        f'<b>Пополнение ограничено</b>\n\n{reason}',
+        f'🚫 <b>Пополнение ограничено</b>\n\n{reason}',
         parse_mode='HTML',
         reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard),
     )
@@ -129,7 +129,7 @@ async def _create_kassa_ai_payment_and_respond(
                 InlineKeyboardButton(
                     text=texts.t(
                         'PAY_BUTTON',
-                        'Оплатить {amount}₽',
+                        '💳 Оплатить {amount}₽',
                     ).format(amount=f'{amount_rub:.0f}'),
                     url=payment_url,
                     style='success',
@@ -137,7 +137,7 @@ async def _create_kassa_ai_payment_and_respond(
             ],
             [
                 InlineKeyboardButton(
-                    text=texts.t('BACK_BUTTON', 'Назад'),
+                    text=texts.t('BACK_BUTTON', '◀️ Назад'),
                     callback_data='menu_balance',
                     style='danger',
                 )
@@ -147,7 +147,7 @@ async def _create_kassa_ai_payment_and_respond(
 
     response_text = texts.t(
         'KASSA_AI_PAYMENT_CREATED',
-        '<b>Оплата через {name}</b>\n\n'
+        '💳 <b>Оплата через {name}</b>\n\n'
         'Сумма: <b>{amount}₽</b>\n\n'
         'Нажмите кнопку ниже для оплаты.\n'
         'После успешной оплаты баланс будет пополнен автоматически.',
@@ -166,11 +166,7 @@ async def _create_kassa_ai_payment_and_respond(
             parse_mode='HTML',
         )
 
-    logger.info(
-        'KassaAI payment created',
-        telegram_id=db_user.telegram_id,
-        amount_rub=amount_rub,
-    )
+    logger.info('KassaAI payment created', telegram_id=db_user.telegram_id, amount_rub=amount_rub)
 
 
 @error_handler
@@ -195,7 +191,7 @@ async def process_kassa_ai_payment_amount(
         keyboard.append([InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance', style='danger')])
 
         await message.answer(
-            f'<b>Пополнение ограничено</b>\n\n{reason}',
+            f'🚫 <b>Пополнение ограничено</b>\n\n{reason}',
             parse_mode='HTML',
             reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard),
         )
@@ -273,7 +269,7 @@ async def _start_kassa_ai_sub_topup(
     await callback.message.edit_text(
         texts.t(
             'KASSA_AI_ENTER_AMOUNT',
-            '<b>Пополнение через {name}</b>\n\n'
+            '💳 <b>Пополнение через {name}</b>\n\n'
             'Введите сумму пополнения в рублях.\n\n'
             'Минимум: {min_amount}₽\n'
             'Максимум: {max_amount}₽',

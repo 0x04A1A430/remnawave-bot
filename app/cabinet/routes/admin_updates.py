@@ -43,7 +43,7 @@ class ReleasesResponse(BaseModel):
 
 # ============ Cabinet releases cache ============
 
-CABINET_REPO = '@xilarobot-DEV/@xilarobot-cabinet'
+CABINET_REPO = 'BEDOLAGA-DEV/bedolaga-cabinet'
 _cabinet_cache: dict = {}
 _cabinet_last_check: datetime | None = None
 _CACHE_TTL = 3600
@@ -60,10 +60,7 @@ async def _fetch_cabinet_releases(force: bool = False) -> list[dict]:
 
     try:
         timeout = aiohttp.ClientTimeout(total=10)
-        async with (
-            aiohttp.ClientSession(timeout=timeout) as session,
-            session.get(url) as response,
-        ):
+        async with aiohttp.ClientSession(timeout=timeout) as session, session.get(url) as response:
             if response.status == 200:
                 data = await response.json()
                 releases = []
@@ -81,10 +78,7 @@ async def _fetch_cabinet_releases(force: bool = False) -> list[dict]:
                 _cabinet_last_check = datetime.now(UTC)
                 logger.info('Fetched cabinet releases from GitHub', releases_count=len(releases))
                 return releases
-            logger.warning(
-                'GitHub API returned status for cabinet releases',
-                response_status=response.status,
-            )
+            logger.warning('GitHub API returned status for cabinet releases', response_status=response.status)
             return _cabinet_cache.get('releases', [])
     except TimeoutError:
         logger.warning('Timeout fetching cabinet releases from GitHub')

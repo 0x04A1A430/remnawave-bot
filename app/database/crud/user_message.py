@@ -13,11 +13,7 @@ logger = structlog.get_logger(__name__)
 
 
 async def create_user_message(
-    db: AsyncSession,
-    message_text: str,
-    created_by: int | None = None,
-    is_active: bool = True,
-    sort_order: int = 0,
+    db: AsyncSession, message_text: str, created_by: int | None = None, is_active: bool = True, sort_order: int = 0
 ) -> UserMessage:
     is_valid, error_message = validate_html_tags(message_text)
     if not is_valid:
@@ -40,11 +36,7 @@ async def create_user_message(
     await db.commit()
     await db.refresh(message)
 
-    logger.info(
-        'Создано сообщение ID пользователем',
-        message_id=message.id,
-        created_by=created_by,
-    )
+    logger.info('✅ Создано сообщение ID пользователем', message_id=message.id, created_by=created_by)
     return message
 
 
@@ -124,7 +116,7 @@ async def update_user_message(
     await db.commit()
     await db.refresh(message)
 
-    logger.info('Обновлено сообщение ID', message_id=message_id)
+    logger.info('📝 Обновлено сообщение ID', message_id=message_id)
     return message
 
 
@@ -141,7 +133,7 @@ async def toggle_user_message_status(db: AsyncSession, message_id: int) -> UserM
     await db.refresh(message)
 
     status_text = 'активировано' if message.is_active else 'деактивировано'
-    logger.info('Сообщение ID', message_id=message_id, status_text=status_text)
+    logger.info('🔄 Сообщение ID', message_id=message_id, status_text=status_text)
 
     return message
 
@@ -155,7 +147,7 @@ async def delete_user_message(db: AsyncSession, message_id: int) -> bool:
     await db.delete(message)
     await db.commit()
 
-    logger.info('Удалено сообщение ID', message_id=message_id)
+    logger.info('🗑️ Удалено сообщение ID', message_id=message_id)
     return True
 
 

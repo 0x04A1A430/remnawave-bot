@@ -391,10 +391,7 @@ async def reset_menu_layout(
     await load_button_styles_cache()
     await load_menu_layout_cache()
 
-    logger.info(
-        'Admin reset menu layout and button styles to defaults',
-        telegram_id=admin.telegram_id,
-    )
+    logger.info('Admin reset menu layout and button styles to defaults', telegram_id=admin.telegram_id)
 
     layout = get_cached_menu_layout()
     button_styles = get_cached_button_styles()

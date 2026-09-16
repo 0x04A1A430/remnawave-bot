@@ -59,7 +59,7 @@ async def _send_pal24_payment_message(
             await message.answer(
                 texts.t(
                     'PAL24_PAYMENT_ERROR',
-                    'Ошибка создания платежа PayPalych. Попробуйте позже или обратитесь в поддержку.',
+                    '❌ Ошибка создания платежа PayPalych. Попробуйте позже или обратитесь в поддержку.',
                 )
             )
             await state.clear()
@@ -73,7 +73,7 @@ async def _send_pal24_payment_message(
             await message.answer(
                 texts.t(
                     'PAL24_PAYMENT_ERROR',
-                    'Ошибка создания платежа PayPalych. Попробуйте позже или обратитесь в поддержку.',
+                    '❌ Ошибка создания платежа PayPalych. Попробуйте позже или обратитесь в поддержку.',
                 )
             )
             await state.clear()
@@ -91,7 +91,7 @@ async def _send_pal24_payment_message(
 
         default_sbp_text = texts.t(
             'PAL24_SBP_PAY_BUTTON',
-            'Оплатить через PayPalych (СБП)',
+            '🏦 Оплатить через PayPalych (СБП)',
         )
         sbp_button_text = settings.get_pal24_sbp_button_text(default_sbp_text)
 
@@ -114,7 +114,7 @@ async def _send_pal24_payment_message(
 
         default_card_text = texts.t(
             'PAL24_CARD_PAY_BUTTON',
-            'Оплатить банковской картой (PayPalych)',
+            '💳 Оплатить банковской картой (PayPalych)',
         )
         card_button_text = settings.get_pal24_card_button_text(default_card_text)
 
@@ -175,18 +175,18 @@ async def _send_pal24_payment_message(
         message_template = texts.t(
             'PAL24_PAYMENT_INSTRUCTIONS',
             (
-                '<b>Оплата через PayPalych</b>\n\n'
-                'Сумма: {amount}\n'
-                'ID счета: {bill_id}\n\n'
-                '<b>Инструкция:</b>\n{steps}\n\n'
-                'Если возникнут проблемы, обратитесь в {support}'
+                '🏦 <b>Оплата через PayPalych</b>\n\n'
+                '💰 Сумма: {amount}\n'
+                '🆔 ID счета: {bill_id}\n\n'
+                '📱 <b>Инструкция:</b>\n{steps}\n\n'
+                '❓ Если возникнут проблемы, обратитесь в {support}'
             ),
         )
 
         keyboard_rows = pay_buttons + [
             [
                 types.InlineKeyboardButton(
-                    text=texts.t('CHECK_STATUS_BUTTON', 'Проверить статус'),
+                    text=texts.t('CHECK_STATUS_BUTTON', '📊 Проверить статус'),
                     callback_data=f'check_pal24_{local_payment_id}',
                     style='primary',
                 )
@@ -248,7 +248,7 @@ async def _send_pal24_payment_message(
         await message.answer(
             texts.t(
                 'PAL24_PAYMENT_ERROR',
-                'Ошибка создания платежа PayPalych. Попробуйте позже или обратитесь в поддержку.',
+                '❌ Ошибка создания платежа PayPalych. Попробуйте позже или обратитесь в поддержку.',
             )
         )
         await state.clear()
@@ -272,14 +272,15 @@ async def start_pal24_payment(
         keyboard.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance', style='danger')])
 
         await callback.message.edit_text(
-            f'<b>Пополнение ограничено</b>\n\n{reason}\n\nЕсли вы считаете это ошибкой, вы можете обжаловать решение.',
+            f'🚫 <b>Пополнение ограничено</b>\n\n{reason}\n\n'
+            'Если вы считаете это ошибкой, вы можете обжаловать решение.',
             reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
         )
         await callback.answer()
         return
 
     if not settings.is_pal24_enabled():
-        await callback.answer('Оплата через PayPalych временно недоступна', show_alert=True)
+        await callback.answer('❌ Оплата через PayPalych временно недоступна', show_alert=True)
         return
 
     # Формируем текст сообщения в зависимости от доступных способов оплаты
@@ -296,7 +297,7 @@ async def start_pal24_payment(
     message_text = texts.t(
         'PAL24_TOPUP_PROMPT',
         (
-            f'<b>Оплата через PayPalych ({payment_methods_text})</b>\n\n'
+            f'🏦 <b>Оплата через PayPalych ({payment_methods_text})</b>\n\n'
             'Введите сумму для пополнения от 100 до 1 000 000 ₽.\n'
             f'Оплата проходит через PayPalych ({payment_methods_text}).'
         ),
@@ -339,7 +340,8 @@ async def process_pal24_payment_amount(
         keyboard.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance', style='danger')])
 
         await message.answer(
-            f'<b>Пополнение ограничено</b>\n\n{reason}\n\nЕсли вы считаете это ошибкой, вы можете обжаловать решение.',
+            f'🚫 <b>Пополнение ограничено</b>\n\n{reason}\n\n'
+            'Если вы считаете это ошибкой, вы можете обжаловать решение.',
             reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
             parse_mode='HTML',
         )
@@ -347,13 +349,13 @@ async def process_pal24_payment_amount(
         return
 
     if not settings.is_pal24_enabled():
-        await message.answer('Оплата через PayPalych временно недоступна')
+        await message.answer('❌ Оплата через PayPalych временно недоступна')
         return
 
     if amount_kopeks < settings.PAL24_MIN_AMOUNT_KOPEKS:
         min_rubles = settings.PAL24_MIN_AMOUNT_KOPEKS / 100
         await message.answer(
-            f'Минимальная сумма для оплаты через PayPalych: {min_rubles:.0f} ₽',
+            f'❌ Минимальная сумма для оплаты через PayPalych: {min_rubles:.0f} ₽',
             reply_markup=get_back_keyboard(db_user.language),
         )
         return
@@ -361,7 +363,7 @@ async def process_pal24_payment_amount(
     if amount_kopeks > settings.PAL24_MAX_AMOUNT_KOPEKS:
         max_rubles = settings.PAL24_MAX_AMOUNT_KOPEKS / 100
         await message.answer(
-            f'Максимальная сумма для оплаты через PayPalych: {max_rubles:,.0f} ₽'.replace(',', ' '),
+            f'❌ Максимальная сумма для оплаты через PayPalych: {max_rubles:,.0f} ₽'.replace(',', ' '),
             reply_markup=get_back_keyboard(db_user.language),
         )
         return
@@ -381,10 +383,7 @@ async def process_pal24_payment_amount(
         try:
             await message.bot.delete_message(prompt_chat_id, prompt_message_id)
         except Exception as delete_error:  # pragma: no cover - diagnostic
-            logger.warning(
-                'Не удалось удалить сообщение с запросом суммы PayPalych',
-                delete_error=delete_error,
-            )
+            logger.warning('Не удалось удалить сообщение с запросом суммы PayPalych', delete_error=delete_error)
 
     if len(available_methods) == 1:
         await _send_pal24_payment_message(
@@ -406,7 +405,7 @@ async def process_pal24_payment_amount(
             [
                 types.InlineKeyboardButton(
                     text=settings.get_pal24_sbp_button_text(
-                        texts.t('PAL24_SBP_PAY_BUTTON', 'Оплатить через PayPalych (СБП)')
+                        texts.t('PAL24_SBP_PAY_BUTTON', '🏦 Оплатить через PayPalych (СБП)')
                     ),
                     callback_data='pal24_method_sbp',
                     style='success',
@@ -418,10 +417,7 @@ async def process_pal24_payment_amount(
             [
                 types.InlineKeyboardButton(
                     text=settings.get_pal24_card_button_text(
-                        texts.t(
-                            'PAL24_CARD_PAY_BUTTON',
-                            'Оплатить банковской картой (PayPalych)',
-                        )
+                        texts.t('PAL24_CARD_PAY_BUTTON', '💳 Оплатить банковской картой (PayPalych)')
                     ),
                     callback_data='pal24_method_card',
                     style='success',
@@ -453,7 +449,7 @@ async def handle_pal24_method_selection(
         await callback.answer(
             texts.t(
                 'PAL24_PAYMENT_ERROR',
-                'Ошибка создания платежа PayPalych. Попробуйте позже или обратитесь в поддержку.',
+                '❌ Ошибка создания платежа PayPalych. Попробуйте позже или обратитесь в поддержку.',
             ),
             show_alert=True,
         )
@@ -486,21 +482,21 @@ async def check_pal24_payment_status(
         status_info = await payment_service.get_pal24_payment_status(db, local_payment_id)
 
         if not status_info:
-            await callback.answer('Платеж не найден', show_alert=True)
+            await callback.answer('❌ Платеж не найден', show_alert=True)
             return
 
         payment = status_info['payment']
 
         status_labels = {
-            'NEW': ('', 'Ожидает оплаты'),
-            'PROCESS': ('', 'Обрабатывается'),
-            'SUCCESS': ('', 'Оплачен'),
-            'FAIL': ('', 'Отменен'),
-            'UNDERPAID': ('', 'Недоплата'),
-            'OVERPAID': ('', 'Переплата'),
+            'NEW': ('⏳', 'Ожидает оплаты'),
+            'PROCESS': ('⌛', 'Обрабатывается'),
+            'SUCCESS': ('✅', 'Оплачен'),
+            'FAIL': ('❌', 'Отменен'),
+            'UNDERPAID': ('⚠️', 'Недоплата'),
+            'OVERPAID': ('⚠️', 'Переплата'),
         }
 
-        emoji, status_text = status_labels.get(payment.status, ('', 'Неизвестно'))
+        emoji, status_text = status_labels.get(payment.status, ('❓', 'Неизвестно'))
 
         metadata = payment.metadata_json or {}
         links_meta = metadata.get('links') if isinstance(metadata, dict) else None
@@ -570,28 +566,30 @@ async def check_pal24_payment_status(
             card_link = payment.link_page_url
 
         message_lines = [
-            'Статус платежа PayPalych:',
+            '🏦 Статус платежа PayPalych:',
             '',
-            f'ID счета: {payment.bill_id}',
-            f'Сумма: {settings.format_price(payment.amount_kopeks)}',
-            f'Статус: {emoji} {status_text}',
-            f'Создан: {payment.created_at.strftime("%d.%m.%Y %H:%M")}',
+            f'🆔 ID счета: {payment.bill_id}',
+            f'💰 Сумма: {settings.format_price(payment.amount_kopeks)}',
+            f'📊 Статус: {emoji} {status_text}',
+            f'📅 Создан: {payment.created_at.strftime("%d.%m.%Y %H:%M")}',
         ]
 
         if payment.is_paid:
             message_lines.append('')
-            message_lines.append('Платеж успешно завершен! Средства уже на балансе.')
+            message_lines.append('✅ Платеж успешно завершен! Средства уже на балансе.')
         elif payment.status in {'NEW', 'PROCESS'}:
             message_lines.append('')
-            message_lines.append('Платеж еще не завершен. Оплатите счет и проверьте статус позже.')
+            message_lines.append('⏳ Платеж еще не завершен. Оплатите счет и проверьте статус позже.')
             if sbp_link:
                 message_lines.append('')
-                message_lines.append(f'СБП: {sbp_link}')
+                message_lines.append(f'🏦 СБП: {sbp_link}')
             if card_link and card_link != sbp_link:
-                message_lines.append(f'Банковская карта: {card_link}')
+                message_lines.append(f'💳 Банковская карта: {card_link}')
         elif payment.status in {'FAIL', 'UNDERPAID', 'OVERPAID'}:
             message_lines.append('')
-            message_lines.append(f'Платеж не завершен корректно. Обратитесь в {settings.get_support_contact_display()}')
+            message_lines.append(
+                f'❌ Платеж не завершен корректно. Обратитесь в {settings.get_support_contact_display()}'
+            )
 
         from app.localization.texts import get_texts
 
@@ -603,7 +601,7 @@ async def check_pal24_payment_status(
         if not payment.is_paid and payment.status in {'NEW', 'PROCESS'}:
             default_sbp_text = texts.t(
                 'PAL24_SBP_PAY_BUTTON',
-                'Оплатить через PayPalych (СБП)',
+                '🏦 Оплатить через PayPalych (СБП)',
             )
             sbp_button_text = settings.get_pal24_sbp_button_text(default_sbp_text)
 
@@ -619,7 +617,7 @@ async def check_pal24_payment_status(
 
             default_card_text = texts.t(
                 'PAL24_CARD_PAY_BUTTON',
-                'Оплатить банковской картой (PayPalych)',
+                '💳 Оплатить банковской картой (PayPalych)',
             )
             card_button_text = settings.get_pal24_card_button_text(default_card_text)
 
@@ -637,7 +635,7 @@ async def check_pal24_payment_status(
         keyboard_rows = pay_rows + [
             [
                 types.InlineKeyboardButton(
-                    text=texts.t('CHECK_STATUS_BUTTON', 'Проверить статус'),
+                    text=texts.t('CHECK_STATUS_BUTTON', '📊 Проверить статус'),
                     callback_data=f'check_pal24_{local_payment_id}',
                     style='primary',
                 )
@@ -662,4 +660,4 @@ async def check_pal24_payment_status(
 
     except Exception as e:
         logger.error('Ошибка проверки статуса PayPalych', error=e)
-        await callback.answer('Ошибка проверки статуса', show_alert=True)
+        await callback.answer('❌ Ошибка проверки статуса', show_alert=True)

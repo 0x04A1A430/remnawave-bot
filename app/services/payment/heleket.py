@@ -240,7 +240,7 @@ class HeleketPaymentMixin:
             payer_amount=str(payer_amount) if payer_amount is not None else None,
             payer_currency=str(payer_currency) if payer_currency is not None else None,
             exchange_rate=exchange_rate,
-            discount_percent=(int(discount_percent) if isinstance(discount_percent, (int, float)) else None),
+            discount_percent=int(discount_percent) if isinstance(discount_percent, (int, float)) else None,
             paid_at=paid_at,
             payment_url=payment_url,
             metadata={metadata_key: payload},
@@ -254,14 +254,7 @@ class HeleketPaymentMixin:
         invoice_message_removed = False
 
         status_normalized = (status or '').lower()
-        is_final = status_normalized in {
-            'paid',
-            'paid_over',
-            'cancel',
-            'fail',
-            'system_fail',
-            'refund_paid',
-        }
+        is_final = status_normalized in {'paid', 'paid_over', 'cancel', 'fail', 'system_fail', 'refund_paid'}
 
         if getattr(self, 'bot', None) and invoice_message and is_final:
             chat_id = invoice_message.get('chat_id')
@@ -270,11 +263,7 @@ class HeleketPaymentMixin:
                 try:
                     await self.bot.delete_message(chat_id, message_id)
                 except Exception as delete_error:  # pragma: no cover - depends on rights
-                    logger.warning(
-                        'Не удалось удалить счёт Heleket',
-                        message_id=message_id,
-                        delete_error=delete_error,
-                    )
+                    logger.warning('Не удалось удалить счёт Heleket', message_id=message_id, delete_error=delete_error)
                 else:
                     metadata.pop('invoice_message', None)
                     invoice_message_removed = True
@@ -290,18 +279,12 @@ class HeleketPaymentMixin:
                 )
                 updated_payment.metadata_json = metadata
             except Exception as error:  # pragma: no cover - diagnostics
-                logger.warning(
-                    'Не удалось обновить метаданные Heleket после удаления счёта',
-                    error=error,
-                )
+                logger.warning('Не удалось обновить метаданные Heleket после удаления счёта', error=error)
 
         heleket_lock_crud = import_module('app.database.crud.heleket')
         locked = await heleket_lock_crud.get_heleket_payment_by_id_for_update(db, updated_payment.id)
         if not locked:
-            logger.error(
-                'Heleket: не удалось заблокировать платёж',
-                payment_id=updated_payment.id,
-            )
+            logger.error('Heleket: не удалось заблокировать платёж', payment_id=updated_payment.id)
             return None
         updated_payment = locked
 
@@ -314,19 +297,13 @@ class HeleketPaymentMixin:
             return updated_payment
 
         if status_normalized not in {'paid', 'paid_over'}:
-            logger.info(
-                'Heleket платеж в статусе , зачисление не требуется',
-                uuid=updated_payment.uuid,
-                status=status,
-            )
+            logger.info('Heleket платеж в статусе , зачисление не требуется', uuid=updated_payment.uuid, status=status)
             return updated_payment
 
         amount_kopeks = updated_payment.amount_kopeks
         if amount_kopeks <= 0:
             logger.error(
-                'Heleket платеж имеет некорректную сумму',
-                uuid=updated_payment.uuid,
-                amount=updated_payment.amount,
+                'Heleket платеж имеет некорректную сумму', uuid=updated_payment.uuid, amount=updated_payment.amount
             )
             return None
 
@@ -373,10 +350,7 @@ class HeleketPaymentMixin:
         get_user_by_id = payment_module.get_user_by_id
         user = await get_user_by_id(db, updated_payment.user_id)
         if not user:
-            logger.error(
-                'Пользователь не найден для Heleket платежа',
-                user_id=updated_payment.user_id,
-            )
+            logger.error('Пользователь не найден для Heleket платежа', user_id=updated_payment.user_id)
             return None
 
         # Lock user row to prevent concurrent balance race conditions
@@ -428,15 +402,13 @@ class HeleketPaymentMixin:
         user = await get_user_by_id(db, user.id) or user
 
         if getattr(self, 'bot', None):
-            topup_status = 'Первое пополнение' if was_first_topup else 'Пополнение'
+            topup_status = '🆕 Первое пополнение' if was_first_topup else '🔄 Пополнение'
             referrer_info = format_referrer_info(user)
             subscription = getattr(user, 'subscription', None)
             promo_group = user.get_primary_promo_group()
 
             try:
-                from app.services.admin_notification_service import (
-                    AdminNotificationService,
-                )
+                from app.services.admin_notification_service import AdminNotificationService
 
                 notification_service = AdminNotificationService(self.bot)
                 await notification_service.send_balance_topup_notification(
@@ -459,18 +431,20 @@ class HeleketPaymentMixin:
 
                     exchange_rate_value = updated_payment.exchange_rate or 0
                     rate_text = (
-                        f'Курс: 1 RUB = {1 / exchange_rate_value:.4f} {updated_payment.payer_currency}'
+                        f'💱 Курс: 1 RUB = {1 / exchange_rate_value:.4f} {updated_payment.payer_currency}'
                         if exchange_rate_value and updated_payment.payer_currency
                         else None
                     )
 
                     message_lines = [
-                        '<b>Пополнение успешно!</b>',
-                        f'Сумма: {settings.format_price(amount_kopeks)}',
-                        'Способ: Heleket',
+                        '✅ <b>Пополнение успешно!</b>',
+                        f'💰 Сумма: {settings.format_price(amount_kopeks)}',
+                        '💳 Способ: Heleket',
                     ]
                     if updated_payment.payer_amount and updated_payment.payer_currency:
-                        message_lines.append(f'Оплата: {updated_payment.payer_amount} {updated_payment.payer_currency}')
+                        message_lines.append(
+                            f'🪙 Оплата: {updated_payment.payer_amount} {updated_payment.payer_currency}'
+                        )
                     if rate_text:
                         message_lines.append(rate_text)
 
@@ -483,10 +457,7 @@ class HeleketPaymentMixin:
                 except Exception as error:  # pragma: no cover
                     logger.error('Ошибка отправки уведомления пользователю Heleket', error=error)
             else:
-                logger.info(
-                    'Пропуск Telegram-уведомления Heleket для email-пользователя',
-                    user_id=user.id,
-                )
+                logger.info('Пропуск Telegram-уведомления Heleket для email-пользователя', user_id=user.id)
 
         # Автопокупка из сохранённой корзины и уведомление о корзине
         try:
@@ -497,10 +468,7 @@ class HeleketPaymentMixin:
             )
         except Exception as error:
             logger.error(
-                'Ошибка при работе с автоактивацией для пользователя',
-                user_id=user.id,
-                error=error,
-                exc_info=True,
+                'Ошибка при работе с автоактивацией для пользователя', user_id=user.id, error=error, exc_info=True
             )
 
         return updated_payment
@@ -542,11 +510,7 @@ class HeleketPaymentMixin:
                 order_id=payment.order_id,
             )
         except Exception as error:  # pragma: no cover - defensive
-            logger.exception(
-                'Ошибка получения статуса Heleket платежа',
-                uuid=payment.uuid,
-                error=error,
-            )
+            logger.exception('Ошибка получения статуса Heleket платежа', uuid=payment.uuid, error=error)
         else:
             if response:
                 result = response.get('result') if isinstance(response, dict) else None
@@ -554,9 +518,7 @@ class HeleketPaymentMixin:
                     payload = dict(result)
                 else:
                     logger.error(
-                        'Некорректный ответ Heleket API при проверке платежа',
-                        uuid=payment.uuid,
-                        response=response,
+                        'Некорректный ответ Heleket API при проверке платежа', uuid=payment.uuid, response=response
                     )
 
         if payload is None:

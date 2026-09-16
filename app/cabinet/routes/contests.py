@@ -16,10 +16,7 @@ from app.database.crud.contest import (
     get_attempt,
     increment_winner_count,
 )
-from app.database.crud.subscription import (
-    get_active_subscriptions_by_user_id,
-    get_subscription_by_user_id,
-)
+from app.database.crud.subscription import get_active_subscriptions_by_user_id, get_subscription_by_user_id
 from app.database.models import SubscriptionStatus, User
 
 
@@ -119,16 +116,20 @@ async def _award_prize(db: AsyncSession, user_id: int, prize_type: str, prize_va
         if not subscription:
             return 'Error: subscription not found'
 
+        # Оверлей грейса, осевший в подписке (v4.10–4.11), — не её срок: вернуть до расчёта.
+        from app.services.grace_access_echo import undo_grace_overlay_echo
+
+        await undo_grace_overlay_echo(db, subscription)
         subscription.end_date = subscription.end_date + timedelta(days=days)
         subscription.updated_at = datetime.now(UTC)
+        # Условия тарифа на новый срок: база тарифа + активные докупки.
+        from app.database.crud.subscription import reconcile_tariff_traffic_limit
+
+        await reconcile_tariff_traffic_limit(db, subscription)
         await db.commit()
         await db.refresh(subscription)
 
-        logger.info(
-            'Extended subscription for user by days (contest prize)',
-            user_id=user_id,
-            days=days,
-        )
+        logger.info('🎁 Extended subscription for user by days (contest prize)', user_id=user_id, days=days)
         return f'Subscription extended by {days} days'
 
     if prize_type == 'balance':
@@ -150,7 +151,7 @@ async def _award_prize(db: AsyncSession, user_id: int, prize_type: str, prize_va
         await db.commit()
         await db.refresh(user)
 
-        logger.info('Added to balance for user (contest prize)', amount=amount, user_id=user_id)
+        logger.info('🎁 Added to balance for user (contest prize)', amount=amount, user_id=user_id)
         return f'Balance increased by {amount}'
 
     logger.warning('Unknown prize type', prize_type=prize_type)
@@ -326,7 +327,7 @@ async def get_contest_game(
         instructions = 'Decrypt the cipher and enter the answer!'
 
     elif game_type == GAME_EMOJI:
-        question = round_obj.payload.get('question', '')
+        question = round_obj.payload.get('question', '🤔')
         emoji_list = question.split()
         random.shuffle(emoji_list)
         game_data = {
@@ -425,20 +426,14 @@ async def submit_contest_answer(
         is_winner = correct and answer.upper() == correct
 
     # Record attempt
-    await create_attempt(
-        db,
-        round_id=round_obj.id,
-        user_id=user.id,
-        answer=str(answer),
-        is_winner=is_winner,
-    )
+    await create_attempt(db, round_id=round_obj.id, user_id=user.id, answer=str(answer), is_winner=is_winner)
 
     if is_winner:
         await increment_winner_count(db, round_obj)
         prize_text = await _award_prize(db, user.id, tpl.prize_type, tpl.prize_value)
         return ContestResult(
             is_winner=True,
-            message=f'Congratulations! You won! {prize_text}',
+            message=f'🎉 Congratulations! You won! {prize_text}',
             prize_type=tpl.prize_type,
             prize_value=tpl.prize_value,
         )

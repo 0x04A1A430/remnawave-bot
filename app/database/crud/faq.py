@@ -33,7 +33,7 @@ async def set_faq_enabled(db: AsyncSession, language: str, enabled: bool) -> Faq
     await db.refresh(setting)
 
     logger.info(
-        'Статус FAQ для языка %s обновлен: %s',
+        '✅ Статус FAQ для языка %s обновлен: %s',
         language,
         'enabled' if setting.is_enabled else 'disabled',
     )
@@ -94,7 +94,7 @@ async def create_faq_page(
     await db.commit()
     await db.refresh(page)
 
-    logger.info('Создана страница FAQ для языка', page_id=page.id, language=language)
+    logger.info('✅ Создана страница FAQ для языка', page_id=page.id, language=language)
 
     return page
 
@@ -122,7 +122,7 @@ async def update_faq_page(
     await db.commit()
     await db.refresh(page)
 
-    logger.info('Страница FAQ обновлена', page_id=page.id)
+    logger.info('✅ Страница FAQ обновлена', page_id=page.id)
 
     return page
 
@@ -130,7 +130,7 @@ async def update_faq_page(
 async def delete_faq_page(db: AsyncSession, page_id: int) -> None:
     await db.execute(delete(FaqPage).where(FaqPage.id == page_id))
     await db.commit()
-    logger.info('Страница FAQ удалена', page_id=page_id)
+    logger.info('🗑️ Страница FAQ удалена', page_id=page_id)
 
 
 async def bulk_update_order(

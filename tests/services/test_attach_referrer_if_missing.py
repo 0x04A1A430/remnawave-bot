@@ -114,10 +114,7 @@ async def test_no_op_when_user_already_has_referrer(db: AsyncMock) -> None:
     user = _user(referred_by_id=999)
 
     with (
-        patch(
-            'app.services.referral_service.get_pending_referral',
-            AsyncMock(return_value=None),
-        ) as _gpr,
+        patch('app.services.referral_service.get_pending_referral', AsyncMock(return_value=None)) as _gpr,
         patch('app.services.referral_service.process_referral_registration', AsyncMock()) as fire,
     ):
         result = await attach_referrer_if_missing(db, user, source='unit_test')
@@ -133,10 +130,7 @@ async def test_no_op_when_no_pending_and_no_code(db: AsyncMock) -> None:
     user = _user()
 
     with (
-        patch(
-            'app.services.referral_service.get_pending_referral',
-            AsyncMock(return_value=None),
-        ),
+        patch('app.services.referral_service.get_pending_referral', AsyncMock(return_value=None)),
         patch('app.services.referral_service.process_referral_registration', AsyncMock()) as fire,
     ):
         result = await attach_referrer_if_missing(db, user, source='unit_test')
@@ -157,14 +151,8 @@ async def test_attaches_referrer_from_explicit_code(db: AsyncMock) -> None:
     referrer = _referrer(user_id=200, telegram_id=888)
 
     with (
-        patch(
-            'app.database.crud.user.get_user_by_referral_code',
-            AsyncMock(return_value=referrer),
-        ),
-        patch(
-            'app.services.referral_service.get_pending_referral',
-            AsyncMock(return_value=None),
-        ) as gpr,
+        patch('app.database.crud.user.get_user_by_referral_code', AsyncMock(return_value=referrer)),
+        patch('app.services.referral_service.get_pending_referral', AsyncMock(return_value=None)) as gpr,
         patch('app.services.referral_service.clear_pending_referral', AsyncMock()),
         patch('app.services.referral_service.process_referral_registration', AsyncMock()) as fire,
     ):
@@ -193,10 +181,7 @@ async def test_attaches_referrer_from_redis_pending_when_no_code(db: AsyncMock) 
             'app.services.referral_service.get_pending_referral',
             AsyncMock(return_value={'referrer_id': 200, 'referral_code': 'ABCD'}),
         ),
-        patch(
-            'app.services.referral_service.get_user_by_id',
-            AsyncMock(return_value=referrer),
-        ),
+        patch('app.services.referral_service.get_user_by_id', AsyncMock(return_value=referrer)),
         patch('app.services.referral_service.clear_pending_referral', AsyncMock()) as clear,
         patch('app.services.referral_service.process_referral_registration', AsyncMock()) as fire,
     ):
@@ -216,10 +201,7 @@ async def test_explicit_code_takes_precedence_over_redis(db: AsyncMock) -> None:
     code_referrer = _referrer(user_id=300, telegram_id=900)
 
     with (
-        patch(
-            'app.database.crud.user.get_user_by_referral_code',
-            AsyncMock(return_value=code_referrer),
-        ),
+        patch('app.database.crud.user.get_user_by_referral_code', AsyncMock(return_value=code_referrer)),
         patch(
             'app.services.referral_service.get_pending_referral',
             AsyncMock(return_value={'referrer_id': 999, 'referral_code': 'stale'}),
@@ -246,10 +228,7 @@ async def test_rejects_self_referral_by_id(db: AsyncMock) -> None:
     self_referrer = _referrer(user_id=100, telegram_id=555)
 
     with (
-        patch(
-            'app.database.crud.user.get_user_by_referral_code',
-            AsyncMock(return_value=self_referrer),
-        ),
+        patch('app.database.crud.user.get_user_by_referral_code', AsyncMock(return_value=self_referrer)),
         patch('app.services.referral_service.process_referral_registration', AsyncMock()) as fire,
     ):
         result = await attach_referrer_if_missing(db, user, referral_code='X', source='unit_test')
@@ -266,10 +245,7 @@ async def test_rejects_self_referral_by_telegram_id(db: AsyncMock) -> None:
     self_referrer = _referrer(user_id=200, telegram_id=555)
 
     with (
-        patch(
-            'app.database.crud.user.get_user_by_referral_code',
-            AsyncMock(return_value=self_referrer),
-        ),
+        patch('app.database.crud.user.get_user_by_referral_code', AsyncMock(return_value=self_referrer)),
         patch('app.services.referral_service.process_referral_registration', AsyncMock()) as fire,
     ):
         result = await attach_referrer_if_missing(db, user, referral_code='X', source='unit_test')
@@ -285,10 +261,7 @@ async def test_rejects_self_referral_by_email(db: AsyncMock) -> None:
     self_referrer = _referrer(user_id=200, email='alice@example.com')
 
     with (
-        patch(
-            'app.database.crud.user.get_user_by_referral_code',
-            AsyncMock(return_value=self_referrer),
-        ),
+        patch('app.database.crud.user.get_user_by_referral_code', AsyncMock(return_value=self_referrer)),
         patch('app.services.referral_service.process_referral_registration', AsyncMock()) as fire,
     ):
         result = await attach_referrer_if_missing(db, user, referral_code='X', source='unit_test')
@@ -315,10 +288,7 @@ async def test_commit_failure_rolls_back_and_returns_none(db: AsyncMock) -> None
     db.commit = AsyncMock(side_effect=RuntimeError('connection lost'))
 
     with (
-        patch(
-            'app.database.crud.user.get_user_by_referral_code',
-            AsyncMock(return_value=referrer),
-        ),
+        patch('app.database.crud.user.get_user_by_referral_code', AsyncMock(return_value=referrer)),
         patch('app.services.referral_service.process_referral_registration', AsyncMock()) as fire,
     ):
         result = await attach_referrer_if_missing(db, user, referral_code='X', source='unit_test')
@@ -339,10 +309,7 @@ async def test_registration_event_failure_still_keeps_attachment(db: AsyncMock) 
     referrer = _referrer(user_id=200)
 
     with (
-        patch(
-            'app.database.crud.user.get_user_by_referral_code',
-            AsyncMock(return_value=referrer),
-        ),
+        patch('app.database.crud.user.get_user_by_referral_code', AsyncMock(return_value=referrer)),
         patch('app.services.referral_service.clear_pending_referral', AsyncMock()),
         patch(
             'app.services.referral_service.process_referral_registration',
@@ -414,14 +381,7 @@ async def test_process_referral_registration_skips_duplicate_pending_row() -> No
 
     db = AsyncMock()
 
-    new_user = SimpleNamespace(
-        id=10,
-        telegram_id=1,
-        referred_by_id=20,
-        language='ru',
-        first_name='',
-        email=None,
-    )
+    new_user = SimpleNamespace(id=10, telegram_id=1, referred_by_id=20, language='ru', first_name='', email=None)
     referrer = SimpleNamespace(id=20, telegram_id=2, language='ru', first_name='Inviter', email=None)
 
     # SELECT existing pending row → returns a row (it already exists).
@@ -430,10 +390,7 @@ async def test_process_referral_registration_skips_duplicate_pending_row() -> No
     db.execute = AsyncMock(return_value=existing_row)
 
     with (
-        patch(
-            'app.services.referral_service.get_user_by_id',
-            AsyncMock(side_effect=[new_user, referrer]),
-        ),
+        patch('app.services.referral_service.get_user_by_id', AsyncMock(side_effect=[new_user, referrer])),
         patch('app.services.referral_service.create_referral_earning', AsyncMock()) as create_earning,
     ):
         result = await process_referral_registration(db, new_user_id=10, referrer_id=20, bot=None)
@@ -449,14 +406,7 @@ async def test_process_referral_registration_inserts_first_pending_row() -> None
 
     db = AsyncMock()
 
-    new_user = SimpleNamespace(
-        id=10,
-        telegram_id=1,
-        referred_by_id=20,
-        language='ru',
-        first_name='',
-        email=None,
-    )
+    new_user = SimpleNamespace(id=10, telegram_id=1, referred_by_id=20, language='ru', first_name='', email=None)
     referrer = SimpleNamespace(id=20, telegram_id=None, language='ru', first_name='Inviter', email=None)
     # No telegram_id on referrer → notification path short-circuits and
     # doesn't try to call bot.send_message; keeps the test simple.
@@ -469,14 +419,8 @@ async def test_process_referral_registration_inserts_first_pending_row() -> None
     # (not at module scope), so we must patch the source module, not
     # `app.services.referral_service.referral_contest_service`.
     with (
-        patch(
-            'app.services.referral_service.get_user_by_id',
-            AsyncMock(side_effect=[new_user, referrer]),
-        ),
-        patch(
-            'app.services.referral_service.get_user_campaign_id',
-            AsyncMock(return_value=None),
-        ),
+        patch('app.services.referral_service.get_user_by_id', AsyncMock(side_effect=[new_user, referrer])),
+        patch('app.services.referral_service.get_user_campaign_id', AsyncMock(return_value=None)),
         patch('app.services.referral_service.create_referral_earning', AsyncMock()) as create_earning,
         patch(
             'app.services.referral_contest_service.referral_contest_service.on_referral_registration',
@@ -515,10 +459,7 @@ async def test_helper_lazy_creates_bot_when_caller_omits_it(db: AsyncMock) -> No
             return None
 
     with (
-        patch(
-            'app.database.crud.user.get_user_by_referral_code',
-            AsyncMock(return_value=referrer),
-        ),
+        patch('app.database.crud.user.get_user_by_referral_code', AsyncMock(return_value=referrer)),
         patch('app.services.referral_service.clear_pending_referral', AsyncMock()),
         patch('app.bot_factory.create_bot', return_value=_CtxMgr()),
         patch('app.services.referral_service.process_referral_registration', AsyncMock()) as fire,
@@ -557,11 +498,7 @@ def test_cabinet_retroactive_calls_pass_none_for_referral_code() -> None:
     auth_path = Path(__file__).resolve().parents[2] / 'app' / 'cabinet' / 'routes' / 'auth.py'
     source = auth_path.read_text(encoding='utf-8')
 
-    forbidden = [
-        'cabinet_telegram_retroactive',
-        'cabinet_widget_retroactive',
-        'cabinet_oidc_retroactive',
-    ]
+    forbidden = ['cabinet_telegram_retroactive', 'cabinet_widget_retroactive', 'cabinet_oidc_retroactive']
     for src_tag in forbidden:
         idx = source.find(src_tag)
         assert idx >= 0, f'expected to find a retroactive call site tagged {src_tag!r}'
@@ -586,9 +523,7 @@ def test_cabinet_retroactive_calls_pass_none_for_referral_code() -> None:
 
 
 @pytest.mark.asyncio
-async def test_concurrent_attach_uses_conditional_update_not_unconditional_write(
-    db: AsyncMock,
-) -> None:
+async def test_concurrent_attach_uses_conditional_update_not_unconditional_write(db: AsyncMock) -> None:
     """REGRESSION: the helper must use ``UPDATE ... WHERE referred_by_id IS NULL``
     so a concurrent session can't displace an already-attached referrer.
 
@@ -610,10 +545,7 @@ async def test_concurrent_attach_uses_conditional_update_not_unconditional_write
     db.execute = _capture_execute
 
     with (
-        patch(
-            'app.database.crud.user.get_user_by_referral_code',
-            AsyncMock(return_value=referrer),
-        ),
+        patch('app.database.crud.user.get_user_by_referral_code', AsyncMock(return_value=referrer)),
         patch('app.services.referral_service.clear_pending_referral', AsyncMock()),
         patch('app.services.referral_service.process_referral_registration', AsyncMock()),
     ):
@@ -651,10 +583,7 @@ async def test_concurrent_attach_loser_does_not_fire_event(db: AsyncMock) -> Non
     db.execute = _execute_zero_rowcount
 
     with (
-        patch(
-            'app.database.crud.user.get_user_by_referral_code',
-            AsyncMock(return_value=referrer),
-        ),
+        patch('app.database.crud.user.get_user_by_referral_code', AsyncMock(return_value=referrer)),
         patch('app.services.referral_service.clear_pending_referral', AsyncMock()) as clear,
         patch('app.services.referral_service.process_referral_registration', AsyncMock()) as fire,
     ):
@@ -674,10 +603,7 @@ async def test_helper_uses_caller_supplied_bot_when_provided(db: AsyncMock) -> N
     caller_bot = AsyncMock(name='caller_bot')
 
     with (
-        patch(
-            'app.database.crud.user.get_user_by_referral_code',
-            AsyncMock(return_value=referrer),
-        ),
+        patch('app.database.crud.user.get_user_by_referral_code', AsyncMock(return_value=referrer)),
         patch('app.services.referral_service.clear_pending_referral', AsyncMock()),
         patch('app.bot_factory.create_bot') as factory,
         patch('app.services.referral_service.process_referral_registration', AsyncMock()) as fire,

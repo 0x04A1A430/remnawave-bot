@@ -82,12 +82,7 @@ async def test_create_payment_success(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
     service = YooKassaService()
-    monkeypatch.setattr(
-        settings,
-        'YOOKASSA_DEFAULT_RECEIPT_EMAIL',
-        'fallback@example.com',
-        raising=False,
-    )
+    monkeypatch.setattr(settings, 'YOOKASSA_DEFAULT_RECEIPT_EMAIL', 'fallback@example.com', raising=False)
 
     result = await service.create_payment(
         amount=140.0,
@@ -131,9 +126,7 @@ async def test_create_payment_without_contacts(monkeypatch: pytest.MonkeyPatch) 
 
 
 @pytest.mark.anyio('asyncio')
-async def test_create_payment_returns_none_when_not_configured(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+async def test_create_payment_returns_none_when_not_configured(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, 'YOOKASSA_SHOP_ID', '', raising=False)
     monkeypatch.setattr(settings, 'YOOKASSA_SECRET_KEY', '', raising=False)
     service = YooKassaService()
@@ -151,12 +144,7 @@ async def test_create_sbp_payment_success(monkeypatch: pytest.MonkeyPatch) -> No
     _prepare_config(monkeypatch)
     monkeypatch.setattr(asyncio, 'get_running_loop', DummyLoop, raising=False)
     monkeypatch.setattr(Configuration, 'configure', lambda *args, **kwargs: None, raising=False)
-    monkeypatch.setattr(
-        settings,
-        'YOOKASSA_DEFAULT_RECEIPT_EMAIL',
-        'fallback@example.com',
-        raising=False,
-    )
+    monkeypatch.setattr(settings, 'YOOKASSA_DEFAULT_RECEIPT_EMAIL', 'fallback@example.com', raising=False)
 
     response_obj = SimpleNamespace(
         id='sbp_001',

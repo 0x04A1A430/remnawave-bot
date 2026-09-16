@@ -4,11 +4,7 @@ from datetime import UTC, datetime, timedelta
 
 import structlog
 from aiogram import Dispatcher, F, types
-from aiogram.exceptions import (
-    TelegramBadRequest,
-    TelegramForbiddenError,
-    TelegramRetryAfter,
-)
+from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError, TelegramRetryAfter
 from aiogram.fsm.context import FSMContext
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.exc import InterfaceError
@@ -49,21 +45,14 @@ from app.services.pinned_message_service import (
 )
 from app.states import AdminStates
 from app.utils.decorators import admin_required, error_handler
-from app.utils.miniapp_buttons import (
-    BUTTON_KEY_TO_CABINET_PATH,
-    build_miniapp_or_callback_button,
-)
+from app.utils.miniapp_buttons import BUTTON_KEY_TO_CABINET_PATH, build_miniapp_or_callback_button
+from app.utils.timezone import local_day_start
 
 
 logger = structlog.get_logger(__name__)
 
 
-async def safe_edit_or_send_text(
-    callback: types.CallbackQuery,
-    text: str,
-    reply_markup=None,
-    parse_mode: str = 'HTML',
-):
+async def safe_edit_or_send_text(callback: types.CallbackQuery, text: str, reply_markup=None, parse_mode: str = 'HTML'):
     """
     Безопасно редактирует сообщение или удаляет и отправляет новое.
     Нужно для случаев, когда текущее сообщение - медиа (фото/видео),
@@ -79,10 +68,7 @@ async def safe_edit_or_send_text(
             except Exception:
                 pass
             await callback.bot.send_message(
-                chat_id=callback.message.chat.id,
-                text=text,
-                reply_markup=reply_markup,
-                parse_mode=parse_mode,
+                chat_id=callback.message.chat.id, text=text, reply_markup=reply_markup, parse_mode=parse_mode
             )
         else:
             raise
@@ -101,9 +87,7 @@ CABINET_MINIAPP_BUTTON_KEYS = {
 }
 
 
-def get_message_buttons_selector_keyboard(
-    language: str = 'ru',
-) -> types.InlineKeyboardMarkup:
+def get_message_buttons_selector_keyboard(language: str = 'ru') -> types.InlineKeyboardMarkup:
     return get_updated_message_buttons_selector_keyboard(list(DEFAULT_SELECTED_BUTTONS), language)
 
 
@@ -138,10 +122,7 @@ def create_broadcast_keyboard(
                 )
             else:
                 row_buttons.append(
-                    types.InlineKeyboardButton(
-                        text=button_config['text'],
-                        callback_data=button_config['callback'],
-                    )
+                    types.InlineKeyboardButton(text=button_config['text'], callback_data=button_config['callback'])
                 )
         if row_buttons:
             keyboard.append(row_buttons)
@@ -154,11 +135,21 @@ def create_broadcast_keyboard(
             action_value = btn.get('action_value', '')
             if not label or not action_value:
                 continue
+            # Необязательный custom emoji перед текстом кнопки (#3025)
+            icon_emoji = btn.get('icon_custom_emoji_id') or None
             if action_type == 'url':
-                keyboard.append([types.InlineKeyboardButton(text=label, url=action_value)])
+                keyboard.append(
+                    [types.InlineKeyboardButton(text=label, url=action_value, icon_custom_emoji_id=icon_emoji)]
+                )
             else:
                 # callback type
-                keyboard.append([types.InlineKeyboardButton(text=label, callback_data=action_value)])
+                keyboard.append(
+                    [
+                        types.InlineKeyboardButton(
+                            text=label, callback_data=action_value, icon_custom_emoji_id=icon_emoji
+                        )
+                    ]
+                )
 
     if not keyboard:
         return None
@@ -197,8 +188,7 @@ async def _persist_broadcast_result(
                 broadcast_history = await session.get(BroadcastHistory, broadcast_id)
                 if not broadcast_history:
                     logger.critical(
-                        'Не удалось найти запись BroadcastHistory для записи результатов',
-                        broadcast_id=broadcast_id,
+                        'Не удалось найти запись BroadcastHistory для записи результатов', broadcast_id=broadcast_id
                     )
                     return
 
@@ -249,7 +239,7 @@ async def _persist_broadcast_result(
 @error_handler
 async def show_messages_menu(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
     text = """
-<b>Управление рассылками</b>
+📨 <b>Управление рассылками</b>
 
 Выберите тип рассылки:
 
@@ -258,14 +248,11 @@ async def show_messages_menu(callback: types.CallbackQuery, db_user: User, db: A
 - <b>По критериям</b> - настраиваемые фильтры
 - <b>История</b> - просмотр предыдущих рассылок
 
-️ Будьте осторожны с массовыми рассылками!
+⚠️ Будьте осторожны с массовыми рассылками!
 """
 
     await safe_edit_or_send_text(
-        callback,
-        text,
-        reply_markup=get_admin_messages_keyboard(db_user.language),
-        parse_mode='HTML',
+        callback, text, reply_markup=get_admin_messages_keyboard(db_user.language), parse_mode='HTML'
     )
     await callback.answer()
 
@@ -288,23 +275,23 @@ async def show_pinned_message_menu(
         media_line = ''
         if pinned_message.media_type:
             media_label = 'Фото' if pinned_message.media_type == 'photo' else 'Видео'
-            media_line = f'Медиа: {media_label}\n'
-        position_line = '↑ Отправлять перед меню' if pinned_message.send_before_menu else '↓ Отправлять после меню'
+            media_line = f'📎 Медиа: {media_label}\n'
+        position_line = '⬆️ Отправлять перед меню' if pinned_message.send_before_menu else '⬇️ Отправлять после меню'
         start_mode_line = (
-            'При каждом /start' if pinned_message.send_on_every_start else 'Только один раз и при обновлении'
+            '🔁 При каждом /start' if pinned_message.send_on_every_start else '🚫 Только один раз и при обновлении'
         )
         body = (
-            '<b>Закрепленное сообщение</b>\n\n'
-            'Текущий текст:\n'
+            '📌 <b>Закрепленное сообщение</b>\n\n'
+            '📝 Текущий текст:\n'
             f'<code>{content_preview}</code>\n\n'
             f'{media_line}'
             f'{position_line}\n'
             f'{start_mode_line}\n'
-            f'Обновлено: {timestamp_text}'
+            f'🕒 Обновлено: {timestamp_text}'
         )
     else:
         body = (
-            '<b>Закрепленное сообщение</b>\n\n'
+            '📌 <b>Закрепленное сообщение</b>\n\n'
             'Сообщение не задано. Отправьте новый текст, чтобы разослать и закрепить его у пользователей.'
         )
 
@@ -329,11 +316,11 @@ async def prompt_pinned_message_update(
 ):
     await state.set_state(AdminStates.editing_pinned_message)
     await callback.message.edit_text(
-        '<b>Новое закрепленное сообщение</b>\n\n'
+        '✏️ <b>Новое закрепленное сообщение</b>\n\n'
         'Пришлите текст, фото или видео, которое нужно закрепить.\n'
         'Бот отправит его всем активным пользователям, открепит старое и закрепит новое без уведомлений.',
         reply_markup=types.InlineKeyboardMarkup(
-            inline_keyboard=[[types.InlineKeyboardButton(text='Отмена', callback_data='admin_pinned_message')]]
+            inline_keyboard=[[types.InlineKeyboardButton(text='❌ Отмена', callback_data='admin_pinned_message')]]
         ),
         parse_mode='HTML',
     )
@@ -394,7 +381,7 @@ async def delete_pinned_message(
         return
 
     await callback.message.edit_text(
-        '<b>Удаление закрепленного сообщения</b>\n\nПодождите, пока бот открепит сообщение у пользователей...',
+        '🗑️ <b>Удаление закрепленного сообщения</b>\n\nПодождите, пока бот открепит сообщение у пользователей...',
         parse_mode='HTML',
     )
 
@@ -405,7 +392,7 @@ async def delete_pinned_message(
 
     if not deleted:
         await callback.message.edit_text(
-            'Не удалось найти активное закрепленное сообщение для удаления',
+            '❌ Не удалось найти активное закрепленное сообщение для удаления',
             reply_markup=get_admin_messages_keyboard(db_user.language),
             parse_mode='HTML',
         )
@@ -414,10 +401,10 @@ async def delete_pinned_message(
 
     total = unpinned_count + failed_count
     await callback.message.edit_text(
-        '<b>Закрепленное сообщение удалено</b>\n\n'
-        f'Чатов обработано: {total}\n'
-        f'Откреплено: {unpinned_count}\n'
-        f'Ошибок: {failed_count}\n\n'
+        '✅ <b>Закрепленное сообщение удалено</b>\n\n'
+        f'👥 Чатов обработано: {total}\n'
+        f'✅ Откреплено: {unpinned_count}\n'
+        f'⚠️ Ошибок: {failed_count}\n\n'
         'Новое сообщение можно задать кнопкой "Обновить".',
         reply_markup=get_admin_messages_keyboard(db_user.language),
         parse_mode='HTML',
@@ -448,10 +435,7 @@ async def process_pinned_message_update(
 
     if not pinned_text and not media_file_id:
         await message.answer(
-            texts.t(
-                'ADMIN_PINNED_NO_CONTENT',
-                'Не удалось прочитать текст или медиа в сообщении, попробуйте снова.',
-            )
+            texts.t('ADMIN_PINNED_NO_CONTENT', '❌ Не удалось прочитать текст или медиа в сообщении, попробуйте снова.')
         )
         return
 
@@ -464,7 +448,7 @@ async def process_pinned_message_update(
             media_file_id=media_file_id,
         )
     except ValueError as validation_error:
-        await message.answer(f'{validation_error}')
+        await message.answer(f'❌ {validation_error}')
         return
 
     # Сообщение сохранено, спрашиваем о рассылке
@@ -474,7 +458,7 @@ async def process_pinned_message_update(
     await message.answer(
         texts.t(
             'ADMIN_PINNED_SAVED_ASK_BROADCAST',
-            '<b>Сообщение сохранено!</b>\n\n'
+            '📌 <b>Сообщение сохранено!</b>\n\n'
             'Выберите, как доставить сообщение пользователям:\n\n'
             '• <b>Разослать сейчас</b> — отправит и закрепит у всех активных пользователей\n'
             '• <b>Только при /start</b> — пользователи увидят при следующем запуске бота',
@@ -508,15 +492,12 @@ async def handle_pinned_broadcast_now(
     pinned_message = result.scalar_one_or_none()
 
     if not pinned_message:
-        await callback.answer('Сообщение не найдено', show_alert=True)
+        await callback.answer('❌ Сообщение не найдено', show_alert=True)
         await state.clear()
         return
 
     await callback.message.edit_text(
-        texts.t(
-            'ADMIN_PINNED_SAVING',
-            'Сообщение сохранено. Начинаю отправку и закрепление у пользователей...',
-        ),
+        texts.t('ADMIN_PINNED_SAVING', '📌 Сообщение сохранено. Начинаю отправку и закрепление у пользователей...'),
         parse_mode='HTML',
     )
 
@@ -530,7 +511,10 @@ async def handle_pinned_broadcast_now(
     await callback.message.edit_text(
         texts.t(
             'ADMIN_PINNED_UPDATED',
-            '<b>Закрепленное сообщение обновлено</b>\n\nПолучателей: {total}\nОтправлено: {sent}\nОшибок: {failed}',
+            '✅ <b>Закрепленное сообщение обновлено</b>\n\n'
+            '👥 Получателей: {total}\n'
+            '✅ Отправлено: {sent}\n'
+            '⚠️ Ошибок: {failed}',
         ).format(total=total, sent=sent_count, failed=failed_count),
         reply_markup=get_admin_messages_keyboard(db_user.language),
         parse_mode='HTML',
@@ -552,7 +536,7 @@ async def handle_pinned_broadcast_skip(
     await callback.message.edit_text(
         texts.t(
             'ADMIN_PINNED_SAVED_NO_BROADCAST',
-            '<b>Закрепленное сообщение сохранено</b>\n\n'
+            '✅ <b>Закрепленное сообщение сохранено</b>\n\n'
             'Рассылка не выполнена. Пользователи увидят сообщение при следующем вводе /start.',
         ),
         reply_markup=get_admin_messages_keyboard(db_user.language),
@@ -565,7 +549,7 @@ async def handle_pinned_broadcast_skip(
 @error_handler
 async def show_broadcast_targets(callback: types.CallbackQuery, db_user: User, state: FSMContext):
     await callback.message.edit_text(
-        '<b>Выбор целевой аудитории</b>\n\nВыберите категорию пользователей для рассылки:',
+        '🎯 <b>Выбор целевой аудитории</b>\n\nВыберите категорию пользователей для рассылки:',
         reply_markup=get_broadcast_target_keyboard(db_user.language),
         parse_mode='HTML',
     )
@@ -580,9 +564,9 @@ async def show_tariff_filter(callback: types.CallbackQuery, db_user: User, db: A
 
     if not tariffs:
         await callback.message.edit_text(
-            '<b>Нет доступных тарифов</b>\n\nСоздайте тарифы в разделе управления тарифами.',
+            '❌ <b>Нет доступных тарифов</b>\n\nСоздайте тарифы в разделе управления тарифами.',
             reply_markup=types.InlineKeyboardMarkup(
-                inline_keyboard=[[types.InlineKeyboardButton(text='← Назад', callback_data='admin_msg_by_sub')]]
+                inline_keyboard=[[types.InlineKeyboardButton(text='⬅️ Назад', callback_data='admin_msg_by_sub')]]
             ),
             parse_mode='HTML',
         )
@@ -605,16 +589,15 @@ async def show_tariff_filter(callback: types.CallbackQuery, db_user: User, db: A
         buttons.append(
             [
                 types.InlineKeyboardButton(
-                    text=f'{tariff.name} ({count} чел.)',
-                    callback_data=f'broadcast_tariff_{tariff.id}',
+                    text=f'{tariff.name} ({count} чел.)', callback_data=f'broadcast_tariff_{tariff.id}'
                 )
             ]
         )
 
-    buttons.append([types.InlineKeyboardButton(text='← Назад', callback_data='admin_msg_by_sub')])
+    buttons.append([types.InlineKeyboardButton(text='⬅️ Назад', callback_data='admin_msg_by_sub')])
 
     await callback.message.edit_text(
-        '<b>Рассылка по тарифу</b>\n\nВыберите тариф для рассылки пользователям с активной подпиской на этот тариф:',
+        '📦 <b>Рассылка по тарифу</b>\n\nВыберите тариф для рассылки пользователям с активной подпиской на этот тариф:',
         reply_markup=types.InlineKeyboardMarkup(inline_keyboard=buttons),
         parse_mode='HTML',
     )
@@ -642,17 +625,17 @@ async def show_messages_history(callback: types.CallbackQuery, db_user: User, db
 
     if not broadcasts:
         text = """
-<b>История рассылок</b>
+📋 <b>История рассылок</b>
 
-История рассылок пуста.
+❌ История рассылок пуста.
 Отправьте первую рассылку, чтобы увидеть её здесь.
 """
-        keyboard = [[types.InlineKeyboardButton(text='← Назад', callback_data='admin_messages')]]
+        keyboard = [[types.InlineKeyboardButton(text='⬅️ Назад', callback_data='admin_messages')]]
     else:
-        text = f'<b>История рассылок</b> (страница {page}/{total_pages})\n\n'
+        text = f'📋 <b>История рассылок</b> (страница {page}/{total_pages})\n\n'
 
         for broadcast in broadcasts:
-            status_emoji = '' if broadcast.status == 'completed' else '' if broadcast.status == 'failed' else ''
+            status_emoji = '✅' if broadcast.status == 'completed' else '❌' if broadcast.status == 'failed' else '⏳'
             success_rate = (
                 round((broadcast.sent_count / broadcast.total_count * 100), 1) if broadcast.total_count > 0 else 0
             )
@@ -660,7 +643,7 @@ async def show_messages_history(callback: types.CallbackQuery, db_user: User, db
             message_preview = (
                 broadcast.message_text[:100] + '...'
                 if broadcast.message_text and len(broadcast.message_text) > 100
-                else (broadcast.message_text or 'Опрос')
+                else (broadcast.message_text or '📊 Опрос')
             )
 
             import html
@@ -669,19 +652,17 @@ async def show_messages_history(callback: types.CallbackQuery, db_user: User, db
 
             text += f"""
 {status_emoji} <b>{broadcast.created_at.strftime('%d.%m.%Y %H:%M')}</b>
-Отправлено: {broadcast.sent_count}/{broadcast.total_count} ({success_rate}%)
-Аудитория: {get_target_name(broadcast.target_type)}
-Админ: {html.escape(broadcast.admin_name or '')}
-Сообщение: {message_preview}
+📊 Отправлено: {broadcast.sent_count}/{broadcast.total_count} ({success_rate}%)
+🎯 Аудитория: {get_target_name(broadcast.target_type)}
+👤 Админ: {html.escape(broadcast.admin_name or '')}
+📝 Сообщение: {message_preview}
 ━━━━━━━━━━━━━━━━━━━━━━━
 """
 
         keyboard = get_broadcast_history_keyboard(page, total_pages, db_user.language).inline_keyboard
 
     await callback.message.edit_text(
-        text,
-        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
-        parse_mode='HTML',
+        text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard), parse_mode='HTML'
     )
     await callback.answer()
 
@@ -692,21 +673,21 @@ async def show_custom_broadcast(callback: types.CallbackQuery, db_user: User, st
     stats = await get_users_statistics(db)
 
     text = f"""
-<b>Рассылка по критериям</b>
+📝 <b>Рассылка по критериям</b>
 
-<b>Доступные фильтры:</b>
+📊 <b>Доступные фильтры:</b>
 
-<b>По регистрации:</b>
+👥 <b>По регистрации:</b>
 • Сегодня: {stats['today']} чел.
 • За неделю: {stats['week']} чел.
 • За месяц: {stats['month']} чел.
 
-<b>По активности:</b>
+💼 <b>По активности:</b>
 • Активные сегодня: {stats['active_today']} чел.
 • Неактивные 7+ дней: {stats['inactive_week']} чел.
 • Неактивные 30+ дней: {stats['inactive_month']} чел.
 
-<b>По источнику:</b>
+🔗 <b>По источнику:</b>
 • Через рефералов: {stats['referrals']} чел.
 • Прямая регистрация: {stats['direct']} чел.
 
@@ -714,9 +695,7 @@ async def show_custom_broadcast(callback: types.CallbackQuery, db_user: User, st
 """
 
     await callback.message.edit_text(
-        text,
-        reply_markup=get_custom_criteria_keyboard(db_user.language),
-        parse_mode='HTML',
+        text, reply_markup=get_custom_criteria_keyboard(db_user.language), parse_mode='HTML'
     )
     await callback.answer()
 
@@ -742,13 +721,13 @@ async def select_custom_criteria(callback: types.CallbackQuery, db_user: User, s
     await state.update_data(broadcast_target=f'custom_{criteria}')
 
     await callback.message.edit_text(
-        f'<b>Создание рассылки</b>\n\n'
-        f'<b>Критерий:</b> {criteria_names.get(criteria, criteria)}\n'
-        f'<b>Получателей:</b> {user_count}\n\n'
+        f'📨 <b>Создание рассылки</b>\n\n'
+        f'🎯 <b>Критерий:</b> {criteria_names.get(criteria, criteria)}\n'
+        f'👥 <b>Получателей:</b> {user_count}\n\n'
         f'Введите текст сообщения для рассылки:\n\n'
         f'<i>Поддерживается HTML разметка</i>',
         reply_markup=types.InlineKeyboardMarkup(
-            inline_keyboard=[[types.InlineKeyboardButton(text='Отмена', callback_data='admin_messages')]]
+            inline_keyboard=[[types.InlineKeyboardButton(text='❌ Отмена', callback_data='admin_messages')]]
         ),
         parse_mode='HTML',
     )
@@ -794,13 +773,13 @@ async def select_broadcast_target(callback: types.CallbackQuery, db_user: User, 
     await state.update_data(broadcast_target=target)
 
     await callback.message.edit_text(
-        f'<b>Создание рассылки</b>\n\n'
-        f'<b>Аудитория:</b> {target_name}\n'
-        f'<b>Получателей:</b> {user_count}\n\n'
+        f'📨 <b>Создание рассылки</b>\n\n'
+        f'🎯 <b>Аудитория:</b> {target_name}\n'
+        f'👥 <b>Получателей:</b> {user_count}\n\n'
         f'Введите текст сообщения для рассылки:\n\n'
         f'<i>Поддерживается HTML разметка</i>',
         reply_markup=types.InlineKeyboardMarkup(
-            inline_keyboard=[[types.InlineKeyboardButton(text='Отмена', callback_data='admin_messages')]]
+            inline_keyboard=[[types.InlineKeyboardButton(text='❌ Отмена', callback_data='admin_messages')]]
         ),
         parse_mode='HTML',
     )
@@ -815,13 +794,13 @@ async def process_broadcast_message(message: types.Message, db_user: User, state
     broadcast_text = message.text
 
     if len(broadcast_text) > 4000:
-        await message.answer('Сообщение слишком длинное (максимум 4000 символов)')
+        await message.answer('❌ Сообщение слишком длинное (максимум 4000 символов)')
         return
 
     await state.update_data(broadcast_message=broadcast_text)
 
     await message.answer(
-        '<b>Добавление медиафайла</b>\n\n'
+        '🖼️ <b>Добавление медиафайла</b>\n\n'
         'Вы можете добавить к сообщению фото, видео или документ.\n'
         'Или пропустить этот шаг.\n\n'
         'Выберите тип медиа:',
@@ -841,9 +820,9 @@ async def handle_media_selection(callback: types.CallbackQuery, db_user: User, s
     media_type = callback.data.replace('add_media_', '')
 
     media_instructions = {
-        'photo': 'Отправьте фотографию для рассылки:',
-        'video': 'Отправьте видео для рассылки:',
-        'document': 'Отправьте документ для рассылки:',
+        'photo': '📷 Отправьте фотографию для рассылки:',
+        'video': '🎥 Отправьте видео для рассылки:',
+        'document': '📄 Отправьте документ для рассылки:',
     }
 
     await state.update_data(media_type=media_type, waiting_for_media=True)
@@ -852,7 +831,7 @@ async def handle_media_selection(callback: types.CallbackQuery, db_user: User, s
         f'{media_instructions.get(media_type, "Отправьте медиафайл:")}\n\n<i>Размер файла не должен превышать 50 МБ</i>'
     )
     instruction_keyboard = types.InlineKeyboardMarkup(
-        inline_keyboard=[[types.InlineKeyboardButton(text='Отмена', callback_data='admin_messages')]]
+        inline_keyboard=[[types.InlineKeyboardButton(text='❌ Отмена', callback_data='admin_messages')]]
     )
 
     # Проверяем, является ли текущее сообщение медиа-сообщением
@@ -898,14 +877,11 @@ async def process_broadcast_media(message: types.Message, db_user: User, state: 
         media_file_id = message.document.file_id
         media_type = 'document'
     else:
-        await message.answer(f'Пожалуйста, отправьте {expected_type} как указано в инструкции.')
+        await message.answer(f'❌ Пожалуйста, отправьте {expected_type} как указано в инструкции.')
         return
 
     await state.update_data(
-        has_media=True,
-        media_file_id=media_file_id,
-        media_type=media_type,
-        media_caption=message.caption,
+        has_media=True, media_file_id=media_file_id, media_type=media_type, media_caption=message.caption
     )
 
     await show_media_preview(message, db_user, state)
@@ -917,7 +893,10 @@ async def show_media_preview(message: types.Message, db_user: User, state: FSMCo
     media_file_id = data.get('media_file_id')
 
     preview_text = (
-        f'<b>Медиафайл добавлен</b>\n\n<b>Тип:</b> {media_type}\nФайл сохранен и готов к отправке\n\nЧто делать дальше?'
+        f'🖼️ <b>Медиафайл добавлен</b>\n\n'
+        f'📎 <b>Тип:</b> {media_type}\n'
+        f'✅ Файл сохранен и готов к отправке\n\n'
+        f'Что делать дальше?'
     )
 
     # Для предпросмотра рассылки используем оригинальный метод без патчинга логотипа
@@ -936,10 +915,7 @@ async def show_media_preview(message: types.Message, db_user: User, state: FSMCo
     else:
         # Для других типов медиа или если нет фото, используем обычное сообщение
         await _original_answer(
-            message,
-            preview_text,
-            reply_markup=get_media_confirm_keyboard(db_user.language),
-            parse_mode='HTML',
+            message, preview_text, reply_markup=get_media_confirm_keyboard(db_user.language), parse_mode='HTML'
         )
 
 
@@ -964,7 +940,7 @@ async def handle_media_confirmation(callback: types.CallbackQuery, db_user: User
 async def handle_change_media(callback: types.CallbackQuery, db_user: User, state: FSMContext):
     await safe_edit_or_send_text(
         callback,
-        '<b>Изменение медиафайла</b>\n\nВыберите новый тип медиа:',
+        '🖼️ <b>Изменение медиафайла</b>\n\nВыберите новый тип медиа:',
         reply_markup=get_broadcast_media_keyboard(db_user.language),
         parse_mode='HTML',
     )
@@ -985,21 +961,21 @@ async def show_button_selector_callback(callback: types.CallbackQuery, db_user: 
     media_info = ''
     if has_media:
         media_type = data.get('media_type', 'файл')
-        media_info = f'\n<b>Медиафайл:</b> {media_type} добавлен'
+        media_info = f'\n🖼️ <b>Медиафайл:</b> {media_type} добавлен'
 
     text = f"""
-<b>Выбор дополнительных кнопок</b>
+📘 <b>Выбор дополнительных кнопок</b>
 
 Выберите кнопки, которые будут добавлены к сообщению рассылки:
 
-<b>Пополнить баланс</b> — откроет методы пополнения
-<b>Реферальная программа</b> — откроет реферальную программу
-<b>Промокод</b> — откроет форму ввода промокода
-<b>Подключиться</b> — поможет подключить приложение
-<b>Подписка</b> — покажет состояние подписки
-️ <b>Поддержка</b> — свяжет с поддержкой
+💰 <b>Пополнить баланс</b> — откроет методы пополнения
+🤝 <b>Партнерка</b> — откроет реферальную программу
+🎫 <b>Промокод</b> — откроет форму ввода промокода
+🔗 <b>Подключиться</b> — поможет подключить приложение
+📱 <b>Подписка</b> — покажет состояние подписки
+🛠️ <b>Техподдержка</b> — свяжет с поддержкой
 
-<b>Кнопка "На главную"</b> включена по умолчанию, но вы можете отключить её при необходимости.{media_info}
+🏠 <b>Кнопка "На главную"</b> включена по умолчанию, но вы можете отключить её при необходимости.{media_info}
 
 Выберите нужные кнопки и нажмите "Продолжить":
 """
@@ -1041,18 +1017,18 @@ async def show_button_selector(message: types.Message, db_user: User, state: FSM
     has_media = data.get('has_media', False)
 
     text = """
-<b>Выбор дополнительных кнопок</b>
+📘 <b>Выбор дополнительных кнопок</b>
 
 Выберите кнопки, которые будут добавлены к сообщению рассылки:
 
-<b>Пополнить баланс</b> — откроет методы пополнения
-<b>Реферальная программа</b> — откроет реферальную программу
-<b>Промокод</b> — откроет форму ввода промокода
-<b>Подключиться</b> — поможет подключить приложение
-<b>Подписка</b> — покажет состояние подписки
-️ <b>Поддержка</b> — свяжет с поддержкой
+💰 <b>Пополнить баланс</b> — откроет методы пополнения
+🤝 <b>Партнерка</b> — откроет реферальную программу
+🎫 <b>Промокод</b> — откроет форму ввода промокода
+🔗 <b>Подключиться</b> — поможет подключить приложение
+📱 <b>Подписка</b> — покажет состояние подписки
+🛠️ <b>Техподдержка</b> — свяжет с поддержкой
 
-<b>Кнопка "На главную"</b> включена по умолчанию, но вы можете отключить её при необходимости.
+🏠 <b>Кнопка "На главную"</b> включена по умолчанию, но вы можете отключить её при необходимости.
 
 Выберите нужные кнопки и нажмите "Продолжить":
 """
@@ -1109,28 +1085,24 @@ async def confirm_button_selection(callback: types.CallbackQuery, db_user: User,
 
     media_info = ''
     if has_media:
-        media_type_names = {
-            'photo': 'Фотография',
-            'video': 'Видео',
-            'document': 'Документ',
-        }
-        media_info = f'\n<b>Медиафайл:</b> {media_type_names.get(media_type, media_type)}'
+        media_type_names = {'photo': 'Фотография', 'video': 'Видео', 'document': 'Документ'}
+        media_info = f'\n🖼️ <b>Медиафайл:</b> {media_type_names.get(media_type, media_type)}'
 
     ordered_keys = [button_key for row in BUTTON_ROWS for button_key in row]
     button_labels = get_broadcast_button_labels(db_user.language)
     selected_names = [button_labels[key] for key in ordered_keys if key in selected_buttons]
     if selected_names:
-        buttons_info = f'\n<b>Кнопки:</b> {", ".join(selected_names)}'
+        buttons_info = f'\n📘 <b>Кнопки:</b> {", ".join(selected_names)}'
     else:
-        buttons_info = '\n<b>Кнопки:</b> отсутствуют'
+        buttons_info = '\n📘 <b>Кнопки:</b> отсутствуют'
 
     preview_text = f"""
-<b>Предварительный просмотр рассылки</b>
+📨 <b>Предварительный просмотр рассылки</b>
 
-<b>Аудитория:</b> {target_display}
-<b>Получателей:</b> {user_count}
+🎯 <b>Аудитория:</b> {target_display}
+👥 <b>Получателей:</b> {user_count}
 
-<b>Сообщение:</b>
+📝 <b>Сообщение:</b>
 {message_text}{media_info}
 
 {buttons_info}
@@ -1140,15 +1112,15 @@ async def confirm_button_selection(callback: types.CallbackQuery, db_user: User,
 
     keyboard = [
         [
-            types.InlineKeyboardButton(text='Отправить', callback_data='admin_confirm_broadcast'),
-            types.InlineKeyboardButton(text='Изменить кнопки', callback_data='edit_buttons'),
+            types.InlineKeyboardButton(text='✅ Отправить', callback_data='admin_confirm_broadcast'),
+            types.InlineKeyboardButton(text='📘 Изменить кнопки', callback_data='edit_buttons'),
         ]
     ]
 
     if has_media:
-        keyboard.append([types.InlineKeyboardButton(text='Изменить медиа', callback_data='change_media')])
+        keyboard.append([types.InlineKeyboardButton(text='🖼️ Изменить медиа', callback_data='change_media')])
 
-    keyboard.append([types.InlineKeyboardButton(text='Отмена', callback_data='admin_messages')])
+    keyboard.append([types.InlineKeyboardButton(text='❌ Отмена', callback_data='admin_messages')])
 
     # Если есть медиа, показываем его с загруженным фото, иначе обычное текстовое сообщение
     if has_media and media_type == 'photo':
@@ -1191,10 +1163,7 @@ async def confirm_button_selection(callback: types.CallbackQuery, db_user: User,
     else:
         # Для текстовых сообщений или других типов медиа используем safe редактирование
         await safe_edit_or_send_text(
-            callback,
-            preview_text,
-            reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
-            parse_mode='HTML',
+            callback, preview_text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard), parse_mode='HTML'
         )
 
     await callback.answer()
@@ -1228,7 +1197,7 @@ async def confirm_broadcast(callback: types.CallbackQuery, db_user: User, state:
 
     await safe_edit_or_send_text(
         callback,
-        '<b>Подготовка рассылки...</b>\n\nЗагружаю список получателей...',
+        '📨 <b>Подготовка рассылки...</b>\n\n⏳ Загружаю список получателей...',
         reply_markup=None,
         parse_mode='HTML',
     )
@@ -1415,14 +1384,14 @@ async def confirm_broadcast(callback: types.CallbackQuery, db_user: User, state:
         if phase == 'sending':
             blocked_line = f'• Заблокировали бота: {current_blocked}\n' if current_blocked else ''
             return (
-                f'<b>Рассылка в процессе...</b>\n\n'
+                f'📨 <b>Рассылка в процессе...</b>\n\n'
                 f'[{bar}] {percent}%\n\n'
-                f'<b>Прогресс:</b>\n'
+                f'📊 <b>Прогресс:</b>\n'
                 f'• Отправлено: {current_sent}\n'
                 f'{blocked_line}'
                 f'• Ошибок: {current_failed}\n'
                 f'• Обработано: {processed}/{total}\n\n'
-                f'Не закрывайте диалог — рассылка продолжается...'
+                f'⏳ Не закрывайте диалог — рассылка продолжается...'
             )
         return ''
 
@@ -1434,20 +1403,12 @@ async def confirm_broadcast(callback: types.CallbackQuery, db_user: User, state:
             return
         last_progress_update = now
 
-        text = _build_progress_text(
-            current_sent,
-            current_failed,
-            total_recipients,
-            current_blocked=current_blocked,
-        )
+        text = _build_progress_text(current_sent, current_failed, total_recipients, current_blocked=current_blocked)
         try:
             await progress_message.edit_text(text, parse_mode='HTML')
         except TelegramRetryAfter as e:
             # Не паникуем — пропускаем обновление прогресса
-            logger.debug(
-                'FloodWait при обновлении прогресса, пропускаем: сек',
-                retry_after=e.retry_after,
-            )
+            logger.debug('FloodWait при обновлении прогресса, пропускаем: сек', retry_after=e.retry_after)
         except TelegramBadRequest:
             # Сообщение удалено или контент не изменился — отправляем новое
             try:
@@ -1502,10 +1463,7 @@ async def confirm_broadcast(callback: types.CallbackQuery, db_user: User, state:
     # Учитываем пропущенных email-only пользователей
     skipped_email_users = total_users_count - total_recipients
     if skipped_email_users > 0:
-        logger.info(
-            'Пропущено email-only пользователей при рассылке',
-            skipped_email_users=skipped_email_users,
-        )
+        logger.info('Пропущено email-only пользователей при рассылке', skipped_email_users=skipped_email_users)
 
     status = 'completed' if failed_count == 0 and blocked_count == 0 else 'partial'
 
@@ -1519,12 +1477,12 @@ async def confirm_broadcast(callback: types.CallbackQuery, db_user: User, state:
     )
 
     success_rate = round(sent_count / total_users_count * 100, 1) if total_users_count else 0
-    media_info = f'\n<b>Медиафайл:</b> {media_type}' if has_media else ''
+    media_info = f'\n🖼️ <b>Медиафайл:</b> {media_type}' if has_media else ''
     blocked_line = f'• Заблокировали бота: {blocked_count}\n' if blocked_count else ''
 
     result_text = (
-        f'<b>Рассылка завершена!</b>\n\n'
-        f'<b>Результат:</b>\n'
+        f'✅ <b>Рассылка завершена!</b>\n\n'
+        f'📊 <b>Результат:</b>\n'
         f'• Отправлено: {sent_count}\n'
         f'{blocked_line}'
         f'• Не доставлено: {failed_count}\n'
@@ -1534,7 +1492,7 @@ async def confirm_broadcast(callback: types.CallbackQuery, db_user: User, state:
     )
 
     back_keyboard = types.InlineKeyboardMarkup(
-        inline_keyboard=[[types.InlineKeyboardButton(text='К рассылкам', callback_data='admin_messages')]]
+        inline_keyboard=[[types.InlineKeyboardButton(text='📨 К рассылкам', callback_data='admin_messages')]]
     )
 
     try:
@@ -1564,6 +1522,19 @@ async def confirm_broadcast(callback: types.CallbackQuery, db_user: User, state:
         total_users_count=total_users_count,
         has_media=has_media,
     )
+
+
+# Пороги сегментов. Вынесены в константы, потому что get_target_users_count (SQL COUNT)
+# и get_target_users (фильтрация в Python) обязаны совпадать: разъехавшиеся пороги дают
+# счётчик в интерфейсе, который не сходится с реальным числом получателей.
+LOW_BALANCE_THRESHOLD_KOPEKS = 10000
+TRIAL_ENDING_DAYS = 3
+AUTOPAY_FAILED_WINDOW_DAYS = 7
+INACTIVE_TARGET_DAYS = {
+    'inactive_30d': 30,
+    'inactive_60d': 60,
+    'inactive_90d': 90,
+}
 
 
 async def get_target_users_count(db: AsyncSession, target: str) -> int:
@@ -1654,37 +1625,38 @@ async def get_target_users_count(db: AsyncSession, target: str) -> int:
         return result.scalar() or 0
 
     if target in ('expired', 'expired_subscribers'):
-        # Истекшие подписки — исключаем юзеров с хотя бы одной активной
+        # Зеркало одноимённых веток get_target_users: активная (ACTIVE и не истекшая)
+        # подписка исключает; иначе нужен хотя бы один истёкший сабж (EXPIRED/DISABLED
+        # или end_date в прошлом) либо платное прошлое без единой подписки. LIMITED с
+        # будущей датой истёкшим не считается, ACTIVE с прошедшей — активной не считается.
         now = datetime.now(UTC)
-        expired_statuses = [
-            SubscriptionStatus.EXPIRED.value,
-            SubscriptionStatus.DISABLED.value,
-            SubscriptionStatus.LIMITED.value,
-        ]
         has_active_sub = (
             select(Subscription.id)
             .where(
                 Subscription.user_id == User.id,
                 Subscription.status == SubscriptionStatus.ACTIVE.value,
+                Subscription.end_date > now,
             )
             .correlate(User)
             .exists()
         )
-        query = (
-            select(sql_func.count(distinct(User.id)))
-            .outerjoin(Subscription, User.id == Subscription.user_id)
+        has_expired_sub = (
+            select(Subscription.id)
             .where(
-                base_filter,
-                ~has_active_sub,
+                Subscription.user_id == User.id,
                 or_(
-                    Subscription.status.in_(expired_statuses),
-                    and_(
-                        Subscription.end_date <= now,
-                        Subscription.status != SubscriptionStatus.ACTIVE.value,
-                    ),
-                    and_(Subscription.id == None, User.has_had_paid_subscription == True),
+                    Subscription.status.in_([SubscriptionStatus.EXPIRED.value, SubscriptionStatus.DISABLED.value]),
+                    Subscription.end_date <= now,
                 ),
             )
+            .correlate(User)
+            .exists()
+        )
+        has_any_sub = select(Subscription.id).where(Subscription.user_id == User.id).correlate(User).exists()
+        query = select(sql_func.count(User.id)).where(
+            base_filter,
+            ~has_active_sub,
+            or_(has_expired_sub, and_(~has_any_sub, User.has_had_paid_subscription == True)),
         )
         result = await db.execute(query)
         return result.scalar() or 0
@@ -1698,10 +1670,7 @@ async def get_target_users_count(db: AsyncSession, target: str) -> int:
                 base_filter,
                 Subscription.status == SubscriptionStatus.ACTIVE.value,
                 Subscription.is_trial == False,
-                or_(
-                    Subscription.traffic_used_gb == None,
-                    Subscription.traffic_used_gb <= 0,
-                ),
+                or_(Subscription.traffic_used_gb == None, Subscription.traffic_used_gb <= 0),
             )
         )
         result = await db.execute(query)
@@ -1716,10 +1685,7 @@ async def get_target_users_count(db: AsyncSession, target: str) -> int:
                 base_filter,
                 Subscription.is_trial == True,
                 Subscription.status == SubscriptionStatus.ACTIVE.value,
-                or_(
-                    Subscription.traffic_used_gb == None,
-                    Subscription.traffic_used_gb <= 0,
-                ),
+                or_(Subscription.traffic_used_gb == None, Subscription.traffic_used_gb <= 0),
             )
         )
         result = await db.execute(query)
@@ -1733,11 +1699,61 @@ async def get_target_users_count(db: AsyncSession, target: str) -> int:
             .where(
                 base_filter,
                 Subscription.status == SubscriptionStatus.ACTIVE.value,
-                or_(
-                    Subscription.traffic_used_gb == None,
-                    Subscription.traffic_used_gb <= 0,
-                ),
+                or_(Subscription.traffic_used_gb == None, Subscription.traffic_used_gb <= 0),
             )
+        )
+        result = await db.execute(query)
+        return result.scalar() or 0
+
+    if target == 'trial_ending':
+        now = datetime.now(UTC)
+        query = (
+            select(sql_func.count(distinct(User.id)))
+            .join(Subscription, User.id == Subscription.user_id)
+            .where(
+                base_filter,
+                Subscription.is_trial == True,
+                Subscription.status == SubscriptionStatus.ACTIVE.value,
+                Subscription.end_date > now,
+                Subscription.end_date <= now + timedelta(days=TRIAL_ENDING_DAYS),
+            )
+        )
+        result = await db.execute(query)
+        return result.scalar() or 0
+
+    if target == 'autopay_failed':
+        from app.database.models import SubscriptionEvent
+
+        window_start = datetime.now(UTC) - timedelta(days=AUTOPAY_FAILED_WINDOW_DAYS)
+        has_recent_failure = (
+            select(SubscriptionEvent.id)
+            .where(
+                SubscriptionEvent.user_id == User.id,
+                SubscriptionEvent.event_type == 'autopay_failed',
+                SubscriptionEvent.occurred_at >= window_start,
+            )
+            .correlate(User)
+            .exists()
+        )
+        query = select(sql_func.count(User.id)).where(base_filter, has_recent_failure)
+        result = await db.execute(query)
+        return result.scalar() or 0
+
+    if target == 'low_balance':
+        query = select(sql_func.count(User.id)).where(
+            base_filter,
+            User.balance_kopeks > 0,
+            User.balance_kopeks < LOW_BALANCE_THRESHOLD_KOPEKS,
+        )
+        result = await db.execute(query)
+        return result.scalar() or 0
+
+    if target in INACTIVE_TARGET_DAYS:
+        threshold = datetime.now(UTC) - timedelta(days=INACTIVE_TARGET_DAYS[target])
+        query = select(sql_func.count(User.id)).where(
+            base_filter,
+            User.last_activity.isnot(None),
+            User.last_activity < threshold,
         )
         result = await db.execute(query)
         return result.scalar() or 0
@@ -1760,7 +1776,7 @@ async def get_target_users_count(db: AsyncSession, target: str) -> int:
     # Custom filters — быстрый COUNT вместо загрузки всех пользователей
     if target.startswith('custom_'):
         now = datetime.now(UTC)
-        today = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        today = local_day_start(now)
         criteria = target[len('custom_') :]
 
         if criteria == 'today':
@@ -1908,7 +1924,7 @@ async def get_target_users(db: AsyncSession, target: str) -> list:
 
     if target == 'trial_ending':
         now = datetime.now(UTC)
-        in_3_days = now + timedelta(days=3)
+        in_3_days = now + timedelta(days=TRIAL_ENDING_DAYS)
         return [
             user
             for user in users
@@ -1929,7 +1945,7 @@ async def get_target_users(db: AsyncSession, target: str) -> list:
     if target == 'autopay_failed':
         from app.database.models import SubscriptionEvent
 
-        week_ago = datetime.now(UTC) - timedelta(days=7)
+        week_ago = datetime.now(UTC) - timedelta(days=AUTOPAY_FAILED_WINDOW_DAYS)
         stmt = (
             select(SubscriptionEvent.user_id)
             .where(
@@ -1945,21 +1961,13 @@ async def get_target_users(db: AsyncSession, target: str) -> list:
         return [user for user in users if user.id in failed_user_ids]
 
     if target == 'low_balance':
-        threshold_kopeks = 10000  # 100 рублей
+        threshold_kopeks = LOW_BALANCE_THRESHOLD_KOPEKS
         return [
             user for user in users if (user.balance_kopeks or 0) < threshold_kopeks and (user.balance_kopeks or 0) > 0
         ]
 
-    if target == 'inactive_30d':
-        threshold = datetime.now(UTC) - timedelta(days=30)
-        return [user for user in users if user.last_activity and user.last_activity < threshold]
-
-    if target == 'inactive_60d':
-        threshold = datetime.now(UTC) - timedelta(days=60)
-        return [user for user in users if user.last_activity and user.last_activity < threshold]
-
-    if target == 'inactive_90d':
-        threshold = datetime.now(UTC) - timedelta(days=90)
+    if target in INACTIVE_TARGET_DAYS:
+        threshold = datetime.now(UTC) - timedelta(days=INACTIVE_TARGET_DAYS[target])
         return [user for user in users if user.last_activity and user.last_activity < threshold]
 
     # Фильтр по тарифу
@@ -1981,7 +1989,7 @@ async def get_custom_users_count(db: AsyncSession, criteria: str) -> int:
 
 async def get_custom_users(db: AsyncSession, criteria: str) -> list:
     now = datetime.now(UTC)
-    today = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    today = local_day_start(now)
     week_ago = now - timedelta(days=7)
     month_ago = now - timedelta(days=30)
 
@@ -2010,7 +2018,7 @@ async def get_custom_users(db: AsyncSession, criteria: str) -> list:
 
 async def get_users_statistics(db: AsyncSession) -> dict:
     now = datetime.now(UTC)
-    today = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    today = local_day_start(now)
     week_ago = now - timedelta(days=7)
     month_ago = now - timedelta(days=30)
 

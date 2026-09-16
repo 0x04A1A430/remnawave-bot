@@ -18,13 +18,7 @@ from app.database.crud.promo_offer_template import (
     update_promo_offer_template,
 )
 from app.database.crud.user import get_user_by_telegram_id
-from app.database.models import (
-    DiscountOffer,
-    PromoOfferLog,
-    PromoOfferTemplate,
-    Subscription,
-    User,
-)
+from app.database.models import DiscountOffer, PromoOfferLog, PromoOfferTemplate, Subscription, User
 from app.handlers.admin.messages import get_custom_users, get_target_users
 
 from ..dependencies import get_db_session, require_api_token
@@ -62,9 +56,7 @@ def _serialize_user(user: User | None) -> PromoOfferUserInfo | None:
     )
 
 
-def _serialize_subscription(
-    subscription: Subscription | None,
-) -> PromoOfferSubscriptionInfo | None:
+def _serialize_subscription(subscription: Subscription | None) -> PromoOfferSubscriptionInfo | None:
     if not subscription:
         return None
 

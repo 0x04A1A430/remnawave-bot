@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.models import PaymentMethod, TransactionType
+from app.services.payment.payer_identity import payer_from_guest, resolve_user_payer
 from app.utils.payment_logger import payment_logger as logger
 from app.utils.user_utils import format_referrer_info
 
@@ -25,8 +26,14 @@ class MulenPayPaymentMixin:
         amount_kopeks: int,
         description: str,
         language: str | None = None,
+        client: str | None = None,
     ) -> dict[str, Any] | None:
-        """Создаёт локальный платеж и инициализирует сессию в MulenPay."""
+        """Создаёт локальный платеж и инициализирует сессию в MulenPay.
+
+        ``client`` — контакт плательщика-гостя; у пользователя он читается по
+        ``user_id``. MulenPay (письмо провайдера 2026-09-15) требует поле в каждом
+        платеже: «почтой, телефоном или ТГ ид и т.п.» — см. payer_identity.
+        """
         display_name = settings.get_mulenpay_display_name()
         settings.get_mulenpay_display_name_html()
         if not getattr(self, 'mulenpay_service', None):
@@ -56,6 +63,13 @@ class MulenPayPaymentMixin:
             payment_uuid = f'mulen_{user_id or "guest"}_{uuid.uuid4().hex}'
             amount_rubles = amount_kopeks / 100
 
+            if client:
+                payer_client = client
+            elif user_id is not None:
+                payer_client = (await resolve_user_payer(db, user_id)).contact
+            else:
+                payer_client = payer_from_guest(payment_uuid, contact_type=None, contact_value=None).contact
+
             items = [
                 {
                     'description': description[:128],
@@ -74,6 +88,7 @@ class MulenPayPaymentMixin:
                 items=items,
                 language=language or settings.MULENPAY_LANGUAGE,
                 website_url=settings.MULENPAY_WEBSITE_URL or settings.WEBHOOK_URL,
+                client=payer_client,
             )
 
             if not response:
@@ -218,9 +233,7 @@ class MulenPayPaymentMixin:
                         )
 
                 logger.info(
-                    'платеж уже обработан, игнорируем повторный callback',
-                    display_name=display_name,
-                    uuid=payment.uuid,
+                    'платеж уже обработан, игнорируем повторный callback', display_name=display_name, uuid=payment.uuid
                 )
                 return True
 
@@ -237,11 +250,7 @@ class MulenPayPaymentMixin:
                 await db.flush()
 
                 if payment.transaction_id:
-                    logger.info(
-                        'Для платежа уже создана транзакция',
-                        display_name=display_name,
-                        uuid=payment.uuid,
-                    )
+                    logger.info('Для платежа уже создана транзакция', display_name=display_name, uuid=payment.uuid)
                     return True
 
                 # --- Guest purchase flow (landing page) ---
@@ -286,9 +295,7 @@ class MulenPayPaymentMixin:
                 user = await payment_module.get_user_by_id(db, payment.user_id)
                 if not user:
                     logger.error(
-                        'Пользователь не найден при обработке',
-                        user_id=payment.user_id,
-                        display_name=display_name,
+                        'Пользователь не найден при обработке', user_id=payment.user_id, display_name=display_name
                     )
                     return False
 
@@ -329,11 +336,7 @@ class MulenPayPaymentMixin:
                         getattr(self, 'bot', None),
                     )
                 except Exception as error:
-                    logger.error(
-                        'Ошибка обработки реферального пополнения',
-                        display_name=display_name,
-                        error=error,
-                    )
+                    logger.error('Ошибка обработки реферального пополнения', display_name=display_name, error=error)
 
                 if was_first_topup and not user.has_made_first_topup and not user.referred_by_id:
                     user.has_made_first_topup = True
@@ -353,7 +356,7 @@ class MulenPayPaymentMixin:
                 promo_group = user.get_primary_promo_group()
                 subscription = getattr(user, 'subscription', None)
                 referrer_info = format_referrer_info(user)
-                topup_status = 'Первое пополнение' if was_first_topup else 'Пополнение'
+                topup_status = '🆕 Первое пополнение' if was_first_topup else '🔄 Пополнение'
 
                 if getattr(self, 'bot', None):
                     try:
@@ -373,11 +376,7 @@ class MulenPayPaymentMixin:
                             db=db,
                         )
                     except Exception as error:
-                        logger.error(
-                            'Ошибка отправки уведомления о пополнении',
-                            display_name=display_name,
-                            error=error,
-                        )
+                        logger.error('Ошибка отправки уведомления о пополнении', display_name=display_name, error=error)
 
                 if getattr(self, 'bot', None) and user.telegram_id and settings.is_notifications_enabled():
                     try:
@@ -385,26 +384,21 @@ class MulenPayPaymentMixin:
                         await self.bot.send_message(
                             user.telegram_id,
                             (
-                                '<b>Пополнение успешно!</b>\n\n'
-                                f'Сумма: {settings.format_price(payment.amount_kopeks)}\n'
-                                f'Способ: {display_name_html}\n'
-                                f'Транзакция: {transaction.id}'
+                                '✅ <b>Пополнение успешно!</b>\n\n'
+                                f'💰 Сумма: {settings.format_price(payment.amount_kopeks)}\n'
+                                f'🦊 Способ: {display_name_html}\n'
+                                f'🆔 Транзакция: {transaction.id}\n\n'
+                                'Баланс пополнен автоматически!'
                             ),
                             parse_mode='HTML',
                             reply_markup=keyboard,
                         )
                     except Exception as error:
-                        logger.error(
-                            'Ошибка отправки уведомления пользователю',
-                            display_name=display_name,
-                            error=error,
-                        )
+                        logger.error('Ошибка отправки уведомления пользователю', display_name=display_name, error=error)
 
                 # Проверяем наличие сохраненной корзины для возврата к оформлению подписки
                 try:
-                    from app.services.payment.common import (
-                        send_cart_notification_after_topup,
-                    )
+                    from app.services.payment.common import send_cart_notification_after_topup
 
                     await send_cart_notification_after_topup(
                         user, payment.amount_kopeks, db, getattr(self, 'bot', None)
@@ -418,7 +412,7 @@ class MulenPayPaymentMixin:
                     )
 
                 logger.info(
-                    'Обработан платеж для пользователя',
+                    '✅ Обработан платеж для пользователя',
                     display_name=display_name,
                     uuid=payment.uuid,
                     user_id=payment.user_id,
@@ -452,12 +446,7 @@ class MulenPayPaymentMixin:
             return True
 
         except Exception as error:
-            logger.error(
-                'Ошибка обработки callback',
-                display_name=display_name,
-                error=error,
-                exc_info=True,
-            )
+            logger.error('Ошибка обработки callback', display_name=display_name, error=error, exc_info=True)
             return False
 
     def _map_mulenpay_status(self, status_code: int | None) -> str:
@@ -550,10 +539,5 @@ class MulenPayPaymentMixin:
             }
 
         except Exception as error:
-            logger.error(
-                'Ошибка получения статуса',
-                display_name=display_name,
-                error=error,
-                exc_info=True,
-            )
+            logger.error('Ошибка получения статуса', display_name=display_name, error=error, exc_info=True)
             return None

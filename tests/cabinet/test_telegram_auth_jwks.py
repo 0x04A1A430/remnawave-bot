@@ -96,13 +96,7 @@ def test_build_public_keys_skips_unsupported_kty() -> None:
     """Unknown kty (e.g. future-Telegram-quantum key) is silently skipped, not crashes."""
     jwks = {
         'keys': [
-            {
-                'kty': 'RSA',
-                'kid': 'good',
-                'alg': 'RS256',
-                'n': 'AQAB',
-                'e': 'AQAB',
-            },  # malformed
+            {'kty': 'RSA', 'kid': 'good', 'alg': 'RS256', 'n': 'AQAB', 'e': 'AQAB'},  # malformed
             {'kty': 'UNKNOWN_FUTURE_TYPE', 'kid': 'mystery', 'alg': 'X25519'},
         ]
     }

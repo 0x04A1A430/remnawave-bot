@@ -22,6 +22,7 @@ from app.database.models import PaymentMethod, Subscription, TransactionType, Us
 from app.services.pricing_engine import pricing_engine
 from app.services.remnawave_service import RemnaWaveService
 from app.services.subscription_service import SubscriptionService
+from app.services.tariff_switch_policy import remaining_days_for_switch, should_reset_used_traffic
 
 from ...dependencies import get_cabinet_db, get_current_cabinet_user
 from ...schemas.subscription import TariffPurchaseRequest
@@ -105,6 +106,21 @@ async def preview_tariff_switch(
             detail='Already on this tariff',
         )
 
+    if settings.TARIFF_SWITCH_RESET_FREE_DAYS and current_tariff is not None and current_tariff.is_free:
+        # A free (0₽) tariff has no paid value to prorate from — the prorated switch
+        # would quote the full new-tariff rate for the whole (often huge) free
+        # remainder AND carry those free days onto a paid tariff, violating
+        # TARIFF_SWITCH_RESET_FREE_DAYS. Route to the purchase flow instead
+        # (extend_subscription there resets the free remainder).
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                'code': 'free_tariff_cannot_switch',
+                'message': 'Free-tariff subscriptions cannot switch tariffs. Please purchase a tariff instead.',
+                'use_purchase_flow': True,
+            },
+        )
+
     # Check tariff availability for user's promo group
     # Use get_primary_promo_group() for correct promo group resolution
     promo_group = user.get_primary_promo_group() if hasattr(user, 'get_primary_promo_group') else None
@@ -117,11 +133,7 @@ async def preview_tariff_switch(
             detail='Tariff not available for your promo group',
         )
 
-    # Calculate remaining days
-    remaining_days = 0
-    if subscription.end_date and subscription.end_date > datetime.now(UTC):
-        delta = subscription.end_date - datetime.now(UTC)
-        remaining_days = max(0, delta.days)
+    remaining_days = remaining_days_for_switch(subscription.end_date)
 
     # Calculate switch cost (PricingEngine handles all cases: periodic<->periodic, daily->periodic, periodic->daily)
     switch_result = pricing_engine.calculate_tariff_switch_cost(
@@ -160,14 +172,14 @@ async def preview_tariff_switch(
         'new_tariff_name': new_tariff.name,
         'remaining_days': remaining_days,
         'upgrade_cost_kopeks': upgrade_cost,
-        'upgrade_cost_label': (settings.format_price(upgrade_cost) if upgrade_cost > 0 else 'Бесплатно'),
+        'upgrade_cost_label': settings.format_price(upgrade_cost) if upgrade_cost > 0 else 'Бесплатно',
         'balance_kopeks': balance,
         # Когда есть нехватка <1₽ (FX-rounding), показ копеек обязателен — без него
         # юзер видит "Баланс 150 ₽, не хватает 0 ₽" и думает что баг.
         'balance_label': settings.format_price(balance, round_kopeks=False),
         'has_enough_balance': has_enough,
         'missing_amount_kopeks': missing,
-        'missing_amount_label': (settings.format_price(missing, round_kopeks=False) if missing > 0 else ''),
+        'missing_amount_label': settings.format_price(missing, round_kopeks=False) if missing > 0 else '',
         'is_upgrade': is_upgrade,
     }
 
@@ -272,6 +284,19 @@ async def switch_tariff(
             detail='Already on this tariff',
         )
 
+    if settings.TARIFF_SWITCH_RESET_FREE_DAYS and current_tariff is not None and current_tariff.is_free:
+        # Same guard as in preview: free (0₽) source tariffs must go through the
+        # purchase flow — prorated switching would charge for and carry the whole
+        # free remainder (TARIFF_SWITCH_RESET_FREE_DAYS).
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                'code': 'free_tariff_cannot_switch',
+                'message': 'Free-tariff subscriptions cannot switch tariffs. Please purchase a tariff instead.',
+                'use_purchase_flow': True,
+            },
+        )
+
     # Check tariff availability
     # Use get_primary_promo_group() for correct promo group resolution
     promo_group = user.get_primary_promo_group() if hasattr(user, 'get_primary_promo_group') else None
@@ -289,11 +314,11 @@ async def switch_tariff(
 
     user = await lock_user_for_pricing(db, user.id)
 
-    # Calculate remaining days
-    remaining_days = 0
-    if subscription.end_date and subscription.end_date > datetime.now(UTC):
-        delta = subscription.end_date - datetime.now(UTC)
-        remaining_days = max(0, delta.days)
+    # Оверлей грейса, осевший в подписке (v4.10–4.11), — не её срок: вернуть до расчёта.
+    from app.services.grace_access_echo import undo_grace_overlay_echo
+
+    await undo_grace_overlay_echo(db, subscription)
+    remaining_days = remaining_days_for_switch(subscription.end_date)
 
     # Calculate cost (PricingEngine handles all cases: periodic<->periodic, daily->periodic, periodic->daily)
     switch_result = pricing_engine.calculate_tariff_switch_cost(
@@ -454,7 +479,10 @@ async def switch_tariff(
     subscription.purchased_traffic_gb = 0
     subscription.traffic_reset_at = None
 
-    if settings.RESET_TRAFFIC_ON_TARIFF_SWITCH:
+    # Счётчик трафика обнуляет только ОПЛАЧЕННОЕ переключение — иначе прыжок
+    # туда-обратно по бесплатному направлению давал новую квоту каждый раз.
+    reset_used_traffic = should_reset_used_traffic(upgrade_cost)
+    if reset_used_traffic:
         subscription.traffic_used_gb = 0.0
 
     if switching_to_daily:
@@ -483,16 +511,16 @@ async def switch_tariff(
         )
 
     # Sync with RemnaWave (optionally reset traffic based on admin setting)
-    should_reset_traffic = settings.RESET_TRAFFIC_ON_TARIFF_SWITCH
+    should_reset_traffic = reset_used_traffic
     # Refresh subscription after commit (all objects are expired)
     await db.refresh(subscription)
 
     try:
         subscription_service = SubscriptionService()
         _has_panel = (
-            getattr(subscription, 'remnawave_uuid', None)
+            getattr(subscription, 'remnawave_id', None)
             if settings.is_multi_tariff_enabled()
-            else getattr(user, 'remnawave_uuid', None)
+            else getattr(user, 'remnawave_id', None)
         )
         if _has_panel:
             await subscription_service.update_remnawave_user(
@@ -521,23 +549,23 @@ async def switch_tariff(
 
     # Reset all devices on tariff switch
     devices_reset = False
-    _switch_uuid = (
-        subscription.remnawave_uuid
-        if settings.is_multi_tariff_enabled() and subscription.remnawave_uuid
-        else user.remnawave_uuid
+    _switch_panel_user_id = (
+        subscription.remnawave_id
+        if settings.is_multi_tariff_enabled() and subscription.remnawave_id
+        else user.remnawave_id
     )
-    if _switch_uuid:
+    if _switch_panel_user_id:
         try:
             service = RemnaWaveService()
             async with service.get_api_client() as api:
-                await api.reset_user_devices(
-                    _switch_uuid,
-                    user_id=subscription.remnawave_id
-                    if settings.is_multi_tariff_enabled() and subscription
-                    else user.remnawave_id,
-                )
-                devices_reset = True
-                logger.info('Reset all devices for user on tariff switch', user_id=user.id)
+                # 3.0.0: сброс делается одним delete-all и исключений наружу не
+                # бросает — сбой панели приходит как False, поэтому флаг ставим
+                # по результату, а не по «не упало».
+                devices_reset = await api.reset_user_devices(_switch_panel_user_id)
+                if devices_reset:
+                    logger.info('Reset all devices for user on tariff switch', user_id=user.id)
+                else:
+                    logger.error('Failed to reset devices on tariff switch', user_id=user.id)
         except Exception as e:
             logger.error('Failed to reset devices on tariff switch', error=e)
 
@@ -558,7 +586,7 @@ async def switch_tariff(
                     user=user,
                     subscription=subscription,
                     transaction=switch_transaction if upgrade_cost > 0 else None,
-                    period_days=(remaining_days if remaining_days > 0 else new_period_days),
+                    period_days=remaining_days if remaining_days > 0 else new_period_days,
                     was_trial_conversion=False,
                     amount_kopeks=upgrade_cost,
                     purchase_type='tariff_switch',

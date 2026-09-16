@@ -28,9 +28,7 @@ from app.database.models import SubscriptionStatus
 
 
 @pytest.mark.asyncio
-async def test_try_auto_extend_skips_when_target_tariff_is_inactive(
-    monkeypatch,
-) -> None:
+async def test_try_auto_extend_skips_when_target_tariff_is_inactive(monkeypatch) -> None:
     """Operator deactivated the tariff → user must NOT be billed even though
     the subscription is expired and the balance is sufficient."""
     from app.services import subscription_auto_purchase_service as svc
@@ -81,9 +79,7 @@ async def test_try_auto_extend_skips_when_target_tariff_is_inactive(
 
 
 @pytest.mark.asyncio
-async def test_try_auto_extend_skips_inactive_tariff_in_multi_tariff_mode(
-    monkeypatch,
-) -> None:
+async def test_try_auto_extend_skips_inactive_tariff_in_multi_tariff_mode(monkeypatch) -> None:
     """Same guard for the multi-tariff selection branch."""
     from app.services import subscription_auto_purchase_service as svc
 
@@ -129,9 +125,7 @@ async def test_try_auto_extend_skips_inactive_tariff_in_multi_tariff_mode(
 
 
 @pytest.mark.asyncio
-async def test_prepare_auto_extend_context_skips_inactive_target_tariff(
-    monkeypatch,
-) -> None:
+async def test_prepare_auto_extend_context_skips_inactive_target_tariff(monkeypatch) -> None:
     """Cart-driven autopay path — the inactive-target guard belongs there too."""
     from app.services import subscription_auto_purchase_service as svc
 

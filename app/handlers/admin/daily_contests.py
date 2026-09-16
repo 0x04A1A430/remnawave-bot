@@ -50,38 +50,31 @@ async def show_daily_contests(
     texts = get_texts(db_user.language)
     templates = await list_templates(db, enabled_only=False)
 
-    lines = [texts.t('ADMIN_DAILY_CONTESTS_TITLE', 'Ежедневные конкурсы')]
+    lines = [texts.t('ADMIN_DAILY_CONTESTS_TITLE', '📆 Ежедневные конкурсы')]
     if not templates:
         lines.append(texts.t('ADMIN_CONTESTS_EMPTY', 'Пока нет созданных конкурсов.'))
     else:
         for tpl in templates:
-            status = '' if tpl.is_enabled else ''
+            status = '🟢' if tpl.is_enabled else '⚪️'
             prize_info = f'{tpl.prize_value} ({tpl.prize_type})' if tpl.prize_type else tpl.prize_value
             lines.append(f'{status} <b>{tpl.name}</b> (slug: {tpl.slug}) — приз {prize_info}, макс {tpl.max_winners}')
 
     keyboard_rows = []
     if templates:
         keyboard_rows.append(
+            [types.InlineKeyboardButton(text='❌ Закрыть все активные раунды', callback_data='admin_daily_close_all')]
+        )
+        keyboard_rows.append(
             [
                 types.InlineKeyboardButton(
-                    text='Закрыть все активные раунды',
-                    callback_data='admin_daily_close_all',
+                    text='� Сбросить попытки во всех активных раундах', callback_data='admin_daily_reset_all_attempts'
                 )
             ]
         )
         keyboard_rows.append(
             [
                 types.InlineKeyboardButton(
-                    text='� Сбросить попытки во всех активных раундах',
-                    callback_data='admin_daily_reset_all_attempts',
-                )
-            ]
-        )
-        keyboard_rows.append(
-            [
-                types.InlineKeyboardButton(
-                    text='� Запустить все активные конкурсы',
-                    callback_data='admin_daily_start_all',
+                    text='� Запустить все активные конкурсы', callback_data='admin_daily_start_all'
                 )
             ]
         )
@@ -89,7 +82,7 @@ async def show_daily_contests(
         keyboard_rows.append(
             [
                 types.InlineKeyboardButton(
-                    text=f'{tpl.name}',
+                    text=f'⚙️ {tpl.name}',
                     callback_data=f'admin_daily_contest_{tpl.id}',
                 )
             ]
@@ -123,8 +116,8 @@ async def show_daily_contest(
         return
 
     lines = [
-        f'<b>{tpl.name}</b> (slug: {tpl.slug})',
-        f'{texts.t("ADMIN_CONTEST_STATUS_ACTIVE", "Активен") if tpl.is_enabled else texts.t("ADMIN_CONTEST_STATUS_INACTIVE", "Выключен")}',
+        f'🏷 <b>{tpl.name}</b> (slug: {tpl.slug})',
+        f'{texts.t("ADMIN_CONTEST_STATUS_ACTIVE", "🟢 Активен") if tpl.is_enabled else texts.t("ADMIN_CONTEST_STATUS_INACTIVE", "⚪️ Выключен")}',
         f'Тип приза: {tpl.prize_type or "days"} | Значение: {tpl.prize_value or "1"}',
         f'Макс победителей: {tpl.max_winners}',
         f'Попыток/польз: {tpl.attempts_per_user}',
@@ -360,10 +353,7 @@ async def edit_payload(
         ]
     )
     await callback.message.edit_text(
-        texts.t(
-            'ADMIN_CONTEST_PAYLOAD_PROMPT',
-            'Отправьте JSON payload для игры (словарь настроек):\n',
-        )
+        texts.t('ADMIN_CONTEST_PAYLOAD_PROMPT', 'Отправьте JSON payload для игры (словарь настроек):\n')
         + f'<code>{payload_json}</code>',
         reply_markup=kb,
     )

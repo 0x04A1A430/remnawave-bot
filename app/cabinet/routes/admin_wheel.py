@@ -107,11 +107,7 @@ async def update_admin_wheel_config(
 
     config = await update_wheel_config(db, **update_data)
 
-    logger.info(
-        'Admin updated wheel config',
-        telegram_id=admin.telegram_id,
-        update_data=update_data,
-    )
+    logger.info('🎡 Admin updated wheel config', telegram_id=admin.telegram_id, update_data=update_data)
 
     # Возвращаем полную конфигурацию
     prizes = await get_wheel_prizes(db, config.id, active_only=False)
@@ -189,11 +185,7 @@ async def get_prizes(
     ]
 
 
-@router.post(
-    '/prizes',
-    response_model=WheelPrizeAdminResponse,
-    status_code=status.HTTP_201_CREATED,
-)
+@router.post('/prizes', response_model=WheelPrizeAdminResponse, status_code=status.HTTP_201_CREATED)
 async def create_prize(
     request: CreatePrizeRequest,
     admin: User = Depends(require_permission('wheel:edit')),
@@ -219,11 +211,7 @@ async def create_prize(
         promo_traffic_gb=request.promo_traffic_gb,
     )
 
-    logger.info(
-        'Admin created prize',
-        telegram_id=admin.telegram_id,
-        display_name=prize.display_name,
-    )
+    logger.info('🎁 Admin created prize', telegram_id=admin.telegram_id, display_name=prize.display_name)
 
     return WheelPrizeAdminResponse(
         id=prize.id,
@@ -273,12 +261,7 @@ async def update_prize(
             detail='Prize not found',
         )
 
-    logger.info(
-        'Admin updated prize',
-        telegram_id=admin.telegram_id,
-        prize_id=prize_id,
-        update_data=update_data,
-    )
+    logger.info('🎁 Admin updated prize', telegram_id=admin.telegram_id, prize_id=prize_id, update_data=update_data)
 
     return WheelPrizeAdminResponse(
         id=prize.id,
@@ -315,7 +298,7 @@ async def delete_prize_endpoint(
             detail='Prize not found',
         )
 
-    logger.info('Admin deleted prize', telegram_id=admin.telegram_id, prize_id=prize_id)
+    logger.info('🗑️ Admin deleted prize', telegram_id=admin.telegram_id, prize_id=prize_id)
 
 
 @router.post('/prizes/reorder', status_code=status.HTTP_200_OK)
@@ -326,11 +309,7 @@ async def reorder_prizes(
 ):
     """Переупорядочить призы."""
     await reorder_wheel_prizes(db, request.prize_ids)
-    logger.info(
-        'Admin reordered prizes',
-        telegram_id=admin.telegram_id,
-        prize_ids=request.prize_ids,
-    )
+    logger.info('🔄 Admin reordered prizes', telegram_id=admin.telegram_id, prize_ids=request.prize_ids)
     return {'success': True}
 
 

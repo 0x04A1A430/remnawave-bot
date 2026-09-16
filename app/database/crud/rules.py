@@ -39,7 +39,7 @@ async def create_or_update_rules(
     await db.commit()
     await db.refresh(new_rules)
 
-    logger.info('Правила обновлены', language=language, new_rules_id=new_rules.id)
+    logger.info('✅ Правила обновлены', language=language, new_rules_id=new_rules.id)
     return new_rules
 
 
@@ -55,15 +55,13 @@ async def clear_all_rules(db: AsyncSession, language: str = 'ru') -> bool:
 
         rows_affected = result.rowcount
         logger.info(
-            'Очищены правила для языка . Деактивировано записей',
-            language=language,
-            rows_affected=rows_affected,
+            '✅ Очищены правила для языка . Деактивировано записей', language=language, rows_affected=rows_affected
         )
 
         return rows_affected > 0
 
     except Exception as e:
-        logger.error('Ошибка при очистке правил для языка', language=language, error=e)
+        logger.error('❌ Ошибка при очистке правил для языка', language=language, error=e)
         await db.rollback()
         raise
 
@@ -132,11 +130,7 @@ async def restore_rules_version(db: AsyncSession, rule_id: int, language: str = 
         )
 
         restored_rule = ServiceRule(
-            title=rule_to_restore.title,
-            content=rule_to_restore.content,
-            language=language,
-            is_active=True,
-            order=0,
+            title=rule_to_restore.title, content=rule_to_restore.content, language=language, is_active=True, order=0
         )
 
         db.add(restored_rule)
@@ -144,14 +138,12 @@ async def restore_rules_version(db: AsyncSession, rule_id: int, language: str = 
         await db.refresh(restored_rule)
 
         logger.info(
-            'Восстановлена версия правил ID как новое правило ID',
-            rule_id=rule_id,
-            restored_rule_id=restored_rule.id,
+            '✅ Восстановлена версия правил ID как новое правило ID', rule_id=rule_id, restored_rule_id=restored_rule.id
         )
         return restored_rule
 
     except Exception as e:
-        logger.error('Ошибка при восстановлении правил ID', rule_id=rule_id, error=e)
+        logger.error('❌ Ошибка при восстановлении правил ID', rule_id=rule_id, error=e)
         await db.rollback()
         raise
 
@@ -168,11 +160,7 @@ async def get_rules_statistics(db: AsyncSession) -> dict:
         for rule in active_rules:
             lang = rule.language
             if lang not in languages_stats:
-                languages_stats[lang] = {
-                    'active_count': 0,
-                    'last_updated': None,
-                    'content_length': 0,
-                }
+                languages_stats[lang] = {'active_count': 0, 'last_updated': None, 'content_length': 0}
 
             languages_stats[lang]['active_count'] += 1
             languages_stats[lang]['content_length'] = len(rule.content)
@@ -188,11 +176,5 @@ async def get_rules_statistics(db: AsyncSession) -> dict:
         }
 
     except Exception as e:
-        logger.error('Ошибка при получении статистики правил', error=e)
-        return {
-            'total_active': 0,
-            'total_all_time': 0,
-            'languages': {},
-            'total_languages': 0,
-            'error': str(e),
-        }
+        logger.error('❌ Ошибка при получении статистики правил', error=e)
+        return {'total_active': 0, 'total_all_time': 0, 'languages': {}, 'total_languages': 0, 'error': str(e)}

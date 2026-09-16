@@ -115,11 +115,7 @@ class MenuLayoutHistoryService:
         # Сохраняем текущую конфигурацию в историю перед откатом
         current_config = await get_config_func(db)
         await cls.save_history(
-            db,
-            current_config,
-            'rollback_backup',
-            f'Backup before rollback to history #{history_id}',
-            user_info,
+            db, current_config, 'rollback_backup', f'Backup before rollback to history #{history_id}', user_info
         )
 
         # Применяем конфигурацию из истории

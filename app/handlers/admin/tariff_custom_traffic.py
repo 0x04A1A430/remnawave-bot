@@ -5,7 +5,7 @@ import html
 from aiogram import Dispatcher, F, types
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State
-from aiogram.types import InlineKeyboardMarkup
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.crud.tariff import get_tariff_by_id, update_tariff
@@ -17,7 +17,6 @@ from app.services.tariff_custom_traffic import (
     validate_custom_traffic_configuration,
 )
 from app.states import AdminStates
-from app.utils.button_emoji import make_button
 from app.utils.decorators import admin_required, error_handler
 from app.utils.formatting import format_price_kopeks
 
@@ -77,32 +76,31 @@ def get_custom_traffic_keyboard(tariff: Tariff, language: str) -> InlineKeyboard
     """Build the dedicated custom-traffic settings keyboard."""
     texts = get_texts(language)
     enabled = getattr(tariff, 'custom_traffic_enabled', False)
-    toggle_text = 'Выключить' if enabled else 'Включить'
+    toggle_text = '❌ Выключить' if enabled else '✅ Включить'
 
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                make_button(
+                InlineKeyboardButton(
                     text=toggle_text,
                     callback_data=f'admin_tariff_toggle_custom_traffic:{tariff.id}',
-                    style='danger' if enabled else 'success',
                 )
             ],
             [
-                make_button(
-                    text='Цена за 1 ГБ',
+                InlineKeyboardButton(
+                    text='💰 Цена за 1 ГБ',
                     callback_data=f'admin_tariff_edit_custom_traffic_price:{tariff.id}',
                 )
             ],
             [
-                make_button(
-                    text='Минимальный объём',
+                InlineKeyboardButton(
+                    text='📉 Минимальный объём',
                     callback_data=f'admin_tariff_edit_custom_traffic_min:{tariff.id}',
                 )
             ],
             [
-                make_button(
-                    text='Максимальный объём',
+                InlineKeyboardButton(
+                    text='📈 Максимальный объём',
                     callback_data=f'admin_tariff_edit_custom_traffic_max:{tariff.id}',
                 )
             ],
@@ -200,7 +198,7 @@ async def _start_custom_traffic_field_edit(
         reply_markup=InlineKeyboardMarkup(
             inline_keyboard=[
                 [
-                    make_button(
+                    InlineKeyboardButton(
                         text=texts.CANCEL,
                         callback_data=f'admin_tariff_edit_custom_traffic:{tariff_id}',
                     )

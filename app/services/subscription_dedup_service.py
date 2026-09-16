@@ -87,7 +87,7 @@ async def _run_dedupe() -> dict[str, int]:
             await db.commit()
 
     if removed_db:
-        logger.info('Схлопнуты дубли тарифных подписок', removed_db=removed_db)
+        logger.info('🧹 Схлопнуты дубли тарифных подписок', removed_db=removed_db)
     return {'removed_db': removed_db}
 
 

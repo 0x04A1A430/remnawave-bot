@@ -46,9 +46,9 @@ async def show_admin_panel(callback: types.CallbackQuery, db_user: User, db: Asy
         admin_text = admin_text.replace(
             '\n\nВыберите раздел для управления:',
             (
-                f'\n\nОнлайн сейчас: {users_online}'
-                f'\nОнлайн сегодня: {users_today}'
-                f'\nНа этой неделе: {users_week}'
+                f'\n\n- 🟢 Онлайн сейчас: {users_online}'
+                f'\n- 📅 Онлайн сегодня: {users_today}'
+                f'\n- 🗓️ На этой неделе: {users_week}'
                 '\n\nВыберите раздел для управления:'
             ),
         )
@@ -65,10 +65,7 @@ async def show_users_submenu(callback: types.CallbackQuery, db_user: User, db: A
     texts = get_texts(db_user.language)
 
     await callback.message.edit_text(
-        texts.t(
-            'ADMIN_USERS_SUBMENU_TITLE',
-            '**Управление пользователями и подписками**\n\n',
-        )
+        texts.t('ADMIN_USERS_SUBMENU_TITLE', '👥 **Управление пользователями и подписками**\n\n')
         + texts.t('ADMIN_SUBMENU_SELECT_SECTION', 'Выберите нужный раздел:'),
         reply_markup=get_admin_users_submenu_keyboard(db_user.language),
         parse_mode='Markdown',
@@ -82,7 +79,7 @@ async def show_promo_submenu(callback: types.CallbackQuery, db_user: User, db: A
     texts = get_texts(db_user.language)
 
     await callback.message.edit_text(
-        texts.t('ADMIN_PROMO_SUBMENU_TITLE', '**Промокоды и статистика**\n\n')
+        texts.t('ADMIN_PROMO_SUBMENU_TITLE', '💰 **Промокоды и статистика**\n\n')
         + texts.t('ADMIN_SUBMENU_SELECT_SECTION', 'Выберите нужный раздел:'),
         reply_markup=get_admin_promo_submenu_keyboard(db_user.language),
         parse_mode='Markdown',
@@ -96,11 +93,8 @@ async def show_communications_submenu(callback: types.CallbackQuery, db_user: Us
     texts = get_texts(db_user.language)
 
     await callback.message.edit_text(
-        texts.t('ADMIN_COMMUNICATIONS_SUBMENU_TITLE', '**Коммуникации**\n\n')
-        + texts.t(
-            'ADMIN_COMMUNICATIONS_SUBMENU_DESCRIPTION',
-            'Управление рассылками и текстами интерфейса:',
-        ),
+        texts.t('ADMIN_COMMUNICATIONS_SUBMENU_TITLE', '📨 **Коммуникации**\n\n')
+        + texts.t('ADMIN_COMMUNICATIONS_SUBMENU_DESCRIPTION', 'Управление рассылками и текстами интерфейса:'),
         reply_markup=get_admin_communications_submenu_keyboard(db_user.language),
         parse_mode='Markdown',
     )
@@ -123,22 +117,18 @@ async def show_support_submenu(callback: types.CallbackQuery, db_user: User, db:
             inline_keyboard=[
                 [
                     InlineKeyboardButton(
-                        text=texts.t('ADMIN_SUPPORT_TICKETS', 'Тикеты поддержки'),
-                        callback_data='admin_tickets',
+                        text=texts.t('ADMIN_SUPPORT_TICKETS', '🎫 Тикеты поддержки'), callback_data='admin_tickets'
                     )
                 ],
                 [InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu', style='danger')],
             ]
         )
     await callback.message.edit_text(
-        texts.t('ADMIN_SUPPORT_SUBMENU_TITLE', '**Поддержка**\n\n')
+        texts.t('ADMIN_SUPPORT_SUBMENU_TITLE', '🛟 **Поддержка**\n\n')
         + (
             texts.t('ADMIN_SUPPORT_SUBMENU_DESCRIPTION_MODERATOR', 'Доступ к тикетам.')
             if is_moderator_only
-            else texts.t(
-                'ADMIN_SUPPORT_SUBMENU_DESCRIPTION',
-                'Управление тикетами и настройками поддержки:',
-            )
+            else texts.t('ADMIN_SUPPORT_SUBMENU_DESCRIPTION', 'Управление тикетами и настройками поддержки:')
         ),
         reply_markup=kb,
         parse_mode='Markdown',
@@ -155,8 +145,7 @@ async def show_moderator_panel(callback: types.CallbackQuery, db_user: User, db:
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text=texts.t('ADMIN_SUPPORT_TICKETS', 'Тикеты поддержки'),
-                    callback_data='admin_tickets',
+                    text=texts.t('ADMIN_SUPPORT_TICKETS', '🎫 Тикеты поддержки'), callback_data='admin_tickets'
                 )
             ],
             [
@@ -169,7 +158,7 @@ async def show_moderator_panel(callback: types.CallbackQuery, db_user: User, db:
         ]
     )
     await callback.message.edit_text(
-        texts.t('ADMIN_SUPPORT_MODERATION_TITLE', '‍<b>Модерация поддержки</b>')
+        texts.t('ADMIN_SUPPORT_MODERATION_TITLE', '🧑‍⚖️ <b>Модерация поддержки</b>')
         + '\n\n'
         + texts.t('ADMIN_SUPPORT_MODERATION_DESCRIPTION', 'Доступ к тикетам поддержки.'),
         parse_mode='HTML',
@@ -197,7 +186,7 @@ async def show_support_audit(callback: types.CallbackQuery, db_user: User, db: A
     offset = (page - 1) * per_page
     logs = await TicketCRUD.list_support_audit(db, limit=per_page, offset=offset)
 
-    lines = [texts.t('ADMIN_SUPPORT_AUDIT_TITLE', '<b>Аудит модераторов</b>'), '']
+    lines = [texts.t('ADMIN_SUPPORT_AUDIT_TITLE', '🧾 <b>Аудит модераторов</b>'), '']
     if not logs:
         lines.append(texts.t('ADMIN_SUPPORT_AUDIT_EMPTY', 'Пока пусто'))
     else:
@@ -213,8 +202,7 @@ async def show_support_audit(callback: types.CallbackQuery, db_user: User, db: A
                 'block_user_timed': texts.t('ADMIN_SUPPORT_AUDIT_ACTION_BLOCK_TIMED', 'Блокировка (время)'),
                 'block_user_perm': texts.t('ADMIN_SUPPORT_AUDIT_ACTION_BLOCK_PERM', 'Блокировка (навсегда)'),
                 'close_all_tickets': texts.t(
-                    'ADMIN_SUPPORT_AUDIT_ACTION_CLOSE_ALL_TICKETS',
-                    'Массовое закрытие тикетов',
+                    'ADMIN_SUPPORT_AUDIT_ACTION_CLOSE_ALL_TICKETS', 'Массовое закрытие тикетов'
                 ),
                 'unblock_user': texts.t('ADMIN_SUPPORT_AUDIT_ACTION_UNBLOCK', 'Снятие блока'),
             }
@@ -233,10 +221,10 @@ async def show_support_audit(callback: types.CallbackQuery, db_user: User, db: A
     nav_row = []
     if total_pages > 1:
         if page > 1:
-            nav_row.append(InlineKeyboardButton(text='←', callback_data=f'admin_support_audit_page_{page - 1}'))
+            nav_row.append(InlineKeyboardButton(text='⬅️', callback_data=f'admin_support_audit_page_{page - 1}'))
         nav_row.append(InlineKeyboardButton(text=f'{page}/{total_pages}', callback_data='current_page'))
         if page < total_pages:
-            nav_row.append(InlineKeyboardButton(text='→', callback_data=f'admin_support_audit_page_{page + 1}'))
+            nav_row.append(InlineKeyboardButton(text='➡️', callback_data=f'admin_support_audit_page_{page + 1}'))
 
     kb_rows = []
     if nav_row:
@@ -254,11 +242,8 @@ async def show_settings_submenu(callback: types.CallbackQuery, db_user: User, db
     texts = get_texts(db_user.language)
 
     await callback.message.edit_text(
-        texts.t('ADMIN_SETTINGS_SUBMENU_TITLE', '**Настройки системы**\n\n')
-        + texts.t(
-            'ADMIN_SETTINGS_SUBMENU_DESCRIPTION',
-            'Управление Remnawave, мониторингом и другими настройками:',
-        ),
+        texts.t('ADMIN_SETTINGS_SUBMENU_TITLE', '⚙️ **Настройки системы**\n\n')
+        + texts.t('ADMIN_SETTINGS_SUBMENU_DESCRIPTION', 'Управление Remnawave, мониторингом и другими настройками:'),
         reply_markup=get_admin_settings_submenu_keyboard(db_user.language),
         parse_mode='Markdown',
     )
@@ -271,10 +256,9 @@ async def show_system_submenu(callback: types.CallbackQuery, db_user: User, db: 
     texts = get_texts(db_user.language)
 
     await callback.message.edit_text(
-        texts.t('ADMIN_SYSTEM_SUBMENU_TITLE', '**Системные функции**\n\n')
+        texts.t('ADMIN_SYSTEM_SUBMENU_TITLE', '🛠️ **Системные функции**\n\n')
         + texts.t(
-            'ADMIN_SYSTEM_SUBMENU_DESCRIPTION',
-            'Отчеты, обновления, логи, резервные копии и системные операции:',
+            'ADMIN_SYSTEM_SUBMENU_DESCRIPTION', 'Отчеты, обновления, логи, резервные копии и системные операции:'
         ),
         reply_markup=get_admin_system_submenu_keyboard(db_user.language),
         parse_mode='Markdown',
@@ -290,7 +274,7 @@ async def clear_rules_command(message: types.Message, db_user: User, db: AsyncSe
 
         if stats['total_active'] == 0:
             await message.reply(
-                '<b>Правила уже очищены</b>\n\n'
+                'ℹ️ <b>Правила уже очищены</b>\n\n'
                 'В системе нет активных правил. Используются стандартные правила по умолчанию.'
             )
             return
@@ -301,8 +285,8 @@ async def clear_rules_command(message: types.Message, db_user: User, db: AsyncSe
             clear_rules_cache()
 
             await message.reply(
-                f'<b>Правила успешно очищены!</b>\n\n'
-                f'<b>Статистика:</b>\n'
+                f'✅ <b>Правила успешно очищены!</b>\n\n'
+                f'📊 <b>Статистика:</b>\n'
                 f'• Очищено правил: {stats["total_active"]}\n'
                 f'• Язык: {db_user.language}\n'
                 f'• Выполнил: {html.escape(db_user.full_name or "")}\n\n'
@@ -310,17 +294,15 @@ async def clear_rules_command(message: types.Message, db_user: User, db: AsyncSe
             )
 
             logger.info(
-                'Правила очищены командой администратором',
-                telegram_id=db_user.telegram_id,
-                full_name=db_user.full_name,
+                'Правила очищены командой администратором', telegram_id=db_user.telegram_id, full_name=db_user.full_name
             )
         else:
-            await message.reply('<b>Нет правил для очистки</b>\n\nАктивные правила не найдены.')
+            await message.reply('⚠️ <b>Нет правил для очистки</b>\n\nАктивные правила не найдены.')
 
     except Exception as e:
         logger.error('Ошибка при очистке правил командой', error=e)
         await message.reply(
-            '<b>Ошибка при очистке правил</b>\n\n'
+            '❌ <b>Ошибка при очистке правил</b>\n\n'
             f'Произошла ошибка: {e!s}\n'
             'Попробуйте через админ-панель или повторите позже.'
         )
@@ -333,49 +315,49 @@ async def rules_stats_command(message: types.Message, db_user: User, db: AsyncSe
         stats = await get_rules_statistics(db)
 
         if 'error' in stats:
-            await message.reply(f'Ошибка получения статистики: {stats["error"]}')
+            await message.reply(f'❌ Ошибка получения статистики: {stats["error"]}')
             return
 
-        text = '<b>Статистика правил сервиса</b>\n\n'
-        text += '<b>Общая информация:</b>\n'
+        text = '📊 <b>Статистика правил сервиса</b>\n\n'
+        text += '📋 <b>Общая информация:</b>\n'
         text += f'• Активных правил: {stats["total_active"]}\n'
         text += f'• Всего в истории: {stats["total_all_time"]}\n'
         text += f'• Поддерживаемых языков: {stats["total_languages"]}\n\n'
 
         if stats['languages']:
-            text += '<b>По языкам:</b>\n'
+            text += '🌐 <b>По языкам:</b>\n'
             for lang, lang_stats in stats['languages'].items():
                 text += f'• <code>{lang}</code>: {lang_stats["active_count"]} правил, '
                 text += f'{lang_stats["content_length"]} символов\n'
                 if lang_stats['last_updated']:
                     text += f'  Обновлено: {lang_stats["last_updated"].strftime("%d.%m.%Y %H:%M")}\n'
         else:
-            text += 'Активных правил нет - используются правила по умолчанию'
+            text += 'ℹ️ Активных правил нет - используются правила по умолчанию'
 
         await message.reply(text)
 
     except Exception as e:
         logger.error('Ошибка при получении статистики правил', error=e)
-        await message.reply(f'<b>Ошибка получения статистики</b>\n\nПроизошла ошибка: {e!s}')
+        await message.reply(f'❌ <b>Ошибка получения статистики</b>\n\nПроизошла ошибка: {e!s}')
 
 
 @admin_required
 @error_handler
 async def admin_commands_help(message: types.Message, db_user: User, db: AsyncSession):
     help_text = """
-<b>Доступные админские команды:</b>
+🔧 <b>Доступные админские команды:</b>
 
-<b>Управление правилами:</b>
+<b>📋 Управление правилами:</b>
 • <code>/clear_rules</code> - очистить все правила
 • <code>/rules_stats</code> - статистика правил
 
-<b>Справка:</b>
+<b>ℹ️ Справка:</b>
 • <code>/admin_help</code> - это сообщение
 
-<b>Панель управления:</b>
+<b>📱 Панель управления:</b>
 Используйте кнопку "Админ панель" в главном меню для полного доступа ко всем функциям.
 
-<b>️ Важно:</b>
+<b>⚠️ Важно:</b>
 Все команды логируются и требуют админских прав.
 """
 
@@ -393,8 +375,7 @@ def register_handlers(dp: Dispatcher):
 
     dp.callback_query.register(show_support_submenu, F.data == 'admin_submenu_support')
     dp.callback_query.register(
-        show_support_audit,
-        F.data.in_(['admin_support_audit']) | F.data.startswith('admin_support_audit_page_'),
+        show_support_audit, F.data.in_(['admin_support_audit']) | F.data.startswith('admin_support_audit_page_')
     )
 
     dp.callback_query.register(show_settings_submenu, F.data == 'admin_submenu_settings')

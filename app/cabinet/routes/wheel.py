@@ -89,7 +89,7 @@ async def get_wheel_config(
     return WheelConfigResponse(
         is_enabled=config.is_enabled,
         name=config.name,
-        spin_cost_stars=(config.spin_cost_stars if config.spin_cost_stars_enabled else None),
+        spin_cost_stars=config.spin_cost_stars if config.spin_cost_stars_enabled else None,
         spin_cost_days=config.spin_cost_days if config.spin_cost_days_enabled else None,
         spin_cost_stars_enabled=config.spin_cost_stars_enabled,
         spin_cost_days_enabled=config.spin_cost_days_enabled,
@@ -178,7 +178,7 @@ async def get_spin_history(
     items = []
     for spin in spins:
         # Получаем emoji и color из приза, если он есть
-        emoji = ''
+        emoji = '🎁'
         color = '#3B82F6'
         if spin.prize:
             emoji = spin.prize.emoji
@@ -292,18 +292,14 @@ async def create_stars_invoice(
         async with create_bot() as bot:
             invoice_url = await bot.create_invoice_link(
                 title='Колесо удачи',
-                description=f'Спин колеса удачи ({stars_amount} )',
+                description=f'Спин колеса удачи ({stars_amount} ⭐)',
                 payload=payload,
                 provider_token='',
                 currency='XTR',
                 prices=[LabeledPrice(label='Спин колеса', amount=stars_amount)],
             )
 
-        logger.info(
-            'Created Stars invoice for wheel spin: user=, stars',
-            user_id=user.id,
-            stars_amount=stars_amount,
-        )
+        logger.info('Created Stars invoice for wheel spin: user=, stars', user_id=user.id, stars_amount=stars_amount)
 
         return StarsInvoiceResponse(
             invoice_url=invoice_url,

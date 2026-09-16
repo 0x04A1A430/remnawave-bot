@@ -74,7 +74,7 @@ class TelegramWebhookProcessor:
 
             if self._worker_count:
                 logger.info(
-                    'Telegram webhook processor запущен',
+                    '🚀 Telegram webhook processor запущен',
                     worker_count=self._worker_count,
                     queue_maxsize=self._queue_maxsize,
                 )
@@ -93,7 +93,7 @@ class TelegramWebhookProcessor:
                     await asyncio.wait_for(self._queue.join(), timeout=self._shutdown_timeout)
                 except TimeoutError:
                     logger.warning(
-                        'Не удалось дождаться завершения очереди Telegram webhook',
+                        '⏱️ Не удалось дождаться завершения очереди Telegram webhook',
                         shutdown_timeout=self._shutdown_timeout,
                     )
             else:
@@ -107,10 +107,7 @@ class TelegramWebhookProcessor:
                         drained += 1
                         self._queue.task_done()
                 if drained:
-                    logger.warning(
-                        'Очередь Telegram webhook остановлена без воркеров',
-                        drained=drained,
-                    )
+                    logger.warning('Очередь Telegram webhook остановлена без воркеров', drained=drained)
 
             for _ in range(len(self._workers)):
                 try:
@@ -122,7 +119,7 @@ class TelegramWebhookProcessor:
             if self._workers:
                 await asyncio.gather(*self._workers, return_exceptions=True)
             self._workers.clear()
-            logger.info('Telegram webhook processor остановлен')
+            logger.info('🛑 Telegram webhook processor остановлен')
 
     async def enqueue(self, update: Update) -> None:
         if not self._running:
@@ -166,11 +163,7 @@ class TelegramWebhookProcessor:
                     logger.debug('Worker cancelled during processing', worker_id=worker_id)
                     raise
                 except Exception as error:  # pragma: no cover - логируем сбой обработчика
-                    logger.exception(
-                        'Ошибка обработки Telegram update в worker',
-                        worker_id=worker_id,
-                        error=error,
-                    )
+                    logger.exception('Ошибка обработки Telegram update в worker', worker_id=worker_id, error=error)
                 finally:
                     self._queue.task_done()
         finally:
@@ -189,15 +182,11 @@ async def _dispatch_update(
             await processor.enqueue(update)
         except TelegramWebhookOverloadedError as error:
             logger.warning('Очередь Telegram webhook переполнена', error=error)
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail='webhook_queue_full',
-            ) from error
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail='webhook_queue_full') from error
         except TelegramWebhookProcessorNotRunningError as error:
             logger.error('Telegram webhook processor неактивен', error=error)
             raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail='webhook_processor_unavailable',
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail='webhook_processor_unavailable'
             ) from error
         return
 
@@ -220,17 +209,11 @@ def create_telegram_router(
             header_token = request.headers.get('X-Telegram-Bot-Api-Secret-Token')
             if header_token != secret_token:
                 logger.warning('Получен Telegram webhook с неверным секретом')
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail='invalid_secret_token',
-                )
+                raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='invalid_secret_token')
 
         content_type = request.headers.get('content-type', '')
         if content_type and 'application/json' not in content_type.lower():
-            raise HTTPException(
-                status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
-                detail='invalid_content_type',
-            )
+            raise HTTPException(status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, detail='invalid_content_type')
 
         try:
             payload: Any = await request.json()

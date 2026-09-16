@@ -10,10 +10,7 @@ from .common import logger
 
 
 async def send_trial_notification(
-    callback: types.CallbackQuery,
-    db: AsyncSession,
-    db_user: User,
-    subscription: Subscription,
+    callback: types.CallbackQuery, db: AsyncSession, db_user: User, subscription: Subscription
 ):
     try:
         notification_service = AdminNotificationService(callback.bot)

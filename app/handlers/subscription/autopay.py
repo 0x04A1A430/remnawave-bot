@@ -1,5 +1,6 @@
 from typing import Any
 
+import structlog
 from aiogram import types
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
@@ -41,6 +42,9 @@ from .countries import (
 from .pricing import _build_subscription_period_prompt
 
 
+logger = structlog.get_logger(__name__)
+
+
 async def _resolve_subscription(callback, db_user, db, state=None):
     """Resolve subscription — delegates to shared resolve_subscription_from_context."""
     from .common import resolve_subscription_from_context
@@ -48,17 +52,12 @@ async def _resolve_subscription(callback, db_user, db, state=None):
     return await resolve_subscription_from_context(callback, db_user, db, state)
 
 
-async def handle_autopay_menu(
-    callback: types.CallbackQuery,
-    db_user: User,
-    db: AsyncSession,
-    state: FSMContext = None,
-):
+async def handle_autopay_menu(callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext = None):
     texts = get_texts(db_user.language)
     subscription, sub_id = await _resolve_subscription(callback, db_user, db, state)
     if not subscription:
         await callback.answer(
-            texts.t('SUBSCRIPTION_ACTIVE_REQUIRED', 'У вас нет активной подписки!'),
+            texts.t('SUBSCRIPTION_ACTIVE_REQUIRED', '⚠️ У вас нет активной подписки!'),
             show_alert=True,
         )
         return
@@ -77,7 +76,7 @@ async def handle_autopay_menu(
             daily_keyboard_rows.append(
                 [
                     types.InlineKeyboardButton(
-                        text=texts.t('SBP_RECURRING_MENU_BUTTON', 'Автопродление через СБП'),
+                        text=texts.t('SBP_RECURRING_MENU_BUTTON', '⚡ Автопродление через СБП'),
                         callback_data='sbp_recurring_menu',
                     )
                 ]
@@ -111,10 +110,10 @@ async def handle_autopay_menu(
     text = texts.t(
         'AUTOPAY_MENU_TEXT',
         (
-            '<b>Автоплатеж</b>\n\n'
-            '<b>Статус:</b> {status}\n'
-            '<b>Списание за:</b> {days} дн. до окончания\n'
-            '<b>Период продления:</b> {period}\n\n'
+            '💳 <b>Автоплатеж</b>\n\n'
+            '📊 <b>Статус:</b> {status}\n'
+            '⏰ <b>Списание за:</b> {days} дн. до окончания\n'
+            '📅 <b>Период продления:</b> {period}\n\n'
             'Выберите действие:'
         ),
     ).format(status=status, days=days, period=period_text)
@@ -127,7 +126,7 @@ async def handle_autopay_menu(
             -1,
             [
                 types.InlineKeyboardButton(
-                    text=texts.t('SBP_RECURRING_MENU_BUTTON', 'Автопродление через СБП'),
+                    text=texts.t('SBP_RECURRING_MENU_BUTTON', '⚡ Автопродление через СБП'),
                     callback_data='sbp_recurring_menu',
                 )
             ],
@@ -141,12 +140,7 @@ async def handle_autopay_menu(
     await callback.answer()
 
 
-async def toggle_autopay(
-    callback: types.CallbackQuery,
-    db_user: User,
-    db: AsyncSession,
-    state: FSMContext = None,
-):
+async def toggle_autopay(callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext = None):
     subscription, sub_id = await _resolve_subscription(callback, db_user, db, state)
     if subscription is None:
         return
@@ -224,10 +218,9 @@ async def toggle_autopay(
         await cancel_platega_recurring_for_subscription_safe(db, subscription.id)
 
         await cancel_lava_recurring_for_subscription_safe(db, subscription.id)
-
     texts = get_texts(db_user.language)
     status = texts.t('AUTOPAY_STATUS_ENABLED', 'включен') if enable else texts.t('AUTOPAY_STATUS_DISABLED', 'выключен')
-    await callback.answer(texts.t('AUTOPAY_TOGGLE_SUCCESS', 'Автоплатеж {status}!').format(status=status))
+    await callback.answer(texts.t('AUTOPAY_TOGGLE_SUCCESS', '✅ Автоплатеж {status}!').format(status=status))
 
     try:
         await handle_autopay_menu(callback, db_user, db, state)
@@ -243,19 +236,14 @@ async def show_autopay_days(callback: types.CallbackQuery, db_user: User):
     await callback.message.edit_text(
         texts.t(
             'AUTOPAY_SELECT_DAYS_PROMPT',
-            'Выберите за сколько дней до окончания списывать средства:',
+            '⏰ Выберите за сколько дней до окончания списывать средства:',
         ),
         reply_markup=get_autopay_days_keyboard(db_user.language),
     )
     await callback.answer()
 
 
-async def set_autopay_days(
-    callback: types.CallbackQuery,
-    db_user: User,
-    db: AsyncSession,
-    state: FSMContext = None,
-):
+async def set_autopay_days(callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext = None):
     subscription, sub_id = await _resolve_subscription(callback, db_user, db, state)
     if subscription is None:
         return
@@ -265,7 +253,7 @@ async def set_autopay_days(
     await update_subscription_autopay(db, subscription, subscription.autopay_enabled, days)
 
     texts = get_texts(db_user.language)
-    await callback.answer(texts.t('AUTOPAY_DAYS_SET', 'Установлено {days} дней!').format(days=days))
+    await callback.answer(texts.t('AUTOPAY_DAYS_SET', '✅ Установлено {days} дней!').format(days=days))
 
     await handle_autopay_menu(callback, db_user, db, state)
 
@@ -280,12 +268,7 @@ def _get_subscription_renewal_periods(subscription) -> list[int]:
     return sorted(settings.get_available_renewal_periods())
 
 
-async def show_autopay_period(
-    callback: types.CallbackQuery,
-    db_user: User,
-    db: AsyncSession,
-    state: FSMContext = None,
-):
+async def show_autopay_period(callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext = None):
     """Period picker UI for autopay."""
     texts = get_texts(db_user.language)
     subscription, sub_id = await _resolve_subscription(callback, db_user, db, state)
@@ -303,23 +286,16 @@ async def show_autopay_period(
     await callback.message.edit_text(
         texts.t(
             'AUTOPAY_SELECT_PERIOD_PROMPT',
-            'Выберите период, на который автоплатёж будет продлевать подписку:',
+            '📅 Выберите период, на который автоплатёж будет продлевать подписку:',
         ),
         reply_markup=get_autopay_period_keyboard(periods, current, db_user.language),
     )
     await callback.answer()
 
 
-async def set_autopay_period(
-    callback: types.CallbackQuery,
-    db_user: User,
-    db: AsyncSession,
-    state: FSMContext = None,
-):
+async def set_autopay_period(callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext = None):
     """Handle period selection (autopay_period_<N> or autopay_period_default)."""
-    from app.database.crud.subscription import (
-        update_subscription_autopay as _update_autopay,
-    )
+    from app.database.crud.subscription import update_subscription_autopay as _update_autopay
 
     subscription, sub_id = await _resolve_subscription(callback, db_user, db, state)
     if subscription is None:
@@ -331,7 +307,7 @@ async def set_autopay_period(
 
     if suffix == 'default':
         await _update_autopay(db, subscription, subscription.autopay_enabled, period_days=None)
-        await callback.answer(texts.t('AUTOPAY_PERIOD_SET_DEFAULT', 'Используется период по умолчанию.'))
+        await callback.answer(texts.t('AUTOPAY_PERIOD_SET_DEFAULT', '✅ Используется период по умолчанию.'))
     else:
         try:
             days = int(suffix)
@@ -349,14 +325,14 @@ async def set_autopay_period(
             await callback.answer(
                 texts.t(
                     'AUTOPAY_PERIOD_NOT_AVAILABLE',
-                    'Этот период недоступен для данной подписки.',
+                    '❌ Этот период недоступен для данной подписки.',
                 ),
                 show_alert=True,
             )
             return
 
         await _update_autopay(db, subscription, subscription.autopay_enabled, period_days=days)
-        await callback.answer(texts.t('AUTOPAY_PERIOD_SET', 'Период автоплатежа: {days} дн.').format(days=days))
+        await callback.answer(texts.t('AUTOPAY_PERIOD_SET', '✅ Период автоплатежа: {days} дн.').format(days=days))
 
     await handle_autopay_menu(callback, db_user, db, state)
 
@@ -409,7 +385,7 @@ async def handle_sbp_recurring_menu(
 
     if not settings.is_platega_recurrent_enabled():
         await callback.answer(
-            texts.t('SBP_RECURRING_UNAVAILABLE', 'Автопродление через СБП сейчас недоступно'),
+            texts.t('SBP_RECURRING_UNAVAILABLE', '⚠️ Автопродление через СБП сейчас недоступно'),
             show_alert=True,
         )
         return
@@ -417,7 +393,7 @@ async def handle_sbp_recurring_menu(
     subscription, sub_id = await _resolve_subscription(callback, db_user, db, state)
     if not subscription:
         await callback.answer(
-            texts.t('SUBSCRIPTION_ACTIVE_REQUIRED', 'У вас нет активной подписки!'),
+            texts.t('SUBSCRIPTION_ACTIVE_REQUIRED', '⚠️ У вас нет активной подписки!'),
             show_alert=True,
         )
         return
@@ -429,19 +405,19 @@ async def handle_sbp_recurring_menu(
 
     text = texts.t(
         'SBP_RECURRING_MENU_TEXT',
-        '<b>Автопродление через СБП</b>\n\n<b>Статус:</b> {status}',
+        '⚡ <b>Автопродление через СБП</b>\n\n📊 <b>Статус:</b> {status}',
     ).format(status=status_text)
 
     if record is not None:
         # get_active_platega_subscription_by_subscription уже фильтрует по
         # PENDING/ACTIVE/PAST_DUE — любая непустая запись «активна» для целей UI.
         action_button = types.InlineKeyboardButton(
-            text=texts.t('SBP_RECURRING_CANCEL_BUTTON', 'Отменить автооплату'),
+            text=texts.t('SBP_RECURRING_CANCEL_BUTTON', '❌ Отменить автооплату'),
             callback_data='sbp_recurring_cancel',
         )
     else:
         action_button = types.InlineKeyboardButton(
-            text=texts.t('SBP_RECURRING_ENABLE_BUTTON', 'Подключить'),
+            text=texts.t('SBP_RECURRING_ENABLE_BUTTON', '✅ Подключить'),
             callback_data='sbp_recurring_enable',
         )
 
@@ -465,7 +441,7 @@ async def handle_sbp_recurring_enable(
 
     if not settings.is_platega_recurrent_enabled():
         await callback.answer(
-            texts.t('SBP_RECURRING_UNAVAILABLE', 'Автопродление через СБП сейчас недоступно'),
+            texts.t('SBP_RECURRING_UNAVAILABLE', '⚠️ Автопродление через СБП сейчас недоступно'),
             show_alert=True,
         )
         return
@@ -473,7 +449,7 @@ async def handle_sbp_recurring_enable(
     subscription, sub_id = await _resolve_subscription(callback, db_user, db, state)
     if not subscription:
         await callback.answer(
-            texts.t('SUBSCRIPTION_ACTIVE_REQUIRED', 'У вас нет активной подписки!'),
+            texts.t('SUBSCRIPTION_ACTIVE_REQUIRED', '⚠️ У вас нет активной подписки!'),
             show_alert=True,
         )
         return
@@ -505,7 +481,7 @@ async def handle_sbp_recurring_enable(
         await callback.answer(
             texts.t(
                 'SBP_RECURRING_NO_TARIFF',
-                'Автопродление через СБП доступно только для подписок с тарифом.',
+                '⚠️ Автопродление через СБП доступно только для подписок с тарифом.',
             ),
             show_alert=True,
         )
@@ -524,7 +500,7 @@ async def handle_sbp_recurring_enable(
         await callback.answer(
             texts.t(
                 'SBP_RECURRING_ENABLE_ERROR',
-                'Не удалось подключить автопродление через СБП. Попробуйте позже.',
+                '❌ Не удалось подключить автопродление через СБП. Попробуйте позже.',
             ),
             show_alert=True,
         )
@@ -543,7 +519,7 @@ async def handle_sbp_recurring_enable(
         inline_keyboard=[
             [
                 types.InlineKeyboardButton(
-                    text=texts.t('SBP_RECURRING_CONFIRM_BUTTON', 'Подтвердить в банке'),
+                    text=texts.t('SBP_RECURRING_CONFIRM_BUTTON', '🏦 Подтвердить в банке'),
                     url=redirect_url,
                 )
             ],
@@ -554,7 +530,7 @@ async def handle_sbp_recurring_enable(
     await callback.message.edit_text(
         texts.t(
             'SBP_RECURRING_ENABLE_SUCCESS',
-            '<b>Автопродление через СБП</b>\n\n'
+            '⚡ <b>Автопродление через СБП</b>\n\n'
             'Подтвердите подключение в банковском приложении по кнопке ниже.\n'
             'После подтверждения автопродление станет активным.',
         ),
@@ -579,18 +555,18 @@ async def handle_sbp_recurring_cancel(
     subscription, sub_id = await _resolve_subscription(callback, db_user, db, state)
     if not subscription:
         await callback.answer(
-            texts.t('SUBSCRIPTION_ACTIVE_REQUIRED', 'У вас нет активной подписки!'),
+            texts.t('SUBSCRIPTION_ACTIVE_REQUIRED', '⚠️ У вас нет активной подписки!'),
             show_alert=True,
         )
         return
 
     # Это кнопка отмены именно СБП-автопродления Platega — привязку Lava она
-    # не трогает (у той своя поверхность отмены).
+    # трогать не должна (у неё своя поверхность отмены).
     from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
 
     await cancel_platega_recurring_for_subscription_safe(db, subscription.id)
-    await callback.answer(texts.t('SBP_RECURRING_CANCELLED', 'Автопродление через СБП отменено'))
-    # Меню гейтится флагом — при выключенной функции не дёргаем его, чтобы после
+    await callback.answer(texts.t('SBP_RECURRING_CANCELLED', '✅ Автопродление через СБП отменено'))
+    # Меню гейтится флагом — при выключенной фиче не дёргаем его, чтобы после
     # успешной отмены юзер не получил второй алерт «недоступно».
     if settings.is_platega_recurrent_enabled():
         await handle_sbp_recurring_menu(callback, db_user, db, state)
@@ -604,7 +580,7 @@ async def handle_saved_cards_list(callback: types.CallbackQuery, db_user: User, 
         await callback.message.edit_text(
             texts.t(
                 'SAVED_CARDS_EMPTY',
-                '<b>Привязанные карты</b>\n\nНет привязанных карт.\n'
+                '💳 <b>Привязанные карты</b>\n\nНет привязанных карт.\n'
                 'Карта привяжется автоматически при следующем пополнении баланса.',
             ),
             reply_markup=get_saved_cards_keyboard([], db_user.language),
@@ -614,7 +590,7 @@ async def handle_saved_cards_list(callback: types.CallbackQuery, db_user: User, 
         await callback.message.edit_text(
             texts.t(
                 'SAVED_CARDS_TITLE',
-                '<b>Привязанные карты</b>\n\nВыберите карту для отвязки:',
+                '💳 <b>Привязанные карты</b>\n\nВыберите карту для отвязки:',
             ),
             reply_markup=get_saved_cards_keyboard(cards, db_user.language),
             parse_mode='HTML',
@@ -635,7 +611,7 @@ async def handle_unlink_card(callback: types.CallbackQuery, db_user: User, db: A
 
     if not card:
         await callback.answer(
-            texts.t('SAVED_CARDS_UNLINK_ERROR', 'Не удалось отвязать карту'),
+            texts.t('SAVED_CARDS_UNLINK_ERROR', '❌ Не удалось отвязать карту'),
             show_alert=True,
         )
         return
@@ -650,7 +626,7 @@ async def handle_unlink_card(callback: types.CallbackQuery, db_user: User, db: A
     if len(cards) == 1:
         text += texts.t(
             'SAVED_CARDS_LAST_CARD_WARNING',
-            '\n\n <b>Внимание:</b> это ваша последняя привязанная карта. '
+            '\n\n⚠️ <b>Внимание:</b> это ваша последняя привязанная карта. '
             'После отвязки автоплатеж не сможет списывать средства.',
         )
 
@@ -674,11 +650,11 @@ async def handle_confirm_unlink(callback: types.CallbackQuery, db_user: User, db
 
     if success:
         await callback.answer(
-            texts.t('SAVED_CARDS_UNLINKED', 'Карта отвязана'),
+            texts.t('SAVED_CARDS_UNLINKED', '✅ Карта отвязана'),
         )
     else:
         await callback.answer(
-            texts.t('SAVED_CARDS_UNLINK_ERROR', 'Не удалось отвязать карту'),
+            texts.t('SAVED_CARDS_UNLINK_ERROR', '❌ Не удалось отвязать карту'),
             show_alert=True,
         )
         return
@@ -704,8 +680,7 @@ async def handle_subscription_config_back(
     elif current_state == SubscriptionStates.selecting_countries.state:
         if settings.is_traffic_selectable():
             await callback.message.edit_text(
-                texts.SELECT_TRAFFIC,
-                reply_markup=get_traffic_packages_keyboard(db_user.language),
+                texts.SELECT_TRAFFIC, reply_markup=get_traffic_packages_keyboard(db_user.language)
             )
             await state.set_state(SubscriptionStates.selecting_traffic)
         else:
@@ -725,8 +700,7 @@ async def handle_subscription_config_back(
             selected_devices = data.get('devices', settings.DEFAULT_DEVICE_LIMIT)
 
             await callback.message.edit_text(
-                texts.SELECT_DEVICES,
-                reply_markup=get_devices_keyboard(selected_devices, db_user.language),
+                texts.SELECT_DEVICES, reply_markup=get_devices_keyboard(selected_devices, db_user.language)
             )
             await state.set_state(SubscriptionStates.selecting_devices)
         else:
@@ -777,7 +751,7 @@ async def handle_subscription_cancel(callback: types.CallbackQuery, state: FSMCo
 
     await show_main_menu(callback, db_user, db)
 
-    await callback.answer('Покупка отменена')
+    await callback.answer('❌ Покупка отменена')
 
 
 async def _show_previous_configuration_step(
@@ -810,8 +784,7 @@ async def _show_previous_configuration_step(
 
     if settings.is_traffic_selectable():
         await callback.message.edit_text(
-            texts.SELECT_TRAFFIC,
-            reply_markup=get_traffic_packages_keyboard(db_user.language),
+            texts.SELECT_TRAFFIC, reply_markup=get_traffic_packages_keyboard(db_user.language)
         )
         await state.set_state(SubscriptionStates.selecting_traffic)
         return

@@ -159,7 +159,7 @@ async def test_create_stars_invoice_calculates_stars(monkeypatch: pytest.MonkeyP
     prices = call['prices']
     assert len(prices) == 1
     assert prices[0].amount == 2  # 14000 коп. → 140 ₽ → 2 звезды при курсе 70
-    assert '≈2 ' in call['description']
+    assert '≈2 ⭐' in call['description']
 
 
 @pytest.mark.anyio('asyncio')
@@ -197,7 +197,7 @@ async def test_create_stars_invoice_uses_explicit_stars(monkeypatch: pytest.Monk
 
     prices = bot.calls[0]['prices']
     assert prices[0].amount == 5
-    assert '≈5 ' in bot.calls[0]['description']
+    assert '≈5 ⭐' in bot.calls[0]['description']
 
 
 @pytest.mark.anyio('asyncio')

@@ -80,7 +80,9 @@ class WebhookService:
         # Записываем результаты в БД последовательно (избегаем concurrent session access)
         for result in results:
             if isinstance(result, Exception):
-                logger.exception('Unexpected error during webhook delivery', result=result)
+                # gather(return_exceptions=True) отдаёт исключение значением, а не
+                # возбуждает — exception() записал бы пустой traceback.
+                logger.error('Unexpected error during webhook delivery', result=result, exc_info=result)
                 continue
             if isinstance(result, DeliveryResult):
                 await self._record_result(db, result)
@@ -166,23 +168,11 @@ class WebhookService:
             await update_webhook_stats(db, result.webhook, result.status == 'success')
 
             if result.status == 'success':
-                logger.info(
-                    'Webhook delivered successfully',
-                    id=result.webhook.id,
-                    url=result.webhook.url,
-                )
+                logger.info('Webhook delivered successfully', id=result.webhook.id, url=result.webhook.url)
             else:
-                logger.warning(
-                    'Webhook delivery failed',
-                    id=result.webhook.id,
-                    error_message=result.error_message,
-                )
+                logger.warning('Webhook delivery failed', id=result.webhook.id, error_message=result.error_message)
         except Exception as error:
-            logger.exception(
-                'Failed to record webhook delivery result',
-                id=result.webhook.id,
-                error=error,
-            )
+            logger.exception('Failed to record webhook delivery result', id=result.webhook.id, error=error)
 
 
 # Глобальный экземпляр сервиса

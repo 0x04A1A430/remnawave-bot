@@ -42,14 +42,7 @@ async def upsert_cid(
 
     stmt = (
         pg_insert(YandexClientIdMap)
-        .values(
-            user_id=user_id,
-            yandex_cid=cid,
-            source=source,
-            counter_id=counter_id,
-            subid=subid,
-            yclid=yclid,
-        )
+        .values(user_id=user_id, yandex_cid=cid, source=source, counter_id=counter_id, subid=subid, yclid=yclid)
         .on_conflict_do_update(index_elements=['user_id'], set_=values)
         .returning(YandexClientIdMap)
     )

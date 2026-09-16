@@ -26,6 +26,7 @@ from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError, Teleg
 from aiogram.types import InlineKeyboardMarkup, InputRichMessage
 
 from app.config import settings
+from app.utils.rich_buttons import render_keyboard_as_rich_html
 from app.utils.rich_menu import _looks_like_unsupported
 
 
@@ -43,68 +44,13 @@ _rich_unavailable = False
 # такого атрибута не знает и отклонил бы всё сообщение.
 _EXPANDABLE_QUOTE_RE = re.compile(r'<blockquote\s+expandable>', re.IGNORECASE)
 # Первая строка классического уведомления — кандидат в заголовок h6
-# («ПОКУПКА» / «ТЕХРАБОТЫ»), если содержит жирный текст.
+# («<b>💎 ПОКУПКА</b>» / «🔧 <b>ТЕХРАБОТЫ</b>»), если содержит жирный текст.
 _LEADING_TITLE_RE = re.compile(r'^(?P<title>[^\n]{1,160})[ \t]*\n+')
-
-
 # Сегментация по блочным тегам: внутри цитат переносы строк конвертируются в
 # <br>, pre-блоки не трогаются вовсе (сохраняют форматирование), остальной
 # текст — в абзацы.
-def _split_block_tags(text: str) -> list[str]:
-    """Разбивает текст на сегменты, сохраняя <blockquote>/<pre>-блоки целиком.
-
-    Линейный скан без регексов — regex-подход с `.*?` был источником
-    ReDoS (CodeQL py/redos) на строках с множеством незакрытых тегов.
-    Семантика как у прежнего `re.split(r'(<blockquote>.*?</blockquote>|<pre>.*?</pre>)')`:
-    блоки включаются в результат целиком, остальной текст — отдельными кусками.
-    """
-    lower = text.lower()
-    parts: list[str] = []
-    pos = 0
-    while pos < len(text):
-        bq = lower.find('<blockquote>', pos)
-        pre = lower.find('<pre>', pos)
-        if bq == -1 and pre == -1:
-            parts.append(text[pos:])
-            return parts
-        if bq != -1 and (pre == -1 or bq < pre):
-            start = bq
-            opening, closing = '<blockquote>', '</blockquote>'
-        else:
-            start = pre
-            opening, closing = '<pre>', '</pre>'
-        end = lower.find(closing, start + len(opening))
-        if end == -1:
-            parts.append(text[pos:])
-            return parts
-        end += len(closing)
-        if start > pos:
-            parts.append(text[pos:start])
-        parts.append(text[start:end])
-        pos = end
-    return parts
-
-
-def _split_pre_tags(text: str) -> list[str]:
-    """Аналог `_split_block_tags`, но только для <pre>-блоков (внутри цитаты)."""
-    lower = text.lower()
-    parts: list[str] = []
-    pos = 0
-    while pos < len(text):
-        start = lower.find('<pre>', pos)
-        if start == -1:
-            parts.append(text[pos:])
-            return parts
-        end = lower.find('</pre>', start + len('<pre>'))
-        if end == -1:
-            parts.append(text[pos:])
-            return parts
-        end += len('</pre>')
-        if start > pos:
-            parts.append(text[pos:start])
-        parts.append(text[start:end])
-        pos = end
-    return parts
+_BLOCK_SPLIT_RE = re.compile(r'(<blockquote>.*?</blockquote>|<pre>.*?</pre>)', re.IGNORECASE | re.DOTALL)
+_PRE_SPLIT_RE = re.compile(r'(<pre>.*?</pre>)', re.IGNORECASE | re.DOTALL)
 
 
 def is_rich_admin_enabled() -> bool:
@@ -127,7 +73,7 @@ def _mark_rich_admin_unavailable(error: Exception) -> None:
     _rich_unavailable = True
 
 
-def rich_footer_now(label: str = '@xilarobot') -> str:
+def rich_footer_now(label: str = 'Remnawave Bedolaga Bot') -> str:
     """Футер с меткой и временем: tg-time рендерится в таймзоне админа."""
     now = datetime.now(UTC)
     stamp = f'<tg-time unix="{int(now.timestamp())}" format="dt">{now.strftime("%d.%m.%Y %H:%M")} UTC</tg-time>'
@@ -157,7 +103,7 @@ def _inline_newlines_to_rich(text: str) -> str:
     Пустая строка = граница абзаца (<p>), одиночный перенос = <br>; внутри
     blockquote — только <br> (цитата остаётся одним блоком).
     """
-    segments = _split_block_tags(text)
+    segments = _BLOCK_SPLIT_RE.split(text)
     rendered: list[str] = []
     for segment in segments:
         if not segment or not segment.strip():
@@ -170,7 +116,7 @@ def _inline_newlines_to_rich(text: str) -> str:
         if lowered.startswith('<blockquote'):
             inner = segment[len('<blockquote>') : -len('</blockquote>')]
             pieces: list[str] = []
-            for piece in _split_pre_tags(inner):
+            for piece in _PRE_SPLIT_RE.split(inner):
                 if not piece or not piece.strip():
                     continue
                 if piece.lower().startswith('<pre'):
@@ -228,6 +174,18 @@ async def try_send_rich_admin_message(
         return False
     if len(rich_html) > RICH_TEXT_LIMIT:
         return False
+
+    if reply_markup is not None and settings.MAIN_MENU_RICH_INLINE_BUTTONS:
+        # Mini App открывается только в личных чатах, а админ-чат чаще всего группа
+        # (у неё отрицательный id) или канал по @username. В такие чаты web_app-кнопку
+        # переносить нельзя — тогда клавиатура остаётся под сообщением целиком.
+        is_private = isinstance(chat_id, int) and chat_id > 0
+        buttons_html = render_keyboard_as_rich_html(reply_markup, allow_web_app=is_private)
+        if buttons_html is not None:
+            rich_html += buttons_html
+            reply_markup = None
+            if len(rich_html) > RICH_TEXT_LIMIT:
+                return False
 
     kwargs: dict = {
         'chat_id': chat_id,

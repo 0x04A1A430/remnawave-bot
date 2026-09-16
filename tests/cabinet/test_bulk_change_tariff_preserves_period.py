@@ -45,11 +45,7 @@ def _tariff(
 
 
 def _subscription(
-    *,
-    end_date: datetime,
-    tariff_id: int,
-    is_trial: bool = False,
-    status: str = 'active',
+    *, end_date: datetime, tariff_id: int, is_trial: bool = False, status: str = 'active'
 ) -> SimpleNamespace:
     return SimpleNamespace(
         id=42,
@@ -98,10 +94,7 @@ async def test_change_tariff_preserves_remaining_period(db: AsyncMock) -> None:
         patch.object(bulk, 'settings', fake_settings),
         patch.object(bulk, 'get_tariff_by_id', AsyncMock(return_value=old_tariff)),
         patch.object(bulk, '_sync_subscription_to_panel', AsyncMock(return_value={})),
-        patch(
-            'app.database.crud.transaction.create_transaction',
-            AsyncMock(return_value=None),
-        ),
+        patch('app.database.crud.transaction.create_transaction', AsyncMock(return_value=None)),
     ):
         result = await bulk._do_change_tariff(
             db,
@@ -135,24 +128,12 @@ async def test_change_tariff_does_not_extend_almost_expired_sub(db: AsyncMock) -
 
     with (
         patch.object(bulk, 'settings', fake_settings),
-        patch.object(
-            bulk,
-            'get_tariff_by_id',
-            AsyncMock(return_value=_tariff(tariff_id=1, name='Tariff 1')),
-        ),
+        patch.object(bulk, 'get_tariff_by_id', AsyncMock(return_value=_tariff(tariff_id=1, name='Tariff 1'))),
         patch.object(bulk, '_sync_subscription_to_panel', AsyncMock(return_value={})),
-        patch(
-            'app.database.crud.transaction.create_transaction',
-            AsyncMock(return_value=None),
-        ),
+        patch('app.database.crud.transaction.create_transaction', AsyncMock(return_value=None)),
     ):
         await bulk._do_change_tariff(
-            db,
-            user,
-            SimpleNamespace(tariff_id=2),
-            new_tariff,
-            dry_run=False,
-            sub_override=sub,
+            db, user, SimpleNamespace(tariff_id=2), new_tariff, dry_run=False, sub_override=sub
         )
 
     assert sub.end_date == end_date
@@ -180,24 +161,12 @@ async def test_change_tariff_keeps_trial_a_trial(db: AsyncMock) -> None:
 
     with (
         patch.object(bulk, 'settings', fake_settings),
-        patch.object(
-            bulk,
-            'get_tariff_by_id',
-            AsyncMock(return_value=_tariff(tariff_id=1, name='Trial')),
-        ),
+        patch.object(bulk, 'get_tariff_by_id', AsyncMock(return_value=_tariff(tariff_id=1, name='Trial'))),
         patch.object(bulk, '_sync_subscription_to_panel', AsyncMock(return_value={})),
-        patch(
-            'app.database.crud.transaction.create_transaction',
-            AsyncMock(return_value=None),
-        ),
+        patch('app.database.crud.transaction.create_transaction', AsyncMock(return_value=None)),
     ):
         await bulk._do_change_tariff(
-            db,
-            user,
-            SimpleNamespace(tariff_id=2),
-            new_tariff,
-            dry_run=False,
-            sub_override=sub,
+            db, user, SimpleNamespace(tariff_id=2), new_tariff, dry_run=False, sub_override=sub
         )
 
     # Still a trial -> auto-extend-after-topup skips it (is_trial gate), no 30-day grant.

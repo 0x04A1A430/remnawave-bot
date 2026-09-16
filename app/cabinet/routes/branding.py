@@ -8,16 +8,20 @@ from typing import Literal
 
 import structlog
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.cabinet.auth.email_auth_gate import EMAIL_AUTH_ENABLED_KEY, is_email_auth_enabled
 from app.config import settings
 from app.database.crud.system_setting import get_setting_value
 from app.database.models import SystemSetting, User
+from app.services.gift_purchase_service import GIFT_ENABLED_KEY, is_gift_enabled
 
 from ..dependencies import get_cabinet_db, get_current_cabinet_user, require_permission
+from ..utils import brand_monogram, favicon_tile
+from ..utils.brand_monogram import monogram_letter, monogram_svg
 
 
 logger = structlog.get_logger(__name__)
@@ -35,12 +39,10 @@ THEME_COLORS_KEY = 'CABINET_THEME_COLORS'  # Stores JSON with theme colors
 ENABLED_THEMES_KEY = 'CABINET_ENABLED_THEMES'  # Stores JSON with enabled themes {"dark": true, "light": false}
 ANIMATION_ENABLED_KEY = 'CABINET_ANIMATION_ENABLED'  # Stores "true" or "false"
 FULLSCREEN_ENABLED_KEY = 'CABINET_FULLSCREEN_ENABLED'  # Stores "true" or "false"
-EMAIL_AUTH_ENABLED_KEY = 'CABINET_EMAIL_AUTH_ENABLED'  # Stores "true" or "false"
 YANDEX_METRIKA_ID_KEY = 'CABINET_YANDEX_METRIKA_ID'  # Stores counter ID (numeric string)
 GOOGLE_ADS_ID_KEY = 'CABINET_GOOGLE_ADS_ID'  # Stores conversion ID (e.g. "AW-123456789")
 GOOGLE_ADS_LABEL_KEY = 'CABINET_GOOGLE_ADS_LABEL'  # Stores conversion label (alphanumeric)
 LITE_MODE_ENABLED_KEY = 'CABINET_LITE_MODE_ENABLED'  # Stores "true" or "false"
-GIFT_ENABLED_KEY = 'CABINET_GIFT_ENABLED'  # Stores "true" or "false"
 ANIMATION_CONFIG_KEY = 'CABINET_ANIMATION_CONFIG'  # Stores JSON with animation config
 TELEGRAM_WIDGET_SIZE_KEY = 'TELEGRAM_WIDGET_SIZE'
 TELEGRAM_WIDGET_RADIUS_KEY = 'TELEGRAM_WIDGET_RADIUS'
@@ -50,12 +52,9 @@ TELEGRAM_OIDC_ENABLED_KEY = 'TELEGRAM_OIDC_ENABLED'
 TELEGRAM_OIDC_CLIENT_ID_KEY = 'TELEGRAM_OIDC_CLIENT_ID'
 
 # Default animation config
-# Дизайн кабинета xila в стиле страницы подписок использует статичный слой
-# .bg-decor (блобы + сетка) — анимированный фон по умолчанию выключен.
-# Админ может включить его в кабинете: Настройки → Оформление.
 DEFAULT_ANIMATION_CONFIG = {
-    'enabled': False,
-    'type': 'none',
+    'enabled': True,
+    'type': 'aurora',
     'settings': {},
     'opacity': 1.0,
     'blur': 0,
@@ -63,13 +62,7 @@ DEFAULT_ANIMATION_CONFIG = {
 }
 
 # Allowed image types
-ALLOWED_CONTENT_TYPES = {
-    'image/png',
-    'image/jpeg',
-    'image/jpg',
-    'image/webp',
-    'image/svg+xml',
-}
+ALLOWED_CONTENT_TYPES = {'image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/svg+xml'}
 MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB for larger logos
 
 
@@ -85,13 +78,6 @@ class BrandingResponse(BaseModel):
     has_custom_logo: bool
 
 
-class BotStartVideoResponse(BaseModel):
-    """Bot start menu video state (Telegram file_id)."""
-
-    has_video: bool
-    file_id: str | None = None
-
-
 class BrandingNameUpdate(BaseModel):
     """Request to update branding name."""
 
@@ -101,18 +87,18 @@ class BrandingNameUpdate(BaseModel):
 class ThemeColorsResponse(BaseModel):
     """Theme colors settings."""
 
-    accent: str = '#c0392b'
-    darkBackground: str = '#0e0e0e'
-    darkSurface: str = '#181818'
-    darkText: str = '#e2e2e2'
-    darkTextSecondary: str = '#808080'
-    lightBackground: str = '#0e0e0e'
-    lightSurface: str = '#181818'
-    lightText: str = '#e2e2e2'
-    lightTextSecondary: str = '#808080'
-    success: str = '#3ddc97'
-    warning: str = '#f6c453'
-    error: str = '#f0617d'
+    accent: str = '#3b82f6'
+    darkBackground: str = '#0a0f1a'
+    darkSurface: str = '#0f172a'
+    darkText: str = '#f1f5f9'
+    darkTextSecondary: str = '#94a3b8'
+    lightBackground: str = '#F7E7CE'
+    lightSurface: str = '#FEF9F0'
+    lightText: str = '#1F1A12'
+    lightTextSecondary: str = '#7D6B48'
+    success: str = '#22c55e'
+    warning: str = '#f59e0b'
+    error: str = '#ef4444'
 
 
 class ThemeColorsUpdate(BaseModel):
@@ -347,20 +333,20 @@ class AnalyticsCountersUpdate(BaseModel):
     google_ads_label: str | None = None
 
 
-# Default theme colors — палитра xila (тёмный glass, красный акцент)
+# Default theme colors
 DEFAULT_THEME_COLORS = {
-    'accent': '#c0392b',
-    'darkBackground': '#0e0e0e',
-    'darkSurface': '#181818',
-    'darkText': '#e2e2e2',
-    'darkTextSecondary': '#808080',
-    'lightBackground': '#0e0e0e',
-    'lightSurface': '#181818',
-    'lightText': '#e2e2e2',
-    'lightTextSecondary': '#808080',
-    'success': '#3ddc97',
-    'warning': '#f6c453',
-    'error': '#f0617d',
+    'accent': '#3b82f6',
+    'darkBackground': '#0a0f1a',
+    'darkSurface': '#0f172a',
+    'darkText': '#f1f5f9',
+    'darkTextSecondary': '#94a3b8',
+    'lightBackground': '#F7E7CE',
+    'lightSurface': '#FEF9F0',
+    'lightText': '#1F1A12',
+    'lightTextSecondary': '#7D6B48',
+    'success': '#22c55e',
+    'warning': '#f59e0b',
+    'error': '#ef4444',
 }
 
 
@@ -408,6 +394,50 @@ def has_custom_logo() -> bool:
 # ============ Routes ============
 
 
+_LOGO_MEDIA_TYPES = {
+    '.png': 'image/png',
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.webp': 'image/webp',
+    '.svg': 'image/svg+xml',
+}
+_LOGO_MAX_AGE_SECONDS = 3600
+# Фавикон живёт в <link rel="icon"> кабинета, а Safari перезапрашивает иконку
+# редко: кеш короткий, чтобы новый логотип из админки доехал без пересборки.
+_FAVICON_MAX_AGE_SECONDS = 300
+
+
+async def _resolve_branding_name(db: AsyncSession) -> str:
+    """Имя из настроек; фолбэк только если оно не задано вовсе (пустая строка — значение)."""
+    name = await get_setting_value(db, BRANDING_NAME_KEY)
+    if name is None:
+        name = getattr(settings, 'CABINET_BRANDING_NAME', None) or os.getenv('VITE_APP_NAME', 'Cabinet')
+    return name
+
+
+def _image_headers(max_age: int) -> dict[str, str]:
+    return {
+        'Cache-Control': f'public, max-age={max_age}',
+        # Одну и ту же картинку браузер запрашивает двумя способами: <link rel="icon">
+        # и <img> — без заголовка Origin, fetch() кабинета — с ним. CORS-заголовки
+        # появляются только в ответ на Origin, и без Vary кеш отдаёт fetch()
+        # ответ от no-cors запроса — браузер блокирует его как CORS-ошибку.
+        'Vary': 'Origin',
+        # The logo may be an SVG (admin-uploaded). Rendering via <img> never
+        # runs SVG scripts, but opening /branding/logo as a top-level document
+        # would. Block that XSS surface: nosniff + a sandboxed CSP that forbids
+        # script execution. CSP on this image response is ignored when loaded
+        # as an <img> subresource, so logo display is unaffected.
+        'X-Content-Type-Options': 'nosniff',
+        'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; sandbox",
+    }
+
+
+def _logo_file_response(logo_path: Path, *, max_age: int) -> FileResponse:
+    media_type = _LOGO_MEDIA_TYPES.get(logo_path.suffix.lower(), 'image/png')
+    return FileResponse(logo_path, media_type=media_type, headers=_image_headers(max_age))
+
+
 @router.get('', response_model=BrandingResponse)
 async def get_branding(
     db: AsyncSession = Depends(get_cabinet_db),
@@ -416,21 +446,13 @@ async def get_branding(
     Get current branding settings.
     This is a public endpoint - no authentication required.
     """
-    # Get name from database or use default from env/settings
-    name = await get_setting_value(db, BRANDING_NAME_KEY)
-    if name is None:  # Only use fallback if not set at all (empty string is valid)
-        name = getattr(settings, 'CABINET_BRANDING_NAME', None) or os.getenv('VITE_APP_NAME', 'Cabinet')
-
-    # Check for custom logo
+    name = await _resolve_branding_name(db)
     custom_logo = has_custom_logo()
-
-    # Get first letter for logo fallback (use "V" if name is empty)
-    logo_letter = name[0].upper() if name else 'V'
 
     return BrandingResponse(
         name=name,
         logo_url='/cabinet/branding/logo' if custom_logo else None,
-        logo_letter=logo_letter,
+        logo_letter=monogram_letter(name),
         has_custom_logo=custom_logo,
     )
 
@@ -446,14 +468,74 @@ async def get_logo():
     if logo_path is None or not await asyncio.to_thread(logo_path.exists):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No custom logo set')
 
-    # Determine media type from file extension
+    return _logo_file_response(logo_path, max_age=_LOGO_MAX_AGE_SECONDS)
+
+
+async def _logo_favicon_response(logo_path: Path) -> Response:
+    """Скруглённая плитка из логотипа (как в шапке кабинета); SVG и нечитаемый файл — как есть."""
+    if favicon_tile.is_raster_logo(logo_path):
+        try:
+            tile = await asyncio.to_thread(favicon_tile.cached_rounded_logo_tile, logo_path)
+        except Exception:
+            logger.warning(
+                'Не удалось скруглить плитку фавикона из логотипа, отдаём файл как есть',
+                path=str(logo_path),
+                exc_info=True,
+            )
+        else:
+            return Response(content=tile, media_type='image/png', headers=_image_headers(_FAVICON_MAX_AGE_SECONDS))
+    return _logo_file_response(logo_path, max_age=_FAVICON_MAX_AGE_SECONDS)
+
+
+@router.get('/favicon')
+async def get_favicon(
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Иконка для <link rel="icon"> кабинета: логотип из админки или монограмма.
+
+    Safari берёт фавикон только при первой загрузке страницы и не замечает
+    смену через JS (Chrome и Firefox замечают), поэтому статическая ссылка в
+    index.html кабинета ведёт сюда, а не на монограмму сборки. Никогда не 404:
+    на месте несуществующей иконки Safari показывает пустоту.
+
+    Монограмма — PNG, не SVG: SVG-фавикон Safari рисует монохромной плиткой с
+    буквой, теряя цвета. SVG остаётся запасным ответом, если PNG не отрисовался.
+    """
+    logo_path = get_logo_path()
+    if logo_path is not None and await asyncio.to_thread(logo_path.exists):
+        return await _logo_favicon_response(logo_path)
+
+    name = await _resolve_branding_name(db)
+    headers = _image_headers(_FAVICON_MAX_AGE_SECONDS)
+    try:
+        png = await asyncio.to_thread(brand_monogram.monogram_png, name)
+    except Exception:
+        logger.warning('Не удалось отрисовать PNG-монограмму фавикона, отдаём SVG', name=name, exc_info=True)
+        return Response(content=monogram_svg(name), media_type='image/svg+xml', headers=headers)
+    return Response(content=png, media_type='image/png', headers=headers)
+
+
+@router.get('/bot-logo')
+async def get_bot_logo():
+    """
+    Get the BOT's menu logo (settings.LOGO_FILE, e.g. vpn_logo.png).
+
+    Distinct from /logo (the cabinet WebApp branding logo uploaded via the admin
+    UI): this serves the same local file the bot attaches to photo-mode menus, so
+    the rich main menu can embed it by public URL (rich media accepts only
+    HTTP(S) URLs). Public like /logo. 404 if the file is missing.
+    """
+    logo_path = Path(settings.LOGO_FILE)
+
+    if not settings.LOGO_FILE or not await asyncio.to_thread(logo_path.is_file):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Bot logo is not configured')
+
     suffix = logo_path.suffix.lower()
     media_types = {
         '.png': 'image/png',
         '.jpg': 'image/jpeg',
         '.jpeg': 'image/jpeg',
         '.webp': 'image/webp',
-        '.svg': 'image/svg+xml',
     }
     media_type = media_types.get(suffix, 'image/png')
 
@@ -462,15 +544,17 @@ async def get_logo():
         media_type=media_type,
         headers={
             'Cache-Control': 'public, max-age=3600',
-            # The logo may be an SVG (admin-uploaded). Rendering via <img> never
-            # runs SVG scripts, but opening /branding/logo as a top-level document
-            # would. Block that XSS surface: nosniff + a sandboxed CSP that forbids
-            # script execution. CSP on this image response is ignored when loaded
-            # as an <img> subresource, so logo display is unaffected.
             'X-Content-Type-Options': 'nosniff',
             'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; sandbox",
         },
     )
+
+
+class BotStartVideoResponse(BaseModel):
+    """Состояние видео стартового меню бота."""
+
+    has_video: bool
+    file_id: str | None = None
 
 
 @router.get('/bot-start-video', response_model=BotStartVideoResponse)
@@ -491,17 +575,18 @@ async def upload_bot_start_video(
     admin: User = Depends(require_permission('settings:edit')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
-    """Загрузить видео стартового меню.
+    """Загружает видео, которое бот прикрепляет к стартовому меню.
 
-    Отправляет файл в Telegram для получения ``file_id`` (чтобы не хранить
-    сам файл и не слать его при каждом показе меню). Успешная отправка
-    означает, что видео пригодно для пересылки.
+    Файл один раз отправляется в Telegram, чтобы получить ``file_id``: дальше
+    меню уходит по нему мгновенно и без повторной загрузки (тот же приём, что
+    в ``/cabinet/media/upload``). Сам файл у нас не хранится.
     """
     content_type = (file.content_type or '').lower()
     if not content_type.startswith('video/'):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Invalid file type. Expected a video')
 
     max_bytes = settings.MEDIA_MAX_VIDEO_SIZE_MB * 1024 * 1024
+    # Читаем на байт больше лимита — чтобы отличить «ровно лимит» от «больше».
     content = await file.read(max_bytes + 1)
     if not content:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Empty file')
@@ -526,18 +611,21 @@ async def upload_bot_start_video(
             disable_notification=True,
         )
         file_id = message.video.file_id if message.video else None
+        # Промежуточное сообщение удаляем — file_id живёт и после удаления.
         try:
             await bot.delete_message(chat_id=target_chat_id, message_id=message.message_id)
         except Exception as delete_error:
+            # Не критично: file_id уже получен, видео загружено. Останется лишнее
+            # сообщение в служебном чате — это не повод валить загрузку.
             logger.debug(
-                'Не удалось удалить тестовое сообщение с видео',
+                'Не удалось удалить промежуточное сообщение с видео',
                 message_id=message.message_id,
                 error=str(delete_error),
             )
     except HTTPException:
         raise
     except Exception as error:
-        logger.error('Не удалось отправить видео стартового меню в Telegram', error=str(error))
+        logger.error('Не удалось загрузить видео стартового меню в Telegram', error=str(error))
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail='Telegram rejected the video',
@@ -558,7 +646,7 @@ async def delete_bot_start_video(
     admin: User = Depends(require_permission('settings:edit')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
-    """Убрать видео из стартового меню (вернуть логотип/текст)."""
+    """Убирает видео — меню возвращается к фото-логотипу/тексту."""
     from app.services.start_media_service import set_start_video_file_id
 
     await set_start_video_file_id(db, None)
@@ -576,10 +664,7 @@ async def update_branding_name(
     name = payload.name.strip() if payload.name else ''
 
     if len(name) > 50:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Name too long (max 50 characters)',
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Name too long (max 50 characters)')
 
     await set_setting_value(db, BRANDING_NAME_KEY, name)
 
@@ -607,8 +692,7 @@ async def upload_logo(
     # Validate content type
     if file.content_type not in ALLOWED_CONTENT_TYPES:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Invalid file type. Allowed: PNG, JPEG, WebP, SVG',
+            status_code=status.HTTP_400_BAD_REQUEST, detail='Invalid file type. Allowed: PNG, JPEG, WebP, SVG'
         )
 
     # Read file content
@@ -756,21 +840,14 @@ async def update_theme_colors(
     # Validate hex colors
     for key, value in update_data.items():
         if not validate_hex_color(value):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f'Invalid hex color for {key}: {value}',
-            )
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f'Invalid hex color for {key}: {value}')
 
     current_colors.update(update_data)
 
     # Save to database
     await set_setting_value(db, THEME_COLORS_KEY, json.dumps(current_colors))
 
-    logger.info(
-        'Admin updated theme colors',
-        telegram_id=admin.telegram_id,
-        value=list(update_data.keys()),
-    )
+    logger.info('Admin updated theme colors', telegram_id=admin.telegram_id, value=list(update_data.keys()))
 
     return ThemeColorsResponse(**current_colors)
 
@@ -837,19 +914,12 @@ async def update_enabled_themes(
 
     # Ensure at least one theme is enabled
     if not current_themes.get('dark') and not current_themes.get('light'):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail='At least one theme must be enabled',
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='At least one theme must be enabled')
 
     # Save to database
     await set_setting_value(db, ENABLED_THEMES_KEY, json.dumps(current_themes))
 
-    logger.info(
-        'Admin updated enabled themes',
-        telegram_id=admin.telegram_id,
-        current_themes=current_themes,
-    )
+    logger.info('Admin updated enabled themes', telegram_id=admin.telegram_id, current_themes=current_themes)
 
     return EnabledThemesResponse(**current_themes)
 
@@ -884,11 +954,7 @@ async def update_animation_enabled(
     """Update animation enabled setting. Admin only."""
     await set_setting_value(db, ANIMATION_ENABLED_KEY, str(payload.enabled).lower())
 
-    logger.info(
-        'Admin set animation enabled',
-        telegram_id=admin.telegram_id,
-        enabled=payload.enabled,
-    )
+    logger.info('Admin set animation enabled', telegram_id=admin.telegram_id, enabled=payload.enabled)
 
     return AnimationEnabledResponse(enabled=payload.enabled)
 
@@ -986,11 +1052,7 @@ async def update_fullscreen_enabled(
     """Update fullscreen enabled setting. Admin only."""
     await set_setting_value(db, FULLSCREEN_ENABLED_KEY, str(payload.enabled).lower())
 
-    logger.info(
-        'Admin set fullscreen enabled',
-        telegram_id=admin.telegram_id,
-        enabled=payload.enabled,
-    )
+    logger.info('Admin set fullscreen enabled', telegram_id=admin.telegram_id, enabled=payload.enabled)
 
     return FullscreenEnabledResponse(enabled=payload.enabled)
 
@@ -1005,20 +1067,10 @@ async def get_email_auth_enabled(
     """
     Get email auth enabled setting.
     This is a public endpoint - no authentication required.
-    Controls whether email registration/login is available.
+    Тот же резолвер, что гейтит email-роуты: кнопка и API не расходятся.
     """
-    email_auth_value = await get_setting_value(db, EMAIL_AUTH_ENABLED_KEY)
-
-    if email_auth_value is not None:
-        enabled = email_auth_value.lower() == 'true'
-        return EmailAuthEnabledResponse(
-            enabled=enabled,
-            verification_enabled=settings.is_cabinet_email_verification_enabled(),
-        )
-
-    # Default: check config setting
     return EmailAuthEnabledResponse(
-        enabled=settings.is_cabinet_email_auth_enabled(),
+        enabled=await is_email_auth_enabled(db),
         verification_enabled=settings.is_cabinet_email_verification_enabled(),
     )
 
@@ -1032,11 +1084,7 @@ async def update_email_auth_enabled(
     """Update email auth enabled setting. Admin only."""
     await set_setting_value(db, EMAIL_AUTH_ENABLED_KEY, str(payload.enabled).lower())
 
-    logger.info(
-        'Admin set email auth enabled',
-        telegram_id=admin.telegram_id,
-        enabled=payload.enabled,
-    )
+    logger.info('Admin set email auth enabled', telegram_id=admin.telegram_id, enabled=payload.enabled)
 
     return EmailAuthEnabledResponse(
         enabled=payload.enabled,
@@ -1072,16 +1120,14 @@ async def get_telegram_widget_config(
 
     return TelegramWidgetConfigResponse(
         bot_username=bot_username,
-        size=(size_val if size_val in ('large', 'medium', 'small') else settings.TELEGRAM_WIDGET_SIZE),
-        radius=(
-            max(0, min(int(radius_val), 20)) if radius_val and radius_val.isdigit() else settings.TELEGRAM_WIDGET_RADIUS
-        ),
-        userpic=(userpic_val.lower() == 'true' if userpic_val is not None else settings.TELEGRAM_WIDGET_USERPIC),
-        request_access=(
-            request_access_val.lower() == 'true'
-            if request_access_val is not None
-            else settings.TELEGRAM_WIDGET_REQUEST_ACCESS
-        ),
+        size=size_val if size_val in ('large', 'medium', 'small') else settings.TELEGRAM_WIDGET_SIZE,
+        radius=max(0, min(int(radius_val), 20))
+        if radius_val and radius_val.isdigit()
+        else settings.TELEGRAM_WIDGET_RADIUS,
+        userpic=userpic_val.lower() == 'true' if userpic_val is not None else settings.TELEGRAM_WIDGET_USERPIC,
+        request_access=request_access_val.lower() == 'true'
+        if request_access_val is not None
+        else settings.TELEGRAM_WIDGET_REQUEST_ACCESS,
         oidc_enabled=oidc_enabled,
         oidc_client_id=oidc_client_id if oidc_enabled else '',
     )
@@ -1242,11 +1288,7 @@ async def update_lite_mode_enabled(
     """Update lite mode enabled setting. Admin only."""
     await set_setting_value(db, LITE_MODE_ENABLED_KEY, str(payload.enabled).lower())
 
-    logger.info(
-        'Admin set lite mode enabled',
-        telegram_id=admin.telegram_id,
-        enabled=payload.enabled,
-    )
+    logger.info('Admin set lite mode enabled', telegram_id=admin.telegram_id, enabled=payload.enabled)
 
     return LiteModeEnabledResponse(enabled=payload.enabled)
 
@@ -1259,11 +1301,8 @@ async def get_gift_enabled(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Get gift feature enabled setting. Public endpoint."""
-    value = await get_setting_value(db, GIFT_ENABLED_KEY)
-    if value is not None:
-        enabled = value.lower() == 'true'
-        return GiftEnabledResponse(enabled=enabled)
-    return GiftEnabledResponse(enabled=False)
+    enabled = await is_gift_enabled(db)
+    return GiftEnabledResponse(enabled=enabled)
 
 
 @router.patch('/gift-enabled', response_model=GiftEnabledResponse)
@@ -1314,9 +1353,5 @@ async def update_footer_enabled(
 ):
     """Update legal footer enabled setting. Admin only."""
     await set_setting_value(db, FOOTER_ENABLED_KEY, str(payload.enabled).lower())
-    logger.info(
-        'Admin set footer enabled',
-        telegram_id=admin.telegram_id,
-        enabled=payload.enabled,
-    )
+    logger.info('Admin set footer enabled', telegram_id=admin.telegram_id, enabled=payload.enabled)
     return FooterEnabledResponse(enabled=payload.enabled)

@@ -157,9 +157,7 @@ async def link_wata_payment_to_transaction(
     await db.refresh(payment)
 
     logger.info(
-        'Wata платеж привязан к транзакции',
-        payment_link_id=payment.payment_link_id,
-        transaction_id=transaction_id,
+        'Wata платеж привязан к транзакции', payment_link_id=payment.payment_link_id, transaction_id=transaction_id
     )
 
     return payment

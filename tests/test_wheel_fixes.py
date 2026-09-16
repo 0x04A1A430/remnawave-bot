@@ -37,31 +37,13 @@ async def test_spin_rechecks_daily_limit_under_lock() -> None:
                 AsyncMock(return_value=SpinAvailability(can_spin=True, can_pay_stars=True)),
             )
         )
+        s.enter_context(patch('app.services.wheel_service.get_or_create_wheel_config', AsyncMock(return_value=config)))
         s.enter_context(
-            patch(
-                'app.services.wheel_service.get_or_create_wheel_config',
-                AsyncMock(return_value=config),
-            )
+            patch('app.services.wheel_service.get_wheel_prizes', AsyncMock(return_value=[SimpleNamespace(id=1)]))
         )
-        s.enter_context(
-            patch(
-                'app.services.wheel_service.get_wheel_prizes',
-                AsyncMock(return_value=[SimpleNamespace(id=1)]),
-            )
-        )
-        s.enter_context(
-            patch(
-                'app.database.crud.user.lock_user_for_update',
-                AsyncMock(return_value=user),
-            )
-        )
+        s.enter_context(patch('app.database.crud.user.lock_user_for_update', AsyncMock(return_value=user)))
         # Count is now AT the limit (a concurrent spin committed in between).
-        s.enter_context(
-            patch(
-                'app.services.wheel_service.get_user_spins_today',
-                AsyncMock(return_value=5),
-            )
-        )
+        s.enter_context(patch('app.services.wheel_service.get_user_spins_today', AsyncMock(return_value=5)))
         s.enter_context(patch.object(svc, '_process_stars_payment', process_stars))
         s.enter_context(patch.object(svc, '_process_days_payment', process_days))
 
@@ -91,42 +73,19 @@ async def test_spin_under_limit_proceeds_to_payment() -> None:
                 AsyncMock(return_value=SpinAvailability(can_spin=True, can_pay_stars=True)),
             )
         )
+        s.enter_context(patch('app.services.wheel_service.get_or_create_wheel_config', AsyncMock(return_value=config)))
         s.enter_context(
-            patch(
-                'app.services.wheel_service.get_or_create_wheel_config',
-                AsyncMock(return_value=config),
-            )
+            patch('app.services.wheel_service.get_wheel_prizes', AsyncMock(return_value=[SimpleNamespace(id=1)]))
         )
-        s.enter_context(
-            patch(
-                'app.services.wheel_service.get_wheel_prizes',
-                AsyncMock(return_value=[SimpleNamespace(id=1)]),
-            )
-        )
-        s.enter_context(
-            patch(
-                'app.database.crud.user.lock_user_for_update',
-                AsyncMock(return_value=user),
-            )
-        )
-        s.enter_context(
-            patch(
-                'app.services.wheel_service.get_user_spins_today',
-                AsyncMock(return_value=2),
-            )
-        )
+        s.enter_context(patch('app.database.crud.user.lock_user_for_update', AsyncMock(return_value=user)))
+        s.enter_context(patch('app.services.wheel_service.get_user_spins_today', AsyncMock(return_value=2)))
         s.enter_context(
             patch(
                 'app.services.wheel_service.settings',
                 MagicMock(is_multi_tariff_enabled=MagicMock(return_value=False)),
             )
         )
-        s.enter_context(
-            patch(
-                'app.services.wheel_service.get_subscription_by_user_id',
-                AsyncMock(return_value=None),
-            )
-        )
+        s.enter_context(patch('app.services.wheel_service.get_subscription_by_user_id', AsyncMock(return_value=None)))
         s.enter_context(patch.object(svc, '_process_stars_payment', process_stars))
 
         result = await svc.spin(AsyncMock(), user, 'telegram_stars')

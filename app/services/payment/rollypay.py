@@ -280,10 +280,7 @@ class RollyPayPaymentMixin:
                 payment.updated_at = datetime.now(UTC)
                 await db.flush()
                 return await self._finalize_rollypay_payment(
-                    db,
-                    payment,
-                    rollypay_payment_id=rollypay_payment_id,
-                    trigger='webhook',
+                    db, payment, rollypay_payment_id=rollypay_payment_id, trigger='webhook'
                 )
 
             # Для не-success статусов можно безопасно коммитить
@@ -337,7 +334,7 @@ class RollyPayPaymentMixin:
             db,
             metadata=metadata,
             payment_amount_kopeks=payment.amount_kopeks,
-            provider_payment_id=(str(rollypay_payment_id) if rollypay_payment_id else payment.order_id),
+            provider_payment_id=str(rollypay_payment_id) if rollypay_payment_id else payment.order_id,
             provider_name='rollypay',
         )
         if guest_result is not None:
@@ -453,9 +450,7 @@ class RollyPayPaymentMixin:
 
         if getattr(self, 'bot', None):
             try:
-                from app.services.admin_notification_service import (
-                    AdminNotificationService,
-                )
+                from app.services.admin_notification_service import AdminNotificationService
 
                 notification_service = AdminNotificationService(self.bot)
                 await notification_service.send_balance_topup_notification(
@@ -480,7 +475,8 @@ class RollyPayPaymentMixin:
                         '\u2705 <b>Пополнение успешно!</b>\n\n'
                         f'\U0001f4b0 Сумма: {settings.format_price(payment.amount_kopeks)}\n'
                         f'\U0001f4b3 Способ: {display_name}\n'
-                        f'\U0001f194 Транзакция: {transaction.id}'
+                        f'\U0001f194 Транзакция: {transaction.id}\n\n'
+                        'Баланс пополнен автоматически!'
                     ),
                     parse_mode='HTML',
                     reply_markup=keyboard,
@@ -580,28 +576,19 @@ class RollyPayPaymentMixin:
                             # Acquire FOR UPDATE lock before finalization
                             locked = await rollypay_crud.get_rollypay_payment_by_id_for_update(db, payment.id)
                             if not locked:
-                                logger.error(
-                                    'RollyPay: не удалось заблокировать платёж',
-                                    payment_id=payment.id,
-                                )
+                                logger.error('RollyPay: не удалось заблокировать платёж', payment_id=payment.id)
                                 return None
                             payment = locked
 
                             if payment.is_paid:
-                                logger.info(
-                                    'RollyPay платеж уже обработан (api_check)',
-                                    order_id=payment.order_id,
-                                )
+                                logger.info('RollyPay платеж уже обработан (api_check)', order_id=payment.order_id)
                                 return {
                                     'payment': payment,
                                     'status': 'success',
                                     'is_paid': True,
                                 }
 
-                            logger.info(
-                                'RollyPay payment confirmed via API',
-                                order_id=payment.order_id,
-                            )
+                            logger.info('RollyPay payment confirmed via API', order_id=payment.order_id)
 
                             # Inline field updates — NO intermediate commit that would release FOR UPDATE lock
                             payment.status = 'success'

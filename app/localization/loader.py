@@ -116,10 +116,7 @@ def _determine_default_language() -> str:
                 FALLBACK_LANGUAGE=_FALLBACK_LANGUAGE,
             )
     else:
-        _logger.debug(
-            'DEFAULT_LANGUAGE is not set — falling back',
-            FALLBACK_LANGUAGE=_FALLBACK_LANGUAGE,
-        )
+        _logger.debug('DEFAULT_LANGUAGE is not set — falling back', FALLBACK_LANGUAGE=_FALLBACK_LANGUAGE)
 
     fallback_language = _select_fallback_language(available_map)
 
@@ -192,10 +189,7 @@ def _directory_is_writable(directory: Path) -> bool:
         )
     except Exception as error:  # pragma: no cover - defensive logging
         _logger.warning(
-            'Unexpected error while checking locale directory',
-            directory=directory,
-            user_hint=user_hint,
-            error=error,
+            'Unexpected error while checking locale directory', directory=directory, user_hint=user_hint, error=error
         )
     return False
 
@@ -209,10 +203,7 @@ def ensure_locale_templates() -> None:
         return
 
     if not _DEFAULT_LOCALES_DIR.exists():
-        _logger.debug(
-            'Default locales directory is missing',
-            DEFAULT_LOCALES_DIR=_DEFAULT_LOCALES_DIR,
-        )
+        _logger.debug('Default locales directory is missing', DEFAULT_LOCALES_DIR=_DEFAULT_LOCALES_DIR)
         return
 
     if not _directory_is_writable(destination):
@@ -224,12 +215,7 @@ def ensure_locale_templates() -> None:
         try:
             shutil.copyfile(source, target)
         except Exception as error:
-            _logger.warning(
-                'Failed to copy default locale',
-                source=source,
-                target=target,
-                error=error,
-            )
+            _logger.warning('Failed to copy default locale', source=source, target=target, error=error)
 
     if not destination_has_files:
         for template in _DEFAULT_LOCALES_DIR.iterdir():
@@ -238,7 +224,7 @@ def ensure_locale_templates() -> None:
             _copy_locale(template, destination / template.name)
         return
 
-    for locale_code in ('ru', 'en'):
+    for locale_code in ('ru', 'en', 'fa'):
         source_path = _DEFAULT_LOCALES_DIR / f'{locale_code}.json'
         target_path = destination / f'{locale_code}.json'
 
@@ -246,11 +232,7 @@ def ensure_locale_templates() -> None:
             continue
 
         if not source_path.exists():
-            _logger.debug(
-                'Default locale template is missing',
-                locale_code=locale_code,
-                source_path=source_path,
-            )
+            _logger.debug('Default locale template is missing', locale_code=locale_code, source_path=source_path)
             continue
 
         _copy_locale(source_path, target_path)
@@ -312,9 +294,7 @@ def load_locale(language: str) -> dict[str, Any]:
 
     if not merged and language != DEFAULT_LANGUAGE:
         _logger.warning(
-            'Locale not found — falling back to default language',
-            language=language,
-            DEFAULT_LANGUAGE=DEFAULT_LANGUAGE,
+            'Locale not found — falling back to default language', language=language, DEFAULT_LANGUAGE=DEFAULT_LANGUAGE
         )
         return load_locale(DEFAULT_LANGUAGE)
     return merged

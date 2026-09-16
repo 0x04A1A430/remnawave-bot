@@ -92,7 +92,7 @@ async def _create_riopay_payment_and_respond(
                 InlineKeyboardButton(
                     text=texts.t(
                         'PAY_BUTTON',
-                        'Оплатить {amount}₽',
+                        '💳 Оплатить {amount}₽',
                     ).format(amount=f'{amount_rub:.0f}'),
                     url=payment_url,
                     style='success',
@@ -100,7 +100,7 @@ async def _create_riopay_payment_and_respond(
             ],
             [
                 InlineKeyboardButton(
-                    text=texts.t('BACK_BUTTON', 'Назад'),
+                    text=texts.t('BACK_BUTTON', '◀️ Назад'),
                     callback_data='menu_balance',
                     style='danger',
                 )
@@ -110,7 +110,7 @@ async def _create_riopay_payment_and_respond(
 
     response_text = texts.t(
         'RIOPAY_PAYMENT_CREATED',
-        '<b>Оплата через {name}</b>\n\n'
+        '💳 <b>Оплата через {name}</b>\n\n'
         'Сумма: <b>{amount}₽</b>\n\n'
         'Нажмите кнопку ниже для оплаты.\n'
         'После успешной оплаты баланс будет пополнен автоматически.',
@@ -149,7 +149,7 @@ async def process_riopay_payment_amount(
     if restriction_kb:
         reason = html.escape(getattr(db_user, 'restriction_reason', None) or 'Действие ограничено администратором')
         await message.answer(
-            f'<b>Пополнение ограничено</b>\n\n{reason}',
+            f'🚫 <b>Пополнение ограничено</b>\n\n{reason}',
             parse_mode='HTML',
             reply_markup=restriction_kb,
         )
@@ -209,7 +209,7 @@ async def start_riopay_topup(
     if restriction_kb:
         reason = html.escape(getattr(db_user, 'restriction_reason', None) or 'Действие ограничено администратором')
         await callback.message.edit_text(
-            f'<b>Пополнение ограничено</b>\n\n{reason}',
+            f'🚫 <b>Пополнение ограничено</b>\n\n{reason}',
             parse_mode='HTML',
             reply_markup=restriction_kb,
         )
@@ -227,7 +227,7 @@ async def start_riopay_topup(
     await callback.message.edit_text(
         texts.t(
             'RIOPAY_ENTER_AMOUNT',
-            '<b>Пополнение через {name}</b>\n\n'
+            '💳 <b>Пополнение через {name}</b>\n\n'
             'Введите сумму пополнения в рублях.\n\n'
             'Минимум: {min_amount}₽\n'
             'Максимум: {max_amount}₽',

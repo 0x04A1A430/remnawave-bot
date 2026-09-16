@@ -39,12 +39,7 @@ def _available_options(texts) -> list[tuple[str, str]]:
         ('overpay_card', texts.t('OVERPAY_OPTION_CARD', '\U0001f4b3 Карта')),
     ]
     if settings.is_overpay_int_enabled():
-        options.append(
-            (
-                'overpay_int',
-                texts.t('OVERPAY_OPTION_INT', '\U0001f30d Международная карта (EUR)'),
-            )
-        )
+        options.append(('overpay_int', texts.t('OVERPAY_OPTION_INT', '\U0001f30d Международная карта (EUR)')))
     return options
 
 
@@ -121,11 +116,7 @@ async def _create_overpay_payment_and_respond(
             'Сумма: <b>{amount}₽</b> (≈ <b>{amount_eur}€</b>)\n\n'
             'Оплата проходит в евро, баланс будет пополнен в рублях.\n'
             'Нажмите кнопку ниже для оплаты.',
-        ).format(
-            name=display_name,
-            amount=f'{amount_rub:.2f}',
-            amount_eur=f'{amount_eur:.2f}',
-        )
+        ).format(name=display_name, amount=f'{amount_rub:.2f}', amount_eur=f'{amount_eur:.2f}')
     else:
         pay_button_text = texts.t(
             'PAY_BUTTON',
@@ -144,7 +135,7 @@ async def _create_overpay_payment_and_respond(
             [InlineKeyboardButton(text=pay_button_text, url=payment_url, style='success')],
             [
                 InlineKeyboardButton(
-                    text=texts.t('BACK_BUTTON', 'Назад'),
+                    text=texts.t('BACK_BUTTON', '◀️ Назад'),
                     callback_data='menu_balance',
                     style='danger',
                 )
@@ -165,12 +156,7 @@ async def _create_overpay_payment_and_respond(
             parse_mode='HTML',
         )
 
-    logger.info(
-        'Overpay payment created',
-        telegram_id=db_user.telegram_id,
-        amount_rub=amount_rub,
-        option=option,
-    )
+    logger.info('Overpay payment created', telegram_id=db_user.telegram_id, amount_rub=amount_rub, option=option)
 
 
 @error_handler
@@ -286,7 +272,7 @@ async def start_overpay_topup(
     keyboard_rows.append(
         [
             InlineKeyboardButton(
-                text=texts.t('BACK_BUTTON', 'Назад'),
+                text=texts.t('BACK_BUTTON', '◀️ Назад'),
                 callback_data='menu_balance',
                 style='danger',
             )
@@ -323,10 +309,7 @@ async def _start_overpay_option_topup_impl(
 
     option = _extract_option(payment_method)
     if option == 'int' and not settings.is_overpay_int_enabled():
-        await callback.answer(
-            texts.t('OVERPAY_OPTION_UNAVAILABLE', 'Способ оплаты недоступен.'),
-            show_alert=True,
-        )
+        await callback.answer(texts.t('OVERPAY_OPTION_UNAVAILABLE', 'Способ оплаты недоступен.'), show_alert=True)
         return
 
     await state.set_state(BalanceStates.waiting_for_amount)

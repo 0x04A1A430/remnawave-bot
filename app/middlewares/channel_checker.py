@@ -11,10 +11,7 @@ from aiogram.types import CallbackQuery, Message, TelegramObject, Update
 
 from app.config import settings
 from app.database.crud.campaign import get_campaign_by_start_parameter
-from app.database.crud.subscription import (
-    deactivate_subscription,
-    reactivate_subscription,
-)
+from app.database.crud.subscription import deactivate_subscription, reactivate_subscription
 from app.database.crud.user import get_user_by_telegram_id
 from app.database.database import AsyncSessionLocal
 from app.database.models import SubscriptionStatus, UserStatus
@@ -26,6 +23,7 @@ from app.services.channel_subscription_service import channel_subscription_servi
 from app.services.subscription_service import SubscriptionService
 from app.utils.cache import cache
 from app.utils.check_reg_process import is_registration_process
+from app.utils.telegram_delivery import is_user_unreachable
 
 
 logger = structlog.get_logger(__name__)
@@ -34,30 +32,10 @@ logger = structlog.get_logger(__name__)
 REDIS_PAYLOAD_KEY_PREFIX = 'pending_start_payload:'
 REDIS_PAYLOAD_TTL = 3600  # 1 hour
 
-# Отказы Telegram, означающие, что писать больше некому: бот заблокирован,
-# аккаунт удалён, чат недоступен. Апдейт от такого пользователя всё равно
-# доезжает (он мог заблокировать бота уже после отправки), а гейт по подписке
-# честно пытается ему ответить и получает 403.
-_UNREACHABLE_USER_ERRORS = (
-    'bot was blocked',
-    'user is deactivated',
-    'chat not found',
-)
-
-
-def _is_user_unreachable(error: BaseException) -> bool:
-    """Сообщение физически некуда доставить — не ошибка бота.
-
-    Такие отказы логируются debug-строкой: на error-уровне
-    ``TelegramNotifierProcessor`` разворачивает ``sys.exc_info()`` и шлёт
-    админам traceback, то есть каждый заблокировавший бота пользователь
-    превращается в отчёт об ошибке.
-    """
-    if isinstance(error, TelegramForbiddenError):
-        return True
-    if isinstance(error, TelegramBadRequest):
-        return any(marker in str(error).lower() for marker in _UNREACHABLE_USER_ERRORS)
-    return False
+# Отказы Telegram, означающие, что писать больше некому (бот заблокирован, аккаунт
+# удалён, чат недоступен), логируются debug-строкой: на error-уровне
+# TelegramNotifierProcessor развернул бы traceback в отчёт админам.
+_is_user_unreachable = is_user_unreachable
 
 
 async def save_pending_payload_to_redis(telegram_id: int, payload: str) -> bool:
@@ -66,11 +44,7 @@ async def save_pending_payload_to_redis(telegram_id: int, payload: str) -> bool:
         key = f'{REDIS_PAYLOAD_KEY_PREFIX}{telegram_id}'
         result = await cache.set(key, payload, expire=REDIS_PAYLOAD_TTL)
         if result:
-            logger.info(
-                'Saved pending payload to Redis',
-                payload=payload,
-                telegram_id=telegram_id,
-            )
+            logger.info('Saved pending payload to Redis', payload=payload, telegram_id=telegram_id)
         return result
     except Exception as e:
         logger.error('Failed to save payload to Redis', telegram_id=telegram_id, error=e)
@@ -219,7 +193,7 @@ class ChannelCheckerMiddleware(BaseMiddleware):
             channel_sub_kb = get_channel_sub_keyboard(normalized, language=user_lang)
             text = texts.t(
                 'CHANNEL_REQUIRED_TEXT',
-                'Для использования бота подпишитесь на новостной канал, '
+                '🔒 Для использования бота подпишитесь на новостной канал, '
                 'чтобы получать уведомления о новых возможностях и обновлениях бота. Спасибо!',
             )
 
@@ -280,7 +254,7 @@ class ChannelCheckerMiddleware(BaseMiddleware):
         channel_sub_kb = get_channel_sub_keyboard(normalized, language=language)
         text = texts.t(
             'CHANNEL_REQUIRED_TEXT',
-            'Для использования бота подпишитесь на новостной канал, '
+            '🔒 Для использования бота подпишитесь на новостной канал, '
             'чтобы получать уведомления о новых возможностях и обновлениях бота. Спасибо!',
         )
 
@@ -397,7 +371,7 @@ class ChannelCheckerMiddleware(BaseMiddleware):
 
                 if existing_is_campaign:
                     logger.info(
-                        'Payload кампании сохранён, перезапись пропущена',
+                        '🔒 Payload кампании сохранён, перезапись пропущена',
                         existing_payload=existing_payload,
                         new_payload=payload,
                         telegram_id=telegram_id,
@@ -457,11 +431,7 @@ class ChannelCheckerMiddleware(BaseMiddleware):
         try:
             state_data = await state.get_data() or {}
         except Exception as error:
-            logger.error(
-                'Failed to get state data for campaign notification',
-                payload=payload,
-                error=error,
-            )
+            logger.error('Failed to get state data for campaign notification', payload=payload, error=error)
             return
 
         if state_data.get('campaign_notification_sent'):
@@ -496,11 +466,7 @@ class ChannelCheckerMiddleware(BaseMiddleware):
                     await state.update_data(campaign_notification_sent=True)
                 await db.commit()
             except Exception as error:
-                logger.error(
-                    'Error sending campaign visit notification',
-                    payload=payload,
-                    error=error,
-                )
+                logger.error('Error sending campaign visit notification', payload=payload, error=error)
                 await db.rollback()
 
     # -- _deactivate (multi-channel) -------------------------------------------
@@ -546,18 +512,18 @@ class ChannelCheckerMiddleware(BaseMiddleware):
 
                 service = SubscriptionService()
                 for subscription in deactivated_subs:
-                    panel_uuid = (
+                    panel_user_id = (
                         subscription.remnawave_id
                         if settings.is_multi_tariff_enabled() and subscription.remnawave_id
                         else user.remnawave_id
                     )
-                    if panel_uuid:
+                    if panel_user_id:
                         try:
-                            await service.disable_remnawave_user(panel_uuid)
+                            await service.disable_remnawave_user(panel_user_id)
                         except Exception as api_error:
                             logger.error(
                                 'Failed to disable RemnaWave user',
-                                remnawave_id=panel_uuid,
+                                remnawave_id=panel_user_id,
                                 api_error=api_error,
                             )
 
@@ -569,13 +535,13 @@ class ChannelCheckerMiddleware(BaseMiddleware):
                         if settings.is_multi_tariff_enabled() and len(deactivated_subs) > 1:
                             notification_text = texts.t(
                                 'SUBSCRIPTION_DEACTIVATED_CHANNEL_UNSUBSCRIBE_MULTI',
-                                'Ваши подписки приостановлены, так как вы отписались от обязательного канала.\n\n'
+                                '🚫 Ваши подписки приостановлены, так как вы отписались от обязательного канала.\n\n'
                                 'Подпишитесь на все каналы для восстановления доступа к VPN.',
                             )
                         else:
                             notification_text = texts.t(
                                 'SUBSCRIPTION_DEACTIVATED_CHANNEL_UNSUBSCRIBE',
-                                'Ваша подписка приостановлена, так как вы отписались от канала.\n\n'
+                                '🚫 Ваша подписка приостановлена, так как вы отписались от канала.\n\n'
                                 'Подпишитесь на канал снова, чтобы восстановить доступ к VPN.',
                             )
                         channel_kb = get_channel_sub_keyboard(normalized, language=user.language)
@@ -615,10 +581,7 @@ class ChannelCheckerMiddleware(BaseMiddleware):
 
                 # Do NOT reactivate for blocked users
                 if user.status == UserStatus.BLOCKED.value:
-                    logger.info(
-                        'Skipping reactivation for blocked user',
-                        telegram_id=telegram_id,
-                    )
+                    logger.info('Skipping reactivation for blocked user', telegram_id=telegram_id)
                     return
 
                 disabled_subs = [
@@ -644,18 +607,18 @@ class ChannelCheckerMiddleware(BaseMiddleware):
                 # Enable in RemnaWave
                 service = SubscriptionService()
                 for subscription in disabled_subs:
-                    panel_uuid = (
+                    panel_user_id = (
                         subscription.remnawave_id
                         if settings.is_multi_tariff_enabled() and subscription.remnawave_id
                         else user.remnawave_id
                     )
-                    if panel_uuid:
+                    if panel_user_id:
                         try:
-                            await service.enable_remnawave_user(panel_uuid)
+                            await service.enable_remnawave_user(panel_user_id)
                         except Exception as api_error:
                             logger.error(
                                 'Failed to enable RemnaWave user',
-                                remnawave_id=panel_uuid,
+                                remnawave_id=panel_user_id,
                                 api_error=api_error,
                             )
 
@@ -668,12 +631,12 @@ class ChannelCheckerMiddleware(BaseMiddleware):
                     if settings.is_multi_tariff_enabled() and len(disabled_subs) > 1:
                         notification_text = texts.t(
                             'SUBSCRIPTION_REACTIVATED_CHANNEL_SUBSCRIBE_MULTI',
-                            'Ваши подписки восстановлены!\n\nСпасибо, что подписались на канал. VPN снова работает.',
+                            '✅ Ваши подписки восстановлены!\n\nСпасибо, что подписались на канал. VPN снова работает.',
                         )
                     else:
                         notification_text = texts.t(
                             'SUBSCRIPTION_REACTIVATED_CHANNEL_SUBSCRIBE',
-                            'Ваша подписка восстановлена!\n\nСпасибо, что подписались на канал. VPN снова работает.',
+                            '✅ Ваша подписка восстановлена!\n\nСпасибо, что подписались на канал. VPN снова работает.',
                         )
                     await bot.send_message(telegram_id, notification_text)
                 except Exception as notify_error:
@@ -684,11 +647,7 @@ class ChannelCheckerMiddleware(BaseMiddleware):
                     )
                 await db.commit()
             except Exception as db_error:
-                logger.error(
-                    'Error reactivating subscription',
-                    telegram_id=telegram_id,
-                    db_error=db_error,
-                )
+                logger.error('Error reactivating subscription', telegram_id=telegram_id, db_error=db_error)
                 await db.rollback()
 
 

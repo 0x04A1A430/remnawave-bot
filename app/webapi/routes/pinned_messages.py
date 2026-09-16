@@ -107,16 +107,11 @@ async def get_pinned_message(
     return _serialize_pinned_message(msg)
 
 
-@router.post(
-    '',
-    response_model=PinnedMessageBroadcastResponse,
-    status_code=status.HTTP_201_CREATED,
-)
+@router.post('', response_model=PinnedMessageBroadcastResponse, status_code=status.HTTP_201_CREATED)
 async def create_pinned_message(
     payload: PinnedMessageCreateRequest,
     broadcast: bool = Query(
-        False,
-        description='Разослать сообщение всем пользователям (по умолчанию False — только при /start)',
+        False, description='Разослать сообщение всем пользователям (по умолчанию False — только при /start)'
     ),
     token: Any = Depends(require_api_token),
     db: AsyncSession = Depends(get_db_session),
@@ -190,10 +185,7 @@ async def update_pinned_message(
 
     if payload.media is not None:
         if payload.media.type not in ('photo', 'video'):
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                'Only photo or video media types are supported',
-            )
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, 'Only photo or video media types are supported')
         msg.media_type = payload.media.type
         msg.media_file_id = payload.media.file_id
 
@@ -245,8 +237,7 @@ async def update_pinned_message_settings(
 async def activate_pinned_message(
     message_id: int,
     broadcast: bool = Query(
-        False,
-        description='Разослать сообщение всем пользователям (по умолчанию False — только при /start)',
+        False, description='Разослать сообщение всем пользователям (по умолчанию False — только при /start)'
     ),
     token: Any = Depends(require_api_token),
     db: AsyncSession = Depends(get_db_session),

@@ -28,22 +28,18 @@ from app.database.crud.subscription import (
     extend_subscription,
     get_subscription_by_id_for_user,
     get_subscription_by_user_id,
+    should_carry_trial_remaining_days,
 )
 from app.database.crud.tariff import get_tariff_by_id, get_tariffs_for_user
 from app.database.crud.transaction import create_transaction
-from app.database.crud.user import add_user_balance, subtract_user_balance
-from app.database.models import (
-    PaymentMethod,
-    Subscription,
-    Tariff,
-    TransactionType,
-    User,
-)
+from app.database.crud.user import add_user_balance, get_user_by_id, subtract_user_balance
+from app.database.database import AsyncSessionLocal
+from app.database.models import PaymentMethod, Subscription, Tariff, Transaction, TransactionType, User
 from app.services.notification_delivery_service import (
     NotificationType,
     notification_delivery_service,
 )
-from app.services.pricing_engine import pricing_engine
+from app.services.pricing_engine import PricingEngine, pricing_engine
 from app.services.subscription_purchase_service import (
     MiniAppSubscriptionPurchaseService,
     PurchaseBalanceError,
@@ -51,7 +47,7 @@ from app.services.subscription_purchase_service import (
 )
 from app.services.subscription_service import SubscriptionService
 from app.services.user_cart_service import user_cart_service
-from app.utils.pricing_utils import format_period_description
+from app.utils.pricing_utils import calculate_price_per_month, format_period_description
 
 from ...dependencies import get_cabinet_db, get_current_cabinet_user
 from ...schemas.subscription import (
@@ -73,6 +69,42 @@ logger = structlog.get_logger(__name__)
 REMNAWAVE_SYNC_TIMEOUT = 10.0
 
 router = APIRouter()
+
+
+async def _persist_failed_refund(user_id: int, amount_kopeks: int, reason: str, error: Exception | str) -> None:
+    """Record a refund that could not be applied, via a fresh session, for later retry.
+
+    The caller's session may be broken (post-rollback / connection error), so a
+    dedicated session is used. Mirrors the bot-handler compensation path so an
+    unapplied refund is never lost silently (#3031).
+    """
+    try:
+        async with AsyncSessionLocal() as session:
+            record = Transaction(
+                user_id=user_id,
+                type=TransactionType.FAILED_REFUND.value,
+                amount_kopeks=amount_kopeks,
+                description=f'{reason} | error: {error}',
+                is_completed=False,
+                created_at=datetime.now(UTC),
+            )
+            session.add(record)
+            await session.commit()
+            logger.warning(
+                'Cabinet purchase: записан failed_refund для последующей обработки',
+                user_id=user_id,
+                amount_kopeks=amount_kopeks,
+                transaction_id=record.id,
+            )
+    except Exception as persist_error:
+        logger.critical(
+            'CRITICAL: невозможно сохранить failed_refund в кабинете — требуется ручное вмешательство',
+            user_id=user_id,
+            amount_kopeks=amount_kopeks,
+            reason=reason,
+            original_error=str(error),
+            persist_error=persist_error,
+        )
 
 
 # ============ Full Purchase Flow (like MiniApp) ============
@@ -160,8 +192,8 @@ async def _build_tariff_response(
                 discount_percent = 0
                 final_price = original_price
 
-            per_month = final_price // months if months > 0 else final_price
-            original_per_month = original_price // months if months > 0 else original_price
+            per_month = calculate_price_per_month(final_price, period_days)
+            original_per_month = calculate_price_per_month(original_price, period_days)
 
             period_data: dict[str, Any] = {
                 'days': period_days,
@@ -171,6 +203,9 @@ async def _build_tariff_response(
                 'price_label': settings.format_price(final_price),
                 'price_per_month_kopeks': per_month,
                 'price_per_month_label': settings.format_price(per_month),
+                # Период, отмеченный оператором как самый выгодный: кабинет
+                # обводит его рамкой, бот ставит подпись в кнопке.
+                'is_highlighted': tariff.highlight_period_days == period_days,
             }
 
             # Информация о доп. устройствах в цене
@@ -193,26 +228,15 @@ async def _build_tariff_response(
 
             periods.append(period_data)
 
-    traffic_label = 'Безлимит' if tariff.traffic_limit_gb == 0 else f'{tariff.traffic_limit_gb} ГБ'
+    traffic_label = '♾️ Безлимит' if tariff.traffic_limit_gb == 0 else f'{tariff.traffic_limit_gb} ГБ'
 
-    # Apply discount to daily price if applicable (group + promo-offer)
-    daily_price = getattr(tariff, 'daily_price_kopeks', 0)
-    original_daily_price = daily_price
-    daily_discount_percent = 0
-    if daily_price > 0:
-        from app.services.pricing_engine import PricingEngine
-        from app.utils.promo_offer import get_user_active_promo_discount_percent
-
-        daily_group_pct = promo_group.get_discount_percent('period', 1) if promo_group else 0
-        daily_offer_pct = get_user_active_promo_discount_percent(user) if user else 0
-        if daily_group_pct > 0 or daily_offer_pct > 0:
-            daily_price, _, _ = PricingEngine.apply_stacked_discounts(daily_price, daily_group_pct, daily_offer_pct)
-            # Комбинированный процент для отображения
-            remaining = (100 - daily_group_pct) * (100 - daily_offer_pct)
-            daily_discount_percent = 100 - remaining // 100
+    # Суточная цена — как и периоды, только со скидкой группы: промокод накладывает
+    # кабинет для показа и сервер при списании (PricingEngine.daily_group_price).
+    original_daily_price = getattr(tariff, 'daily_price_kopeks', 0) or 0
+    daily_price, daily_discount_percent = PricingEngine.daily_group_price(original_daily_price, user)
 
     # Apply discount to custom price_per_day if applicable
-    price_per_day = tariff.price_per_day_kopeks
+    price_per_day = tariff.price_per_day_kopeks or 0
     original_price_per_day = price_per_day
     custom_days_discount_percent = 0
     if promo_group and price_per_day > 0:
@@ -238,6 +262,9 @@ async def _build_tariff_response(
         'id': tariff.id,
         'name': tariff.name,
         'description': tariff.description,
+        # Тариф отмечен оператором как выгодный: кабинет обводит карточку рамкой,
+        # бот ставит подпись в кнопке списка.
+        'is_highlighted': bool(tariff.is_highlighted),
         'tier_level': tariff.tier_level,
         'traffic_limit_gb': tariff.traffic_limit_gb,
         'traffic_limit_label': traffic_label,
@@ -263,9 +290,9 @@ async def _build_tariff_response(
         'max_traffic_gb': tariff.max_traffic_gb,
         # Докупка трафика
         'traffic_topup_enabled': tariff.traffic_topup_enabled,
-        'traffic_topup_packages': (
-            tariff.get_traffic_topup_packages() if hasattr(tariff, 'get_traffic_topup_packages') else {}
-        ),
+        'traffic_topup_packages': tariff.get_traffic_topup_packages()
+        if hasattr(tariff, 'get_traffic_topup_packages')
+        else {},
         'max_topup_traffic_gb': tariff.max_topup_traffic_gb,
         # Дневной тариф
         'is_daily': getattr(tariff, 'is_daily', False),
@@ -316,17 +343,13 @@ async def get_purchase_options(
             tariffs = await get_tariffs_for_user(db, promo_group_id)
 
             if settings.is_multi_tariff_enabled():
-                from app.database.crud.subscription import (
-                    get_active_subscriptions_by_user_id,
-                )
+                from app.database.crud.subscription import get_active_subscriptions_by_user_id
 
                 active_subs = await get_active_subscriptions_by_user_id(db, user.id)
                 purchased_tariff_ids = {s.tariff_id for s in active_subs if s.tariff_id and not s.is_trial}
 
                 if subscription_id:
-                    from app.database.crud.subscription import (
-                        get_subscription_by_id_for_user,
-                    )
+                    from app.database.crud.subscription import get_subscription_by_id_for_user
 
                     subscription = await get_subscription_by_id_for_user(db, subscription_id, user.id)
                 elif active_subs:
@@ -348,6 +371,14 @@ async def get_purchase_options(
                 subscription_status = subscription.actual_status
                 subscription_is_expired = subscription_status == 'expired'
 
+            # Free (0₽) source tariff: switching is blocked (free_tariff_cannot_switch,
+            # TARIFF_SWITCH_RESET_FREE_DAYS) — frontend must offer the purchase flow
+            # instead of the prorated switch.
+            subscription_on_free_tariff = False
+            if current_tariff_id and settings.TARIFF_SWITCH_RESET_FREE_DAYS:
+                _current_tariff = await get_tariff_by_id(db, current_tariff_id)
+                subscription_on_free_tariff = bool(_current_tariff is not None and _current_tariff.is_free)
+
             tariff_responses = []
             for tariff in tariffs:
                 tariff_data = await _build_tariff_response(db, tariff, current_tariff_id, language, user, subscription)
@@ -367,20 +398,32 @@ async def get_purchase_options(
                 # Include subscription status info for frontend decision making
                 'subscription_status': subscription_status,
                 'subscription_is_expired': subscription_is_expired,
+                'subscription_on_free_tariff': subscription_on_free_tariff,
                 'has_subscription': subscription is not None,
                 # Multi-tariff: all tariffs purchased flag for frontend fallback
-                'all_tariffs_purchased': (
-                    len(purchased_tariff_ids) >= len(tariffs) if settings.is_multi_tariff_enabled() else False
-                ),
+                'all_tariffs_purchased': len(purchased_tariff_ids) >= len(tariffs)
+                if settings.is_multi_tariff_enabled()
+                else False,
                 # Направления смены тарифа
                 'tariff_switch_upgrade_enabled': settings.TARIFF_SWITCH_UPGRADE_ENABLED,
                 'tariff_switch_downgrade_enabled': settings.TARIFF_SWITCH_DOWNGRADE_ENABLED,
+                # СБП-оформление (Platega recurrent): фронт показывает кнопку
+                # «Оформить с автооплатой СБП» рядом с покупкой с баланса.
+                'platega_recurrent_enabled': settings.is_platega_recurrent_enabled(),
+                # Автопродление Lava: фронт показывает переключатель на странице
+                # подписки, если фича включена.
+                'lava_recurrent_enabled': settings.is_lava_recurrent_enabled(),
             }
 
         # Classic mode - return periods
         context = await purchase_service.build_options(db, user, subscription_id=subscription_id)
         payload = context.payload
         payload['sales_mode'] = 'classic'
+        # Автооплата — свойство системы, а не режима продаж. Без этих признаков
+        # кабинет спрашивал состояние автооплаты у каждой подписки и узнавал об
+        # отключённой фиче из ответа 403 — по красной строке в консоли на запрос.
+        payload['platega_recurrent_enabled'] = settings.is_platega_recurrent_enabled()
+        payload['lava_recurrent_enabled'] = settings.is_lava_recurrent_enabled()
         return payload
 
     except PurchaseValidationError as e:
@@ -505,11 +548,7 @@ async def submit_purchase(
                     bot=None,
                 )
             except Exception as notif_error:
-                logger.warning(
-                    'Failed to send subscription notification to',
-                    email=user.email,
-                    notif_error=notif_error,
-                )
+                logger.warning('Failed to send subscription notification to', email=user.email, notif_error=notif_error)
 
         # Отправляем уведомление админам о покупке подписки
         try:
@@ -529,7 +568,7 @@ async def submit_purchase(
                         period_days=selection.period.days,
                         was_trial_conversion=result.get('was_trial_conversion', False),
                         amount_kopeks=pricing.final_total,
-                        purchase_type=('renewal' if not is_new_subscription else 'first_purchase'),
+                        purchase_type='renewal' if not is_new_subscription else 'first_purchase',
                     )
                 finally:
                     await bot.session.close()
@@ -552,11 +591,7 @@ async def submit_purchase(
                 request.yandex_cid,
             )
         except Exception as yconv_err:
-            logger.debug(
-                'yandex_conv purchase hook failed (non-fatal)',
-                user_id=user.id,
-                error=str(yconv_err),
-            )
+            logger.debug('yandex_conv purchase hook failed (non-fatal)', user_id=user.id, error=str(yconv_err))
 
         return {
             'success': True,
@@ -590,10 +625,7 @@ async def submit_purchase(
             await user_cart_service.save_user_cart(user.id, cart_data)
             logger.info('Cart saved for auto-purchase (cabinet /purchase) user', user_id=user.id)
         except Exception as cart_error:
-            logger.error(
-                'Error saving cart for auto-purchase (cabinet /purchase)',
-                cart_error=cart_error,
-            )
+            logger.error('Error saving cart for auto-purchase (cabinet /purchase)', cart_error=cart_error)
 
         raise HTTPException(
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
@@ -734,9 +766,7 @@ async def purchase_tariff(
                     )
                     existing_subscription = None
             if existing_subscription is None:
-                from app.database.crud.subscription import (
-                    get_subscription_by_user_and_tariff,
-                )
+                from app.database.crud.subscription import get_subscription_by_user_and_tariff
 
                 # include_inactive=True so an EXPIRED (or disabled) trial of THIS
                 # tariff is found and converted in place via the extend branch
@@ -771,10 +801,20 @@ async def purchase_tariff(
         promo_offer_discount_value = result.promo_offer_discount
         price_before_promo_offer = price_kopeks + promo_offer_discount_value
 
-        # Safety guard: reject zero-price purchases for non-daily tariffs (defense in depth).
-        # Use original_total (pre-discount price) — base_price is already discounted,
-        # so a 100% group discount legitimately makes it 0.
-        if price_kopeks <= 0 and result.original_total <= 0 and not is_daily_tariff:
+        # Safety guard: reject purchases whose price is zero because nothing is
+        # configured. Use original_total (pre-discount price) — base_price is
+        # already discounted, so a 100% group discount legitimately makes it 0.
+        #
+        # Нулевая цена сама по себе поломкой НЕ является: бесплатный тариф в
+        # проекте штатный, и бот его продаёт. Признак настроенности — наличие
+        # цены периода, а не её величина; раньше здесь стояла проверка «> 0», и
+        # тариф, показанный кабинетом как «Бесплатно», купить было нельзя.
+        if (
+            price_kopeks <= 0
+            and result.original_total <= 0
+            and not is_daily_tariff
+            and not tariff.has_configured_price_for_period(period_days)
+        ):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail='Invalid tariff period or pricing configuration',
@@ -802,7 +842,7 @@ async def purchase_tariff(
                     'allowed_squads': tariff.allowed_squads or [],
                     'consume_promo_offer': promo_offer_discount_value > 0,
                     'source': 'cabinet',
-                    'subscription_id': (existing_subscription.id if existing_subscription else None),
+                    'subscription_id': existing_subscription.id if existing_subscription else None,
                 }
             else:
                 cart_data = {
@@ -821,16 +861,12 @@ async def purchase_tariff(
                     'discount_percent': discount_percent,
                     'consume_promo_offer': promo_offer_discount_value > 0,
                     'source': 'cabinet',
-                    'subscription_id': (existing_subscription.id if existing_subscription else None),
+                    'subscription_id': existing_subscription.id if existing_subscription else None,
                 }
 
             try:
                 await user_cart_service.save_user_cart(user.id, cart_data)
-                logger.info(
-                    'Cart saved for auto-purchase (cabinet) user tariff',
-                    user_id=user.id,
-                    tariff_id=tariff.id,
-                )
+                logger.info('Cart saved for auto-purchase (cabinet) user tariff', user_id=user.id, tariff_id=tariff.id)
             except Exception as e:
                 logger.error('Error saving cart for auto-purchase (cabinet)', error=e)
 
@@ -890,73 +926,174 @@ async def purchase_tariff(
             payment_method=PaymentMethod.BALANCE,
         )
 
-        # --- Trial cleanup: find and kill all trials BEFORE creating/extending ---
-        from app.database.crud.subscription import deactivate_user_trial_subscriptions
+        # Плоские копии для веток возврата средств ниже: после db.rollback()
+        # ORM-объекты expired, а синхронный доступ к их атрибутам в async-контексте
+        # падает с MissingGreenlet — компенсация обязана работать без живых инстансов.
+        refund_user_id = user.id
+        refund_tariff_id = tariff.id
+        refund_tariff_name = tariff.name
 
-        # Collect remaining trial seconds for TRIAL_ADD_REMAINING_DAYS_TO_PAID
-        _bonus_seconds = 0
-        _now_trial = datetime.now(UTC)
-        killed_trials = await deactivate_user_trial_subscriptions(
-            db,
-            user.id,
-            exclude_subscription_id=subscription.id if subscription else None,
-        )
-        if settings.TRIAL_ADD_REMAINING_DAYS_TO_PAID:
-            for _kt in killed_trials:
-                if _kt.end_date and _kt.end_date > _now_trial:
-                    _bonus_seconds += max(0, (_kt.end_date - _now_trial).total_seconds())
+        async def _refund_charge(reason: str) -> None:
+            """Возврат уже списанной суммы после db.rollback().
 
-        # If existing subscription IS the trial being extended — it's already deactivated
-        # as trial by deactivate_user_trial_subscriptions (is_trial=False, status=DISABLED).
-        # We need to re-activate it for extend to work correctly.
-        if subscription and subscription.id in {kt.id for kt in killed_trials}:
-            subscription.status = 'active'
-            subscription.is_trial = False
-            await db.flush()
-
-        if subscription:
-            # Extend/change tariff — сохраняем докупленные устройства при продлении того же тарифа
-            subscription = await extend_subscription(
-                db=db,
-                subscription=subscription,
-                days=period_days,
-                tariff_id=tariff.id,
-                traffic_limit_gb=traffic_limit_gb,
-                device_limit=effective_device_limit,
-                connected_squads=squads,
-            )
-        else:
-            # Create new subscription
+            Сбои возврата только логируем (CRITICAL): исходную ошибку покупки
+            маскировать нельзя, а двойного списания здесь быть не может.
+            """
             try:
-                subscription = await create_paid_subscription(
-                    db=db,
-                    user_id=user.id,
-                    duration_days=period_days,
-                    traffic_limit_gb=traffic_limit_gb,
-                    device_limit=tariff.device_limit,
-                    connected_squads=squads,
-                    tariff_id=tariff.id,
-                )
-            except IntegrityError:
-                # Partial unique index violation: user already has active subscription for this tariff
-                logger.warning(
-                    'Cabinet purchase: tariff already active (IntegrityError), refunding',
-                    tariff_id=tariff.id,
-                    user_id=user.id,
-                )
-                await db.rollback()
-                await add_user_balance(
+                refund_user = await get_user_by_id(db, refund_user_id)
+                if refund_user is None:
+                    logger.critical(
+                        'CRITICAL: пользователь не найден для возврата средств после ошибки покупки тарифа',
+                        user_id=refund_user_id,
+                        price_kopeks=price_kopeks,
+                    )
+                    await _persist_failed_refund(refund_user_id, price_kopeks, reason, 'user not found for refund')
+                    return
+                # add_user_balance swallows its own errors and returns False rather than
+                # raising, so the return value — not just an exception — must be checked;
+                # otherwise a failed refund would be lost silently (#3031).
+                refund_success = await add_user_balance(
                     db,
-                    user,
+                    refund_user,
                     price_kopeks,
-                    f"Возврат: тариф '{tariff.name}' уже активен",
+                    reason,
                     create_transaction=True,
                     transaction_type=TransactionType.REFUND,
                 )
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail='You already have an active subscription for this tariff',
+                if not refund_success:
+                    logger.critical(
+                        'CRITICAL: add_user_balance вернул False при возврате средств в кабинете',
+                        user_id=refund_user_id,
+                        price_kopeks=price_kopeks,
+                    )
+                    await _persist_failed_refund(
+                        refund_user_id, price_kopeks, reason, 'add_user_balance returned False'
+                    )
+                    return
+                logger.info(
+                    'Cabinet purchase: средства возвращены после ошибки покупки тарифа',
+                    user_id=refund_user_id,
+                    refund_kopeks=price_kopeks,
                 )
+            except Exception as refund_error:
+                logger.critical(
+                    'CRITICAL: не удалось вернуть средства после ошибки покупки тарифа в кабинете',
+                    user_id=refund_user_id,
+                    price_kopeks=price_kopeks,
+                    refund_error=refund_error,
+                )
+                await _persist_failed_refund(refund_user_id, price_kopeks, reason, refund_error)
+
+        # С этого места деньги уже списаны и закоммичены (subtract_user_balance +
+        # create_transaction). Любая ошибка до успешного сохранения подписки без
+        # компенсации — «тихая» потеря платежа: route-level обработчик отдал бы
+        # HTTP 500 без возврата (#3031: запись в transactions есть, в subscriptions
+        # нет). Пост-persist шаги (bonus_seconds, daily-маркер, синк с панелью)
+        # остаются снаружи guard'а: их сбой не должен возвращать деньги за уже
+        # выданную подписку.
+        try:
+            # --- Trial cleanup: find and kill all trials BEFORE creating/extending ---
+            from app.database.crud.subscription import deactivate_user_trial_subscriptions
+
+            # Collect remaining trial seconds (перенос — по общему правилу:
+            # TARIFF_SWITCH_RESET_FREE_DAYS перебивает TRIAL_ADD_REMAINING_DAYS_TO_PAID).
+            _bonus_seconds = 0
+            _now_trial = datetime.now(UTC)
+            # В мульти-тарифе create-ветка ниже (нет живой подписки покупаемого
+            # тарифа) НЕ должна глушить живой триал здесь: create_paid_subscription
+            # конвертирует его на месте (та же строка, тот же Remnawave-юзер и
+            # ссылка) вместо вставки новой подписки. Убив его заранее, мы бы
+            # спрятали кандидата от конверсии и вернули старое поведение — новый
+            # панельный юзер + мёртвый триал, висящий в кабинете. Его остаток
+            # дней переносит extend_subscription внутри конверсии, поэтому в
+            # _bonus_seconds кандидат не попадает — двойного начисления нет.
+            # resolve_trial_conversion_candidate повторяет приоритеты
+            # create_paid_subscription (в т.ч. вернёт None, когда сработает
+            # revive-ветка #3004) — тогда триал глушится по-старому: с переносом
+            # остатка и отключением панельного юзера в цикле ниже.
+            _conversion_trial = None
+            if subscription is None and settings.is_multi_tariff_enabled():
+                from app.database.crud.subscription import resolve_trial_conversion_candidate
+
+                _conversion_trial = await resolve_trial_conversion_candidate(db, user.id, tariff.id)
+            killed_trials = await deactivate_user_trial_subscriptions(
+                db,
+                user.id,
+                exclude_subscription_id=subscription.id if subscription else getattr(_conversion_trial, 'id', None),
+            )
+            if should_carry_trial_remaining_days():
+                for _kt in killed_trials:
+                    if _kt.end_date and _kt.end_date > _now_trial:
+                        _bonus_seconds += max(0, (_kt.end_date - _now_trial).total_seconds())
+
+            # Защитная ветка: собственный триал исключён из deactivate выше и сюда
+            # НЕ попадает — его конвертацию (is_trial=False) выполняет
+            # extend_subscription (convert_trial=True по умолчанию). Ветка оживёт,
+            # только если exclude_subscription_id перестанут передавать: тогда
+            # убитый триал нужно реанимировать перед extend, иначе продление
+            # отработает по DISABLED-строке.
+            if subscription and subscription.id in {kt.id for kt in killed_trials}:
+                subscription.status = 'active'
+                subscription.is_trial = False
+                await db.flush()
+
+            if subscription:
+                # Extend/change tariff — сохраняем докупленные устройства при продлении того же тарифа
+                subscription = await extend_subscription(
+                    db=db,
+                    subscription=subscription,
+                    days=period_days,
+                    tariff_id=tariff.id,
+                    traffic_limit_gb=traffic_limit_gb,
+                    device_limit=effective_device_limit,
+                    connected_squads=squads,
+                )
+            else:
+                # Create new subscription (или конверсия исключённого выше триала)
+                try:
+                    subscription = await create_paid_subscription(
+                        db=db,
+                        user_id=user.id,
+                        duration_days=period_days,
+                        traffic_limit_gb=traffic_limit_gb,
+                        device_limit=tariff.device_limit,
+                        connected_squads=squads,
+                        tariff_id=tariff.id,
+                        conversion_trial=_conversion_trial,
+                    )
+                except IntegrityError:
+                    # Partial unique index violation: user already has active subscription for this tariff
+                    logger.warning(
+                        'Cabinet purchase: tariff already active (IntegrityError), refunding',
+                        tariff_id=refund_tariff_id,
+                        user_id=refund_user_id,
+                    )
+                    await db.rollback()
+                    await _refund_charge(f"Возврат: тариф '{refund_tariff_name}' уже активен")
+                    raise HTTPException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail='You already have an active subscription for this tariff',
+                    )
+        except HTTPException:
+            # 409-ветка выше уже вернула средства; повторная компенсация здесь
+            # превратила бы одиночный возврат в двойной.
+            raise
+        except Exception as purchase_error:
+            # Логируем до rollback — после него атрибуты ORM-объектов недоступны.
+            logger.error(
+                'Cabinet purchase: ошибка между списанием баланса и сохранением подписки — возвращаем средства',
+                user_id=refund_user_id,
+                tariff_id=refund_tariff_id,
+                price_kopeks=price_kopeks,
+                error=purchase_error,
+                exc_info=True,
+            )
+            await db.rollback()
+            await _refund_charge(f"Возврат: ошибка активации тарифа '{refund_tariff_name}'")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail='Failed to process tariff purchase',
+            )
 
         # Add remaining trial time to paid subscription
         if _bonus_seconds > 0 and subscription:
@@ -982,25 +1119,21 @@ async def purchase_tariff(
             if trial_sub.id == (subscription.id if subscription else None):
                 continue  # This trial became the paid subscription, don't disable
             try:
-                _trial_uuid = trial_sub.remnawave_uuid or (
-                    getattr(user, 'remnawave_uuid', None) if not settings.is_multi_tariff_enabled() else None
+                _trial_panel_user_id = trial_sub.remnawave_id or (
+                    getattr(user, 'remnawave_id', None) if not settings.is_multi_tariff_enabled() else None
                 )
-                if _trial_uuid:
-                    await service.disable_remnawave_user(_trial_uuid)
+                if _trial_panel_user_id:
+                    await service.disable_remnawave_user(_trial_panel_user_id)
                 await decrement_subscription_server_counts(db, trial_sub)
             except Exception as trial_err:
-                logger.warning(
-                    'Failed to disable trial on RemnaWave',
-                    error=trial_err,
-                    trial_id=trial_sub.id,
-                )
+                logger.warning('Failed to disable trial on RemnaWave', error=trial_err, trial_id=trial_sub.id)
         try:
-            # Mirror the bot handler logic: in single-tariff mode, check user.remnawave_uuid
-            # (webhook clears it on panel deletion), not subscription.remnawave_uuid
+            # Mirror the bot handler logic: in single-tariff mode, check user.remnawave_id
+            # (webhook clears it on panel deletion), not subscription.remnawave_id
             if settings.is_multi_tariff_enabled():
-                _should_create = not subscription.remnawave_uuid
+                _should_create = not subscription.remnawave_id
             else:
-                _should_create = not getattr(user, 'remnawave_uuid', None)
+                _should_create = not getattr(user, 'remnawave_id', None)
 
             # Time-bounded (see REMNAWAVE_SYNC_TIMEOUT): the subscription is already
             # committed, so a slow panel must not keep the cabinet pay button spinning;
@@ -1022,10 +1155,7 @@ async def purchase_tariff(
                         reset_reason='покупка тарифа (cabinet)',
                     )
         except Exception as remnawave_error:
-            logger.error(
-                'Failed to sync subscription with RemnaWave',
-                remnawave_error=remnawave_error,
-            )
+            logger.error('Failed to sync subscription with RemnaWave', remnawave_error=remnawave_error)
             from app.services.remnawave_retry_queue import remnawave_retry_queue
 
             remnawave_retry_queue.enqueue(
@@ -1052,6 +1182,11 @@ async def purchase_tariff(
 
         await db.refresh(user)
         await db.refresh(subscription)
+        # refresh обнуляет загруженные связи, а ответ читает тариф подписки
+        # (суточность, цена дня, режим сброса трафика). Дочитывать его лениво
+        # в async-роуте нельзя: получится MissingGreenlet и HTTP 500 уже ПОСЛЕ
+        # списания и создания подписки — человек заплатил и увидел ошибку.
+        await db.refresh(subscription, ['tariff'])
 
         # Yandex.Metrika offline conversion — see /purchase endpoint for context (#558449).
         try:
@@ -1064,11 +1199,7 @@ async def purchase_tariff(
                 request.yandex_cid,
             )
         except Exception as yconv_err:
-            logger.debug(
-                'yandex_conv purchase hook failed (non-fatal)',
-                user_id=user.id,
-                error=str(yconv_err),
-            )
+            logger.debug('yandex_conv purchase hook failed (non-fatal)', user_id=user.id, error=str(yconv_err))
 
         response: dict[str, Any] = {
             'success': True,
@@ -1125,11 +1256,7 @@ async def purchase_tariff(
                     bot=None,
                 )
             except Exception as notif_error:
-                logger.warning(
-                    'Failed to send subscription notification to',
-                    email=user.email,
-                    notif_error=notif_error,
-                )
+                logger.warning('Failed to send subscription notification to', email=user.email, notif_error=notif_error)
 
         # Отправляем уведомление админам о покупке/продлении тарифа
         try:
@@ -1150,9 +1277,12 @@ async def purchase_tariff(
                         subscription=subscription,
                         transaction=transaction,
                         period_days=period_days,
-                        was_trial_conversion=False,
+                        # Маркер ставит extend_subscription, когда покупка
+                        # конвертировала живой триал (в т.ч. конверсию внутри
+                        # create_paid_subscription).
+                        was_trial_conversion=bool(getattr(subscription, '_converted_from_trial', False)),
                         amount_kopeks=price_kopeks,
-                        purchase_type=('renewal' if not was_new_subscription else 'first_purchase'),
+                        purchase_type='renewal' if not was_new_subscription else 'first_purchase',
                     )
                 finally:
                     await bot.session.close()
@@ -1350,11 +1480,7 @@ async def activate_trial(
             payment_method=PaymentMethod.BALANCE,
         )
 
-        logger.info(
-            'User paid kopeks for trial activation',
-            user_id=user.id,
-            price_kopeks=price_kopeks,
-        )
+        logger.info('User paid kopeks for trial activation', user_id=user.id, price_kopeks=price_kopeks)
 
     # Get trial parameters from tariff if configured (same logic as bot handler)
     trial_duration = settings.TRIAL_DURATION_DAYS

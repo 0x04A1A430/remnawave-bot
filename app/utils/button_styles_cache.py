@@ -16,57 +16,17 @@ logger = structlog.get_logger(__name__)
 # ---- Defaults per section ------------------------------------------------
 
 DEFAULT_BUTTON_STYLES: dict[str, dict] = {
-    'home': {
-        'style': 'primary',
-        'icon_custom_emoji_id': '',
-        'enabled': True,
-        'labels': {},
-    },
-    'subscription': {
-        'style': 'success',
-        'icon_custom_emoji_id': '',
-        'enabled': True,
-        'labels': {},
-    },
-    'balance': {
-        'style': 'primary',
-        'icon_custom_emoji_id': '',
-        'enabled': True,
-        'labels': {},
-    },
-    'referral': {
-        'style': 'success',
-        'icon_custom_emoji_id': '',
-        'enabled': True,
-        'labels': {},
-    },
-    'support': {
-        'style': 'primary',
-        'icon_custom_emoji_id': '',
-        'enabled': True,
-        'labels': {},
-    },
-    'info': {
-        'style': 'primary',
-        'icon_custom_emoji_id': '',
-        'enabled': True,
-        'labels': {},
-    },
-    'admin': {
-        'style': 'danger',
-        'icon_custom_emoji_id': '',
-        'enabled': True,
-        'labels': {},
-    },
-    'language': {
-        'style': 'primary',
-        'icon_custom_emoji_id': '',
-        'enabled': True,
-        'labels': {},
-    },
+    'home': {'style': 'primary', 'icon_custom_emoji_id': '', 'enabled': True, 'labels': {}},
+    'subscription': {'style': 'success', 'icon_custom_emoji_id': '', 'enabled': True, 'labels': {}},
+    'balance': {'style': 'primary', 'icon_custom_emoji_id': '', 'enabled': True, 'labels': {}},
+    'referral': {'style': 'success', 'icon_custom_emoji_id': '', 'enabled': True, 'labels': {}},
+    'support': {'style': 'primary', 'icon_custom_emoji_id': '', 'enabled': True, 'labels': {}},
+    'info': {'style': 'primary', 'icon_custom_emoji_id': '', 'enabled': True, 'labels': {}},
+    'admin': {'style': 'danger', 'icon_custom_emoji_id': '', 'enabled': True, 'labels': {}},
+    'language': {'style': 'primary', 'icon_custom_emoji_id': '', 'enabled': True, 'labels': {}},
 }
 
-BOT_LOCALES = ('ru', 'en', 'ua', 'zh')
+BOT_LOCALES = ('ru', 'en', 'ua', 'zh', 'fa')
 
 SECTIONS = list(DEFAULT_BUTTON_STYLES.keys())
 

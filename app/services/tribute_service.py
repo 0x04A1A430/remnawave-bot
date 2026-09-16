@@ -7,10 +7,7 @@ from aiogram import Bot
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from app.config import settings
-from app.database.crud.transaction import (
-    create_transaction,
-    get_transaction_by_external_id,
-)
+from app.database.crud.transaction import create_transaction, get_transaction_by_external_id
 from app.database.crud.user import get_user_by_telegram_id
 from app.database.database import get_db
 from app.database.models import PaymentMethod, TransactionType
@@ -76,10 +73,7 @@ class TributeService:
             logger.error('Некорректный JSON в Tribute webhook')
             return {'status': 'error', 'reason': 'invalid_json'}
 
-        logger.info(
-            'Получен Tribute webhook',
-            dumps=json.dumps(webhook_data, ensure_ascii=False),
-        )
+        logger.info('Получен Tribute webhook', dumps=json.dumps(webhook_data, ensure_ascii=False))
 
         processed_data = await self.tribute_api.process_webhook(webhook_data)
         if not processed_data:
@@ -124,9 +118,7 @@ class TributeService:
                     balance_kopeks=user.balance_kopeks,
                 )
 
-                from app.database.crud.transaction import (
-                    check_tribute_payment_duplicate,
-                )
+                from app.database.crud.transaction import check_tribute_payment_duplicate
 
                 duplicate_transaction = await check_tribute_payment_duplicate(
                     session, payment_id, amount_kopeks, user_telegram_id
@@ -134,28 +126,14 @@ class TributeService:
 
                 if duplicate_transaction:
                     logger.warning('Найден дубликат платежа в течение 24ч')
-                    logger.warning(
-                        'Дубликат: ID транзакции',
-                        duplicate_transaction_id=duplicate_transaction.id,
-                    )
-                    logger.warning(
-                        'Дубликат: сумма',
-                        amount_kopeks=duplicate_transaction.amount_kopeks,
-                    )
-                    logger.warning(
-                        'Дубликат: дата создания',
-                        created_at=duplicate_transaction.created_at,
-                    )
-                    logger.warning(
-                        'Дубликат: внешний ID',
-                        external_id=duplicate_transaction.external_id,
-                    )
+                    logger.warning('Дубликат: ID транзакции', duplicate_transaction_id=duplicate_transaction.id)
+                    logger.warning('Дубликат: сумма', amount_kopeks=duplicate_transaction.amount_kopeks)
+                    logger.warning('Дубликат: дата создания', created_at=duplicate_transaction.created_at)
+                    logger.warning('Дубликат: внешний ID', external_id=duplicate_transaction.external_id)
                     logger.warning('Платеж игнорирован - это дубликат свежего платежа')
                     return
 
-                from app.database.crud.transaction import (
-                    create_unique_tribute_transaction,
-                )
+                from app.database.crud.transaction import create_unique_tribute_transaction
 
                 transaction, created = await create_unique_tribute_transaction(
                     db=session,
@@ -189,7 +167,7 @@ class TributeService:
                 promo_group = user.get_primary_promo_group()
                 subscription = getattr(user, 'subscription', None)
                 referrer_info = format_referrer_info(user)
-                topup_status = 'Первое пополнение' if was_first_topup else 'Пополнение'
+                topup_status = '🆕 Первое пополнение' if was_first_topup else '🔄 Пополнение'
 
                 await session.commit()
 
@@ -207,24 +185,19 @@ class TributeService:
                 await session.refresh(user)
 
                 logger.info(
-                    'Баланс пользователя обновлен: коп (+)',
+                    '✅ Баланс пользователя обновлен: коп (+)',
                     user_telegram_id=user_telegram_id,
                     old_balance=old_balance,
                     balance_kopeks=user.balance_kopeks,
                     amount_kopeks=amount_kopeks,
                 )
-                logger.info('Создана транзакция', transaction_id=transaction.id)
+                logger.info('✅ Создана транзакция', transaction_id=transaction.id)
 
                 if was_first_topup:
-                    logger.info(
-                        'Отмечен первый топап для пользователя',
-                        user_telegram_id=user_telegram_id,
-                    )
+                    logger.info('Отмечен первый топап для пользователя', user_telegram_id=user_telegram_id)
 
                 try:
-                    from app.services.admin_notification_service import (
-                        AdminNotificationService,
-                    )
+                    from app.services.admin_notification_service import AdminNotificationService
 
                     notification_service = AdminNotificationService(self.bot)
                     await notification_service.send_balance_topup_notification(
@@ -244,7 +217,7 @@ class TributeService:
                 await self._send_success_notification(user_telegram_id, amount_kopeks)
 
                 logger.info(
-                    'Успешно обработан Tribute платеж: ₽ для пользователя',
+                    '🎉 Успешно обработан Tribute платеж: ₽ для пользователя',
                     amount_kopeks=amount_kopeks / 100,
                     user_telegram_id=user_telegram_id,
                 )
@@ -339,10 +312,7 @@ class TributeService:
             async for session in get_db():
                 user = await get_user_by_telegram_id(session, user_id)
                 if not user:
-                    logger.warning(
-                        'Пользователь не найден для уведомления Tribute',
-                        user_id=user_id,
-                    )
+                    logger.warning('Пользователь не найден для уведомления Tribute', user_id=user_id)
                     break
 
                 # Сначала отправляем стандартное уведомление
@@ -350,19 +320,17 @@ class TributeService:
                 keyboard = await payment_service.build_topup_success_keyboard(user)
 
                 text = (
-                    f'**Платеж успешно получен!**\n\n'
-                    f'Сумма: {int(amount_rubles)} ₽\n'
-                    f'Способ оплаты: Tribute\n'
-                    f'Средства зачислены на баланс!\n\n'
-                    f'Спасибо за оплату! '
+                    f'✅ **Платеж успешно получен!**\n\n'
+                    f'💰 Сумма: {int(amount_rubles)} ₽\n'
+                    f'💳 Способ оплаты: Tribute\n'
+                    f'🎉 Средства зачислены на баланс!\n\n'
+                    f'Спасибо за оплату! 🙏'
                 )
 
                 await self.bot.send_message(user_id, text, reply_markup=keyboard, parse_mode='Markdown')
 
                 # Проверяем наличие сохраненной корзины для возврата к оформлению подписки
-                from app.services.payment.common import (
-                    send_cart_notification_after_topup,
-                )
+                from app.services.payment.common import send_cart_notification_after_topup
 
                 await send_cart_notification_after_topup(user, amount_kopeks, session, self.bot)
                 break
@@ -392,8 +360,8 @@ class TributeService:
 
             keyboard = InlineKeyboardMarkup(
                 inline_keyboard=[
-                    [InlineKeyboardButton(text='Попробовать снова', callback_data='menu_balance')],
-                    [InlineKeyboardButton(text='Поддержка', callback_data='menu_support')],
+                    [InlineKeyboardButton(text='🔄 Попробовать снова', callback_data='menu_balance')],
+                    [InlineKeyboardButton(text='💬 Поддержка', callback_data='menu_support')],
                 ]
             )
 
@@ -415,17 +383,17 @@ class TributeService:
             amount_rubles = amount_kopeks / 100
 
             text = (
-                f'**Возврат средств**\n\n'
-                f'Сумма возврата: {int(amount_rubles)} ₽\n'
-                f'Способ: Tribute\n\n'
+                f'🔄 **Возврат средств**\n\n'
+                f'💰 Сумма возврата: {int(amount_rubles)} ₽\n'
+                f'💳 Способ: Tribute\n\n'
                 f'Средства будут возвращены на вашу карту в течение 3-5 рабочих дней.\n\n'
                 f'Если у вас есть вопросы, обратитесь в поддержку.'
             )
 
             keyboard = InlineKeyboardMarkup(
                 inline_keyboard=[
-                    [InlineKeyboardButton(text='Поддержка', callback_data='menu_support')],
-                    [InlineKeyboardButton(text='← Главное меню', callback_data='back_to_menu')],
+                    [InlineKeyboardButton(text='💬 Поддержка', callback_data='menu_support')],
+                    [InlineKeyboardButton(text='🏠 Главное меню', callback_data='back_to_menu')],
                 ]
             )
 
@@ -443,7 +411,7 @@ class TributeService:
     ) -> bool:
         try:
             logger.info(
-                'ПРИНУДИТЕЛЬНАЯ ОБРАБОТКА платежа',
+                '🔧 ПРИНУДИТЕЛЬНАЯ ОБРАБОТКА платежа',
                 payment_id=payment_id,
                 user_id=user_id,
                 amount_kopeks=amount_kopeks,
@@ -480,14 +448,12 @@ class TributeService:
                 await session.commit()
 
                 logger.info(
-                    'ПРИНУДИТЕЛЬНО обновлён баланс',
-                    old_balance=old_balance,
-                    balance_kopeks=user.balance_kopeks,
+                    '💰 ПРИНУДИТЕЛЬНО обновлён баланс', old_balance=old_balance, balance_kopeks=user.balance_kopeks
                 )
 
                 await self._send_success_notification(user_id, amount_kopeks)
 
-                logger.info('Принудительно обработан платеж', payment_id=payment_id)
+                logger.info('✅ Принудительно обработан платеж', payment_id=payment_id)
                 return True
 
         except Exception as e:
@@ -498,9 +464,6 @@ class TributeService:
         return await self.tribute_api.get_payment_status(payment_id)
 
     async def create_refund(
-        self,
-        payment_id: str,
-        amount_kopeks: int | None = None,
-        reason: str = 'Возврат по запросу',
+        self, payment_id: str, amount_kopeks: int | None = None, reason: str = 'Возврат по запросу'
     ) -> dict[str, Any] | None:
         return await self.tribute_api.refund_payment(payment_id, amount_kopeks, reason)

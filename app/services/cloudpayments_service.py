@@ -83,11 +83,7 @@ class CloudPaymentsService:
                 data = response.json()
 
                 if response.status_code >= 400:
-                    logger.error(
-                        'CloudPayments API error',
-                        status_code=response.status_code,
-                        data=data,
-                    )
+                    logger.error('CloudPayments API error', status_code=response.status_code, data=data)
                     raise CloudPaymentsAPIError(f'CloudPayments API returned status {response.status_code}')
 
                 return data
@@ -181,11 +177,7 @@ class CloudPaymentsService:
             logger.error('CloudPayments orders/create returned no URL', response=response)
             raise CloudPaymentsAPIError('CloudPayments API returned no payment URL')
 
-        logger.info(
-            'CloudPayments order created: id url',
-            model=model.get('Id'),
-            payment_url=payment_url,
-        )
+        logger.info('CloudPayments order created: id url', model=model.get('Id'), payment_url=payment_url)
 
         return payment_url
 
@@ -353,7 +345,7 @@ class CloudPaymentsService:
             'status': form_data.get('Status', ''),
             'test_mode': form_data.get('TestMode') == '1' or form_data.get('TestMode') == 'True',
             'reason': form_data.get('Reason'),
-            'reason_code': (int(form_data.get('ReasonCode', 0)) if form_data.get('ReasonCode') else None),
+            'reason_code': int(form_data.get('ReasonCode', 0)) if form_data.get('ReasonCode') else None,
             'card_holder_message': form_data.get('CardHolderMessage'),
             'auth_code': form_data.get('AuthCode'),  # Auth code present only in Pay notifications
             'data': form_data.get('Data'),  # JSON string with custom data

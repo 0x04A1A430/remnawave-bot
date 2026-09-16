@@ -7,7 +7,7 @@ import redis.asyncio as redis
 import structlog
 from redis.exceptions import NoScriptError
 
-from app.config import settings
+from app.utils.redis_client import create_redis
 
 
 logger = structlog.get_logger(__name__)
@@ -20,14 +20,14 @@ class CacheService:
 
     async def connect(self):
         try:
-            self.redis_client = redis.from_url(settings.REDIS_URL)
+            self.redis_client = create_redis()
             await self.redis_client.ping()
             self._connected = True
             # Invalidate cached Lua script SHA (new connection = new script cache)
             RateLimitCache._rate_limit_sha = None
-            logger.info('Подключение к Redis кешу установлено')
+            logger.info('✅ Подключение к Redis кешу установлено')
         except Exception as e:
-            logger.warning('Не удалось подключиться к Redis', error=e)
+            logger.warning('⚠️ Не удалось подключиться к Redis', error=e)
             self._connected = False
 
     async def disconnect(self):
@@ -166,7 +166,7 @@ class CacheService:
 
         try:
             await self.redis_client.flushall()
-            logger.info('Кеш полностью очищен')
+            logger.info('🗑️ Кеш полностью очищен')
             return True
         except Exception as e:
             logger.error('Ошибка очистки кеша', error=e)
@@ -422,6 +422,20 @@ return c
         key = cache_key('rate_limit', 'ip', ip, action)
         return await RateLimitCache._atomic_rate_check(key, limit, window, fail_closed=fail_closed)
 
+    @staticmethod
+    async def is_subject_rate_limited(
+        subject: str, action: str, limit: int, window: int, *, fail_closed: bool = False
+    ) -> bool:
+        """Rate limiting keyed by a subject other than the caller — an inbox, say.
+
+        An IP limit protects the service from one caller; it does not protect a
+        third party whose address is being mail-bombed from many addresses.
+        Callers are expected to pass an opaque digest, not the raw value: the key
+        lands in Redis and in its logs.
+        """
+        key = cache_key('rate_limit', 'subject', subject, action)
+        return await RateLimitCache._atomic_rate_check(key, limit, window, fail_closed=fail_closed)
+
 
 class TokenReplayCache:
     """Prevents OIDC id_token replay by storing token hashes with TTL."""
@@ -522,11 +536,7 @@ class ChannelSubCache:
         try:
             await cache.redis_client.delete(*keys)
         except Exception as e:
-            logger.warning(
-                'Failed to invalidate user channel cache',
-                telegram_id=telegram_id,
-                error=e,
-            )
+            logger.warning('Failed to invalidate user channel cache', telegram_id=telegram_id, error=e)
 
     @staticmethod
     async def get_required_channels() -> list[dict] | None:

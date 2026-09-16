@@ -264,8 +264,7 @@ def test_final_not_starved_by_repeats_when_cap_reached():
 
 def test_final_fires_even_if_interval_steps_past_window():
     """If the monitoring tick jumps over the final window (4h → expired), the still-unsent
-    final reminder must go out on the post-expiry tick (no lower 0-bound on hours_left).
-    """
+    final reminder must go out on the post-expiry tick (no lower 0-bound on hours_left)."""
     state = AutopayFailState()
     sent = []
     for hours_left, now_ts in [(4, 0), (-0.5, 200000)]:
@@ -287,8 +286,7 @@ def test_max_one_still_delivers_final():
 
 async def test_load_reads_redis_on_inmemory_miss(monkeypatch):
     """Cross-restart durability: on an in-memory miss, _load must consult Redis and
-    reconstruct the state from the stored JSON dict (this branch is otherwise uncovered).
-    """
+    reconstruct the state from the stored JSON dict (this branch is otherwise uncovered)."""
     from app.services import monitoring_service as ms
 
     svc = ms.MonitoringService(bot=None)  # empty in-memory state
@@ -337,18 +335,10 @@ async def test_email_only_path_uses_cause_specific_reason(monkeypatch):
     user = SimpleNamespace(id=1, telegram_id=None, balance_kopeks=0)
 
     await svc._maybe_notify_autopay_failure(
-        user,
-        50000,
-        SimpleNamespace(id=7, end_date=now + timedelta(hours=40)),
-        now,
-        cause='charge_error',
+        user, 50000, SimpleNamespace(id=7, end_date=now + timedelta(hours=40)), now, cause='charge_error'
     )
     await svc._maybe_notify_autopay_failure(
-        user,
-        50000,
-        SimpleNamespace(id=8, end_date=now + timedelta(hours=40)),
-        now,
-        cause='insufficient_balance',
+        user, 50000, SimpleNamespace(id=8, end_date=now + timedelta(hours=40)), now, cause='insufficient_balance'
     )
 
     assert reasons == ['Ошибка списания средств', 'Недостаточно средств на балансе']

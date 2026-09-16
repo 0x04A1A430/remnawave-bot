@@ -20,8 +20,9 @@ from typing import Sequence, Union
 
 from alembic import op
 
-revision: str = "0084"
-down_revision: Union[str, None] = "0083"
+
+revision: str = '0084'
+down_revision: Union[str, None] = '0083'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -30,9 +31,7 @@ def upgrade() -> None:
     # Literal SQL is safe here — the stale values are hardcoded
     # constants, no user input. Works identically on PostgreSQL and
     # SQLite (the two supported backends).
-    op.execute(
-        "DELETE FROM system_settings WHERE key = 'TELEGRAM_STARS_RATE_RUB' AND value IN ('1.3', '1.79')"
-    )
+    op.execute("DELETE FROM system_settings WHERE key = 'TELEGRAM_STARS_RATE_RUB' AND value IN ('1.3', '1.79')")
 
 
 def downgrade() -> None:

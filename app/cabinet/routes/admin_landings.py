@@ -24,13 +24,9 @@ from app.database.crud.landing import (
     update_landing,
     update_landing_order,
 )
-from app.database.models import (
-    GuestPurchase,
-    GuestPurchaseStatus,
-    LandingPage,
-    Tariff,
-    User,
-)
+from app.database.local_date import local_date_expr
+from app.database.models import GuestPurchase, GuestPurchaseStatus, LandingPage, Tariff, User
+from app.utils.timezone import local_date
 
 from ..dependencies import get_cabinet_db, require_permission
 from .branding import ALLOWED_BG_TYPES, _validate_settings
@@ -234,13 +230,7 @@ class LandingCreateRequest(BaseModel):
         return _validate_background_config(v)
 
     @field_validator(
-        'title',
-        'subtitle',
-        'footer_text',
-        'meta_title',
-        'meta_description',
-        'discount_badge_text',
-        mode='before',
+        'title', 'subtitle', 'footer_text', 'meta_title', 'meta_description', 'discount_badge_text', mode='before'
     )
     @classmethod
     def coerce_text_to_dict(cls, v: dict[str, str] | str | None) -> dict[str, str] | None:
@@ -366,13 +356,7 @@ class LandingUpdateRequest(BaseModel):
         return v
 
     @field_validator(
-        'title',
-        'subtitle',
-        'footer_text',
-        'meta_title',
-        'meta_description',
-        'discount_badge_text',
-        mode='before',
+        'title', 'subtitle', 'footer_text', 'meta_title', 'meta_description', 'discount_badge_text', mode='before'
     )
     @classmethod
     def coerce_text_to_dict(cls, v: dict[str, str] | str | None) -> dict[str, str] | None:
@@ -509,13 +493,7 @@ class LandingDetailResponse(BaseModel):
     updated_at: datetime | None = None
 
     @field_validator(
-        'title',
-        'subtitle',
-        'footer_text',
-        'meta_title',
-        'meta_description',
-        'discount_badge_text',
-        mode='before',
+        'title', 'subtitle', 'footer_text', 'meta_title', 'meta_description', 'discount_badge_text', mode='before'
     )
     @classmethod
     def coerce_to_dict(cls, v: dict[str, str] | str | None) -> dict[str, str] | None:
@@ -710,12 +688,7 @@ async def create_landing_page(
         analytics_click_goal=request.analytics_click_goal,
     )
 
-    logger.info(
-        'Admin created landing page',
-        admin_id=admin.id,
-        slug=landing.slug,
-        landing_id=landing.id,
-    )
+    logger.info('Admin created landing page', admin_id=admin.id, slug=landing.slug, landing_id=landing.id)
 
     return _landing_to_detail(landing)
 
@@ -728,11 +701,7 @@ async def update_landings_order(
 ):
     """Batch update display order for landing pages."""
     await update_landing_order(db, request.landing_ids)
-    logger.info(
-        'Admin updated landing page order',
-        admin_id=admin.id,
-        landing_ids=request.landing_ids,
-    )
+    logger.info('Admin updated landing page order', admin_id=admin.id, landing_ids=request.landing_ids)
     return {'success': True}
 
 
@@ -808,12 +777,7 @@ async def update_landing_page(
             detail='Landing page not found',
         )
 
-    logger.info(
-        'Admin updated landing page',
-        admin_id=admin.id,
-        slug=landing.slug,
-        landing_id=landing.id,
-    )
+    logger.info('Admin updated landing page', admin_id=admin.id, slug=landing.slug, landing_id=landing.id)
 
     return _landing_to_detail(landing)
 
@@ -894,14 +858,9 @@ async def get_landing_stats(
             func.coalesce(func.sum(case((is_successful, GuestPurchase.amount_kopeks))), 0).label(
                 'total_revenue_kopeks'
             ),
-            func.count(
-                case(
-                    (
-                        and_(is_successful, GuestPurchase.is_gift.is_(True)),
-                        GuestPurchase.id,
-                    )
-                )
-            ).label('total_gifts'),
+            func.count(case((and_(is_successful, GuestPurchase.is_gift.is_(True)), GuestPurchase.id))).label(
+                'total_gifts'
+            ),
             func.count(
                 case(
                     (
@@ -928,10 +887,10 @@ async def get_landing_stats(
     # -- Daily stats for last N days --
     now = datetime.now(UTC)
     cutoff = now - timedelta(days=_STATS_PERIOD_DAYS)
-    day_at_utc = func.date(func.timezone('UTC', GuestPurchase.paid_at))
+    day_paid = local_date_expr(GuestPurchase.paid_at, db)
     daily_result = await db.execute(
         select(
-            day_at_utc.label('day'),
+            day_paid.label('day'),
             func.count(GuestPurchase.id).label('purchases'),
             func.coalesce(func.sum(GuestPurchase.amount_kopeks), 0).label('revenue_kopeks'),
             func.count(case((GuestPurchase.is_gift.is_(True), GuestPurchase.id))).label('gifts'),
@@ -941,29 +900,29 @@ async def get_landing_stats(
             is_successful,
             GuestPurchase.paid_at >= cutoff,
         )
-        .group_by(day_at_utc)
-        .order_by(day_at_utc)
+        .group_by(day_paid)
+        .order_by(day_paid)
     )
     daily_rows = {str(r.day): r for r in daily_result.all()}
 
     # Created per day (all statuses, by created_at)
-    day_created_utc = func.date(func.timezone('UTC', GuestPurchase.created_at))
+    day_created = local_date_expr(GuestPurchase.created_at, db)
     created_result = await db.execute(
         select(
-            day_created_utc.label('day'),
+            day_created.label('day'),
             func.count(GuestPurchase.id).label('created'),
         )
         .where(
             GuestPurchase.landing_id == landing_id,
             GuestPurchase.created_at >= cutoff,
         )
-        .group_by(day_created_utc)
-        .order_by(day_created_utc)
+        .group_by(day_created)
+        .order_by(day_created)
     )
     created_rows = {str(r.day): r.created for r in created_result.all()}
 
     # Fill missing days with zeros
-    today = now.date()
+    today = local_date(now)  # ключи дней из SQL — локальные (#3136)
     daily_stats: list[LandingDailyStat] = []
     for i in range(_STATS_PERIOD_DAYS, -1, -1):
         day = today - timedelta(days=i)
@@ -1135,7 +1094,7 @@ async def get_landing_purchases(
     items = [
         LandingPurchaseItem(
             id=row.id,
-            token=((row.token[:_PURCHASE_TOKEN_VISIBLE_CHARS] + '...') if row.token else '???'),
+            token=(row.token[:_PURCHASE_TOKEN_VISIBLE_CHARS] + '...') if row.token else '???',
             contact_type=row.contact_type,
             contact_value=row.contact_value,
             is_gift=row.is_gift,

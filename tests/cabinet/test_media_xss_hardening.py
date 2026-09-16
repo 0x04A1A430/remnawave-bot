@@ -9,12 +9,7 @@ as an opaque blob, with nosniff + a locked-down CSP, and a sanitized filename.
 
 from __future__ import annotations
 
-import mimetypes
-
 import pytest
-
-
-mimetypes.add_type('image/webp', '.webp')
 
 from app.cabinet.routes.media import (
     _BLOCKED_UPLOAD_CONTENT_TYPES,
@@ -33,16 +28,7 @@ def test_raster_images_served_inline_with_their_type(filename):
 
 @pytest.mark.parametrize(
     'filename',
-    [
-        'evil.html',
-        'evil.htm',
-        'evil.svg',
-        'evil.xml',
-        'evil.js',
-        'doc.pdf',
-        'archive.zip',
-        'noext',
-    ],
+    ['evil.html', 'evil.htm', 'evil.svg', 'evil.xml', 'evil.js', 'doc.pdf', 'archive.zip', 'noext'],
 )
 def test_non_raster_forced_to_download_as_octet_stream(filename):
     media_type, headers = _content_response_params(filename)

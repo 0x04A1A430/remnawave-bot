@@ -126,11 +126,7 @@ def _auto_capture_exc_info(logger: Any, method_name: str, event_dict: dict[str, 
     for key in ('error', 'exc', 'exception', 'e', 'err'):
         candidate = event_dict.get(key)
         if isinstance(candidate, BaseException) and candidate.__traceback__ is not None:
-            event_dict['exc_info'] = (
-                type(candidate),
-                candidate,
-                candidate.__traceback__,
-            )
+            event_dict['exc_info'] = (type(candidate), candidate, candidate.__traceback__)
             return event_dict
 
     return event_dict
@@ -205,15 +201,23 @@ def setup_logging() -> tuple[logging.Formatter, logging.Formatter, Any]:
     )
 
     # Console formatter: colors controlled by LOG_COLORS env var (default: true).
-    # Tracebacks always render as plain text (no Rich box/❱ decorations) so
-    # container logs look identical regardless of color mode.
+    # Rich tracebacks with conservative limits to avoid 5000-line dumps.
     use_colors = settings.LOG_COLORS
     console_renderer_kwargs: dict[str, Any] = {
         'colors': use_colors,
         'pad_event_to': 0,
         'pad_level': False,
     }
-    console_renderer_kwargs['exception_formatter'] = structlog.dev.plain_traceback
+    if use_colors:
+        console_renderer_kwargs['exception_formatter'] = structlog.dev.RichTracebackFormatter(
+            show_locals=False,
+            max_frames=20,
+            extra_lines=1,
+            width=120,
+            suppress=['aiogram', 'aiohttp'],
+        )
+    else:
+        console_renderer_kwargs['exception_formatter'] = structlog.dev.plain_traceback
 
     console_formatter = structlog.stdlib.ProcessorFormatter(
         foreign_pre_chain=shared_processors,

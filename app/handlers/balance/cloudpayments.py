@@ -85,7 +85,7 @@ async def _create_cloudpayments_payment_and_respond(
                 InlineKeyboardButton(
                     text=texts.t(
                         'PAY_BUTTON',
-                        'Оплатить {amount}₽',
+                        '💳 Оплатить {amount}₽',
                     ).format(amount=f'{amount_rub:.0f}'),
                     url=payment_url,
                     style='success',
@@ -93,7 +93,7 @@ async def _create_cloudpayments_payment_and_respond(
             ],
             [
                 InlineKeyboardButton(
-                    text=texts.t('BACK_BUTTON', 'Назад'),
+                    text=texts.t('BACK_BUTTON', '◀️ Назад'),
                     callback_data='menu_balance',
                     style='danger',
                 )
@@ -103,7 +103,7 @@ async def _create_cloudpayments_payment_and_respond(
 
     response_text = texts.t(
         'CLOUDPAYMENTS_PAYMENT_CREATED',
-        '<b>Оплата банковской картой</b>\n\n'
+        '💳 <b>Оплата банковской картой</b>\n\n'
         'Сумма: <b>{amount}₽</b>\n\n'
         'Нажмите кнопку ниже для оплаты.\n'
         'После успешной оплаты баланс будет пополнен автоматически.',
@@ -122,11 +122,7 @@ async def _create_cloudpayments_payment_and_respond(
             parse_mode='HTML',
         )
 
-    logger.info(
-        'CloudPayments payment created',
-        telegram_id=db_user.telegram_id,
-        amount_rub=amount_rub,
-    )
+    logger.info('CloudPayments payment created', telegram_id=db_user.telegram_id, amount_rub=amount_rub)
 
 
 @error_handler
@@ -154,7 +150,8 @@ async def process_cloudpayments_payment_amount(
         keyboard.append([InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance', style='danger')])
 
         await message.answer(
-            f'<b>Пополнение ограничено</b>\n\n{reason}\n\nЕсли вы считаете это ошибкой, вы можете обжаловать решение.',
+            f'🚫 <b>Пополнение ограничено</b>\n\n{reason}\n\n'
+            'Если вы считаете это ошибкой, вы можете обжаловать решение.',
             reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard),
             parse_mode='HTML',
         )
@@ -219,7 +216,8 @@ async def start_cloudpayments_payment(
         keyboard.append([InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance', style='danger')])
 
         await callback.message.edit_text(
-            f'<b>Пополнение ограничено</b>\n\n{reason}\n\nЕсли вы считаете это ошибкой, вы можете обжаловать решение.',
+            f'🚫 <b>Пополнение ограничено</b>\n\n{reason}\n\n'
+            'Если вы считаете это ошибкой, вы можете обжаловать решение.',
             reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard),
         )
         await callback.answer()
@@ -237,7 +235,7 @@ async def start_cloudpayments_payment(
 
     message_text = texts.t(
         'CLOUDPAYMENTS_ENTER_AMOUNT',
-        '<b>Оплата банковской картой (CloudPayments)</b>\n\n'
+        '💳 <b>Оплата банковской картой (CloudPayments)</b>\n\n'
         'Введите сумму для пополнения от {min_amount:.0f} до {max_amount:,.0f} рублей:',
     ).format(min_amount=min_amount_rub, max_amount=max_amount_rub)
 
@@ -355,7 +353,7 @@ async def process_cloudpayments_amount(
                 InlineKeyboardButton(
                     text=texts.t(
                         'PAY_BUTTON',
-                        'Оплатить {amount}₽',
+                        '💳 Оплатить {amount}₽',
                     ).format(amount=f'{amount_rub:.0f}'),
                     url=payment_url,
                     style='success',
@@ -363,7 +361,7 @@ async def process_cloudpayments_amount(
             ],
             [
                 InlineKeyboardButton(
-                    text=texts.t('BACK_BUTTON', 'Назад'),
+                    text=texts.t('BACK_BUTTON', '◀️ Назад'),
                     callback_data='menu_balance',
                     style='danger',
                 )
@@ -374,7 +372,7 @@ async def process_cloudpayments_amount(
     await message.answer(
         texts.t(
             'CLOUDPAYMENTS_PAYMENT_CREATED',
-            '<b>Оплата банковской картой</b>\n\n'
+            '💳 <b>Оплата банковской картой</b>\n\n'
             'Сумма: <b>{amount}₽</b>\n\n'
             'Нажмите кнопку ниже для оплаты.\n'
             'После успешной оплаты баланс будет пополнен автоматически.',
@@ -383,8 +381,4 @@ async def process_cloudpayments_amount(
         parse_mode='HTML',
     )
 
-    logger.info(
-        'CloudPayments payment created',
-        telegram_id=db_user.telegram_id,
-        amount_rub=amount_rub,
-    )
+    logger.info('CloudPayments payment created', telegram_id=db_user.telegram_id, amount_rub=amount_rub)

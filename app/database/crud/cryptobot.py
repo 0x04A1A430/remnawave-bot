@@ -131,11 +131,7 @@ async def link_cryptobot_payment_to_transaction(
     await db.flush()
     await db.refresh(payment)
 
-    logger.info(
-        'Связан CryptoBot платеж с транзакцией',
-        invoice_id=invoice_id,
-        transaction_id=transaction_id,
-    )
+    logger.info('Связан CryptoBot платеж с транзакцией', invoice_id=invoice_id, transaction_id=transaction_id)
     return payment
 
 
@@ -158,12 +154,7 @@ async def get_pending_cryptobot_payments(db: AsyncSession, older_than_hours: int
     result = await db.execute(
         select(CryptoBotPayment)
         .options(selectinload(CryptoBotPayment.user))
-        .where(
-            and_(
-                CryptoBotPayment.status == 'active',
-                CryptoBotPayment.created_at < cutoff_time,
-            )
-        )
+        .where(and_(CryptoBotPayment.status == 'active', CryptoBotPayment.created_at < cutoff_time))
         .order_by(CryptoBotPayment.created_at)
     )
     return result.scalars().all()

@@ -3,13 +3,7 @@ from typing import Any
 
 import structlog
 from aiogram import BaseMiddleware
-from aiogram.types import (
-    CallbackQuery,
-    Message,
-    PreCheckoutQuery,
-    TelegramObject,
-    User as TgUser,
-)
+from aiogram.types import CallbackQuery, Message, PreCheckoutQuery, TelegramObject, User as TgUser
 
 from app.services.blacklist_service import blacklist_service
 
@@ -36,15 +30,10 @@ class BlacklistMiddleware(BaseMiddleware):
         if not is_blacklisted:
             return await handler(event, data)
 
-        logger.warning(
-            'Пользователь из черного списка',
-            user_id=user.id,
-            username=user.username,
-            reason=reason,
-        )
+        logger.warning('🚫 Пользователь из черного списка', user_id=user.id, username=user.username, reason=reason)
 
         block_text = (
-            f'Доступ запрещен\n\nПричина: {reason}\n\nЕсли вы считаете, что это ошибка, обратитесь в поддержку.'
+            f'🚫 Доступ запрещен\n\nПричина: {reason}\n\nЕсли вы считаете, что это ошибка, обратитесь в поддержку.'
         )
 
         try:
@@ -55,10 +44,6 @@ class BlacklistMiddleware(BaseMiddleware):
             elif isinstance(event, PreCheckoutQuery):
                 await event.answer(ok=False, error_message='Доступ запрещен')
         except Exception as e:
-            logger.error(
-                'Ошибка отправки сообщения о блокировке пользователю',
-                user_id=user.id,
-                error=e,
-            )
+            logger.error('Ошибка отправки сообщения о блокировке пользователю', user_id=user.id, error=e)
 
         return None

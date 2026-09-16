@@ -206,13 +206,7 @@ class JupiterPaymentMixin:
 
             # Терминальные неуспешные статусы стики — провайдер не должен иметь возможность
             # «починить» отклонённый/несовпавший платёж повторным callback'ом.
-            if payment.status in {
-                'amount_mismatch',
-                'cancelled',
-                'declined',
-                'error',
-                'expired',
-            }:
+            if payment.status in {'amount_mismatch', 'cancelled', 'declined', 'error', 'expired'}:
                 logger.warning(
                     'Jupiter callback: платёж в терминальном неуспешном статусе, игнорируется',
                     order_id=payment.order_id,
@@ -423,9 +417,7 @@ class JupiterPaymentMixin:
 
         if getattr(self, 'bot', None):
             try:
-                from app.services.admin_notification_service import (
-                    AdminNotificationService,
-                )
+                from app.services.admin_notification_service import AdminNotificationService
 
                 notification_service = AdminNotificationService(self.bot)
                 await notification_service.send_balance_topup_notification(
@@ -447,10 +439,11 @@ class JupiterPaymentMixin:
                 await self.bot.send_message(
                     user.telegram_id,
                     (
-                        '<b>Пополнение успешно!</b>\n\n'
+                        '✅ <b>Пополнение успешно!</b>\n\n'
                         f'\U0001f4b0 Сумма: {settings.format_price(payment.amount_kopeks)}\n'
                         f'\U0001f4b3 Способ: {display_name}\n'
-                        f'\U0001f194 Транзакция: {transaction.id}'
+                        f'\U0001f194 Транзакция: {transaction.id}\n\n'
+                        'Баланс пополнен автоматически!'
                     ),
                     parse_mode='HTML',
                     reply_markup=keyboard,
@@ -497,9 +490,5 @@ class JupiterPaymentMixin:
         try:
             return await jupiter_service.check_payment(transaction_id=transaction_id)
         except Exception as e:
-            logger.error(
-                'Jupiter: ошибка проверки статуса',
-                transaction_id=transaction_id,
-                error=e,
-            )
+            logger.error('Jupiter: ошибка проверки статуса', transaction_id=transaction_id, error=e)
             return None

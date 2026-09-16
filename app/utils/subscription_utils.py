@@ -14,7 +14,7 @@ logger = structlog.get_logger(__name__)
 async def cleanup_duplicate_subscriptions(db: AsyncSession) -> int:
     # В multi-tariff режиме несколько подписок у пользователя — это нормально
     if settings.is_multi_tariff_enabled():
-        logger.info('cleanup_duplicate_subscriptions пропущена: multi-tariff режим')
+        logger.info('♻️ cleanup_duplicate_subscriptions пропущена: multi-tariff режим')
         return 0
 
     result = await db.execute(
@@ -34,13 +34,13 @@ async def cleanup_duplicate_subscriptions(db: AsyncSession) -> int:
             await db.delete(old_subscription)
             total_deleted += 1
             logger.info(
-                'Удалена дублирующаяся подписка',
+                '🗑️ Удалена дублирующаяся подписка',
                 old_subscription_id=old_subscription.id,
                 user_id=user_id,
             )
 
     await db.commit()
-    logger.info('Очищено дублирующихся подписок', total_deleted=total_deleted)
+    logger.info('🧹 Очищено дублирующихся подписок', total_deleted=total_deleted)
 
     return total_deleted
 
@@ -89,9 +89,7 @@ def get_happ_cryptolink_redirect_link(subscription_link: str | None) -> str | No
     return f'{template}{encoded_link}'
 
 
-def convert_subscription_link_to_happ_scheme(
-    subscription_link: str | None,
-) -> str | None:
+def convert_subscription_link_to_happ_scheme(subscription_link: str | None) -> str | None:
     if not subscription_link:
         return None
 
@@ -132,8 +130,37 @@ def coerce_panel_device_limit(value: object, default: int = 1) -> int:
     return default
 
 
+def resolve_min_device_limit(tariff: object | None = None) -> int:
+    """Нижняя граница, до которой пользователь может уменьшить лимит устройств.
+
+    По умолчанию (``ALLOW_DEVICES_BELOW_TARIFF_LIMIT=False``) опустить лимит
+    ниже включённого в тариф нельзя: уменьшают почти всегда не ради
+    самоограничения, а чтобы платить меньше — либо промахиваются и потом
+    спрашивают в поддержке, почему устройств меньше, чем положено по тарифу.
+
+    Вне тарифного режима (тариф не передан / у него нет лимита) граница — 1,
+    как и раньше.
+    """
+    from app.config import settings
+
+    if settings.ALLOW_DEVICES_BELOW_TARIFF_LIMIT:
+        return 1
+
+    tariff_devices = getattr(tariff, 'device_limit', None) if tariff is not None else None
+    try:
+        return max(1, int(tariff_devices or 0))
+    except (TypeError, ValueError):
+        return 1
+
+
 def resolve_hwid_device_limit(subscription: Subscription | None) -> int | None:
-    """Return a device limit value for RemnaWave payloads when selection is enabled."""
+    """Return a device limit value for RemnaWave payloads when selection is enabled.
+
+    Ноль или пусто в ``device_limit`` — «без ограничения» (HWID выключен): это
+    штатное состояние подписки, а не ошибка, поэтому в панель поле не шлём и
+    пишем об этом только в debug. Полная синхронизация прогоняет через эту
+    функцию каждую подписку — warning здесь превращался в шум на всю базу.
+    """
     import structlog
 
     _logger = structlog.get_logger('resolve_hwid_device_limit')
@@ -156,8 +183,8 @@ def resolve_hwid_device_limit(subscription: Subscription | None) -> int | None:
 
     limit = getattr(subscription, 'device_limit', None)
     if limit is None or limit <= 0:
-        _logger.warning(
-            'device_limit is None or <= 0, returning None',
+        _logger.debug(
+            'device_limit не задан (без ограничения) — hwidDeviceLimit в панель не шлём',
             device_limit=limit,
             subscription_id=getattr(subscription, 'id', None),
         )
@@ -174,39 +201,22 @@ def resolve_hwid_device_limit_for_payload(
     When device selection is disabled and no explicit override is configured,
     RemnaWave should continue receiving the subscription's stored limit so the
     external panel stays aligned with the bot configuration.
+
+    Раньше здесь был «запасной» путь, читавший тот же ``device_limit`` ещё раз
+    и писавший второй warning на ту же подписку; значения он дать не мог.
     """
     import structlog
 
     _logger = structlog.get_logger('resolve_hwid_device_limit')
 
     resolved_limit = resolve_hwid_device_limit(subscription)
-
     if resolved_limit is not None:
         _logger.info(
             'hwid_device_limit resolved',
             resolved_limit=resolved_limit,
             subscription_id=getattr(subscription, 'id', None),
         )
-        return resolved_limit
-
-    if subscription is None:
-        return None
-
-    fallback_limit = getattr(subscription, 'device_limit', None)
-    if fallback_limit is None or fallback_limit <= 0:
-        _logger.warning(
-            'fallback device_limit is None or <= 0, NOT sending hwidDeviceLimit to RemnaWave',
-            fallback_limit=fallback_limit,
-            subscription_id=getattr(subscription, 'id', None),
-        )
-        return None
-
-    _logger.info(
-        'using fallback device_limit',
-        fallback_limit=fallback_limit,
-        subscription_id=getattr(subscription, 'id', None),
-    )
-    return fallback_limit
+    return resolved_limit
 
 
 def resolve_simple_subscription_device_limit() -> int:

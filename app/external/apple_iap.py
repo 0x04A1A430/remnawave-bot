@@ -12,10 +12,7 @@ import attrs
 import structlog
 from appstoreserverlibrary.api_client import APIException, AsyncAppStoreServerAPIClient
 from appstoreserverlibrary.models.Environment import Environment
-from appstoreserverlibrary.signed_data_verifier import (
-    SignedDataVerifier,
-    VerificationException,
-)
+from appstoreserverlibrary.signed_data_verifier import SignedDataVerifier, VerificationException
 
 from app.config import settings
 
@@ -198,8 +195,7 @@ class AppleIAPService:
             signed_transaction_info = getattr(response, 'signedTransactionInfo', None)
             if not signed_transaction_info:
                 logger.warning(
-                    'Apple transaction response missing signedTransactionInfo',
-                    transaction_id=transaction_id,
+                    'Apple transaction response missing signedTransactionInfo', transaction_id=transaction_id
                 )
                 return None
 
@@ -235,11 +231,7 @@ class AppleIAPService:
             except AppleIAPConfigurationError:
                 raise
             except Exception as error:
-                logger.error(
-                    'Apple signed transaction verification error',
-                    error=str(error),
-                    exc_info=True,
-                )
+                logger.error('Apple signed transaction verification error', error=str(error), exc_info=True)
                 return None
         return None
 
@@ -265,11 +257,7 @@ class AppleIAPService:
             except AppleIAPConfigurationError:
                 raise
             except Exception as error:
-                logger.error(
-                    'Apple notification verification error',
-                    error=str(error),
-                    exc_info=True,
-                )
+                logger.error('Apple notification verification error', error=str(error), exc_info=True)
                 return None
         return None
 
@@ -295,10 +283,7 @@ class AppleIAPService:
     def _log_api_exception(error: APIException, transaction_id: str | None = None) -> None:
         status = getattr(error, 'http_status_code', None)
         if status == 401:
-            logger.error(
-                'Apple API auth failed -- check key configuration',
-                transaction_id=transaction_id,
-            )
+            logger.error('Apple API auth failed -- check key configuration', transaction_id=transaction_id)
         elif status == 404:
             logger.warning('Apple transaction not found', transaction_id=transaction_id)
         elif status == 429:

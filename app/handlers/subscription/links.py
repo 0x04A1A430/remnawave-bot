@@ -1,6 +1,6 @@
 from aiogram import types
 from aiogram.fsm.context import FSMContext
-from aiogram.types import InaccessibleMessage, InlineKeyboardMarkup
+from aiogram.types import InaccessibleMessage, InlineKeyboardButton, InlineKeyboardMarkup
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -11,7 +11,6 @@ from app.keyboards.inline import (
     get_happ_download_button_row,
 )
 from app.localization.texts import get_texts
-from app.utils.button_emoji import make_button
 from app.utils.subscription_utils import (
     convert_subscription_link_to_happ_scheme,
     get_display_subscription_link,
@@ -29,10 +28,7 @@ async def _resolve_subscription(callback: types.CallbackQuery, db_user: User, db
 
 
 async def handle_connect_subscription(
-    callback: types.CallbackQuery,
-    db_user: User,
-    db: AsyncSession,
-    state: FSMContext = None,
+    callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext = None
 ):
     # Проверяем, доступно ли сообщение для редактирования
     if isinstance(callback.message, InaccessibleMessage):
@@ -63,14 +59,14 @@ async def handle_connect_subscription(
                 keyboard.append(
                     [
                         types.InlineKeyboardButton(
-                            text=f'{tariff_name} ({days_left}д.)',
+                            text=f'🔗 {tariff_name} ({days_left}д.)',
                             callback_data=f'sl:{sub.id}',
                         )
                     ]
                 )
-            keyboard.append([types.InlineKeyboardButton(text='Назад', callback_data='back_to_menu')])
+            keyboard.append([types.InlineKeyboardButton(text='◀️ Назад', callback_data='back_to_menu')])
             await callback.message.edit_text(
-                '<b>Подключиться</b>\n\nВыберите подписку:',
+                '🔗 <b>Подключиться</b>\n\nВыберите подписку:',
                 reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
             )
             await callback.answer()
@@ -87,7 +83,7 @@ async def handle_connect_subscription(
         await callback.answer(
             texts.t(
                 'SUBSCRIPTION_NO_ACTIVE_LINK',
-                'У вас нет активной подписки или ссылка еще генерируется',
+                '⚠ У вас нет активной подписки или ссылка еще генерируется',
             ),
             show_alert=True,
         )
@@ -99,8 +95,8 @@ async def handle_connect_subscription(
         keyboard = InlineKeyboardMarkup(
             inline_keyboard=[
                 [
-                    make_button(
-                        text=texts.t('CONNECT_BUTTON', 'Подключиться'),
+                    InlineKeyboardButton(
+                        text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'),
                         web_app=types.WebAppInfo(url=subscription_link),
                     )
                 ],
@@ -111,9 +107,9 @@ async def handle_connect_subscription(
         await callback.message.edit_text(
             texts.t(
                 'SUBSCRIPTION_CONNECT_MINIAPP_MESSAGE',
-                """<b>Подключить подписку</b>
+                """📱 <b>Подключить подписку</b>
 
-Нажмите кнопку ниже, чтобы открыть подписку в мини-приложении Telegram:""",
+🚀 Нажмите кнопку ниже, чтобы открыть подписку в мини-приложении Telegram:""",
             ),
             reply_markup=keyboard,
             parse_mode='HTML',
@@ -124,7 +120,7 @@ async def handle_connect_subscription(
             await callback.answer(
                 texts.t(
                     'CUSTOM_MINIAPP_URL_NOT_SET',
-                    'Кастомная ссылка для мини-приложения не настроена',
+                    '⚠ Кастомная ссылка для мини-приложения не настроена',
                 ),
                 show_alert=True,
             )
@@ -133,8 +129,8 @@ async def handle_connect_subscription(
         keyboard = InlineKeyboardMarkup(
             inline_keyboard=[
                 [
-                    make_button(
-                        text=texts.t('CONNECT_BUTTON', 'Подключиться'),
+                    InlineKeyboardButton(
+                        text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'),
                         web_app=types.WebAppInfo(url=settings.MINIAPP_CUSTOM_URL),
                     )
                 ],
@@ -145,23 +141,16 @@ async def handle_connect_subscription(
         await callback.message.edit_text(
             texts.t(
                 'SUBSCRIPTION_CONNECT_CUSTOM_MESSAGE',
-                """<b>Подключить подписку</b>
+                """🚀 <b>Подключить подписку</b>
 
-Нажмите кнопку ниже, чтобы открыть приложение:""",
+📱 Нажмите кнопку ниже, чтобы открыть приложение:""",
             ),
             reply_markup=keyboard,
             parse_mode='HTML',
         )
 
     elif connect_mode == 'link':
-        rows = [
-            [
-                make_button(
-                    text=texts.t('CONNECT_BUTTON', 'Подключиться'),
-                    url=subscription_link,
-                )
-            ]
-        ]
+        rows = [[InlineKeyboardButton(text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'), url=subscription_link)]]
         happ_row = get_happ_download_button_row(texts)
         if happ_row:
             rows.append(happ_row)
@@ -172,9 +161,9 @@ async def handle_connect_subscription(
         await callback.message.edit_text(
             texts.t(
                 'SUBSCRIPTION_CONNECT_LINK_MESSAGE',
-                """<b>Подключить подписку</b>",
+                """🚀 <b>Подключить подписку</b>",
 
-Нажмите кнопку ниже, чтобы открыть ссылку подписки:""",
+🔗 Нажмите кнопку ниже, чтобы открыть ссылку подписки:""",
             ),
             reply_markup=keyboard,
             parse_mode='HTML',
@@ -182,13 +171,11 @@ async def handle_connect_subscription(
     elif connect_mode == 'happ_cryptolink':
         rows = [
             [
-                make_button(
-                    text=texts.t('CONNECT_BUTTON', 'Подключиться'),
-                    callback_data=(
-                        f'open_subscription_link:{sub_id}'
-                        if settings.is_multi_tariff_enabled()
-                        else 'open_subscription_link'
-                    ),
+                InlineKeyboardButton(
+                    text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'),
+                    callback_data=f'open_subscription_link:{sub_id}'
+                    if settings.is_multi_tariff_enabled()
+                    else 'open_subscription_link',
                 )
             ]
         ]
@@ -202,9 +189,9 @@ async def handle_connect_subscription(
         await callback.message.edit_text(
             texts.t(
                 'SUBSCRIPTION_CONNECT_LINK_MESSAGE',
-                """<b>Подключить подписку</b>",
+                """🚀 <b>Подключить подписку</b>",
 
-Нажмите кнопку ниже, чтобы открыть ссылку подписки:""",
+🔗 Нажмите кнопку ниже, чтобы открыть ссылку подписки:""",
             ),
             reply_markup=keyboard,
             parse_mode='HTML',
@@ -223,7 +210,7 @@ async def handle_connect_subscription(
             await callback.message.edit_text(
                 texts.t(
                     'GUIDE_CONFIG_NOT_SET',
-                    '<b>Конфигурация не настроена</b>\n\n'
+                    '⚠️ <b>Конфигурация не настроена</b>\n\n'
                     'Администратор ещё не настроил конфигурацию приложений.\n'
                     'Обратитесь к администратору.',
                 ),
@@ -240,21 +227,21 @@ async def handle_connect_subscription(
         if hide_subscription_link:
             device_text = texts.t(
                 'SUBSCRIPTION_CONNECT_DEVICE_MESSAGE_HIDDEN',
-                """<b>Подключить подписку</b>
+                """📱 <b>Подключить подписку</b>
 
-Ссылка подписки доступна по кнопкам ниже или в разделе "Моя подписка".
+ℹ️ Ссылка подписки доступна по кнопкам ниже или в разделе "Моя подписка".
 
-<b>Выберите ваше устройство</b> для получения подробной инструкции по настройке:""",
+💡 <b>Выберите ваше устройство</b> для получения подробной инструкции по настройке:""",
             )
         else:
             device_text = texts.t(
                 'SUBSCRIPTION_CONNECT_DEVICE_MESSAGE',
-                """<b>Подключить подписку</b>
+                """📱 <b>Подключить подписку</b>
 
-<b>Ссылка подписки:</b>
+🔗 <b>Ссылка подписки:</b>
 <code>{subscription_url}</code>
 
-<b>Выберите ваше устройство</b> для получения подробной инструкции по настройке:""",
+💡 <b>Выберите ваше устройство</b> для получения подробной инструкции по настройке:""",
             ).format(subscription_url=subscription_link)
 
         await callback.message.edit_text(
@@ -267,10 +254,7 @@ async def handle_connect_subscription(
 
 
 async def handle_open_subscription_link(
-    callback: types.CallbackQuery,
-    db_user: User,
-    db: AsyncSession,
-    state: FSMContext = None,
+    callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext = None
 ):
     texts = get_texts(db_user.language)
     subscription, sub_id = await _resolve_subscription(callback, db_user, db, state)
@@ -281,7 +265,7 @@ async def handle_open_subscription_link(
 
     if not subscription_link:
         await callback.answer(
-            texts.t('SUBSCRIPTION_LINK_UNAVAILABLE', 'Ссылка подписки недоступна'),
+            texts.t('SUBSCRIPTION_LINK_UNAVAILABLE', '❌ Ссылка подписки недоступна'),
             show_alert=True,
         )
         return
@@ -292,24 +276,24 @@ async def handle_open_subscription_link(
         happ_message = (
             texts.t(
                 'SUBSCRIPTION_HAPP_OPEN_TITLE',
-                '<b>Подключение через Happ</b>',
+                '🔗 <b>Подключение через Happ</b>',
             )
             + '\n\n'
             + texts.t(
                 'SUBSCRIPTION_HAPP_OPEN_LINK',
-                '<a href="{subscription_link}">Открыть ссылку в Happ</a>',
+                '<a href="{subscription_link}">🔓 Открыть ссылку в Happ</a>',
             ).format(subscription_link=happ_scheme_link)
             + '\n\n'
             + texts.t(
                 'SUBSCRIPTION_HAPP_OPEN_HINT',
-                'Если ссылка не открывается автоматически, скопируйте её вручную:',
+                '💡 Если ссылка не открывается автоматически, скопируйте её вручную:',
             )
         )
 
         if redirect_link:
             happ_message += '\n\n' + texts.t(
                 'SUBSCRIPTION_HAPP_OPEN_BUTTON_HINT',
-                'Нажмите кнопку "Подключиться" ниже, чтобы открыть Happ и добавить подписку автоматически.',
+                '▶️ Нажмите кнопку "Подключиться" ниже, чтобы открыть Happ и добавить подписку автоматически.',
             )
 
         happ_message += '\n\n' + texts.t(
@@ -333,10 +317,10 @@ async def handle_open_subscription_link(
         return
 
     link_text = (
-        texts.t('SUBSCRIPTION_DEVICE_LINK_TITLE', '<b>Ссылка подписки:</b>')
+        texts.t('SUBSCRIPTION_DEVICE_LINK_TITLE', '🔗 <b>Ссылка подписки:</b>')
         + '\n\n'
         + f'<code>{subscription_link}</code>\n\n'
-        + texts.t('SUBSCRIPTION_LINK_USAGE_TITLE', '<b>Как использовать:</b>')
+        + texts.t('SUBSCRIPTION_LINK_USAGE_TITLE', '📱 <b>Как использовать:</b>')
         + '\n'
         + '\n'.join(
             [
@@ -361,7 +345,7 @@ async def handle_open_subscription_link(
         + '\n\n'
         + texts.t(
             'SUBSCRIPTION_LINK_HINT',
-            'Если ссылка не скопировалась, выделите её вручную и скопируйте.',
+            '💡 Если ссылка не скопировалась, выделите её вручную и скопируйте.',
         )
     )
 
@@ -370,13 +354,11 @@ async def handle_open_subscription_link(
         reply_markup=InlineKeyboardMarkup(
             inline_keyboard=[
                 [
-                    make_button(
-                        text=texts.t('CONNECT_BUTTON', 'Подключиться'),
-                        callback_data=(
-                            f'subscription_connect:{sub_id}'
-                            if settings.is_multi_tariff_enabled()
-                            else 'subscription_connect'
-                        ),
+                    InlineKeyboardButton(
+                        text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'),
+                        callback_data=f'subscription_connect:{sub_id}'
+                        if settings.is_multi_tariff_enabled()
+                        else 'subscription_connect',
                     )
                 ],
                 [make_button(text=texts.BACK, callback_data=back_cb, style='danger')],

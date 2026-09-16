@@ -48,15 +48,13 @@ async def handle_unknown_callback(callback: types.CallbackQuery, db_user: User):
     await callback.answer(
         texts.t(
             'UNKNOWN_CALLBACK_ALERT',
-            'Неизвестная команда. Попробуйте ещё раз.',
+            '❓ Неизвестная команда. Попробуйте ещё раз.',
         ),
         show_alert=True,
     )
 
     logger.warning(
-        'Неизвестный callback от пользователя',
-        callback_data=callback.data,
-        from_user_id=callback.from_user.id,
+        'Неизвестный callback от пользователя', callback_data=callback.data, from_user_id=callback.from_user.id
     )
 
 
@@ -91,7 +89,7 @@ async def handle_unknown_message(
     await message.answer(
         texts.t(
             'UNKNOWN_COMMAND_MESSAGE',
-            'Не понимаю эту команду. Используйте кнопки меню.',
+            '❓ Не понимаю эту команду. Используйте кнопки меню.',
         ),
         reply_markup=get_back_keyboard(db_user.language if db_user else 'ru'),
     )

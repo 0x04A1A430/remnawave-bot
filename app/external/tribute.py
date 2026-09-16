@@ -17,10 +17,7 @@ class TributeService:
         self.donate_link = settings.TRIBUTE_DONATE_LINK
 
     async def create_payment_link(
-        self,
-        user_id: int,
-        amount_kopeks: int = 0,
-        description: str = 'Пополнение баланса',
+        self, user_id: int, amount_kopeks: int = 0, description: str = 'Пополнение баланса'
     ) -> str | None:
         if not settings.TRIBUTE_ENABLED:
             logger.warning('Tribute платежи отключены')
@@ -47,9 +44,9 @@ class TributeService:
             is_valid = hmac.compare_digest(signature, expected_signature)
 
             if is_valid:
-                logger.info('Подпись Tribute webhook проверена успешно')
+                logger.info('✅ Подпись Tribute webhook проверена успешно')
             else:
-                logger.error('Неверная подпись Tribute webhook')
+                logger.error('❌ Неверная подпись Tribute webhook')
 
             return is_valid
 
@@ -59,14 +56,14 @@ class TributeService:
 
     async def process_webhook(self, payload_or_data) -> dict[str, Any] | None:
         try:
-            logger.info('Начинаем обработку Tribute webhook')
+            logger.info('🔄 Начинаем обработку Tribute webhook')
 
             if isinstance(payload_or_data, str):
                 try:
                     webhook_data = json.loads(payload_or_data)
-                    logger.info('Распарсенные данные', webhook_data=webhook_data)
+                    logger.info('📊 Распарсенные данные', webhook_data=webhook_data)
                 except json.JSONDecodeError as e:
-                    logger.error('Ошибка парсинга JSON', error=e)
+                    logger.error('❌ Ошибка парсинга JSON', error=e)
                     return None
             else:
                 webhook_data = payload_or_data
@@ -94,10 +91,23 @@ class TributeService:
             if not payment_id and 'name' in webhook_data:
                 event_name = webhook_data.get('name')
                 data = webhook_data.get('payload', {})
-                payment_id = str(data.get('donation_request_id'))
                 amount_kopeks = data.get('amount', 0)
                 telegram_user_id = data.get('telegram_user_id')
                 trb_user_id = data.get('trb_user_id')
+
+                # У new_donation НЕТ id платежа: donation_request_id — id донат-ссылки,
+                # общий для всех платежей через неё (purchase_id есть только у цифровых
+                # товаров). Ключ идемпотентности собираем per-событие: created_at из
+                # конверта стабилен при ретраях доставки и различен у разных донатов;
+                # user и amount добавлены на случай одинакового created_at.
+                donation_request_id = data.get('donation_request_id')
+                created_at = webhook_data.get('created_at')
+                if donation_request_id is not None and created_at:
+                    payment_id = f'{donation_request_id}_{telegram_user_id}_{amount_kopeks}_{created_at}'
+                elif donation_request_id is not None:
+                    # Без created_at ключ не уникален — уходим в fallback tribute_<tg>_<amount>,
+                    # который дедуп-слой считает неуникальным и не блокирует повторные донаты.
+                    payment_id = None
 
                 if event_name in ('new_donation', 'recurrent_donation'):
                     status = 'paid'
@@ -107,7 +117,7 @@ class TributeService:
                     status = 'unknown'
 
             logger.info(
-                'Извлеченные данные',
+                '📝 Извлеченные данные',
                 payment_id=payment_id,
                 status=status,
                 amount_kopeks=amount_kopeks,
@@ -117,19 +127,18 @@ class TributeService:
 
             if not telegram_user_id:
                 logger.error(
-                    'Не найден telegram_user_id в webhook данных',
+                    '❌ Не найден telegram_user_id в webhook данных',
                     trb_user_id=trb_user_id,
                 )
                 logger.error(
-                    'Полные данные для отладки',
-                    dumps=json.dumps(webhook_data, ensure_ascii=False, indent=2),
+                    '🔍 Полные данные для отладки', dumps=json.dumps(webhook_data, ensure_ascii=False, indent=2)
                 )
                 return None
 
             try:
                 telegram_user_id = int(telegram_user_id)
             except (ValueError, TypeError):
-                logger.error('Некорректный telegram_user_id', telegram_user_id=telegram_user_id)
+                logger.error('❌ Некорректный telegram_user_id', telegram_user_id=telegram_user_id)
                 return None
 
             result = {
@@ -143,15 +152,12 @@ class TributeService:
                 'payment_system': 'tribute',
             }
 
-            logger.info('Tribute webhook обработан успешно', result=result)
+            logger.info('✅ Tribute webhook обработан успешно', result=result)
             return result
 
         except Exception as e:
-            logger.error('Ошибка обработки Tribute webhook', error=e, exc_info=True)
-            logger.error(
-                'Webhook data для отладки',
-                dumps=json.dumps(webhook_data, ensure_ascii=False, indent=2),
-            )
+            logger.error('❌ Ошибка обработки Tribute webhook', error=e, exc_info=True)
+            logger.error('🔍 Webhook data для отладки', dumps=json.dumps(webhook_data, ensure_ascii=False, indent=2))
             return None
 
     async def get_payment_status(self, payment_id: str) -> dict[str, Any] | None:
@@ -163,10 +169,7 @@ class TributeService:
             return None
 
     async def refund_payment(
-        self,
-        payment_id: str,
-        amount_kopeks: int | None = None,
-        reason: str = 'Возврат по запросу',
+        self, payment_id: str, amount_kopeks: int | None = None, reason: str = 'Возврат по запросу'
     ) -> dict[str, Any] | None:
         try:
             logger.info('Создание возврата для платежа', payment_id=payment_id)

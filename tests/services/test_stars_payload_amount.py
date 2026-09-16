@@ -160,9 +160,7 @@ def test_negative_control_old_rate_was_lossy(monkeypatch: pytest.MonkeyPatch) ->
     assert plausible(payload_kopeks=payload_kopeks, reconstructed_kopeks=reconstructed_kopeks) is True
 
 
-def test_negative_control_at_new_rate_is_lossless_for_integer_rubles(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_negative_control_at_new_rate_is_lossless_for_integer_rubles(monkeypatch: pytest.MonkeyPatch) -> None:
     """At rate=1.0 with integer rubles, payload and reconstructed agree exactly."""
     from app.config import settings
 

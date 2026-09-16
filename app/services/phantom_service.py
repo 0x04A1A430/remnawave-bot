@@ -76,11 +76,7 @@ async def claim_phantom(
                 status='success',
             )
     except Exception:
-        logger.warning(
-            'Failed to write phantom claim audit log',
-            phantom_id=phantom.id,
-            exc_info=True,
-        )
+        logger.warning('Failed to write phantom claim audit log', phantom_id=phantom.id, exc_info=True)
 
     try:
         await db.commit()

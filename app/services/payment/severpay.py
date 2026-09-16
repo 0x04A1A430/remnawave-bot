@@ -425,7 +425,7 @@ class SeverPayPaymentMixin:
             external_id=transaction_external_id,
         )
 
-        topup_status = 'Первое пополнение' if was_first_topup else 'Пополнение'
+        topup_status = '🆕 Первое пополнение' if was_first_topup else '🔄 Пополнение'
 
         try:
             from app.services.referral_service import process_referral_topup
@@ -446,9 +446,7 @@ class SeverPayPaymentMixin:
 
         if getattr(self, 'bot', None):
             try:
-                from app.services.admin_notification_service import (
-                    AdminNotificationService,
-                )
+                from app.services.admin_notification_service import AdminNotificationService
 
                 notification_service = AdminNotificationService(self.bot)
                 await notification_service.send_balance_topup_notification(
@@ -470,10 +468,11 @@ class SeverPayPaymentMixin:
                 await self.bot.send_message(
                     user.telegram_id,
                     (
-                        '<b>Пополнение успешно!</b>\n\n'
-                        f'Сумма: {settings.format_price(payment.amount_kopeks)}\n'
-                        f'Способ: {display_name}\n'
-                        f'Транзакция: {transaction.id}'
+                        '✅ <b>Пополнение успешно!</b>\n\n'
+                        f'💰 Сумма: {settings.format_price(payment.amount_kopeks)}\n'
+                        f'💳 Способ: {display_name}\n'
+                        f'🆔 Транзакция: {transaction.id}\n\n'
+                        'Баланс пополнен автоматически!'
                     ),
                     parse_mode='HTML',
                     reply_markup=keyboard,
@@ -573,28 +572,19 @@ class SeverPayPaymentMixin:
                             # Acquire FOR UPDATE lock before finalization
                             locked = await severpay_crud.get_severpay_payment_by_id_for_update(db, payment.id)
                             if not locked:
-                                logger.error(
-                                    'SeverPay: не удалось заблокировать платёж',
-                                    payment_id=payment.id,
-                                )
+                                logger.error('SeverPay: не удалось заблокировать платёж', payment_id=payment.id)
                                 return None
                             payment = locked
 
                             if payment.is_paid:
-                                logger.info(
-                                    'SeverPay платеж уже обработан (api_check)',
-                                    order_id=payment.order_id,
-                                )
+                                logger.info('SeverPay платеж уже обработан (api_check)', order_id=payment.order_id)
                                 return {
                                     'payment': payment,
                                     'status': 'success',
                                     'is_paid': True,
                                 }
 
-                            logger.info(
-                                'SeverPay payment confirmed via API',
-                                order_id=payment.order_id,
-                            )
+                            logger.info('SeverPay payment confirmed via API', order_id=payment.order_id)
 
                             # Inline field updates — NO intermediate commit that would release FOR UPDATE lock
                             payment.status = 'success'

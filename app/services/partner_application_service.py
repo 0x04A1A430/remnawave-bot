@@ -6,12 +6,7 @@ import structlog
 from sqlalchemy import desc, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database.models import (
-    AdvertisingCampaign,
-    PartnerApplication,
-    PartnerStatus,
-    User,
-)
+from app.database.models import AdvertisingCampaign, PartnerApplication, PartnerStatus, User
 from app.utils.user_utils import generate_unique_referral_code
 
 
@@ -63,7 +58,7 @@ class PartnerApplicationService:
         await db.refresh(application)
 
         logger.info(
-            'Подана заявка на партнёрство',
+            '📝 Подана заявка на партнёрство',
             user_id=user_id,
             application_id=application.id,
         )
@@ -113,7 +108,7 @@ class PartnerApplicationService:
         await db.commit()
 
         logger.info(
-            'Партнёрская заявка одобрена',
+            '✅ Партнёрская заявка одобрена',
             application_id=application_id,
             user_id=application.user_id,
             commission_percent=commission_percent,
@@ -153,7 +148,7 @@ class PartnerApplicationService:
         await db.commit()
 
         logger.info(
-            'Партнёрская заявка отклонена',
+            '❌ Партнёрская заявка отклонена',
             application_id=application_id,
             user_id=application.user_id,
             admin_id=admin_id,
@@ -188,7 +183,7 @@ class PartnerApplicationService:
         await db.commit()
 
         logger.info(
-            'Партнёрский статус отозван',
+            '🚫 Партнёрский статус отозван',
             user_id=user_id,
             admin_id=admin_id,
         )

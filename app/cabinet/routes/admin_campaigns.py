@@ -274,12 +274,7 @@ async def get_campaign_chart_data(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(
-            'Failed to get campaign chart data',
-            error=str(e),
-            campaign_id=campaign_id,
-            exc_info=True,
-        )
+        logger.error('Failed to get campaign chart data', error=str(e), campaign_id=campaign_id, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail='Failed to load campaign chart data',
@@ -332,12 +327,7 @@ async def get_campaign_stats(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(
-            'Failed to get campaign stats',
-            error=str(e),
-            campaign_id=campaign_id,
-            exc_info=True,
-        )
+        logger.error('Failed to get campaign stats', error=str(e), campaign_id=campaign_id, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail='Failed to load campaign statistics',
@@ -480,12 +470,7 @@ async def create_new_campaign(
         partner_user_id=request.partner_user_id,
     )
 
-    logger.info(
-        'Admin created campaign',
-        admin_id=admin.id,
-        campaign_id=campaign.id,
-        campaign_name=campaign.name,
-    )
+    logger.info('Admin created campaign', admin_id=admin.id, campaign_id=campaign.id, campaign_name=campaign.name)
 
     return await get_campaign(campaign.id, admin, db)
 
@@ -605,12 +590,7 @@ async def delete_existing_campaign(
         )
 
     await delete_campaign(db, campaign)
-    logger.info(
-        'Admin deleted campaign',
-        admin_id=admin.id,
-        campaign_id=campaign_id,
-        campaign_name=campaign.name,
-    )
+    logger.info('Admin deleted campaign', admin_id=admin.id, campaign_id=campaign_id, campaign_name=campaign.name)
 
     return {'message': 'Campaign deleted successfully'}
 
@@ -633,12 +613,7 @@ async def toggle_campaign(
     await update_campaign(db, campaign, is_active=new_status)
 
     status_text = 'activated' if new_status else 'deactivated'
-    logger.info(
-        'Admin campaign',
-        admin_id=admin.id,
-        status_text=status_text,
-        campaign_id=campaign_id,
-    )
+    logger.info('Admin campaign', admin_id=admin.id, status_text=status_text, campaign_id=campaign_id)
 
     return CampaignToggleResponse(
         id=campaign_id,

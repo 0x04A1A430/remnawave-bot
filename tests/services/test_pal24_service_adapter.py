@@ -64,12 +64,7 @@ async def test_create_bill_success(monkeypatch: pytest.MonkeyPatch) -> None:
     client = StubPal24Client()
     service = Pal24Service(client)
 
-    monkeypatch.setattr(
-        Pal24Client,
-        'normalize_amount',
-        staticmethod(lambda amount: Decimal('500.00')),
-        raising=False,
-    )
+    monkeypatch.setattr(Pal24Client, 'normalize_amount', staticmethod(lambda amount: Decimal('500.00')), raising=False)
 
     result = await service.create_bill(
         amount_kopeks=50000,
@@ -91,9 +86,7 @@ async def test_create_bill_success(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.mark.anyio('asyncio')
-async def test_create_bill_requires_configuration(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+async def test_create_bill_requires_configuration(monkeypatch: pytest.MonkeyPatch) -> None:
     _enable_pal24(monkeypatch)
     client = StubPal24Client(configured=False)
     service = Pal24Service(client)

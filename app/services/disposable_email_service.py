@@ -1,7 +1,10 @@
 """Service for blocking disposable/temporary email domains."""
 
 import asyncio
+import re
+from collections.abc import Iterator
 from datetime import UTC, datetime
+from functools import lru_cache
 
 import aiohttp
 import structlog
@@ -10,6 +13,26 @@ from app.config import settings
 
 
 logger = structlog.get_logger(__name__)
+
+
+_EXTRA_SEPARATORS = re.compile(r'[\s,;]+')
+
+
+@lru_cache(maxsize=8)
+def parse_extra_domains(raw: str | None) -> frozenset[str]:
+    """Список оператора из настройки: любые разделители, регистр и ведущие '@'/'.' не важны."""
+    if not raw:
+        return frozenset()
+    return frozenset(
+        cleaned for token in _EXTRA_SEPARATORS.split(raw) if (cleaned := token.strip().lower().lstrip('@.'))
+    )
+
+
+def domain_and_parents(domain: str) -> Iterator[str]:
+    """'deep.sub.mail.tm' → 'deep.sub.mail.tm', 'sub.mail.tm', 'mail.tm' (голый TLD не считается)."""
+    parts = domain.split('.')
+    for start in range(len(parts) - 1):
+        yield '.'.join(parts[start:])
 
 
 class DisposableEmailService:
@@ -34,10 +57,7 @@ class DisposableEmailService:
         """Load domains and start periodic refresh task."""
         await self._update_domains()
         self._task = asyncio.create_task(self._periodic_loop())
-        logger.info(
-            'DisposableEmailService started (domains loaded)',
-            domain_count=self._domain_count,
-        )
+        logger.info('DisposableEmailService started (domains loaded)', domain_count=self._domain_count)
 
     async def stop(self) -> None:
         """Cancel periodic refresh task."""
@@ -53,15 +73,9 @@ class DisposableEmailService:
     async def _update_domains(self) -> None:
         """Fetch domains.txt from GitHub and swap the in-memory set."""
         try:
-            async with (
-                aiohttp.ClientSession() as session,
-                session.get(self.DOMAINS_URL) as resp,
-            ):
+            async with aiohttp.ClientSession() as session, session.get(self.DOMAINS_URL) as resp:
                 if resp.status != 200:
-                    logger.error(
-                        'Failed to fetch disposable domains: HTTP',
-                        resp_status=resp.status,
-                    )
+                    logger.error('Failed to fetch disposable domains: HTTP', resp_status=resp.status)
                     return
 
                 text = await resp.text()
@@ -73,10 +87,7 @@ class DisposableEmailService:
             self._domains = domains
             self._domain_count = len(domains)
             self._last_updated = datetime.now(UTC)
-            logger.info(
-                'Disposable email domains updated: domains',
-                domain_count=self._domain_count,
-            )
+            logger.info('Disposable email domains updated: domains', domain_count=self._domain_count)
 
         except Exception:
             logger.exception('Error updating disposable email domains')
@@ -88,29 +99,31 @@ class DisposableEmailService:
             await self._update_domains()
 
     def is_disposable(self, email: str) -> bool:
-        """Check if the email uses a disposable domain.
+        """Домен письма или любой его родитель — в скачанном списке или в списке оператора.
 
         Returns False when the feature is disabled via settings.
         """
         if not getattr(settings, 'DISPOSABLE_EMAIL_CHECK_ENABLED', True):
             return False
 
-        if not self._domains:
+        extra = parse_extra_domains(getattr(settings, 'DISPOSABLE_EMAIL_EXTRA_DOMAINS', ''))
+        if not self._domains and not extra:
             return False
 
         try:
-            domain = email.rsplit('@', 1)[1].lower()
+            domain = email.rsplit('@', 1)[1].strip().lower()
         except IndexError:
             return False
 
-        return domain in self._domains
+        return any(candidate in self._domains or candidate in extra for candidate in domain_and_parents(domain))
 
     def get_status(self) -> dict:
         """Return service status for monitoring / health checks."""
         return {
             'enabled': getattr(settings, 'DISPOSABLE_EMAIL_CHECK_ENABLED', True),
             'domain_count': self._domain_count,
-            'last_updated': (self._last_updated.isoformat() if self._last_updated else None),
+            'extra_domain_count': len(parse_extra_domains(getattr(settings, 'DISPOSABLE_EMAIL_EXTRA_DOMAINS', ''))),
+            'last_updated': self._last_updated.isoformat() if self._last_updated else None,
             'running': self._task is not None and not self._task.done(),
         }
 

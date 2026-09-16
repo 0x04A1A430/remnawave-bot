@@ -102,7 +102,7 @@ async def _create_jupiter_payment_and_respond(
     keyboard_buttons.append(
         [
             InlineKeyboardButton(
-                text=texts.t('BACK_BUTTON', 'Назад'),
+                text=texts.t('BACK_BUTTON', '◀️ Назад'),
                 callback_data='menu_balance',
                 style='danger',
             )
@@ -131,11 +131,7 @@ async def _create_jupiter_payment_and_respond(
     else:
         await message_or_callback.answer(response_text, reply_markup=keyboard, parse_mode='HTML')
 
-    logger.info(
-        'Jupiter payment created',
-        telegram_id=db_user.telegram_id,
-        amount_rub=amount_rub,
-    )
+    logger.info('Jupiter payment created', telegram_id=db_user.telegram_id, amount_rub=amount_rub)
 
 
 @error_handler

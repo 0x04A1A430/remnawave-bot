@@ -20,7 +20,6 @@ from app.services.contests import (
     get_game_strategy,
 )
 from app.states import ContestStates
-from app.utils.button_emoji import make_button
 from app.utils.decorators import auth_required, error_handler
 
 
@@ -81,10 +80,7 @@ async def _reply_not_eligible(callback: types.CallbackQuery, language: str):
     """Reply that user is not eligible to play."""
     texts = get_texts(language)
     await callback.answer(
-        texts.t(
-            'CONTEST_NOT_ELIGIBLE',
-            'Игры доступны только с активной или триальной подпиской.',
-        ),
+        texts.t('CONTEST_NOT_ELIGIBLE', 'Игры доступны только с активной или триальной подпиской.'),
         show_alert=True,
     )
 
@@ -121,7 +117,7 @@ async def _build_contests_menu_view(db: AsyncSession, db_user) -> tuple[str, typ
         buttons.append(
             [
                 types.InlineKeyboardButton(
-                    text=f'{title}',
+                    text=f'▶️ {title}',
                     callback_data=f'contest_play_{tpl_slug}_{rnd.id}',
                 )
             ]
@@ -140,7 +136,7 @@ async def _build_contests_menu_view(db: AsyncSession, db_user) -> tuple[str, typ
     buttons.append([make_button(text=texts.BACK, callback_data='back_to_menu', style='danger')])
 
     return (
-        texts.t('CONTEST_MENU_TITLE', '<b>Игры/Конкурсы</b>\nВыберите игру:'),
+        texts.t('CONTEST_MENU_TITLE', '🎲 <b>Игры/Конкурсы</b>\nВыберите игру:'),
         types.InlineKeyboardMarkup(inline_keyboard=buttons),
     )
 
@@ -155,10 +151,7 @@ async def open_contests_menu_message(message: types.Message, db_user, db: AsyncS
     texts = get_texts(db_user.language)
     if view is None:
         await message.answer(
-            texts.t(
-                'CONTEST_NOT_ELIGIBLE',
-                'Игры доступны только с активной или триальной подпиской.',
-            )
+            texts.t('CONTEST_NOT_ELIGIBLE', 'Игры доступны только с активной или триальной подпиской.')
         )
         return
     text, keyboard = view

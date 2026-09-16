@@ -29,14 +29,14 @@ logger = structlog.get_logger(__name__)
 def _build_poll_invitation_text(poll: Poll, language: str) -> str:
     texts = get_texts(language)
 
-    lines: list[str] = [f'<b>{html.escape(poll.title)}</b>']
+    lines: list[str] = [f'🗳️ <b>{html.escape(poll.title)}</b>']
     if poll.description:
         lines.append(html.escape(poll.description))
 
     if poll.reward_enabled and poll.reward_amount_kopeks > 0:
         reward_line = texts.t(
             'POLL_INVITATION_REWARD',
-            'За участие вы получите {amount}.',
+            '🎁 За участие вы получите {amount}.',
         ).format(amount=settings.format_price(poll.reward_amount_kopeks))
         lines.append(reward_line)
 
@@ -56,7 +56,7 @@ def build_start_keyboard(response_id: int, language: str) -> InlineKeyboardMarku
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text=texts.t('POLL_START_BUTTON', 'Пройти опрос'),
+                    text=texts.t('POLL_START_BUTTON', '📝 Пройти опрос'),
                     callback_data=f'poll_start:{response_id}',
                 )
             ]
@@ -163,7 +163,7 @@ async def send_poll_to_users(
                     # Проверяем, является ли ошибка связанной с лимитом подключений
                     if 'too many clients' in str(error).lower():
                         logger.warning(
-                            'Ограничение на количество подключений к БД при обработке пользователя',
+                            '⚠️ Ограничение на количество подключений к БД при обработке пользователя',
                             poll_id=poll_id,
                             telegram_id=user_snapshot.telegram_id,
                         )
@@ -171,7 +171,7 @@ async def send_poll_to_users(
                         await asyncio.sleep(0.1)
                     else:
                         logger.error(
-                            'Ошибка отправки опроса пользователю',
+                            '❌ Ошибка отправки опроса пользователю',
                             poll_id=poll_id,
                             telegram_id=user_snapshot.telegram_id,
                             error=error,
@@ -239,9 +239,7 @@ async def reward_user_for_poll(
     return poll.reward_amount_kopeks
 
 
-async def get_next_question(
-    response: PollResponse,
-) -> tuple[int | None, PollQuestion | None]:
+async def get_next_question(response: PollResponse) -> tuple[int | None, PollQuestion | None]:
     if not response.poll or not response.poll.questions:
         return None, None
 

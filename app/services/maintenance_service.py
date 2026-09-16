@@ -67,10 +67,7 @@ class MaintenanceService:
             return False
 
         try:
-            from app.services.admin_notification_service import (
-                AdminNotificationService,
-                NotificationCategory,
-            )
+            from app.services.admin_notification_service import AdminNotificationService, NotificationCategory
 
             notification_service = AdminNotificationService(self._bot)
 
@@ -78,11 +75,11 @@ class MaintenanceService:
                 logger.debug('Уведомления администраторов отключены')
                 return False
 
-            emoji_map = {'error': '', 'warning': '', 'success': '', 'info': ''}
-            emoji = emoji_map.get(alert_type, '')
+            emoji_map = {'error': '🚨', 'warning': '⚠️', 'success': '✅', 'info': 'ℹ️'}
+            emoji = emoji_map.get(alert_type, 'ℹ️')
 
             timestamp = format_local_datetime(datetime.now(UTC), '%d.%m.%Y %H:%M:%S %Z')
-            formatted_message = f'{emoji} <b>ТЕХНИЧЕСКИЕ РАБОТЫ</b>\n\n{message}\n\n <i>{timestamp}</i>'
+            formatted_message = f'{emoji} <b>ТЕХНИЧЕСКИЕ РАБОТЫ</b>\n\n{message}\n\n⏰ <i>{timestamp}</i>'
 
             return await notification_service.send_admin_notification(
                 formatted_message, category=NotificationCategory.INFRASTRUCTURE
@@ -114,8 +111,8 @@ class MaintenanceService:
             logger.warning('Список администраторов пуст')
             return
 
-        emoji_map = {'error': '', 'warning': '', 'success': '', 'info': ''}
-        emoji = emoji_map.get(alert_type, '')
+        emoji_map = {'error': '🚨', 'warning': '⚠️', 'success': '✅', 'info': 'ℹ️'}
+        emoji = emoji_map.get(alert_type, 'ℹ️')
 
         formatted_message = f'{emoji} <b>Maintenance Service</b>\n\n{message}'
 
@@ -159,7 +156,7 @@ class MaintenanceService:
 
             await self._notify_admins(notification_msg, 'warning' if auto else 'info')
 
-            logger.warning('Режим техработ ВКЛЮЧЕН', reason=self._status.reason)
+            logger.warning('🔧 Режим техработ ВКЛЮЧЕН', reason=self._status.reason)
             return True
 
         except Exception as e:
@@ -190,9 +187,9 @@ class MaintenanceService:
                 hours = int(duration.total_seconds() // 3600)
                 minutes = int((duration.total_seconds() % 3600) // 60)
                 if hours > 0:
-                    duration_str = f'\n <b>Длительность:</b> {hours}ч {minutes}мин'
+                    duration_str = f'\n⏱️ <b>Длительность:</b> {hours}ч {minutes}мин'
                 else:
-                    duration_str = f'\n <b>Длительность:</b> {minutes}мин'
+                    duration_str = f'\n⏱️ <b>Длительность:</b> {minutes}мин'
 
             notification_time = format_local_datetime(datetime.now(UTC), '%d.%m.%Y %H:%M:%S %Z')
             notification_msg = f"""<b>Режим технических работ выключен</b>
@@ -205,7 +202,7 @@ class MaintenanceService:
 
             await self._notify_admins(notification_msg, 'success')
 
-            logger.info('Режим техработ ВЫКЛЮЧЕН')
+            logger.info('✅ Режим техработ ВЫКЛЮЧЕН')
             return True
 
         except Exception as e:
@@ -227,7 +224,7 @@ class MaintenanceService:
 
             self._check_task = asyncio.create_task(self._monitoring_loop())
             logger.info(
-                'Запущен мониторинг API Remnawave',
+                '🔄 Запущен мониторинг API Remnawave',
                 get_maintenance_check_interval=settings.get_maintenance_check_interval(),
                 get_maintenance_retry_attempts=settings.get_maintenance_retry_attempts(),
             )
@@ -251,7 +248,7 @@ class MaintenanceService:
                     pass
 
             await self._notify_admins('Мониторинг технических работ остановлен', 'info')
-            logger.info('Мониторинг API остановлен')
+            logger.info('ℹ️ Мониторинг API остановлен')
             return True
 
         except Exception as e:
@@ -325,16 +322,12 @@ API снова отвечает на запросы.""",
 
                         if self._status.is_active and self._status.auto_enabled:
                             await self.disable_maintenance()
-                            logger.info('API восстановился, режим техработ автоматически отключен')
+                            logger.info('✅ API восстановился, режим техработ автоматически отключен')
 
                         return True
 
                     if attempt < attempts:
-                        logger.warning(
-                            'API Remnawave недоступно (попытка /)',
-                            attempt=attempt,
-                            attempts=attempts,
-                        )
+                        logger.warning('API Remnawave недоступно (попытка /)', attempt=attempt, attempts=attempts)
                         await asyncio.sleep(1)
 
                 was_available = self._status.api_status
@@ -407,11 +400,11 @@ API снова отвечает на запросы.""",
         try:
             status_data = {
                 'is_active': self._status.is_active,
-                'enabled_at': (self._status.enabled_at.isoformat() if self._status.enabled_at else None),
+                'enabled_at': self._status.enabled_at.isoformat() if self._status.enabled_at else None,
                 'reason': self._status.reason,
                 'auto_enabled': self._status.auto_enabled,
                 'consecutive_failures': self._status.consecutive_failures,
-                'last_check': (self._status.last_check.isoformat() if self._status.last_check else None),
+                'last_check': self._status.last_check.isoformat() if self._status.last_check else None,
             }
 
             await cache.set('maintenance_status', status_data, expire=3600)
@@ -425,7 +418,18 @@ API снова отвечает на запросы.""",
             if not status_data:
                 return
 
-            self._status.is_active = status_data.get('is_active', False)
+            cached_active = status_data.get('is_active', False)
+            cached_auto = status_data.get('auto_enabled', False)
+
+            # Кэш нужен, чтобы перезапуск во время аварии не снимал АВТОМАТИЧЕСКИ
+            # включённые техработы. Но для ручного режима источник истины —
+            # сохранённая настройка: если она говорит «выключено», протухшая запись
+            # в кэше (TTL час) не имеет права включить режим обратно.
+            if cached_active and not cached_auto and not settings.is_maintenance_mode():
+                logger.info('Кэш техработ противоречит настройке — ручной режим не восстанавливаем')
+                return
+
+            self._status.is_active = cached_active
             self._status.reason = status_data.get('reason')
             self._status.auto_enabled = status_data.get('auto_enabled', False)
             self._status.consecutive_failures = status_data.get('consecutive_failures', 0)
@@ -442,10 +446,7 @@ API снова отвечает на запросы.""",
                     dt = dt.replace(tzinfo=UTC)
                 self._status.last_check = dt
 
-            logger.info(
-                'Состояние техработ загружено из кеша: активен',
-                is_active=self._status.is_active,
-            )
+            logger.info('🔥 Состояние техработ загружено из кеша: активен', is_active=self._status.is_active)
 
         except Exception as e:
             logger.error('Ошибка загрузки состояния из кеша', error=e)
@@ -497,11 +498,15 @@ API снова отвечает на запросы.""",
 
     async def send_remnawave_status_notification(self, status: str, details: str = '') -> bool:
         try:
-            message = f"""<b>Статус панели Remnawave изменился</b>
+            status_emojis = {'online': '🟢', 'offline': '🔴', 'warning': '🟡', 'error': '⚠️'}
 
-<blockquote><b>Статус:</b> {status.upper()}
-<b>URL:</b> {settings.REMNAWAVE_API_URL}
-{details}</blockquote>"""
+            emoji = status_emojis.get(status, 'ℹ️')
+
+            message = f"""Статус панели Remnawave изменился
+
+{emoji} <b>Статус:</b> {status.upper()}
+🔗 <b>URL:</b> {settings.REMNAWAVE_API_URL}
+{details}"""
 
             alert_type = 'error' if status in ['offline', 'error'] else 'info'
             await self._notify_admins(message, alert_type)

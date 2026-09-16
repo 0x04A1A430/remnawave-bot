@@ -166,10 +166,7 @@ class CloudPaymentsPaymentMixin:
         payment = await payment_module.get_cloudpayments_payment_by_invoice_id(db, invoice_id)
 
         if not payment:
-            logger.warning(
-                'CloudPayments платёж не найден: invoice создаём новый',
-                invoice_id=invoice_id,
-            )
+            logger.warning('CloudPayments платёж не найден: invoice создаём новый', invoice_id=invoice_id)
             # Try to extract user_id from account_id (we now use user_id as AccountId)
             try:
                 user_id = int(account_id) if account_id else None
@@ -203,9 +200,7 @@ class CloudPaymentsPaymentMixin:
                 return False
 
         # Lock payment row to prevent concurrent double-processing
-        from app.database.crud.cloudpayments import (
-            get_cloudpayments_payment_by_id_for_update,
-        )
+        from app.database.crud.cloudpayments import get_cloudpayments_payment_by_id_for_update
 
         locked = await get_cloudpayments_payment_by_id_for_update(db, payment.id)
         if not locked:
@@ -238,7 +233,7 @@ class CloudPaymentsPaymentMixin:
             db,
             metadata=cp_metadata,
             payment_amount_kopeks=amount_kopeks,
-            provider_payment_id=(str(transaction_id_cp) if transaction_id_cp else invoice_id),
+            provider_payment_id=str(transaction_id_cp) if transaction_id_cp else invoice_id,
             provider_name='cloudpayments',
         )
         if guest_result is not None:
@@ -366,13 +361,11 @@ class CloudPaymentsPaymentMixin:
             await db.commit()
             await db.refresh(user)
 
-        topup_status = 'Первое пополнение' if was_first_topup else 'Пополнение'
+        topup_status = '🆕 Первое пополнение' if was_first_topup else '🔄 Пополнение'
 
         if getattr(self, 'bot', None):
             try:
-                from app.services.admin_notification_service import (
-                    AdminNotificationService,
-                )
+                from app.services.admin_notification_service import AdminNotificationService
 
                 notification_service = AdminNotificationService(self.bot)
                 await notification_service.send_balance_topup_notification(
@@ -476,10 +469,7 @@ class CloudPaymentsPaymentMixin:
 
         # Skip email-only users (no telegram_id)
         if not user.telegram_id:
-            logger.debug(
-                'Skipping CloudPayments notification for email-only user',
-                user_id=user.id,
-            )
+            logger.debug('Skipping CloudPayments notification for email-only user', user_id=user.id)
             return
 
         texts = get_texts(user.language)
@@ -492,10 +482,10 @@ class CloudPaymentsPaymentMixin:
 
         message = texts.t(
             'PAYMENT_SUCCESS_CLOUDPAYMENTS',
-            '<b>Оплата получена!</b>\n\n'
-            'Сумма: {amount}₽\n'
-            'Способ: CloudPayments\n'
-            'Баланс: {balance}₽\n\n'
+            '✅ <b>Оплата получена!</b>\n\n'
+            '💰 Сумма: {amount}₽\n'
+            '💳 Способ: CloudPayments\n'
+            '💵 Баланс: {balance}₽\n\n'
             'Спасибо за пополнение!',
         ).format(
             amount=f'{amount_rub:.2f}',
@@ -515,9 +505,7 @@ class CloudPaymentsPaymentMixin:
                 )
             except Exception as error:
                 logger.warning(
-                    'Не удалось отправить уведомление пользователю',
-                    telegram_id=user.telegram_id,
-                    error=error,
+                    'Не удалось отправить уведомление пользователю', telegram_id=user.telegram_id, error=error
                 )
 
     async def _send_cloudpayments_fail_notification(
@@ -531,7 +519,7 @@ class CloudPaymentsPaymentMixin:
 
         from app.bot_factory import create_bot
 
-        text = f'<b>Оплата не прошла</b>\n\n{message}'
+        text = f'❌ <b>Оплата не прошла</b>\n\n{message}'
 
         async with create_bot() as bot:
             try:
@@ -541,11 +529,7 @@ class CloudPaymentsPaymentMixin:
                     parse_mode='HTML',
                 )
             except Exception as error:
-                logger.warning(
-                    'Не удалось отправить уведомление пользователю',
-                    telegram_id=telegram_id,
-                    error=error,
-                )
+                logger.warning('Не удалось отправить уведомление пользователю', telegram_id=telegram_id, error=error)
 
     async def get_cloudpayments_payment_status(
         self,
@@ -584,10 +568,7 @@ class CloudPaymentsPaymentMixin:
             api_response = await self.cloudpayments_service.find_payment(payment.invoice_id)
 
             if not api_response.get('Success'):
-                logger.debug(
-                    'CloudPayments API: payment not found or error for invoice',
-                    invoice_id=payment.invoice_id,
-                )
+                logger.debug('CloudPayments API: payment not found or error for invoice', invoice_id=payment.invoice_id)
                 return {'payment': payment, 'status': payment.status}
 
             model = api_response.get('Model', {})
@@ -614,10 +595,7 @@ class CloudPaymentsPaymentMixin:
                 await self.process_cloudpayments_pay_webhook(db, webhook_data)
                 await db.refresh(payment)
 
-            elif api_status in ('Declined', 'Cancelled') and payment.status not in (
-                'failed',
-                'cancelled',
-            ):
+            elif api_status in ('Declined', 'Cancelled') and payment.status not in ('failed', 'cancelled'):
                 payment.status = 'failed'
                 await db.flush()
                 await db.refresh(payment)
@@ -626,8 +604,6 @@ class CloudPaymentsPaymentMixin:
 
         except Exception as error:
             logger.error(
-                'Error checking CloudPayments payment status: id error',
-                local_payment_id=local_payment_id,
-                error=error,
+                'Error checking CloudPayments payment status: id error', local_payment_id=local_payment_id, error=error
             )
             return {'payment': payment, 'status': payment.status}

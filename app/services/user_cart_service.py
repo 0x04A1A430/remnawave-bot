@@ -5,6 +5,7 @@ import redis.asyncio as redis
 import structlog
 
 from app.config import settings
+from app.utils.redis_client import create_redis
 
 
 logger = structlog.get_logger(__name__)
@@ -28,7 +29,7 @@ class UserCartService:
             return self._redis_client
 
         try:
-            self._redis_client = redis.from_url(settings.REDIS_URL)
+            self._redis_client = create_redis()
             self._initialized = True
             logger.debug('Redis клиент для корзины инициализирован')
         except Exception as e:
@@ -59,7 +60,7 @@ class UserCartService:
         """
         client = self._get_redis_client()
         if client is None:
-            logger.warning('Redis недоступен, корзина пользователя НЕ сохранена', user_id=user_id)
+            logger.warning('🛒 Redis недоступен, корзина пользователя НЕ сохранена', user_id=user_id)
             return False
 
         try:
@@ -69,7 +70,7 @@ class UserCartService:
             await client.setex(key, effective_ttl, json_data)
             cart_mode = cart_data.get('cart_mode', 'unknown')
             logger.info(
-                'Корзина пользователя сохранена в Redis',
+                '🛒 Корзина пользователя сохранена в Redis',
                 user_id=user_id,
                 cart_mode=cart_mode,
                 effective_ttl=effective_ttl,
@@ -95,8 +96,9 @@ class UserCartService:
             # «Свежее намерение»: корзина сохранена именно для пополнения и
             # завершения покупки (поток «недостаточно средств → выбрать оплату»).
             # Только при наличии этой метки тихая авто-покупка после пополнения
-            # имеет право списать баланс — пополнение ради подарка/просто денег
-            # такой метки не ставит и корзину не трогает.
+            # имеет право списать баланс — обычное пополнение просто денег без
+            # сохранённой корзины такой метки не ставит, а для подарков выполняется
+            # только соответствующая явная подарочная корзина (gift_purchase).
             if cart_data.get('return_to_cart'):
                 try:
                     await client.setex(
@@ -106,14 +108,12 @@ class UserCartService:
                     )
                 except Exception as intent_error:
                     logger.warning(
-                        'Не удалось поставить метку намерения пополнения',
-                        user_id=user_id,
-                        error=intent_error,
+                        '🛒 Не удалось поставить метку намерения пополнения', user_id=user_id, error=intent_error
                     )
 
             return True
         except Exception as e:
-            logger.error('Ошибка сохранения корзины пользователя', user_id=user_id, error=e)
+            logger.error('🛒 Ошибка сохранения корзины пользователя', user_id=user_id, error=e)
             return False
 
     async def get_user_cart(self, user_id: int) -> dict[str, Any] | None:
@@ -208,11 +208,7 @@ class UserCartService:
             result = await client.delete(key)
             return bool(result)
         except Exception as e:
-            logger.error(
-                'Ошибка удаления глобальной корзины пользователя',
-                user_id=user_id,
-                error=e,
-            )
+            logger.error('Ошибка удаления глобальной корзины пользователя', user_id=user_id, error=e)
             return False
 
     async def has_user_cart(self, user_id: int) -> bool:
@@ -227,10 +223,7 @@ class UserCartService:
         """
         client = self._get_redis_client()
         if client is None:
-            logger.warning(
-                'Redis недоступен, проверка корзины пользователя невозможна',
-                user_id=user_id,
-            )
+            logger.warning('🛒 Redis недоступен, проверка корзины пользователя невозможна', user_id=user_id)
             return False
 
         try:
@@ -238,13 +231,11 @@ class UserCartService:
             exists = await client.exists(key)
             result = bool(exists)
             logger.info(
-                'Проверка корзины пользователя',
-                user_id=user_id,
-                value='найдена' if result else 'не найдена',
+                '🛒 Проверка корзины пользователя', user_id=user_id, value='найдена' if result else 'не найдена'
             )
             return result
         except Exception as e:
-            logger.error('Ошибка проверки наличия корзины пользователя', user_id=user_id, error=e)
+            logger.error('🛒 Ошибка проверки наличия корзины пользователя', user_id=user_id, error=e)
             return False
 
     # ---- Per-subscription cart methods (multi-tariff safe) ----
@@ -262,9 +253,9 @@ class UserCartService:
         сохранена → выбрать оплату» (cart_data['return_to_cart'] == True).
         Тихая авто-покупка из корзины после пополнения проверяет наличие метки
         (has_topup_intent) и гасит её только при УСПЕШНОЙ покупке
-        (clear_topup_intent) — чтобы пополнение ради подарка / просто денег не
-        тратилось молча на подписку из старой корзины, а частичное пополнение
-        (в рассрочку) могло до-сработать со следующего пополнения.
+        (clear_topup_intent) — чтобы обычное пополнение баланса без корзины не
+        тратилось молча на подписку из старой корзины, а для подарков исполнялась
+        только явная подходящая корзина подарка (gift_purchase).
         """
         return f'cart_topup_intent:{user_id}'
 
@@ -280,7 +271,7 @@ class UserCartService:
         try:
             return bool(await client.exists(self._topup_intent_key(user_id)))
         except Exception as e:
-            logger.error('Ошибка чтения метки намерения пополнения', user_id=user_id, error=e)
+            logger.error('🛒 Ошибка чтения метки намерения пополнения', user_id=user_id, error=e)
             return False
 
     async def clear_topup_intent(self, user_id: int) -> None:
@@ -291,7 +282,7 @@ class UserCartService:
         try:
             await client.delete(self._topup_intent_key(user_id))
         except Exception as e:
-            logger.error('Ошибка удаления метки намерения пополнения', user_id=user_id, error=e)
+            logger.error('🛒 Ошибка удаления метки намерения пополнения', user_id=user_id, error=e)
 
     async def save_subscription_cart(
         self,
@@ -431,11 +422,7 @@ class UserCartService:
                 if not already_covered:
                     results.append(global_cart)
         except Exception as e:
-            logger.warning(
-                'Ошибка чтения глобальной корзины при сканировании',
-                user_id=user_id,
-                error=e,
-            )
+            logger.warning('Ошибка чтения глобальной корзины при сканировании', user_id=user_id, error=e)
 
         return results
 

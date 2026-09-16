@@ -25,57 +25,69 @@ _LANGUAGE_ALIASES = {
 
 _DYNAMIC_LANGUAGE_CONFIGS = {
     'ru': {
-        'traffic_pattern': '{size} ГБ - {price}',
-        'unlimited_pattern': 'Безлимит - {price}',
+        'traffic_pattern': '📊 {size} ГБ - {price}',
+        'unlimited_pattern': '📊 Безлимит - {price}',
         'support_info': (
-            '\n<b>Поддержка</b>\n\n'
+            '\n🛟 <b>Поддержка</b>\n\n'
             'Это центр тикетов: создавайте обращения, просматривайте ответы и историю.\n\n'
-            '• Создать тикет — опишите проблему или вопрос\n'
-            '• Мои тикеты — статус и переписка\n'
-            '• Связаться — написать напрямую (если нужно)\n\n'
+            '• 🎫 Создать тикет — опишите проблему или вопрос\n'
+            '• 📋 Мои тикеты — статус и переписка\n'
+            '• 💬 Связаться — написать напрямую (если нужно)\n\n'
             'Старайтесь использовать тикеты — так мы быстрее поможем и ничего не потеряется.\n'
         ),
     },
-    'en': {
-        'traffic_pattern': '{size} GB - {price}',
-        'unlimited_pattern': 'Unlimited - {price}',
+    'fa': {
+        'traffic_pattern': '📊 {size} گیگابایت - {price}',
+        'unlimited_pattern': '📊 نامحدود - {price}',
         'support_info': (
-            '\n<b>RemnaWave Support</b>\n\n'
+            '\n🛟 <b>پشتیبانی</b>\n\n'
+            'برای هرگونه سؤال به پشتیبانی پیام دهید:\n\n'
+            '👤 {support_username}\n\n'
+            '• 🎫 ایجاد تیکت\n'
+            '• 📋 تیکت‌های من\n'
+            '• 💬 تماس مستقیم\n'
+        ),
+    },
+    'en': {
+        'traffic_pattern': '📊 {size} GB - {price}',
+        'unlimited_pattern': '📊 Unlimited - {price}',
+        'support_info': (
+            '\n🛟 <b>RemnaWave Support</b>\n\n'
             'This is the ticket center: create requests, view replies and history.\n\n'
-            '• Create ticket — describe your issue or question\n'
-            '• My tickets — status and conversation\n'
-            '• Contact — message directly if needed\n\n'
+            '• 🎫 Create ticket — describe your issue or question\n'
+            '• 📋 My tickets — status and conversation\n'
+            '• 💬 Contact — message directly if needed\n\n'
             'Prefer tickets — it helps us respond faster and keep context.\n'
         ),
     },
     'ua': {
-        'traffic_pattern': '{size} ГБ - {price}',
-        'unlimited_pattern': 'Безліміт - {price}',
+        'traffic_pattern': '📊 {size} ГБ - {price}',
+        'unlimited_pattern': '📊 Безліміт - {price}',
         'support_info': (
-            '\n <b>Технічна підтримка</b>\n\n'
+            '\n🛠️ <b>Технічна підтримка</b>\n\n'
             'З усіх питань звертайтеся до нашої підтримки:\n\n'
-            '{support_username}\n\n'
+            '👤 {support_username}\n\n'
             'Ми допоможемо з:\n'
             '• Налаштуванням підключення\n'
             '• Вирішенням технічних проблем\n'
             '• Питаннями щодо оплати\n'
             '• Іншими питаннями\n\n'
-            'Час відповіді: зазвичай протягом 1-2 годин\n'
+            '⏰ Час відповіді: зазвичай протягом 1-2 годин\n'
         ),
     },
     'zh': {
-        'traffic_pattern': '{size}GB-{price}',
-        'unlimited_pattern': '无限-{price}',
+        'traffic_pattern': '📊{size}GB-{price}',
+        'unlimited_pattern': '📊无限-{price}',
         'support_info': (
-            '\n <b>技术支持</b>\n\n'
+            '\n🛠️ <b>技术支持</b>\n\n'
             '如有任何问题，请联系我们的支持团队：\n\n'
-            '{support_username}\n\n'
+            '👤 {support_username}\n\n'
             '我们将帮助您：\n'
             '• 设置连接\n'
             '• 解决技术问题\n'
             '• 付款问题\n'
             '• 其他问题\n\n'
-            '响应时间：通常在 1-2 小时内\n'
+            '⏰ 响应时间：通常在 1-2 小时内\n'
         ),
     },
 }
@@ -193,13 +205,6 @@ class Texts:
         return settings.format_price(kopeks, round_kopeks=round_kopeks)
 
     @staticmethod
-    def format_device_limit(limit: int | None) -> str:
-        """Format device limit. 0 or None means unlimited (HWID disabled)."""
-        if not limit:
-            return '∞ (безлимит)'
-        return str(limit)
-
-    @staticmethod
     def format_traffic(gb: float, is_limit: bool = True) -> str:
         """Format traffic value.
 
@@ -212,6 +217,19 @@ class Texts:
         if gb >= 1024:
             return f'{gb / 1024:.1f} ТБ'
         return f'{gb:.0f} ГБ'
+
+    @staticmethod
+    def format_device_limit(limit: int | None) -> str:
+        """Format a device limit for display. 0/None означает «без ограничения».
+
+        При выключенном HWID RemnaWave отдаёт device_limit = 0, и
+        resolve_hwid_device_limit сам трактует <= 0 как «лимит в панель не
+        слать». Показывать это пользователю нулём нельзя: «Устройства: 3 / 0»
+        читается как «устройств не осталось», хотя ограничения нет вовсе.
+        """
+        if not limit or limit <= 0:
+            return '∞'
+        return str(limit)
 
 
 def get_texts(language: str = DEFAULT_LANGUAGE) -> Texts:

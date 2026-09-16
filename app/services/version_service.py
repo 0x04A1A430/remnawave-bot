@@ -13,14 +13,7 @@ logger = structlog.get_logger(__name__)
 
 
 class VersionInfo:
-    def __init__(
-        self,
-        tag_name: str,
-        published_at: str,
-        name: str,
-        body: str,
-        prerelease: bool = False,
-    ):
+    def __init__(self, tag_name: str, published_at: str, name: str, body: str, prerelease: bool = False):
         self.tag_name = tag_name
         self.published_at = datetime.fromisoformat(published_at.replace('Z', '+00:00'))
         self.name = name or tag_name
@@ -69,7 +62,7 @@ class VersionInfo:
 class VersionService:
     def __init__(self, bot=None):
         self.bot = bot
-        self.repo = getattr(settings, 'VERSION_CHECK_REPO', 'cy6su/remnawave-bot')
+        self.repo = getattr(settings, 'VERSION_CHECK_REPO', 'fr1ngg/remnawave-bedolaga-telegram-bot')
         self.enabled = getattr(settings, 'VERSION_CHECK_ENABLED', True)
         self.current_version = self._get_current_version()
         self.cache_ttl = 3600
@@ -146,10 +139,7 @@ class VersionService:
 
         try:
             timeout = aiohttp.ClientTimeout(total=10)
-            async with (
-                aiohttp.ClientSession(timeout=timeout) as session,
-                session.get(url) as response,
-            ):
+            async with aiohttp.ClientSession(timeout=timeout) as session, session.get(url) as response:
                 if response.status == 200:
                     data = await response.json()
                     releases = []
@@ -203,9 +193,7 @@ class VersionService:
                 return
 
             await self._notification_service.send_version_update_notification(
-                current_version=self.current_version,
-                latest_version=latest_version,
-                total_updates=len(newer_releases),
+                current_version=self.current_version, latest_version=latest_version, total_updates=len(newer_releases)
             )
 
             self._cache[cache_key] = True
@@ -271,10 +259,12 @@ class VersionService:
 
     def format_version_display(self, version_info: VersionInfo) -> str:
         status_icon = ''
-        if version_info.prerelease or version_info.is_dev:
-            status_icon = ''
+        if version_info.prerelease:
+            status_icon = '🧪'
+        elif version_info.is_dev:
+            status_icon = '🔧'
         else:
-            status_icon = ''
+            status_icon = '📦'
 
         return f'{status_icon} {version_info.tag_name}'
 

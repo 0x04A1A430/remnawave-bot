@@ -28,10 +28,7 @@ class CryptoBotService:
             return None
 
         url = f'{self.base_url}/api/{endpoint}'
-        headers = {
-            'Crypto-Pay-API-Token': self.api_token,
-            'Content-Type': 'application/json',
-        }
+        headers = {'Crypto-Pay-API-Token': self.api_token, 'Content-Type': 'application/json'}
 
         try:
             async with aiohttp.ClientSession() as session:
@@ -84,12 +81,7 @@ class CryptoBotService:
         result = await self._make_request('POST', 'createInvoice', data)
 
         if result:
-            logger.info(
-                'Создан CryptoBot invoice',
-                get=result.get('invoice_id'),
-                amount=amount,
-                asset=asset,
-            )
+            logger.info('Создан CryptoBot invoice', get=result.get('invoice_id'), amount=amount, asset=asset)
 
         return result
 

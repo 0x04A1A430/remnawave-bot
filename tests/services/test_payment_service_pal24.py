@@ -13,7 +13,6 @@ ROOT_DIR = Path(__file__).resolve().parents[2]
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
-import app.services.payment_service as payment_service_module
 from app.config import settings
 from app.services.pal24_service import Pal24APIError
 from app.services.payment_service import PaymentService
@@ -105,8 +104,7 @@ async def test_create_pal24_payment_success(monkeypatch: pytest.MonkeyPatch) -> 
         return DummyLocalPayment(payment_id=321)
 
     monkeypatch.setattr(
-        payment_service_module,
-        'create_pal24_payment',
+        'app.services.payment_service.create_pal24_payment',
         fake_create_pal24_payment,
         raising=False,
     )
@@ -136,9 +134,7 @@ async def test_create_pal24_payment_success(monkeypatch: pytest.MonkeyPatch) -> 
 
 
 @pytest.mark.anyio('asyncio')
-async def test_create_pal24_payment_default_method(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+async def test_create_pal24_payment_default_method(monkeypatch: pytest.MonkeyPatch) -> None:
     stub = StubPal24Service()
     service = _make_service(stub)
     db = DummySession()
@@ -147,8 +143,7 @@ async def test_create_pal24_payment_default_method(
         return DummyLocalPayment(payment_id=111)
 
     monkeypatch.setattr(
-        payment_service_module,
-        'create_pal24_payment',
+        'app.services.payment_service.create_pal24_payment',
         fake_create_pal24_payment,
         raising=False,
     )
@@ -170,9 +165,7 @@ async def test_create_pal24_payment_default_method(
 
 
 @pytest.mark.anyio('asyncio')
-async def test_create_pal24_payment_limits_and_configuration(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+async def test_create_pal24_payment_limits_and_configuration(monkeypatch: pytest.MonkeyPatch) -> None:
     stub = StubPal24Service()
     service = _make_service(stub)
     db = DummySession()
@@ -210,9 +203,7 @@ async def test_create_pal24_payment_limits_and_configuration(
 
 
 @pytest.mark.anyio('asyncio')
-async def test_create_pal24_payment_handles_api_errors(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+async def test_create_pal24_payment_handles_api_errors(monkeypatch: pytest.MonkeyPatch) -> None:
     stub = StubPal24Service()
     stub.raise_error = Pal24APIError('api failed')
     service = _make_service(stub)
@@ -232,9 +223,7 @@ async def test_create_pal24_payment_handles_api_errors(
 
 
 @pytest.mark.anyio('asyncio')
-async def test_get_pal24_payment_status_updates_from_remote(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+async def test_get_pal24_payment_status_updates_from_remote(monkeypatch: pytest.MonkeyPatch) -> None:
     stub = StubPal24Service()
     stub.status_response = {'status': 'SUCCESS'}
     stub.payment_status_response = {
@@ -308,14 +297,12 @@ async def test_get_pal24_payment_status_updates_from_remote(
         return False
 
     monkeypatch.setattr(
-        payment_service_module,
-        'get_pal24_payment_by_id',
+        'app.services.payment_service.get_pal24_payment_by_id',
         fake_get_by_id,
         raising=False,
     )
     monkeypatch.setattr(
-        payment_service_module,
-        'update_pal24_payment_status',
+        'app.services.payment_service.update_pal24_payment_status',
         fake_update_status,
         raising=False,
     )

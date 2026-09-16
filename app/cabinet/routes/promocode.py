@@ -53,10 +53,7 @@ async def activate_promocode(
     promocode_service = PromoCodeService()
 
     result = await promocode_service.activate_promocode(
-        db=db,
-        user_id=user.id,
-        code=request.code.strip(),
-        subscription_id=request.subscription_id,
+        db=db, user_id=user.id, code=request.code.strip(), subscription_id=request.subscription_id
     )
 
     if result.get('error') == 'select_subscription':
@@ -75,9 +72,7 @@ async def activate_promocode(
         if getattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False):
             try:
                 from app.bot_factory import create_bot
-                from app.services.admin_notification_service import (
-                    AdminNotificationService,
-                )
+                from app.services.admin_notification_service import AdminNotificationService
 
                 bot = create_bot()
                 try:

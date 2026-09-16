@@ -69,11 +69,7 @@ async def update_category(
         await db.rollback()
         raise
     await db.refresh(category)
-    logger.info(
-        'Updated news category',
-        category_id=category.id,
-        updated_fields=list(update_data.keys()),
-    )
+    logger.info('Updated news category', category_id=category.id, updated_fields=list(update_data.keys()))
     return category
 
 

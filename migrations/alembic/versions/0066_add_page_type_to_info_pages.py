@@ -11,24 +11,18 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0066"
-down_revision: Union[str, None] = "0065"
+revision: str = '0066'
+down_revision: Union[str, None] = '0065'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    conn = op.get_bind()
-    inspector = sa.inspect(conn)
-    existing_cols = {c["name"] for c in inspector.get_columns("info_pages")}
-    if "page_type" not in existing_cols:
-        op.add_column(
-            "info_pages",
-            sa.Column(
-                "page_type", sa.String(20), nullable=False, server_default="page"
-            ),
-        )
+    op.add_column(
+        'info_pages',
+        sa.Column('page_type', sa.String(20), nullable=False, server_default='page'),
+    )
 
 
 def downgrade() -> None:
-    op.drop_column("info_pages", "page_type")
+    op.drop_column('info_pages', 'page_type')

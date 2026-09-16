@@ -20,6 +20,16 @@ os.environ.setdefault('DATABASE_MODE', 'postgresql')
 os.environ.setdefault('DATABASE_URL', 'postgresql+asyncpg://user:pass@localhost/test_db')
 os.environ.setdefault('BOT_TOKEN', 'test-token')
 
+# Module-level singleton `backup_service = BackupService()` в backup_service.py
+# при импорте делает `Path(settings.BACKUP_LOCATION).mkdir(parents=True)`.
+# Дефолт `/app/data/backups` — это путь docker-контейнера, недоступный на dev.
+# Подменяем на temp-директорию ещё до первого импорта приложения, чтобы тест-
+# коллекция не падала с `OSError: Read-only file system: '/app'`.
+import tempfile as _tempfile
+
+
+os.environ.setdefault('BACKUP_LOCATION', _tempfile.mkdtemp(prefix='bedolaga_test_backups_'))
+
 # Создаём заглушки для драйверов, которых может не быть в окружении тестов.
 sys.modules.setdefault('asyncpg', types.ModuleType('asyncpg'))
 sys.modules.setdefault('aiosqlite', types.ModuleType('aiosqlite'))
@@ -27,20 +37,14 @@ sys.modules.setdefault('aiosqlite', types.ModuleType('aiosqlite'))
 # Эмуляция redis.asyncio, чтобы модуль кеша мог импортироваться.
 if 'redis.asyncio' not in sys.modules:
     redis_module = types.ModuleType('redis')
-    redis_module.__path__ = []  # маркируем как пакет — иначе 'redis is not a package'
     redis_async_module = types.ModuleType('redis.asyncio')
-    redis_async_module.__path__ = []
     redis_exceptions_module = types.ModuleType('redis.exceptions')
 
     class _FakeRedisError(Exception):
-        pass
+        """Base Redis exception for tests."""
 
-    class _FakeNoScriptError(Exception):
-        pass
-
-    redis_exceptions_module.RedisError = _FakeRedisError
-    redis_exceptions_module.ConnectionError = _FakeRedisError
-    redis_exceptions_module.NoScriptError = _FakeNoScriptError
+    class _FakeNoScriptError(_FakeRedisError):
+        """Redis script cache miss exception for tests."""
 
     class _FakeRedisClient:
         async def ping(self):
@@ -71,14 +75,41 @@ if 'redis.asyncio' not in sys.modules:
         async def incr(self, key):
             return 1
 
-    def _from_url(url):
+    def _from_url(url, **kwargs):
         return _FakeRedisClient()
 
+    # Политика повторов подключения: код создания клиента импортирует её жёстко,
+    # чтобы смена пути в библиотеке была видна сразу, а не молча отключала повторы.
+    redis_retry_module = types.ModuleType('redis.asyncio.retry')
+    redis_backoff_module = types.ModuleType('redis.backoff')
+
+    class _FakeRetry:
+        def __init__(self, backoff, retries, supported_errors=()):
+            self._backoff = backoff
+            self._retries = retries
+            self._supported_errors = supported_errors
+
+    class _FakeBackoff:
+        def __init__(self, base=0.008, cap=0.512):
+            self.base = base
+            self.cap = cap
+
+    redis_retry_module.Retry = _FakeRetry
+    redis_backoff_module.ExponentialWithJitterBackoff = _FakeBackoff
+
+    redis_module.__path__ = []
+    redis_async_module.__path__ = []
+    redis_module.asyncio = redis_async_module
+    redis_module.backoff = redis_backoff_module
+    redis_async_module.retry = redis_retry_module
     redis_async_module.from_url = _from_url
     redis_async_module.Redis = _FakeRedisClient
-    redis_async_module.RedisError = _FakeRedisError
+    redis_exceptions_module.RedisError = _FakeRedisError
+    redis_exceptions_module.NoScriptError = _FakeNoScriptError
     sys.modules['redis'] = redis_module
     sys.modules['redis.asyncio'] = redis_async_module
+    sys.modules['redis.asyncio.retry'] = redis_retry_module
+    sys.modules['redis.backoff'] = redis_backoff_module
     sys.modules['redis.exceptions'] = redis_exceptions_module
 
 # Минимальная реализация SDK YooKassa, чтобы импорт сервисов не падал.
@@ -185,24 +216,36 @@ def fixed_datetime() -> datetime:
     return datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
 
 
+@pytest.fixture(scope='session')
+def registered_paths() -> dict[str, set[str]]:
+    """Карта `путь -> {HTTP-методы}` кабинетного роутера, как их реально
+    обслуживает приложение.
+
+    Раньше тесты обходили ``router.routes`` и читали ``route.path`` напрямую.
+    Начиная со Starlette 1.x вложенные роутеры (``include_router``) хранятся
+    лениво как ``_IncludedRouter`` без атрибута ``path``, поэтому такой обход
+    ломается. Резолвим фактическую таблицу маршрутов через OpenAPI-схему
+    приложения — это устойчиво между версиями Starlette/FastAPI.
+    """
+    from fastapi import FastAPI
+
+    from app.cabinet.routes import router
+
+    app = FastAPI()
+    app.include_router(router)
+    schema = app.openapi()
+    return {path: {method.upper() for method in operations} for path, operations in schema.get('paths', {}).items()}
+
+
 # Auto-load fixture modules so tests don't need explicit imports.
 # Promocode/promo-group tests in tests/services/test_promocode_service.py,
 # tests/crud/test_promocode_crud.py, and tests/integration/test_promocode_promo_group_flow.py
 # all rely on these without importing them directly.
-pytest_plugins = ['tests.fixtures.promocode_fixtures']
-
-
-def pytest_configure(config: pytest.Config) -> None:
-    """Регистрируем маркеры для асинхронных тестов."""
-
-    config.addinivalue_line(
-        'markers',
-        'asyncio: запуск асинхронного теста через встроенный цикл событий',
-    )
-    config.addinivalue_line(
-        'markers',
-        'anyio: запуск асинхронного теста через встроенный цикл событий',
-    )
+pytest_plugins = [
+    'tests.fixtures.promocode_fixtures',
+    # Даёт фикстуру postgres_database тестам на настоящем PostgreSQL.
+    'tests.fixtures.postgres_db',
+]
 
 
 def _unwrap_test(obj):
@@ -247,24 +290,3 @@ def pytest_pyfunc_call(pyfuncitem: pytest.Function) -> bool | None:
         loop.close()
 
     return True
-
-
-@pytest.fixture(scope='session')
-def registered_paths() -> dict[str, set[str]]:
-    """Карта `путь -> {HTTP-методы}` кабинетного роутера, как их реально
-    обслуживает приложение.
-
-    Раньше тесты обходили ``router.routes`` и читали ``route.path`` напрямую.
-    Начиная со Starlette 1.x вложенные роутеры (``include_router``) хранятся
-    лениво как ``_IncludedRouter`` без атрибута ``path``, поэтому такой обход
-    ломается. Резолвим фактическую таблицу маршрутов через OpenAPI-схему
-    приложения — это устойчиво между версиями Starlette/FastAPI.
-    """
-    from fastapi import FastAPI
-
-    from app.cabinet.routes import router
-
-    app = FastAPI()
-    app.include_router(router)
-    schema = app.openapi()
-    return {path: {method.upper() for method in operations} for path, operations in schema.get('paths', {}).items()}

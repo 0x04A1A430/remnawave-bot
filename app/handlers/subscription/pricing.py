@@ -210,23 +210,23 @@ async def _prepare_subscription_summary(
     details_text = '\n'.join(details_lines)
 
     summary_lines = [
-        '<b>Сводка заказа</b>',
+        '📋 <b>Сводка заказа</b>',
         '',
-        f'<b>Период:</b> {period_display}',
-        f'<b>Трафик:</b> {traffic_display}',
-        f'<b>Страны:</b> {", ".join(selected_countries_names)}',
+        f'📅 <b>Период:</b> {period_display}',
+        f'📊 <b>Трафик:</b> {traffic_display}',
+        f'🌍 <b>Страны:</b> {", ".join(selected_countries_names)}',
     ]
 
     if devices_selection_enabled:
-        summary_lines.append(f'<b>Устройства:</b> {devices_selected}')
+        summary_lines.append(f'📱 <b>Устройства:</b> {devices_selected}')
 
     summary_lines.extend(
         [
             '',
-            '<b>Детализация стоимости:</b>',
+            '💰 <b>Детализация стоимости:</b>',
             details_text,
             '',
-            f'<b>Общая стоимость:</b> {texts.format_price(total_price)}',
+            f'💎 <b>Общая стоимость:</b> {texts.format_price(total_price)}',
             '',
             'Подтверждаете покупку?',
         ]
@@ -277,11 +277,7 @@ async def get_subscription_cost(subscription, db: AsyncSession) -> int:
         result = await pricing_engine.calculate_renewal_price(db, subscription, 30, user=owner)
         total_cost = result.final_total
 
-        logger.info(
-            'Monthly subscription cost',
-            subscription_id=subscription.id,
-            total_cost_kopeks=total_cost,
-        )
+        logger.info('Monthly subscription cost', subscription_id=subscription.id, total_cost_kopeks=total_cost)
         return total_cost
 
     except Exception as e:
@@ -302,13 +298,13 @@ async def get_subscription_info_text(subscription, texts, db_user, db: AsyncSess
     subscription_url = getattr(subscription, 'subscription_url', None) or 'Генерируется...'
 
     if subscription.is_trial:
-        status_text = 'Тестовая'
+        status_text = '🎁 Тестовая'
         type_text = 'Триал'
     else:
         if subscription.is_active:
-            status_text = 'Оплачена'
+            status_text = '✅ Оплачена'
         else:
-            status_text = 'Истекла'
+            status_text = '⌛ Истекла'
         type_text = 'Платная подписка'
 
     traffic_limit = subscription.traffic_limit_gb or 0
@@ -328,10 +324,10 @@ async def get_subscription_info_text(subscription, texts, db_user, db: AsyncSess
 
     if not devices_selection_enabled:
         info_template = info_template.replace(
-            '\n<b>Устройства:</b> {devices_used} / {devices_limit}',
+            '\n📱 <b>Устройства:</b> {devices_used} / {devices_limit}',
             '',
         ).replace(
-            '\n<b>Devices:</b> {devices_used} / {devices_limit}',
+            '\n📱 <b>Devices:</b> {devices_used} / {devices_limit}',
             '',
         )
 
@@ -345,11 +341,11 @@ async def get_subscription_info_text(subscription, texts, db_user, db: AsyncSess
         countries_count=len(subscription.connected_squads or []),
         devices_used=devices_used,
         devices_limit=subscription.device_limit,
-        autopay_status='Включен' if subscription.autopay_enabled else 'Выключен',
+        autopay_status='✅ Включен' if subscription.autopay_enabled else '⌛ Выключен',
     )
 
     if subscription_cost > 0:
-        info_text += f'\n<b>Стоимость подписки в месяц:</b> {texts.format_price(subscription_cost)}'
+        info_text += f'\n💰 <b>Стоимость подписки в месяц:</b> {texts.format_price(subscription_cost)}'
 
     # Отображаем докупленный трафик
     if (subscription.traffic_limit_gb or 0) > 0:  # Только для лимитированных тарифов
@@ -368,7 +364,7 @@ async def get_subscription_info_text(subscription, texts, db_user, db: AsyncSess
         purchases = purchases_result.scalars().all()
 
         if purchases:
-            info_text += '\n\n<b>Докупленный трафик:</b>'
+            info_text += '\n\n📦 <b>Докупленный трафик:</b>'
 
             for purchase in purchases:
                 time_remaining = purchase.expires_at - now
@@ -379,10 +375,7 @@ async def get_subscription_info_text(subscription, texts, db_user, db: AsyncSess
                 elapsed_seconds = (now - purchase.created_at).total_seconds()
                 progress_percent = min(
                     100.0,
-                    max(
-                        0.0,
-                        ((elapsed_seconds / total_duration_seconds * 100) if total_duration_seconds > 0 else 0),
-                    ),
+                    max(0.0, (elapsed_seconds / total_duration_seconds * 100) if total_duration_seconds > 0 else 0),
                 )
 
                 bar_length = 10
@@ -406,6 +399,6 @@ async def get_subscription_info_text(subscription, texts, db_user, db: AsyncSess
                 info_text += f'\n  {bar} {progress_percent:.0f}% | до {expire_date}'
 
     if subscription_url and subscription_url != 'Генерируется...' and not settings.should_hide_subscription_link():
-        info_text += f'\n\n<b>Ваша ссылка для импорта в VPN приложениe:</b>\n<code>{subscription_url}</code>'
+        info_text += f'\n\n🔗 <b>Ваша ссылка для импорта в VPN приложениe:</b>\n<code>{subscription_url}</code>'
 
     return info_text

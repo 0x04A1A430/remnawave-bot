@@ -39,11 +39,7 @@ async def _sync_user_primary_promo_group(
             user.updated_at = datetime.now(UTC)
 
     except Exception as error:
-        logger.error(
-            'Ошибка синхронизации primary промогруппы пользователя',
-            user_id=user_id,
-            error=error,
-        )
+        logger.error('Ошибка синхронизации primary промогруппы пользователя', user_id=user_id, error=error)
         raise
 
 
@@ -81,11 +77,7 @@ async def add_user_to_promo_group(
         # Проверяем существование связи
         existing = await has_user_promo_group(db, user_id, promo_group_id)
         if existing:
-            logger.info(
-                'Пользователь уже имеет промогруппу',
-                user_id=user_id,
-                promo_group_id=promo_group_id,
-            )
+            logger.info('Пользователь уже имеет промогруппу', user_id=user_id, promo_group_id=promo_group_id)
             return None
 
         # Создаем новую связь
@@ -141,19 +133,14 @@ async def remove_user_from_promo_group(
     try:
         result = await db.execute(
             select(UserPromoGroup).where(
-                and_(
-                    UserPromoGroup.user_id == user_id,
-                    UserPromoGroup.promo_group_id == promo_group_id,
-                )
+                and_(UserPromoGroup.user_id == user_id, UserPromoGroup.promo_group_id == promo_group_id)
             )
         )
         user_promo_group = result.scalar_one_or_none()
 
         if not user_promo_group:
             logger.warning(
-                'Связь пользователя с промогруппой не найдена',
-                user_id=user_id,
-                promo_group_id=promo_group_id,
+                'Связь пользователя с промогруппой не найдена', user_id=user_id, promo_group_id=promo_group_id
             )
             return False
 
@@ -165,11 +152,7 @@ async def remove_user_from_promo_group(
         if commit:
             await db.commit()
 
-        logger.info(
-            'У пользователя удалена промогруппа',
-            user_id=user_id,
-            promo_group_id=promo_group_id,
-        )
+        logger.info('У пользователя удалена промогруппа', user_id=user_id, promo_group_id=promo_group_id)
         return True
 
     except Exception as error:
@@ -235,10 +218,7 @@ async def has_user_promo_group(db: AsyncSession, user_id: int, promo_group_id: i
     """
     result = await db.execute(
         select(UserPromoGroup).where(
-            and_(
-                UserPromoGroup.user_id == user_id,
-                UserPromoGroup.promo_group_id == promo_group_id,
-            )
+            and_(UserPromoGroup.user_id == user_id, UserPromoGroup.promo_group_id == promo_group_id)
         )
     )
     return result.scalar_one_or_none() is not None
@@ -267,10 +247,7 @@ async def count_user_promo_groups(db: AsyncSession, user_id: int) -> int:
 
 
 async def replace_user_promo_groups(
-    db: AsyncSession,
-    user_id: int,
-    promo_group_ids: list[int],
-    assigned_by: str = 'admin',
+    db: AsyncSession, user_id: int, promo_group_ids: list[int], assigned_by: str = 'admin'
 ) -> bool:
     """
     Заменяет все промогруппы пользователя на новый список.
@@ -300,11 +277,7 @@ async def replace_user_promo_groups(
         await _sync_user_primary_promo_group(db, user_id)
 
         await db.commit()
-        logger.info(
-            'Промогруппы пользователя заменены',
-            user_id=user_id,
-            promo_group_ids=promo_group_ids,
-        )
+        logger.info('Промогруппы пользователя заменены', user_id=user_id, promo_group_ids=promo_group_ids)
         return True
 
     except Exception as error:

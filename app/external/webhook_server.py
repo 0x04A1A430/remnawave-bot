@@ -55,19 +55,14 @@ class WebhookServer:
             self.app.router.add_options(settings.FREEKASSA_WEBHOOK_PATH, self._options_handler)
 
         logger.info('Webhook сервер настроен:')
-        logger.info(
-            'Tribute webhook зарегистрирован (POST)',
-            TRIBUTE_WEBHOOK_PATH=settings.TRIBUTE_WEBHOOK_PATH,
-        )
+        logger.info('Tribute webhook зарегистрирован (POST)', TRIBUTE_WEBHOOK_PATH=settings.TRIBUTE_WEBHOOK_PATH)
         if settings.is_cryptobot_enabled():
             logger.info(
-                'CryptoBot webhook зарегистрирован (POST)',
-                CRYPTOBOT_WEBHOOK_PATH=settings.CRYPTOBOT_WEBHOOK_PATH,
+                'CryptoBot webhook зарегистрирован (POST)', CRYPTOBOT_WEBHOOK_PATH=settings.CRYPTOBOT_WEBHOOK_PATH
             )
         if settings.is_freekassa_enabled():
             logger.info(
-                'Freekassa webhook зарегистрирован (POST)',
-                FREEKASSA_WEBHOOK_PATH=settings.FREEKASSA_WEBHOOK_PATH,
+                'Freekassa webhook зарегистрирован (POST)', FREEKASSA_WEBHOOK_PATH=settings.FREEKASSA_WEBHOOK_PATH
             )
         logger.info('  - Health check: GET /health')
 
@@ -81,11 +76,7 @@ class WebhookServer:
             self.runner = web.AppRunner(self.app)
             await self.runner.setup()
 
-            self.site = web.TCPSite(
-                self.runner,
-                host=settings.TRIBUTE_WEBHOOK_HOST,
-                port=settings.TRIBUTE_WEBHOOK_PORT,
-            )
+            self.site = web.TCPSite(self.runner, host=settings.TRIBUTE_WEBHOOK_HOST, port=settings.TRIBUTE_WEBHOOK_PORT)
 
             await self.site.start()
 
@@ -181,10 +172,7 @@ class WebhookServer:
 
         except Exception as e:
             logger.error('Критическая ошибка обработки Tribute webhook', error=e, exc_info=True)
-            return web.json_response(
-                {'status': 'error', 'reason': 'internal_error', 'message': str(e)},
-                status=500,
-            )
+            return web.json_response({'status': 'error', 'reason': 'internal_error', 'message': str(e)}, status=500)
 
     async def _cryptobot_webhook_handler(self, request: web.Request) -> web.Response:
         try:
@@ -237,10 +225,7 @@ class WebhookServer:
 
         except Exception as e:
             logger.error('Критическая ошибка обработки CryptoBot webhook', error=e, exc_info=True)
-            return web.json_response(
-                {'status': 'error', 'reason': 'internal_error', 'message': str(e)},
-                status=500,
-            )
+            return web.json_response({'status': 'error', 'reason': 'internal_error', 'message': str(e)}, status=500)
 
     async def _health_check(self, request: web.Request) -> web.Response:
         return web.json_response(
@@ -252,8 +237,8 @@ class WebhookServer:
                 'freekassa_enabled': settings.is_freekassa_enabled(),
                 'port': settings.TRIBUTE_WEBHOOK_PORT,
                 'tribute_path': settings.TRIBUTE_WEBHOOK_PATH,
-                'cryptobot_path': (settings.CRYPTOBOT_WEBHOOK_PATH if settings.is_cryptobot_enabled() else None),
-                'freekassa_path': (settings.FREEKASSA_WEBHOOK_PATH if settings.is_freekassa_enabled() else None),
+                'cryptobot_path': settings.CRYPTOBOT_WEBHOOK_PATH if settings.is_cryptobot_enabled() else None,
+                'freekassa_path': settings.FREEKASSA_WEBHOOK_PATH if settings.is_freekassa_enabled() else None,
             }
         )
 

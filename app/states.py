@@ -31,6 +31,17 @@ class SubscriptionStates(StatesGroup):
     confirming_custom_purchase = State()
 
 
+class GiftPurchaseStates(StatesGroup):
+    selecting_tariff = State()
+    selecting_period = State()
+    confirming_purchase = State()
+    cart_saved_for_topup = State()
+
+
+class GiftActivationStates(StatesGroup):
+    waiting_for_code = State()
+
+
 class BalanceStates(StatesGroup):
     waiting_for_amount = State()
     waiting_for_pal24_method = State()
@@ -47,11 +58,8 @@ class PromoCodeStates(StatesGroup):
 class AdminStates(StatesGroup):
     waiting_for_user_search = State()
     waiting_for_bulk_ban_list = State()
-    waiting_for_bulk_unban_list = State()
-    waiting_for_bulk_unban_confirm_all = State()
     sending_user_message = State()
     editing_user_balance = State()
-    editing_user_personal_price = State()
     extending_subscription = State()
     adding_traffic = State()
     granting_subscription = State()
@@ -64,6 +72,7 @@ class AdminStates(StatesGroup):
     setting_promocode_uses = State()
     setting_promocode_expiry = State()
     setting_discount_hours = State()  # Для DISCOUNT: ввод срока действия скидки в часах
+    setting_promocode_combo_days = State()  # Для BALANCE_AND_DAYS: ввод дней подписки после суммы
     selecting_promo_group = State()
 
     creating_coupon_batch_days = State()
@@ -145,6 +154,11 @@ class AdminStates(StatesGroup):
     # Тестовое начисление реферального дохода
     test_referral_earning_input = State()
 
+    # Редактор уровней реферальных наград: одно состояние на всё числовое поле,
+    # какое именно правится — хранится в data FSM (как в редакторе мониторинга).
+    referral_level_value_input = State()
+    referral_depth_input = State()
+
     # Диагностика рефералов
     referral_diagnostics_period = State()
     waiting_for_log_file = State()
@@ -220,6 +234,13 @@ class AdminStates(StatesGroup):
     editing_tariff_custom_traffic_min = State()
     editing_tariff_custom_traffic_max = State()
     editing_tariff_daily_price = State()
+    editing_tariff_panel_tag = State()
+    editing_tariff_lava_product = State()
+    editing_tariff_display_order = State()
+    editing_tariff_custom_days_price = State()
+    editing_tariff_custom_days_min = State()
+    editing_tariff_custom_days_max = State()
+    editing_tariff_server_limit = State()
 
 
 class SupportStates(StatesGroup):

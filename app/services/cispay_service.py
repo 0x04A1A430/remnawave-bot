@@ -14,7 +14,7 @@ logger = structlog.get_logger(__name__)
 
 
 class CisPayAPIError(Exception):
-    """Ошибка API cispay."""
+    """Ошибка API cisPay."""
 
     def __init__(self, status_code: int, message: str) -> None:
         self.status_code = status_code
@@ -86,7 +86,7 @@ class CisPayService:
                 if response.status >= 400:
                     detail = data.get('detail') if isinstance(data, dict) else data
                     logger.error(
-                        'cispay API error',
+                        'cisPay API error',
                         url=url,
                         status=response.status,
                         detail=detail,
@@ -94,7 +94,7 @@ class CisPayService:
                     raise CisPayAPIError(response.status, str(detail))
                 return data if isinstance(data, dict) else {'_raw': data}
         except aiohttp.ClientError as error:
-            logger.exception('cispay API connection error', url=url, error=error)
+            logger.exception('cisPay API connection error', url=url, error=error)
             raise
 
     async def create_payment(
@@ -130,7 +130,7 @@ class CisPayService:
             payload['redirect_fail_url'] = redirect_fail_url[:1024]
 
         logger.info(
-            'cispay API create_payment',
+            'cisPay API create_payment',
             order_id=order_id,
             amount_kopeks=amount_kopeks,
             payment_method=payment_method,
@@ -142,18 +142,18 @@ class CisPayService:
         # платёж всё равно создан на стороне cisPay: запись сохраняем, иначе
         # пришедший позже вебхук не найдёт платёж и деньги придётся сверять руками.
         if not data.get('id'):
-            logger.error('cispay create_payment: в ответе нет id транзакции', response_data=data)
+            logger.error('cisPay create_payment: в ответе нет id транзакции', response_data=data)
             raise CisPayAPIError(200, f'Incomplete create payment response: {data}')
 
         if not data.get('payment_url'):
             logger.warning(
-                'cispay create_payment: ответ без payment_url',
+                'cisPay create_payment: ответ без payment_url',
                 order_id=order_id,
                 payment_id=data.get('id'),
             )
 
         logger.info(
-            'cispay API payment created',
+            'cisPay API payment created',
             order_id=order_id,
             payment_id=data.get('id'),
             status=data.get('status'),
@@ -177,9 +177,9 @@ class CisPayService:
         elif order_id:
             params['order_id'] = order_id
         else:
-            raise ValueError('cispay check_payment: нужен payment_id или order_id')
+            raise ValueError('cisPay check_payment: нужен payment_id или order_id')
 
-        logger.info('cispay check_payment', payment_id=payment_id, order_id=order_id)
+        logger.info('cisPay check_payment', payment_id=payment_id, order_id=order_id)
         return await self._request('GET', '/payments/status', params=params)
 
     async def get_store_capabilities(self) -> dict[str, Any]:
@@ -205,12 +205,12 @@ class CisPayService:
         try:
             received = (signature or '').strip()
             if not received:
-                logger.warning('cispay webhook: отсутствует X-Signature')
+                logger.warning('cisPay webhook: отсутствует X-Signature')
                 return False
 
             if not self.api_key:
                 # Без ключа HMAC считался бы от b'' — подпись подделал бы кто угодно
-                logger.error('cispay webhook: не задан API-ключ, проверка подписи невозможна')
+                logger.error('cisPay webhook: не задан API-ключ, проверка подписи невозможна')
                 return False
 
             expected = hmac.new(
@@ -221,14 +221,14 @@ class CisPayService:
 
             if not hmac.compare_digest(expected.lower(), received.lower()):
                 logger.warning(
-                    'cispay webhook: invalid signature',
+                    'cisPay webhook: invalid signature',
                     expected_prefix=expected[:8],
                     received_prefix=received[:8],
                 )
                 return False
             return True
         except Exception as error:
-            logger.error('cispay webhook verify error', error=error)
+            logger.error('cisPay webhook verify error', error=error)
             return False
 
 

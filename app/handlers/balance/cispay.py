@@ -63,7 +63,7 @@ async def _create_cispay_payment_and_respond(
     edit_message: bool = False,
     payment_method_type: str | None = None,
 ):
-    """Создаёт платёж cispay и отправляет ссылку на страницу оплаты пользователю."""
+    """Создаёт платёж cisPay и отправляет ссылку на страницу оплаты пользователю."""
     texts = get_texts(db_user.language)
     amount_rub = amount_kopeks / 100
 
@@ -99,9 +99,9 @@ async def _create_cispay_payment_and_respond(
         return
 
     payment_url = result.get('payment_url')
-    name = _display_name_for_method(payment_method_type) if payment_method_type else settings.get_cispay_display_name()
+    display_name = settings.get_cispay_display_name()
 
-    pay_button_text = texts.t('PAY_BUTTON', 'Оплатить {amount}₽').format(
+    pay_button_text = texts.t('PAY_BUTTON', '\U0001f4b3 Оплатить {amount}₽').format(
         amount=f'{amount_rub:.0f}',
     )
 
@@ -111,7 +111,7 @@ async def _create_cispay_payment_and_respond(
     keyboard_buttons.append(
         [
             InlineKeyboardButton(
-                text=texts.t('BACK_BUTTON', 'Назад'),
+                text=texts.t('BACK_BUTTON', '◀️ Назад'),
                 callback_data='menu_balance',
                 style='danger',
             )
@@ -122,19 +122,19 @@ async def _create_cispay_payment_and_respond(
     if payment_url:
         response_text = texts.t(
             'CISPAY_PAYMENT_CREATED',
-            '<b>Оплата через {name}</b>\n\n'
+            '\U0001f4b3 <b>Оплата через {name}</b>\n\n'
             'Сумма: <b>{amount}₽</b>\n\n'
             'Нажмите кнопку ниже, чтобы перейти на страницу оплаты.\n'
             'Счёт действителен 30 минут.\n'
             'Баланс будет пополнен автоматически после подтверждения платежа.',
-        ).format(name=name, amount=f'{amount_rub:.2f}')
+        ).format(name=display_name, amount=f'{amount_rub:.2f}')
     else:
         response_text = texts.t(
             'CISPAY_PAYMENT_PROCESSING',
-            '<b>Платёж создан через {name}</b>\n\n'
+            '\U0001f4b3 <b>Платёж создан через {name}</b>\n\n'
             'Сумма: <b>{amount}₽</b>\n\n'
             'Платёж в обработке. Ссылка на оплату будет отправлена отдельным сообщением.',
-        ).format(name=name, amount=f'{amount_rub:.2f}')
+        ).format(name=display_name, amount=f'{amount_rub:.2f}')
 
     if edit_message:
         await message_or_callback.edit_text(response_text, reply_markup=keyboard, parse_mode='HTML')
@@ -159,7 +159,7 @@ async def process_cispay_payment_amount(
     if restriction_kb:
         reason = html.escape(getattr(db_user, 'restriction_reason', None) or 'Действие ограничено администратором')
         await message.answer(
-            f'<b>Пополнение ограничено</b>\n\n{reason}',
+            f'\U0001f6ab <b>Пополнение ограничено</b>\n\n{reason}',
             parse_mode='HTML',
             reply_markup=restriction_kb,
         )
@@ -220,7 +220,7 @@ async def _start_cispay_topup_impl(
     if restriction_kb:
         reason = html.escape(getattr(db_user, 'restriction_reason', None) or 'Действие ограничено администратором')
         await callback.message.edit_text(
-            f'<b>Пополнение ограничено</b>\n\n{reason}',
+            f'\U0001f6ab <b>Пополнение ограничено</b>\n\n{reason}',
             parse_mode='HTML',
             reply_markup=restriction_kb,
         )
@@ -239,7 +239,7 @@ async def _start_cispay_topup_impl(
     await callback.message.edit_text(
         texts.t(
             'CISPAY_ENTER_AMOUNT',
-            '<b>Пополнение через {name}</b>\n\n'
+            '\U0001f4b3 <b>Пополнение через {name}</b>\n\n'
             'Введите сумму пополнения в рублях.\n\n'
             'Минимум: {min_amount}₽\n'
             'Максимум: {max_amount}₽',

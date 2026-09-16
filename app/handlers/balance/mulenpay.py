@@ -36,7 +36,8 @@ async def start_mulenpay_payment(
         keyboard.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance', style='danger')])
 
         await callback.message.edit_text(
-            f'<b>Пополнение ограничено</b>\n\n{reason}\n\nЕсли вы считаете это ошибкой, вы можете обжаловать решение.',
+            f'🚫 <b>Пополнение ограничено</b>\n\n{reason}\n\n'
+            'Если вы считаете это ошибкой, вы можете обжаловать решение.',
             reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
         )
         await callback.answer()
@@ -47,7 +48,7 @@ async def start_mulenpay_payment(
 
     if not settings.is_mulenpay_enabled():
         await callback.answer(
-            f'Оплата через {mulenpay_name} временно недоступна',
+            f'❌ Оплата через {mulenpay_name} временно недоступна',
             show_alert=True,
         )
         return
@@ -55,7 +56,7 @@ async def start_mulenpay_payment(
     message_template = texts.t(
         'MULENPAY_TOPUP_PROMPT',
         (
-            '<b>Оплата через {mulenpay_name_html}</b>\n\n'
+            '💳 <b>Оплата через {mulenpay_name_html}</b>\n\n'
             'Введите сумму для пополнения от 100 до 100 000 ₽.\n'
             'Оплата происходит через защищенную платформу {mulenpay_name}.'
         ),
@@ -102,7 +103,8 @@ async def process_mulenpay_payment_amount(
         keyboard.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance', style='danger')])
 
         await message.answer(
-            f'<b>Пополнение ограничено</b>\n\n{reason}\n\nЕсли вы считаете это ошибкой, вы можете обжаловать решение.',
+            f'🚫 <b>Пополнение ограничено</b>\n\n{reason}\n\n'
+            'Если вы считаете это ошибкой, вы можете обжаловать решение.',
             reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
             parse_mode='HTML',
         )
@@ -113,7 +115,7 @@ async def process_mulenpay_payment_amount(
     mulenpay_name_html = settings.get_mulenpay_display_name_html()
 
     if not settings.is_mulenpay_enabled():
-        await message.answer(f'Оплата через {mulenpay_name} временно недоступна')
+        await message.answer(f'❌ Оплата через {mulenpay_name} временно недоступна')
         return
 
     if amount_kopeks < settings.MULENPAY_MIN_AMOUNT_KOPEKS:
@@ -145,10 +147,7 @@ async def process_mulenpay_payment_amount(
         try:
             await message.bot.delete_message(prompt_chat_id, prompt_message_id)
         except Exception as delete_error:  # pragma: no cover - diagnostic
-            logger.warning(
-                'Не удалось удалить сообщение с запросом суммы MulenPay',
-                delete_error=delete_error,
-            )
+            logger.warning('Не удалось удалить сообщение с запросом суммы MulenPay', delete_error=delete_error)
 
     try:
         payment_service = PaymentService(message.bot)
@@ -164,7 +163,7 @@ async def process_mulenpay_payment_amount(
             await message.answer(
                 texts.t(
                     'MULENPAY_PAYMENT_ERROR',
-                    'Ошибка создания платежа {mulenpay_name}. Попробуйте позже или обратитесь в поддержку.',
+                    '❌ Ошибка создания платежа {mulenpay_name}. Попробуйте позже или обратитесь в поддержку.',
                 ).format(mulenpay_name=mulenpay_name)
             )
             await state.clear()
@@ -180,7 +179,7 @@ async def process_mulenpay_payment_amount(
                     types.InlineKeyboardButton(
                         text=texts.t(
                             'MULENPAY_PAY_BUTTON',
-                            'Оплатить через {mulenpay_name}',
+                            '💳 Оплатить через {mulenpay_name}',
                         ).format(mulenpay_name=mulenpay_name),
                         url=payment_url,
                         style='success',
@@ -188,7 +187,7 @@ async def process_mulenpay_payment_amount(
                 ],
                 [
                     types.InlineKeyboardButton(
-                        text=texts.t('CHECK_STATUS_BUTTON', 'Проверить статус'),
+                        text=texts.t('CHECK_STATUS_BUTTON', '📊 Проверить статус'),
                         callback_data=f'check_mulenpay_{local_payment_id}',
                         style='primary',
                     )
@@ -202,15 +201,15 @@ async def process_mulenpay_payment_amount(
         message_template = texts.t(
             'MULENPAY_PAYMENT_INSTRUCTIONS',
             (
-                '<b>Оплата через {mulenpay_name_html}</b>\n\n'
-                'Сумма: {amount}\n'
-                'ID платежа: {payment_id}\n\n'
-                '<b>Инструкция:</b>\n'
+                '💳 <b>Оплата через {mulenpay_name_html}</b>\n\n'
+                '💰 Сумма: {amount}\n'
+                '🆔 ID платежа: {payment_id}\n\n'
+                '📱 <b>Инструкция:</b>\n'
                 "1. Нажмите кнопку 'Оплатить через {mulenpay_name}'\n"
                 '2. Следуйте подсказкам платежной системы\n'
                 '3. Подтвердите перевод\n'
                 '4. Средства зачислятся автоматически\n\n'
-                'Если возникнут проблемы, обратитесь в {support}'
+                '❓ Если возникнут проблемы, обратитесь в {support}'
             ),
         )
 
@@ -266,7 +265,7 @@ async def process_mulenpay_payment_amount(
         await message.answer(
             texts.t(
                 'MULENPAY_PAYMENT_ERROR',
-                'Ошибка создания платежа {mulenpay_name}. Попробуйте позже или обратитесь в поддержку.',
+                '❌ Ошибка создания платежа {mulenpay_name}. Попробуйте позже или обратитесь в поддержку.',
             ).format(mulenpay_name=mulenpay_name)
         )
         await state.clear()
@@ -280,55 +279,51 @@ async def check_mulenpay_payment_status(callback: types.CallbackQuery, db: Async
         status_info = await payment_service.get_mulenpay_payment_status(db, local_payment_id)
 
         if not status_info:
-            await callback.answer('Платеж не найден', show_alert=True)
+            await callback.answer('❌ Платеж не найден', show_alert=True)
             return
 
         payment = status_info['payment']
 
         status_labels = {
-            'created': ('', 'Ожидает оплаты'),
-            'processing': ('', 'Обрабатывается'),
-            'success': ('', 'Оплачен'),
-            'canceled': ('', 'Отменен'),
-            'error': ('', 'Ошибка'),
-            'hold': ('', 'Холд'),
-            'unknown': ('', 'Неизвестно'),
+            'created': ('⏳', 'Ожидает оплаты'),
+            'processing': ('⌛', 'Обрабатывается'),
+            'success': ('✅', 'Оплачен'),
+            'canceled': ('❌', 'Отменен'),
+            'error': ('⚠️', 'Ошибка'),
+            'hold': ('🔒', 'Холд'),
+            'unknown': ('❓', 'Неизвестно'),
         }
 
-        emoji, status_text = status_labels.get(payment.status, ('', 'Неизвестно'))
+        emoji, status_text = status_labels.get(payment.status, ('❓', 'Неизвестно'))
 
         mulenpay_name = settings.get_mulenpay_display_name()
         message_lines = [
-            f'Статус платежа {mulenpay_name}:\n\n',
-            f'ID: {payment.mulen_payment_id or payment.id}\n',
-            f'Сумма: {settings.format_price(payment.amount_kopeks)}\n',
-            f'Статус: {emoji} {status_text}\n',
-            f'Создан: {payment.created_at.strftime("%d.%m.%Y %H:%M")}\n',
+            f'💳 Статус платежа {mulenpay_name}:\n\n',
+            f'🆔 ID: {payment.mulen_payment_id or payment.id}\n',
+            f'💰 Сумма: {settings.format_price(payment.amount_kopeks)}\n',
+            f'📊 Статус: {emoji} {status_text}\n',
+            f'📅 Создан: {payment.created_at.strftime("%d.%m.%Y %H:%M")}\n',
         ]
 
         if payment.is_paid:
-            message_lines.append('\nПлатеж успешно завершен! Средства уже на балансе.')
+            message_lines.append('\n✅ Платеж успешно завершен! Средства уже на балансе.')
         elif payment.status in {'created', 'processing'}:
-            message_lines.append('\n Платеж еще не завершен. Завершите оплату по ссылке и проверьте статус позже.')
+            message_lines.append('\n⏳ Платеж еще не завершен. Завершите оплату по ссылке и проверьте статус позже.')
             if payment.payment_url:
-                message_lines.append(f'\nСсылка на оплату: {payment.payment_url}')
+                message_lines.append(f'\n🔗 Ссылка на оплату: {payment.payment_url}')
         elif payment.status in {'canceled', 'error'}:
             message_lines.append(
-                f'\nПлатеж не был завершен. Попробуйте создать новый платеж или обратитесь в {settings.get_support_contact_display()}'
+                f'\n❌ Платеж не был завершен. Попробуйте создать новый платеж или обратитесь в {settings.get_support_contact_display()}'
             )
 
         message_text = ''.join(message_lines)
 
         if len(message_text) > 190:
             await callback.message.answer(message_text)
-            await callback.answer('Статус платежа отправлен в чат', show_alert=True)
+            await callback.answer('ℹ️ Статус платежа отправлен в чат', show_alert=True)
         else:
             await callback.answer(message_text, show_alert=True)
 
     except Exception as e:
-        logger.error(
-            'Ошибка проверки статуса',
-            get_mulenpay_display_name=settings.get_mulenpay_display_name(),
-            error=e,
-        )
-        await callback.answer('Ошибка проверки статуса', show_alert=True)
+        logger.error('Ошибка проверки статуса', get_mulenpay_display_name=settings.get_mulenpay_display_name(), error=e)
+        await callback.answer('❌ Ошибка проверки статуса', show_alert=True)

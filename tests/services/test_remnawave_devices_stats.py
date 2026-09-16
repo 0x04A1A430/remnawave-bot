@@ -30,22 +30,11 @@ async def test_devices_statistics_aggregates_nested_byapp_2_8_0():
                 {
                     'platform': 'iOS',
                     'count': 3,
-                    'byApp': [
-                        {'app': 'Happ', 'count': 2},
-                        {'app': 'Streisand', 'count': 1},
-                    ],
+                    'byApp': [{'app': 'Happ', 'count': 2}, {'app': 'Streisand', 'count': 1}],
                 },
-                {
-                    'platform': 'Android',
-                    'count': 2,
-                    'byApp': [{'app': 'Happ', 'count': 2}],
-                },
+                {'platform': 'Android', 'count': 2, 'byApp': [{'app': 'Happ', 'count': 2}]},
             ],
-            'stats': {
-                'totalUniqueDevices': 5,
-                'totalHwidDevices': 5,
-                'averageHwidDevicesPerUser': 1.0,
-            },
+            'stats': {'totalUniqueDevices': 5, 'totalHwidDevices': 5, 'averageHwidDevicesPerUser': 1.0},
         }
     )
     api.get_hwid_top_users = AsyncMock(return_value={'users': []})
@@ -54,10 +43,7 @@ async def test_devices_statistics_aggregates_nested_byapp_2_8_0():
 
     by_app = {e['app']: e['count'] for e in result['by_app']}
     assert by_app == {'Happ': 4, 'Streisand': 1}  # summed across platforms
-    assert {e['platform']: e['count'] for e in result['by_platform']} == {
-        'iOS': 3,
-        'Android': 2,
-    }
+    assert {e['platform']: e['count'] for e in result['by_platform']} == {'iOS': 3, 'Android': 2}
     assert result['total_unique_devices'] == 5
 
 
@@ -100,16 +86,8 @@ async def test_devices_statistics_platform_without_byapp_is_skipped_not_fatal():
         return_value={
             'byPlatform': [
                 {'platform': 'iOS', 'count': 1},  # no byApp key
-                {
-                    'platform': 'Web',
-                    'count': 1,
-                    'byApp': {'bad': 'shape'},
-                },  # malformed dict, not list
-                {
-                    'platform': 'Android',
-                    'count': 1,
-                    'byApp': [{'app': 'Happ', 'count': 1}],
-                },
+                {'platform': 'Web', 'count': 1, 'byApp': {'bad': 'shape'}},  # malformed dict, not list
+                {'platform': 'Android', 'count': 1, 'byApp': [{'app': 'Happ', 'count': 1}]},
             ],
             'stats': {'totalUniqueDevices': 3},
         }

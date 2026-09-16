@@ -57,7 +57,7 @@ class HeleketService:
         api_key = self.api_key or ''
         encoded = base64.b64encode(body.encode('utf-8')).decode('utf-8')
         raw = f'{encoded}{api_key}'
-        return hashlib.md5(raw.encode('utf-8'), usedforsecurity=False).hexdigest()  # provider-defined algorithm
+        return hashlib.md5(raw.encode('utf-8')).hexdigest()
 
     async def _request(
         self,
@@ -93,11 +93,7 @@ class HeleketService:
             ):
                 text = await response.text()
                 if response.content_type != 'application/json':
-                    logger.error(
-                        'Ответ Heleket не JSON',
-                        content_type=response.content_type,
-                        text=text,
-                    )
+                    logger.error('Ответ Heleket не JSON', content_type=response.content_type, text=text)
                     return None
 
                 try:
@@ -108,10 +104,7 @@ class HeleketService:
 
                 if response.status >= 400:
                     logger.error(
-                        'Heleket API вернул статус',
-                        endpoint=endpoint,
-                        response_status=response.status,
-                        data=data,
+                        'Heleket API вернул статус', endpoint=endpoint, response_status=response.status, data=data
                     )
                     return None
 
@@ -182,9 +175,5 @@ class HeleketService:
         is_valid = hmac.compare_digest(expected, str(signature))
 
         if not is_valid:
-            logger.error(
-                'Неверная подпись Heleket webhook',
-                expected=expected,
-                signature=signature,
-            )
+            logger.error('Неверная подпись Heleket webhook', expected=expected, signature=signature)
         return is_valid

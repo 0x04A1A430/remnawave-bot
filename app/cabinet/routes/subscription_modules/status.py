@@ -23,6 +23,7 @@ from app.database.crud.tariff import get_tariff_by_id
 from app.database.models import ServerSquad, User
 from app.services.remnawave_service import RemnaWaveService
 from app.services.system_settings_service import bot_configuration_service
+from app.utils.incy_crypt1 import wrap_incy_deep_link
 
 from ...dependencies import get_cabinet_db, get_current_cabinet_user
 from ...schemas.subscription import (
@@ -97,11 +98,7 @@ async def get_subscription(
         total_duration_seconds = (purchase.expires_at - purchase.created_at).total_seconds()
         elapsed_seconds = (now - purchase.created_at).total_seconds()
         progress_percent = min(
-            100.0,
-            max(
-                0.0,
-                ((elapsed_seconds / total_duration_seconds * 100) if total_duration_seconds > 0 else 0),
-            ),
+            100.0, max(0.0, (elapsed_seconds / total_duration_seconds * 100) if total_duration_seconds > 0 else 0)
         )
 
         traffic_purchases_data.append(
@@ -166,6 +163,10 @@ async def get_connection_link(
         'display_link': display_link if not hide_subscription_link else None,
         'happ_redirect_link': happ_redirect,
         'happ_scheme_link': happ_scheme_link,
+        # Сохранённая crypt-ссылка (happ://crypt4/... или happ://crypt5/...) — фронт
+        # предпочитает её клиентской генерации crypt4. Не прячем при hide_link:
+        # crypt-ссылка и есть способ скрыть исходный subscription_url.
+        'happ_crypto_link': subscription.subscription_crypto_link,
         'connect_mode': connect_mode,
         'hide_link': hide_subscription_link,
         'instructions': {
@@ -190,22 +191,22 @@ async def get_happ_downloads(
     platforms = {
         'ios': {
             'name': 'iOS (iPhone/iPad)',
-            'icon': '',
+            'icon': '🍎',
             'link': settings.get_happ_download_link('ios'),
         },
         'android': {
             'name': 'Android',
-            'icon': '',
+            'icon': '🤖',
             'link': settings.get_happ_download_link('android'),
         },
         'macos': {
             'name': 'macOS',
-            'icon': '',
+            'icon': '🖥️',
             'link': settings.get_happ_download_link('macos'),
         },
         'windows': {
             'name': 'Windows',
-            'icon': '',
+            'icon': '💻',
             'link': settings.get_happ_download_link('windows'),
         },
     }
@@ -322,10 +323,7 @@ async def _load_app_config_async() -> dict[str, Any] | None:
             async with service.get_api_client() as api:
                 config = await api.get_subscription_page_config(remnawave_uuid)
                 if config and config.config:
-                    logger.debug(
-                        'Loaded app config from RemnaWave',
-                        remnawave_uuid=remnawave_uuid,
-                    )
+                    logger.debug('Loaded app config from RemnaWave', remnawave_uuid=remnawave_uuid)
                     raw = dict(config.config)
                     raw['_isRemnawave'] = True
                     return raw
@@ -336,9 +334,7 @@ async def _load_app_config_async() -> dict[str, Any] | None:
 
 
 def _create_deep_link(
-    app: dict[str, Any],
-    subscription_url: str,
-    subscription_crypto_link: str | None = None,
+    app: dict[str, Any], subscription_url: str, subscription_crypto_link: str | None = None
 ) -> str | None:
     """Create deep link for app with subscription URL.
 
@@ -364,16 +360,20 @@ def _create_deep_link(
     if uses_crypto:
         if not subscription_crypto_link:
             logger.debug(
-                '_create_deep_link: app requires crypto link but none available',
-                get=app.get('name', 'unknown'),
+                '_create_deep_link: app requires crypto link but none available', get=app.get('name', 'unknown')
             )
             return None
+        # The stored crypto link is already a full deep link (happ://crypt4/... from
+        # the old panel endpoint or happ://crypt5/... from the Happ API). Gluing it
+        # onto another happ:// scheme would produce happ://crypt4/happ://crypt5/...;
+        # https redirect wrappers (e.g. ...?url=) must still be applied though.
+        if subscription_crypto_link.lower().startswith('happ://') and scheme.lower().startswith('happ://'):
+            return subscription_crypto_link
         payload = subscription_crypto_link
     else:
         if not subscription_url:
             logger.debug(
-                '_create_deep_link: app requires subscription_url but none available',
-                get=app.get('name', 'unknown'),
+                '_create_deep_link: app requires subscription_url but none available', get=app.get('name', 'unknown')
             )
             return None
         payload = subscription_url
@@ -384,7 +384,7 @@ def _create_deep_link(
         except Exception as e:
             logger.warning('Failed to encode payload to base64', error=e)
 
-    return f'{scheme}{payload}'
+    return wrap_incy_deep_link(f'{scheme}{payload}', subscription_url)
 
 
 def _resolve_button_url(
@@ -405,9 +405,14 @@ def _resolve_button_url(
     if subscription_url:
         result = result.replace('{{SUBSCRIPTION_LINK}}', subscription_url)
     if subscription_crypto_link:
+        # {{HAPP_CRYPT*_LINK}} resolves to a FULL happ://crypt.../ deep link; when the
+        # template also hardcodes the prefix (happ://crypt4/{{HAPP_CRYPT4_LINK}}),
+        # collapse it so we don't produce happ://crypt4/happ://crypt5/...
+        if subscription_crypto_link.lower().startswith('happ://'):
+            result = re.sub(r'happ://crypt\d+/(?=\{\{HAPP_CRYPT[34]_LINK\}\})', '', result, flags=re.IGNORECASE)
         result = result.replace('{{HAPP_CRYPT3_LINK}}', subscription_crypto_link)
         result = result.replace('{{HAPP_CRYPT4_LINK}}', subscription_crypto_link)
-    return result
+    return wrap_incy_deep_link(result, subscription_url)
 
 
 @router.get('/app-config')
@@ -424,6 +429,25 @@ async def get_app_config(
     if subscription:
         subscription_url = subscription.subscription_url
         subscription_crypto_link = subscription.subscription_crypto_link
+
+    # Generate crypto link on the fly if subscription_url exists but crypto link is missing.
+    # This covers synced users where enrich_happ_links was not called.
+    if subscription_url and not subscription_crypto_link:
+        try:
+            service = RemnaWaveService()
+            async with service.get_api_client() as api:
+                encrypted = await api.encrypt_happ_crypto_link(subscription_url)
+                if encrypted:
+                    subscription_crypto_link = encrypted
+                    if subscription:
+                        subscription.subscription_crypto_link = encrypted
+                        await db.commit()
+                        logger.info(
+                            'Generated and saved crypto link for user',
+                            user_id=user.id,
+                        )
+        except Exception as e:
+            logger.debug('Could not generate crypto link', error=e)
 
     config = await _load_app_config_async()
 

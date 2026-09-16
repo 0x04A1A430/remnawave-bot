@@ -206,80 +206,79 @@ class YooKassaWebhookHandler:
 
     async def handle_webhook(self, request: web.Request) -> web.Response:
         try:
-            logger.info('Получен YooKassa webhook', method=request.method, path=request.path)
+            logger.info('📥 Получен YooKassa webhook', method=request.method, path=request.path)
 
-            header_ip_candidates = collect_yookassa_ip_candidates(
-                request.headers.get('X-Forwarded-For'),
-                request.headers.get('X-Real-IP'),
-                request.headers.get('Cf-Connecting-Ip'),
-            )
-            client_ip = resolve_yookassa_ip(
-                header_ip_candidates,
-                remote=request.remote,
-            )
-
-            if client_ip is None:
-                logger.warning(
-                    'Не удалось определить IP-адрес отправителя YooKassa webhook. Кандидаты',
-                    header_ip_candidates=header_ip_candidates + ([request.remote] if request.remote else []),
+            # IP-гейт можно отключить (YOOKASSA_SKIP_IP_CHECK) для схем за Anti-DDoS/прокси,
+            # который не пробрасывает реальный IP отправителя. В этом режиме подлинность
+            # платежа гарантирует fail-closed API-проверка в process_yookassa_webhook.
+            if not settings.YOOKASSA_SKIP_IP_CHECK:
+                header_ip_candidates = collect_yookassa_ip_candidates(
+                    request.headers.get('X-Forwarded-For'),
+                    request.headers.get('X-Real-IP'),
+                    request.headers.get('Cf-Connecting-Ip'),
                 )
-                return web.Response(status=403, text='Forbidden')
-
-            if not is_yookassa_ip_allowed(client_ip):
-                logger.warning(
-                    'YooKassa webhook отклонён: IP %s не входит в доверенные диапазоны (%s)',
-                    client_ip,
-                    ', '.join(str(network) for network in YOOKASSA_ALLOWED_IP_NETWORKS),
+                client_ip = resolve_yookassa_ip(
+                    header_ip_candidates,
+                    remote=request.remote,
                 )
-                return web.Response(status=403, text='Forbidden')
 
-            logger.info('IP-адрес YooKassa подтверждён', client_ip=client_ip)
+                if client_ip is None:
+                    logger.warning(
+                        '🚫 Не удалось определить IP-адрес отправителя YooKassa webhook. Кандидаты',
+                        header_ip_candidates=header_ip_candidates + ([request.remote] if request.remote else []),
+                    )
+                    return web.Response(status=403, text='Forbidden')
+
+                if not is_yookassa_ip_allowed(client_ip):
+                    logger.warning(
+                        '🚫 YooKassa webhook отклонён: IP %s не входит в доверенные диапазоны (%s)',
+                        client_ip,
+                        ', '.join(str(network) for network in YOOKASSA_ALLOWED_IP_NETWORKS),
+                    )
+                    return web.Response(status=403, text='Forbidden')
+
+                logger.info('🌐 IP-адрес YooKassa подтверждён', client_ip=client_ip)
 
             body = await request.text()
 
             if not body:
-                logger.warning('Получен пустой webhook от YooKassa')
+                logger.warning('⚠️ Получен пустой webhook от YooKassa')
                 return web.Response(status=400, text='Empty body')
 
-            logger.debug('Body received', length=len(body))
+            logger.debug('📄 Body received', length=len(body))
 
             signature = request.headers.get('Signature') or request.headers.get('X-YooKassa-Signature')
             if signature:
-                logger.info('Получена подпись YooKassa', signature=signature)
+                logger.info('ℹ️ Получена подпись YooKassa', signature=signature)
 
             try:
                 webhook_data = json.loads(body)
             except json.JSONDecodeError as e:
-                logger.error('Ошибка парсинга JSON webhook YooKassa', error=e)
+                logger.error('❌ Ошибка парсинга JSON webhook YooKassa', error=e)
                 return web.Response(status=400, text='Invalid JSON')
 
-            logger.info(
-                'Обработка webhook YooKassa',
-                get=webhook_data.get('event', 'unknown_event'),
-            )
-            logger.debug('Полные данные webhook', webhook_data=webhook_data)
+            logger.info('📊 Обработка webhook YooKassa', get=webhook_data.get('event', 'unknown_event'))
+            logger.debug('🔍 Полные данные webhook', webhook_data=webhook_data)
 
             event_type = webhook_data.get('event')
             if not event_type:
-                logger.warning('Webhook YooKassa без типа события')
+                logger.warning('⚠️ Webhook YooKassa без типа события')
                 return web.Response(status=400, text='No event type')
 
             # Извлекаем ID платежа из вебхука для предотвращения дублирования
             yookassa_payment_id = webhook_data.get('object', {}).get('id')
             if not yookassa_payment_id:
-                logger.warning('Webhook YooKassa без ID платежа')
+                logger.warning('⚠️ Webhook YooKassa без ID платежа')
                 return web.Response(status=400, text='No payment id')
 
             if event_type not in YOOKASSA_ALLOWED_EVENTS:
-                logger.info('Игнорируем событие YooKassa', event_type=event_type)
+                logger.info('ℹ️ Игнорируем событие YooKassa', event_type=event_type)
                 return web.Response(status=200, text='OK')
 
             async with AsyncSessionLocal() as db:
                 try:
                     # Проверяем, не обрабатывается ли этот платеж уже (защита от дублирования)
-                    from app.database.crud.transaction import (
-                        get_transaction_by_external_id,
-                    )
+                    from app.database.crud.transaction import get_transaction_by_external_id
                     from app.database.models import PaymentMethod
 
                     existing_transaction = None
@@ -290,7 +289,7 @@ class YooKassaWebhookHandler:
 
                     if existing_transaction and event_type == 'payment.succeeded':
                         logger.info(
-                            'Платеж YooKassa уже был обработан. Пропускаем дублирующий вебхук.',
+                            'ℹ️ Платеж YooKassa уже был обработан. Пропускаем дублирующий вебхук.',
                             yookassa_payment_id=yookassa_payment_id,
                         )
                         return web.Response(status=200, text='OK')
@@ -300,14 +299,14 @@ class YooKassaWebhookHandler:
                     if success:
                         await db.commit()
                         logger.info(
-                            'Успешно обработан webhook YooKassa',
+                            '✅ Успешно обработан webhook YooKassa',
                             event_type=event_type,
                             yookassa_payment_id=yookassa_payment_id,
                         )
                         return web.Response(status=200, text='OK')
                     await db.rollback()
                     logger.error(
-                        'Ошибка обработки webhook YooKassa',
+                        '❌ Ошибка обработки webhook YooKassa',
                         event_type=event_type,
                         yookassa_payment_id=yookassa_payment_id,
                     )
@@ -315,11 +314,11 @@ class YooKassaWebhookHandler:
 
                 except Exception as e:
                     await db.rollback()
-                    logger.error('Ошибка обработки webhook YooKassa', error=e, exc_info=True)
+                    logger.error('❌ Ошибка обработки webhook YooKassa', error=e, exc_info=True)
                     return web.Response(status=500, text='Processing error')
 
         except Exception as e:
-            logger.error('Критическая ошибка обработки webhook YooKassa', error=e, exc_info=True)
+            logger.error('❌ Критическая ошибка обработки webhook YooKassa', error=e, exc_info=True)
             return web.Response(status=500, text='Internal server error')
 
     def setup_routes(self, app: web.Application) -> None:
@@ -328,7 +327,7 @@ class YooKassaWebhookHandler:
         app.router.add_get(webhook_path, self._get_handler)
         app.router.add_options(webhook_path, self._options_handler)
 
-        logger.info('Настроен YooKassa webhook (POST)', webhook_path=webhook_path)
+        logger.info('✅ Настроен YooKassa webhook (POST)', webhook_path=webhook_path)
 
     async def _get_handler(self, request: web.Request) -> web.Response:
         return web.json_response(
@@ -376,7 +375,7 @@ def create_yookassa_webhook_app(payment_service: PaymentService) -> web.Applicat
 
 async def start_yookassa_webhook_server(payment_service: PaymentService) -> None:
     if not settings.is_yookassa_enabled():
-        logger.info('YooKassa отключена, webhook сервер не запускается')
+        logger.info('ℹ️ YooKassa отключена, webhook сервер не запускается')
         return
 
     try:
@@ -385,21 +384,17 @@ async def start_yookassa_webhook_server(payment_service: PaymentService) -> None
         runner = web.AppRunner(app)
         await runner.setup()
 
-        site = web.TCPSite(
-            runner,
-            host=settings.YOOKASSA_WEBHOOK_HOST,
-            port=settings.YOOKASSA_WEBHOOK_PORT,
-        )
+        site = web.TCPSite(runner, host=settings.YOOKASSA_WEBHOOK_HOST, port=settings.YOOKASSA_WEBHOOK_PORT)
 
         await site.start()
 
         logger.info(
-            'YooKassa webhook сервер запущен',
+            '✅ YooKassa webhook сервер запущен',
             YOOKASSA_WEBHOOK_HOST=settings.YOOKASSA_WEBHOOK_HOST,
             YOOKASSA_WEBHOOK_PORT=settings.YOOKASSA_WEBHOOK_PORT,
         )
         logger.info(
-            'YooKassa webhook URL',
+            '🎯 YooKassa webhook URL',
             YOOKASSA_WEBHOOK_HOST=settings.YOOKASSA_WEBHOOK_HOST,
             YOOKASSA_WEBHOOK_PORT=settings.YOOKASSA_WEBHOOK_PORT,
             YOOKASSA_WEBHOOK_PATH=settings.YOOKASSA_WEBHOOK_PATH,
@@ -409,12 +404,12 @@ async def start_yookassa_webhook_server(payment_service: PaymentService) -> None
             while True:
                 await asyncio.sleep(1)
         except asyncio.CancelledError:
-            logger.info('YooKassa webhook сервер получил сигнал остановки')
+            logger.info('🛑 YooKassa webhook сервер получил сигнал остановки')
         finally:
             await site.stop()
             await runner.cleanup()
-            logger.info('YooKassa webhook сервер остановлен')
+            logger.info('✅ YooKassa webhook сервер остановлен')
 
     except Exception as e:
-        logger.error('Ошибка запуска YooKassa webhook сервера', error=e, exc_info=True)
+        logger.error('❌ Ошибка запуска YooKassa webhook сервера', error=e, exc_info=True)
         raise

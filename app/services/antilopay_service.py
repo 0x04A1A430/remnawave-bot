@@ -6,12 +6,9 @@ from typing import Any
 
 import aiohttp
 import structlog
-
-# pycryptodome (активно поддерживаемый форк), а не заброшенный PyCrypto —
-# bandit B413 здесь ложно срабатывает на общий namespace `Crypto`.
-from Crypto.Hash import SHA256  # nosec B413
-from Crypto.PublicKey import RSA  # nosec B413
-from Crypto.Signature import pkcs1_15  # nosec B413
+from Crypto.Hash import SHA256
+from Crypto.PublicKey import RSA
+from Crypto.Signature import pkcs1_15
 
 from app.config import settings
 

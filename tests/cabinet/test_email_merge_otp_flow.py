@@ -36,16 +36,21 @@ def _attacker() -> SimpleNamespace:
 
 
 def _victim() -> SimpleNamespace:
-    return SimpleNamespace(
-        id=2,
-        email='victim@example.com',
-        email_verified=True,
-        status=UserStatus.ACTIVE.value,
-    )
+    return SimpleNamespace(id=2, email='victim@example.com', email_verified=True, status=UserStatus.ACTIVE.value)
 
 
 def _auth(name: str, value: object):
     return patch(f'app.cabinet.routes.auth.{name}', value)
+
+
+@pytest.fixture(autouse=True)
+def _email_auth_enabled(monkeypatch):
+    """Гейт email-входа первым запросом читает строку флага из БД; болванка db здесь
+    отдаёт один результат на любой execute, поэтому флаг решаем напрямую: включён, строки нет."""
+    from app.cabinet.auth import email_auth_gate
+
+    monkeypatch.setattr(email_auth_gate, 'get_setting_value', AsyncMock(return_value=None))
+    monkeypatch.setattr(email_auth_gate.settings, 'CABINET_EMAIL_AUTH_ENABLED', True)
 
 
 @pytest.mark.asyncio
@@ -120,31 +125,15 @@ async def test_verify_correct_code_issues_token() -> None:
 @pytest.mark.asyncio
 async def test_execute_rejects_non_initiator() -> None:
     """A leaked token can't be executed by anyone but the authenticated initiator."""
-    consumed = {
-        'primary_user_id': 1,
-        'secondary_user_id': 2,
-        'provider': 'email',
-        'provider_id': 'x',
-    }
+    consumed = {'primary_user_id': 1, 'secondary_user_id': 2, 'provider': 'email', 'provider_id': 'x'}
     restore = AsyncMock()
     with ExitStack() as s:
+        s.enter_context(patch('app.cabinet.routes.account_linking.get_client_ip', MagicMock(return_value='1.2.3.4')))
         s.enter_context(
-            patch(
-                'app.cabinet.routes.account_linking.get_client_ip',
-                MagicMock(return_value='1.2.3.4'),
-            )
+            patch('app.cabinet.routes.account_linking.RateLimitCache.is_ip_rate_limited', AsyncMock(return_value=False))
         )
         s.enter_context(
-            patch(
-                'app.cabinet.routes.account_linking.RateLimitCache.is_ip_rate_limited',
-                AsyncMock(return_value=False),
-            )
-        )
-        s.enter_context(
-            patch(
-                'app.cabinet.routes.account_linking.consume_merge_token',
-                AsyncMock(return_value=consumed),
-            )
+            patch('app.cabinet.routes.account_linking.consume_merge_token', AsyncMock(return_value=consumed))
         )
         s.enter_context(patch('app.cabinet.routes.account_linking.restore_merge_token', restore))
         with pytest.raises(HTTPException) as exc:

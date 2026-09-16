@@ -127,17 +127,11 @@ def _verify_mulenpay_signature(request: Request, raw_body: bytes) -> bool:
     try:
         payload = json.loads(raw_body.decode('utf-8'))
     except (json.JSONDecodeError, UnicodeDecodeError):
-        logger.warning(
-            'MulenPay webhook: cannot parse JSON body for signature check',
-            display_name=display_name,
-        )
+        logger.warning('MulenPay webhook: cannot parse JSON body for signature check', display_name=display_name)
         return False
 
     if not isinstance(payload, dict) or not payload:
-        logger.warning(
-            'MulenPay webhook: payload is not a non-empty JSON object',
-            display_name=display_name,
-        )
+        logger.warning('MulenPay webhook: payload is not a non-empty JSON object', display_name=display_name)
         return False
 
     received_sign = payload.get('sign')
@@ -148,9 +142,7 @@ def _verify_mulenpay_signature(request: Request, raw_body: bytes) -> bool:
     # Iterate insertion order (json.loads preserves wire order since Python 3.7),
     # excluding the 'sign' field itself. Matches official SDK exactly.
     data_str = ''.join(str(value) for key, value in payload.items() if key != 'sign')
-    expected = hashlib.sha1(
-        (data_str + secret_key).encode('utf-8'), usedforsecurity=False
-    ).hexdigest()  # provider-defined algorithm
+    expected = hashlib.sha1((data_str + secret_key).encode('utf-8')).hexdigest()
 
     if hmac.compare_digest(received_sign.lower(), expected.lower()):
         return True
@@ -159,25 +151,45 @@ def _verify_mulenpay_signature(request: Request, raw_body: bytes) -> bool:
     return False
 
 
+# Bound concurrent payment-callback processing. Each callback holds a DB session
+# for its whole processing duration (incl. external calls to the panel/provider).
+# A burst of provider webhooks (e.g. a daily recurring-charge run firing 100+
+# callbacks/min) would otherwise open a session per callback and exhaust the
+# connection pool, starving the cabinet/admin API. Excess callbacks wait for a
+# slot (without holding a DB connection); providers retry on timeout and
+# processing is idempotent per order id.
+_WEBHOOK_CALLBACK_CONCURRENCY = 16
+_webhook_callback_semaphore: asyncio.Semaphore | None = None
+
+
+def _get_webhook_callback_semaphore() -> asyncio.Semaphore:
+    # Lazily created inside the running loop to avoid binding to the wrong loop.
+    global _webhook_callback_semaphore
+    if _webhook_callback_semaphore is None:
+        _webhook_callback_semaphore = asyncio.Semaphore(_WEBHOOK_CALLBACK_CONCURRENCY)
+    return _webhook_callback_semaphore
+
+
 async def _process_payment_service_callback(
     payment_service: PaymentService,
     payload: dict,
     method_name: str,
 ) -> bool:
-    db_generator = get_db()
-    try:
-        db = await db_generator.__anext__()
-    except StopAsyncIteration:  # pragma: no cover - defensive guard
-        return False
-
-    try:
-        process_callback = getattr(payment_service, method_name)
-        return await process_callback(db, payload)
-    finally:
+    async with _get_webhook_callback_semaphore():
+        db_generator = get_db()
         try:
-            await db_generator.__anext__()
-        except StopAsyncIteration:
-            pass
+            db = await db_generator.__anext__()
+        except StopAsyncIteration:  # pragma: no cover - defensive guard
+            return False
+
+        try:
+            process_callback = getattr(payment_service, method_name)
+            return await process_callback(db, payload)
+        finally:
+            try:
+                await db_generator.__anext__()
+            except StopAsyncIteration:
+                pass
 
 
 async def _parse_pal24_payload(request: Request) -> dict[str, str]:
@@ -244,8 +256,7 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
             raw_body = await request.body()
             if not raw_body:
                 return JSONResponse(
-                    {'status': 'error', 'reason': 'empty_body'},
-                    status_code=status.HTTP_400_BAD_REQUEST,
+                    {'status': 'error', 'reason': 'empty_body'}, status_code=status.HTTP_400_BAD_REQUEST
                 )
 
             payload = raw_body.decode('utf-8')
@@ -309,8 +320,7 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
             raw_body = await request.body()
             if not raw_body:
                 return JSONResponse(
-                    {'status': 'error', 'reason': 'empty_body'},
-                    status_code=status.HTTP_400_BAD_REQUEST,
+                    {'status': 'error', 'reason': 'empty_body'}, status_code=status.HTTP_400_BAD_REQUEST
                 )
 
             if not _verify_mulenpay_signature(request, raw_body):
@@ -361,8 +371,7 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
             raw_body = await request.body()
             if not raw_body:
                 return JSONResponse(
-                    {'status': 'error', 'reason': 'empty_body'},
-                    status_code=status.HTTP_400_BAD_REQUEST,
+                    {'status': 'error', 'reason': 'empty_body'}, status_code=status.HTTP_400_BAD_REQUEST
                 )
 
             payload_text = raw_body.decode('utf-8')
@@ -448,41 +457,44 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
 
         @router.post(settings.YOOKASSA_WEBHOOK_PATH)
         async def yookassa_webhook(request: Request) -> JSONResponse:
-            header_ip_candidates = yookassa_webhook_module.collect_yookassa_ip_candidates(
-                request.headers.get('X-Forwarded-For'),
-                request.headers.get('X-Real-IP'),
-                request.headers.get('Cf-Connecting-Ip'),
-            )
-            remote_ip = request.client.host if request.client else None
-            client_ip = yookassa_webhook_module.resolve_yookassa_ip(
-                header_ip_candidates,
-                remote=remote_ip,
-            )
-
-            if client_ip is None:
-                return JSONResponse(
-                    {'status': 'error', 'reason': 'unknown_ip'},
-                    status_code=status.HTTP_403_FORBIDDEN,
+            # IP-гейт можно отключить (YOOKASSA_SKIP_IP_CHECK) для схем за Anti-DDoS/прокси,
+            # который не пробрасывает реальный IP отправителя. В этом режиме подлинность
+            # платежа гарантирует fail-closed API-проверка в process_yookassa_webhook.
+            if not settings.YOOKASSA_SKIP_IP_CHECK:
+                header_ip_candidates = yookassa_webhook_module.collect_yookassa_ip_candidates(
+                    request.headers.get('X-Forwarded-For'),
+                    request.headers.get('X-Real-IP'),
+                    request.headers.get('Cf-Connecting-Ip'),
+                )
+                remote_ip = request.client.host if request.client else None
+                client_ip = yookassa_webhook_module.resolve_yookassa_ip(
+                    header_ip_candidates,
+                    remote=remote_ip,
                 )
 
-            if not yookassa_webhook_module.is_yookassa_ip_allowed(client_ip):
-                return JSONResponse(
-                    {'status': 'error', 'reason': 'forbidden_ip', 'ip': str(client_ip)},
-                    status_code=status.HTTP_403_FORBIDDEN,
-                )
+                if client_ip is None:
+                    return JSONResponse(
+                        {'status': 'error', 'reason': 'unknown_ip'},
+                        status_code=status.HTTP_403_FORBIDDEN,
+                    )
+
+                if not yookassa_webhook_module.is_yookassa_ip_allowed(client_ip):
+                    return JSONResponse(
+                        {'status': 'error', 'reason': 'forbidden_ip'},
+                        status_code=status.HTTP_403_FORBIDDEN,
+                    )
 
             body_bytes = await request.body()
             if not body_bytes:
                 return JSONResponse(
-                    {'status': 'error', 'reason': 'empty_body'},
-                    status_code=status.HTTP_400_BAD_REQUEST,
+                    {'status': 'error', 'reason': 'empty_body'}, status_code=status.HTTP_400_BAD_REQUEST
                 )
 
             body = body_bytes.decode('utf-8')
 
             signature = request.headers.get('Signature') or request.headers.get('X-YooKassa-Signature')
             if signature:
-                logger.info('Получена подпись YooKassa', signature=signature)
+                logger.info('ℹ️ Получена подпись YooKassa', signature=signature)
 
             try:
                 webhook_data = json.loads(body)
@@ -559,8 +571,7 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
             raw_body = await request.body()
             if not raw_body:
                 return JSONResponse(
-                    {'status': 'error', 'reason': 'empty_body'},
-                    status_code=status.HTTP_400_BAD_REQUEST,
+                    {'status': 'error', 'reason': 'empty_body'}, status_code=status.HTTP_400_BAD_REQUEST
                 )
 
             signature = request.headers.get('X-Signature') or ''
@@ -707,9 +718,9 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
 
             try:
                 parsed_payload = pal24_service.parse_callback(payload)
-            except Pal24APIError:
+            except Pal24APIError as error:
                 return JSONResponse(
-                    {'status': 'error', 'reason': 'invalid callback payload'},
+                    {'status': 'error', 'reason': str(error)},
                     status_code=status.HTTP_400_BAD_REQUEST,
                 )
 
@@ -1074,10 +1085,7 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
             try:
                 form_data = await request.form()
             except Exception as form_error:
-                logger.error(
-                    'Freekassa webhook: не удалось прочитать данные формы',
-                    form_error=form_error,
-                )
+                logger.error('Freekassa webhook: не удалось прочитать данные формы', form_error=form_error)
                 return Response('Error reading form data', status_code=status.HTTP_400_BAD_REQUEST)
 
             # Извлекаем параметры
@@ -1122,11 +1130,7 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
                 if success:
                     return Response('YES', status_code=status.HTTP_200_OK)
 
-                logger.error(
-                    'Freekassa webhook processing failed',
-                    order_id=order_id,
-                    intid=intid,
-                )
+                logger.error('Freekassa webhook processing failed', order_id=order_id, intid=intid)
                 return Response('Error', status_code=status.HTTP_400_BAD_REQUEST)
             except Exception as e:
                 logger.exception('Freekassa webhook processing error', e=e)
@@ -1158,10 +1162,7 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
             try:
                 form_data = await request.form()
             except Exception as form_error:
-                logger.error(
-                    'KassaAI webhook: не удалось прочитать данные формы',
-                    form_error=form_error,
-                )
+                logger.error('KassaAI webhook: не удалось прочитать данные формы', form_error=form_error)
                 return Response('Error reading form data', status_code=status.HTTP_400_BAD_REQUEST)
 
             # Извлекаем параметры (те же что и у Freekassa)
@@ -1478,9 +1479,7 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
                 if not existing:
                     overpay_id = payload.get('id')
                     if overpay_id:
-                        from app.database.crud.overpay import (
-                            get_overpay_payment_by_overpay_id,
-                        )
+                        from app.database.crud.overpay import get_overpay_payment_by_overpay_id
 
                         existing = await get_overpay_payment_by_overpay_id(check_db, str(overpay_id))
                     if not existing:
@@ -1826,6 +1825,132 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
 
         routes_registered = True
 
+    # ParityPay webhook (api.paritypay.net v2)
+    if settings.is_paritypay_configured():
+
+        @router.get(settings.PARITYPAY_WEBHOOK_PATH)
+        async def paritypay_health() -> JSONResponse:
+            return JSONResponse(
+                {
+                    'status': 'ok',
+                    'service': 'paritypay_webhook',
+                    'enabled': settings.is_paritypay_enabled(),
+                }
+            )
+
+        @router.post(settings.PARITYPAY_WEBHOOK_PATH)
+        async def paritypay_webhook(request: Request) -> JSONResponse:
+            raw_body = await request.body()
+
+            from app.services.paritypay_service import paritypay_service
+
+            # Подпись считается по РАЗОБРАННОМУ телу: поля сортируются по ключам,
+            # значения склеиваются. Разбор сохраняет исходный текст чисел, иначе
+            # Python перепишет 1200 как 1200.0 и подпись не сойдётся.
+            payload = paritypay_service.parse_callback_body(raw_body)
+            if payload is None:
+                return JSONResponse({'status': 'error'}, status_code=status.HTTP_400_BAD_REQUEST)
+
+            if not paritypay_service.verify_callback_signature(payload, request.headers.get('X-SIGNATURE')):
+                logger.warning('ParityPay webhook: invalid signature')
+                return JSONResponse({'status': 'error'}, status_code=status.HTTP_400_BAD_REQUEST)
+
+            # Провайдер ждёт HTTP 200 как подтверждение доставки и иначе повторяет
+            # до пяти раз. Подтверждаем сразу после проверки подписи, зачисление
+            # доделываем фоном: обработчик берёт свою сессию БД и блокирует строку
+            # платежа, поэтому параллельные доставки безопасны.
+            async def _process_paritypay_bg() -> None:
+                try:
+                    success = await _process_payment_service_callback(
+                        payment_service,
+                        payload,
+                        'process_paritypay_callback',
+                    )
+                    if not success:
+                        logger.error(
+                            'ParityPay webhook processing failed',
+                            order_id=payload.get('order_id'),
+                            payment_id=payload.get('id'),
+                            payment_status=payload.get('status'),
+                        )
+                except Exception as e:
+                    logger.exception('ParityPay webhook processing error', error=e)
+
+            _spawn_webhook_bg(_process_paritypay_bg())
+            return JSONResponse({'status': 'ok'}, status_code=status.HTTP_200_OK)
+
+        routes_registered = True
+
+    # TabPay webhook (tabpay.org)
+    if settings.is_tabpay_configured():
+
+        @router.get(settings.TABPAY_WEBHOOK_PATH)
+        async def tabpay_health() -> JSONResponse:
+            return JSONResponse(
+                {
+                    'status': 'ok',
+                    'service': 'tabpay_webhook',
+                    'enabled': settings.is_tabpay_enabled(),
+                }
+            )
+
+        @router.post(settings.TABPAY_WEBHOOK_PATH)
+        async def tabpay_webhook(request: Request) -> JSONResponse:
+            # Сырые байты тела: подпись считается ДО разбора JSON, потому что
+            # пересобранный JSON меняет порядок ключей и пробелы.
+            raw_body = await request.body()
+
+            from app.services.tabpay_service import tabpay_service
+
+            # X-Signature-V2 — HMAC-SHA256 от «{X-Timestamp}.{тело}»; окно
+            # свежести метки закрывает переигрывание перехваченного вебхука.
+            if not tabpay_service.verify_webhook_signature(
+                raw_body,
+                request.headers.get('X-Timestamp'),
+                request.headers.get('X-Signature-V2'),
+            ):
+                logger.warning('TabPay webhook: invalid signature')
+                return JSONResponse({'status': 'error'}, status_code=status.HTTP_400_BAD_REQUEST)
+
+            try:
+                payload = json.loads(raw_body)
+            except Exception as parse_error:
+                logger.error('TabPay webhook: failed to parse JSON', parse_error=parse_error)
+                return JSONResponse({'status': 'error'}, status_code=status.HTTP_400_BAD_REQUEST)
+
+            if not isinstance(payload, dict):
+                logger.error('TabPay webhook: тело не является объектом JSON')
+                return JSONResponse({'status': 'error'}, status_code=status.HTTP_400_BAD_REQUEST)
+
+            # TabPay ждёт 2xx за 5 секунд, а зачисление тянет за собой транзакцию,
+            # уведомления и реферальные начисления. Подтверждаем доставку сразу
+            # после проверки подписи, работу доделываем фоном: обработчик берёт
+            # свою сессию БД и блокирует строку платежа, поэтому параллельные
+            # доставки безопасны. Потерянное фоном зачисление подхватит сверка
+            # по API (SUPPORTED_AUTO_CHECK_METHODS), а drain_webhook_bg_tasks
+            # не даёт задаче пропасть при остановке процесса.
+            async def _process_tabpay_bg() -> None:
+                try:
+                    success = await _process_payment_service_callback(
+                        payment_service,
+                        payload,
+                        'process_tabpay_callback',
+                    )
+                    if not success:
+                        logger.error(
+                            'TabPay webhook processing failed',
+                            order_id=payload.get('orderId'),
+                            payment_id=payload.get('id'),
+                            payment_status=payload.get('status'),
+                        )
+                except Exception as e:
+                    logger.exception('TabPay webhook processing error', error=e)
+
+            _spawn_webhook_bg(_process_tabpay_bg())
+            return JSONResponse({'status': 'ok'}, status_code=status.HTTP_200_OK)
+
+        routes_registered = True
+
     # Donut webhook (Donut P2P)
     if settings.is_donut_configured():
 
@@ -1903,6 +2028,8 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
                     'donut_enabled': settings.is_donut_enabled(),
                     'lava_enabled': settings.is_lava_enabled(),
                     'cispay_enabled': settings.is_cispay_enabled(),
+                    'tabpay_enabled': settings.is_tabpay_enabled(),
+                    'paritypay_enabled': settings.is_paritypay_enabled(),
                 }
             )
 

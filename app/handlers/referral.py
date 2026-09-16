@@ -17,13 +17,10 @@ from app.config import settings
 from app.database.models import ReferralEarning, Transaction, TransactionType, User
 from app.keyboards.inline import get_referral_keyboard
 from app.localization.texts import get_texts
-from app.services.admin_notification_service import (
-    AdminNotificationService,
-    NotificationCategory,
-)
+from app.services.admin_notification_service import AdminNotificationService, NotificationCategory
+from app.services.referral_reward_service import format_reward_total
 from app.services.referral_withdrawal_service import referral_withdrawal_service
 from app.states import ReferralWithdrawalStates
-from app.utils.button_emoji import make_button
 from app.utils.photo_message import edit_or_answer_photo
 from app.utils.timezone import format_local_datetime
 from app.utils.user_utils import (
@@ -37,23 +34,38 @@ from app.utils.user_utils import (
 logger = structlog.get_logger(__name__)
 
 
+async def _reward_tariff_names(db) -> dict[int, str]:
+    """Названия тарифов, на которые ссылаются уровни наград.
+
+    Без них описание обещает «7 дн. подписки», умалчивая, в какой тариф они лягут,
+    — а это ровно то, что настраивает админ.
+    """
+    from sqlalchemy import select
+
+    from app.database.models import Tariff
+    from app.services.referral_reward_service import ReferralRewardLevelService
+
+    configs = await ReferralRewardLevelService.get_all(db)
+    ids = {cfg.referrer_tariff_id for cfg in configs.values() if cfg.referrer_tariff_id}
+    ids |= {cfg.referee_tariff_id for cfg in configs.values() if cfg.referee_tariff_id}
+    if not ids:
+        return {}
+
+    result = await db.execute(select(Tariff.id, Tariff.name).where(Tariff.id.in_(ids)))
+    return {row.id: row.name for row in result.all()}
+
+
 async def show_referral_info(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
     # Проверяем, включена ли реферальная программа
     if not settings.is_referral_program_enabled():
         texts = get_texts(db_user.language)
-        await callback.answer(
-            texts.t('REFERRAL_PROGRAM_DISABLED', 'Реферальная программа отключена'),
-            show_alert=True,
-        )
+        await callback.answer(texts.t('REFERRAL_PROGRAM_DISABLED', 'Реферальная программа отключена'), show_alert=True)
         return
 
     texts = get_texts(db_user.language)
 
     if not db_user.referral_code:
-        await callback.answer(
-            texts.t('REFERRAL_CODE_NOT_ASSIGNED', 'Реферальный код не назначен'),
-            show_alert=True,
-        )
+        await callback.answer(texts.t('REFERRAL_CODE_NOT_ASSIGNED', 'Реферальный код не назначен'), show_alert=True)
         return
 
     summary = await get_user_referral_summary(db, db_user.id)
@@ -63,7 +75,7 @@ async def show_referral_info(callback: types.CallbackQuery, db_user: User, db: A
     cabinet_referral_link = settings.get_cabinet_referral_link(db_user.referral_code)
 
     referral_text = (
-        texts.t('REFERRAL_PROGRAM_TITLE', '<b>Реферальная программа</b>')
+        texts.t('REFERRAL_PROGRAM_TITLE', '👥 <b>Реферальная программа</b>')
         + '\n\n'
         + '<blockquote>'
         + texts.t(
@@ -100,7 +112,44 @@ async def show_referral_info(callback: types.CallbackQuery, db_user: User, db: A
         + '\n<blockquote>'
     )
 
-    if settings.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS > 0:
+    levels_scheme = settings.is_referral_levels_scheme()
+
+    if levels_scheme:
+        # Описание берётся из того же источника, что и расчёт: расхождение
+        # обещанного и начисляемого — самый дорогой класс ошибок в реферальных
+        # программах, и берётся он ровно из отдельно написанного текста.
+        from app.services.referral_reward_service import (
+            describe_active_levels,
+            describe_referee_bonus,
+            format_tier_progress,
+            resolve_tier_progress,
+        )
+
+        tariff_names = await _reward_tariff_names(db)
+        for line in await describe_active_levels(
+            db, tariff_names=tariff_names, language=db_user.language, viewer=db_user
+        ):
+            referral_text += f'\n• {line}'
+        # «Новый пользователь получает» на экране партнёра — это обещание тем,
+        # кого пригласит ИМЕННО ЭТОТ партнёр, поэтому берётся его ранг.
+        referee_bonus = await describe_referee_bonus(
+            db, tariff_names=tariff_names, language=db_user.language, referrer=db_user
+        )
+        if referee_bonus:
+            referral_text += '\n' + texts.t(
+                'REFERRAL_REWARD_NEW_USER_LEVELS',
+                '• Новый пользователь получает: <b>{bonus}</b>',
+            ).format(bonus=referee_bonus)
+
+        # В режиме рангов лестница без отметки «вы здесь» не отвечает на главный
+        # вопрос пользователя: какой ранг у НЕГО и сколько до следующего.
+        progress_lines = format_tier_progress(await resolve_tier_progress(db, db_user), db_user.language)
+        if progress_lines:
+            referral_text += '\n\n' + '\n'.join(progress_lines)
+
+        referral_text += '\n\n'
+
+    if not levels_scheme and settings.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS > 0:
         referral_text += '\n' + texts.t(
             'REFERRAL_REWARD_NEW_USER',
             'Новый пользователь получает: <b>{bonus}</b> при первом пополнении от <b>{minimum}</b>',
@@ -109,7 +158,7 @@ async def show_referral_info(callback: types.CallbackQuery, db_user: User, db: A
             minimum=texts.format_price(settings.REFERRAL_MINIMUM_TOPUP_KOPEKS),
         )
 
-    if settings.REFERRAL_INVITER_BONUS_KOPEKS > 0:
+    if not levels_scheme and settings.REFERRAL_INVITER_BONUS_KOPEKS > 0:
         referral_text += '\n' + texts.t(
             'REFERRAL_REWARD_INVITER',
             'Вы получаете при первом пополнении реферала: <b>{bonus}</b>',
@@ -133,20 +182,26 @@ async def show_referral_info(callback: types.CallbackQuery, db_user: User, db: A
 
     # Show bot link
     referral_text += (
-        texts.t('REFERRAL_BOT_LINK_TITLE', '<b>Ссылка на бота:</b>')
-        + f'\n<code>{html_escape(bot_referral_link)}</code>\n'
+        texts.t('REFERRAL_BOT_LINK_TITLE', '🤖 <b>Ссылка на бота:</b>') + f'\n{html_escape(bot_referral_link)}\n'
     )
 
     # Show cabinet link if configured
     if cabinet_referral_link:
         referral_text += (
             '\n'
-            + texts.t('REFERRAL_CABINET_LINK_TITLE', '<b>Ссылка на кабинет:</b>')
-            + f'\n<code>{html_escape(cabinet_referral_link)}</code>\n'
+            + texts.t('REFERRAL_CABINET_LINK_TITLE', '🌐 <b>Ссылка на кабинет:</b>')
+            + f'\n{html_escape(cabinet_referral_link)}\n'
         )
 
     if summary['recent_earnings']:
-        meaningful_earnings = [earning for earning in summary['recent_earnings'][:5] if earning['amount_kopeks'] > 0]
+        # Награда днями имеет amount_kopeks == 0 by design: фильтр «только с
+        # деньгами» выкидывал из истории каждое такое начисление, и пользователь,
+        # только что получивший 7 дней, не видел ничего.
+        meaningful_earnings = [
+            earning
+            for earning in summary['recent_earnings'][:5]
+            if earning['amount_kopeks'] > 0 or earning.get('days_granted', 0) > 0
+        ]
 
         if meaningful_earnings:
             earnings_lines = []
@@ -154,15 +209,27 @@ async def show_referral_info(callback: types.CallbackQuery, db_user: User, db: A
                 reason_text = {
                     'referral_first_topup': texts.t(
                         'REFERRAL_EARNING_REASON_FIRST_TOPUP',
-                        'Первое пополнение',
+                        '🎉 Первое пополнение',
                     ),
                     'referral_commission_topup': texts.t(
                         'REFERRAL_EARNING_REASON_COMMISSION_TOPUP',
-                        'Комиссия с пополнения',
+                        '💰 Комиссия с пополнения',
                     ),
                     'referral_commission': texts.t(
                         'REFERRAL_EARNING_REASON_COMMISSION_PURCHASE',
-                        'Комиссия с покупки',
+                        '💰 Комиссия с покупки',
+                    ),
+                    'referral_registration_reward': texts.t(
+                        'REFERRAL_EARNING_REASON_REGISTRATION',
+                        '👥 Награда за регистрацию',
+                    ),
+                    'referral_days_reward': texts.t(
+                        'REFERRAL_EARNING_REASON_DAYS',
+                        '📅 Дни подписки',
+                    ),
+                    'referral_days_bonus': texts.t(
+                        'REFERRAL_EARNING_REASON_DAYS_BONUS',
+                        '🎁 Бонусные дни',
                     ),
                 }.get(earning['reason'], earning['reason'])
 
@@ -172,7 +239,9 @@ async def show_referral_info(callback: types.CallbackQuery, db_user: User, db: A
                         '{reason}: <b>{amount}</b> от {referral_name}',
                     ).format(
                         reason=reason_text,
-                        amount=texts.format_price(earning['amount_kopeks']),
+                        amount=format_reward_total(
+                            earning['amount_kopeks'], earning.get('days_granted', 0), db_user.language
+                        ),
                         referral_name=html_escape(str(earning['referral_name'] or '')),
                     )
                 )
@@ -195,7 +264,9 @@ async def show_referral_info(callback: types.CallbackQuery, db_user: User, db: A
                         'Бонусы за первые пополнения: <b>{count}</b> ({amount})',
                     ).format(
                         count=data['count'],
-                        amount=texts.format_price(data['total_amount_kopeks']),
+                        amount=format_reward_total(
+                            data['total_amount_kopeks'], data.get('total_days', 0), db_user.language
+                        ),
                     )
                 )
 
@@ -208,7 +279,9 @@ async def show_referral_info(callback: types.CallbackQuery, db_user: User, db: A
                         'Комиссии с пополнений: <b>{count}</b> ({amount})',
                     ).format(
                         count=data['count'],
-                        amount=texts.format_price(data['total_amount_kopeks']),
+                        amount=format_reward_total(
+                            data['total_amount_kopeks'], data.get('total_days', 0), db_user.language
+                        ),
                     )
                 )
 
@@ -221,7 +294,9 @@ async def show_referral_info(callback: types.CallbackQuery, db_user: User, db: A
                         'Комиссии с покупок: <b>{count}</b> ({amount})',
                     ).format(
                         count=data['count'],
-                        amount=texts.format_price(data['total_amount_kopeks']),
+                        amount=format_reward_total(
+                            data['total_amount_kopeks'], data.get('total_days', 0), db_user.language
+                        ),
                     )
                 )
 
@@ -248,10 +323,7 @@ async def show_referral_qr(
     texts = get_texts(db_user.language)
 
     if not db_user.referral_code:
-        await callback.answer(
-            texts.t('REFERRAL_CODE_NOT_ASSIGNED', 'Реферальный код не назначен'),
-            show_alert=True,
-        )
+        await callback.answer(texts.t('REFERRAL_CODE_NOT_ASSIGNED', 'Реферальный код не назначен'), show_alert=True)
         return
 
     await callback.answer()
@@ -262,7 +334,7 @@ async def show_referral_qr(
     qr_dir = Path('data') / 'referral_qr'
     qr_dir.mkdir(parents=True, exist_ok=True)
 
-    link_hash = hashlib.shake_128(bot_referral_link.encode()).hexdigest(4)
+    link_hash = hashlib.md5(bot_referral_link.encode()).hexdigest()[:8]
     file_path = qr_dir / f'{db_user.id}_{link_hash}.png'
     if not file_path.exists():
         img = qrcode.make(bot_referral_link)
@@ -275,14 +347,14 @@ async def show_referral_qr(
 
     caption = texts.t(
         'REFERRAL_QR_BOT_LINK',
-        'Ссылка на бота:\n{link}',
+        '🤖 Ссылка на бота:\n{link}',
     ).format(link=bot_referral_link)
 
     cabinet_referral_link = settings.get_cabinet_referral_link(db_user.referral_code)
     if cabinet_referral_link:
         caption += '\n\n' + texts.t(
             'REFERRAL_QR_CABINET_LINK',
-            'Ссылка на кабинет:\n{link}',
+            '🌐 Ссылка на кабинет:\n{link}',
         ).format(link=cabinet_referral_link)
 
     try:
@@ -309,7 +381,7 @@ async def show_detailed_referral_list(callback: types.CallbackQuery, db_user: Us
             callback,
             texts.t(
                 'REFERRAL_LIST_EMPTY',
-                'У вас пока нет рефералов.\n\nПоделитесь своей реферальной ссылкой, чтобы начать зарабатывать!',
+                '📋 У вас пока нет рефералов.\n\nПоделитесь своей реферальной ссылкой, чтобы начать зарабатывать!',
             ),
             types.InlineKeyboardMarkup(
                 inline_keyboard=[[make_button(text=texts.BACK, callback_data='menu_referrals', style='danger')]]
@@ -465,7 +537,7 @@ async def show_referral_analytics(callback: types.CallbackQuery, db_user: User, 
 
     analytics = await get_referral_analytics(db, db_user.id)
 
-    text = texts.t('REFERRAL_ANALYTICS_TITLE', '<b>Аналитика рефералов</b>') + '\n\n'
+    text = texts.t('REFERRAL_ANALYTICS_TITLE', '📊 <b>Аналитика рефералов</b>') + '\n\n'
 
     ep = analytics['earnings_by_period']
     text += (
@@ -488,7 +560,9 @@ async def show_referral_analytics(callback: types.CallbackQuery, db_user: User, 
                 ).format(
                     index=i,
                     name=html_escape(str(ref['referral_name'] or '')),
-                    amount=texts.format_price(ref['total_earned_kopeks']),
+                    amount=format_reward_total(
+                        ref['total_earned_kopeks'], ref.get('total_earned_days', 0), db_user.language
+                    ),
                     count=ref['earnings_count'],
                 )
             )
@@ -512,25 +586,38 @@ async def show_referral_analytics(callback: types.CallbackQuery, db_user: User, 
     await callback.answer()
 
 
-async def create_invite_message(callback: types.CallbackQuery, db_user: User):
+async def create_invite_message(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
     texts = get_texts(db_user.language)
 
     if not db_user.referral_code:
-        await callback.answer(
-            texts.t('REFERRAL_CODE_NOT_ASSIGNED', 'Реферальный код не назначен'),
-            show_alert=True,
-        )
+        await callback.answer(texts.t('REFERRAL_CODE_NOT_ASSIGNED', 'Реферальный код не назначен'), show_alert=True)
         return
 
     bot_username = (await callback.bot.get_me()).username
     bot_referral_link = settings.get_bot_referral_link(db_user.referral_code, bot_username)
     cabinet_referral_link = settings.get_cabinet_referral_link(db_user.referral_code)
 
+    # Обещание в приглашении обязано совпадать с тем, что реально начислят.
+    # В многоуровневой схеме бонус приглашённому задаётся уровнем, а легаси-ключ
+    # ничем не управляет — пообещать по нему значит отправить другу неправду.
     bonus_block = ''
-    if settings.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS > 0:
+    if settings.is_referral_levels_scheme():
+        from app.services.referral_reward_service import describe_referee_bonus
+
+        # Текст пересылают другу, и обещание в нём — про бонус ЭТОГО приглашающего:
+        # в режиме рангов сумма зависит от его ранга, а не от стартового.
+        referee_bonus = await describe_referee_bonus(
+            db, tariff_names=await _reward_tariff_names(db), language=db_user.language, referrer=db_user
+        )
+        if referee_bonus:
+            bonus_block = '\n\n' + texts.t(
+                'REFERRAL_INVITE_BONUS_LEVELS',
+                '💎 Твой бонус за регистрацию по ссылке: {bonus}',
+            ).format(bonus=referee_bonus)
+    elif settings.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS > 0:
         bonus_block = '\n\n' + texts.t(
             'REFERRAL_INVITE_BONUS',
-            'При первом пополнении от {minimum} ты получишь {bonus} бонусом на баланс!',
+            '💎 При первом пополнении от {minimum} ты получишь {bonus} бонусом на баланс!',
         ).format(
             minimum=texts.format_price(settings.REFERRAL_MINIMUM_TOPUP_KOPEKS),
             bonus=texts.format_price(settings.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS),
@@ -543,15 +630,15 @@ async def create_invite_message(callback: types.CallbackQuery, db_user: User):
     # html_escape-им всю собранную строку (иначе экранировались бы и теги <code>).
     cabinet_block = ''
     if cabinet_referral_link:
-        cabinet_block = f'\n\n <code>{html_escape(cabinet_referral_link)}</code>'
+        cabinet_block = f'\n\n🌐 <code>{html_escape(cabinet_referral_link)}</code>'
 
     invite_template = texts.t(
         'REFERRAL_INVITE_TEXT',
-        'Присоединяйся к VPN сервису!{bonus_block}\n\n'
-        'Быстрое подключение\n'
-        'Серверы по всему миру\n'
-        'Надежная защита\n\n'
-        'Переходи по ссылке:\n'
+        '🎉 Присоединяйся к VPN сервису!{bonus_block}\n\n'
+        '🚀 Быстрое подключение\n'
+        '🌍 Серверы по всему миру\n'
+        '🔒 Надежная защита\n\n'
+        '👇 Переходи по ссылке:\n'
         '{link}{cabinet_block}',
     )
     invite_html = html_escape(invite_template).format(
@@ -569,7 +656,7 @@ async def create_invite_message(callback: types.CallbackQuery, db_user: User):
     await edit_or_answer_photo(
         callback,
         (
-            texts.t('REFERRAL_INVITE_CREATED_TITLE', '<b>Приглашение создано!</b>')
+            texts.t('REFERRAL_INVITE_CREATED_TITLE', '📝 <b>Приглашение создано!</b>')
             + '\n\n'
             + texts.t(
                 'REFERRAL_INVITE_CREATED_INSTRUCTION',
@@ -588,10 +675,7 @@ async def show_withdrawal_info(callback: types.CallbackQuery, db_user: User, db:
     texts = get_texts(db_user.language)
 
     if not settings.is_referral_withdrawal_enabled():
-        await callback.answer(
-            texts.t('REFERRAL_WITHDRAWAL_DISABLED', 'Функция вывода отключена'),
-            show_alert=True,
-        )
+        await callback.answer(texts.t('REFERRAL_WITHDRAWAL_DISABLED', 'Функция вывода отключена'), show_alert=True)
         return
 
     # Получаем детальную статистику баланса
@@ -602,37 +686,37 @@ async def show_withdrawal_info(callback: types.CallbackQuery, db_user: User, db:
     # Проверяем возможность вывода
     can_request, reason, _stats = await referral_withdrawal_service.can_request_withdrawal(db, db_user.id)
 
-    text = texts.t('REFERRAL_WITHDRAWAL_TITLE', '<b>Вывод реферального баланса</b>') + '\n\n'
+    text = texts.t('REFERRAL_WITHDRAWAL_TITLE', '💸 <b>Вывод реферального баланса</b>') + '\n\n'
 
     # Показываем детальную статистику
     text += referral_withdrawal_service.format_balance_stats_for_user(stats, texts)
     text += '\n'
 
     text += (
-        texts.t('REFERRAL_WITHDRAWAL_MIN_AMOUNT', 'Минимальная сумма: <b>{amount}</b>').format(
+        texts.t('REFERRAL_WITHDRAWAL_MIN_AMOUNT', '📊 Минимальная сумма: <b>{amount}</b>').format(
             amount=texts.format_price(min_amount)
         )
         + '\n'
     )
     text += (
-        texts.t('REFERRAL_WITHDRAWAL_COOLDOWN', 'Частота вывода: раз в <b>{days}</b> дней').format(days=cooldown_days)
+        texts.t('REFERRAL_WITHDRAWAL_COOLDOWN', '⏱ Частота вывода: раз в <b>{days}</b> дней').format(days=cooldown_days)
         + '\n\n'
     )
 
     keyboard = []
 
     if can_request:
-        text += texts.t('REFERRAL_WITHDRAWAL_READY', 'Вы можете запросить вывод средств') + '\n'
+        text += texts.t('REFERRAL_WITHDRAWAL_READY', '✅ Вы можете запросить вывод средств') + '\n'
         keyboard.append(
             [
                 types.InlineKeyboardButton(
-                    text=texts.t('REFERRAL_WITHDRAWAL_REQUEST_BUTTON', 'Оформить заявку'),
+                    text=texts.t('REFERRAL_WITHDRAWAL_REQUEST_BUTTON', '📝 Оформить заявку'),
                     callback_data='referral_withdrawal_start',
                 )
             ]
         )
     else:
-        text += f'{html_escape(str(reason))}\n'
+        text += f'❌ {html_escape(str(reason))}\n'
 
     keyboard.append([make_button(text=texts.BACK, callback_data='menu_referrals', style='danger')])
 
@@ -657,25 +741,20 @@ async def start_withdrawal_request(callback: types.CallbackQuery, db_user: User,
     await state.set_state(ReferralWithdrawalStates.waiting_for_amount)
 
     text = texts.t(
-        'REFERRAL_WITHDRAWAL_ENTER_AMOUNT',
-        'Введите сумму для вывода в рублях\n\nДоступно: <b>{amount}</b>',
+        'REFERRAL_WITHDRAWAL_ENTER_AMOUNT', '💸 Введите сумму для вывода в рублях\n\nДоступно: <b>{amount}</b>'
     ).format(amount=texts.format_price(available))
 
     keyboard = types.InlineKeyboardMarkup(
         inline_keyboard=[
             [
                 types.InlineKeyboardButton(
-                    text=texts.t(
-                        'REFERRAL_WITHDRAWAL_ALL',
-                        f'Вывести всё ({available / 100:.0f}₽)',
-                    ),
+                    text=texts.t('REFERRAL_WITHDRAWAL_ALL', f'Вывести всё ({available / 100:.0f}₽)'),
                     callback_data=f'referral_withdrawal_amount_{available}',
                 )
             ],
             [
                 types.InlineKeyboardButton(
-                    text=texts.t('CANCEL', 'Отмена'),
-                    callback_data='referral_withdrawal_cancel',
+                    text=texts.t('CANCEL', '❌ Отмена'), callback_data='referral_withdrawal_cancel'
                 )
             ],
         ]
@@ -698,13 +777,13 @@ async def process_withdrawal_amount(message: types.Message, db_user: User, db: A
         amount_kopeks = int(amount_rubles * 100)
 
         if amount_kopeks <= 0:
-            await message.answer(texts.t('REFERRAL_WITHDRAWAL_INVALID_AMOUNT', 'Введите положительную сумму'))
+            await message.answer(texts.t('REFERRAL_WITHDRAWAL_INVALID_AMOUNT', '❌ Введите положительную сумму'))
             return
 
         min_amount = settings.REFERRAL_WITHDRAWAL_MIN_AMOUNT_KOPEKS
         if amount_kopeks < min_amount:
             await message.answer(
-                texts.t('REFERRAL_WITHDRAWAL_MIN_ERROR', 'Минимальная сумма: {amount}').format(
+                texts.t('REFERRAL_WITHDRAWAL_MIN_ERROR', '❌ Минимальная сумма: {amount}').format(
                     amount=texts.format_price(min_amount)
                 )
             )
@@ -712,10 +791,9 @@ async def process_withdrawal_amount(message: types.Message, db_user: User, db: A
 
         if amount_kopeks > available:
             await message.answer(
-                texts.t(
-                    'REFERRAL_WITHDRAWAL_INSUFFICIENT',
-                    'Недостаточно средств. Доступно: {amount}',
-                ).format(amount=texts.format_price(available))
+                texts.t('REFERRAL_WITHDRAWAL_INSUFFICIENT', '❌ Недостаточно средств. Доступно: {amount}').format(
+                    amount=texts.format_price(available)
+                )
             )
             return
 
@@ -725,15 +803,14 @@ async def process_withdrawal_amount(message: types.Message, db_user: User, db: A
 
         text = texts.t(
             'REFERRAL_WITHDRAWAL_ENTER_DETAILS',
-            'Введите реквизиты для перевода:\n\nНапример:\n• СБП: +7 999 123-45-67 (Сбербанк)',
+            '💳 Введите реквизиты для перевода:\n\nНапример:\n• СБП: +7 999 123-45-67 (Сбербанк)',
         )
 
         keyboard = types.InlineKeyboardMarkup(
             inline_keyboard=[
                 [
                     types.InlineKeyboardButton(
-                        text=texts.t('CANCEL', 'Отмена'),
-                        callback_data='referral_withdrawal_cancel',
+                        text=texts.t('CANCEL', '❌ Отмена'), callback_data='referral_withdrawal_cancel'
                     )
                 ]
             ]
@@ -742,7 +819,7 @@ async def process_withdrawal_amount(message: types.Message, db_user: User, db: A
         await message.answer(text, reply_markup=keyboard)
 
     except ValueError:
-        await message.answer(texts.t('REFERRAL_WITHDRAWAL_INVALID_AMOUNT', 'Введите корректную сумму'))
+        await message.answer(texts.t('REFERRAL_WITHDRAWAL_INVALID_AMOUNT', '❌ Введите корректную сумму'))
 
 
 async def process_withdrawal_amount_callback(
@@ -760,15 +837,14 @@ async def process_withdrawal_amount_callback(
 
     text = texts.t(
         'REFERRAL_WITHDRAWAL_ENTER_DETAILS',
-        'Введите реквизиты для перевода:\n\nНапример:\n• СБП: +7 999 123-45-67 (Сбербанк)',
+        '💳 Введите реквизиты для перевода:\n\nНапример:\n• СБП: +7 999 123-45-67 (Сбербанк)',
     )
 
     keyboard = types.InlineKeyboardMarkup(
         inline_keyboard=[
             [
                 types.InlineKeyboardButton(
-                    text=texts.t('CANCEL', 'Отмена'),
-                    callback_data='referral_withdrawal_cancel',
+                    text=texts.t('CANCEL', '❌ Отмена'), callback_data='referral_withdrawal_cancel'
                 )
             ]
         ]
@@ -786,43 +862,39 @@ async def process_payment_details(message: types.Message, db_user: User, db: Asy
     payment_details = message.text.strip()
 
     if len(payment_details) < 10:
-        await message.answer(texts.t('REFERRAL_WITHDRAWAL_DETAILS_TOO_SHORT', 'Реквизиты слишком короткие'))
+        await message.answer(texts.t('REFERRAL_WITHDRAWAL_DETAILS_TOO_SHORT', '❌ Реквизиты слишком короткие'))
         return
 
     # Сохраняем реквизиты
     await state.update_data(payment_details=payment_details)
     await state.set_state(ReferralWithdrawalStates.confirming)
 
-    text = texts.t('REFERRAL_WITHDRAWAL_CONFIRM_TITLE', '<b>Подтверждение заявки</b>') + '\n\n'
+    text = texts.t('REFERRAL_WITHDRAWAL_CONFIRM_TITLE', '📋 <b>Подтверждение заявки</b>') + '\n\n'
     text += (
-        texts.t('REFERRAL_WITHDRAWAL_CONFIRM_AMOUNT', 'Сумма: <b>{amount}</b>').format(
+        texts.t('REFERRAL_WITHDRAWAL_CONFIRM_AMOUNT', '💰 Сумма: <b>{amount}</b>').format(
             amount=texts.format_price(amount_kopeks)
         )
         + '\n\n'
     )
     text += (
-        texts.t('REFERRAL_WITHDRAWAL_CONFIRM_DETAILS', 'Реквизиты:\n<code>{details}</code>').format(
+        texts.t('REFERRAL_WITHDRAWAL_CONFIRM_DETAILS', '💳 Реквизиты:\n<code>{details}</code>').format(
             details=html_escape(payment_details)
         )
         + '\n\n'
     )
-    text += texts.t(
-        'REFERRAL_WITHDRAWAL_CONFIRM_WARNING',
-        'После отправки заявка будет рассмотрена администрацией',
-    )
+    text += texts.t('REFERRAL_WITHDRAWAL_CONFIRM_WARNING', '⚠️ После отправки заявка будет рассмотрена администрацией')
 
     keyboard = types.InlineKeyboardMarkup(
         inline_keyboard=[
             [
                 types.InlineKeyboardButton(
-                    text=texts.t('REFERRAL_WITHDRAWAL_CONFIRM_BUTTON', 'Подтвердить'),
+                    text=texts.t('REFERRAL_WITHDRAWAL_CONFIRM_BUTTON', '✅ Подтвердить'),
                     callback_data='referral_withdrawal_confirm',
                 )
             ],
             [
                 types.InlineKeyboardButton(
-                    text=texts.t('CANCEL', 'Отмена'),
-                    callback_data='referral_withdrawal_cancel',
+                    text=texts.t('CANCEL', '❌ Отмена'), callback_data='referral_withdrawal_cancel'
                 )
             ],
         ]
@@ -846,7 +918,7 @@ async def confirm_withdrawal_request(callback: types.CallbackQuery, db_user: Use
     )
 
     if error:
-        await callback.answer(f'{error}', show_alert=True)
+        await callback.answer(f'❌ {error}', show_alert=True)
         return
 
     # Отправляем уведомление админам
@@ -871,16 +943,15 @@ async def confirm_withdrawal_request(callback: types.CallbackQuery, db_user: Use
     # Формируем клавиатуру - кнопка профиля только для Telegram-пользователей
     keyboard_rows = [
         [
-            make_button(text='Одобрить', callback_data=f'admin_withdrawal_approve_{request.id}'),
-            make_button(text='Отклонить', callback_data=f'admin_withdrawal_reject_{request.id}'),
+            types.InlineKeyboardButton(text='✅ Одобрить', callback_data=f'admin_withdrawal_approve_{request.id}'),
+            types.InlineKeyboardButton(text='❌ Отклонить', callback_data=f'admin_withdrawal_reject_{request.id}'),
         ]
     ]
     if db_user.telegram_id:
         keyboard_rows.append(
             [
                 types.InlineKeyboardButton(
-                    text='Профиль пользователя',
-                    callback_data=f'admin_user_{db_user.telegram_id}',
+                    text='👤 Профиль пользователя', callback_data=f'admin_user_{db_user.telegram_id}'
                 )
             ]
         )
@@ -889,9 +960,7 @@ async def confirm_withdrawal_request(callback: types.CallbackQuery, db_user: Use
     try:
         notification_service = AdminNotificationService(callback.bot)
         await notification_service.send_admin_notification(
-            admin_text,
-            reply_markup=admin_keyboard,
-            category=NotificationCategory.PARTNERS,
+            admin_text, reply_markup=admin_keyboard, category=NotificationCategory.PARTNERS
         )
     except Exception as e:
         logger.error('Ошибка отправки уведомления админам о заявке на вывод', error=e)
@@ -918,7 +987,7 @@ async def confirm_withdrawal_request(callback: types.CallbackQuery, db_user: Use
     # Отвечаем пользователю
     text = texts.t(
         'REFERRAL_WITHDRAWAL_SUCCESS',
-        '<b>Заявка #{id} создана!</b>\n\n'
+        '✅ <b>Заявка #{id} создана!</b>\n\n'
         'Сумма: <b>{amount}</b>\n\n'
         'Ваша заявка будет рассмотрена администрацией. '
         'Мы уведомим вас о результате.',
@@ -942,7 +1011,7 @@ async def cancel_withdrawal_request(callback: types.CallbackQuery, db_user: User
     keyboard = types.InlineKeyboardMarkup(
         inline_keyboard=[[make_button(text=texts.BACK, callback_data='menu_referrals', style='danger')]]
     )
-    await edit_or_answer_photo(callback, texts.t('REFERRAL_WITHDRAWAL_CANCELLED', 'Заявка отменена'), keyboard)
+    await edit_or_answer_photo(callback, texts.t('REFERRAL_WITHDRAWAL_CANCELLED', '❌ Заявка отменена'), keyboard)
 
 
 def register_handlers(dp: Dispatcher):
@@ -969,10 +1038,7 @@ def register_handlers(dp: Dispatcher):
 
     dp.callback_query.register(start_withdrawal_request, F.data == 'referral_withdrawal_start')
 
-    dp.callback_query.register(
-        process_withdrawal_amount_callback,
-        F.data.startswith('referral_withdrawal_amount_'),
-    )
+    dp.callback_query.register(process_withdrawal_amount_callback, F.data.startswith('referral_withdrawal_amount_'))
 
     dp.callback_query.register(confirm_withdrawal_request, F.data == 'referral_withdrawal_confirm')
 

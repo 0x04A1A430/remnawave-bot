@@ -12,6 +12,8 @@ Partial unique index ``uq_subscriptions_user_tariff_active`` сторожит т
 from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
+
 from app.database.crud import subscription as sub_crud
 from app.database.models import SubscriptionStatus
 
@@ -21,6 +23,12 @@ def _sub(**kw) -> MagicMock:
     for k, v in kw.items():
         setattr(s, k, v)
     return s
+
+
+@pytest.fixture(autouse=True)
+def _no_grace_history(monkeypatch):
+    """Реанимация сначала возвращает затёртое оверлеем грейса; у этих подписок истории нет."""
+    monkeypatch.setattr('app.services.grace_access_echo.undo_grace_overlay_echo', AsyncMock(return_value=set()))
 
 
 def _db() -> AsyncMock:
@@ -108,13 +116,7 @@ async def test_revive_alive_extends_from_end_date(monkeypatch):
 async def test_create_paid_subscription_revives_existing_in_multitariff(monkeypatch):
     """Мульти-тариф + есть ИСТЁКШАЯ запись тарифа → revive, без вставки дубля."""
     monkeypatch.setattr(type(sub_crud.settings), 'is_multi_tariff_enabled', lambda self: True)
-    existing = _sub(
-        id=5,
-        user_id=7,
-        tariff_id=3,
-        is_trial=False,
-        status=SubscriptionStatus.EXPIRED.value,
-    )
+    existing = _sub(id=5, user_id=7, tariff_id=3, is_trial=False, status=SubscriptionStatus.EXPIRED.value)
     lookup = AsyncMock(return_value=existing)
     revive = AsyncMock(return_value=existing)
     monkeypatch.setattr(sub_crud, 'get_subscription_by_user_and_tariff', lookup)
@@ -136,13 +138,7 @@ async def test_create_paid_subscription_revives_expired_trial(monkeypatch):
     та же Remnawave-ссылка. Раньше guard исключал триалы (``not _existing.is_trial``).
     """
     monkeypatch.setattr(type(sub_crud.settings), 'is_multi_tariff_enabled', lambda self: True)
-    expired_trial = _sub(
-        id=9,
-        user_id=7,
-        tariff_id=3,
-        is_trial=True,
-        status=SubscriptionStatus.EXPIRED.value,
-    )
+    expired_trial = _sub(id=9, user_id=7, tariff_id=3, is_trial=True, status=SubscriptionStatus.EXPIRED.value)
     lookup = AsyncMock(return_value=expired_trial)
     revive = AsyncMock(return_value=expired_trial)
     monkeypatch.setattr(sub_crud, 'get_subscription_by_user_and_tariff', lookup)
@@ -197,22 +193,14 @@ async def test_revive_expired_trial_converts_to_paid(monkeypatch):
 async def test_create_paid_subscription_does_not_revive_active(monkeypatch):
     """Активную (не истёкшую) НЕ реанимируем — падаем в обычное создание/IntegrityError."""
     monkeypatch.setattr(type(sub_crud.settings), 'is_multi_tariff_enabled', lambda self: True)
-    active = _sub(
-        id=5,
-        user_id=7,
-        tariff_id=3,
-        is_trial=False,
-        status=SubscriptionStatus.ACTIVE.value,
-    )
+    active = _sub(id=5, user_id=7, tariff_id=3, is_trial=False, status=SubscriptionStatus.ACTIVE.value)
     monkeypatch.setattr(sub_crud, 'get_subscription_by_user_and_tariff', AsyncMock(return_value=active))
+    # Живого триала нет — иначе сработала бы конверсия триала на месте
+    monkeypatch.setattr(sub_crud, 'get_alive_trial_subscription', AsyncMock(return_value=None))
     revive = AsyncMock(return_value=active)
     monkeypatch.setattr(sub_crud, '_revive_paid_subscription', revive)
     # short-circuit тяжёлый путь создания сразу после guard
-    monkeypatch.setattr(
-        sub_crud,
-        'generate_unique_short_id',
-        AsyncMock(side_effect=RuntimeError('reached create')),
-    )
+    monkeypatch.setattr(sub_crud, 'generate_unique_short_id', AsyncMock(side_effect=RuntimeError('reached create')))
     db = _db()
 
     try:
@@ -229,11 +217,7 @@ async def test_create_paid_subscription_skips_revive_without_tariff(monkeypatch)
     lookup = AsyncMock(return_value=None)
     monkeypatch.setattr(sub_crud, 'get_subscription_by_user_and_tariff', lookup)
     # short-circuit тяжёлый путь создания сразу после guard
-    monkeypatch.setattr(
-        sub_crud,
-        'generate_unique_short_id',
-        AsyncMock(side_effect=RuntimeError('reached create')),
-    )
+    monkeypatch.setattr(sub_crud, 'generate_unique_short_id', AsyncMock(side_effect=RuntimeError('reached create')))
     db = _db()
 
     try:

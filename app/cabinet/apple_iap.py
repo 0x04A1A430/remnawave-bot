@@ -11,25 +11,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.models import User
-from app.services.apple_iap import (
-    AppleIAPFulfillmentService,
-    apple_iap_fulfillment_service,
-)
-from app.services.apple_iap_reconciliation_service import (
-    apple_iap_reconciliation_service,
-)
+from app.services.apple_iap import AppleIAPFulfillmentService, apple_iap_fulfillment_service
+from app.services.apple_iap_reconciliation_service import apple_iap_reconciliation_service
+from app.utils.redis_client import create_redis
 
-from .dependencies import (
-    get_cabinet_db,
-    get_current_admin_user,
-    get_current_cabinet_user,
-)
+from .dependencies import get_cabinet_db, get_current_admin_user, get_current_cabinet_user
 from .ip_utils import get_client_ip
-from .schemas.apple_iap import (
-    AppleAccountTokenResponse,
-    ApplePurchaseRequest,
-    ApplePurchaseResponse,
-)
+from .schemas.apple_iap import AppleAccountTokenResponse, ApplePurchaseRequest, ApplePurchaseResponse
 
 
 logger = structlog.get_logger(__name__)
@@ -46,7 +34,7 @@ async def _close_redis_client(client: redis.Redis) -> None:
 
 @asynccontextmanager
 async def apple_iap_lifespan(app: FastAPI) -> AsyncIterator[None]:
-    client = redis.from_url(settings.REDIS_URL)
+    client = create_redis()
     setattr(app.state, APPLE_IAP_REDIS_STATE_KEY, client)
     try:
         yield
@@ -120,11 +108,7 @@ async def _check_purchase_rate_limit(client: redis.Redis | None, user_id: int, i
         return allow_request
     except (TypeError, ValueError, UnicodeDecodeError) as error:
         allow_request = _rate_limit_error_allows_request()
-        logger.error(
-            'Apple IAP rate limiter returned invalid counter',
-            error=error,
-            fail_open=allow_request,
-        )
+        logger.error('Apple IAP rate limiter returned invalid counter', error=error, fail_open=allow_request)
         return allow_request
     return True
 

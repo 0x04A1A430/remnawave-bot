@@ -28,7 +28,7 @@ async def show_reports_menu(
     db: AsyncSession,
 ) -> None:
     await callback.message.edit_text(
-        '<b>Отчеты</b>\n\nВыберите период, чтобы отправить отчет в админский топик.',
+        '📊 <b>Отчеты</b>\n\nВыберите период, чтобы отправить отчет в админский топик.',
         reply_markup=get_admin_reports_keyboard(db_user.language),
         parse_mode='HTML',
     )

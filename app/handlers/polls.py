@@ -14,11 +14,7 @@ from app.database.crud.poll import (
 )
 from app.database.models import PollQuestion, User
 from app.localization.texts import get_texts
-from app.services.poll_service import (
-    get_next_question,
-    get_question_option,
-    reward_user_for_poll,
-)
+from app.services.poll_service import get_next_question, get_question_option, reward_user_for_poll
 
 
 logger = structlog.get_logger(__name__)
@@ -44,13 +40,7 @@ async def _render_question_text(
         current=current_index,
         total=total,
     )
-    lines = [
-        f'<b>{html.escape(poll_title)}</b>',
-        '',
-        header,
-        '',
-        html.escape(question.text),
-    ]
+    lines = [f'🗳️ <b>{html.escape(poll_title)}</b>', '', header, '', html.escape(question.text)]
     return '\n'.join(lines)
 
 
@@ -74,16 +64,10 @@ async def _update_poll_message(
             logger.debug('Опросное сообщение уже актуально, пропускаем обновление', error=error)
             return True
 
-        logger.warning(
-            'Не удалось обновить сообщение опроса',
-            message_id=message.message_id,
-            error=error,
-        )
+        logger.warning('Не удалось обновить сообщение опроса', message_id=message.message_id, error=error)
     except Exception as error:  # pragma: no cover - defensive logging
         logger.exception(
-            'Непредвиденная ошибка при обновлении сообщения опроса',
-            message_id=message.message_id,
-            error=error,
+            'Непредвиденная ошибка при обновлении сообщения опроса', message_id=message.message_id, error=error
         )
 
     return False
@@ -111,21 +95,18 @@ async def handle_poll_start(
     try:
         response_id = int(callback.data.split(':')[1])
     except (IndexError, ValueError):
-        await callback.answer('Опрос не найден', show_alert=True)
+        await callback.answer('❌ Опрос не найден', show_alert=True)
         return
 
     response = await get_poll_response_by_id(db, response_id)
     if not response or response.user_id != db_user.id:
-        await callback.answer('Опрос не найден', show_alert=True)
+        await callback.answer('❌ Опрос не найден', show_alert=True)
         return
 
     texts = get_texts(db_user.language)
 
     if response.completed_at:
-        await callback.answer(
-            texts.t('POLL_ALREADY_COMPLETED', 'Вы уже прошли этот опрос.'),
-            show_alert=True,
-        )
+        await callback.answer(texts.t('POLL_ALREADY_COMPLETED', 'Вы уже прошли этот опрос.'), show_alert=True)
         return
 
     if not response.poll or not response.poll.questions:
@@ -170,14 +151,14 @@ async def handle_poll_answer(
         question_id = int(question_id)
         option_id = int(option_id)
     except (ValueError, IndexError):
-        await callback.answer('Некорректные данные', show_alert=True)
+        await callback.answer('❌ Некорректные данные', show_alert=True)
         return
 
     response = await get_poll_response_by_id(db, response_id)
     texts = get_texts(db_user.language)
 
     if not response or response.user_id != db_user.id:
-        await callback.answer('Опрос не найден', show_alert=True)
+        await callback.answer('❌ Опрос не найден', show_alert=True)
         return
 
     if not response.poll:
@@ -185,10 +166,7 @@ async def handle_poll_answer(
         return
 
     if response.completed_at:
-        await callback.answer(
-            texts.t('POLL_ALREADY_COMPLETED', 'Вы уже прошли этот опрос.'),
-            show_alert=True,
-        )
+        await callback.answer(texts.t('POLL_ALREADY_COMPLETED', 'Вы уже прошли этот опрос.'), show_alert=True)
         return
 
     question = next((q for q in response.poll.questions if q.id == question_id), None)
@@ -211,11 +189,7 @@ async def handle_poll_answer(
     try:
         await db.refresh(response, attribute_names=['answers'])
     except Exception as error:  # pragma: no cover - defensive cache busting
-        logger.debug(
-            'Не удалось обновить локальные ответы опроса',
-            response_id=response.id,
-            error=error,
-        )
+        logger.debug('Не удалось обновить локальные ответы опроса', response_id=response.id, error=error)
         response = await get_poll_response_by_id(db, response.id)
         if not response:
             await callback.answer(texts.t('POLL_ERROR', 'Опрос недоступен.'), show_alert=True)
@@ -245,7 +219,7 @@ async def handle_poll_answer(
 
     reward_amount = await reward_user_for_poll(db, response)
 
-    thanks_lines = [texts.t('POLL_COMPLETED', 'Спасибо за участие в опросе!')]
+    thanks_lines = [texts.t('POLL_COMPLETED', '🙏 Спасибо за участие в опросе!')]
     if reward_amount:
         thanks_lines.append(
             texts.t(
@@ -258,7 +232,7 @@ async def handle_poll_answer(
         callback.message,
         '\n\n'.join(thanks_lines),
     ):
-        await callback.answer(texts.t('POLL_COMPLETED', 'Спасибо за участие в опросе!'))
+        await callback.answer(texts.t('POLL_COMPLETED', '🙏 Спасибо за участие в опросе!'))
         return
     asyncio.create_task(_delete_message_later(callback.bot, callback.message.chat.id, callback.message.message_id))
     await callback.answer()

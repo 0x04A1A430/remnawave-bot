@@ -37,16 +37,10 @@ async def _run_link(user, *, email, email_verified, email_owner=None):
             )
         )
         s.enter_context(
-            patch(
-                'app.cabinet.routes.account_linking.get_user_by_oauth_provider',
-                AsyncMock(return_value=None),
-            )
+            patch('app.cabinet.routes.account_linking.get_user_by_oauth_provider', AsyncMock(return_value=None))
         )
         s.enter_context(
-            patch(
-                'app.cabinet.routes.account_linking.get_user_by_email',
-                AsyncMock(return_value=email_owner),
-            )
+            patch('app.cabinet.routes.account_linking.get_user_by_email', AsyncMock(return_value=email_owner))
         )
         set_id = AsyncMock()
         s.enter_context(patch('app.cabinet.routes.account_linking.set_user_oauth_provider_id', set_id))

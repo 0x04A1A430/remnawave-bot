@@ -18,7 +18,6 @@ from app.config import settings
 from app.database.crud.system_setting import upsert_system_setting
 from app.database.models import SystemSetting
 from app.localization.texts import get_texts
-from app.utils.button_emoji import make_button
 
 from .constants import (
     AVAILABLE_CALLBACKS,
@@ -291,9 +290,7 @@ class MenuLayoutService:
                     if key == 'connect' or buttons[key].get('builtin_id') == 'connect':
                         actual_button_id = key
                         logger.info(
-                            'Найдена кнопка connect по ID',
-                            button_id=button_id,
-                            actual_button_id=actual_button_id,
+                            '🔗 Найдена кнопка connect по ID', button_id=button_id, actual_button_id=actual_button_id
                         )
                         break
                 else:
@@ -305,7 +302,7 @@ class MenuLayoutService:
                         ):
                             actual_button_id = key
                             logger.info(
-                                'Найдена кнопка connect по builtin_id',
+                                '🔗 Найдена кнопка connect по builtin_id',
                                 button_id=button_id,
                                 actual_button_id=actual_button_id,
                             )
@@ -321,7 +318,7 @@ class MenuLayoutService:
         # Логирование для отладки
         if 'connect' in actual_button_id.lower() or button.get('builtin_id') == 'connect':
             logger.info(
-                'Обновление кнопки connect (ID: ): open_mode=, action=, webapp_url',
+                '🔗 Обновление кнопки connect (ID: ): open_mode=, action=, webapp_url',
                 actual_button_id=actual_button_id,
                 get=updates.get('open_mode'),
                 get_2=updates.get('action'),
@@ -620,11 +617,7 @@ class MenuLayoutService:
         config['rows'] = [row for row in rows if row.get('buttons')]
 
         await cls.save_config(db, config)
-        return {
-            'button_id': button_id,
-            'target_row_id': target_row_id,
-            'position': position,
-        }
+        return {'button_id': button_id, 'target_row_id': target_row_id, 'position': position}
 
     @classmethod
     async def reorder_buttons_in_row(
@@ -702,16 +695,8 @@ class MenuLayoutService:
 
         await cls.save_config(db, config)
         return {
-            'button_1': {
-                'id': button_id_1,
-                'new_row': pos2[0],
-                'new_position': pos2[1],
-            },
-            'button_2': {
-                'id': button_id_2,
-                'new_row': pos1[0],
-                'new_position': pos1[1],
-            },
+            'button_1': {'id': button_id_1, 'new_row': pos2[0], 'new_position': pos2[1]},
+            'button_2': {'id': button_id_2, 'new_row': pos1[0], 'new_position': pos1[1]},
         }
 
     # --- Проверка условий ---
@@ -1038,7 +1023,7 @@ class MenuLayoutService:
 
         if is_connect_button:
             logger.info(
-                'Построение кнопки connect: button_id=, type=, open_mode=, action=, webapp_url',
+                '🔗 Построение кнопки connect: button_id=, type=, open_mode=, action=, webapp_url',
                 effective_button_id=effective_button_id,
                 button_type=button_type,
                 open_mode=open_mode,
@@ -1063,16 +1048,16 @@ class MenuLayoutService:
 
         # Строим кнопку в зависимости от типа
         if button_type == 'url':
-            return make_button(text=text, url=action, icon_custom_emoji_id=custom_emoji_id)
+            return InlineKeyboardButton(text=text, url=action, icon_custom_emoji_id=custom_emoji_id)
         if button_type == 'mini_app':
-            return make_button(
+            return InlineKeyboardButton(
                 text=text,
                 web_app=types.WebAppInfo(url=action),
                 icon_custom_emoji_id=custom_emoji_id,
             )
         if button_type == 'callback':
             # Кастомная кнопка с callback_data
-            return make_button(text=text, callback_data=action, icon_custom_emoji_id=custom_emoji_id)
+            return InlineKeyboardButton(text=text, callback_data=action, icon_custom_emoji_id=custom_emoji_id)
         # builtin - проверяем open_mode
         if open_mode == 'direct':
             # Прямое открытие Mini App через WebAppInfo
@@ -1083,55 +1068,37 @@ class MenuLayoutService:
             # пытаемся получить URL из подписки пользователя
             if is_connect_button and (not url or not (url.startswith('http://') or url.startswith('https://'))):
                 if context.subscription:
-                    from app.utils.subscription_utils import (
-                        get_display_subscription_link,
-                    )
+                    from app.utils.subscription_utils import get_display_subscription_link
 
                     subscription_url = get_display_subscription_link(context.subscription)
                     if subscription_url:
                         url = subscription_url
-                        logger.info('Кнопка connect: получен URL из подписки: ...', url=url[:50])
+                        logger.info('🔗 Кнопка connect: получен URL из подписки: ...', url=url[:50])
                 # Если все еще нет URL, пробуем использовать настройку MINIAPP_CUSTOM_URL
                 if not url or not (url.startswith('http://') or url.startswith('https://')):
                     if settings.MINIAPP_CUSTOM_URL:
                         url = settings.MINIAPP_CUSTOM_URL
-                        logger.info(
-                            'Кнопка connect: использован MINIAPP_CUSTOM_URL: ...',
-                            url=url[:50],
-                        )
+                        logger.info('🔗 Кнопка connect: использован MINIAPP_CUSTOM_URL: ...', url=url[:50])
 
             # Проверяем, что это действительно URL
             if url and (url.startswith('http://') or url.startswith('https://')):
-                logger.info(
-                    'Кнопка connect: open_mode=direct, используем URL: ...',
-                    url=url[:50],
-                )
-                if is_connect_button:
-                    return make_button(
-                        text=text,
-                        url=url,
-                        icon_custom_emoji_id=custom_emoji_id,
-                    )
-                return make_button(
+                logger.info('🔗 Кнопка connect: open_mode=direct, используем URL: ...', url=url[:50])
+                return InlineKeyboardButton(
                     text=text,
                     web_app=types.WebAppInfo(url=url),
                     icon_custom_emoji_id=custom_emoji_id,
                 )
             logger.warning(
-                'Кнопка connect: open_mode=direct, но URL не найден. webapp_url=, action=, subscription_url',
+                '🔗 Кнопка connect: open_mode=direct, но URL не найден. webapp_url=, action=, subscription_url',
                 webapp_url=webapp_url,
                 action=action,
                 value='есть' if context.subscription else 'нет',
             )
             # Fallback на callback_data
-            return make_button(text=text, callback_data=action, icon_custom_emoji_id=custom_emoji_id)
+            return InlineKeyboardButton(text=text, callback_data=action, icon_custom_emoji_id=custom_emoji_id)
         # Стандартный callback_data
-        logger.debug(
-            'Кнопка connect: open_mode=, используем callback_data',
-            open_mode=open_mode,
-            action=action,
-        )
-        return make_button(text=text, callback_data=action, icon_custom_emoji_id=custom_emoji_id)
+        logger.debug('Кнопка connect: open_mode=, используем callback_data', open_mode=open_mode, action=action)
+        return InlineKeyboardButton(text=text, callback_data=action, icon_custom_emoji_id=custom_emoji_id)
 
     # --- Построение клавиатуры ---
 
@@ -1310,10 +1277,11 @@ class MenuLayoutService:
         callback_data: str | None = None,
         button_type: str | None = None,
         button_text: str | None = None,
+        telegram_id: int | None = None,
     ):
         """Записать клик по кнопке."""
         return await MenuLayoutStatsService.log_button_click(
-            db, button_id, user_id, callback_data, button_type, button_text
+            db, button_id, user_id, callback_data, button_type, button_text, telegram_id=telegram_id
         )
 
     @classmethod

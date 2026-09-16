@@ -21,14 +21,10 @@ async def test_create_invite_message_wraps_links_in_code(monkeypatch):
     monkeypatch.setattr(ref, 'edit_or_answer_photo', fake_edit)
     # get_*_referral_link are methods on the Settings class — patch on the class.
     monkeypatch.setattr(
-        type(ref.settings),
-        'get_bot_referral_link',
-        lambda self, code, bot: 'https://t.me/bot?start=ref_X',
+        type(ref.settings), 'get_bot_referral_link', lambda self, code, bot: 'https://t.me/bot?start=ref_X'
     )
     monkeypatch.setattr(
-        type(ref.settings),
-        'get_cabinet_referral_link',
-        lambda self, code: 'https://cab.example/?ref=X&u=1',
+        type(ref.settings), 'get_cabinet_referral_link', lambda self, code: 'https://cab.example/?ref=X&u=1'
     )
     monkeypatch.setattr(ref.settings, 'REFERRAL_FIRST_TOPUP_BONUS_KOPEKS', 0)
 
@@ -39,7 +35,7 @@ async def test_create_invite_message_wraps_links_in_code(monkeypatch):
     callback.bot = bot
     callback.answer = AsyncMock()
 
-    await ref.create_invite_message(callback, db_user)
+    await ref.create_invite_message(callback, db_user, None)
 
     html = captured['text']
     # Both links are wrapped in <code> so tap-to-copy captures them whole.

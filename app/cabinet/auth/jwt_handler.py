@@ -120,11 +120,7 @@ def decode_token(token: str) -> dict[str, Any] | None:
         logger.debug('JWT decode: token expired', token_fp=_token_fingerprint(token))
         return None
     except jwt.InvalidTokenError as err:
-        logger.debug(
-            'JWT decode: invalid token',
-            token_fp=_token_fingerprint(token),
-            error=str(err),
-        )
+        logger.debug('JWT decode: invalid token', token_fp=_token_fingerprint(token), error=str(err))
         return None
 
 

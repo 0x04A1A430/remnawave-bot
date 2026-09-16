@@ -92,7 +92,7 @@ async def create_server_squad(
     await db.commit()
     await db.refresh(server_squad)
 
-    logger.info('Создан сервер', display_name=display_name, squad_uuid=squad_uuid)
+    logger.info('✅ Создан сервер', display_name=display_name, squad_uuid=squad_uuid)
     return server_squad
 
 
@@ -294,7 +294,7 @@ async def delete_server_squad(db: AsyncSession, server_id: int) -> bool:
 
     if connections_count > 0:
         logger.warning(
-            'Нельзя удалить сервер есть активные подключения',
+            '⚠ Нельзя удалить сервер есть активные подключения',
             server_id=server_id,
             connections_count=connections_count,
         )
@@ -303,7 +303,7 @@ async def delete_server_squad(db: AsyncSession, server_id: int) -> bool:
     await db.execute(delete(ServerSquad).where(ServerSquad.id == server_id))
     await db.commit()
 
-    logger.info('Удален сервер', server_id=server_id)
+    logger.info('🗑️ Удален сервер', server_id=server_id)
     return True
 
 
@@ -361,11 +361,7 @@ async def sync_with_remnawave(db: AsyncSession, remnawave_squads: list[dict]) ->
         subscription_ids = {row[0] for row in subscription_ids_result.fetchall()}
 
         for server in removed_servers:
-            logger.info(
-                'Удаляется сервер',
-                display_name=server.display_name,
-                squad_uuid=server.squad_uuid,
-            )
+            logger.info('🗑️ Удаляется сервер', display_name=server.display_name, squad_uuid=server.squad_uuid)
 
         await db.execute(delete(SubscriptionServer).where(SubscriptionServer.server_squad_id.in_(removed_ids)))
 
@@ -415,7 +411,7 @@ async def sync_with_remnawave(db: AsyncSession, remnawave_squads: list[dict]) ->
                 tariff.updated_at = datetime.now(UTC)
                 cleaned_tariffs += 1
                 logger.info(
-                    'Тариф "%s" (ID: %s): удалены несуществующие сквады %s',
+                    '🧹 Тариф "%s" (ID: %s): удалены несуществующие сквады %s',
                     tariff.name,
                     tariff.id,
                     [u for u in current if u in removed_uuids],
@@ -425,25 +421,14 @@ async def sync_with_remnawave(db: AsyncSession, remnawave_squads: list[dict]) ->
         removed = len(removed_servers)
 
         if cleaned_subscriptions:
-            logger.info(
-                'Обновлены подписки после удаления серверов',
-                cleaned_subscriptions=cleaned_subscriptions,
-            )
+            logger.info('🧹 Обновлены подписки после удаления серверов', cleaned_subscriptions=cleaned_subscriptions)
 
         if cleaned_tariffs:
-            logger.info(
-                'Обновлены тарифы после удаления серверов',
-                cleaned_tariffs=cleaned_tariffs,
-            )
+            logger.info('🧹 Обновлены тарифы после удаления серверов', cleaned_tariffs=cleaned_tariffs)
 
     await db.commit()
 
-    logger.info(
-        'Синхронизация завершена: + ~',
-        created=created,
-        updated=updated,
-        removed=removed,
-    )
+    logger.info('🔄 Синхронизация завершена: + ~', created=created, updated=updated, removed=removed)
     return created, updated, removed
 
 
@@ -598,10 +583,7 @@ async def add_user_to_servers(db: AsyncSession, server_squad_ids: list[int]) -> 
             )
 
         await db.flush()
-        logger.info(
-            'Увеличен счетчик пользователей для серверов',
-            server_squad_ids=server_squad_ids,
-        )
+        logger.info('✅ Увеличен счетчик пользователей для серверов', server_squad_ids=server_squad_ids)
         return True
 
     except Exception as e:
@@ -619,10 +601,7 @@ async def remove_user_from_servers(db: AsyncSession, server_squad_ids: list[int]
             )
 
         await db.flush()
-        logger.info(
-            'Уменьшен счетчик пользователей для серверов',
-            server_squad_ids=server_squad_ids,
-        )
+        logger.info('✅ Уменьшен счетчик пользователей для серверов', server_squad_ids=server_squad_ids)
         return True
 
     except Exception as e:
@@ -673,9 +652,9 @@ async def update_server_user_counts(
 
         await db.flush()
         if add_set:
-            logger.info('Увеличен счетчик пользователей для серверов', sorted=sorted(add_set))
+            logger.info('✅ Увеличен счетчик пользователей для серверов', sorted=sorted(add_set))
         if remove_set:
-            logger.info('Уменьшен счетчик пользователей для серверов', sorted=sorted(remove_set))
+            logger.info('✅ Уменьшен счетчик пользователей для серверов', sorted=sorted(remove_set))
 
     except Exception as e:
         logger.error('Ошибка обновления счетчиков серверов', e=e)
@@ -708,37 +687,40 @@ async def ensure_servers_synced(db: AsyncSession) -> None:
     чтобы админка видела актуальные сквады без ручных действий.
     """
     try:
-        logger.info('Синхронизация серверов с RemnaWave...')
+        # Проверяем есть ли серверы в БД
+        result = await db.execute(select(func.count(ServerSquad.id)))
+        server_count = result.scalar() or 0
+
+        if server_count > 0:
+            logger.info('✅ В базе уже есть серверов, пропускаем синхронизацию', server_count=server_count)
+            return
+
+        logger.info('🔄 Серверов в БД нет, начинаем синхронизацию с RemnaWave...')
 
         # Импортируем сервис здесь чтобы избежать циклических импортов
         from app.services.subscription_service import SubscriptionService
 
         subscription_service = SubscriptionService()
         if not subscription_service.is_configured:
-            logger.warning('RemnaWave не настроен, серверы не синхронизированы')
+            logger.warning('⚠️ RemnaWave не настроен, серверы не синхронизированы')
             return
 
         # Получаем скводы из RemnaWave
         squads = await subscription_service.get_remnawave_squads()
         if squads is None:
-            logger.error('Не удалось получить список серверов из RemnaWave')
+            logger.error('❌ Не удалось получить список серверов из RemnaWave')
             return
 
         if not squads:
-            logger.warning('RemnaWave вернул пустой список серверов')
+            logger.warning('⚠️ RemnaWave вернул пустой список серверов')
             return
 
         # Синхронизируем
         created, updated, removed = await sync_with_remnawave(db, squads)
-        logger.info(
-            'Серверы синхронизированы: + ~',
-            created=created,
-            updated=updated,
-            removed=removed,
-        )
+        logger.info('✅ Серверы синхронизированы: + ~', created=created, updated=updated, removed=removed)
 
     except Exception as e:
-        logger.error('Ошибка синхронизации серверов', error=e)
+        logger.error('❌ Ошибка синхронизации серверов', error=e)
 
 
 async def sync_server_user_counts(db: AsyncSession) -> int:
@@ -746,7 +728,7 @@ async def sync_server_user_counts(db: AsyncSession) -> int:
         all_servers_result = await db.execute(select(ServerSquad.id, ServerSquad.squad_uuid))
         all_servers = all_servers_result.fetchall()
 
-        logger.info('Найдено серверов для синхронизации', all_servers_count=len(all_servers))
+        logger.info('🔍 Найдено серверов для синхронизации', all_servers_count=len(all_servers))
 
         updated_count = 0
         for server_id, squad_uuid in all_servers:
@@ -762,17 +744,14 @@ async def sync_server_user_counts(db: AsyncSession) -> int:
             actual_users = count_result.scalar() or 0
 
             logger.info(
-                'Сервер пользователей',
-                server_id=server_id,
-                squad_uuid=squad_uuid[:8],
-                actual_users=actual_users,
+                '📊 Сервер пользователей', server_id=server_id, squad_uuid=squad_uuid[:8], actual_users=actual_users
             )
 
             await db.execute(update(ServerSquad).where(ServerSquad.id == server_id).values(current_users=actual_users))
             updated_count += 1
 
         await db.commit()
-        logger.info('Синхронизированы счетчики для серверов', updated_count=updated_count)
+        logger.info('✅ Синхронизированы счетчики для серверов', updated_count=updated_count)
         return updated_count
 
     except Exception as e:

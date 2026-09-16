@@ -100,11 +100,7 @@ class FreekassaPaymentMixin:
                     email=email,
                     payment_system_id=ps_id,
                 )
-                logger.info(
-                    'Freekassa API: создан заказ order_id url',
-                    order_id=order_id,
-                    payment_url=payment_url,
-                )
+                logger.info('Freekassa API: создан заказ order_id url', order_id=order_id, payment_url=payment_url)
             else:
                 # Генерируем URL для формы оплаты (стандартный способ)
                 payment_url = freekassa_service.build_payment_url(
@@ -190,10 +186,7 @@ class FreekassaPaymentMixin:
 
             # Проверка подписи
             if not freekassa_service.verify_webhook_signature(merchant_id, amount, order_id, sign):
-                logger.warning(
-                    'Freekassa webhook: неверная подпись для order_id',
-                    order_id=order_id,
-                )
+                logger.warning('Freekassa webhook: неверная подпись для order_id', order_id=order_id)
                 return False
 
             # Импортируем CRUD модуль
@@ -208,19 +201,13 @@ class FreekassaPaymentMixin:
             # Lock payment row immediately to prevent concurrent webhook processing (TOCTOU race)
             locked = await freekassa_crud.get_freekassa_payment_by_id_for_update(db, payment.id)
             if not locked:
-                logger.error(
-                    'Freekassa webhook: не удалось заблокировать платёж',
-                    payment_id=payment.id,
-                )
+                logger.error('Freekassa webhook: не удалось заблокировать платёж', payment_id=payment.id)
                 return False
             payment = locked
 
             # Re-check is_paid from the locked row
             if payment.is_paid:
-                logger.info(
-                    'Freekassa webhook: платеж уже обработан order_id',
-                    order_id=order_id,
-                )
+                logger.info('Freekassa webhook: платеж уже обработан order_id', order_id=order_id)
                 return True
 
             # Проверка суммы
@@ -271,11 +258,7 @@ class FreekassaPaymentMixin:
 
         # FOR UPDATE lock already acquired by caller — just check idempotency
         if payment.transaction_id:
-            logger.info(
-                'Freekassa платеж уже привязан к транзакции',
-                order_id=payment.order_id,
-                trigger=trigger,
-            )
+            logger.info('Freekassa платеж уже привязан к транзакции', order_id=payment.order_id, trigger=trigger)
             return True
 
         # --- Guest purchase flow (landing page) ---
@@ -415,10 +398,11 @@ class FreekassaPaymentMixin:
                 await self.bot.send_message(
                     user.telegram_id,
                     (
-                        '<b>Пополнение успешно!</b>\n\n'
-                        f'Сумма: {settings.format_price(payment.amount_kopeks)}\n'
-                        f'Способ: {display_name}\n'
-                        f'Транзакция: {transaction.id}'
+                        '✅ <b>Пополнение успешно!</b>\n\n'
+                        f'💰 Сумма: {settings.format_price(payment.amount_kopeks)}\n'
+                        f'💳 Способ: {display_name}\n'
+                        f'🆔 Транзакция: {transaction.id}\n\n'
+                        'Баланс пополнен автоматически!'
                     ),
                     parse_mode='HTML',
                     reply_markup=keyboard,
@@ -433,14 +417,11 @@ class FreekassaPaymentMixin:
             await send_cart_notification_after_topup(user, payment.amount_kopeks, db, getattr(self, 'bot', None))
         except Exception as error:
             logger.error(
-                'Ошибка при работе с сохраненной корзиной для пользователя',
-                user_id=user.id,
-                error=error,
-                exc_info=True,
+                'Ошибка при работе с сохраненной корзиной для пользователя', user_id=user.id, error=error, exc_info=True
             )
 
         logger.info(
-            'Обработан Freekassa платеж для пользователя',
+            '✅ Обработан Freekassa платеж для пользователя',
             order_id=payment.order_id,
             user_id=payment.user_id,
             trigger=trigger,
@@ -526,16 +507,10 @@ class FreekassaPaymentMixin:
                     # Lock payment row before finalization to prevent concurrent double-processing
                     locked = await freekassa_crud.get_freekassa_payment_by_id_for_update(db, payment.id)
                     if not locked:
-                        logger.error(
-                            'Freekassa status check: не удалось заблокировать платёж',
-                            payment_id=payment.id,
-                        )
+                        logger.error('Freekassa status check: не удалось заблокировать платёж', payment_id=payment.id)
                     elif locked.is_paid:
                         # Another concurrent handler already processed — skip
-                        logger.info(
-                            'Freekassa платеж уже оплачен после блокировки',
-                            order_id=locked.order_id,
-                        )
+                        logger.info('Freekassa платеж уже оплачен после блокировки', order_id=locked.order_id)
                         payment = locked
                     else:
                         payment = locked

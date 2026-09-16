@@ -93,7 +93,7 @@ class SpinResultResponse(BaseModel):
     prize_type: str | None = None
     prize_value: int = 0
     prize_display_name: str = ''
-    emoji: str = ''
+    emoji: str = '🎁'
     color: str = '#3B82F6'
     rotation_degrees: float = 0.0
     message: str = ''
@@ -115,7 +115,7 @@ class SpinHistoryItem(BaseModel):
     prize_type: str
     prize_value: int
     prize_display_name: str
-    emoji: str = ''
+    emoji: str = '🎁'
     color: str = '#3B82F6'
     prize_value_kopeks: int
     created_at: datetime
@@ -206,7 +206,7 @@ class CreatePrizeRequest(BaseModel):
     prize_type: WheelPrizeType
     prize_value: int = Field(..., ge=0)
     display_name: str = Field(..., min_length=1, max_length=100)
-    emoji: str = Field(default='', max_length=10)
+    emoji: str = Field(default='🎁', max_length=10)
     color: str = Field(default='#3B82F6', pattern=r'^#[0-9A-Fa-f]{6}$')
     prize_value_kopeks: int = Field(..., ge=0)
     sort_order: int = Field(default=0, ge=0)

@@ -74,31 +74,34 @@ class StageHandle:
         self.title = title
         self.icon = icon
         self.message = success_message or ''
-        self.status_icon = ''
+        self.status_icon = '✅'
         self.status_label = 'Готово'
         self._explicit_status = False
 
     def success(self, message: str | None = None) -> None:
         if message is not None:
             self.message = message
-        self.status_icon = ''
+        self.status_icon = '✅'
         self.status_label = 'Готово'
         self._explicit_status = True
 
     def warning(self, message: str) -> None:
-        self.status_icon = ''
+        # Статусные значки — только из однозначно широких (East Asian Wide) эмодзи:
+        # пары «нейтральный символ + VS16» (⚠️, ⏭️) терминалы рисуют широким глифом,
+        # продвигая курсор на одну клетку — глиф наезжает на пробел и ломает рамку резюме.
+        self.status_icon = '❗'
         self.status_label = 'Предупреждение'
         self.message = message
         self._explicit_status = True
 
     def skip(self, message: str) -> None:
-        self.status_icon = ''
+        self.status_icon = '⏩'
         self.status_label = 'Пропущено'
         self.message = message
         self._explicit_status = True
 
     def failure(self, message: str) -> None:
-        self.status_icon = ''
+        self.status_icon = '❌'
         self.status_label = 'Ошибка'
         self.message = message
         self._explicit_status = True
@@ -125,7 +128,7 @@ class StartupTimeline:
         )
 
     def log_banner(self, metadata: Sequence[tuple[str, Any]] | None = None) -> None:
-        title_text = f'{self.app_name}'
+        title_text = f'🚀 {self.app_name}'
         subtitle_parts = [f'Python {platform.python_version()}']
         if metadata:
             for key, value in metadata:
@@ -139,7 +142,7 @@ class StartupTimeline:
         self.logger.info('║ ' + _ljust(subtitle_text, width) + ' ║')
         self.logger.info('╚' + '═' * (width + 2) + '╝')
 
-    def log_section(self, title: str, lines: Iterable[str], icon: str = '') -> None:
+    def log_section(self, title: str, lines: Iterable[str], icon: str = '📄') -> None:
         items = [f'{icon} {title}'] + [f'• {line}' for line in lines]
         width = max(_display_width(item) for item in items)
         top = '┌ ' + '─' * width + ' ┐'
@@ -168,7 +171,7 @@ class StartupTimeline:
     async def stage(
         self,
         title: str,
-        icon: str = '',
+        icon: str = '⚙️',
         description: str | None = None,
         success_message: str | None = 'Готово',
     ):
@@ -184,7 +187,7 @@ class StartupTimeline:
         except Exception as exc:
             message = str(exc)
             handle.failure(message)
-            self.logger.exception('┣ — ошибка', title=title, message=message)
+            self.logger.exception('┣ ❌ — ошибка', title=title, message=message)
             raise
         finally:
             duration = time.perf_counter() - start_time

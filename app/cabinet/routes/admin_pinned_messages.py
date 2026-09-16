@@ -139,11 +139,7 @@ async def get_pinned_message(
 # ============ Create / Update Endpoints ============
 
 
-@router.post(
-    '',
-    response_model=PinnedMessageBroadcastResponse,
-    status_code=status.HTTP_201_CREATED,
-)
+@router.post('', response_model=PinnedMessageBroadcastResponse, status_code=status.HTTP_201_CREATED)
 async def create_pinned_message(
     payload: PinnedMessageCreateRequest,
     admin: User = Depends(require_permission('pinned_messages:create')),
@@ -186,10 +182,7 @@ async def create_pinned_message(
         sent_count, failed_count = await broadcast_pinned_message(_get_bot(), db, msg)
 
     logger.info(
-        'Admin created pinned message # (broadcast=)',
-        admin_id=admin.id,
-        message_id=msg.id,
-        broadcast=payload.broadcast,
+        'Admin created pinned message # (broadcast=)', admin_id=admin.id, message_id=msg.id, broadcast=payload.broadcast
     )
 
     return PinnedMessageBroadcastResponse(
@@ -349,10 +342,7 @@ async def activate_pinned_message(
         sent_count, failed_count = await broadcast_pinned_message(_get_bot(), db, msg)
 
     logger.info(
-        'Admin activated pinned message # (broadcast=)',
-        admin_id=admin.id,
-        message_id=message_id,
-        broadcast=broadcast,
+        'Admin activated pinned message # (broadcast=)', admin_id=admin.id, message_id=message_id, broadcast=broadcast
     )
 
     return PinnedMessageBroadcastResponse(

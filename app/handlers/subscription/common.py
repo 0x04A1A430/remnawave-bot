@@ -14,6 +14,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from app.config import get_traffic_prices, settings
 from app.database.models import Subscription, User
 from app.localization.texts import get_texts
+from app.utils.incy_crypt1 import wrap_incy_deep_link
 from app.utils.pricing_utils import (
     apply_percentage_discount,
 )
@@ -174,7 +175,7 @@ def update_traffic_prices():
     from app.config import refresh_traffic_prices
 
     refresh_traffic_prices()
-    logger.info('TRAFFIC_PRICES обновлены из конфигурации')
+    logger.info('🔄 TRAFFIC_PRICES обновлены из конфигурации')
 
 
 def format_traffic_display(traffic_gb: int, is_fixed_mode: bool = None) -> str:
@@ -305,13 +306,13 @@ def get_device_name(device_type: str, language: str = 'ru') -> str:
 # ── Remnawave async config loader ──
 
 _PLATFORM_DISPLAY = {
-    'ios': {'name': 'iPhone/iPad', 'emoji': ''},
-    'android': {'name': 'Android', 'emoji': ''},
-    'windows': {'name': 'Windows', 'emoji': ''},
-    'macos': {'name': 'macOS', 'emoji': ''},
-    'linux': {'name': 'Linux', 'emoji': ''},
-    'androidTV': {'name': 'Android TV', 'emoji': ''},
-    'appleTV': {'name': 'Apple TV', 'emoji': ''},
+    'ios': {'name': 'iPhone/iPad', 'emoji': '📱'},
+    'android': {'name': 'Android', 'emoji': '🤖'},
+    'windows': {'name': 'Windows', 'emoji': '💻'},
+    'macos': {'name': 'macOS', 'emoji': '🎯'},
+    'linux': {'name': 'Linux', 'emoji': '🐧'},
+    'androidTV': {'name': 'Android TV', 'emoji': '📺'},
+    'appleTV': {'name': 'Apple TV', 'emoji': '📺'},
 }
 
 # Map callback device_type keys to Remnawave platform keys
@@ -344,10 +345,7 @@ def _get_remnawave_config_uuid() -> str | None:
 
         return bot_configuration_service.get_current_value('CABINET_REMNA_SUB_CONFIG')
     except Exception as e:
-        logger.debug(
-            'Could not read CABINET_REMNA_SUB_CONFIG from service, using settings fallback',
-            error=e,
-        )
+        logger.debug('Could not read CABINET_REMNA_SUB_CONFIG from service, using settings fallback', error=e)
         return getattr(settings, 'CABINET_REMNA_SUB_CONFIG', None)
 
 
@@ -381,10 +379,7 @@ async def load_app_config_async() -> dict[str, Any] | None:
                         raw['_isRemnawave'] = True
                         _app_config_cache = raw
                         _app_config_cache_ts = time.monotonic()
-                        logger.debug(
-                            'Loaded app config from Remnawave',
-                            remnawave_uuid=remnawave_uuid,
-                        )
+                        logger.debug('Loaded app config from Remnawave', remnawave_uuid=remnawave_uuid)
                         return raw
             except Exception as e:
                 logger.warning('Failed to load Remnawave config', error=e)
@@ -482,7 +477,7 @@ def get_platforms_list(config: dict[str, Any]) -> list[dict[str, Any]]:
         if not isinstance(pd, dict) or not pd.get('apps'):
             continue
 
-        display = _PLATFORM_DISPLAY.get(pk, {'name': pk, 'emoji': ''})
+        display = _PLATFORM_DISPLAY.get(pk, {'name': pk, 'emoji': '📱'})
 
         # Get displayName from Remnawave or fallback
         display_name_data = pd.get('displayName', display['name'])
@@ -503,12 +498,12 @@ def get_platforms_list(config: dict[str, Any]) -> list[dict[str, Any]]:
         if not isinstance(pd, dict) or not pd.get('apps'):
             continue
 
-        display = _PLATFORM_DISPLAY.get(pk, {'name': pk, 'emoji': ''})
+        display = _PLATFORM_DISPLAY.get(pk, {'name': pk, 'emoji': '📱'})
         result.append(
             {
                 'key': pk,
                 'displayName': display.get('name', pk),
-                'icon_emoji': display.get('emoji', ''),
+                'icon_emoji': display.get('emoji', '📱'),
                 'device_type': _PLATFORM_TO_DEVICE.get(pk, pk),
             }
         )
@@ -528,9 +523,14 @@ def resolve_button_url(
     if subscription_url:
         result = result.replace('{{SUBSCRIPTION_LINK}}', subscription_url)
     if crypto_link:
+        # {{HAPP_CRYPT*_LINK}} — это ПОЛНАЯ ссылка happ://crypt.../; если шаблон задан
+        # с префиксом (happ://crypt4/{{HAPP_CRYPT4_LINK}}), схлопываем его, чтобы не
+        # получить happ://crypt4/happ://crypt5/...
+        if crypto_link.lower().startswith('happ://'):
+            result = re.sub(r'happ://crypt\d+/(?=\{\{HAPP_CRYPT[34]_LINK\}\})', '', result, flags=re.IGNORECASE)
         result = result.replace('{{HAPP_CRYPT3_LINK}}', crypto_link)
         result = result.replace('{{HAPP_CRYPT4_LINK}}', crypto_link)
-    return result
+    return wrap_incy_deep_link(result, subscription_url)
 
 
 def create_deep_link(app: dict[str, Any], subscription_url: str) -> str | None:
@@ -543,18 +543,25 @@ def create_deep_link(app: dict[str, Any], subscription_url: str) -> str | None:
     scheme = str(app.get('urlScheme', '')).strip()
     payload = subscription_url
 
-    if app.get('isNeedBase64Encoding'):
-        try:
-            payload = base64.b64encode(subscription_url.encode('utf-8')).decode('utf-8')
-        except Exception as exc:
-            logger.warning(
-                'Не удалось закодировать ссылку подписки в base64 для приложения',
-                app=app.get('id'),
-                exc=exc,
-            )
-            payload = subscription_url
+    # В режиме happ_cryptolink сюда приходит уже полный happ://crypt.../ deep link
+    # (get_display_subscription_link отдаёт сохранённую crypt-ссылку). Приклеивать его
+    # к другой happ://-схеме нельзя — получится happ://crypt4/happ://crypt5/...;
+    # https-обёртки (редиректы) ниже по коду по-прежнему применяются.
+    if payload.lower().startswith('happ://') and scheme.lower().startswith('happ://'):
+        scheme_link = payload
+    else:
+        if app.get('isNeedBase64Encoding'):
+            try:
+                payload = base64.b64encode(subscription_url.encode('utf-8')).decode('utf-8')
+            except Exception as exc:
+                logger.warning(
+                    'Не удалось закодировать ссылку подписки в base64 для приложения', app=app.get('id'), exc=exc
+                )
+                payload = subscription_url
 
-    scheme_link = f'{scheme}{payload}' if scheme else None
+        scheme_link = f'{scheme}{payload}' if scheme else None
+
+    scheme_link = wrap_incy_deep_link(scheme_link, subscription_url)
 
     template = settings.get_happ_cryptolink_redirect_template()
     redirect_link = build_redirect_link(scheme_link, template) if scheme_link and template else None
@@ -568,13 +575,8 @@ def get_reset_devices_confirm_keyboard(
     get_texts(language)
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text='Да, сбросить все устройства',
-                    callback_data='confirm_reset_devices',
-                )
-            ],
-            [InlineKeyboardButton(text='Отмена', callback_data=back_callback)],
+            [InlineKeyboardButton(text='✅ Да, сбросить все устройства', callback_data='confirm_reset_devices')],
+            [InlineKeyboardButton(text='❌ Отмена', callback_data=back_callback)],
         ]
     )
 
@@ -629,11 +631,11 @@ def get_traffic_switch_keyboard(
 
         # Сравниваем с базовым трафиком (без докупленного)
         if gb == base_traffic_gb:
-            emoji = ''
+            emoji = '✅'
             action_text = ' (текущий)'
             price_text = ''
         elif total_price_diff > 0:
-            emoji = '↑ '
+            emoji = '⬆️'
             action_text = ''
             price_text = f' (+{total_price_diff // 100}₽{period_text})'
             if discount_percent > 0:
@@ -641,11 +643,11 @@ def get_traffic_switch_keyboard(
                 if discount_total > 0:
                     price_text += f' (скидка {discount_percent}%: -{discount_total // 100}₽)'
         elif total_price_diff < 0:
-            emoji = '↓ '
+            emoji = '⬇️'
             action_text = ''
             price_text = ' (без возврата)'
         else:
-            emoji = ''
+            emoji = '🔄'
             action_text = ''
             price_text = ' (бесплатно)'
 
@@ -662,7 +664,7 @@ def get_traffic_switch_keyboard(
     buttons.append(
         [
             InlineKeyboardButton(
-                text='← Назад' if language_code in {'ru'} else '← Back',
+                text='⬅️ Назад' if language_code in {'ru', 'fa'} else '⬅️ Back',
                 callback_data=back_callback,
             )
         ]
@@ -672,19 +674,16 @@ def get_traffic_switch_keyboard(
 
 
 def get_confirm_switch_traffic_keyboard(
-    new_traffic_gb: int,
-    price_difference: int,
-    language: str = 'ru',
-    back_callback: str = 'subscription_settings',
+    new_traffic_gb: int, price_difference: int, language: str = 'ru', back_callback: str = 'subscription_settings'
 ) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text='Подтвердить переключение',
+                    text='✅ Подтвердить переключение',
                     callback_data=f'confirm_switch_traffic_{new_traffic_gb}_{price_difference}',
                 )
             ],
-            [InlineKeyboardButton(text='Отмена', callback_data=back_callback)],
+            [InlineKeyboardButton(text='❌ Отмена', callback_data=back_callback)],
         ]
     )

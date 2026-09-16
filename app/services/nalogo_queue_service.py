@@ -214,9 +214,7 @@ class NalogoQueueService:
                             operation_time = operation_time.replace(tzinfo=UTC)
                     except (ValueError, TypeError) as parse_error:
                         logger.warning(
-                            'Не удалось распарсить created_at',
-                            created_at_str=created_at_str,
-                            parse_error=parse_error,
+                            'Не удалось распарсить created_at', created_at_str=created_at_str, parse_error=parse_error
                         )
 
                 # Формируем описание заново из настроек (если есть данные)
@@ -284,11 +282,7 @@ class NalogoQueueService:
             except Exception as error:
                 await self._nalogo_service.requeue_receipt(receipt_data)
                 failed += 1
-                logger.error(
-                    'Ошибка при создании чека из очереди',
-                    payment_id=payment_id,
-                    error=error,
-                )
+                logger.error('Ошибка при создании чека из очереди', payment_id=payment_id, error=error)
                 # Прекращаем попытки при ошибке
                 break
 
@@ -313,10 +307,10 @@ class NalogoQueueService:
                 total_queued_amount = sum(r.get('amount', 0) for r in queued)
 
                 message = (
-                    f'<b> Проблема с отправкой чеков NaloGO</b>\n\n'
+                    f'<b>⚠️ Проблема с отправкой чеков NaloGO</b>\n\n'
                     f'Сервис nalog.ru временно недоступен.\n\n'
-                    f'<b>В очереди:</b> {remaining} чек(ов)\n'
-                    f'<b>На сумму:</b> {total_queued_amount:,.2f} ₽\n\n'
+                    f'📋 <b>В очереди:</b> {remaining} чек(ов)\n'
+                    f'💰 <b>На сумму:</b> {total_queued_amount:,.2f} ₽\n\n'
                     f'Чеки будут отправлены автоматически когда сервис восстановится.'
                 )
                 await self._send_admin_notification(message)
@@ -325,10 +319,10 @@ class NalogoQueueService:
         elif remaining == 0 and self._had_pending_receipts and processed > 0:
             self._had_pending_receipts = False
             message = (
-                f'<b>Очередь чеков NaloGO разгружена</b>\n\n'
+                f'<b>✅ Очередь чеков NaloGO разгружена</b>\n\n'
                 f'Все отложенные чеки успешно отправлены!\n\n'
-                f'<b>Отправлено:</b> {processed} чек(ов)\n'
-                f'<b>На сумму:</b> {total_processed_amount:,.2f} ₽'
+                f'📋 <b>Отправлено:</b> {processed} чек(ов)\n'
+                f'💰 <b>На сумму:</b> {total_processed_amount:,.2f} ₽'
             )
             await self._send_admin_notification(message, skip_cooldown=True)
 

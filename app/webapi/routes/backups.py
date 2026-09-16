@@ -245,10 +245,7 @@ async def upload_and_restore_backup(
 
     allowed_extensions = ('.tar.gz', '.json', '.json.gz', '.tar')
     if not any(safe_filename.endswith(ext) for ext in allowed_extensions):
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST,
-            f'Invalid file type. Allowed: {", ".join(allowed_extensions)}',
-        )
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, f'Invalid file type. Allowed: {", ".join(allowed_extensions)}')
 
     temp_path = backup_service.backup_dir / f'uploaded_{safe_filename}'
 
