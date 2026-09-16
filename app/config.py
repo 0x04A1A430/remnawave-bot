@@ -1244,7 +1244,7 @@ class Settings(BaseSettings):
     INCY_CRYPTOLINK_PROVIDER_NAME: str | None = None
     HIDE_SUBSCRIPTION_LINK: bool = False
     ENABLE_LOGO_MODE: bool = True
-    LOGO_FILE: str = 'vpn_logo.png'
+    LOGO_FILE: str = 'bot_logo.png'
     SKIP_RULES_ACCEPT: bool = False
     SKIP_REFERRAL_CODE: bool = False
 
