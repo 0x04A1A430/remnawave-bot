@@ -1473,6 +1473,7 @@
   "SUBSCRIPTION_SUMMARY": "\n📋 <b>Підсумкова конфігурація</b>\n\n📅 <b>Період:</b> {period} днів\n📈 <b>Трафік:</b> {traffic}\n🌍 <b>Країни:</b> {countries}\n📱 <b>Пристрої:</b> {devices}\n\n💰 <b>Разом до сплати:</b> {total_price}\n\nПідтвердити покупку?\n",
   "SUBSCRIPTION_SUMMARY_PROMO_DISCOUNT": "- Промо-пропозиція: -{amount} ({percent}% додатково)",
   "SUBSCRIPTION_TIME_LEFT_DAYS": "{days} дн.",
+  "SUBSCRIPTION_TIME_LEFT_DAYS_HOURS": "{days} дн. {hours} год.",
   "SUBSCRIPTION_TIME_LEFT_EXPIRED": "закінчився",
   "SUBSCRIPTION_TIME_LEFT_HOURS": "{hours} год.",
   "SUBSCRIPTION_TIME_LEFT_MINUTES": "{minutes} хв.",

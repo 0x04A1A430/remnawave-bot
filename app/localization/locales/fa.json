@@ -1666,6 +1666,7 @@
   "SUBSCRIPTION_SUMMARY": "\n📋 <b>پیکربندی نهایی</b>\n\n📅 <b>دوره:</b> {period} روز\n📈 <b>ترافیک:</b> {traffic}\n🌍 <b>کشورها:</b> {countries}\n📱 <b>دستگاه‌ها:</b> {devices}\n\n💰 <b>مبلغ نهایی:</b> {total_price}\n\nخرید تأیید شود؟\n",
   "SUBSCRIPTION_SUMMARY_PROMO_DISCOUNT": "- پیشنهاد تخفیف: -{amount} ({percent}% اضافی)",
   "SUBSCRIPTION_TIME_LEFT_DAYS": "{days} روز",
+  "SUBSCRIPTION_TIME_LEFT_DAYS_HOURS": "{days} روز {hours} ساعت",
   "SUBSCRIPTION_TIME_LEFT_EXPIRED": "منقضی شده",
   "SUBSCRIPTION_TIME_LEFT_HOURS": "{hours} ساعت",
   "SUBSCRIPTION_TIME_LEFT_MINUTES": "{minutes} دقیقه",

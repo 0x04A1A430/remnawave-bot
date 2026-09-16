@@ -74,6 +74,7 @@ from app.services.panel_sync import (
 from app.services.panel_sync.fields import narrow_push_fields
 from app.services.permission_service import PermissionService
 from app.services.user_action_log_service import CLICK_PREFIX, SCREEN_PREFIX
+from app.utils.subscription_time import local_days_until
 from app.utils.subscription_utils import coerce_panel_device_limit
 from app.utils.timezone import local_day_start, panel_datetime_to_utc
 
@@ -250,8 +251,7 @@ def _build_user_list_item(user: User, spending_stats: dict = None, highlight: st
         traffic_limit_gb = subscription.traffic_limit_gb or 0
         device_limit = subscription.device_limit or 0
         if subscription.end_date:
-            delta = subscription.end_date - datetime.now(UTC)
-            days_remaining = max(0, delta.days)
+            days_remaining = local_days_until(subscription.end_date)
 
     # Build per-subscription list (always — bulk actions need it for any mode)
     sub_list: list[SubscriptionListItem] = []
@@ -317,8 +317,7 @@ def _build_subscription_info(subscription: Subscription, tariff_name: str | None
     is_active = False
 
     if subscription.end_date:
-        delta = subscription.end_date - datetime.now(UTC)
-        days_remaining = max(0, delta.days)
+        days_remaining = local_days_until(subscription.end_date)
         is_active = subscription.status == SubscriptionStatus.ACTIVE.value and subscription.end_date > datetime.now(UTC)
 
     return UserSubscriptionInfo(
@@ -359,8 +358,7 @@ async def _build_subscription_info_async(db: AsyncSession, subscription: Subscri
 
     traffic_purchase_items = []
     for p in purchases:
-        delta = p.expires_at - now
-        days_remaining = max(0, delta.days)
+        days_remaining = local_days_until(p.expires_at, now)
         is_expired = now >= p.expires_at
         traffic_purchase_items.append(
             TrafficPurchaseItem(

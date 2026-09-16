@@ -1469,6 +1469,7 @@
   "SUBSCRIPTION_SUMMARY": "\n📋<b>最终配置</b>\n\n📅<b>周期：</b>{period}天\n📈<b>流量：</b>{traffic}\n🌍<b>国家：</b>{countries}\n📱<b>设备：</b>{devices}\n\n💰<b>总计：</b>{total_price}\n\n确认购买吗？\n",
   "SUBSCRIPTION_SUMMARY_PROMO_DISCOUNT": "-促销优惠：-{amount}(额外{percent}%)",
   "SUBSCRIPTION_TIME_LEFT_DAYS": "{days}天",
+  "SUBSCRIPTION_TIME_LEFT_DAYS_HOURS": "{days}天{hours}小时",
   "SUBSCRIPTION_TIME_LEFT_EXPIRED": "已过期",
   "SUBSCRIPTION_TIME_LEFT_HOURS": "{hours}小时",
   "SUBSCRIPTION_TIME_LEFT_MINUTES": "{minutes}分钟",

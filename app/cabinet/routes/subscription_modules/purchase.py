@@ -48,6 +48,7 @@ from app.services.subscription_purchase_service import (
 from app.services.subscription_service import SubscriptionService
 from app.services.user_cart_service import user_cart_service
 from app.utils.pricing_utils import calculate_price_per_month, format_period_description
+from app.utils.timezone import format_local_datetime
 
 from ...dependencies import get_cabinet_db, get_current_cabinet_user
 from ...schemas.subscription import (
@@ -534,7 +535,7 @@ async def submit_purchase(
                     if is_new_subscription
                     else NotificationType.SUBSCRIPTION_RENEWED
                 )
-                end_date_str = subscription.end_date.strftime('%d.%m.%Y') if subscription.end_date else ''
+                end_date_str = format_local_datetime(subscription.end_date, '%d.%m.%Y') if subscription.end_date else ''
                 await notification_delivery_service.send_notification(
                     user=user,
                     notification_type=notification_type,
@@ -1242,7 +1243,7 @@ async def purchase_tariff(
                     if was_new_subscription
                     else NotificationType.SUBSCRIPTION_RENEWED
                 )
-                end_date_str = subscription.end_date.strftime('%d.%m.%Y') if subscription.end_date else ''
+                end_date_str = format_local_datetime(subscription.end_date, '%d.%m.%Y') if subscription.end_date else ''
                 await notification_delivery_service.send_notification(
                     user=user,
                     notification_type=notification_type,
