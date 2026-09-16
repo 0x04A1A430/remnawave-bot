@@ -68,6 +68,7 @@ from app.services.panel_sync import (
     PanelAccountOwnedByAnotherUser,
     find_foreign_panel_owner,
     is_subscription_live,
+    link_subscription_panel_identity,
     project_onto_subscription,
     read_panel_user,
 )
@@ -4139,6 +4140,12 @@ async def sync_user_from_panel(
                     policy=ADMIN_PULL if request.update_subscription else ROUTINE,
                     trust_status=request.update_subscription,
                 )
+                # Одиночный режим: аккаунт найден по пользователю, строка подписки могла
+                # остаться без id после старого импорта. В мультитарифе привязка выше.
+                if not settings.is_multi_tariff_enabled() and await link_subscription_panel_identity(
+                    db, sync_sub, panel_user.id
+                ):
+                    changes['subscription_remnawave_id'] = {'old': None, 'new': panel_user.id}
                 for field in sorted(changed_fields):
                     old_value = before[field]
                     new_value = getattr(sync_sub, field)

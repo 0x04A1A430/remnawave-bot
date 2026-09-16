@@ -2890,6 +2890,9 @@
 - `migrations/alembic/versions/0123_user_trial_reset_at.py` — Python-модуль
   Классы: нет
   Функции: `upgrade`, `downgrade`
+- `migrations/alembic/versions/0124_subscription_panel_identity_backfill.py` — Python-модуль
+  Классы: нет
+  Функции: `upgrade`, `downgrade`
 
 ## scripts
 
@@ -3512,6 +3515,9 @@
 - `tests/database/test_migration_chain.py` — Python-модуль
   Классы: нет
   Функции: `test_single_head`, `test_revision_ids_are_unique`, `test_every_revision_reaches_base` — Разрыв в down_revision оставил бы часть миграций неприменёнными.
+- `tests/database/test_panel_import_subscription_identity_postgres.py` — Python-модуль
+  Классы: нет
+  Функции: `single_tariff`, `test_created_from_panel_carries_panel_id`, `test_update_from_panel_binds_row_left_empty_by_old_import`, `test_migration_binds_only_unambiguous_rows`
 - `tests/database/test_paritypay_payments_schema_parity.py` — Python-модуль
   Классы: нет
   Функции: `both`, `test_columns_match`, `test_indexes_match`, `test_column_types_match` — Integer вместо Boolean в рукописном DDL иначе не заметить., `test_order_id_is_unique` — Уникальность orderId не даёт двум записям претендовать на один вебхук., `test_downgrade_removes_the_table` — Откат обязан снимать таблицу, иначе повторный upgrade упрётся в неё.
