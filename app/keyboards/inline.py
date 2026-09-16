@@ -1170,6 +1170,7 @@ def get_subscription_keyboard(
     has_subscription: bool = False,
     is_trial: bool = False,
     subscription=None,
+    gift_enabled: bool = False,
 ) -> InlineKeyboardMarkup:
     from app.config import settings
 
