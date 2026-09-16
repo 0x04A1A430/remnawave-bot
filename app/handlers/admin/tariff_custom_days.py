@@ -29,7 +29,7 @@ def _price(value: int | None) -> str:
 def format_custom_days_settings(tariff: Tariff) -> str:
     """Блок для карточки тарифа."""
     enabled = getattr(tariff, 'custom_days_enabled', False)
-    status = '✅ Включено' if enabled else '❌ Выключено'
+    status = ' Включено' if enabled else ' Выключено'
     return (
         f'{status}\n'
         f'• Цена за 1 день: {_price(getattr(tariff, "price_per_day_kopeks", None))}\n'
@@ -41,9 +41,9 @@ def format_custom_days_settings(tariff: Tariff) -> str:
 def render_custom_days_settings(tariff: Tariff) -> str:
     """Отдельный экран настроек."""
     enabled = getattr(tariff, 'custom_days_enabled', False)
-    status = '✅ Включён' if enabled else '❌ Выключен'
+    status = ' Включён' if enabled else ' Выключен'
     return (
-        f'📅 <b>Произвольное количество дней</b>\n\n'
+        f' <b>Произвольное количество дней</b>\n\n'
         f'Тариф: <b>{html.escape(tariff.name)}</b>\n\n'
         f'Статус: {status}\n'
         f'Цена за 1 день: <b>{_price(getattr(tariff, "price_per_day_kopeks", None))}</b>\n'
@@ -60,23 +60,23 @@ def get_custom_days_keyboard(tariff: Tariff, language: str) -> InlineKeyboardMar
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text='❌ Выключить' if enabled else '✅ Включить',
+                    text=' Выключить' if enabled else ' Включить',
                     callback_data=f'admin_tariff_toggle_custom_days:{tariff.id}',
                 )
             ],
             [
                 InlineKeyboardButton(
-                    text='💰 Цена за 1 день', callback_data=f'admin_tariff_edit_custom_days_price:{tariff.id}'
+                    text=' Цена за 1 день', callback_data=f'admin_tariff_edit_custom_days_price:{tariff.id}'
                 )
             ],
             [
                 InlineKeyboardButton(
-                    text='📉 Минимум дней', callback_data=f'admin_tariff_edit_custom_days_min:{tariff.id}'
+                    text=' Минимум дней', callback_data=f'admin_tariff_edit_custom_days_min:{tariff.id}'
                 )
             ],
             [
                 InlineKeyboardButton(
-                    text='📈 Максимум дней', callback_data=f'admin_tariff_edit_custom_days_max:{tariff.id}'
+                    text=' Максимум дней', callback_data=f'admin_tariff_edit_custom_days_max:{tariff.id}'
                 )
             ],
             [InlineKeyboardButton(text=texts.BACK, callback_data=f'admin_tariff_view:{tariff.id}')],
@@ -172,7 +172,7 @@ async def start_edit_custom_days_price(
         state,
         tariff,
         state_value=AdminStates.editing_tariff_custom_days_price,
-        title='💰 <b>Цена за 1 день</b>',
+        title=' <b>Цена за 1 день</b>',
         current_value=_price(getattr(tariff, 'price_per_day_kopeks', None)),
         prompt='Введите цену за 1 день в рублях.\nПример: <code>15</code> или <code>12.50</code>',
     )
@@ -191,7 +191,7 @@ async def start_edit_custom_days_min(callback: types.CallbackQuery, db_user: Use
         state,
         tariff,
         state_value=AdminStates.editing_tariff_custom_days_min,
-        title='📉 <b>Минимум дней</b>',
+        title=' <b>Минимум дней</b>',
         current_value=_days(getattr(tariff, 'min_days', None)),
         prompt='Введите минимальный срок целым числом дней.\nПример: <code>3</code>',
     )
@@ -210,7 +210,7 @@ async def start_edit_custom_days_max(callback: types.CallbackQuery, db_user: Use
         state,
         tariff,
         state_value=AdminStates.editing_tariff_custom_days_max,
-        title='📈 <b>Максимум дней</b>',
+        title=' <b>Максимум дней</b>',
         current_value=_days(getattr(tariff, 'max_days', None)),
         prompt='Введите максимальный срок целым числом дней.\nПример: <code>90</code>',
     )
@@ -244,14 +244,14 @@ async def process_custom_days_price_input(message: types.Message, db_user: User,
         price_kopeks = parse_positive_rubles_to_kopeks(message.text or '')
     except ValueError:
         await message.answer(
-            '❌ Некорректная цена. Введите положительную сумму в рублях с точностью не более двух знаков.\n'
+            ' Некорректная цена. Введите положительную сумму в рублях с точностью не более двух знаков.\n'
             'Пример: <code>15</code> или <code>12.50</code>',
             parse_mode='HTML',
         )
         return
     tariff = await update_tariff(db, tariff, price_per_day_kopeks=price_kopeks)
     await _finish(
-        message, db_user, state, tariff, f'✅ Цена за 1 день установлена: {format_price_kopeks(price_kopeks)}'
+        message, db_user, state, tariff, f' Цена за 1 день установлена: {format_price_kopeks(price_kopeks)}'
     )
 
 
@@ -264,14 +264,14 @@ async def process_custom_days_min_input(message: types.Message, db_user: User, d
     try:
         minimum = parse_positive_days(message.text or '')
     except ValueError:
-        await message.answer('❌ Введите положительное целое число дней.\nПример: <code>3</code>', parse_mode='HTML')
+        await message.answer(' Введите положительное целое число дней.\nПример: <code>3</code>', parse_mode='HTML')
         return
     maximum = getattr(tariff, 'max_days', None)
     if maximum is not None and maximum > 0 and minimum > maximum:
-        await message.answer(f'❌ Минимум дней не может быть больше текущего максимума ({maximum} дн.).')
+        await message.answer(f' Минимум дней не может быть больше текущего максимума ({maximum} дн.).')
         return
     tariff = await update_tariff(db, tariff, min_days=minimum)
-    await _finish(message, db_user, state, tariff, f'✅ Минимум установлен: {minimum} дн.')
+    await _finish(message, db_user, state, tariff, f' Минимум установлен: {minimum} дн.')
 
 
 @admin_required
@@ -283,14 +283,14 @@ async def process_custom_days_max_input(message: types.Message, db_user: User, d
     try:
         maximum = parse_positive_days(message.text or '')
     except ValueError:
-        await message.answer('❌ Введите положительное целое число дней.\nПример: <code>90</code>', parse_mode='HTML')
+        await message.answer(' Введите положительное целое число дней.\nПример: <code>90</code>', parse_mode='HTML')
         return
     minimum = getattr(tariff, 'min_days', None)
     if minimum is not None and minimum > 0 and maximum < minimum:
-        await message.answer(f'❌ Максимум дней не может быть меньше текущего минимума ({minimum} дн.).')
+        await message.answer(f' Максимум дней не может быть меньше текущего минимума ({minimum} дн.).')
         return
     tariff = await update_tariff(db, tariff, max_days=maximum)
-    await _finish(message, db_user, state, tariff, f'✅ Максимум установлен: {maximum} дн.')
+    await _finish(message, db_user, state, tariff, f' Максимум установлен: {maximum} дн.')
 
 
 def register_custom_days_handlers(dp: Dispatcher) -> None:

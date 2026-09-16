@@ -272,7 +272,10 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
         days_left = delta.days
         hours_left = delta.seconds // 3600
 
-        if days_left > 1:
+        if subscription.end_date.year > 2050:
+            time_left_text = texts.t('SUBSCRIPTION_TIME_LEFT_FOREVER', 'доступно')
+            warning_text = ''
+        elif days_left > 1:
             time_left_text = texts.t('SUBSCRIPTION_TIME_LEFT_DAYS', '{days} дн.').format(days=days_left)
             warning_text = ''
         elif days_left == 1:

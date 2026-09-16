@@ -19,6 +19,7 @@ from app.database.crud.subscription import (
 )
 from app.database.models import Subscription, SubscriptionStatus, User
 from app.localization.texts import Texts, get_texts
+from app.utils.formatters import format_subscription_end_date
 
 
 logger = structlog.get_logger(__name__)
@@ -65,7 +66,7 @@ def _format_subscription_line(sub, idx: int) -> str:
     devices = f'{Texts.format_device_limit(sub.device_limit)} устр.' if sub.device_limit is not None else ''
 
     # End date
-    end_date = sub.end_date.strftime('%d.%m.%Y') if sub.end_date else '—'
+    end_date = format_subscription_end_date(sub.end_date)
 
     parts = [f'{emoji} <b>{idx}. {tariff_name}</b>{label}']
     parts.append(f'   📊 Трафик: {traffic}')
@@ -240,15 +241,15 @@ async def show_subscription_detail(
         used = f'{subscription.traffic_used_gb:.1f}' if subscription.traffic_used_gb else '0'
         traffic = f'{used} / {subscription.traffic_limit_gb} ГБ'
 
-    end_date = subscription.end_date.strftime('%d.%m.%Y %H:%M') if subscription.end_date else '—'
+    end_date = format_subscription_end_date(subscription.end_date, '%d.%m.%Y %H:%M')
     status = subscription.status_display
 
     text = (
         f'📋 <b>{tariff_name}</b>\n\n'
-        f'Статус: {status}\n'
+        f'<blockquote>Статус: {status}\n'
         f'📊 Трафик: {traffic}\n'
         f'📱 Устройства: {Texts.format_device_limit(subscription.device_limit)}\n'
-        f'📅 До: {end_date}\n'
+        f'📅 До: {end_date}</blockquote>\n'
     )
 
     if subscription.subscription_url and not settings.should_hide_subscription_link():

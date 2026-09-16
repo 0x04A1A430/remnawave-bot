@@ -20,7 +20,7 @@ router = Router(name='admin_overpay_certificate')
 ALLOWED_EXTENSIONS = ('.p12', '.pfx')
 
 ENV_LOCK_NOTE = (
-    '⚠️ OVERPAY_P12_PATH или OVERPAY_P12_PASSPHRASE заданы через переменные окружения — значения из БД не применяются.'
+    ' OVERPAY_P12_PATH или OVERPAY_P12_PASSPHRASE заданы через переменные окружения — значения из БД не применяются.'
 )
 
 
@@ -30,27 +30,27 @@ class OverpayCertStates(StatesGroup):
 
 
 def _cancel_keyboard() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text='◀️ Отмена', callback_data='overpay_cert')]])
+    return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text='◀ Отмена', callback_data='overpay_cert')]])
 
 
 def _back_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
-        inline_keyboard=[[InlineKeyboardButton(text='◀️ К сертификату', callback_data='overpay_cert')]]
+        inline_keyboard=[[InlineKeyboardButton(text='◀ К сертификату', callback_data='overpay_cert')]]
     )
 
 
 def _status_view() -> tuple[str, InlineKeyboardMarkup]:
     status = cert_service.get_status()
-    lines = ['📜 <b>Сертификат Overpay</b>', '']
+    lines = [' <b>Сертификат Overpay</b>', '']
 
     if not status['uploaded']:
-        lines.append('Статус: ❌ не загружен')
+        lines.append('Статус:  не загружен')
     elif status['valid']:
-        lines.append('Статус: ✅ загружен')
+        lines.append('Статус:  загружен')
         lines.append(f'Субъект: <code>{html.escape(status["subject"])}</code>')
         lines.append(f'Действует до: <code>{status["not_valid_after"]}</code>')
     else:
-        lines.append('Статус: ⚠️ файл найден, но не читается с текущим паролем')
+        lines.append('Статус:  файл найден, но не читается с текущим паролем')
 
     if status['uploaded']:
         lines.append(f'Путь: <code>{html.escape(status["path"])}</code>')
@@ -59,10 +59,10 @@ def _status_view() -> tuple[str, InlineKeyboardMarkup]:
         lines.append('')
         lines.append(ENV_LOCK_NOTE)
 
-    buttons = [[InlineKeyboardButton(text='📎 Загрузить', callback_data='overpay_cert:upload')]]
+    buttons = [[InlineKeyboardButton(text=' Загрузить', callback_data='overpay_cert:upload')]]
     if status['uploaded']:
-        buttons.append([InlineKeyboardButton(text='🗑 Удалить', callback_data='overpay_cert:delete')])
-    buttons.append([InlineKeyboardButton(text='◀️ Назад', callback_data='admin_submenu_settings')])
+        buttons.append([InlineKeyboardButton(text=' Удалить', callback_data='overpay_cert:delete')])
+    buttons.append([InlineKeyboardButton(text='◀ Назад', callback_data='admin_submenu_settings')])
 
     return '\n'.join(lines), InlineKeyboardMarkup(inline_keyboard=buttons)
 
@@ -83,7 +83,7 @@ async def show_certificate_status(callback: CallbackQuery, state: FSMContext, **
 async def start_certificate_upload(callback: CallbackQuery, state: FSMContext, **kwargs) -> None:
     await state.set_state(OverpayCertStates.waiting_for_file)
     await callback.message.edit_text(
-        '📎 <b>Загрузка сертификата Overpay</b>\n\nОтправьте файл сертификата (.p12 или .pfx) размером до 1 МБ.',
+        ' <b>Загрузка сертификата Overpay</b>\n\nОтправьте файл сертификата (.p12 или .pfx) размером до 1 МБ.',
         reply_markup=_cancel_keyboard(),
     )
     await callback.answer()
@@ -94,13 +94,13 @@ async def start_certificate_upload(callback: CallbackQuery, state: FSMContext, *
 @error_handler
 async def confirm_certificate_delete(callback: CallbackQuery, **kwargs) -> None:
     await callback.message.edit_text(
-        '🗑 <b>Удаление сертификата Overpay</b>\n\n'
+        ' <b>Удаление сертификата Overpay</b>\n\n'
         'Файл будет удалён, настройки пути и пароля очищены. Платежи через Overpay перестанут работать. Продолжить?',
         reply_markup=InlineKeyboardMarkup(
             inline_keyboard=[
                 [
-                    InlineKeyboardButton(text='✅ Удалить', callback_data='overpay_cert:delete_confirm'),
-                    InlineKeyboardButton(text='◀️ Отмена', callback_data='overpay_cert'),
+                    InlineKeyboardButton(text=' Удалить', callback_data='overpay_cert:delete_confirm'),
+                    InlineKeyboardButton(text='◀ Отмена', callback_data='overpay_cert'),
                 ]
             ]
         ),
@@ -127,7 +127,7 @@ async def process_certificate_file(message: Message, state: FSMContext, **kwargs
     document = message.document
     if not document:
         await message.answer(
-            '❌ Отправьте файл сертификата документом (.p12 или .pfx).',
+            ' Отправьте файл сертификата документом (.p12 или .pfx).',
             reply_markup=_cancel_keyboard(),
         )
         return
@@ -135,14 +135,14 @@ async def process_certificate_file(message: Message, state: FSMContext, **kwargs
     file_name = document.file_name or ''
     if not file_name.lower().endswith(ALLOWED_EXTENSIONS):
         await message.answer(
-            '❌ Неподдерживаемый формат файла. Загрузите .p12 или .pfx.',
+            ' Неподдерживаемый формат файла. Загрузите .p12 или .pfx.',
             reply_markup=_cancel_keyboard(),
         )
         return
 
     if document.file_size and document.file_size > cert_service.MAX_P12_SIZE:
         await message.answer(
-            '❌ Файл слишком большой (максимум 1 МБ).',
+            ' Файл слишком большой (максимум 1 МБ).',
             reply_markup=_cancel_keyboard(),
         )
         return
@@ -150,7 +150,7 @@ async def process_certificate_file(message: Message, state: FSMContext, **kwargs
     await state.update_data(overpay_cert_file_id=document.file_id)
     await state.set_state(OverpayCertStates.waiting_for_passphrase)
     await message.answer(
-        '🔑 Отправьте пароль от контейнера P12.\n'
+        ' Отправьте пароль от контейнера P12.\n'
         'Если пароля нет — отправьте <code>-</code>.\n\n'
         'Сообщение с паролем будет удалено.',
         reply_markup=_cancel_keyboard(),
@@ -163,7 +163,7 @@ async def process_certificate_file(message: Message, state: FSMContext, **kwargs
 async def process_certificate_passphrase(message: Message, state: FSMContext, **kwargs) -> None:
     if not message.text:
         await message.answer(
-            '❌ Отправьте пароль текстовым сообщением (или <code>-</code>, если пароля нет).',
+            ' Отправьте пароль текстовым сообщением (или <code>-</code>, если пароля нет).',
             reply_markup=_cancel_keyboard(),
         )
         return
@@ -180,7 +180,7 @@ async def process_certificate_passphrase(message: Message, state: FSMContext, **
     await state.clear()
 
     if not file_id:
-        await message.answer('❌ Файл не найден. Начните загрузку заново.', reply_markup=_back_keyboard())
+        await message.answer(' Файл не найден. Начните загрузку заново.', reply_markup=_back_keyboard())
         return
 
     buffer = io.BytesIO()
@@ -188,25 +188,25 @@ async def process_certificate_passphrase(message: Message, state: FSMContext, **
         await message.bot.download(file_id, destination=buffer)
     except TelegramBadRequest as error:
         logger.warning('Overpay: не удалось скачать файл сертификата', error=error)
-        await message.answer('❌ Не удалось скачать файл. Начните загрузку заново.', reply_markup=_back_keyboard())
+        await message.answer(' Не удалось скачать файл. Начните загрузку заново.', reply_markup=_back_keyboard())
         return
 
     async with AsyncSessionLocal() as db:
         try:
             metadata = await cert_service.store_certificate(db, buffer.getvalue(), passphrase)
         except ValueError as error:
-            await message.answer(f'❌ {error}', reply_markup=_back_keyboard())
+            await message.answer(f' {error}', reply_markup=_back_keyboard())
             return
 
     lines = [
-        '✅ <b>Сертификат Overpay сохранён</b>',
+        ' <b>Сертификат Overpay сохранён</b>',
         '',
         f'Субъект: <code>{html.escape(metadata["subject"])}</code>',
         f'Действует до: <code>{metadata["not_valid_after"]}</code>',
     ]
     if metadata['warning']:
         lines.append('')
-        lines.append(f'⚠️ {metadata["warning"]}')
+        lines.append(f' {metadata["warning"]}')
 
     await message.answer('\n'.join(lines), reply_markup=_back_keyboard())
 

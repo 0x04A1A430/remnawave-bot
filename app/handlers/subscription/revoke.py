@@ -124,7 +124,7 @@ async def start_subscription_revoke(
         await callback.answer(
             texts.t(
                 'SUBSCRIPTION_REVOKE_COOLDOWN',
-                '⏱ Перевыпуск будет доступен через {minutes} мин. {seconds} сек.',
+                'Перевыпуск будет доступен через {minutes} мин. {seconds} сек.',
             ).format(minutes=minutes, seconds=seconds),
             show_alert=True,
         )

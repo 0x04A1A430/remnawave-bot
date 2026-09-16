@@ -141,7 +141,7 @@ def _render_creation_progress(
     status_message: str | None = None,
     error_message: str | None = None,
 ) -> str:
-    lines: list[str] = ['🗳️ <b>Создание опроса</b>']
+    lines: list[str] = [' <b>Создание опроса</b>']
 
     title_prompt = texts.t(
         'ADMIN_POLLS_CREATION_TITLE_PROMPT',
@@ -258,7 +258,7 @@ def _build_polls_keyboard(polls: list[Poll], language: str) -> types.InlineKeybo
         keyboard.append(
             [
                 types.InlineKeyboardButton(
-                    text=f'🗳️ {poll.title[:40]}',
+                    text=f' {poll.title[:40]}',
                     callback_data=f'poll_view:{poll.id}',
                 )
             ]
@@ -267,7 +267,7 @@ def _build_polls_keyboard(polls: list[Poll], language: str) -> types.InlineKeybo
     keyboard.append(
         [
             types.InlineKeyboardButton(
-                text=texts.t('ADMIN_POLLS_CREATE', '➕ Создать опрос'),
+                text=texts.t('ADMIN_POLLS_CREATE', ' Создать опрос'),
                 callback_data='poll_create',
             )
         ]
@@ -295,23 +295,23 @@ def _build_poll_details_keyboard(poll_id: int, language: str) -> types.InlineKey
         inline_keyboard=[
             [
                 types.InlineKeyboardButton(
-                    text=texts.t('ADMIN_POLLS_SEND', '📤 Отправить'),
+                    text=texts.t('ADMIN_POLLS_SEND', ' Отправить'),
                     callback_data=f'poll_send:{poll_id}',
                 )
             ],
             [
                 types.InlineKeyboardButton(
-                    text=texts.t('ADMIN_POLLS_STATS', '📊 Статистика'),
+                    text=texts.t('ADMIN_POLLS_STATS', ' Статистика'),
                     callback_data=f'poll_stats:{poll_id}',
                 )
             ],
             [
                 types.InlineKeyboardButton(
-                    text=texts.t('ADMIN_POLLS_DELETE', '🗑️ Удалить'),
+                    text=texts.t('ADMIN_POLLS_DELETE', ' Удалить'),
                     callback_data=f'poll_delete:{poll_id}',
                 )
             ],
-            [types.InlineKeyboardButton(text=texts.t('ADMIN_POLLS_BACK', '⬅️ К списку'), callback_data='admin_polls')],
+            [types.InlineKeyboardButton(text=texts.t('ADMIN_POLLS_BACK', '⬅ К списку'), callback_data='admin_polls')],
         ]
     )
 
@@ -322,47 +322,47 @@ def _build_target_keyboard(poll_id: int, language: str) -> types.InlineKeyboardM
         inline_keyboard=[
             [
                 types.InlineKeyboardButton(
-                    text=texts.t('ADMIN_BROADCAST_TARGET_ALL', '👥 Всем'),
+                    text=texts.t('ADMIN_BROADCAST_TARGET_ALL', ' Всем'),
                     callback_data=f'poll_target:{poll_id}:all',
                 ),
                 types.InlineKeyboardButton(
-                    text=texts.t('ADMIN_BROADCAST_TARGET_ACTIVE', '📱 С подпиской'),
+                    text=texts.t('ADMIN_BROADCAST_TARGET_ACTIVE', ' С подпиской'),
                     callback_data=f'poll_target:{poll_id}:active',
                 ),
             ],
             [
                 types.InlineKeyboardButton(
-                    text=texts.t('ADMIN_BROADCAST_TARGET_TRIAL', '🎁 Триал'),
+                    text=texts.t('ADMIN_BROADCAST_TARGET_TRIAL', ' Триал'),
                     callback_data=f'poll_target:{poll_id}:trial',
                 ),
                 types.InlineKeyboardButton(
-                    text=texts.t('ADMIN_BROADCAST_TARGET_NO_SUB', '❌ Без подписки'),
+                    text=texts.t('ADMIN_BROADCAST_TARGET_NO_SUB', ' Без подписки'),
                     callback_data=f'poll_target:{poll_id}:no',
                 ),
             ],
             [
                 types.InlineKeyboardButton(
-                    text=texts.t('ADMIN_BROADCAST_TARGET_EXPIRING', '⏰ Истекающие'),
+                    text=texts.t('ADMIN_BROADCAST_TARGET_EXPIRING', ' Истекающие'),
                     callback_data=f'poll_target:{poll_id}:expiring',
                 ),
                 types.InlineKeyboardButton(
-                    text=texts.t('ADMIN_BROADCAST_TARGET_EXPIRED', '🔚 Истекшие'),
+                    text=texts.t('ADMIN_BROADCAST_TARGET_EXPIRED', ' Истекшие'),
                     callback_data=f'poll_target:{poll_id}:expired',
                 ),
             ],
             [
                 types.InlineKeyboardButton(
-                    text=texts.t('ADMIN_BROADCAST_TARGET_ACTIVE_ZERO', '🧊 Активна 0 ГБ'),
+                    text=texts.t('ADMIN_BROADCAST_TARGET_ACTIVE_ZERO', ' Активна 0 ГБ'),
                     callback_data=f'poll_target:{poll_id}:active_zero',
                 ),
                 types.InlineKeyboardButton(
-                    text=texts.t('ADMIN_BROADCAST_TARGET_TRIAL_ZERO', '🥶 Триал 0 ГБ'),
+                    text=texts.t('ADMIN_BROADCAST_TARGET_TRIAL_ZERO', ' Триал 0 ГБ'),
                     callback_data=f'poll_target:{poll_id}:trial_zero',
                 ),
             ],
             [
                 types.InlineKeyboardButton(
-                    text=texts.t('ADMIN_POLLS_CUSTOM_TARGET', '⚙️ По критериям'),
+                    text=texts.t('ADMIN_POLLS_CUSTOM_TARGET', ' По критериям'),
                     callback_data=f'poll_custom_menu:{poll_id}',
                 )
             ],
@@ -377,41 +377,41 @@ def _build_custom_target_keyboard(poll_id: int, language: str) -> types.InlineKe
         inline_keyboard=[
             [
                 types.InlineKeyboardButton(
-                    text=texts.t('ADMIN_CRITERIA_TODAY', '📅 Сегодня'),
+                    text=texts.t('ADMIN_CRITERIA_TODAY', ' Сегодня'),
                     callback_data=f'poll_custom_target:{poll_id}:today',
                 ),
                 types.InlineKeyboardButton(
-                    text=texts.t('ADMIN_CRITERIA_WEEK', '📅 За неделю'),
+                    text=texts.t('ADMIN_CRITERIA_WEEK', ' За неделю'),
                     callback_data=f'poll_custom_target:{poll_id}:week',
                 ),
             ],
             [
                 types.InlineKeyboardButton(
-                    text=texts.t('ADMIN_CRITERIA_MONTH', '📅 За месяц'),
+                    text=texts.t('ADMIN_CRITERIA_MONTH', ' За месяц'),
                     callback_data=f'poll_custom_target:{poll_id}:month',
                 ),
                 types.InlineKeyboardButton(
-                    text=texts.t('ADMIN_CRITERIA_ACTIVE_TODAY', '⚡ Активные сегодня'),
+                    text=texts.t('ADMIN_CRITERIA_ACTIVE_TODAY', ' Активные сегодня'),
                     callback_data=f'poll_custom_target:{poll_id}:active_today',
                 ),
             ],
             [
                 types.InlineKeyboardButton(
-                    text=texts.t('ADMIN_CRITERIA_INACTIVE_WEEK', '💤 Неактивные 7+ дней'),
+                    text=texts.t('ADMIN_CRITERIA_INACTIVE_WEEK', ' Неактивные 7+ дней'),
                     callback_data=f'poll_custom_target:{poll_id}:inactive_week',
                 ),
                 types.InlineKeyboardButton(
-                    text=texts.t('ADMIN_CRITERIA_INACTIVE_MONTH', '💤 Неактивные 30+ дней'),
+                    text=texts.t('ADMIN_CRITERIA_INACTIVE_MONTH', ' Неактивные 30+ дней'),
                     callback_data=f'poll_custom_target:{poll_id}:inactive_month',
                 ),
             ],
             [
                 types.InlineKeyboardButton(
-                    text=texts.t('ADMIN_CRITERIA_REFERRALS', '🤝 Через рефералов'),
+                    text=texts.t('ADMIN_CRITERIA_REFERRALS', ' Через рефералов'),
                     callback_data=f'poll_custom_target:{poll_id}:referrals',
                 ),
                 types.InlineKeyboardButton(
-                    text=texts.t('ADMIN_CRITERIA_DIRECT', '🎯 Прямая регистрация'),
+                    text=texts.t('ADMIN_CRITERIA_DIRECT', ' Прямая регистрация'),
                     callback_data=f'poll_custom_target:{poll_id}:direct',
                 ),
             ],
@@ -426,7 +426,7 @@ def _build_send_confirmation_keyboard(poll_id: int, target: str, language: str) 
         inline_keyboard=[
             [
                 types.InlineKeyboardButton(
-                    text=texts.t('ADMIN_POLLS_SEND_CONFIRM_BUTTON', '✅ Отправить'),
+                    text=texts.t('ADMIN_POLLS_SEND_CONFIRM_BUTTON', ' Отправить'),
                     callback_data=f'poll_send_confirm:{poll_id}:{target}',
                 )
             ],
@@ -441,7 +441,7 @@ async def show_polls_panel(callback: types.CallbackQuery, db_user: User, db: Asy
     polls = await list_polls(db)
     texts = get_texts(db_user.language)
 
-    lines = [texts.t('ADMIN_POLLS_LIST_TITLE', '🗳️ <b>Опросы</b>'), '']
+    lines = [texts.t('ADMIN_POLLS_LIST_TITLE', ' <b>Опросы</b>'), '']
     if not polls:
         lines.append(texts.t('ADMIN_POLLS_LIST_EMPTY', 'Опросов пока нет.'))
     else:
@@ -500,7 +500,7 @@ async def process_poll_title(
         await _safe_delete_message(message)
         cancel_text = texts.t(
             'ADMIN_POLLS_CREATION_CANCELLED',
-            '❌ Создание опроса отменено.',
+            ' Создание опроса отменено.',
         )
         keyboard = get_admin_communications_submenu_keyboard(db_user.language)
         updated = await _edit_creation_message(
@@ -527,7 +527,7 @@ async def process_poll_title(
     if not title:
         error_text = texts.t(
             'ADMIN_POLLS_CREATION_TITLE_EMPTY',
-            '❌ Заголовок не может быть пустым. Попробуйте снова.',
+            ' Заголовок не может быть пустым. Попробуйте снова.',
         )
         form_text = _render_creation_progress(texts, state_data, 'title', error_message=error_text)
         updated = await _edit_creation_message(message.bot, state_data, form_text)
@@ -570,7 +570,7 @@ async def process_poll_description(
         await _safe_delete_message(message)
         cancel_text = texts.t(
             'ADMIN_POLLS_CREATION_CANCELLED',
-            '❌ Создание опроса отменено.',
+            ' Создание опроса отменено.',
         )
         keyboard = get_admin_communications_submenu_keyboard(db_user.language)
         updated = await _edit_creation_message(
@@ -603,7 +603,7 @@ async def process_poll_description(
         if not is_valid:
             error_text = texts.t(
                 'ADMIN_POLLS_CREATION_INVALID_HTML',
-                '❌ Ошибка в HTML: {error}',
+                ' Ошибка в HTML: {error}',
             ).format(error=error_message)
             form_text = _render_creation_progress(texts, state_data, 'description', error_message=error_text)
             updated = await _edit_creation_message(message.bot, state_data, form_text)
@@ -660,7 +660,7 @@ async def process_poll_reward(
         await _safe_delete_message(message)
         cancel_text = texts.t(
             'ADMIN_POLLS_CREATION_CANCELLED',
-            '❌ Создание опроса отменено.',
+            ' Создание опроса отменено.',
         )
         keyboard = get_admin_communications_submenu_keyboard(db_user.language)
         updated = await _edit_creation_message(
@@ -686,7 +686,7 @@ async def process_poll_reward(
     if reward_kopeks is None:
         error_text = texts.t(
             'ADMIN_POLLS_CREATION_REWARD_INVALID',
-            '❌ Некорректная сумма. Попробуйте ещё раз.',
+            ' Некорректная сумма. Попробуйте ещё раз.',
         )
         form_text = _render_creation_progress(texts, state_data, 'reward', error_message=error_text)
         updated = await _edit_creation_message(message.bot, state_data, form_text)
@@ -733,7 +733,7 @@ async def process_poll_question(
         await _safe_delete_message(message)
         cancel_text = texts.t(
             'ADMIN_POLLS_CREATION_CANCELLED',
-            '❌ Создание опроса отменено.',
+            ' Создание опроса отменено.',
         )
         keyboard = get_admin_communications_submenu_keyboard(db_user.language)
         updated = await _edit_creation_message(
@@ -761,7 +761,7 @@ async def process_poll_question(
         if not questions:
             error_text = texts.t(
                 'ADMIN_POLLS_CREATION_NEEDS_QUESTION',
-                '❌ Добавьте хотя бы один вопрос.',
+                ' Добавьте хотя бы один вопрос.',
             )
             form_text = _render_creation_progress(texts, data, 'questions', error_message=error_text)
             updated = await _edit_creation_message(message.bot, data, form_text)
@@ -794,7 +794,7 @@ async def process_poll_question(
         reward_text = _format_reward_text(poll, db_user.language)
         result_text = texts.t(
             'ADMIN_POLLS_CREATION_FINISHED',
-            ('✅ Опрос «{title}» создан!\nВопросов: {count}\n{reward}'),
+            (' Опрос «{title}» создан!\nВопросов: {count}\n{reward}'),
         ).format(
             title=html.escape(poll.title),
             count=len(poll.questions),
@@ -825,7 +825,7 @@ async def process_poll_question(
     if len(lines) < 3:
         error_text = texts.t(
             'ADMIN_POLLS_CREATION_MIN_OPTIONS',
-            '❌ Нужен вопрос и минимум два варианта ответа.',
+            ' Нужен вопрос и минимум два варианта ответа.',
         )
         form_text = _render_creation_progress(texts, state_data, 'questions', error_message=error_text)
         updated = await _edit_creation_message(message.bot, state_data, form_text)
@@ -869,7 +869,7 @@ async def process_poll_question(
 
 async def _render_poll_details(poll: Poll, language: str) -> str:
     texts = get_texts(language)
-    lines = [f'🗳️ <b>{html.escape(poll.title)}</b>']
+    lines = [f' <b>{html.escape(poll.title)}</b>']
     if poll.description:
         lines.append(html.escape(poll.description))
 
@@ -899,7 +899,7 @@ async def show_poll_details(
     poll_id = int(callback.data.split(':')[1])
     poll = await get_poll_by_id(db, poll_id)
     if not poll:
-        await callback.answer('❌ Опрос не найден', show_alert=True)
+        await callback.answer(' Опрос не найден', show_alert=True)
         return
 
     text = await _render_poll_details(poll, db_user.language)
@@ -921,12 +921,12 @@ async def start_poll_send(
     poll_id = int(callback.data.split(':')[1])
     poll = await get_poll_by_id(db, poll_id)
     if not poll:
-        await callback.answer('❌ Опрос не найден', show_alert=True)
+        await callback.answer(' Опрос не найден', show_alert=True)
         return
 
     texts = get_texts(db_user.language)
     await callback.message.edit_text(
-        texts.t('ADMIN_POLLS_SEND_CHOOSE_TARGET', '🎯 Выберите аудиторию для отправки опроса:'),
+        texts.t('ADMIN_POLLS_SEND_CHOOSE_TARGET', ' Выберите аудиторию для отправки опроса:'),
         reply_markup=_build_target_keyboard(poll.id, db_user.language),
         parse_mode='HTML',
     )
@@ -961,14 +961,14 @@ async def _show_send_confirmation(
 ):
     poll = await get_poll_by_id(db, poll_id)
     if not poll:
-        await callback.answer('❌ Опрос не найден', show_alert=True)
+        await callback.answer(' Опрос не найден', show_alert=True)
         return
 
     audience_name = get_target_display_name(target)
     texts = get_texts(db_user.language)
     confirmation_text = texts.t(
         'ADMIN_POLLS_SEND_CONFIRM',
-        '📤 Отправить опрос «{title}» аудитории «{audience}»? Пользователей: {count}',
+        ' Отправить опрос «{title}» аудитории «{audience}»? Пользователей: {count}',
     ).format(title=poll.title, audience=audience_name, count=user_count)
 
     await callback.message.edit_text(
@@ -1022,7 +1022,7 @@ async def confirm_poll_send(
 
     poll = await get_poll_by_id(db, poll_id)
     if not poll:
-        await callback.answer('❌ Опрос не найден', show_alert=True)
+        await callback.answer(' Опрос не найден', show_alert=True)
         return
 
     poll_id_value = poll.id
@@ -1035,7 +1035,7 @@ async def confirm_poll_send(
     user_language = db_user.language
     texts = get_texts(user_language)
     await callback.message.edit_text(
-        texts.t('ADMIN_POLLS_SENDING', '📤 Запускаю отправку опроса...'),
+        texts.t('ADMIN_POLLS_SENDING', ' Запускаю отправку опроса...'),
         parse_mode='HTML',
     )
 
@@ -1043,7 +1043,7 @@ async def confirm_poll_send(
 
     result_text = texts.t(
         'ADMIN_POLLS_SEND_RESULT',
-        '📤 Отправка завершена\nУспешно: {sent}\nОшибок: {failed}\nПропущено: {skipped}\nВсего: {total}',
+        ' Отправка завершена\nУспешно: {sent}\nОшибок: {failed}\nПропущено: {skipped}\nВсего: {total}',
     ).format(**result)
 
     await callback.message.edit_text(
@@ -1064,14 +1064,14 @@ async def show_poll_stats(
     poll_id = int(callback.data.split(':')[1])
     poll = await get_poll_by_id(db, poll_id)
     if not poll:
-        await callback.answer('❌ Опрос не найден', show_alert=True)
+        await callback.answer(' Опрос не найден', show_alert=True)
         return
 
     stats = await get_poll_statistics(db, poll_id)
     texts = get_texts(db_user.language)
 
     reward_sum = settings.format_price(stats['reward_sum_kopeks'])
-    lines = [texts.t('ADMIN_POLLS_STATS_HEADER', '📊 <b>Статистика опроса</b>'), '']
+    lines = [texts.t('ADMIN_POLLS_STATS_HEADER', ' <b>Статистика опроса</b>'), '']
     lines.append(
         texts.t(
             'ADMIN_POLLS_STATS_OVERVIEW',
@@ -1112,7 +1112,7 @@ async def confirm_poll_delete(
     poll_id = int(callback.data.split(':')[1])
     poll = await get_poll_by_id(db, poll_id)
     if not poll:
-        await callback.answer('❌ Опрос не найден', show_alert=True)
+        await callback.answer(' Опрос не найден', show_alert=True)
         return
 
     texts = get_texts(db_user.language)
@@ -1125,7 +1125,7 @@ async def confirm_poll_delete(
             inline_keyboard=[
                 [
                     types.InlineKeyboardButton(
-                        text=texts.t('ADMIN_POLLS_DELETE', '🗑️ Удалить'),
+                        text=texts.t('ADMIN_POLLS_DELETE', ' Удалить'),
                         callback_data=f'poll_delete_confirm:{poll_id}',
                     )
                 ],
@@ -1150,11 +1150,11 @@ async def delete_poll_handler(
 
     if success:
         await callback.message.edit_text(
-            texts.t('ADMIN_POLLS_DELETED', '🗑️ Опрос удалён.'),
+            texts.t('ADMIN_POLLS_DELETED', ' Опрос удалён.'),
             reply_markup=_build_polls_keyboard(await list_polls(db), db_user.language),
         )
     else:
-        await callback.answer('❌ Опрос не найден', show_alert=True)
+        await callback.answer(' Опрос не найден', show_alert=True)
         return
 
     await callback.answer()

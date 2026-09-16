@@ -44,7 +44,7 @@ def _visible_squads(tariff: Tariff, squads: list) -> list:
 
 def render_server_limits(tariff: Tariff) -> str:
     return (
-        f'🗄️ <b>Лимиты трафика по серверам</b>\n\n'
+        f' <b>Лимиты трафика по серверам</b>\n\n'
         f'Тариф: <b>{html.escape(tariff.name)}</b>\n'
         f'Общий лимит тарифа: <b>{tariff.traffic_limit_gb or "∞"} ГБ</b>\n\n'
         'Нажмите на сервер и введите лимит в ГБ. <code>0</code> — использовать общий лимит тарифа.'
@@ -101,7 +101,7 @@ async def start_edit_server_limit(callback: types.CallbackQuery, db_user: User, 
     texts = get_texts(db_user.language)
     current = limit_for(tariff, squad_uuid)
     await callback.message.edit_text(
-        f'🗄️ <b>Лимит сервера</b>\n\nТариф: <b>{html.escape(tariff.name)}</b>\n'
+        f' <b>Лимит сервера</b>\n\nТариф: <b>{html.escape(tariff.name)}</b>\n'
         f'Текущее значение: <b>{current} ГБ</b>{"" if current else " (по тарифу)"}\n\n'
         'Введите лимит в ГБ целым числом. <code>0</code> — по тарифу.',
         reply_markup=InlineKeyboardMarkup(
@@ -131,7 +131,7 @@ async def process_server_limit_input(message: types.Message, db_user: User, db: 
             raise ValueError
     except ValueError:
         await message.answer(
-            '❌ Введите целое число гигабайт, не меньше нуля. <code>0</code> — по тарифу.', parse_mode='HTML'
+            ' Введите целое число гигабайт, не меньше нуля. <code>0</code> — по тарифу.', parse_mode='HTML'
         )
         return
 
@@ -141,7 +141,7 @@ async def process_server_limit_input(message: types.Message, db_user: User, db: 
         limits[squad_uuid] = {'traffic_limit_gb': limit}
     tariff = await update_tariff(db, tariff, server_traffic_limits=limits)
     await state.clear()
-    confirmation = f'✅ Лимит установлен: {limit} ГБ' if limit else '✅ Лимит снят — по тарифу'
+    confirmation = f' Лимит установлен: {limit} ГБ' if limit else ' Лимит снят — по тарифу'
     await _render_screen(message, tariff, db, db_user.language, edit=False, prefix=f'{confirmation}\n\n')
 
 

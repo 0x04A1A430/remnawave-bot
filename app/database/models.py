@@ -339,6 +339,44 @@ class CryptoBotPayment(Base):
         return f'<CryptoBotPayment(id={self.id}, invoice_id={self.invoice_id}, amount={self.amount} {self.asset}, status={self.status})>'
 
 
+class InlineGiftSubscription(Base):
+    """Gift issued by an administrator through an inline query."""
+
+    __tablename__ = 'inline_gift_subscriptions'
+    __table_args__ = (
+        Index('ix_inline_gifts_gift_code', 'gift_code', unique=True),
+        Index('ix_inline_gifts_recipient_tg_id', 'recipient_telegram_id'),
+        Index('ix_inline_gifts_sender_id', 'sender_user_id'),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    gift_code = Column(String(64), unique=True, nullable=False, index=True)
+    recipient_telegram_id = Column(BigInteger, nullable=False)
+    sender_user_id = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
+    gift_type = Column(String(20), nullable=False, default='subscription', server_default='subscription')
+    days = Column(Integer, nullable=True)
+    traffic_limit_gb = Column(Integer, nullable=True)
+    device_limit = Column(Integer, nullable=True)
+    discount_percent = Column(Integer, nullable=True)
+    balance_amount_kopeks = Column(Integer, nullable=True)
+    temp_traffic_gb = Column(Integer, nullable=True)
+    temp_traffic_days = Column(Integer, nullable=True)
+    reset_traffic = Column(Boolean, nullable=True, default=False, server_default='false')
+    max_activations = Column(Integer, nullable=False, default=1, server_default='1')
+    activated_count = Column(Integer, nullable=False, default=0, server_default='0')
+    inline_message_id = Column(String(255), nullable=True)
+    inline_chat_id = Column(BigInteger, nullable=True)
+    inline_msg_id = Column(BigInteger, nullable=True)
+    is_activated = Column(Boolean, nullable=False, default=False, server_default='false')
+    activated_at = Column(AwareDateTime(), nullable=True)
+    activated_by_user_id = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
+    subscription_id = Column(Integer, ForeignKey('subscriptions.id', ondelete='SET NULL'), nullable=True)
+    created_at = Column(AwareDateTime(), server_default=func.now())
+
+    sender = relationship('User', foreign_keys=[sender_user_id], lazy='noload')
+    activated_by = relationship('User', foreign_keys=[activated_by_user_id], lazy='noload')
+
+
 class AppleTransaction(Base):
     __tablename__ = 'apple_transactions'
 

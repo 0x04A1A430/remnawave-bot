@@ -38,7 +38,7 @@ logger = structlog.get_logger(__name__)
 class BlockedUsersText(Enum):
     """Тексты для сообщений модуля заблокированных пользователей."""
 
-    MENU_TITLE = '🔒 <b>Проверка заблокированных пользователей</b>'
+    MENU_TITLE = ' <b>Проверка заблокированных пользователей</b>'
     MENU_DESCRIPTION = (
         '\n\nЗдесь вы можете проверить, какие пользователи заблокировали бота, '
         'и очистить их из базы данных и панели Remnawave.\n\n'
@@ -48,24 +48,24 @@ class BlockedUsersText(Enum):
         '3. Можно удалить таких пользователей из БД и/или Remnawave'
     )
 
-    SCAN_STARTED = '🔄 <b>Сканирование запущено...</b>\n\nЭто может занять несколько минут.'
-    SCAN_PROGRESS = '🔄 <b>Сканирование:</b> {checked}/{total} ({percent}%)'
+    SCAN_STARTED = ' <b>Сканирование запущено...</b>\n\nЭто может занять несколько минут.'
+    SCAN_PROGRESS = ' <b>Сканирование:</b> {checked}/{total} ({percent}%)'
     SCAN_COMPLETE = (
-        '✅ <b>Сканирование завершено</b>\n\n'
-        '📊 <b>Результаты:</b>\n'
+        ' <b>Сканирование завершено</b>\n\n'
+        ' <b>Результаты:</b>\n'
         '• Проверено: {total_checked}\n'
         '• Заблокировали бота: {blocked_count}\n'
         '• Активных: {active_users}\n'
         '• Ошибок: {errors}\n'
         '• Без Telegram ID: {skipped}\n\n'
-        '⏱ Время сканирования: {duration:.1f}с'
+        ' Время сканирования: {duration:.1f}с'
     )
-    SCAN_NO_BLOCKED = '✅ <b>Отлично!</b>\n\nНе найдено пользователей, заблокировавших бота.'
+    SCAN_NO_BLOCKED = ' <b>Отлично!</b>\n\nНе найдено пользователей, заблокировавших бота.'
 
-    BLOCKED_LIST_TITLE = '🔒 <b>Заблокированные пользователи</b> ({count})\n\n'
+    BLOCKED_LIST_TITLE = ' <b>Заблокированные пользователи</b> ({count})\n\n'
     BLOCKED_USER_ROW = '• {name} (ID: <code>{telegram_id}</code>)\n'
 
-    CLEANUP_CONFIRM_TITLE = '⚠️ <b>Подтверждение действия</b>\n\n'
+    CLEANUP_CONFIRM_TITLE = ' <b>Подтверждение действия</b>\n\n'
     CLEANUP_CONFIRM_DELETE_DB = (
         'Вы собираетесь <b>удалить из БД</b> {count} пользователей.\n'
         'Это действие необратимо!\n\n'
@@ -89,26 +89,26 @@ class BlockedUsersText(Enum):
         'Они останутся в БД, но будут помечены статусом "blocked".'
     )
 
-    CLEANUP_PROGRESS = '🗑 <b>Очистка:</b> {processed}/{total}'
+    CLEANUP_PROGRESS = ' <b>Очистка:</b> {processed}/{total}'
     CLEANUP_COMPLETE = (
-        '✅ <b>Очистка завершена</b>\n\n'
-        '📊 <b>Результаты:</b>\n'
+        ' <b>Очистка завершена</b>\n\n'
+        ' <b>Результаты:</b>\n'
         '• Удалено из БД: {deleted_db}\n'
         '• Удалено из Remnawave: {deleted_remnawave}\n'
         '• Помечено как заблокированные: {marked}\n'
         '• Ошибок: {errors}'
     )
 
-    BUTTON_START_SCAN = '🔍 Начать сканирование'
-    BUTTON_VIEW_BLOCKED = '👥 Список заблокированных ({count})'
-    BUTTON_DELETE_DB = '🗑 Удалить из БД'
-    BUTTON_DELETE_REMNAWAVE = '🌐 Удалить из Remnawave'
-    BUTTON_DELETE_BOTH = '💀 Удалить везде'
-    BUTTON_MARK_BLOCKED = '🚫 Пометить как заблокированных'
-    BUTTON_CONFIRM = '✅ Подтвердить'
-    BUTTON_CANCEL = '❌ Отмена'
-    BUTTON_BACK = '⬅️ Назад'
-    BUTTON_BACK_TO_USERS = '⬅️ К пользователям'
+    BUTTON_START_SCAN = ' Начать сканирование'
+    BUTTON_VIEW_BLOCKED = ' Список заблокированных ({count})'
+    BUTTON_DELETE_DB = ' Удалить из БД'
+    BUTTON_DELETE_REMNAWAVE = ' Удалить из Remnawave'
+    BUTTON_DELETE_BOTH = ' Удалить везде'
+    BUTTON_MARK_BLOCKED = ' Пометить как заблокированных'
+    BUTTON_CONFIRM = ' Подтвердить'
+    BUTTON_CANCEL = ' Отмена'
+    BUTTON_BACK = '⬅ Назад'
+    BUTTON_BACK_TO_USERS = '⬅ К пользователям'
 
 
 class BlockedUsersCallback(Enum):
@@ -195,7 +195,7 @@ def get_blocked_list_keyboard(
         if page > 1:
             nav_row.append(
                 InlineKeyboardButton(
-                    text='⬅️',
+                    text='⬅',
                     callback_data=f'{BlockedUsersCallback.VIEW_LIST_PAGE.value}{page - 1}',
                 )
             )
@@ -208,7 +208,7 @@ def get_blocked_list_keyboard(
         if page < total_pages:
             nav_row.append(
                 InlineKeyboardButton(
-                    text='➡️',
+                    text='',
                     callback_data=f'{BlockedUsersCallback.VIEW_LIST_PAGE.value}{page + 1}',
                 )
             )
@@ -300,7 +300,7 @@ async def show_blocked_users_menu(
 
     if scan_result:
         text += (
-            f'\n\n📊 <b>Последнее сканирование:</b>\n'
+            f'\n\n <b>Последнее сканирование:</b>\n'
             f'• Заблокированных: {scan_result.get("blocked_count", 0)}\n'
             f'• Активных: {scan_result.get("active_users", 0)}'
         )

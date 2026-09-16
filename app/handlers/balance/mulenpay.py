@@ -180,7 +180,7 @@ async def process_mulenpay_payment_amount(
                         text=texts.t(
                             'MULENPAY_PAY_BUTTON',
                             '💳 Оплатить через {mulenpay_name}',
-                        ).format(mulenpay_name=mulenpay_name),
+                        ).format(mulenpay_name=mulenpay_name, amount=settings.format_price(amount_kopeks)),
                         url=payment_url,
                         style='success',
                     )
