@@ -4731,6 +4731,9 @@
 - `tests/webapi/test_broadcast_list_nullable_text.py` — Python-модуль
   Классы: нет
   Функции: `test_row_without_text_serializes` — Email-рассылка без текста отдаётся как есть, а не ломает сериализацию., `test_one_empty_row_does_not_break_the_whole_list` — Соседние рассылки обязаны доехать до ответа вместе с пустой., `test_list_endpoint_returns_rows_with_null_text` — Сам маршрут отвечает 200, а не 500, когда в выборку попала пустая строка.
+- `tests/webapi/test_list_total_counts_rows.py` — Python-модуль
+  Классы: нет
+  Функции: `test_users_total_counts_everyone_without_filters`, `test_users_total_matches_the_filter`, `test_paging_by_total_reaches_the_oldest_account` — Клиент листает `while offset < total` — он обязан дойти до самых старых записей., `test_transactions_total_counts_everyone_without_filters`, `test_subscription_events_total_counts_everyone_without_filters`, `test_referrers_total_counts_everyone_without_search`, `test_no_counter_loses_its_table` — Сторож на весь `app/`: счётчик страницы обязан считать по колонке.
 - `tests/webapi/test_miniapp_zero_price_traffic_package.py` — Python-модуль
   Классы: нет
   Функции: `tariffs_mode`, `test_zero_price_package_is_not_offered` — Список докупки в Mini App не показывает пакет без цены., `test_zero_price_package_cannot_be_bought` — Купить пакет без цены нельзя — иначе это бесплатный трафик.
