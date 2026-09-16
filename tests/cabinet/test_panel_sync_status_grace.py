@@ -93,7 +93,7 @@ async def _status(monkeypatch: pytest.MonkeyPatch, subscription) -> object:
         async def __aexit__(self, *exc):
             return False
 
-    service = SimpleNamespace(is_configured=True, get_api_client=lambda: _Client())
+    service = SimpleNamespace(is_configured=True, get_api_client=_Client)
     db = SimpleNamespace(refresh=AsyncMock())
 
     with (

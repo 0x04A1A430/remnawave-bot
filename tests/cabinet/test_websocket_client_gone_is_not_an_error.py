@@ -64,7 +64,7 @@ def test_real_failures_are_not_mistaken_for_a_disconnect() -> None:
     assert not is_client_gone(KeyError('token'))
 
 
-@pytest.mark.parametrize('error_factory', [_client_disconnected, lambda: ConnectionResetError()])
+@pytest.mark.parametrize('error_factory', [_client_disconnected, ConnectionResetError])
 async def test_cabinet_socket_stays_quiet_when_client_is_gone(error_factory) -> None:
     from app.cabinet.routes import websocket as ws_route
 
