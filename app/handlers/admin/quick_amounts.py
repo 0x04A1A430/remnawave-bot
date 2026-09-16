@@ -50,9 +50,7 @@ def _method_title(config, defaults: dict) -> str:
 def _list_keyboard(configs: list, defaults: dict) -> InlineKeyboardMarkup:
     buttons = []
     for config in configs:
-        if config.quick_amounts:
-            marker = ''
-        elif config.quick_amounts is not None:
+        if config.quick_amounts or config.quick_amounts is not None:
             marker = ''
         else:
             marker = '▫'
@@ -71,9 +69,7 @@ def _list_keyboard(configs: list, defaults: dict) -> InlineKeyboardMarkup:
 def _view_keyboard(method_id: str, quick_amounts: list[int] | None) -> InlineKeyboardMarkup:
     buttons = [[InlineKeyboardButton(text=' Изменить', callback_data=f'qamounts:edit:{method_id}')]]
     if quick_amounts != []:
-        buttons.append(
-            [InlineKeyboardButton(text=' Отключить кнопки', callback_data=f'qamounts:disable:{method_id}')]
-        )
+        buttons.append([InlineKeyboardButton(text=' Отключить кнопки', callback_data=f'qamounts:disable:{method_id}')])
     if quick_amounts is not None:
         buttons.append(
             [InlineKeyboardButton(text=' Сбросить к умолчанию', callback_data=f'qamounts:reset:{method_id}')]

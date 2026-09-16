@@ -539,11 +539,7 @@ async def process_server_price_edit(message: types.Message, state: FSMContext, d
                 f' Цена сервера изменена на: <b>{price_text}</b>',
                 reply_markup=types.InlineKeyboardMarkup(
                     inline_keyboard=[
-                        [
-                            types.InlineKeyboardButton(
-                                text=' К серверу', callback_data=f'admin_server_edit_{server_id}'
-                            )
-                        ]
+                        [types.InlineKeyboardButton(text=' К серверу', callback_data=f'admin_server_edit_{server_id}')]
                     ]
                 ),
                 parse_mode='HTML',
@@ -856,11 +852,7 @@ async def process_server_limit_edit(message: types.Message, state: FSMContext, d
                 f' Лимит пользователей изменен на: <b>{limit_text}</b>',
                 reply_markup=types.InlineKeyboardMarkup(
                     inline_keyboard=[
-                        [
-                            types.InlineKeyboardButton(
-                                text=' К серверу', callback_data=f'admin_server_edit_{server_id}'
-                            )
-                        ]
+                        [types.InlineKeyboardButton(text=' К серверу', callback_data=f'admin_server_edit_{server_id}')]
                     ]
                 ),
                 parse_mode='HTML',

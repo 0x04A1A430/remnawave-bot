@@ -468,9 +468,7 @@ async def handle_admin_ticket_reply(message: types.Message, state: FSMContext, d
     except Exception as e:
         logger.error('Error adding admin ticket reply', error=e)
         texts = get_texts(db_user.language)
-        await message.answer(
-            texts.t('TICKET_REPLY_ERROR', ' Произошла ошибка при отправке ответа. Попробуйте позже.')
-        )
+        await message.answer(texts.t('TICKET_REPLY_ERROR', ' Произошла ошибка при отправке ответа. Попробуйте позже.'))
 
 
 async def mark_ticket_as_answered(callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext):
@@ -482,9 +480,7 @@ async def mark_ticket_as_answered(callback: types.CallbackQuery, db_user: User, 
 
         if success:
             texts = get_texts(db_user.language)
-            await callback.answer(
-                texts.t('TICKET_MARKED_ANSWERED', ' Тикет отмечен как отвеченный.'), show_alert=True
-            )
+            await callback.answer(texts.t('TICKET_MARKED_ANSWERED', ' Тикет отмечен как отвеченный.'), show_alert=True)
 
             # Обновляем сообщение
             await view_admin_ticket(callback, db_user, db, state)
@@ -782,8 +778,7 @@ async def handle_admin_block_duration_input(message: types.Message, state: FSMCo
                     safe_username = html.escape(updated.user.username)
                     ticket_text += f' Username: @{safe_username}\n'
                     ticket_text += (
-                        f' ЛС: <a href="tg://resolve?domain={safe_username}">'
-                        f'tg://resolve?domain={safe_username}</a>\n'
+                        f' ЛС: <a href="tg://resolve?domain={safe_username}">tg://resolve?domain={safe_username}</a>\n'
                     )
                 else:
                     ticket_text += ' Username: отсутствует\n'

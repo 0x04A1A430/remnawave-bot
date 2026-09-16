@@ -306,11 +306,7 @@ async def _show_top_referrers_filtered(callback: types.CallbackQuery, db: AsyncS
                     display_text = f'ID{id_display}'
 
                 emoji = ''
-                if i == 1:
-                    emoji = ' '
-                elif i == 2:
-                    emoji = ' '
-                elif i == 3:
+                if i == 1 or i == 2 or i == 3:
                     emoji = ' '
 
                 # Выделяем основную метрику в зависимости от сортировки
@@ -441,9 +437,7 @@ async def show_pending_withdrawal_requests(callback: types.CallbackQuery, db_use
         user_name = html.escape(user.full_name) if user and user.full_name else 'Неизвестно'
         user_tg_id = user.telegram_id if user else 'N/A'
 
-        risk_emoji = (
-            '' if req.risk_score < 30 else '' if req.risk_score < 50 else '' if req.risk_score < 70 else ''
-        )
+        risk_emoji = '' if req.risk_score < 30 else '' if req.risk_score < 50 else '' if req.risk_score < 70 else ''
 
         text += f'<b>#{req.id}</b> — {user_name} (ID{user_tg_id})\n'
         text += f' {req.amount_kopeks / 100:.0f}₽ | {risk_emoji} Риск: {req.risk_score}/100\n'
@@ -897,11 +891,7 @@ async def _show_diagnostics_for_period(callback: types.CallbackQuery, db: AsyncS
             ],
             [types.InlineKeyboardButton(text=' Загрузить лог-файл', callback_data='admin_ref_diag_upload')],
             [types.InlineKeyboardButton(text=' Проверить бонусы (по БД)', callback_data='admin_ref_check_bonuses')],
-            [
-                types.InlineKeyboardButton(
-                    text=' Синхронизировать с конкурсом', callback_data='admin_ref_sync_contest'
-                )
-            ],
+            [types.InlineKeyboardButton(text=' Синхронизировать с конкурсом', callback_data='admin_ref_sync_contest')],
         ]
 
         # Кнопки действий (только если есть потерянные рефералы)
@@ -1336,8 +1326,7 @@ async def sync_referrals_with_contest(
 
         if not all_contests:
             await callback.message.edit_text(
-                ' <b>Нет активных конкурсов рефералов</b>\n\n'
-                'Создайте конкурс в разделе "Конкурсы" для синхронизации.',
+                ' <b>Нет активных конкурсов рефералов</b>\n\nСоздайте конкурс в разделе "Конкурсы" для синхронизации.',
                 reply_markup=types.InlineKeyboardMarkup(
                     inline_keyboard=[
                         [types.InlineKeyboardButton(text='⬅ К диагностике', callback_data='admin_referral_diagnostics')]
@@ -1585,11 +1574,7 @@ async def receive_log_file(message: types.Message, db_user: User, db: AsyncSessi
                 f'Проверьте, что файл является текстовым логом бота.',
                 reply_markup=types.InlineKeyboardMarkup(
                     inline_keyboard=[
-                        [
-                            types.InlineKeyboardButton(
-                                text=' Попробовать снова', callback_data='admin_ref_diag_upload'
-                            )
-                        ],
+                        [types.InlineKeyboardButton(text=' Попробовать снова', callback_data='admin_ref_diag_upload')],
                         [
                             types.InlineKeyboardButton(
                                 text='⬅ К диагностике', callback_data='admin_referral_diagnostics'

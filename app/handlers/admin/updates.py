@@ -15,11 +15,7 @@ def get_updates_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
     buttons = [
         [InlineKeyboardButton(text=' Проверить обновления', callback_data='admin_updates_check')],
         [InlineKeyboardButton(text=' Информация о версии', callback_data='admin_updates_info')],
-        [
-            InlineKeyboardButton(
-                text=' Открыть репозиторий', url=f'https://github.com/{version_service.repo}/releases'
-            )
-        ],
+        [InlineKeyboardButton(text=' Открыть репозиторий', url=f'https://github.com/{version_service.repo}/releases')],
         [InlineKeyboardButton(text='◀ Назад', callback_data='admin_panel')],
     ]
 
@@ -167,9 +163,7 @@ async def show_version_info(callback: types.CallbackQuery, db_user: User, db: As
 
             for i, release in enumerate(newer_releases):
                 icon = '' if i == 0 else ''
-                if release.prerelease:
-                    icon = ''
-                elif release.is_dev:
+                if release.prerelease or release.is_dev:
                     icon = ''
 
                 updates_info += f'{icon} <b>{release.tag_name}</b>\n'

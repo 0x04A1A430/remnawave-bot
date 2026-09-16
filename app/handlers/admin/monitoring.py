@@ -87,11 +87,7 @@ def _build_notification_settings_view(language: str):
                     callback_data='admin_mon_notify_toggle_expired_2d',
                 )
             ],
-            [
-                InlineKeyboardButton(
-                    text=' Тест: скидка 2-3 день', callback_data='admin_mon_notify_preview_expired_2d'
-                )
-            ],
+            [InlineKeyboardButton(text=' Тест: скидка 2-3 день', callback_data='admin_mon_notify_preview_expired_2d')],
             [
                 InlineKeyboardButton(
                     text=f' Скидка 2-3 дня: {second_percent}%', callback_data='admin_mon_notify_edit_2d_percent'

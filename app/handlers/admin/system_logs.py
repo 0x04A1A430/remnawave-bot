@@ -129,9 +129,7 @@ async def download_system_logs(
         document = FSInputFile(log_path)
         stats = log_path.stat()
         updated_at = datetime.fromtimestamp(stats.st_mtime, tz=UTC).strftime('%d.%m.%Y %H:%M:%S')
-        caption = (
-            f' Лог-файл <code>{log_path.name}</code>\n Путь: <code>{log_path}</code>\n Обновлен: {updated_at}'
-        )
+        caption = f' Лог-файл <code>{log_path.name}</code>\n Путь: <code>{log_path}</code>\n Обновлен: {updated_at}'
         await callback.message.answer_document(document=document, caption=caption, parse_mode='HTML')
     except Exception as error:  # pragma: no cover - защита от ошибок отправки
         logger.error('Ошибка отправки лог-файла', log_path=log_path, error=error)

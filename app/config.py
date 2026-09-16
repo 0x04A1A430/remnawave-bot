@@ -2748,8 +2748,14 @@ class Settings(BaseSettings):
         return {
             2: {'name': 'СБП (QR)', 'title': "<tg-emoji emoji-id='5886306834410640699'>🆕</tg-emoji> СБП (QR)"},
             11: {'name': 'Карты (RUB)', 'title': "<tg-emoji emoji-id='5927169041595634481'>💳</tg-emoji> Карты (RUB)"},
-            12: {'name': 'Международные карты', 'title': "<tg-emoji emoji-id='5927169041595634481'>💳</tg-emoji> Международные карты"},
-            13: {'name': 'Криптовалюта', 'title': "<tg-emoji emoji-id='5771755323572359189'>💎</tg-emoji> Криптовалюта"},
+            12: {
+                'name': 'Международные карты',
+                'title': "<tg-emoji emoji-id='5927169041595634481'>💳</tg-emoji> Международные карты",
+            },
+            13: {
+                'name': 'Криптовалюта',
+                'title': "<tg-emoji emoji-id='5771755323572359189'>💎</tg-emoji> Криптовалюта",
+            },
         }
 
     def get_platega_method_display_name(self, method_code: int) -> str:

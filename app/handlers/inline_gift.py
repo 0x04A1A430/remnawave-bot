@@ -750,7 +750,7 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
                                 days=0,
                                 traffic_limit_gb=new_traffic,
                                 device_limit=new_devices,
-                                connected_squads=squads if squads else None,
+                                connected_squads=squads or None,
                                 commit=False,
                             )
                         else:
@@ -760,7 +760,7 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
                                 days=gift_days or 0,
                                 traffic_limit_gb=new_traffic,
                                 device_limit=new_devices,
-                                connected_squads=squads if squads else None,
+                                connected_squads=squads or None,
                                 commit=False,
                             )
                         # Подарок — реальная выдача/продление: выводим из grace.
@@ -974,7 +974,7 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
                         days=0,
                         traffic_limit_gb=new_traffic,
                         device_limit=new_devices,
-                        connected_squads=squads if squads else None,
+                        connected_squads=squads or None,
                         commit=False,
                     )
                 else:
@@ -984,7 +984,7 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
                         days=gift_days or 0,
                         traffic_limit_gb=new_traffic,
                         device_limit=new_devices,
-                        connected_squads=squads if squads else None,
+                        connected_squads=squads or None,
                         commit=False,
                     )
                 # Подарок — это реальная выдача/продление подписки: переводим в

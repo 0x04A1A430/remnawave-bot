@@ -1370,9 +1370,7 @@ async def start_edit_virtual_participant(
     await state.set_state(AdminStates.editing_virtual_participant_count)
     await state.update_data(vp_edit_id=vp_id, vp_edit_contest_id=vp.contest_id)
     await callback.message.edit_text(
-        f' <b>{vp.display_name}</b>\n'
-        f'Текущее кол-во рефералов: <b>{vp.referral_count}</b>\n\n'
-        f'Введите новое количество:',
+        f' <b>{vp.display_name}</b>\nТекущее кол-во рефералов: <b>{vp.referral_count}</b>\n\nВведите новое количество:',
         reply_markup=types.InlineKeyboardMarkup(
             inline_keyboard=[
                 [types.InlineKeyboardButton(text=' Отмена', callback_data=f'admin_contest_vp_{vp.contest_id}')],

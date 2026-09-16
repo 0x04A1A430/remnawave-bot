@@ -131,9 +131,7 @@ def _get_support_settings_keyboard(language: str) -> types.InlineKeyboardMarkup:
     rows.append(
         [
             types.InlineKeyboardButton(
-                text=texts.t('ADMIN_SUPPORT_SETTINGS_MODERATORS_COUNT', ' Модераторы: {count}').format(
-                    count=mod_count
-                ),
+                text=texts.t('ADMIN_SUPPORT_SETTINGS_MODERATORS_COUNT', ' Модераторы: {count}').format(count=mod_count),
                 callback_data='admin_support_list_moderators',
             )
         ]
@@ -323,9 +321,7 @@ async def handle_moderator_id(message: types.Message, db_user: User, db: AsyncSe
     else:
         ok = await SupportSettingsService.add_moderator(db, tid)
         msg = (
-            texts.t('ADMIN_SUPPORT_MODERATOR_ADDED_SUCCESS', ' Пользователь {tid} назначен модератором').format(
-                tid=tid
-            )
+            texts.t('ADMIN_SUPPORT_MODERATOR_ADDED_SUCCESS', ' Пользователь {tid} назначен модератором').format(tid=tid)
             if ok
             else texts.t('ADMIN_SUPPORT_MODERATOR_ADDED_FAIL', ' Не удалось назначить модератора')
         )

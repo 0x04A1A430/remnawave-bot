@@ -371,11 +371,7 @@ async def _render_levels(callback: types.CallbackQuery, db: AsyncSession) -> Non
     # как пропавшая настройка, и админ идёт искать её в общем списке конфигурации.
     if tier_mode:
         keyboard_rows.append(
-            [
-                types.InlineKeyboardButton(
-                    text=' Глубина цепочки: не используется', callback_data='admin_ref_lvl_depth'
-                )
-            ]
+            [types.InlineKeyboardButton(text=' Глубина цепочки: не используется', callback_data='admin_ref_lvl_depth')]
         )
     else:
         keyboard_rows.append(
@@ -735,9 +731,7 @@ async def _render_level(
                 types.InlineKeyboardButton(
                     text=' Фикс. пригласившему', callback_data=f'{prefix}:referrer_fixed_kopeks'
                 ),
-                types.InlineKeyboardButton(
-                    text=' Фикс. приглашённому', callback_data=f'{prefix}:referee_fixed_kopeks'
-                ),
+                types.InlineKeyboardButton(text=' Фикс. приглашённому', callback_data=f'{prefix}:referee_fixed_kopeks'),
             ]
         )
     if days_on:
