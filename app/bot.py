@@ -26,7 +26,6 @@ from app.handlers.admin import (
     blocked_users as admin_blocked_users,
     bot_configuration as admin_bot_configuration,
     bulk_ban as admin_bulk_ban,
-    bulk_unban as admin_bulk_unban,
     campaigns as admin_campaigns,
     contests as admin_contests,
     coupons as admin_coupons,
@@ -63,16 +62,12 @@ from app.handlers.admin import (
     users as admin_users,
     welcome_text as admin_welcome_text,
 )
-from app.handlers.admin.inline_gift import (
-    register_handlers as register_admin_inline_gift_handlers,
-)
 from app.handlers.channel_member import (
     register_handlers as register_channel_member_handlers,
 )
 from app.handlers.gift_activation import (
     register_handlers as register_gift_activation_handlers,
 )
-from app.handlers.inline_gift import register_handlers as register_inline_gift_handlers
 from app.handlers.stars_payments import register_stars_handlers
 from app.middlewares.auth import AuthMiddleware
 from app.middlewares.blacklist import BlacklistMiddleware
@@ -242,7 +237,6 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
     admin_trials.register_handlers(dp)
     admin_tariffs.register_handlers(dp)
     admin_bulk_ban.register_bulk_ban_handlers(dp)
-    admin_bulk_unban.register_bulk_unban_handlers(dp)
     admin_blacklist.register_blacklist_handlers(dp)
     admin_blocked_users.register_handlers(dp)
     admin_required_channels.register_handlers(dp)
@@ -251,8 +245,6 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
     admin_coupons.register_handlers(dp)
     register_channel_member_handlers(dp)
     register_gift_activation_handlers(dp)
-    register_inline_gift_handlers(dp)
-    register_admin_inline_gift_handlers(dp)
     common.register_handlers(dp)
     register_stars_handlers(dp)
     user_contests.register_handlers(dp)
