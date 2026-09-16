@@ -2543,6 +2543,13 @@ class Subscription(Base):
     last_webhook_update_at = Column(AwareDateTime(), nullable=True)
     last_revoke_at = Column(AwareDateTime(), nullable=True)
 
+    def time_until_revoke_available(self, cooldown_seconds: int) -> int:
+        """Return remaining revoke cooldown in seconds for this subscription."""
+        if not self.last_revoke_at:
+            return 0
+        elapsed = (datetime.now(UTC) - _aware(self.last_revoke_at)).total_seconds()
+        return max(0, int(cooldown_seconds - elapsed))
+
     # Grace-access ingress marker.  Only trusted status transitions set the
     # candidate timestamp; generic updated_at/webhooks must not resurrect old
     # expired subscriptions when the feature is enabled.
