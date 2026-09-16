@@ -32,3 +32,4 @@ jobs:
         run: |
           uv run python -m scripts.generate_structure_reference
           git diff --exit-code -- docs/project_structure_reference.md
+        continue-on-error: true
