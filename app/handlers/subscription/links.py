@@ -319,34 +319,7 @@ async def handle_open_subscription_link(
     link_text = (
         texts.t('SUBSCRIPTION_DEVICE_LINK_TITLE', '🔗 <b>Ссылка подписки:</b>')
         + '\n\n'
-        + f'<code>{subscription_link}</code>\n\n'
-        + texts.t('SUBSCRIPTION_LINK_USAGE_TITLE', '📱 <b>Как использовать:</b>')
-        + '\n'
-        + '\n'.join(
-            [
-                texts.t(
-                    'SUBSCRIPTION_LINK_STEP1',
-                    '1. Нажмите на ссылку выше чтобы её скопировать',
-                ),
-                texts.t(
-                    'SUBSCRIPTION_LINK_STEP2',
-                    '2. Откройте ваше VPN приложение',
-                ),
-                texts.t(
-                    'SUBSCRIPTION_LINK_STEP3',
-                    '3. Найдите функцию "Добавить подписку" или "Import"',
-                ),
-                texts.t(
-                    'SUBSCRIPTION_LINK_STEP4',
-                    '4. Вставьте скопированную ссылку',
-                ),
-            ]
-        )
-        + '\n\n'
-        + texts.t(
-            'SUBSCRIPTION_LINK_HINT',
-            '💡 Если ссылка не скопировалась, выделите её вручную и скопируйте.',
-        )
+        + f'<code>{subscription_link}</code>'
     )
 
     await callback.message.edit_text(
