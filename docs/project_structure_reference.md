@@ -15,42 +15,37 @@
 - `.gitignore` — файл
 - `.python-version` — файл
 - `.release-please-manifest.json` — файл
-- `CHANGELOG.md` — файл
-- `CONTRIBUTING.md` — файл
-- `Dockerfile` — файл
-- `LICENSE` — файл
-- `Makefile` — файл
-- `README.md` — файл
-- `SECURITY.md` — файл
 - `alembic.ini` — файл
 - `app/`
 - `assets/`
+- `CHANGELOG.md` — файл
+- `CONTRIBUTING.md` — файл
 - `docker-compose.local.yml` — файл
 - `docker-compose.yml` — файл
+- `Dockerfile` — файл
 - `docs/`
+- `LICENSE` — файл
 - `main.py` — Python-модуль
   Классы: `GracefulExit` (2 методов)
   Функции: `main`
+- `Makefile` — файл
 - `migrations/`
 - `pyproject.toml` — файл
+- `README.md` — файл
 - `release-please-config.json` — файл
 - `scripts/`
+- `SECURITY.md` — файл
 - `tests/`
 - `uv.lock` — файл
 - `vpn_logo.png` — файл
 
 ## .github
 
-- `.github/ISSUE_TEMPLATE/`
 - `.github/assets/`
 - `.github/codeql/`
 - `.github/dependabot.yml` — файл
+- `.github/ISSUE_TEMPLATE/`
 - `.github/workflows/`
-
-### .github/ISSUE_TEMPLATE
-
-- `.github/ISSUE_TEMPLATE/bug-bedolage.md` — файл
-- `.github/ISSUE_TEMPLATE/feat-bedolage.md` — файл
 
 ### .github/assets
 
@@ -64,6 +59,11 @@
 ### .github/codeql
 
 - `.github/codeql/codeql-config.yml` — файл
+
+### .github/ISSUE_TEMPLATE
+
+- `.github/ISSUE_TEMPLATE/bug-bedolage.md` — файл
+- `.github/ISSUE_TEMPLATE/feat-bedolage.md` — файл
 
 ### .github/workflows
 
@@ -584,8 +584,8 @@
 
 ##### app/cabinet/utils/fonts
 
-- `app/cabinet/utils/fonts/OFL.txt` — файл
 - `app/cabinet/utils/fonts/manrope-variable.ttf` — файл
+- `app/cabinet/utils/fonts/OFL.txt` — файл
 
 ### app/database
 
@@ -622,7 +622,7 @@
   Функции: `create_aurapay_payment` — Создает запись о платеже AuraPay., `get_aurapay_payment_by_order_id` — Получает платеж по order_id (internal)., `get_aurapay_payment_by_invoice_id` — Получает платеж по UUID от AuraPay., `get_aurapay_payment_by_id` — Получает платеж по ID., `get_aurapay_payment_by_id_for_update` — Получает платеж по ID с блокировкой FOR UPDATE., `update_aurapay_payment_status` — Обновляет статус платежа., `get_pending_aurapay_payments` — Получает незавершенные платежи пользователя., `get_expired_pending_aurapay_payments` — Получает просроченные платежи в статусе pending., `link_aurapay_payment_to_transaction` — Связывает платеж с транзакцией.
 - `app/database/crud/campaign.py` — Python-модуль
   Классы: нет
-  Функции: `create_campaign`, `get_campaign_by_id`, `get_campaign_by_start_parameter`, `get_campaigns_list`, `get_campaigns_count`, `update_campaign`, `delete_campaign`, `get_campaign_registration_by_user`, `record_campaign_registration` — Создаёт или возвращает запись регистрации в рекламной кампании., `get_campaign_statistics`, `get_campaigns_overview`
+  Функции: `create_campaign`, `get_campaign_by_id`, `get_campaign_by_start_parameter`, `get_campaigns_list`, `get_campaigns_count`, `update_campaign`, `delete_campaign`, `get_campaign_registration_by_user`, `is_campaign_bonus_tariff_subscription` — True — тариф подписки выдан пользователю бонусом по рекламной кампании., `record_campaign_registration` — Создаёт или возвращает запись регистрации в рекламной кампании., `get_campaign_statistics`, `get_campaigns_overview`
 - `app/database/crud/cispay.py` — Python-модуль
   Классы: нет
   Функции: `create_cispay_payment` — Создаёт запись о платеже cisPay., `get_cispay_payment_by_order_id` — Получает платеж по order_id (internal)., `get_cispay_payment_by_invoice_id` — Получает платёж по id транзакции, выданному cisPay., `get_cispay_payment_by_id` — Получает платеж по локальному ID., `get_cispay_payment_by_id_for_update` — Получает платёж с блокировкой FOR UPDATE., `update_cispay_payment_status` — Обновляет статус платежа., `get_pending_cispay_payments` — Возвращает незавершённые платежи пользователя., `get_expired_pending_cispay_payments` — Возвращает просроченные платежи в статусе pending., `link_cispay_payment_to_transaction` — Связывает платёж с транзакцией.
@@ -769,7 +769,7 @@
   Функции: `create_saved_payment_method` — Создаёт или реактивирует сохранённый метод оплаты., `get_active_payment_methods_by_user` — Получить все активные сохранённые методы оплаты пользователя., `get_user_ids_with_active_payment_methods` — Вернуть подмножество user_ids, у которых есть хотя бы один активный метод оплаты., `get_payment_method_by_yookassa_id` — Найти сохранённый метод по YooKassa payment_method.id., `deactivate_payment_method` — Деактивировать (soft-delete) сохранённый метод оплаты., `deactivate_all_user_payment_methods` — Деактивировать все методы оплаты пользователя. Возвращает количество деактивированных.
 - `app/database/crud/server_squad.py` — Python-модуль
   Классы: нет
-  Функции: `create_server_squad`, `get_server_squad_by_uuid`, `get_server_squad_by_id`, `get_all_server_squads`, `get_available_server_squads`, `get_effective_tariff_squad_uuids` — Resolve tariff squads, treating an empty list as "all available squads"., `get_active_server_squads` — Возвращает список активных серверов, доступных для подключения., `choose_random_active_server_squad` — Возвращает случайный активный сервер., `get_random_active_squad_uuid` — Возвращает UUID случайного активного сервера или запасной UUID., `update_server_squad_promo_groups`, `update_server_squad`, `delete_server_squad`, `sync_with_remnawave`, `get_server_connected_users`, `get_trial_eligible_server_squads`, `choose_random_trial_server_squad`, `get_random_trial_squad_uuid`, `get_server_statistics`, `count_active_users_for_squad` — Возвращает количество активных подписок, подключенных к указанному скваду., `add_user_to_servers`, `remove_user_from_servers`, `update_server_user_counts` — Increment and decrement server user counters in a single sorted pass., `get_server_ids_by_uuids`, `get_server_squads_by_uuids` — Получает список ServerSquad объектов по их UUID с загрузкой allowed_promo_groups., `ensure_servers_synced` — Проверяет и синхронизирует серверы при запуске., `sync_server_user_counts`
+  Функции: `create_server_squad`, `get_server_squad_by_uuid`, `get_server_squad_by_id`, `get_all_server_squads`, `get_available_server_squads`, `get_effective_tariff_squad_uuids` — Resolve tariff squads, treating an empty list as "all available squads"., `get_active_server_squads` — Возвращает список активных серверов, доступных для подключения., `choose_random_active_server_squad` — Возвращает случайный активный сервер., `get_random_active_squad_uuid` — Возвращает UUID случайного активного сервера или запасной UUID., `update_server_squad_promo_groups`, `update_server_squad`, `delete_server_squad`, `sync_with_remnawave`, `get_server_connected_users`, `get_trial_eligible_server_squads`, `choose_random_trial_server_squad`, `get_random_trial_squad_uuid`, `get_server_statistics`, `count_active_users_for_squad` — Возвращает количество активных подписок, подключенных к указанному скваду., `add_user_to_servers`, `remove_user_from_servers`, `update_server_user_counts` — Increment and decrement server user counters in a single sorted pass., `get_server_ids_by_uuids`, `get_server_squads_by_uuids` — Получает список ServerSquad объектов по их UUID с загрузкой allowed_promo_groups., `ensure_servers_synced` — Синхронизация серверов со списком из панели., `sync_server_user_counts`
 - `app/database/crud/severpay.py` — Python-модуль
   Классы: нет
   Функции: `create_severpay_payment` — Создает запись о платеже SeverPay., `get_severpay_payment_by_order_id` — Получает платеж по order_id (internal)., `get_severpay_payment_by_severpay_id` — Получает платеж по ID от SeverPay., `get_severpay_payment_by_id` — Получает платеж по ID., `get_severpay_payment_by_id_for_update` — Получает платеж по ID с блокировкой FOR UPDATE., `update_severpay_payment_status` — Обновляет статус платежа., `get_pending_severpay_payments` — Получает незавершенные платежи пользователя., `get_expired_pending_severpay_payments` — Получает просроченные платежи в статусе pending., `link_severpay_payment_to_transaction` — Связывает платеж с транзакцией.
@@ -915,7 +915,7 @@
   Функции: `show_promocode_menu`, `activate_promocode_for_registration` — Активирует промокод для пользователя., `process_promocode`, `handle_promo_subscription_select` — Handle subscription selection for promocode with days in multi-tariff., `register_handlers`
 - `app/handlers/referral.py` — Python-модуль
   Классы: нет
-  Функции: `show_referral_info`, `show_referral_qr`, `show_detailed_referral_list`, `show_referral_analytics`, `create_invite_message`, `show_withdrawal_info` — Показывает информацию о выводе реферального баланса., `start_withdrawal_request` — Начинает процесс оформления заявки на вывод., `process_withdrawal_amount` — Обрабатывает ввод суммы для вывода., `process_withdrawal_amount_callback` — Обрабатывает выбор суммы для вывода через кнопку., `process_payment_details` — Обрабатывает ввод реквизитов и показывает подтверждение., `confirm_withdrawal_request` — Подтверждает и создаёт заявку на вывод., `cancel_withdrawal_request` — Отменяет процесс создания заявки на вывод., `register_handlers`
+  Функции: `show_referral_info`, `show_referral_qr`, `show_detailed_referral_list`, `show_referral_detail`, `show_referral_analytics`, `create_invite_message`, `show_withdrawal_info` — Показывает информацию о выводе реферального баланса., `start_withdrawal_request` — Начинает процесс оформления заявки на вывод., `process_withdrawal_amount` — Обрабатывает ввод суммы для вывода., `process_withdrawal_amount_callback` — Обрабатывает выбор суммы для вывода через кнопку., `process_payment_details` — Обрабатывает ввод реквизитов и показывает подтверждение., `confirm_withdrawal_request` — Подтверждает и создаёт заявку на вывод., `cancel_withdrawal_request` — Отменяет процесс создания заявки на вывод., `register_handlers`
 - `app/handlers/referral_settings.py` — Python-модуль
   Классы: нет
   Функции: `show_reward_settings`, `set_reward_preference` — Сохранить, что получать. Неразрешённая настройка не сохраняется вовсе., `set_days_target` — Сохранить подписку для дней., `register_handlers`
@@ -1132,7 +1132,7 @@
   Функции: `process_lava_payment_amount` — Обрабатывает сумму для Lava., `start_lava_topup`, `start_lava_card_topup`, `start_lava_sbp_topup`
 - `app/handlers/balance/main.py` — Python-модуль
   Классы: нет
-  Функции: `route_payment_by_method` — Роутер платежей по методу оплаты., `show_balance_menu`, `show_balance_history`, `handle_balance_history_pagination`, `show_payment_methods`, `handle_payment_methods_unavailable`, `handle_successful_topup_with_cart`, `request_support_topup`, `process_topup_amount`, `handle_sbp_payment`, `handle_topup_amount_callback`, `register_balance_handlers`
+  Функции: `route_payment_by_method` — Роутер платежей по методу оплаты., `show_balance_menu`, `show_balance_history`, `show_balance_history_deposits`, `show_balance_history_withdrawals`, `show_balance_history_deposits_page`, `show_balance_history_withdrawals_page`, `show_transaction_category`, `show_transaction_detail`, `show_payment_methods`, `handle_payment_methods_unavailable`, `handle_successful_topup_with_cart`, `request_support_topup`, `process_topup_amount`, `handle_sbp_payment`, `handle_topup_amount_callback`, `register_balance_handlers`
 - `app/handlers/balance/mulenpay.py` — Python-модуль
   Классы: нет
   Функции: `start_mulenpay_payment`, `process_mulenpay_payment_amount`, `check_mulenpay_payment_status`
@@ -1195,7 +1195,7 @@
   Функции: `handle_add_countries`, `get_countries_price_by_uuids_fallback`, `handle_manage_country`, `apply_countries_changes`, `select_country`, `countries_continue`, `handle_add_country_to_subscription`, `confirm_add_countries_to_subscription`
 - `app/handlers/subscription/devices.py` — Python-модуль
   Классы: нет
-  Функции: `get_current_devices_detailed`, `get_servers_display_names`, `get_current_devices_count`, `handle_change_devices`, `confirm_change_devices`, `execute_change_devices`, `handle_device_management`, `show_devices_page`, `handle_devices_page`, `start_device_rename` — Callback `device_rename_<idx>_<page>` — prompts user for the new alias., `process_device_rename` — Text input from the user with the new alias (or `-`/`/clear` to delete)., `cancel_device_rename` — Callback `device_rename_cancel` — «Отмена» в промпте переименования., `handle_single_device_reset`, `handle_all_devices_reset_from_management`, `confirm_add_devices`, `handle_reset_devices`, `confirm_reset_devices`, `handle_device_guide`, `handle_app_selection`, `handle_specific_app_guide`, `show_device_connection_help`
+  Функции: `get_current_devices_detailed`, `get_servers_display_names`, `get_current_devices_count`, `handle_change_devices`, `confirm_change_devices`, `execute_change_devices`, `handle_device_management`, `show_devices_page`, `handle_devices_page`, `handle_single_device_reset`, `handle_all_devices_reset_from_management`, `confirm_add_devices`, `handle_reset_devices`, `confirm_reset_devices`, `handle_device_guide`, `handle_app_selection`, `handle_specific_app_guide`, `show_device_connection_help`
 - `app/handlers/subscription/gift.py` — Python-модуль
   Классы: нет
   Функции: `handle_gift_catalog` — Entry point for native gift catalog and history hub., `handle_gift_tariff_select` — Handle tariff selection in gift flow and render periods., `handle_gift_period_select` — Handle period selection in gift flow and render confirmation summary., `handle_gift_back_tariffs` — Navigate back to tariff catalog., `handle_gift_back_periods` — Navigate back to period selection for current tariff., `handle_gift_cancel` — Cancel gift checkout, clean up saved gift cart, and return to origin subscription view., `handle_gift_confirm` — Confirmation handler: validates selection, preflights channels, purchases from balance, and renders result., `handle_return_to_gift_cart` — Resume gift cart after balance top-up (Task 6)., `handle_gift_enter_code` — Prompt user to manually enter gift code or link., `handle_gift_activation_cancel` — Cancel manual code entry and return to gift catalog view., `handle_gift_code_input` — Handle manual gift code or link input in GiftActivationStates.waiting_for_code., `handle_gift_my` — Entry handler for 'My gifts' history list (Page 1)., `handle_gift_my_page` — Handle pagination page change in gift history., `handle_gift_my_open` — Open detail card for a specific gift owned by the sender (IDOR protected)., `handle_gift_my_qr` — Показать QR со ссылкой на активацию подарка., `handle_gift_my_text` — Готовое сообщение получателю, скопировать одним нажатием., `handle_gift_my_back` — Return from gift detail card to history list., `register_gift_handlers` — Register all gift purchase, navigation, and code activation handlers.
@@ -1228,7 +1228,7 @@
   Функции: `present_subscription_summary` — Render the subscription purchase summary and switch to the confirmation state.
 - `app/handlers/subscription/tariff_purchase.py` — Python-модуль
   Классы: нет
-  Функции: `format_tariffs_list_text` — Форматирует текст со списком тарифов для отображения., `get_tariffs_keyboard` — Создает компактную клавиатуру выбора тарифов (только названия)., `get_tariff_periods_keyboard` — Создает клавиатуру выбора периода для тарифа с учетом скидок по периодам., `get_tariff_periods_keyboard_with_traffic` — Клавиатура выбора периода для тарифа с кастомным трафиком (переход к настройке трафика)., `get_tariff_confirm_keyboard` — Создает клавиатуру подтверждения покупки тарифа., `get_tariff_insufficient_balance_keyboard` — Создает клавиатуру при недостаточном балансе., `get_tariff_extend_insufficient_balance_keyboard` — Клавиатура «Недостаточно средств» при продлении тарифа., `format_tariff_info_for_user` — Форматирует информацию о тарифе для пользователя., `get_daily_tariff_confirm_keyboard` — Создает клавиатуру подтверждения покупки суточного тарифа., `get_daily_tariff_insufficient_balance_keyboard` — Создает клавиатуру при недостаточном балансе для суточного тарифа., `get_custom_tariff_keyboard` — Создает клавиатуру для настройки кастомных дней и трафика., `format_custom_tariff_preview` — Форматирует предпросмотр покупки с кастомными параметрами., `show_tariffs_list` — Показывает список тарифов для покупки., `select_tariff` — Обрабатывает выбор тарифа., `handle_custom_days_change` — Обрабатывает изменение количества дней., `handle_custom_traffic_change` — Обрабатывает изменение количества трафика., `handle_custom_confirm` — Подтверждает покупку тарифа с кастомными параметрами., `select_tariff_period_with_traffic` — Обрабатывает выбор периода для тарифа с кастомным трафиком - показывает экран настройки трафика., `select_tariff_period` — Обрабатывает выбор периода для тарифа., `confirm_tariff_purchase` — Подтверждает покупку тарифа и создает подписку., `confirm_daily_tariff_purchase` — Подтверждает покупку суточного тарифа., `get_tariff_extend_keyboard` — Создает клавиатуру выбора периода для продления по тарифу с учетом скидок по периодам., `get_tariff_extend_confirm_keyboard` — Создает клавиатуру подтверждения продления по тарифу., `show_tariff_extend` — Показывает экран продления по текущему тарифу., `select_tariff_extend_period` — Обрабатывает выбор периода для продления., `confirm_tariff_extend` — Подтверждает продление по тарифу., `format_tariff_switch_list_text` — Форматирует текст со списком тарифов для переключения., `get_tariff_switch_keyboard` — Создает компактную клавиатуру выбора тарифа для переключения., `get_tariff_switch_periods_keyboard` — Создает клавиатуру выбора периода для переключения тарифа с учетом скидок по периодам., `get_tariff_switch_confirm_keyboard` — Создает клавиатуру подтверждения переключения тарифа., `get_tariff_switch_insufficient_balance_keyboard` — Создает клавиатуру при недостаточном балансе для переключения., `show_tariff_switch_list` — Показывает список тарифов для переключения., `select_tariff_switch` — Обрабатывает выбор тарифа для переключения., `select_tariff_switch_period` — Обрабатывает выбор периода для переключения тарифа., `confirm_tariff_switch` — Подтверждает переключение тарифа., `confirm_daily_tariff_switch` — Подтверждает смену на суточный тариф., `format_instant_switch_list_text` — Форматирует текст со списком тарифов для мгновенного переключения., `get_instant_switch_keyboard` — Создает клавиатуру для мгновенного переключения тарифа., `get_instant_switch_confirm_keyboard` — Создает клавиатуру подтверждения мгновенного переключения., `get_instant_switch_insufficient_balance_keyboard` — Создает клавиатуру при недостаточном балансе для мгновенного переключения., `show_instant_switch_list` — Показывает список тарифов для мгновенного переключения., `preview_instant_switch` — Показывает превью мгновенного переключения тарифа., `purchase_tariff_with_lava` — Оформление подписки на тариф через автопродление Lava., `confirm_instant_switch` — Подтверждает мгновенное переключение тарифа., `return_to_saved_tariff_cart` — Восстанавливает сохраненную корзину тарифа после пополнения баланса., `purchase_tariff_with_sbp` — Оформление подписки на тариф через СБП-автопродление Platega., `register_tariff_purchase_handlers` — Регистрирует обработчики покупки по тарифам.
+  Функции: `format_tariffs_list_text` — Форматирует текст со списком тарифов для отображения., `get_tariffs_keyboard` — Создает компактную клавиатуру выбора тарифов (только названия)., `get_tariff_periods_keyboard` — Создает клавиатуру выбора периода для тарифа с учетом скидок по периодам., `get_tariff_periods_keyboard_with_traffic` — Клавиатура выбора периода для тарифа с кастомным трафиком (переход к настройке трафика)., `get_tariff_confirm_keyboard` — Создает клавиатуру подтверждения покупки тарифа., `get_tariff_insufficient_balance_keyboard` — Создает клавиатуру при недостаточном балансе., `get_tariff_extend_insufficient_balance_keyboard` — Клавиатура «Недостаточно средств» при продлении тарифа., `format_tariff_info_for_user` — Форматирует информацию о тарифе для пользователя., `get_daily_tariff_confirm_keyboard` — Создает клавиатуру подтверждения покупки суточного тарифа., `get_daily_tariff_insufficient_balance_keyboard` — Создает клавиатуру при недостаточном балансе для суточного тарифа., `get_custom_tariff_keyboard` — Создает клавиатуру для настройки кастомных дней и трафика., `format_custom_tariff_preview` — Форматирует предпросмотр покупки с кастомными параметрами., `show_tariffs_list` — Показывает список тарифов для покупки., `select_tariff` — Обрабатывает выбор тарифа., `handle_custom_days_change` — Обрабатывает изменение количества дней., `handle_custom_traffic_change` — Обрабатывает изменение количества трафика., `handle_custom_confirm` — Подтверждает покупку тарифа с кастомными параметрами., `select_tariff_period_with_traffic` — Обрабатывает выбор периода для тарифа с кастомным трафиком - показывает экран настройки трафика., `select_tariff_period` — Обрабатывает выбор периода для тарифа., `confirm_tariff_purchase` — Подтверждает покупку тарифа и создает подписку., `confirm_daily_tariff_purchase` — Подтверждает покупку суточного тарифа., `get_tariff_extend_keyboard` — Создает клавиатуру выбора периода для продления по тарифу с учетом скидок по периодам., `get_tariff_extend_confirm_keyboard` — Создает клавиатуру подтверждения продления по тарифу., `show_tariff_extend` — Показывает экран продления по текущему тарифу., `select_tariff_extend_period` — Обрабатывает выбор периода для продления., `confirm_tariff_extend` — Подтверждает продление по тарифу., `format_tariff_switch_list_text` — Форматирует текст со списком тарифов для переключения., `get_tariff_switch_keyboard` — Создает компактную клавиатуру выбора тарифа для переключения., `get_tariff_switch_periods_keyboard` — Создает клавиатуру выбора периода для переключения тарифа с учетом скидок по периодам., `get_tariff_switch_confirm_keyboard` — Создает клавиатуру подтверждения переключения тарифа., `get_tariff_switch_insufficient_balance_keyboard` — Создает клавиатуру при недостаточном балансе для переключения., `show_tariff_switch_list` — Показывает список тарифов для переключения., `select_tariff_switch` — Обрабатывает выбор тарифа для переключения., `select_tariff_switch_period` — Обрабатывает выбор периода для переключения тарифа., `confirm_tariff_switch` — Подтверждает переключение тарифа., `confirm_daily_tariff_switch` — Подтверждает смену на суточный тариф., `format_instant_switch_list_text` — Форматирует текст со списком тарифов для мгновенного переключения., `get_instant_switch_keyboard` — Создает клавиатуру для мгновенного переключения тарифа., `get_instant_switch_confirm_keyboard` — Создает клавиатуру подтверждения мгновенного переключения., `get_instant_switch_insufficient_balance_keyboard` — Создает клавиатуру при недостаточном балансе для мгновенного переключения., `show_instant_switch_list` — Показывает список тарифов для мгновенного переключения., `preview_instant_switch` — Показывает превью мгновенного переключения тарифа., `purchase_tariff_with_lava` — Оформление подписки на тариф через автопродление Lava., `confirm_instant_switch` — Подтверждает мгновенное переключение тарифа., `return_to_saved_tariff_cart` — Восстанавливает сохраненную корзину тарифа после пополнения баланса., `purchase_tariff_with_sbp` — Оформление подписки на тариф через СБП-автопродление Platega., `purchase_tariff_with_lava` — Оформление подписки на тариф через автопродление Lava., `register_tariff_purchase_handlers` — Регистрирует обработчики покупки по тарифам.
 - `app/handlers/subscription/traffic.py` — Python-модуль
   Классы: нет
   Функции: `handle_add_traffic`, `handle_reset_traffic`, `confirm_reset_traffic`, `refresh_traffic_config`, `get_traffic_packages_info`, `select_traffic`, `add_traffic`, `handle_no_traffic_packages`, `handle_switch_traffic`, `confirm_switch_traffic`, `execute_switch_traffic`
@@ -1371,6 +1371,9 @@
   Функции: нет
 - `app/middlewares/maintenance.py` — Python-модуль
   Классы: `MaintenanceMiddleware` (1 методов)
+  Функции: нет
+- `app/middlewares/rich_menu_cleanup.py` — Python-модуль
+  Классы: `RichMenuCleanupMiddleware` (1 методов)
   Функции: нет
 - `app/middlewares/stale_callback_answer.py` — Python-модуль
   Классы: `StaleCallbackAnswerMiddleware` (1 методов)
@@ -2174,7 +2177,7 @@
   Функции: `render_keyboard_as_rich_html` — Клавиатура целиком в виде рядов ``<tg-button-row>``.
 - `app/utils/rich_menu.py` — Python-модуль
   Классы: нет
-  Функции: `is_rich_menu_enabled`, `build_main_menu_rich_html` — Собирает rich-HTML главного меню (контент, без клавиатуры)., `try_send_rich_main_menu` — Отправляет главное меню rich-сообщением. False — показать классическое меню., `try_answer_rich_main_menu` — Rich-аналог message.answer(menu_text) для /start и завершения регистрации., `try_edit_rich_main_menu` — Rich-аналог edit_or_answer_photo для callback-навигации. False — рисовать классику.
+  Функции: `mark_rich_menu_taken_over` — Отмечает, что при этом нажатии прежнее rich-меню было поглощено/заменено., `reset_rich_menu_takeover` — Сбрасывает флаг «переиспользовано» перед обработкой нового события., `cleanup_stale_rich_menu` — Удаляет прежнее rich-меню, если это нажатие кнопки его не переиспользовало., `is_rich_menu_enabled`, `build_main_menu_rich_html` — Собирает rich-HTML главного меню (контент, без клавиатуры)., `try_send_rich_main_menu` — Отправляет главное меню rich-сообщением. False — показать классическое меню., `try_answer_rich_main_menu` — Rich-аналог message.answer(menu_text) для /start и завершения регистрации., `try_edit_rich_main_menu` — Rich-аналог edit_or_answer_photo для callback-навигации. False — рисовать классику.
 - `app/utils/rich_notify.py` — Python-модуль
   Классы: нет
   Функции: `build_notification_rich_html` — Текст уведомления → rich-разметка в стиле главного меню., `try_send_rich_notification` — Шлёт уведомление rich-сообщением. ``False`` — отправить классическое.
@@ -2958,7 +2961,7 @@
   Функции: `test_small_logo_used_as_is`, `test_oversized_logo_is_resized_under_cap` — A 2000×2000 PNG (~well over _LOGO_MAX_DIMENSION) gets resized., `test_oversized_non_square_logo_keeps_aspect` — 1980×1267 (the literal `vpn_logo.png` shipped in the repo) keeps ratio., `test_cached_resized_copy_is_reused` — Subsequent calls on the same source must hit the cached resized file., `test_missing_pil_falls_back_to_original` — If Pillow chokes on the file for any reason we return the source path —, `test_size_thresholds_are_sane` — Guard against accidental edits that would render the resize a noop., `test_get_logo_media_uses_resized_copy` — End-to-end: get_logo_media() returns FSInputFile pointing at the resized copy.
 - `tests/test_menu_subscription_status.py` — Python-модуль
   Классы: `DummyTexts` (1 методов)
-  Функции: `test_get_subscription_status_marks_trial_as_trial`
+  Функции: `test_get_subscription_status_marks_trial_as_trial`, `test_get_subscription_status_shows_forever_above_threshold` — Подписка с остатком > 25000 дней («вечная» до 2099) — «Активна (навсегда)»., `test_get_subscription_status_keeps_days_below_threshold`
 - `tests/test_miniapp_payments.py` — Python-модуль
   Классы: нет
   Функции: `anyio_backend`, `test_compute_cryptobot_limits_scale_with_rate`, `test_encode_decode_renewal_payload_preserves_snapshot`, `test_submit_subscription_renewal_uses_balance_when_sufficient`, `test_submit_subscription_renewal_returns_cryptobot_invoice`, `test_submit_subscription_renewal_rounds_up_cryptobot_amount`, `test_cryptobot_renewal_uses_pricing_snapshot`, `test_cryptobot_renewal_accepts_changed_pricing_without_snapshot`, `test_cryptobot_webhook_uses_inline_payload_when_db_missing`, `test_create_payment_link_pal24_uses_selected_option`, `test_create_payment_link_wata_returns_payload`, `test_resolve_yookassa_status_includes_identifiers`, `test_resolve_payment_status_supports_yookassa_sbp`, `test_resolve_pal24_status_includes_identifiers`, `test_resolve_wata_payment_status_success`, `test_resolve_wata_payment_status_uses_payment_link_lookup`, `test_create_payment_link_stars_normalizes_amount`, `test_get_payment_methods_exposes_stars_min_amount`, `test_get_payment_methods_includes_wata`, `test_get_payment_methods_marks_mulenpay_iframe`, `test_find_recent_deposit_ignores_transactions_before_attempt`, `test_find_recent_deposit_accepts_recent_transactions`
@@ -3633,7 +3636,6 @@
 
 #### tests/fixtures/bschek
 
-- `tests/fixtures/bschek/README.md` — файл
 - `tests/fixtures/bschek/account.json` — файл
 - `tests/fixtures/bschek/auth_bad.json` — файл
 - `tests/fixtures/bschek/auth_none.json` — файл
@@ -3655,15 +3657,15 @@
 - `tests/fixtures/bschek/p2_replay.json` — файл
 - `tests/fixtures/bschek/p3_bare_mts.json` — файл
 - `tests/fixtures/bschek/p4_bare_mts_any.json` — файл
-- `tests/fixtures/bschek/pF_fleet.json` — файл
-- `tests/fixtures/bschek/pF_replay_0.json` — файл
-- `tests/fixtures/bschek/pF_replay_late.json` — файл
-- `tests/fixtures/bschek/pF_same_key_while_running.json` — файл
 - `tests/fixtures/bschek/p_blocked.json` — файл
 - `tests/fixtures/bschek/p_dpi_off.json` — файл
 - `tests/fixtures/bschek/p_empty_ops.json` — файл
 - `tests/fixtures/bschek/p_legacy_alias.json` — файл
 - `tests/fixtures/bschek/p_noidem.json` — файл
+- `tests/fixtures/bschek/pF_fleet.json` — файл
+- `tests/fixtures/bschek/pF_replay_0.json` — файл
+- `tests/fixtures/bschek/pF_replay_late.json` — файл
+- `tests/fixtures/bschek/pF_same_key_while_running.json` — файл
 - `tests/fixtures/bschek/pv_11_targets.json` — файл
 - `tests/fixtures/bschek/pv_all_any.json` — файл
 - `tests/fixtures/bschek/pv_all_default.json` — файл
@@ -3691,6 +3693,7 @@
 - `tests/fixtures/bschek/pv_two_targets.json` — файл
 - `tests/fixtures/bschek/pv_unknown_op.json` — файл
 - `tests/fixtures/bschek/pv_url_target.json` — файл
+- `tests/fixtures/bschek/README.md` — файл
 - `tests/fixtures/bschek/rl2_a.json` — файл
 - `tests/fixtures/bschek/rl2_b.json` — файл
 - `tests/fixtures/bschek/s1_poll_00.json` — файл
@@ -3698,6 +3701,8 @@
 - `tests/fixtures/bschek/s1_poll_03.json` — файл
 - `tests/fixtures/bschek/s1_second.json` — файл
 - `tests/fixtures/bschek/s1_submit.json` — файл
+- `tests/fixtures/bschek/s_cancel_done.json` — файл
+- `tests/fixtures/bschek/s_notfound.json` — файл
 - `tests/fixtures/bschek/sB_after_0.json` — файл
 - `tests/fixtures/bschek/sB_cancel.json` — файл
 - `tests/fixtures/bschek/sB_cancel_again.json` — файл
@@ -3708,8 +3713,6 @@
 - `tests/fixtures/bschek/sC_submit.json` — файл
 - `tests/fixtures/bschek/sD_poll_37.json` — файл
 - `tests/fixtures/bschek/sD_submit.json` — файл
-- `tests/fixtures/bschek/s_cancel_done.json` — файл
-- `tests/fixtures/bschek/s_notfound.json` — файл
 - `tests/fixtures/bschek/sv_25.json` — файл
 - `tests/fixtures/bschek/sv_all_any.json` — файл
 - `tests/fixtures/bschek/sv_cfo_any_sni.json` — файл
@@ -3727,6 +3730,12 @@
 - `tests/fixtures/bschek/v2_replay.json` — файл
 - `tests/fixtures/bschek/v2_status.json` — файл
 - `tests/fixtures/bschek/v2_submit.json` — файл
+- `tests/fixtures/bschek/v_cancel_done.json` — файл
+- `tests/fixtures/bschek/v_noconfigs.json` — файл
+- `tests/fixtures/bschek/v_notfound.json` — файл
+- `tests/fixtures/bschek/v_suburl.json` — файл
+- `tests/fixtures/bschek/v_too_large.json` — файл
+- `tests/fixtures/bschek/v_too_many.json` — файл
 - `tests/fixtures/bschek/vA_poll_02.json` — файл
 - `tests/fixtures/bschek/vA_submit.json` — файл
 - `tests/fixtures/bschek/vB_poll_34.json` — файл
@@ -3739,12 +3748,6 @@
 - `tests/fixtures/bschek/vD_submit.json` — файл
 - `tests/fixtures/bschek/vE_poll_01.json` — файл
 - `tests/fixtures/bschek/vE_submit.json` — файл
-- `tests/fixtures/bschek/v_cancel_done.json` — файл
-- `tests/fixtures/bschek/v_noconfigs.json` — файл
-- `tests/fixtures/bschek/v_notfound.json` — файл
-- `tests/fixtures/bschek/v_suburl.json` — файл
-- `tests/fixtures/bschek/v_too_large.json` — файл
-- `tests/fixtures/bschek/v_too_many.json` — файл
 
 ### tests/handlers
 
@@ -3784,9 +3787,6 @@
 - `tests/handlers/test_daily_bot_resume_traffic_reset.py` — Python-модуль
   Классы: нет
   Функции: `test_bot_resume_resets_traffic_when_enabled` — RESET_TRAFFIC_ON_PAYMENT=true — оплата возобновления обнуляет счётчик и в панели, и у себя., `test_bot_resume_keeps_traffic_when_disabled` — Выключатель выключен — счётчик не трогаем (прежнее поведение)., `test_bot_resume_leaves_daily_reset_to_panel` — Панель обнуляет сама раз в сутки — свой сброс не добавляем, иначе две квоты за день., `test_bot_resume_lifts_panel_limit_after_paid_reset` — Подписка была в лимите трафика: после оплаты со сбросом лимит в панели снимается явно., `test_bot_unpause_without_charge_keeps_traffic` — Снятие своей паузы у активной подписки — не оплата: денег не берём и счётчик не трогаем.
-- `tests/handlers/test_device_rename_cancel.py` — Python-модуль
-  Классы: нет
-  Функции: `test_cancel_button_reopens_device_list`, `test_typed_cancel_reopens_device_list`, `test_valid_name_saves_and_reopens`, `test_empty_after_normalize_keeps_state_for_retry`
 - `tests/handlers/test_gift_deeplink_activation.py` — Python-модуль
   Классы: `TestGiftDeeplinkActivation` (7 методов), `TestGiftSubscriptionActivationMultiTariff` (3 методов), `TestGiftSubscriptionActivationSingleTariff` (3 методов), `TestGiftProvisioningInvariants` (2 методов)
   Функции: нет
@@ -4676,7 +4676,7 @@
   Функции: нет
 - `tests/utils/test_formatters_basic.py` — Python-модуль
   Классы: нет
-  Функции: `test_format_datetime_handles_iso_strings` — ISO-строка должна корректно преобразовываться в отформатированный текст., `test_format_date_uses_custom_format` — Можно задавать собственный шаблон вывода., `test_format_time_ago_returns_human_readable_text` — Разница во времени должна переводиться в человеко-понятную строку., `test_format_days_declension_handles_russian_rules` — Склонение дней в русском языке зависит от числа., `test_format_days_declension_uses_russian_fallback_for_fa` — Для fa используем fallback на русские формы до полной локализации., `test_format_duration_switches_units` — В зависимости от длины интервала выбирается подходящая единица измерения., `test_format_bytes_scales_value` — Размер должен выражаться в наиболее подходящей единице., `test_format_percentage_respects_precision` — Проценты форматируются с нужным количеством знаков., `test_format_number_inserts_separators` — Разделители тысяч должны расставляться корректно как для int, так и для float., `test_truncate_text_appends_suffix` — Строки, превышающие лимит, должны обрезаться и дополняться суффиксом., `test_format_username_prefers_full_name` — Полное имя имеет приоритет, затем username, затем ID., `test_format_subscription_status_handles_active_and_expired` — Статус подписки различается для активных/просроченных случаев., `test_format_traffic_usage_supports_unlimited` — При безлимитном тарифе в строке должна появляться бесконечность., `test_format_boolean_localises_output` — Булевые значения отображаются локализованными словами., `test_format_boolean_uses_russian_fallback_for_fa` — Для fa булевы значения пока используют базовый ru fallback., `test_format_username_link_wraps_telegram_handle_in_anchor` — Rich-сообщения идут со skip_entity_detection=True — ссылка нужна явная., `test_format_username_link_does_not_double_the_at_sign` — Логин может прийти уже с собакой — в тексте она должна остаться одна., `test_format_username_link_returns_fallback_without_username` — Пустой логин отдаётся текстом-заглушкой, без собаки и без ссылки., `test_format_username_link_keeps_non_telegram_logins_as_text` — OAuth-регистрация кладёт в users.username логин Discord/Яндекса., `test_format_username_link_escapes_html_metacharacters` — Значение попадает и в href, и в текст — экранируем оба.
+  Функции: `test_format_datetime_handles_iso_strings` — ISO-строка должна корректно преобразовываться в отформатированный текст., `test_format_date_uses_custom_format` — Можно задавать собственный шаблон вывода., `test_format_time_ago_returns_human_readable_text` — Разница во времени должна переводиться в человеко-понятную строку., `test_format_days_declension_handles_russian_rules` — Склонение дней в русском языке зависит от числа., `test_format_days_declension_uses_russian_fallback_for_fa` — Для fa используем fallback на русские формы до полной локализации., `test_format_duration_switches_units` — В зависимости от длины интервала выбирается подходящая единица измерения., `test_format_bytes_scales_value` — Размер должен выражаться в наиболее подходящей единице., `test_format_percentage_respects_precision` — Проценты форматируются с нужным количеством знаков., `test_format_number_inserts_separators` — Разделители тысяч должны расставляться корректно как для int, так и для float., `test_truncate_text_appends_suffix` — Строки, превышающие лимит, должны обрезаться и дополняться суффиксом., `test_format_username_prefers_full_name` — Полное имя имеет приоритет, затем username, затем ID., `test_format_subscription_status_handles_active_and_expired` — Статус подписки различается для активных/просроченных случаев., `test_format_traffic_usage_supports_unlimited` — При безлимитном тарифе в строке должна появляться бесконечность., `test_format_boolean_localises_output` — Булевые значения отображаются локализованными словами., `test_format_boolean_uses_russian_fallback_for_fa` — Для fa булевы значения пока используют базовый ru fallback., `test_format_subscription_status_marks_long_subscriptions_as_forever` — Остаток больше INFINITY_DAYS_THRESHOLD («вечные» до 2099) — без числа дней., `test_format_username_link_wraps_telegram_handle_in_anchor` — Rich-сообщения идут со skip_entity_detection=True — ссылка нужна явная., `test_format_username_link_does_not_double_the_at_sign` — Логин может прийти уже с собакой — в тексте она должна остаться одна., `test_format_username_link_returns_fallback_without_username` — Пустой логин отдаётся текстом-заглушкой, без собаки и без ссылки., `test_format_username_link_keeps_non_telegram_logins_as_text` — OAuth-регистрация кладёт в users.username логин Discord/Яндекса., `test_format_username_link_escapes_html_metacharacters` — Значение попадает и в href, и в текст — экранируем оба.
 - `tests/utils/test_gift_links.py` — Python-модуль
   Классы: `TestBuildBotGiftClaimLink` (9 методов), `TestBuildCabinetGiftClaimLink` (5 методов), `TestBuildTelegramGiftShareUrl` (8 методов), `TestLandingGiftLinkIntegration` (1 методов), `TestBuildGiftPublicCode` (9 методов), `TestParseGiftClaimInput` (14 методов), `TestGiftClaimArtifacts` (6 методов)
   Функции: нет
@@ -4716,6 +4716,9 @@
 - `tests/utils/test_rich_menu.py` — Python-модуль
   Классы: `DummyTexts` (2 методов), `PremiumEmojiTexts` (2 методов), `HostileTexts` (1 методов)
   Функции: `test_rich_flag_default_is_enabled`, `test_builder_keeps_premium_emoji_from_operator_texts` — Премиум-эмодзи из текстов меню должны доезжать тегом, а не текстом., `test_builder_strips_disallowed_markup_from_operator_texts` — Из текстов пропускаем только подмножество sanitize_html, а не любой HTML., `test_unlimited_devices_shown_as_infinity_not_hidden` — device_limit = 0 (HWID выключен) — безлимит, а не «нет устройств»., `test_unlimited_devices_in_multi_tariff_table` — То же для строки расхода в таблице мультитарифа., `test_builder_single_subscription_structure`, `test_builder_links_username_used_instead_of_name` — Без имени full_name подставляет логин — показываем его ссылкой на профиль., `test_builder_keeps_plain_name_when_user_has_one` — Имя есть — шапка остаётся обычным текстом, ссылка на логин не подставляется., `test_builder_survives_user_without_username_attribute` — Шапка не должна падать на объекте без username — иначе меню молча уедет в классику., `test_builder_multi_tariff_table`, `test_builder_without_subscription`, `test_builder_hints_in_details_and_random_message_sanitized`, `test_builder_without_hints_has_no_details`, `test_input_rich_message_flags`, `test_try_send_disabled_by_setting`, `test_try_send_unsupported_server_marks_unavailable`, `test_try_send_render_error_does_not_disable_rich`, `test_try_edit_text_message_uses_edit_message_text`, `test_try_edit_photo_message_recreates_via_send`, `test_try_edit_not_modified_is_success`, `test_try_edit_unsupported_on_edit_marks_unavailable`, `test_try_edit_build_failure_falls_back`, `test_try_send_happy_path_sends_rich_message` — Успешная отправка: реальный билдер (застабены только источники контента)., `test_try_send_forbidden_is_handled_without_fallback` — Бот заблокирован: True, чтобы классический рендер не долбил тот же чат., `test_try_edit_forbidden_is_handled_without_fallback`, `test_try_edit_transient_edit_error_falls_back_without_disabling` — 'message to edit not found' — не признак старого сервера: rich остаётся включён,, `test_try_edit_photo_delete_failure_falls_back_to_classic` — deleteMessage запрещён для сообщений старше 48ч: rich не отправляется новым, `test_multi_tariff_table_is_fully_localized` — Все строки таблицы идут через texts.t — маркер-стаб не должен оставить, `test_show_main_menu_prefers_rich_and_falls_back` — Поведенческий тест ветвления show_main_menu: rich True — классика не зовётся,, `test_expired_subscription_renew_link_in_cabinet_mode` — Истёкшая подписка в cabinet-режиме получает ссылку «Продлить» в кабинет., `test_expired_subscription_no_renew_link_outside_cabinet_mode`, `test_single_mode_expired_renew_link`, `test_usage_traffic_and_devices_displayed` — Активная подписка показывает текущий трафик и лимит устройств., `test_usage_row_in_multi_tariff_table`, `test_send_passes_message_effect`, `test_rejected_effect_degrades_and_resends` — Отклонённый эффект: повтор без него, эффект отключается до рестарта., `test_logo_included_from_explicit_url`, `test_logo_auto_url_from_webhook`, `test_logo_fetch_failure_degrades_and_resends` — Telegram не скачал логотип: единственный повтор без логотипа, флаг до рестарта., `test_logo_can_be_disabled_explicitly` — Rich-меню должно работать вообще без логотипа., `test_non_http_logo_value_disables_logo_instead_of_breaking_menu` — «Подставлю не-картинку, чтобы не грузилась» не должно ронять rich в классику., `test_unknown_send_error_retries_without_logo` — Незнакомая ошибка при наличии логотипа — повтор без него, а не уход в классику., `test_unknown_send_error_without_logo_falls_back_to_classic` — Без логотипа повторять нечем — незнакомая ошибка честно уходит в классику., `test_connect_link_for_active_subscription_in_table` — Активная строка таблицы получает «кнопку» подключения — ссылку на subscription_url., `test_connect_link_hidden_when_subscription_link_hidden`, `test_connect_link_uses_happ_redirect_in_happ_mode` — В happ-режиме подключение идёт через https-обёртку редиректа, не через сырую happ://., `test_trial_offer_free_deeplink` — Новый юзер без триала: ссылка t.me/<bot>?start=trial (бесплатный триал)., `test_trial_offer_paid_opens_miniapp` — Платный триал: ссылка ведёт на оплату в миниапп (startapp=trial), не на диплинк., `test_trial_offer_absent_when_trial_used`, `test_multiple_subscriptions_collapse_into_details` — При >1 подписки таблица сворачивается в details со счётчиком в summary., `test_single_multi_tariff_subscription_stays_expanded` — Одна подписка — обычный заголовок и таблица без сворачивания., `test_collapsible_disabled_keeps_plain_table`, `test_collapsible_flag_default_is_enabled`, `test_tg_time_beyond_telegram_date_limit_falls_back_to_text` — Telegram принимает дату сущности только до «сейчас + 1098 дней», `test_strip_tg_time_keeps_inner_text` — Страховка: снимаем теги дат, но текст внутри остаётся., `test_is_rich_date_error_matches_server_code`, `test_send_retries_without_tg_time_on_date_error` — Одна отвергнутая дата не должна ронять меню целиком в классику., `test_tg_time_keeps_past_dates` — Новый лимит не должен задеть обычную истёкшую подписку., `test_tg_time_survives_extreme_datetimes` — datetime.max/min: timestamp() на них падает на части платформ — не роняем меню., `test_far_future_end_date_in_table_renders_without_tg_time` — «Вечная» подписка (например, импорт из панели с датой 2099) не роняет, `test_multi_year_subscription_renders_without_tg_time` — Репорт из поддержки: у юзера подписка на несколько лет вперёд, и /start, `test_far_future_end_date_in_single_block_renders_without_tg_time`, `test_try_send_decode_error_falls_back_to_classic` — ClientDecodeError не наследуется от TelegramAPIError и пролетал мимо всех except., `test_try_edit_decode_error_falls_back_to_classic`, `test_inline_buttons_setting_moves_keyboard_into_canvas` — Bot API 10.3: кнопки уезжают в полотно, клавиатуры под сообщением не остаётся., `test_inline_buttons_setting_off_keeps_classic_keyboard`, `test_unmovable_button_keeps_keyboard_outside` — Если перенести можно не всё — клавиатура остаётся под сообщением целиком., `test_edit_clears_old_keyboard_when_buttons_move_inside` — У editMessageText отсутствующий reply_markup означает «не трогать».
+- `tests/utils/test_rich_menu_minimal.py` — Python-модуль
+  Классы: нет
+  Функции: `test_rich_menu_mirrors_classic_menu_text`
 - `tests/utils/test_rich_notify.py` — Python-модуль
   Классы: `TestBuildHtml` (11 методов), `TestSend` (8 методов), `TestDeliveryIntegration` (3 методов), `TestLogoAndTimeout` (4 методов), `TestMonitoringIntegration` (4 методов), `TestBroadcastIntegration` (5 методов), `TestUnsupportedServer` (1 методов)
   Функции: нет
