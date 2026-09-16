@@ -405,7 +405,7 @@ async def show_transaction_category(
             [
                 make_button(
                     label,
-                    callback_data=f'bh_view_{"d" if deposits else "w"}_{transaction.id}',
+                    callback_data=f'bh_view_{"d" if deposits else "w"}_{page}_{transaction.id}',
                     style=random.choice(_TRANSACTION_ITEM_STYLES),
                 )
             ]
@@ -428,8 +428,10 @@ async def show_transaction_category(
 async def show_transaction_detail(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
     texts = get_texts(db_user.language)
 
-    prefix, _, tx_id_raw = callback.data.rpartition('_')
-    deposits = prefix.endswith('_d')
+    parts = callback.data.split('_')
+    deposits = len(parts) > 2 and parts[2] == 'd'
+    page = int(parts[3]) if len(parts) > 4 and parts[3].isdigit() else 1
+    tx_id_raw = parts[-1]
     try:
         transaction_id = int(tx_id_raw)
     except ValueError:
@@ -470,7 +472,8 @@ async def show_transaction_detail(callback: types.CallbackQuery, db_user: User, 
     if transaction.external_id:
         lines.append(f'<code>{html.escape(transaction.external_id)}</code>')
 
-    back_to_list = 'balance_history_deposits' if deposits else 'balance_history_withdrawals'
+    list_callback = 'balance_history_deposits' if deposits else 'balance_history_withdrawals'
+    back_to_list = f'{list_callback}_page_{page}' if page > 1 else list_callback
     keyboard = [
         [types.InlineKeyboardButton(text='← К списку', callback_data=back_to_list, style='danger')],
         [
@@ -865,14 +868,11 @@ def register_balance_handlers(dp: Dispatcher):
     dp.callback_query.register(show_balance_history, F.data == 'balance_history')
 
     dp.callback_query.register(show_balance_history_deposits, F.data == 'balance_history_deposits')
-
-    dp.callback_query.register(show_balance_history_withdrawals, F.data == 'balance_history_withdrawals')
-
     dp.callback_query.register(
         show_balance_history_deposits_page,
         F.data.startswith('balance_history_deposits_page_'),
     )
-
+    dp.callback_query.register(show_balance_history_withdrawals, F.data == 'balance_history_withdrawals')
     dp.callback_query.register(
         show_balance_history_withdrawals_page,
         F.data.startswith('balance_history_withdrawals_page_'),
