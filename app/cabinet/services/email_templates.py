@@ -1876,34 +1876,25 @@ class EmailNotificationTemplates:
         text = texts.get(language, texts['en'])
         url = f'{self.cabinet_url.rstrip("/")}/support'
 
-        if discount_percent > 0:
-            subjects = {
-                'ru': f'Персональное предложение: скидка {discount_percent}%',
-                'en': f'Personal offer: {discount_percent}% off',
-                'zh': f'专属优惠：{discount_percent}% 折扣',
-                'ua': f'Персональна пропозиція: знижка {discount_percent}%',
-            }
-        else:
-            subjects = {
-                'ru': 'Персональное предложение',
-                'en': 'Personal offer',
-                'zh': '专属优惠',
-                'ua': 'Персональна пропозиція',
-            }
+        return f'<p style="text-align: center;"><a href="{url}" class="button">{text}</a></p>'
 
-        valid_lines = {
-            'ru': f'<p>Предложение действует <b>{valid_hours} ч.</b></p>' if valid_hours else '',
-            'en': f'<p>The offer is valid for <b>{valid_hours} h.</b></p>' if valid_hours else '',
-            'zh': f'<p>优惠有效期 <b>{valid_hours} 小时</b></p>' if valid_hours else '',
-            'ua': f'<p>Пропозиція діє <b>{valid_hours} год.</b></p>' if valid_hours else '',
+    def _ticket_reply_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
+        """Template for a support reply in a ticket."""
+        ticket_id = context.get('ticket_id', '')
+        preview = html.escape(str(context.get('reply_preview', '') or '')).replace('\n', '<br>')
+        has_photo = bool(context.get('has_photo'))
+
+        subjects = {
+            'ru': f'Ответ по тикету #{ticket_id}',
+            'en': f'Reply to ticket #{ticket_id}',
+            'zh': f'工单 #{ticket_id} 的回复',
+            'ua': f'Відповідь по тікету #{ticket_id}',
         }
-
         photo_notes = {
             'ru': '<p>К ответу приложено изображение — оно доступно в кабинете.</p>',
             'en': '<p>The reply includes an image — it is available in your dashboard.</p>',
         }
         photo_note = photo_notes.get(language, photo_notes['ru']) if has_photo else ''
-
         bodies = {
             'ru': f"""
                 <h2>Ответ поддержки по тикету #{ticket_id}</h2>
@@ -1924,7 +1915,6 @@ class EmailNotificationTemplates:
                 {self._get_support_button(language)}
             """,
         }
-
         return {
             'subject': subjects.get(language, subjects['ru']),
             'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
