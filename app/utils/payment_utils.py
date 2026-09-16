@@ -119,8 +119,8 @@ def get_available_payment_methods() -> list[dict[str, str]]:
                 methods.append(
                     {
                         'id': f'platega_m{method_code}',
-                        'name': info.get('name', f'Метод {method_code}'),
-                        'icon': info.get('title', '💳').split(' ', 1)[0] if info.get('title') else '💳',
+                        'name': info.get('title') or info.get('name', f'Метод {method_code}'),
+                        'icon': '',
                         'description': f'через {platega_name}',
                         'callback': f'topup_platega_m{method_code}',
                     }

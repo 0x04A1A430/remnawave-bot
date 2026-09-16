@@ -1518,7 +1518,7 @@
   "REFERRAL_PROGRAM_TITLE": "👥 <b>برنامه دعوت</b>",
   "REFERRAL_RECENT_EARNINGS_HEADER": "💰 <b>آخرین واریزها:</b>",
   "REFERRAL_RECENT_EARNINGS_ITEM": "• {reason}: <b>{amount}</b> از {referral_name}",
-  "REFERRAL_REWARDS_HEADER": "🎁 <b>نحوه عملکرد پاداش‌ها:</b>",
+  "REFERRAL_REWARDS_HEADER": "<b>نحوه عملکرد پاداش‌ها:</b>",
   "REFERRAL_REWARD_COMMISSION": "• کمیسیون از هر شارژ دعوت‌شده: <b>{percent}%</b>",
   "REFERRAL_REWARD_COMMISSION_LIMITED": "• کمیسیون از {max_payments} شارژ اول دعوت‌شده: <b>{percent}%</b>",
   "REFERRAL_REWARD_INVITER": "• پاداش اولین شارژ دعوت‌شده: <b>{bonus}</b>",

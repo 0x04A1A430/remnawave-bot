@@ -885,10 +885,12 @@ async def show_devices_page(
     ).format(total=len(devices_list), page=pagination.page, pages=pagination.total_pages)
 
     if pagination.items:
-        devices_text += texts.t(
+        connected_header = texts.t(
             'DEVICE_MANAGEMENT_CONNECTED_HEADER',
             '<b>Подключенные устройства:</b>\n',
         )
+        connected_header = '<blockquote>' + connected_header.removeprefix('<blockquote>')
+        devices_text += connected_header
         for device in pagination.items:
             platform = device.get('platform', 'Unknown')
             device_model = device.get('deviceModel', 'Unknown')
@@ -905,16 +907,7 @@ async def show_devices_page(
                 'DEVICE_MANAGEMENT_LIST_ITEM',
                 '• {device}\n',
             ).format(device=html_mod.escape(device_info))
-
-    devices_text += texts.t(
-        'DEVICE_MANAGEMENT_ACTIONS',
-        (
-            '\n💡 <b>Действия:</b>\n'
-            '• ✏️ — переименовать устройство (видно только вам)\n'
-            '• 🔄 — сбросить устройство\n'
-            '• Или сбросьте все устройства сразу'
-        ),
-    )
+        devices_text += '</blockquote>\n'
 
     await callback.message.edit_text(
         devices_text,

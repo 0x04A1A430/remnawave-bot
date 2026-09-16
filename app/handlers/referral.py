@@ -109,7 +109,7 @@ async def show_referral_info(callback: types.CallbackQuery, db_user: User, db: A
             'За последний месяц: <b>{amount}</b>',
         ).format(amount=texts.format_price(summary['month_earned_kopeks']))
         + '</blockquote>\n\n'
-        + texts.t('REFERRAL_REWARDS_HEADER', '<b>Как работают награды:</b>')
+        + texts.t('REFERRAL_REWARDS_HEADER', '<b>Как работают награды:</b>').removeprefix('🎁 ')
         + '\n<blockquote>'
     )
 

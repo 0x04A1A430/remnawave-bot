@@ -886,16 +886,16 @@ async def _render_user_subscription_overview(
     # Suffix used to route back to this exact subscription in multi-tariff mode
     _sid = f'_s{subscription.id}' if settings.is_multi_tariff_enabled() and subscription else ''
 
-    text = '📱 <b>Подписка и настройки пользователя</b>\n\n'
+    text = '<b>Подписка и настройки пользователя</b>\n\n'
     user_link = user_html_link(user)
     user_id_display = user.telegram_id or user.email or f'#{user.id}'
-    text += f'👤 {user_link} (ID: <code>{user_id_display}</code>)\n\n'
+    text += f'• {user_link} (ID: <code>{user_id_display}</code>)\n\n'
 
     keyboard = []
 
     if subscription:
-        status_emoji = '✅' if subscription.is_active else '❌'
-        type_emoji = '🎁' if subscription.is_trial else '💎'
+        status_emoji = '+' if subscription.is_active else '-'
+        type_emoji = '*' if subscription.is_trial else '$'
 
         traffic_display = f'{subscription.traffic_used_gb:.1f}/'
         if subscription.traffic_limit_gb == 0:
@@ -910,7 +910,7 @@ async def _render_user_subscription_overview(
         if subscription.tariff_id:
             tariff = await get_tariff_by_id(db, subscription.tariff_id)
             if tariff:
-                text += f'<b>Тариф:</b> 📦 {html.escape(tariff.name)}\n'
+                text += f'<b>Тариф:</b> {html.escape(tariff.name)}\n'
             else:
                 text += f'<b>Тариф:</b> ID {subscription.tariff_id} (удалён)\n'
 

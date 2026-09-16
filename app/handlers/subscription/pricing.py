@@ -343,6 +343,8 @@ async def get_subscription_info_text(subscription, texts, db_user, db: AsyncSess
         devices_limit=subscription.device_limit,
         autopay_status='✅ Включен' if subscription.autopay_enabled else '⌛ Выключен',
     )
+    if '<blockquote' not in info_text:
+        info_text = f'<blockquote>{info_text.strip()}</blockquote>'
 
     if subscription_cost > 0:
         info_text += f'\n💰 <b>Стоимость подписки в месяц:</b> {texts.format_price(subscription_cost)}'
