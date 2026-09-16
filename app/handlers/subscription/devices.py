@@ -894,7 +894,6 @@ async def show_devices_page(
             device_model = device.get('deviceModel', 'Unknown')
             os_version = device.get('osVersion') or device.get('os_version') or ''
             app_version = device.get('appVersion') or device.get('app_version') or ''
-            emoji_tag = _PLATFORM_EMOJI.get(platform, '')
             device_info = html_mod.escape(
                 format_device_label(platform, device_model, os_version=os_version, app_version=app_version)
             )
