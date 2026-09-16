@@ -93,11 +93,7 @@ def _batch_card_keyboard(batch: CouponBatch, counts: dict[str, int]) -> types.In
             [types.InlineKeyboardButton(text=' Файл со ссылками', callback_data=f'admin_coupon_export_{batch.id}')]
         )
         keyboard.append(
-            [
-                types.InlineKeyboardButton(
-                    text=' Отозвать непогашенные', callback_data=f'admin_coupon_revoke_{batch.id}'
-                )
-            ]
+            [types.InlineKeyboardButton(text=' Отозвать непогашенные', callback_data=f'admin_coupon_revoke_{batch.id}')]
         )
     # Удаление доступно всегда (в т.ч. у отозванной/использованной партии) —
     # это способ убрать запись совсем, отзыв лишь гасит ссылки.

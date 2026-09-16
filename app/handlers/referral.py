@@ -26,7 +26,6 @@ from app.utils.photo_message import edit_or_answer_photo
 from app.utils.timezone import format_local_datetime
 from app.utils.user_utils import (
     get_detailed_referral_list,
-    get_effective_referral_commission_percent,
     get_referral_analytics,
     get_user_referral_summary,
 )

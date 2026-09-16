@@ -32,7 +32,7 @@ def get_admin_main_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                     text=_t(
                         texts,
                         'ADMIN_MAIN_USERS_SUBSCRIPTIONS',
-                        " Юзеры/Подписки",
+                        ' Юзеры/Подписки',
                     ),
                     callback_data='admin_submenu_users',
                 ),
@@ -40,7 +40,7 @@ def get_admin_main_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                     text=_t(
                         texts,
                         'ADMIN_MAIN_SERVERS',
-                        " Серверы",
+                        ' Серверы',
                     ),
                     callback_data='admin_servers',
                 ),
@@ -50,7 +50,7 @@ def get_admin_main_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                     text=_t(
                         texts,
                         'ADMIN_MAIN_TARIFFS',
-                        " Тарифы",
+                        ' Тарифы',
                     ),
                     callback_data='admin_tariffs',
                 ),
@@ -58,7 +58,7 @@ def get_admin_main_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                     text=_t(
                         texts,
                         'ADMIN_MAIN_PRICING',
-                        " Цены",
+                        ' Цены',
                     ),
                     callback_data='admin_pricing',
                 ),
@@ -68,7 +68,7 @@ def get_admin_main_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                     text=_t(
                         texts,
                         'ADMIN_MAIN_PROMO_STATS',
-                        " Промокоды/Статистика",
+                        ' Промокоды/Статистика',
                     ),
                     callback_data='admin_submenu_promo',
                 ),
@@ -78,7 +78,7 @@ def get_admin_main_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                     text=_t(
                         texts,
                         'ADMIN_MAIN_SUPPORT',
-                        " Поддержка",
+                        ' Поддержка',
                     ),
                     callback_data='admin_submenu_support',
                 ),
@@ -86,7 +86,7 @@ def get_admin_main_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                     text=_t(
                         texts,
                         'ADMIN_MAIN_MESSAGES',
-                        " Сообщения",
+                        ' Сообщения',
                     ),
                     callback_data='admin_submenu_communications',
                 ),
@@ -96,7 +96,7 @@ def get_admin_main_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                     text=_t(
                         texts,
                         'ADMIN_MAIN_SETTINGS',
-                        " Настройки",
+                        ' Настройки',
                     ),
                     callback_data='admin_submenu_settings',
                 ),
@@ -104,7 +104,7 @@ def get_admin_main_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                     text=_t(
                         texts,
                         'ADMIN_MAIN_SYSTEM',
-                        " Система",
+                        ' Система',
                     ),
                     callback_data='admin_submenu_system',
                 ),
@@ -114,7 +114,7 @@ def get_admin_main_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                     text=_t(
                         texts,
                         'ADMIN_MAIN_TRIALS',
-                        " Триалы",
+                        ' Триалы',
                     ),
                     callback_data='admin_trials',
                 ),
@@ -122,7 +122,7 @@ def get_admin_main_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                     text=_t(
                         texts,
                         'ADMIN_MAIN_PAYMENTS',
-                        " Пополнения",
+                        ' Пополнения',
                     ),
                     callback_data='admin_payments',
                 ),
@@ -172,7 +172,7 @@ def get_admin_promo_submenu_keyboard(language: str = 'ru') -> InlineKeyboardMark
                     text=_t(
                         texts,
                         'ADMIN_CONTESTS',
-                        " Конкурсы",
+                        ' Конкурсы',
                     ),
                     callback_data='admin_contests',
                 )
@@ -196,7 +196,7 @@ def get_admin_communications_submenu_keyboard(
                     text=_t(
                         texts,
                         'ADMIN_COMMUNICATIONS_POLLS',
-                        " Опросы",
+                        ' Опросы',
                     ),
                     callback_data='admin_polls',
                 )
@@ -206,7 +206,7 @@ def get_admin_communications_submenu_keyboard(
                     text=_t(
                         texts,
                         'ADMIN_COMMUNICATIONS_PROMO_OFFERS',
-                        " Промо-предложения",
+                        ' Промо-предложения',
                     ),
                     callback_data='admin_promo_offers',
                 )
@@ -216,7 +216,7 @@ def get_admin_communications_submenu_keyboard(
                     text=_t(
                         texts,
                         'ADMIN_COMMUNICATIONS_WELCOME_TEXT',
-                        " Приветственный текст",
+                        ' Приветственный текст',
                     ),
                     callback_data='welcome_text_panel',
                 ),
@@ -224,7 +224,7 @@ def get_admin_communications_submenu_keyboard(
                     text=_t(
                         texts,
                         'ADMIN_COMMUNICATIONS_MENU_MESSAGES',
-                        " Сообщения в меню",
+                        ' Сообщения в меню',
                     ),
                     callback_data='user_messages_panel',
                 ),
@@ -244,7 +244,7 @@ def get_admin_support_submenu_keyboard(language: str = 'ru') -> InlineKeyboardMa
                     text=_t(
                         texts,
                         'ADMIN_SUPPORT_TICKETS',
-                        " Тикеты поддержки",
+                        ' Тикеты поддержки',
                     ),
                     callback_data='admin_tickets',
                 )
@@ -254,7 +254,7 @@ def get_admin_support_submenu_keyboard(language: str = 'ru') -> InlineKeyboardMa
                     text=_t(
                         texts,
                         'ADMIN_SUPPORT_AUDIT',
-                        " Аудит модераторов",
+                        ' Аудит модераторов',
                     ),
                     callback_data='admin_support_audit',
                 )
@@ -264,7 +264,7 @@ def get_admin_support_submenu_keyboard(language: str = 'ru') -> InlineKeyboardMa
                     text=_t(
                         texts,
                         'ADMIN_SUPPORT_SETTINGS',
-                        " Настройки поддержки",
+                        ' Настройки поддержки',
                     ),
                     callback_data='admin_support_settings',
                 )
@@ -288,7 +288,7 @@ def get_admin_settings_submenu_keyboard(language: str = 'ru') -> InlineKeyboardM
                     text=_t(
                         texts,
                         'ADMIN_SETTINGS_BOT_CONFIG',
-                        " Конфигурация бота",
+                        ' Конфигурация бота',
                     ),
                     callback_data='admin_bot_config',
                 ),
@@ -297,7 +297,7 @@ def get_admin_settings_submenu_keyboard(language: str = 'ru') -> InlineKeyboardM
                 make_button(
                     text=texts.t(
                         'ADMIN_MONITORING_SETTINGS',
-                        " Настройки мониторинга",
+                        ' Настройки мониторинга',
                     ),
                     callback_data='admin_mon_settings',
                 )
@@ -308,7 +308,7 @@ def get_admin_settings_submenu_keyboard(language: str = 'ru') -> InlineKeyboardM
                     text=_t(
                         texts,
                         'ADMIN_SETTINGS_MAINTENANCE',
-                        " Техработы",
+                        ' Техработы',
                     ),
                     callback_data='maintenance_panel',
                 ),
@@ -318,7 +318,7 @@ def get_admin_settings_submenu_keyboard(language: str = 'ru') -> InlineKeyboardM
                     text=_t(
                         texts,
                         'ADMIN_SETTINGS_PRIVACY_POLICY',
-                        " Политика конф.",
+                        ' Политика конф.',
                     ),
                     callback_data='admin_privacy_policy',
                 )
@@ -328,7 +328,7 @@ def get_admin_settings_submenu_keyboard(language: str = 'ru') -> InlineKeyboardM
                     text=_t(
                         texts,
                         'ADMIN_SETTINGS_PUBLIC_OFFER',
-                        " Публичная оферта",
+                        ' Публичная оферта',
                     ),
                     callback_data='admin_public_offer',
                 )
@@ -338,7 +338,7 @@ def get_admin_settings_submenu_keyboard(language: str = 'ru') -> InlineKeyboardM
                     text=_t(
                         texts,
                         'ADMIN_SETTINGS_FAQ',
-                        " FAQ",
+                        ' FAQ',
                     ),
                     callback_data='admin_faq',
                 )
@@ -348,7 +348,7 @@ def get_admin_settings_submenu_keyboard(language: str = 'ru') -> InlineKeyboardM
                     text=_t(
                         texts,
                         'ADMIN_SETTINGS_REQUIRED_CHANNELS',
-                        " Обязательные каналы",
+                        ' Обязательные каналы',
                     ),
                     callback_data='reqch:list',
                 )
@@ -386,7 +386,7 @@ def get_admin_system_submenu_keyboard(language: str = 'ru') -> InlineKeyboardMar
                     text=_t(
                         texts,
                         'ADMIN_SYSTEM_UPDATES',
-                        " Обновления",
+                        ' Обновления',
                     ),
                     callback_data='admin_updates',
                 ),
@@ -394,7 +394,7 @@ def get_admin_system_submenu_keyboard(language: str = 'ru') -> InlineKeyboardMar
                     text=_t(
                         texts,
                         'ADMIN_SYSTEM_BACKUPS',
-                        " Бекапы",
+                        ' Бекапы',
                     ),
                     callback_data='backup_panel',
                 ),
@@ -404,7 +404,7 @@ def get_admin_system_submenu_keyboard(language: str = 'ru') -> InlineKeyboardMar
                     text=_t(
                         texts,
                         'ADMIN_SYSTEM_LOGS',
-                        " Логи",
+                        ' Логи',
                     ),
                     callback_data='admin_system_logs',
                 )
@@ -413,7 +413,7 @@ def get_admin_system_submenu_keyboard(language: str = 'ru') -> InlineKeyboardMar
                 make_button(
                     text=texts.t(
                         'ADMIN_REPORTS',
-                        " Отчеты",
+                        ' Отчеты',
                     ),
                     callback_data='admin_reports',
                 )
@@ -433,7 +433,7 @@ def get_admin_trials_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                     text=_t(
                         texts,
                         'ADMIN_TRIALS_RESET_BUTTON',
-                        " Сбросить все триалы",
+                        ' Сбросить все триалы',
                     ),
                     callback_data='admin_trials_reset',
                 )
@@ -453,7 +453,7 @@ def get_admin_reports_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                     text=_t(
                         texts,
                         'ADMIN_REPORTS_PREVIOUS_DAY',
-                        " За вчера",
+                        ' За вчера',
                     ),
                     callback_data='admin_reports_daily',
                 )
@@ -463,7 +463,7 @@ def get_admin_reports_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                     text=_t(
                         texts,
                         'ADMIN_REPORTS_LAST_WEEK',
-                        " За неделю",
+                        ' За неделю',
                     ),
                     callback_data='admin_reports_weekly',
                 )
@@ -473,7 +473,7 @@ def get_admin_reports_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                     text=_t(
                         texts,
                         'ADMIN_REPORTS_LAST_MONTH',
-                        " За месяц",
+                        ' За месяц',
                     ),
                     callback_data='admin_reports_monthly',
                 )
@@ -508,7 +508,7 @@ def get_admin_users_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                     text=_t(
                         texts,
                         'ADMIN_USERS_ALL',
-                        " Все пользователи",
+                        ' Все пользователи',
                     ),
                     callback_data='admin_users_list',
                 ),
@@ -516,7 +516,7 @@ def get_admin_users_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                     text=_t(
                         texts,
                         'ADMIN_USERS_SEARCH',
-                        " Поиск",
+                        ' Поиск',
                     ),
                     callback_data='admin_users_search',
                 ),
@@ -527,7 +527,7 @@ def get_admin_users_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                     text=_t(
                         texts,
                         'ADMIN_USERS_INACTIVE',
-                        " Неактивные",
+                        ' Неактивные',
                     ),
                     callback_data='admin_users_inactive',
                 ),
@@ -537,7 +537,7 @@ def get_admin_users_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                     text=_t(
                         texts,
                         'ADMIN_USERS_FILTERS',
-                        " Фильтры",
+                        ' Фильтры',
                     ),
                     callback_data='admin_users_filters',
                 )
@@ -547,7 +547,7 @@ def get_admin_users_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                     text=_t(
                         texts,
                         'ADMIN_USERS_BLACKLIST',
-                        " Черный список",
+                        ' Черный список',
                     ),
                     callback_data='admin_blacklist_settings',
                 )
@@ -557,7 +557,7 @@ def get_admin_users_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                     text=_t(
                         texts,
                         'ADMIN_USERS_BULK_BAN',
-                        " Массовый бан",
+                        ' Массовый бан',
                     ),
                     callback_data='admin_bulk_ban_start',
                 ),
@@ -565,7 +565,7 @@ def get_admin_users_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                     text=_t(
                         texts,
                         'ADMIN_USERS_BULK_UNBAN',
-                        " Массовый разбан",
+                        ' Массовый разбан',
                     ),
                     callback_data='admin_bulk_unban_start',
                 ),
@@ -575,7 +575,7 @@ def get_admin_users_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                     text=_t(
                         texts,
                         'ADMIN_USERS_BLOCKED_CHECK',
-                        " Заблокировавшие бота",
+                        ' Заблокировавшие бота',
                     ),
                     callback_data='admin_blocked_users',
                 ),
@@ -583,7 +583,7 @@ def get_admin_users_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                     text=_t(
                         texts,
                         'ADMIN_USERS_RESTORE_DELETED',
-                        " Восстановить удаленных",
+                        ' Восстановить удаленных',
                     ),
                     callback_data='admin_restore_deleted',
                 ),
@@ -603,7 +603,7 @@ def get_admin_users_filters_keyboard(language: str = 'ru') -> InlineKeyboardMark
                     text=_t(
                         texts,
                         'ADMIN_USERS_FILTER_BALANCE',
-                        " По балансу",
+                        ' По балансу',
                     ),
                     callback_data='admin_users_balance_filter',
                 )
@@ -613,7 +613,7 @@ def get_admin_users_filters_keyboard(language: str = 'ru') -> InlineKeyboardMark
                     text=_t(
                         texts,
                         'ADMIN_USERS_FILTER_RENEW_READY',
-                        " Готовы к продлению",
+                        ' Готовы к продлению',
                     ),
                     callback_data='admin_users_ready_to_renew_filter',
                 )
@@ -623,7 +623,7 @@ def get_admin_users_filters_keyboard(language: str = 'ru') -> InlineKeyboardMark
                     text=_t(
                         texts,
                         'ADMIN_USERS_FILTER_POTENTIAL_CUSTOMERS',
-                        " Потенциальные клиенты",
+                        ' Потенциальные клиенты',
                     ),
                     callback_data='admin_users_potential_customers_filter',
                 )
@@ -633,7 +633,7 @@ def get_admin_users_filters_keyboard(language: str = 'ru') -> InlineKeyboardMark
                     text=_t(
                         texts,
                         'ADMIN_USERS_FILTER_CAMPAIGN',
-                        " По кампании",
+                        ' По кампании',
                     ),
                     callback_data='admin_users_campaign_filter',
                 )
@@ -653,7 +653,7 @@ def get_admin_subscriptions_keyboard(language: str = 'ru') -> InlineKeyboardMark
                     text=_t(
                         texts,
                         'ADMIN_SUBSCRIPTIONS_ALL',
-                        " Все подписки",
+                        ' Все подписки',
                     ),
                     callback_data='admin_subs_list',
                 ),
@@ -661,7 +661,7 @@ def get_admin_subscriptions_keyboard(language: str = 'ru') -> InlineKeyboardMark
                     text=_t(
                         texts,
                         'ADMIN_SUBSCRIPTIONS_EXPIRING',
-                        " Истекающие",
+                        ' Истекающие',
                     ),
                     callback_data='admin_subs_expiring',
                 ),
@@ -671,7 +671,7 @@ def get_admin_subscriptions_keyboard(language: str = 'ru') -> InlineKeyboardMark
                     text=_t(
                         texts,
                         'ADMIN_SUBSCRIPTIONS_COUNTRIES',
-                        " Управление странами",
+                        ' Управление странами',
                     ),
                     callback_data='admin_subs_countries',
                 )
@@ -692,7 +692,7 @@ def get_admin_promocodes_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                     text=_t(
                         texts,
                         'ADMIN_PROMOCODES_ALL',
-                        " Все промокоды",
+                        ' Все промокоды',
                     ),
                     callback_data='admin_promo_list',
                 ),
@@ -700,7 +700,7 @@ def get_admin_promocodes_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                     text=_t(
                         texts,
                         'ADMIN_PROMOCODES_CREATE',
-                        " Создать",
+                        ' Создать',
                     ),
                     callback_data='admin_promo_create',
                 ),
@@ -710,7 +710,7 @@ def get_admin_promocodes_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                     text=_t(
                         texts,
                         'ADMIN_PROMOCODES_GENERAL_STATS',
-                        " Общая статистика",
+                        ' Общая статистика',
                     ),
                     callback_data='admin_promo_general_stats',
                 )
@@ -730,7 +730,7 @@ def get_admin_campaigns_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                     text=_t(
                         texts,
                         'ADMIN_CAMPAIGNS_LIST',
-                        " Список кампаний",
+                        ' Список кампаний',
                     ),
                     callback_data='admin_campaigns_list',
                 ),
@@ -738,7 +738,7 @@ def get_admin_campaigns_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                     text=_t(
                         texts,
                         'ADMIN_CAMPAIGNS_CREATE',
-                        " Создать",
+                        ' Создать',
                     ),
                     callback_data='admin_campaigns_create',
                 ),
@@ -748,7 +748,7 @@ def get_admin_campaigns_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                     text=_t(
                         texts,
                         'ADMIN_CAMPAIGNS_GENERAL_STATS',
-                        " Общая статистика",
+                        ' Общая статистика',
                     ),
                     callback_data='admin_campaigns_stats',
                 )
@@ -768,7 +768,7 @@ def get_admin_contests_root_keyboard(language: str = 'ru') -> InlineKeyboardMark
                     text=_t(
                         texts,
                         'ADMIN_CONTESTS_REFERRAL',
-                        " Реферальные конкурсы",
+                        ' Реферальные конкурсы',
                     ),
                     callback_data='admin_contests_referral',
                 )
@@ -778,7 +778,7 @@ def get_admin_contests_root_keyboard(language: str = 'ru') -> InlineKeyboardMark
                     text=_t(
                         texts,
                         'ADMIN_CONTESTS_DAILY',
-                        " Ежедневные конкурсы",
+                        ' Ежедневные конкурсы',
                     ),
                     callback_data='admin_contests_daily',
                 )
@@ -800,7 +800,7 @@ def get_admin_contests_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                     text=_t(
                         texts,
                         'ADMIN_CONTESTS_LIST',
-                        " Текущие конкурсы",
+                        ' Текущие конкурсы',
                     ),
                     callback_data='admin_contests_list',
                 ),
@@ -808,7 +808,7 @@ def get_admin_contests_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                     text=_t(
                         texts,
                         'ADMIN_CONTESTS_CREATE',
-                        " Новый конкурс",
+                        ' Новый конкурс',
                     ),
                     callback_data='admin_contests_create',
                 ),
@@ -1733,7 +1733,7 @@ def get_promocode_list_keyboard(
                     text=_t(
                         texts,
                         'ADMIN_PROMOCODES_CREATE',
-                        " Создать",
+                        ' Создать',
                     ),
                     callback_data='admin_promo_create',
                 )

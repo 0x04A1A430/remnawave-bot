@@ -1122,20 +1122,14 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
 
         if remnawave_user and subscription_link:
             if settings.is_happ_cryptolink_mode():
-                trial_success_text = (
-                    f'{texts.TRIAL_ACTIVATED}\n\n'
-                    + texts.t(
-                        'SUBSCRIPTION_HAPP_LINK_PROMPT',
-                        '🔒 Ссылка на подписку создана. Нажмите кнопку "Подключиться" ниже, чтобы открыть её в Happ.',
-                    )
+                trial_success_text = f'{texts.TRIAL_ACTIVATED}\n\n' + texts.t(
+                    'SUBSCRIPTION_HAPP_LINK_PROMPT',
+                    '🔒 Ссылка на подписку создана. Нажмите кнопку "Подключиться" ниже, чтобы открыть её в Happ.',
                 )
             elif hide_subscription_link:
-                trial_success_text = (
-                    f'{texts.TRIAL_ACTIVATED}\n\n'
-                    + texts.t(
-                        'SUBSCRIPTION_LINK_HIDDEN_NOTICE',
-                        'ℹ️ Ссылка подписки доступна по кнопкам ниже или в разделе "Моя подписка".',
-                    )
+                trial_success_text = f'{texts.TRIAL_ACTIVATED}\n\n' + texts.t(
+                    'SUBSCRIPTION_LINK_HIDDEN_NOTICE',
+                    'ℹ️ Ссылка подписки доступна по кнопкам ниже или в разделе "Моя подписка".',
                 )
             else:
                 subscription_import_link = texts.t(
@@ -1143,10 +1137,7 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
                     '🔗 <b>Ваша ссылка для импорта в VPN приложение:</b>\n<code>{subscription_url}</code>',
                 ).format(subscription_url=subscription_link)
 
-                trial_success_text = (
-                    f'{texts.TRIAL_ACTIVATED}\n\n'
-                    f'{subscription_import_link}'
-                )
+                trial_success_text = f'{texts.TRIAL_ACTIVATED}\n\n{subscription_import_link}'
 
             trial_success_text += payment_note
 
@@ -2715,20 +2706,14 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
 
         if remnawave_user and subscription_link:
             if settings.is_happ_cryptolink_mode():
-                success_text = (
-                    f'{texts.SUBSCRIPTION_PURCHASED}\n\n'
-                    + texts.t(
-                        'SUBSCRIPTION_HAPP_LINK_PROMPT',
-                        '🔒 Ссылка на подписку создана. Нажмите кнопку "Подключиться" ниже, чтобы открыть её в Happ.',
-                    )
+                success_text = f'{texts.SUBSCRIPTION_PURCHASED}\n\n' + texts.t(
+                    'SUBSCRIPTION_HAPP_LINK_PROMPT',
+                    '🔒 Ссылка на подписку создана. Нажмите кнопку "Подключиться" ниже, чтобы открыть её в Happ.',
                 )
             elif hide_subscription_link:
-                success_text = (
-                    f'{texts.SUBSCRIPTION_PURCHASED}\n\n'
-                    + texts.t(
-                        'SUBSCRIPTION_LINK_HIDDEN_NOTICE',
-                        'ℹ️ Ссылка подписки доступна по кнопкам ниже или в разделе "Моя подписка".',
-                    )
+                success_text = f'{texts.SUBSCRIPTION_PURCHASED}\n\n' + texts.t(
+                    'SUBSCRIPTION_LINK_HIDDEN_NOTICE',
+                    'ℹ️ Ссылка подписки доступна по кнопкам ниже или в разделе "Моя подписка".',
                 )
             else:
                 import_link_section = texts.t(
@@ -2736,10 +2721,7 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
                     '🔗 <b>Ваша ссылка для импорта в VPN приложение:</b>\\n<code>{subscription_url}</code>',
                 ).format(subscription_url=subscription_link)
 
-                success_text = (
-                    f'{texts.SUBSCRIPTION_PURCHASED}\n\n'
-                    f'{import_link_section}'
-                )
+                success_text = f'{texts.SUBSCRIPTION_PURCHASED}\n\n{import_link_section}'
 
             if discount_note:
                 success_text = f'{success_text}\n\n{discount_note}'
@@ -3504,20 +3486,14 @@ async def handle_trial_pay_with_balance(callback: types.CallbackQuery, db_user: 
 
         if remnawave_user and subscription_link:
             if settings.is_happ_cryptolink_mode():
-                trial_success_text = (
-                    f'{texts.TRIAL_ACTIVATED}\n\n'
-                    + texts.t(
-                        'SUBSCRIPTION_HAPP_LINK_PROMPT',
-                        '🔒 Ссылка на подписку создана. Нажмите кнопку "Подключиться" ниже, чтобы открыть её в Happ.',
-                    )
+                trial_success_text = f'{texts.TRIAL_ACTIVATED}\n\n' + texts.t(
+                    'SUBSCRIPTION_HAPP_LINK_PROMPT',
+                    '🔒 Ссылка на подписку создана. Нажмите кнопку "Подключиться" ниже, чтобы открыть её в Happ.',
                 )
             elif hide_subscription_link:
-                trial_success_text = (
-                    f'{texts.TRIAL_ACTIVATED}\n\n'
-                    + texts.t(
-                        'SUBSCRIPTION_LINK_HIDDEN_NOTICE',
-                        'ℹ️ Ссылка подписки доступна по кнопкам ниже или в разделе "Моя подписка".',
-                    )
+                trial_success_text = f'{texts.TRIAL_ACTIVATED}\n\n' + texts.t(
+                    'SUBSCRIPTION_LINK_HIDDEN_NOTICE',
+                    'ℹ️ Ссылка подписки доступна по кнопкам ниже или в разделе "Моя подписка".',
                 )
             else:
                 subscription_import_link = texts.t(
@@ -3525,10 +3501,7 @@ async def handle_trial_pay_with_balance(callback: types.CallbackQuery, db_user: 
                     '🔗 <b>Ваша ссылка для импорта в VPN приложение:</b>\n<code>{subscription_url}</code>',
                 ).format(subscription_url=subscription_link)
 
-                trial_success_text = (
-                    f'{texts.TRIAL_ACTIVATED}\n\n'
-                    f'{subscription_import_link}'
-                )
+                trial_success_text = f'{texts.TRIAL_ACTIVATED}\n\n{subscription_import_link}'
 
             trial_success_text += payment_note
 

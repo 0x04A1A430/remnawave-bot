@@ -20,8 +20,8 @@ from app.database.crud.referral_reward_level import (
 )
 from app.database.models import User
 from app.localization.texts import get_texts
-from app.utils.formatters import format_subscription_end_date
 from app.utils.decorators import error_handler
+from app.utils.formatters import format_subscription_end_date
 
 
 logger = structlog.get_logger(__name__)

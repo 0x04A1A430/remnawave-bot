@@ -1989,11 +1989,7 @@ async def process_squad_name(message: types.Message, db_user: User, db: AsyncSes
 
     for i, inbound in enumerate(all_inbounds[:15]):
         keyboard.append(
-            [
-                types.InlineKeyboardButton(
-                    text=f' {inbound["tag"]} ({inbound["type"]})', callback_data=f'create_tgl_{i}'
-                )
-            ]
+            [types.InlineKeyboardButton(text=f' {inbound["tag"]} ({inbound["type"]})', callback_data=f'create_tgl_{i}')]
         )
 
     if len(all_inbounds) > 15:

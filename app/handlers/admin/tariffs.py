@@ -178,9 +178,7 @@ def get_tariff_view_keyboard(
             InlineKeyboardButton(
                 text=' Цена за устройство', callback_data=f'admin_tariff_edit_device_price:{tariff.id}'
             ),
-            InlineKeyboardButton(
-                text=' Макс. устройств', callback_data=f'admin_tariff_edit_max_devices:{tariff.id}'
-            ),
+            InlineKeyboardButton(text=' Макс. устройств', callback_data=f'admin_tariff_edit_max_devices:{tariff.id}'),
         ]
     )
     buttons.append(
@@ -202,9 +200,7 @@ def get_tariff_view_keyboard(
     )
     buttons.append(
         [
-            InlineKeyboardButton(
-                text=' Докупка трафика', callback_data=f'admin_tariff_edit_traffic_topup:{tariff.id}'
-            ),
+            InlineKeyboardButton(text=' Докупка трафика', callback_data=f'admin_tariff_edit_traffic_topup:{tariff.id}'),
         ]
     )
     buttons.append(
@@ -232,9 +228,7 @@ def get_tariff_view_keyboard(
     if is_daily:
         buttons.append(
             [
-                InlineKeyboardButton(
-                    text=' Суточная цена', callback_data=f'admin_tariff_edit_daily_price:{tariff.id}'
-                ),
+                InlineKeyboardButton(text=' Суточная цена', callback_data=f'admin_tariff_edit_daily_price:{tariff.id}'),
             ]
         )
         # Примечание: отключение суточного режима убрано - это необратимое решение при создании
@@ -250,17 +244,13 @@ def get_tariff_view_keyboard(
         )
 
     # Переключение активности
-    highlight_label = (
-        '⭐  Снять выделение тарифа' if getattr(tariff, 'is_highlighted', False) else '⭐ Выделить тариф'
-    )
+    highlight_label = '⭐  Снять выделение тарифа' if getattr(tariff, 'is_highlighted', False) else '⭐ Выделить тариф'
     buttons.append(
         [InlineKeyboardButton(text=highlight_label, callback_data=f'admin_tariff_toggle_highlight:{tariff.id}')]
     )
 
     if tariff.is_active:
-        buttons.append(
-            [InlineKeyboardButton(text=' Деактивировать', callback_data=f'admin_tariff_toggle:{tariff.id}')]
-        )
+        buttons.append([InlineKeyboardButton(text=' Деактивировать', callback_data=f'admin_tariff_toggle:{tariff.id}')])
     else:
         buttons.append([InlineKeyboardButton(text=' Активировать', callback_data=f'admin_tariff_toggle:{tariff.id}')])
 
@@ -1524,11 +1514,7 @@ def _highlight_keyboard(tariff: Tariff, language: str) -> InlineKeyboardMarkup:
 
     if current is not None:
         buttons.append(
-            [
-                InlineKeyboardButton(
-                    text=' Убрать выделение', callback_data=f'admin_tariff_highlight_set:{tariff.id}:0'
-                )
-            ]
+            [InlineKeyboardButton(text=' Убрать выделение', callback_data=f'admin_tariff_highlight_set:{tariff.id}:0')]
         )
 
     buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data=f'admin_tariff_view:{tariff.id}')])
@@ -2193,11 +2179,7 @@ async def process_edit_traffic_topup_packages(
 
     buttons = [
         [InlineKeyboardButton(text=' Отключить', callback_data=f'admin_tariff_toggle_traffic_topup:{tariff_id}')],
-        [
-            InlineKeyboardButton(
-                text=' Настроить пакеты', callback_data=f'admin_tariff_edit_topup_packages:{tariff_id}'
-            )
-        ],
+        [InlineKeyboardButton(text=' Настроить пакеты', callback_data=f'admin_tariff_edit_topup_packages:{tariff_id}')],
         [InlineKeyboardButton(text=texts.BACK, callback_data=f'admin_tariff_view:{tariff_id}', style='danger')],
     ]
 
@@ -2309,11 +2291,7 @@ async def process_edit_max_topup_traffic(
 
     buttons = [
         [InlineKeyboardButton(text=' Отключить', callback_data=f'admin_tariff_toggle_traffic_topup:{tariff_id}')],
-        [
-            InlineKeyboardButton(
-                text=' Настроить пакеты', callback_data=f'admin_tariff_edit_topup_packages:{tariff_id}'
-            )
-        ],
+        [InlineKeyboardButton(text=' Настроить пакеты', callback_data=f'admin_tariff_edit_topup_packages:{tariff_id}')],
         [InlineKeyboardButton(text=texts.BACK, callback_data=f'admin_tariff_view:{tariff_id}', style='danger')],
     ]
 
@@ -2381,9 +2359,7 @@ async def confirm_delete_tariff(
         reply_markup=InlineKeyboardMarkup(
             inline_keyboard=[
                 [
-                    InlineKeyboardButton(
-                        text=' Да, удалить', callback_data=f'admin_tariff_delete_confirm:{tariff_id}'
-                    ),
+                    InlineKeyboardButton(text=' Да, удалить', callback_data=f'admin_tariff_delete_confirm:{tariff_id}'),
                     InlineKeyboardButton(text=' Отмена', callback_data=f'admin_tariff_view:{tariff_id}'),
                 ]
             ]

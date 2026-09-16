@@ -435,17 +435,13 @@ def _build_payment_details_text(record: PendingPayment, *, texts, language: str)
 
     if record.method == PaymentMethod.WATA:
         if getattr(payment, 'order_id', None):
-            lines.append(
-                f' {texts.t("ADMIN_PAYMENT_GATEWAY_ID", "Gateway ID")}: {html.escape(str(payment.order_id))}'
-            )
+            lines.append(f' {texts.t("ADMIN_PAYMENT_GATEWAY_ID", "Gateway ID")}: {html.escape(str(payment.order_id))}')
         if getattr(payment, 'terminal_public_id', None):
             lines.append(f' Terminal: {html.escape(str(payment.terminal_public_id))}')
 
     if record.method == PaymentMethod.HELEKET:
         if getattr(payment, 'order_id', None):
-            lines.append(
-                f' {texts.t("ADMIN_PAYMENT_GATEWAY_ID", "Gateway ID")}: {html.escape(str(payment.order_id))}'
-            )
+            lines.append(f' {texts.t("ADMIN_PAYMENT_GATEWAY_ID", "Gateway ID")}: {html.escape(str(payment.order_id))}')
         if getattr(payment, 'payer_amount', None) and getattr(payment, 'payer_currency', None):
             lines.append(
                 f' {texts.t("ADMIN_PAYMENT_PAYER_AMOUNT", "Paid amount")}: '
@@ -455,8 +451,7 @@ def _build_payment_details_text(record: PendingPayment, *, texts, language: str)
     if record.method == PaymentMethod.YOOKASSA:
         if getattr(payment, 'payment_method_type', None):
             lines.append(
-                f' {texts.t("ADMIN_PAYMENT_GATEWAY_METHOD", "Method")}: '
-                f'{html.escape(str(payment.payment_method_type))}'
+                f' {texts.t("ADMIN_PAYMENT_GATEWAY_METHOD", "Method")}: {html.escape(str(payment.payment_method_type))}'
             )
         if getattr(payment, 'confirmation_url', None):
             lines.append(texts.t('ADMIN_PAYMENT_HAS_LINK', ' Payment link is available above.'))

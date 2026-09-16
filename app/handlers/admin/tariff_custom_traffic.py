@@ -375,9 +375,7 @@ async def process_custom_traffic_min_input(
     try:
         minimum = parse_positive_gb(message.text or '')
     except ValueError:
-        await message.answer(
-            ' Введите положительное целое число гигабайт.\nПример: <code>5</code>', parse_mode='HTML'
-        )
+        await message.answer(' Введите положительное целое число гигабайт.\nПример: <code>5</code>', parse_mode='HTML')
         return
 
     maximum = getattr(tariff, 'max_traffic_gb', None)

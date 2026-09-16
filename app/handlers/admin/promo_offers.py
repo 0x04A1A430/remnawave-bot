@@ -459,9 +459,7 @@ def _build_user_button_label(user: User) -> str:
 
     subscription = getattr(user, 'subscription', None)
     if subscription:
-        if subscription.is_trial:
-            subscription_emoji = ''
-        elif subscription.is_active:
+        if subscription.is_trial or subscription.is_active:
             subscription_emoji = ''
         else:
             subscription_emoji = ''

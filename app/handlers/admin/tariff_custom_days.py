@@ -250,9 +250,7 @@ async def process_custom_days_price_input(message: types.Message, db_user: User,
         )
         return
     tariff = await update_tariff(db, tariff, price_per_day_kopeks=price_kopeks)
-    await _finish(
-        message, db_user, state, tariff, f' Цена за 1 день установлена: {format_price_kopeks(price_kopeks)}'
-    )
+    await _finish(message, db_user, state, tariff, f' Цена за 1 день установлена: {format_price_kopeks(price_kopeks)}')
 
 
 @admin_required

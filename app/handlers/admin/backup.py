@@ -300,9 +300,7 @@ async def restore_backup_start(callback: types.CallbackQuery, db_user: User, db:
         keyboard = InlineKeyboardMarkup(
             inline_keyboard=[
                 [
-                    InlineKeyboardButton(
-                        text=' Да, восстановить', callback_data=f'backup_restore_execute_{filename}'
-                    ),
+                    InlineKeyboardButton(text=' Да, восстановить', callback_data=f'backup_restore_execute_{filename}'),
                     InlineKeyboardButton(
                         text=' Очистить и восстановить', callback_data=f'backup_restore_clear_{filename}'
                     ),

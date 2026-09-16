@@ -108,8 +108,7 @@ async def process_new_message_text(message: types.Message, state: FSMContext, db
 
     if len(message_text) > 4000:
         await message.answer(
-            ' Сообщение слишком длинное. Максимум 4000 символов.\n'
-            'Попробуйте еще раз или отправьте /cancel для отмены.'
+            ' Сообщение слишком длинное. Максимум 4000 символов.\nПопробуйте еще раз или отправьте /cancel для отмены.'
         )
         return
 
@@ -369,8 +368,7 @@ async def process_edit_message_text(message: types.Message, state: FSMContext, d
 
     if len(new_text) > 4000:
         await message.answer(
-            ' Сообщение слишком длинное. Максимум 4000 символов.\n'
-            'Попробуйте еще раз или отправьте /cancel для отмены.'
+            ' Сообщение слишком длинное. Максимум 4000 символов.\nПопробуйте еще раз или отправьте /cancel для отмены.'
         )
         return
 

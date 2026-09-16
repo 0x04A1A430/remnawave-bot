@@ -511,10 +511,7 @@ async def handle_pinned_broadcast_now(
     await callback.message.edit_text(
         texts.t(
             'ADMIN_PINNED_UPDATED',
-            ' <b>Закрепленное сообщение обновлено</b>\n\n'
-            ' Получателей: {total}\n'
-            ' Отправлено: {sent}\n'
-            ' Ошибок: {failed}',
+            ' <b>Закрепленное сообщение обновлено</b>\n\n Получателей: {total}\n Отправлено: {sent}\n Ошибок: {failed}',
         ).format(total=total, sent=sent_count, failed=failed_count),
         reply_markup=get_admin_messages_keyboard(db_user.language),
         parse_mode='HTML',
