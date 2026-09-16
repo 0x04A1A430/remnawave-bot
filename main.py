@@ -1,1 +1,1 @@
-C:/Users/cy7su/Desktop/а/remnawave-bot-dev/app/main.py
+app/main.py
