@@ -37,6 +37,7 @@ dependencies = [
     'starlette==1.6.0',
     'attrs==26.1.0',
     'pillow==12.3.0',
+    'tzdata==2025.2',
 ]
 
 [dependency-groups]
