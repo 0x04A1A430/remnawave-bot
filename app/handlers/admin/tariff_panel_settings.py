@@ -28,7 +28,7 @@ _NO_EXTERNAL_SQUAD = '-'
 
 
 def _yes_no(value: bool) -> str:
-    return '✅ Да' if value else '❌ Нет'
+    return ' Да' if value else ' Нет'
 
 
 def _tag_display(tariff: Tariff) -> str:
@@ -56,7 +56,7 @@ def format_panel_settings(tariff: Tariff) -> str:
 
 def render_panel_settings(tariff: Tariff) -> str:
     return (
-        f'⚙️ <b>Ещё настройки</b>\n\n'
+        f' <b>Ещё настройки</b>\n\n'
         f'Тариф: <b>{html.escape(tariff.name)}</b>\n\n'
         f'{format_panel_settings(tariff)}\n'
         f'• Порядок в списке: {getattr(tariff, "display_order", 0)}\n\n'
@@ -72,22 +72,22 @@ def get_panel_settings_keyboard(tariff: Tariff, language: str) -> InlineKeyboard
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                InlineKeyboardButton(text='🏷️ Тег панели', callback_data=f'admin_tariff_edit_panel_tag:{tariff.id}'),
-                InlineKeyboardButton(text='🌐 Внешний сквад', callback_data=f'admin_tariff_edit_ext_squad:{tariff.id}'),
+                InlineKeyboardButton(text=' Тег панели', callback_data=f'admin_tariff_edit_panel_tag:{tariff.id}'),
+                InlineKeyboardButton(text=' Внешний сквад', callback_data=f'admin_tariff_edit_ext_squad:{tariff.id}'),
             ],
             [
-                InlineKeyboardButton(text='💳 Продукт Lava', callback_data=f'admin_tariff_edit_lava:{tariff.id}'),
-                InlineKeyboardButton(text='🔢 Порядок', callback_data=f'admin_tariff_edit_order:{tariff.id}'),
+                InlineKeyboardButton(text=' Продукт Lava', callback_data=f'admin_tariff_edit_lava:{tariff.id}'),
+                InlineKeyboardButton(text=' Порядок', callback_data=f'admin_tariff_edit_order:{tariff.id}'),
             ],
             [
                 InlineKeyboardButton(
-                    text='🎁 В подарках: выключить' if gift else '🎁 В подарках: включить',
+                    text=' В подарках: выключить' if gift else ' В подарках: включить',
                     callback_data=f'admin_tariff_toggle_gift:{tariff.id}',
                 )
             ],
             [
                 InlineKeyboardButton(
-                    text='📈 Докупка: запретить' if allow_topup else '📈 Докупка: разрешить',
+                    text=' Докупка: запретить' if allow_topup else ' Докупка: разрешить',
                     callback_data=f'admin_tariff_toggle_allow_topup:{tariff.id}',
                 )
             ],
@@ -186,7 +186,7 @@ async def start_edit_panel_tag(callback: types.CallbackQuery, db_user: User, db:
         state,
         tariff,
         state_value=AdminStates.editing_tariff_panel_tag,
-        title='🏷️ <b>Тег панели</b>',
+        title=' <b>Тег панели</b>',
         current_value=_tag_display(tariff),
         prompt=f'Введите тег ({PANEL_TAG_RULES}) или <code>-</code>, чтобы вернуть общий тег из настроек.',
     )
@@ -205,7 +205,7 @@ async def start_edit_lava_product(callback: types.CallbackQuery, db_user: User, 
         state,
         tariff,
         state_value=AdminStates.editing_tariff_lava_product,
-        title='💳 <b>Продукт Lava (автопродление)</b>',
+        title=' <b>Продукт Lava (автопродление)</b>',
         current_value=_lava_display(tariff),
         prompt='Введите UUID продукта из кабинета Lava или <code>-</code>, чтобы отвязать.',
     )
@@ -224,7 +224,7 @@ async def start_edit_display_order(callback: types.CallbackQuery, db_user: User,
         state,
         tariff,
         state_value=AdminStates.editing_tariff_display_order,
-        title='🔢 <b>Порядок в списке</b>',
+        title=' <b>Порядок в списке</b>',
         current_value=str(getattr(tariff, 'display_order', 0)),
         prompt='Введите порядок целым числом от 0 — меньше число, выше тариф в списке.',
     )
@@ -254,10 +254,10 @@ async def process_panel_tag_input(message: types.Message, db_user: User, db: Asy
     try:
         tag = None if raw == '-' else normalize_panel_tag(raw)
     except ValueError as error:
-        await message.answer(f'❌ {error}. Попробуйте ещё раз:')
+        await message.answer(f' {error}. Попробуйте ещё раз:')
         return
     tariff = await update_tariff(db, tariff, panel_tag=tag)
-    confirmation = f'✅ Тег панели: {html.escape(tag)}' if tag else '✅ Тег панели снят — общий из настроек'
+    confirmation = f' Тег панели: {html.escape(tag)}' if tag else ' Тег панели снят — общий из настроек'
     await _finish(message, db_user, state, tariff, confirmation)
 
 
@@ -271,7 +271,7 @@ async def process_lava_product_input(message: types.Message, db_user: User, db: 
     # Пустая строка для CRUD значит «отвязать» — так же, как в кабинете.
     value = '' if raw == '-' else raw
     tariff = await update_tariff(db, tariff, lava_product_id=value)
-    confirmation = f'✅ Продукт Lava: {html.escape(value)}' if value else '✅ Продукт Lava отвязан'
+    confirmation = f' Продукт Lava: {html.escape(value)}' if value else ' Продукт Lava отвязан'
     await _finish(message, db_user, state, tariff, confirmation)
 
 
@@ -286,10 +286,10 @@ async def process_display_order_input(message: types.Message, db_user: User, db:
         if order < 0:
             raise ValueError
     except ValueError:
-        await message.answer('❌ Введите целое число от 0. Попробуйте ещё раз:')
+        await message.answer(' Введите целое число от 0. Попробуйте ещё раз:')
         return
     tariff = await update_tariff(db, tariff, display_order=order)
-    await _finish(message, db_user, state, tariff, f'✅ Порядок в списке: {order}')
+    await _finish(message, db_user, state, tariff, f' Порядок в списке: {order}')
 
 
 # ---- внешний сквад ----
@@ -314,13 +314,13 @@ def _external_squad_keyboard(tariff: Tariff, squads: list, language: str) -> Inl
     buttons = [
         [
             InlineKeyboardButton(
-                text=f'{"✅" if current is None else "⬜"} Без внешнего сквада',
+                text=f'{"" if current is None else "⬜"} Без внешнего сквада',
                 callback_data=f'admin_tariff_set_ext_squad:{tariff.id}:{_NO_EXTERNAL_SQUAD}',
             )
         ]
     ]
     for squad in squads:
-        prefix = '✅' if squad.uuid == current else '⬜'
+        prefix = '' if squad.uuid == current else '⬜'
         buttons.append(
             [
                 InlineKeyboardButton(
@@ -333,9 +333,9 @@ def _external_squad_keyboard(tariff: Tariff, squads: list, language: str) -> Inl
 
 
 def _external_squad_text(tariff: Tariff, squads: list) -> str:
-    note = '' if squads else '\n\n⚠️ Список сквадов из панели пуст или панель недоступна.'
+    note = '' if squads else '\n\n Список сквадов из панели пуст или панель недоступна.'
     return (
-        f'🌐 <b>Внешний сквад Remnawave</b>\n\nТариф: <b>{html.escape(tariff.name)}</b>\n'
+        f' <b>Внешний сквад Remnawave</b>\n\nТариф: <b>{html.escape(tariff.name)}</b>\n'
         f'Сейчас: <b>{_ext_squad_display(tariff)}</b>\n\n'
         'Пользователи тарифа попадают в выбранный сквад; смена применяется ко всем живым подпискам тарифа.'
         f'{note}'

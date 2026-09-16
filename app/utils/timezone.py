@@ -150,6 +150,8 @@ def format_local_datetime(
     localized = to_local_datetime(dt)
     if localized is None:
         return na_placeholder
+    if localized.year > 2050:
+        return 'Навсегда'
     return localized.strftime(fmt)
 
 

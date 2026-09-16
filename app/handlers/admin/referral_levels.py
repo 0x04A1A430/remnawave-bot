@@ -41,15 +41,15 @@ from app.utils.decorators import admin_required, error_handler
 
 
 _MODE_LABELS = {
-    ReferralRewardMode.MONEY.value: '💰 Только деньги',
-    ReferralRewardMode.DAYS.value: '📅 Только дни',
-    ReferralRewardMode.BOTH.value: '💰📅 Деньги и дни',
+    ReferralRewardMode.MONEY.value: ' Только деньги',
+    ReferralRewardMode.DAYS.value: ' Только дни',
+    ReferralRewardMode.BOTH.value: ' Деньги и дни',
 }
 
 _TRIGGER_LABELS = {
-    ReferralRewardTrigger.REGISTRATION.value: '👥 За регистрацию',
-    ReferralRewardTrigger.FIRST_TOPUP.value: '🎉 За первое пополнение',
-    ReferralRewardTrigger.EVERY_TOPUP.value: '🔁 С каждого пополнения',
+    ReferralRewardTrigger.REGISTRATION.value: ' За регистрацию',
+    ReferralRewardTrigger.FIRST_TOPUP.value: ' За первое пополнение',
+    ReferralRewardTrigger.EVERY_TOPUP.value: ' С каждого пополнения',
 }
 
 # Порядок перебора по кругу: одна кнопка вместо подменю на два пункта.
@@ -223,10 +223,10 @@ def _pays_referrer(level) -> bool:
 
 def _scheme_line() -> str:
     if not settings.is_referral_levels_scheme():
-        return '⚠️ Схема наград: классическая — уровни ниже НЕ применяются'
+        return ' Схема наград: классическая — уровни ниже НЕ применяются'
     if settings.is_referral_tier_levels():
-        return '✅ Многоуровневая схема включена (режим: уровни за приглашённых)'
-    return f'✅ Многоуровневая схема включена (режим: цепочка, глубина до {settings.get_referral_max_level_depth()})'
+        return ' Многоуровневая схема включена (режим: уровни за приглашённых)'
+    return f' Многоуровневая схема включена (режим: цепочка, глубина до {settings.get_referral_max_level_depth()})'
 
 
 async def _render_levels(callback: types.CallbackQuery, db: AsyncSession) -> None:
@@ -242,7 +242,7 @@ async def _render_levels(callback: types.CallbackQuery, db: AsyncSession) -> Non
     tier_mode_header = settings.is_referral_tier_levels()
     header_caption = 'Уровень'
     lines = [
-        '🪜 <b>Уровни реферальных наград</b>',
+        ' <b>Уровни реферальных наград</b>',
         '',
         _scheme_line(),
         '',
@@ -256,7 +256,7 @@ async def _render_levels(callback: types.CallbackQuery, db: AsyncSession) -> Non
         if tier_mode_header:
             levels = sorted(levels, key=lambda lvl: ((lvl.required_referrals or 0), lvl.level))
         for level in levels:
-            status = '✅' if level.is_active else '⛔️'
+            status = '' if level.is_active else ''
             lines.append(
                 f'{status} <b>{header_caption} {level.level}</b> — '
                 f'{_MODE_LABELS.get(level.reward_mode, level.reward_mode)}'
@@ -296,7 +296,7 @@ async def _render_levels(callback: types.CallbackQuery, db: AsyncSession) -> Non
     # лестница складывается уже после того, как тост показан и забыт.
     for warning in _tier_ladder_warnings(levels):
         lines.append('')
-        lines.append(f'<i>⚠️ {warning}</i>')
+        lines.append(f'<i> {warning}</i>')
 
     lines.append(
         '<i>Правила хранятся в базе, а не в .env, поэтому меняются отсюда и из кабинета и переживают перезапуск.</i>'
@@ -308,9 +308,9 @@ async def _render_levels(callback: types.CallbackQuery, db: AsyncSession) -> Non
     keyboard_rows = []
     for level in levels:
         # Уровень глубже предела обхода не платит вовсе: помечаем прямо на кнопке,
-        # иначе «✅ Уровень 4» неотличим от работающего. В режиме рангов предела
+        # иначе « Уровень 4» неотличим от работающего. В режиме рангов предела
         # нет — там работают все заведённые.
-        mark = '✅' if level.is_active else '⛔️'
+        mark = '' if level.is_active else ''
         suffix = ' (не платит)' if level.level > max_level else ''
         keyboard_rows.append(
             [
@@ -323,14 +323,14 @@ async def _render_levels(callback: types.CallbackQuery, db: AsyncSession) -> Non
     next_level = _next_free_level(levels)
     if next_level <= MAX_SUPPORTED_LEVEL:
         keyboard_rows.append(
-            [types.InlineKeyboardButton(text=f'➕ Добавить уровень {next_level}', callback_data='admin_ref_lvl_add')]
+            [types.InlineKeyboardButton(text=f' Добавить уровень {next_level}', callback_data='admin_ref_lvl_add')]
         )
 
     if not levels:
         keyboard_rows.append(
             [
                 types.InlineKeyboardButton(
-                    text='📥 Перенести текущие настройки в уровень 1', callback_data='admin_ref_lvl_import'
+                    text=' Перенести текущие настройки в уровень 1', callback_data='admin_ref_lvl_import'
                 )
             ]
         )
@@ -343,7 +343,7 @@ async def _render_levels(callback: types.CallbackQuery, db: AsyncSession) -> Non
     keyboard_rows.append(
         [
             types.InlineKeyboardButton(
-                text=f'🎚 Режим: {"за приглашённых" if stored_tiers else "по цепочке"}',
+                text=f' Режим: {"за приглашённых" if stored_tiers else "по цепочке"}',
                 callback_data='admin_ref_lvl_tiers',
             )
         ]
@@ -353,7 +353,7 @@ async def _render_levels(callback: types.CallbackQuery, db: AsyncSession) -> Non
     keyboard_rows.append(
         [
             types.InlineKeyboardButton(
-                text=f'🎁 Выбор награды: {"разрешён" if settings.REFERRAL_ALLOW_REWARD_KIND_CHOICE else "запрещён"}',
+                text=f' Выбор награды: {"разрешён" if settings.REFERRAL_ALLOW_REWARD_KIND_CHOICE else "запрещён"}',
                 callback_data='admin_ref_lvl_kindchoice',
             )
         ]
@@ -361,7 +361,7 @@ async def _render_levels(callback: types.CallbackQuery, db: AsyncSession) -> Non
     keyboard_rows.append(
         [
             types.InlineKeyboardButton(
-                text=f'📅 Выбор подписки: {"разрешён" if settings.REFERRAL_ALLOW_DAYS_TARGET_CHOICE else "запрещён"}',
+                text=f' Выбор подписки: {"разрешён" if settings.REFERRAL_ALLOW_DAYS_TARGET_CHOICE else "запрещён"}',
                 callback_data='admin_ref_lvl_targetchoice',
             )
         ]
@@ -373,7 +373,7 @@ async def _render_levels(callback: types.CallbackQuery, db: AsyncSession) -> Non
         keyboard_rows.append(
             [
                 types.InlineKeyboardButton(
-                    text='📏 Глубина цепочки: не используется', callback_data='admin_ref_lvl_depth'
+                    text=' Глубина цепочки: не используется', callback_data='admin_ref_lvl_depth'
                 )
             ]
         )
@@ -381,15 +381,15 @@ async def _render_levels(callback: types.CallbackQuery, db: AsyncSession) -> Non
         keyboard_rows.append(
             [
                 types.InlineKeyboardButton(
-                    text=f'📏 Глубина цепочки: {settings.get_referral_max_level_depth()}',
+                    text=f' Глубина цепочки: {settings.get_referral_max_level_depth()}',
                     callback_data='admin_ref_lvl_depth',
                 )
             ]
         )
 
-    scheme_toggle = '🔻 Вернуть классическую' if settings.is_referral_levels_scheme() else '🔺 Включить многоуровневую'
+    scheme_toggle = ' Вернуть классическую' if settings.is_referral_levels_scheme() else ' Включить многоуровневую'
     keyboard_rows.append([types.InlineKeyboardButton(text=scheme_toggle, callback_data='admin_ref_lvl_scheme')])
-    keyboard_rows.append([types.InlineKeyboardButton(text='⬅️ Назад', callback_data='admin_referrals_settings')])
+    keyboard_rows.append([types.InlineKeyboardButton(text='⬅ Назад', callback_data='admin_referrals_settings')])
 
     await callback.message.edit_text(
         '\n'.join(lines), reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
@@ -600,9 +600,9 @@ async def _render_level(
     caption = 'Уровень'
     beyond_depth = level.level > settings.get_referral_effective_max_level()
     lines = [
-        f'🪜 <b>{caption} {level.level}</b>',
+        f' <b>{caption} {level.level}</b>',
         '',
-        f'Состояние: {"✅ активен" if level.is_active else "⛔️ выключен"}',
+        f'Состояние: {" активен" if level.is_active else " выключен"}',
         f'Активные бонусы: {_MODE_LABELS.get(level.reward_mode, level.reward_mode)}',
         f'Повод: {_TRIGGER_LABELS.get(level.trigger, level.trigger)}',
         '',
@@ -622,7 +622,7 @@ async def _render_level(
 
     for note in notes or []:
         lines.append('')
-        lines.append(f'<i>⚠️ {note}</i>')
+        lines.append(f'<i> {note}</i>')
 
     if tier_mode:
         lines.append('')
@@ -635,7 +635,7 @@ async def _render_level(
     if beyond_depth:
         lines.append('')
         lines.append(
-            f'<i>❗️ Цепочка обходится только до {settings.get_referral_max_level_depth()} уровней '
+            f'<i> Цепочка обходится только до {settings.get_referral_max_level_depth()} уровней '
             '(REFERRAL_MAX_LEVEL_DEPTH), поэтому этот уровень не начисляет ничего, '
             'сколько бы ни был настроен.</i>'
         )
@@ -651,7 +651,7 @@ async def _render_level(
     ):
         lines.append('')
         lines.append(
-            '<i>❗️ Повод «за регистрацию»: пополнения не было, и процент считать не от чего — '
+            '<i> Повод «за регистрацию»: пополнения не было, и процент считать не от чего — '
             'этот уровень не начислит пригласившему ничего. Задайте фиксированную сумму '
             'или смените повод.</i>'
         )
@@ -666,7 +666,7 @@ async def _render_level(
     if not settings.is_referral_levels_scheme():
         lines.append('')
         lines.append(
-            '<i>⚠️ Схема наград — классическая: это правило настроено, но НЕ применяется. '
+            '<i> Схема наград — классическая: это правило настроено, но НЕ применяется. '
             'Включите многоуровневую схему на экране уровней.</i>'
         )
 
@@ -691,7 +691,7 @@ async def _render_level(
     if warnings:
         lines.append('')
         lines.append(
-            f'<i>⚠️ Тариф не выбран для дней {" и ".join(warnings)}: они лягут в основную '
+            f'<i> Тариф не выбран для дней {" и ".join(warnings)}: они лягут в основную '
             'подписку получателя, а если подписки нет — не начислятся вовсе.</i>'
         )
 
@@ -701,7 +701,7 @@ async def _render_level(
     if days_on and not settings.is_multi_tariff_enabled() and (level.referrer_tariff_id or level.referee_tariff_id):
         lines.append('')
         lines.append(
-            '<i>❗️ Мультитариф выключен: у подписок нет тарифа, и дни с выбранным '
+            '<i> Мультитариф выключен: у подписок нет тарифа, и дни с выбранным '
             'тарифом не начислятся. Уберите тариф — дни пойдут в основную подписку.</i>'
         )
 
@@ -712,7 +712,7 @@ async def _render_level(
         and not level.referee_tariff_id
     ):
         lines.append(
-            '<i>❗️ При поводе «за регистрацию» у приглашённого подписки ещё нет: '
+            '<i> При поводе «за регистрацию» у приглашённого подписки ещё нет: '
             'без тарифа дни не начислятся никому и никогда.</i>'
         )
 
@@ -720,12 +720,12 @@ async def _render_level(
     rows = [
         [
             types.InlineKeyboardButton(
-                text='⛔️ Выключить' if level.is_active else '✅ Включить',
+                text=' Выключить' if level.is_active else ' Включить',
                 callback_data=f'admin_ref_lvl_active:{level.level}',
             )
         ],
-        [types.InlineKeyboardButton(text='🎁 Активные бонусы', callback_data=f'admin_ref_lvl_mode:{level.level}')],
-        [types.InlineKeyboardButton(text='⚡️ Повод начисления', callback_data=f'admin_ref_lvl_trigger:{level.level}')],
+        [types.InlineKeyboardButton(text=' Активные бонусы', callback_data=f'admin_ref_lvl_mode:{level.level}')],
+        [types.InlineKeyboardButton(text=' Повод начисления', callback_data=f'admin_ref_lvl_trigger:{level.level}')],
     ]
 
     if money_on:
@@ -733,46 +733,46 @@ async def _render_level(
         rows.append(
             [
                 types.InlineKeyboardButton(
-                    text='💰 Фикс. пригласившему', callback_data=f'{prefix}:referrer_fixed_kopeks'
+                    text=' Фикс. пригласившему', callback_data=f'{prefix}:referrer_fixed_kopeks'
                 ),
                 types.InlineKeyboardButton(
-                    text='🎁 Фикс. приглашённому', callback_data=f'{prefix}:referee_fixed_kopeks'
+                    text=' Фикс. приглашённому', callback_data=f'{prefix}:referee_fixed_kopeks'
                 ),
             ]
         )
     if days_on:
         rows.append(
             [
-                types.InlineKeyboardButton(text='📅 Дни пригласившему', callback_data=f'{prefix}:referrer_days'),
-                types.InlineKeyboardButton(text='📅 Дни приглашённому', callback_data=f'{prefix}:referee_days'),
+                types.InlineKeyboardButton(text=' Дни пригласившему', callback_data=f'{prefix}:referrer_days'),
+                types.InlineKeyboardButton(text=' Дни приглашённому', callback_data=f'{prefix}:referee_days'),
             ]
         )
         rows.append(
             [
                 types.InlineKeyboardButton(
-                    text='🎯 Тариф пригласившему', callback_data=f'admin_ref_lvl_tariff:{level.level}:referrer'
+                    text=' Тариф пригласившему', callback_data=f'admin_ref_lvl_tariff:{level.level}:referrer'
                 ),
                 types.InlineKeyboardButton(
-                    text='🎯 Тариф приглашённому', callback_data=f'admin_ref_lvl_tariff:{level.level}:referee'
+                    text=' Тариф приглашённому', callback_data=f'admin_ref_lvl_tariff:{level.level}:referee'
                 ),
             ]
         )
 
-    rows.append([types.InlineKeyboardButton(text='🔢 Лимит комиссий', callback_data=f'{prefix}:max_payments')])
+    rows.append([types.InlineKeyboardButton(text=' Лимит комиссий', callback_data=f'{prefix}:max_payments')])
     rows.append(
         [
-            types.InlineKeyboardButton(text='🎖 Рефералов для открытия', callback_data=f'{prefix}:required_referrals'),
+            types.InlineKeyboardButton(text=' Рефералов для открытия', callback_data=f'{prefix}:required_referrals'),
             types.InlineKeyboardButton(
-                text='👥 Считать: '
+                text=' Считать: '
                 + ('с пополнением' if getattr(level, 'required_referrals_active_only', True) else 'всех'),
                 callback_data=f'admin_ref_lvl_countmode:{level.level}',
             ),
         ]
     )
     rows.append(
-        [types.InlineKeyboardButton(text='🗑 Удалить уровень', callback_data=f'admin_ref_lvl_delask:{level.level}')]
+        [types.InlineKeyboardButton(text=' Удалить уровень', callback_data=f'admin_ref_lvl_delask:{level.level}')]
     )
-    rows.append([types.InlineKeyboardButton(text='⬅️ К уровням', callback_data='admin_ref_levels')])
+    rows.append([types.InlineKeyboardButton(text='⬅ К уровням', callback_data='admin_ref_levels')])
 
     await callback.message.edit_text('\n'.join(lines), reply_markup=types.InlineKeyboardMarkup(inline_keyboard=rows))
     return True
@@ -866,12 +866,12 @@ async def confirm_delete_level(
     level_number = int(callback.data.split(':')[1])
 
     await callback.message.edit_text(
-        f'🗑 <b>Удалить уровень {level_number}?</b>\n\n'
+        f' <b>Удалить уровень {level_number}?</b>\n\n'
         'Настройки правила будут потеряны: восстановить их можно только заново.',
         reply_markup=types.InlineKeyboardMarkup(
             inline_keyboard=[
-                [types.InlineKeyboardButton(text='🗑 Да, удалить', callback_data=f'admin_ref_lvl_del:{level_number}')],
-                [types.InlineKeyboardButton(text='⬅️ Отмена', callback_data=f'admin_ref_lvl:{level_number}')],
+                [types.InlineKeyboardButton(text=' Да, удалить', callback_data=f'admin_ref_lvl_del:{level_number}')],
+                [types.InlineKeyboardButton(text='⬅ Отмена', callback_data=f'admin_ref_lvl:{level_number}')],
             ]
         ),
     )
@@ -940,7 +940,7 @@ async def choose_level_tariff(
     rows = [
         [
             types.InlineKeyboardButton(
-                text=('✅ ' if not current_id else '') + '➖ Без тарифа (основная подписка)',
+                text=(' ' if not current_id else '') + ' Без тарифа (основная подписка)',
                 callback_data=f'admin_ref_lvl_settariff:{level_number}:{side}:0',
             )
         ]
@@ -948,7 +948,7 @@ async def choose_level_tariff(
 
     shown = tariffs[:_TARIFF_PICKER_LIMIT]
     for tariff in shown:
-        mark = '✅ ' if tariff.id == current_id else '🎯 '
+        mark = ' ' if tariff.id == current_id else ' '
         suffix = '' if tariff.is_active else ' (неактивен)'
         rows.append(
             [
@@ -958,10 +958,10 @@ async def choose_level_tariff(
                 )
             ]
         )
-    rows.append([types.InlineKeyboardButton(text='⬅️ Назад', callback_data=f'admin_ref_lvl:{level_number}')])
+    rows.append([types.InlineKeyboardButton(text='⬅ Назад', callback_data=f'admin_ref_lvl:{level_number}')])
 
     text = (
-        f'🎯 <b>Тариф для дней {side_label}</b>\n\n'
+        f' <b>Тариф для дней {side_label}</b>\n\n'
         'Дни лягут в подписку выбранного тарифа. Если такой подписки у получателя нет, '
         'она будет создана — но только когда у него нет живого триала.\n\n'
         '<i>Без тарифа дни идут в оплаченную подписку получателя; при нескольких '
@@ -969,7 +969,7 @@ async def choose_level_tariff(
     )
     # Молчаливое обрезание списка означало бы «такого тарифа нет», хотя он есть.
     if len(tariffs) > len(shown):
-        text += f'\n\n<i>⚠️ Показаны первые {len(shown)} из {len(tariffs)} тарифов.</i>'
+        text += f'\n\n<i> Показаны первые {len(shown)} из {len(tariffs)} тарифов.</i>'
 
     await callback.message.edit_text(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=rows))
     await callback.answer()
@@ -1008,10 +1008,10 @@ async def start_level_value_edit(callback: types.CallbackQuery, db_user: User, d
         hint += ' Сумма в рублях, можно дробную.'
 
     await callback.message.edit_text(
-        f'✏️ <b>{label}</b>\nУровень {level_number}\n\n{hint}\n\n0 — не начислять.',
+        f' <b>{label}</b>\nУровень {level_number}\n\n{hint}\n\n0 — не начислять.',
         reply_markup=types.InlineKeyboardMarkup(
             inline_keyboard=[
-                [types.InlineKeyboardButton(text='⬅️ Отмена', callback_data=f'admin_ref_lvl:{level_number}')]
+                [types.InlineKeyboardButton(text='⬅ Отмена', callback_data=f'admin_ref_lvl:{level_number}')]
             ]
         ),
     )
@@ -1026,7 +1026,7 @@ async def process_level_value(message: types.Message, db_user: User, db: AsyncSe
     field = data.get('referral_field')
     if not level_number or field not in _NUMERIC_FIELDS:
         await state.clear()
-        await message.answer('❌ Не понял, какое поле правим. Откройте уровень заново.')
+        await message.answer(' Не понял, какое поле правим. Откройте уровень заново.')
         return
 
     label, unit, maximum = _NUMERIC_FIELDS[field]
@@ -1035,7 +1035,7 @@ async def process_level_value(message: types.Message, db_user: User, db: AsyncSe
     try:
         parsed = float(raw)
     except ValueError:
-        await message.answer(f'❌ Нужно число. {label} ({unit}).')
+        await message.answer(f' Нужно число. {label} ({unit}).')
         return
 
     # float() принимает 'inf' и 'nan', проверка на отрицательность их пропускает,
@@ -1043,17 +1043,17 @@ async def process_level_value(message: types.Message, db_user: User, db: AsyncSe
     # ошибкой, НЕ сняв состояние: следующее произвольное сообщение админа
     # попадает сюда же и переписывает денежное поле.
     if not math.isfinite(parsed):
-        await message.answer(f'❌ Нужно обычное число. {label} ({unit}).')
+        await message.answer(f' Нужно обычное число. {label} ({unit}).')
         return
 
     if parsed < 0:
-        await message.answer('❌ Отрицательные значения недопустимы.')
+        await message.answer(' Отрицательные значения недопустимы.')
         return
 
     # Деньги вводятся в рублях, а хранятся в копейках — как и везде в админке.
     value = int(round(parsed * 100)) if field in _MONEY_FIELDS else int(parsed)
     if maximum is not None and value > maximum:
-        await message.answer(f'❌ Максимум: {maximum} {unit}.')
+        await message.answer(f' Максимум: {maximum} {unit}.')
         return
 
     # Ноль в проценте и фиксированной сумме хранится как NULL: в расчёте NULL и 0
@@ -1069,10 +1069,10 @@ async def process_level_value(message: types.Message, db_user: User, db: AsyncSe
 
     display = settings.format_price(value) if field in _MONEY_FIELDS else f'{value} {unit}'
     await message.answer(
-        f'✅ {label}: {display}\n\nОткройте «Уровни наград», чтобы продолжить настройку.',
+        f' {label}: {display}\n\nОткройте «Уровни наград», чтобы продолжить настройку.',
         reply_markup=types.InlineKeyboardMarkup(
             inline_keyboard=[
-                [types.InlineKeyboardButton(text='🪜 К уровням', callback_data='admin_ref_levels')],
+                [types.InlineKeyboardButton(text=' К уровням', callback_data='admin_ref_levels')],
             ]
         ),
     )
@@ -1196,14 +1196,14 @@ async def start_depth_edit(callback: types.CallbackQuery, db_user: User, db: Asy
 
     await state.set_state(AdminStates.referral_depth_input)
     await callback.message.edit_text(
-        f'📏 <b>Глубина реферальной цепочки</b>\n\n'
+        f' <b>Глубина реферальной цепочки</b>\n\n'
         f'Сейчас: {settings.get_referral_max_level_depth()}\n\n'
         f'Сколько звеньев вверх обходить при начислении. Уровень 1 — тот, кто пригласил '
         f'напрямую; уровень 2 — пригласивший его, и так далее. Правила глубже этого числа '
         f'не начисляют ничего.\n\n'
         f'Введите число от 1 до {MAX_SUPPORTED_LEVEL}.',
         reply_markup=types.InlineKeyboardMarkup(
-            inline_keyboard=[[types.InlineKeyboardButton(text='⬅️ Отмена', callback_data='admin_ref_levels')]]
+            inline_keyboard=[[types.InlineKeyboardButton(text='⬅ Отмена', callback_data='admin_ref_levels')]]
         ),
     )
     await callback.answer()
@@ -1216,19 +1216,19 @@ async def process_depth_value(message: types.Message, db_user: User, db: AsyncSe
     try:
         depth = int(raw)
     except ValueError:
-        await message.answer(f'❌ Нужно целое число от 1 до {MAX_SUPPORTED_LEVEL}.')
+        await message.answer(f' Нужно целое число от 1 до {MAX_SUPPORTED_LEVEL}.')
         return
 
     if depth < 1 or depth > MAX_SUPPORTED_LEVEL:
-        await message.answer(f'❌ Допустимо от 1 до {MAX_SUPPORTED_LEVEL}.')
+        await message.answer(f' Допустимо от 1 до {MAX_SUPPORTED_LEVEL}.')
         return
 
     await bot_configuration_service.set_value(db, 'REFERRAL_MAX_LEVEL_DEPTH', depth)
     await state.clear()
     await message.answer(
-        f'✅ Глубина цепочки: {depth}\n\nПравила уровней до {depth} включительно теперь начисляют награды.',
+        f' Глубина цепочки: {depth}\n\nПравила уровней до {depth} включительно теперь начисляют награды.',
         reply_markup=types.InlineKeyboardMarkup(
-            inline_keyboard=[[types.InlineKeyboardButton(text='🪜 К уровням', callback_data='admin_ref_levels')]]
+            inline_keyboard=[[types.InlineKeyboardButton(text=' К уровням', callback_data='admin_ref_levels')]]
         ),
     )
 

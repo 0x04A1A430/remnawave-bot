@@ -109,8 +109,7 @@ async def show_referral_info(callback: types.CallbackQuery, db_user: User, db: A
             'За последний месяц: <b>{amount}</b>',
         ).format(amount=texts.format_price(summary['month_earned_kopeks']))
         + '</blockquote>\n\n'
-        + texts.t('REFERRAL_REWARDS_HEADER', '<b>Как работают награды:</b>').removeprefix('🎁 ')
-        + '\n<blockquote>'
+        + '<blockquote>'
     )
 
     levels_scheme = settings.is_referral_levels_scheme()
@@ -165,21 +164,7 @@ async def show_referral_info(callback: types.CallbackQuery, db_user: User, db: A
             'Вы получаете при первом пополнении реферала: <b>{bonus}</b>',
         ).format(bonus=texts.format_price(settings.REFERRAL_INVITER_BONUS_KOPEKS))
 
-    if settings.REFERRAL_MAX_COMMISSION_PAYMENTS > 0:
-        commission_line = texts.t(
-            'REFERRAL_REWARD_COMMISSION_LIMITED',
-            'Комиссия с первых {max_payments} пополнений реферала: <b>{percent}%</b>',
-        ).format(
-            percent=get_effective_referral_commission_percent(db_user),
-            max_payments=settings.REFERRAL_MAX_COMMISSION_PAYMENTS,
-        )
-    else:
-        commission_line = texts.t(
-            'REFERRAL_REWARD_COMMISSION',
-            'Комиссия с каждого пополнения реферала: <b>{percent}%</b>',
-        ).format(percent=get_effective_referral_commission_percent(db_user))
-
-    referral_text += '\n' + commission_line + '\n</blockquote>\n\n'
+    referral_text += '</blockquote>\n\n'
 
     # Show bot link
     referral_text += (

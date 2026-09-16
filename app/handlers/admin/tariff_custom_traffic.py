@@ -35,7 +35,7 @@ def format_custom_traffic_settings(tariff: Tariff) -> str:
     minimum = getattr(tariff, 'min_traffic_gb', None)
     maximum = getattr(tariff, 'max_traffic_gb', None)
 
-    status = '✅ Включено' if enabled else '❌ Выключено'
+    status = ' Включено' if enabled else ' Выключено'
     price_display = format_price_kopeks(price) if price is not None and price > 0 else 'Не задано'
     minimum_display = _format_custom_traffic_value(minimum, ' ГБ')
     maximum_display = _format_custom_traffic_value(maximum, ' ГБ')
@@ -55,13 +55,13 @@ def render_custom_traffic_settings(tariff: Tariff) -> str:
     minimum = getattr(tariff, 'min_traffic_gb', None)
     maximum = getattr(tariff, 'max_traffic_gb', None)
 
-    status = '✅ Включён' if enabled else '❌ Выключен'
+    status = ' Включён' if enabled else ' Выключен'
     price_display = format_price_kopeks(price) if price is not None and price > 0 else 'Не задано'
     minimum_display = _format_custom_traffic_value(minimum, ' ГБ')
     maximum_display = _format_custom_traffic_value(maximum, ' ГБ')
 
     return (
-        f'⚙️ <b>Произвольный трафик</b>\n\n'
+        f' <b>Произвольный трафик</b>\n\n'
         f'Тариф: <b>{html.escape(tariff.name)}</b>\n\n'
         f'Статус: {status}\n'
         f'Цена за 1 ГБ: <b>{price_display}</b>\n'
@@ -76,7 +76,7 @@ def get_custom_traffic_keyboard(tariff: Tariff, language: str) -> InlineKeyboard
     """Build the dedicated custom-traffic settings keyboard."""
     texts = get_texts(language)
     enabled = getattr(tariff, 'custom_traffic_enabled', False)
-    toggle_text = '❌ Выключить' if enabled else '✅ Включить'
+    toggle_text = ' Выключить' if enabled else ' Включить'
 
     return InlineKeyboardMarkup(
         inline_keyboard=[
@@ -88,19 +88,19 @@ def get_custom_traffic_keyboard(tariff: Tariff, language: str) -> InlineKeyboard
             ],
             [
                 InlineKeyboardButton(
-                    text='💰 Цена за 1 ГБ',
+                    text=' Цена за 1 ГБ',
                     callback_data=f'admin_tariff_edit_custom_traffic_price:{tariff.id}',
                 )
             ],
             [
                 InlineKeyboardButton(
-                    text='📉 Минимальный объём',
+                    text=' Минимальный объём',
                     callback_data=f'admin_tariff_edit_custom_traffic_min:{tariff.id}',
                 )
             ],
             [
                 InlineKeyboardButton(
-                    text='📈 Максимальный объём',
+                    text=' Максимальный объём',
                     callback_data=f'admin_tariff_edit_custom_traffic_max:{tariff.id}',
                 )
             ],
@@ -233,7 +233,7 @@ async def start_edit_custom_traffic_price(
         state,
         tariff,
         state_value=AdminStates.editing_tariff_custom_traffic_price,
-        title='💰 <b>Цена произвольного трафика</b>',
+        title=' <b>Цена произвольного трафика</b>',
         current_value=current,
         prompt='Введите цену за 1 ГБ в рублях.\nПример: <code>2</code> или <code>2.50</code>',
     )
@@ -261,7 +261,7 @@ async def start_edit_custom_traffic_min(
         state,
         tariff,
         state_value=AdminStates.editing_tariff_custom_traffic_min,
-        title='📉 <b>Минимальный объём</b>',
+        title=' <b>Минимальный объём</b>',
         current_value=current,
         prompt='Введите минимальный объём целым числом гигабайт.\nПример: <code>5</code>',
     )
@@ -289,7 +289,7 @@ async def start_edit_custom_traffic_max(
         state,
         tariff,
         state_value=AdminStates.editing_tariff_custom_traffic_max,
-        title='📈 <b>Максимальный объём</b>',
+        title=' <b>Максимальный объём</b>',
         current_value=current,
         prompt='Введите максимальный объём целым числом гигабайт.\nПример: <code>100</code>',
     )
@@ -343,7 +343,7 @@ async def process_custom_traffic_price_input(
         price_kopeks = parse_positive_rubles_to_kopeks(message.text or '')
     except ValueError:
         await message.answer(
-            '❌ Некорректная цена. Введите положительную сумму в рублях '
+            ' Некорректная цена. Введите положительную сумму в рублях '
             'с точностью не более двух знаков.\nПример: <code>2</code> или <code>2.50</code>',
             parse_mode='HTML',
         )
@@ -355,7 +355,7 @@ async def process_custom_traffic_price_input(
         db_user,
         state,
         tariff,
-        f'✅ Цена за 1 ГБ установлена: {format_price_kopeks(price_kopeks)}',
+        f' Цена за 1 ГБ установлена: {format_price_kopeks(price_kopeks)}',
     )
 
 
@@ -376,14 +376,14 @@ async def process_custom_traffic_min_input(
         minimum = parse_positive_gb(message.text or '')
     except ValueError:
         await message.answer(
-            '❌ Введите положительное целое число гигабайт.\nПример: <code>5</code>', parse_mode='HTML'
+            ' Введите положительное целое число гигабайт.\nПример: <code>5</code>', parse_mode='HTML'
         )
         return
 
     maximum = getattr(tariff, 'max_traffic_gb', None)
     if maximum is not None and maximum > 0 and minimum > maximum:
         await message.answer(
-            f'❌ Минимальный объём не может быть больше текущего максимума ({maximum} ГБ).',
+            f' Минимальный объём не может быть больше текущего максимума ({maximum} ГБ).',
         )
         return
 
@@ -393,7 +393,7 @@ async def process_custom_traffic_min_input(
         db_user,
         state,
         tariff,
-        f'✅ Минимальный объём установлен: {minimum} ГБ',
+        f' Минимальный объём установлен: {minimum} ГБ',
     )
 
 
@@ -414,7 +414,7 @@ async def process_custom_traffic_max_input(
         maximum = parse_positive_gb(message.text or '')
     except ValueError:
         await message.answer(
-            '❌ Введите положительное целое число гигабайт.\nПример: <code>100</code>',
+            ' Введите положительное целое число гигабайт.\nПример: <code>100</code>',
             parse_mode='HTML',
         )
         return
@@ -422,7 +422,7 @@ async def process_custom_traffic_max_input(
     minimum = getattr(tariff, 'min_traffic_gb', None)
     if minimum is not None and minimum > 0 and maximum < minimum:
         await message.answer(
-            f'❌ Максимальный объём не может быть меньше текущего минимума ({minimum} ГБ).',
+            f' Максимальный объём не может быть меньше текущего минимума ({minimum} ГБ).',
         )
         return
 
@@ -432,7 +432,7 @@ async def process_custom_traffic_max_input(
         db_user,
         state,
         tariff,
-        f'✅ Максимальный объём установлен: {maximum} ГБ',
+        f' Максимальный объём установлен: {maximum} ГБ',
     )
 
 
