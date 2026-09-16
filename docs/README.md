@@ -24,7 +24,7 @@
   <br>
 </div>
 
-### Telegram bot for the [Remnawave](https://github.com/remnawave/remnawave) panel: VPN subscription sales, user cabinet, 15+ payment systems, referral program and promo codes
+### Telegram bot for the [Remnawave](https://github.com/remnawave/) panel: VPN subscription sales, user cabinet, 15+ payment systems, referral program and promo codes
 
 #
 
@@ -44,9 +44,9 @@
 
 ## File Overview
 
-- [**`docker-compose.yml`**](../docker-compose.yml) — production stack: bot + PostgreSQL + Redis
+- [**`docker-compose.yml`**](https://github.com/0x04A1A430/remnawave-bot/blob/dev/docker-compose.yml) — production stack: bot + PostgreSQL + Redis
 
-- [**`Makefile`**](../Makefile) — management commands:
+- [**`Makefile`**](https://github.com/0x04A1A430/remnawave-bot/blob/dev/Makefile) — management commands:
   - <ins>**`make up`** — start the stack in background</ins>
   - **`make up-follow`** — start with streaming logs
   - **`make down`** — stop and remove containers
@@ -54,7 +54,7 @@
   - **`make test`** — run tests (pytest)
   - **`make lint` / `make format` / `make fix`** — ruff checks and auto-fixes
 
-- [**`app/`**](../app) — source code:
+- [**`app/`**](https://github.com/0x04A1A430/remnawave-bot/tree/dev/app) — source code:
   - `handlers/` — Telegram handlers (admin, subscriptions, payments, cabinet)
   - `services/` — business logic: payments, subscriptions, broadcasts, backups
   - `cabinet/` — web user cabinet (FastAPI)
@@ -62,9 +62,9 @@
   - `external/` — Remnawave API and payment system clients
   - `database/` — models and CRUD (SQLAlchemy 2.0, async)
 
-- [**`migrations/`**](../migrations) — Alembic migrations
+- [**`migrations/`**](https://github.com/0x04A1A430/remnawave-bot/tree/dev/migrations) — Alembic migrations
 
-- [**`locales/`**](../locales) — bot interface localization
+- [**`locales/`**](https://github.com/0x04A1A430/remnawave-bot/tree/dev/locales) — bot interface localization
 
 ## Support
 
@@ -74,4 +74,4 @@ Bot on Telegram: [@xilarobot](https://t.me/xilarobot)
 
 ## License
 
-This project is licensed under [MIT](./LICENSE)
+This project is licensed under [MIT](https://github.com/0x04A1A430/remnawave-bot/blob/dev/LICENSE)

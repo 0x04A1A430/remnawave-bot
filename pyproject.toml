@@ -54,7 +54,17 @@ package = false
 [tool.ruff]
 target-version = 'py313'
 line-length = 120
-extend-exclude = ['README.md', 'main.py', 'docs']
+extend-exclude = [
+    'README.md',
+    'main.py',
+    'SECURITY.md',
+    'CONTRIBUTING.md',
+    'CODE_OF_CONDUCT.md',
+    'LICENSE',
+    'Makefile',
+    'entrypoint.py',
+    'docs',
+]
 exclude = [
     '.bzr',
     '.direnv',
