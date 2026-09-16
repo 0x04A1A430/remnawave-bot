@@ -950,6 +950,36 @@ async def cleanup_expired_promo_offer_discounts(db: AsyncSession) -> int:
     return len(users)
 
 
+#: Статусы, при которых подписка ещё даёт доступ (с непрошедшей датой окончания).
+LIVE_SUBSCRIPTION_STATUSES = (SubscriptionStatus.ACTIVE.value, SubscriptionStatus.TRIAL.value)
+
+#: Статусы «доступа больше нет».
+#:
+#: В мультитарифе их нельзя проверять по одной подписке: у человека с тремя живыми
+#: тарифами одна старая истёкшая строка не делает его отвалившимся. Такие выборки
+#: ищут людей, у которых не осталось ни одной живой подписки.
+GONE_SUBSCRIPTION_STATUSES = frozenset(
+    {
+        SubscriptionStatus.EXPIRED.value,
+        SubscriptionStatus.DISABLED.value,
+        SubscriptionStatus.LIMITED.value,
+    }
+)
+
+
+def _has_live_subscription(now: datetime):
+    """Есть ли у пользователя хоть одна подписка, которая сейчас даёт доступ."""
+    return exists(
+        select(Subscription.id)
+        .where(
+            Subscription.user_id == User.id,
+            Subscription.status.in_(LIVE_SUBSCRIPTION_STATUSES),
+            Subscription.end_date > now,
+        )
+        .correlate(User)
+    )
+
+
 def _users_list_conditions(
     *,
     status: UserStatus | None = None,
@@ -974,6 +1004,7 @@ def _users_list_conditions(
     добавленная только в одну из них, давала «показано 12 из 40» при 12 найденных.
     """
     conditions: list = []
+    now = datetime.now(UTC)
 
     if status:
         conditions.append(User.status == status.value)
@@ -984,8 +1015,16 @@ def _users_list_conditions(
             sub_conditions.append(Subscription.status == subscription_status)
         if tariff_ids:
             sub_conditions.append(Subscription.tariff_id.in_(tariff_ids))
-        sub_query = select(Subscription.user_id).where(and_(*sub_conditions)).distinct().scalar_subquery()
+        sub_query = (
+            select(Subscription.user_id).where(and_(*sub_conditions)).distinct().correlate(None).scalar_subquery()
+        )
         conditions.append(User.id.in_(sub_query))
+
+    if subscription_status in GONE_SUBSCRIPTION_STATUSES:
+        # «Истекшие», «Отключена», «Лимит» — это «человек остался без доступа».
+        # Одной такой строки мало: у владельца нескольких тарифов она может лежать
+        # рядом с живыми. См. tests/cabinet/test_admin_users_multi_tariff_and_grace.py.
+        conditions.append(~_has_live_subscription(now))
 
     if promo_group_id:
         # Юзер считается членом группы если она в legacy `user.promo_group_id` ИЛИ
@@ -994,17 +1033,23 @@ def _users_list_conditions(
         conditions.append(
             or_(
                 User.promo_group_id == promo_group_id,
-                User.id.in_(select(UserPromoGroup.user_id).where(UserPromoGroup.promo_group_id == promo_group_id)),
+                User.id.in_(
+                    select(UserPromoGroup.user_id)
+                    .where(UserPromoGroup.promo_group_id == promo_group_id)
+                    .correlate(None)
+                ),
             )
         )
 
     if campaign_id:
         conditions.append(
             exists(
-                select(AdvertisingCampaignRegistration.id).where(
+                select(AdvertisingCampaignRegistration.id)
+                .where(
                     AdvertisingCampaignRegistration.user_id == User.id,
                     AdvertisingCampaignRegistration.campaign_id == campaign_id,
                 )
+                .correlate(User)
             )
         )
 
@@ -1017,6 +1062,7 @@ def _users_list_conditions(
                     AdvertisingCampaignRegistration.user_id == User.id,
                     AdvertisingCampaign.partner_user_id == partner_id,
                 )
+                .correlate(User)
             )
         )
 
@@ -1025,8 +1071,6 @@ def _users_list_conditions(
 
     if email:
         conditions.append(User.email.ilike(f'%{email}%'))
-
-    now = datetime.now(UTC)
 
     if expires_within_days is not None:
         # «Истекают за N дней»: живая подписка с концом в ближайшие N дней. Суточные
@@ -1043,6 +1087,7 @@ def _users_list_conditions(
                     Subscription.end_date <= now + timedelta(days=expires_within_days),
                     ~and_(Tariff.is_daily.is_(True), Subscription.is_daily_paused.is_(False)),
                 )
+                .correlate(User)
             )
         )
 
@@ -1054,18 +1099,20 @@ def _users_list_conditions(
         conditions.append(restricted if has_restrictions else ~restricted)
 
     if has_subscription is not None:
-        any_subscription = exists(select(Subscription.id).where(Subscription.user_id == User.id))
+        any_subscription = exists(select(Subscription.id).where(Subscription.user_id == User.id).correlate(User))
         conditions.append(any_subscription if has_subscription else ~any_subscription)
 
     if purchase_count == 0:
         # Покупка — ровно то, что считает статистика трат: завершённая оплата подписки.
         conditions.append(
             ~exists(
-                select(Transaction.id).where(
+                select(Transaction.id)
+                .where(
                     Transaction.user_id == User.id,
                     Transaction.type == TransactionType.SUBSCRIPTION_PAYMENT.value,
                     Transaction.is_completed.is_(True),
                 )
+                .correlate(User)
             )
         )
 
@@ -1075,7 +1122,8 @@ def _users_list_conditions(
         threshold = traffic_used_percent_min / 100
         conditions.append(
             exists(
-                select(Subscription.id).where(
+                select(Subscription.id)
+                .where(
                     Subscription.user_id == User.id,
                     Subscription.status.in_(
                         (
@@ -1087,6 +1135,7 @@ def _users_list_conditions(
                     Subscription.traffic_limit_gb > 0,
                     Subscription.traffic_used_gb >= Subscription.traffic_limit_gb * threshold,
                 )
+                .correlate(User)
             )
         )
 
@@ -1098,10 +1147,12 @@ def _users_list_conditions(
             keys.append(User.remnawave_id.in_(connected.panel_ids))
             keys.append(
                 exists(
-                    select(Subscription.id).where(
+                    select(Subscription.id)
+                    .where(
                         Subscription.user_id == User.id,
                         Subscription.remnawave_id.in_(connected.panel_ids),
                     )
+                    .correlate(User)
                 )
             )
         if connected.telegram_ids:
@@ -1189,9 +1240,18 @@ async def get_users_list(
         query = query.outerjoin(transactions_stats, transactions_stats.c.user_id == User.id)
 
     if order_by_traffic:
-        traffic_sort = func.coalesce(Subscription.traffic_used_gb, 0.0)
-        query = query.outerjoin(Subscription, Subscription.user_id == User.id)
-        query = query.order_by(traffic_sort.desc(), User.created_at.desc())
+        # Подзапросом, а не JOIN подписок: JOIN давал по строке на каждую подписку
+        # мультитарифа (страница короче запрошенной, «показано N из M» врало) и
+        # ломал выборки — их условия «есть такая подписка у этого человека»
+        # SQLAlchemy считала целиком связанными с внешним запросом и выкидывала
+        # из подзапроса все таблицы (см. tests/crud/test_users_list_filter_sort_matrix.py).
+        most_traffic = (
+            select(func.max(Subscription.traffic_used_gb))
+            .where(Subscription.user_id == User.id)
+            .correlate(User)
+            .scalar_subquery()
+        )
+        query = query.order_by(func.coalesce(most_traffic, 0.0).desc(), User.created_at.desc())
     elif order_by_total_spent:
         order_column = func.coalesce(transactions_stats.c.total_spent, 0)
         query = query.order_by(order_column.desc(), User.created_at.desc())
@@ -1230,6 +1290,7 @@ async def get_users_list(
             .select_from(Subscription)
             .outerjoin(Tariff, Subscription.tariff_id == Tariff.id)
             .where(*soonest_end_conditions)
+            .correlate(User)
             .scalar_subquery()
         )
         query = query.order_by(nullslast(soonest_end.asc()), User.created_at.desc())
