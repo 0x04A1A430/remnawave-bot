@@ -132,22 +132,13 @@ async def test_check_user_subscriptions_preserves_last_known_on_uncertain() -> N
 
     with (
         patch('app.services.channel_subscription_service.AsyncSessionLocal') as session_local,
-        patch(
-            'app.services.channel_subscription_service.ChannelSubCache.get_sub_statuses',
-            AsyncMock(return_value={}),
-        ),
-        patch(
-            'app.services.channel_subscription_service.ChannelSubCache.set_sub_status',
-            AsyncMock(),
-        ),
+        patch('app.services.channel_subscription_service.ChannelSubCache.get_sub_statuses', AsyncMock(return_value={})),
+        patch('app.services.channel_subscription_service.ChannelSubCache.set_sub_status', AsyncMock()),
         patch(
             'app.services.channel_subscription_service.get_user_channel_subs',
             fake_get_user_channel_subs,
         ),
-        patch(
-            'app.services.channel_subscription_service.upsert_user_channel_sub',
-            AsyncMock(),
-        ) as upsert_mock,
+        patch('app.services.channel_subscription_service.upsert_user_channel_sub', AsyncMock()) as upsert_mock,
     ):
         session_local.return_value.__aenter__ = AsyncMock(return_value=mock_db)
         session_local.return_value.__aexit__ = AsyncMock(return_value=None)

@@ -28,12 +28,7 @@ class TicketCRUD:
         media_items: list[dict] | None = None,
     ) -> Ticket:
         """Создать новый тикет с первым сообщением"""
-        ticket = Ticket(
-            user_id=user_id,
-            title=title,
-            status=TicketStatus.OPEN.value,
-            priority=priority,
-        )
+        ticket = Ticket(user_id=user_id, title=title, status=TicketStatus.OPEN.value, priority=priority)
         db.add(ticket)
         await db.flush()  # Получаем ID тикета
 
@@ -77,10 +72,7 @@ class TicketCRUD:
 
     @staticmethod
     async def get_ticket_by_id(
-        db: AsyncSession,
-        ticket_id: int,
-        load_messages: bool = True,
-        load_user: bool = False,
+        db: AsyncSession, ticket_id: int, load_messages: bool = True, load_user: bool = False
     ) -> Ticket | None:
         """Получить тикет по ID"""
         query = select(Ticket).where(Ticket.id == ticket_id)
@@ -96,11 +88,7 @@ class TicketCRUD:
 
     @staticmethod
     async def get_user_tickets(
-        db: AsyncSession,
-        user_id: int,
-        status: str | None = None,
-        limit: int = 20,
-        offset: int = 0,
+        db: AsyncSession, user_id: int, status: str | None = None, limit: int = 20, offset: int = 0
     ) -> list[Ticket]:
         """Получить тикеты пользователя"""
         query = select(Ticket).where(Ticket.user_id == user_id)
@@ -124,11 +112,7 @@ class TicketCRUD:
 
     @staticmethod
     async def get_user_tickets_by_statuses(
-        db: AsyncSession,
-        user_id: int,
-        statuses: list[str],
-        limit: int = 20,
-        offset: int = 0,
+        db: AsyncSession, user_id: int, statuses: list[str], limit: int = 20, offset: int = 0
     ) -> list[Ticket]:
         """Получить тикеты пользователя по списку статусов с пагинацией"""
         query = (
@@ -148,10 +132,7 @@ class TicketCRUD:
         """Проверить, есть ли у пользователя активный (не закрытый) тикет"""
         query = (
             select(Ticket.id)
-            .where(
-                Ticket.user_id == user_id,
-                Ticket.status.in_([TicketStatus.OPEN.value, TicketStatus.ANSWERED.value]),
-            )
+            .where(Ticket.user_id == user_id, Ticket.status.in_([TicketStatus.OPEN.value, TicketStatus.ANSWERED.value]))
             .limit(1)
         )
         result = await db.execute(query)
@@ -166,10 +147,7 @@ class TicketCRUD:
             select(Ticket)
             .where(
                 Ticket.user_id == user_id,
-                or_(
-                    Ticket.user_reply_block_permanent == True,
-                    Ticket.user_reply_block_until.isnot(None),
-                ),
+                or_(Ticket.user_reply_block_permanent == True, Ticket.user_reply_block_until.isnot(None)),
             )
             .order_by(desc(Ticket.updated_at))
             .limit(10)
@@ -192,11 +170,7 @@ class TicketCRUD:
 
     @staticmethod
     async def get_all_tickets(
-        db: AsyncSession,
-        status: str | None = None,
-        priority: str | None = None,
-        limit: int = 50,
-        offset: int = 0,
+        db: AsyncSession, status: str | None = None, priority: str | None = None, limit: int = 50, offset: int = 0
     ) -> list[Ticket]:
         """Получить все тикеты (для админов)"""
         query = select(Ticket).options(selectinload(Ticket.user))

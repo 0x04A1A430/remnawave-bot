@@ -66,18 +66,11 @@ async def get_public_ip() -> str:
                                 logger.info('KassaAI: определён публичный IP сервера', ip=ip)
                                 return ip
                 except Exception as e:
-                    logger.debug(
-                        'KassaAI: не удалось получить IP от сервиса',
-                        service_url=service_url,
-                        error=e,
-                    )
+                    logger.debug('KassaAI: не удалось получить IP от сервиса', service_url=service_url, error=e)
                     continue
 
         fallback_ip = '127.0.0.1'
-        logger.warning(
-            'KassaAI: не удалось определить публичный IP, используем fallback',
-            fallback_ip=fallback_ip,
-        )
+        logger.warning('KassaAI: не удалось определить публичный IP, используем fallback', fallback_ip=fallback_ip)
         _cached_public_ip = fallback_ip
         return fallback_ip
 
@@ -132,9 +125,7 @@ class KassaAiService:
                 amount_str = str(amount)
 
             sign_str = f'{shop_id}:{amount_str}:{self.secret2}:{order_id}'
-            expected_sign = hashlib.md5(
-                sign_str.encode('utf-8'), usedforsecurity=False
-            ).hexdigest()  # provider-defined algorithm
+            expected_sign = hashlib.md5(sign_str.encode('utf-8')).hexdigest()
 
             return hmac.compare_digest(expected_sign.lower(), sign.lower())
         except Exception as e:

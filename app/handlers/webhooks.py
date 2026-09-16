@@ -3,10 +3,7 @@ from aiogram import Bot, types
 from aiohttp import web
 
 from app.config import settings
-from app.database.crud.transaction import (
-    create_transaction,
-    get_transaction_by_external_id,
-)
+from app.database.crud.transaction import create_transaction, get_transaction_by_external_id
 from app.database.crud.user import add_user_balance, get_user_by_id
 from app.database.database import AsyncSessionLocal
 from app.database.models import PaymentMethod, TransactionType
@@ -50,10 +47,7 @@ async def tribute_webhook(request):
                 )
 
                 if existing_transaction:
-                    logger.info(
-                        'Платеж уже обработан',
-                        processed_data=processed_data['payment_id'],
-                    )
+                    logger.info('Платеж уже обработан', processed_data=processed_data['payment_id'])
                     return web.Response(status=200, text='Already processed')
 
                 if processed_data['status'] == 'completed':
@@ -85,10 +79,7 @@ async def tribute_webhook(request):
                             commit=False,
                         )
 
-                        logger.info(
-                            'Обработан Tribute платеж',
-                            processed_data=processed_data['payment_id'],
-                        )
+                        logger.info('✅ Обработан Tribute платеж', processed_data=processed_data['payment_id'])
 
                 await db.commit()
                 return web.Response(status=200, text='OK')
@@ -115,15 +106,12 @@ async def handle_successful_payment(message: types.Message):
             async with AsyncSessionLocal() as db:
                 try:
                     existing_transaction = await get_transaction_by_external_id(
-                        db,
-                        payment.telegram_payment_charge_id,
-                        PaymentMethod.TELEGRAM_STARS,
+                        db, payment.telegram_payment_charge_id, PaymentMethod.TELEGRAM_STARS
                     )
 
                     if existing_transaction:
                         logger.info(
-                            'Stars платеж уже обработан',
-                            telegram_payment_charge_id=payment.telegram_payment_charge_id,
+                            'Stars платеж уже обработан', telegram_payment_charge_id=payment.telegram_payment_charge_id
                         )
                         return
 
@@ -154,13 +142,12 @@ async def handle_successful_payment(message: types.Message):
                         )
 
                         await message.answer(
-                            f'Баланс успешно пополнен на {settings.format_price(amount_kopeks)}!\n\n'
+                            f'✅ Баланс успешно пополнен на {settings.format_price(amount_kopeks)}!\n\n'
                             'Средства зачислены на ваш баланс!'
                         )
 
                         logger.info(
-                            'Обработан Stars платеж',
-                            telegram_payment_charge_id=payment.telegram_payment_charge_id,
+                            '✅ Обработан Stars платеж', telegram_payment_charge_id=payment.telegram_payment_charge_id
                         )
 
                     await db.commit()

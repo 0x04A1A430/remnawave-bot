@@ -2,9 +2,7 @@
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from app.database.crud.required_channel import (
-    validate_channel_id as _validate_channel_id_format,
-)
+from app.database.crud.required_channel import validate_channel_id as _validate_channel_id_format
 
 
 def _validate_channel_link_value(v: str | None) -> str | None:

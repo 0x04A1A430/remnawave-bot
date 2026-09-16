@@ -23,15 +23,8 @@ async def sync_bot_username(bot) -> None:
     try:
         me = await bot.get_me()
     except Exception as e:
-        logger.warning(
-            'Не удалось получить username бота через get_me(); используем BOT_USERNAME из конфига',
-            error=e,
-        )
+        logger.warning('Не удалось получить username бота через get_me(); используем BOT_USERNAME из конфига', error=e)
         return
     if me.username and me.username != settings.BOT_USERNAME:
-        logger.info(
-            'Синхронизирован BOT_USERNAME из get_me()',
-            old=settings.BOT_USERNAME,
-            new=me.username,
-        )
+        logger.info('Синхронизирован BOT_USERNAME из get_me()', old=settings.BOT_USERNAME, new=me.username)
         settings.BOT_USERNAME = me.username

@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field, model_validator
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.cabinet.auth.email_auth_gate import is_email_auth_enabled
 from app.config import settings
 from app.database.crud.system_setting import get_setting_value
 from app.database.crud.user import (
@@ -24,6 +25,7 @@ from app.database.crud.user import (
     get_user_by_id,
     get_user_by_oauth_provider,
     get_user_by_telegram_id,
+    provider_attested_email,
     set_user_oauth_provider_id,
 )
 from app.database.models import User
@@ -33,7 +35,6 @@ from app.services.account_merge_service import (
     flush_remnawave_deletions,
     get_merge_preview,
 )
-from app.services.grace_access_runtime import GraceAccessDeletionBlocked
 from app.utils.cache import RateLimitCache, TokenReplayCache
 
 from ..auth.merge_service import (
@@ -83,10 +84,10 @@ class OAuthStateData(TypedDict):
     code_verifier: NotRequired[str]  # PKCE code verifier (VK)
 
 
-def _get_active_providers() -> list[str]:
-    """Вернуть список активных провайдеров аутентификации (только включённые)."""
+async def _get_active_providers(db: AsyncSession) -> list[str]:
+    """Активные способы входа: email — по тому же переключателю, что UI и роуты."""
     providers: list[str] = ['telegram']
-    if settings.is_cabinet_email_auth_enabled():
+    if await is_email_auth_enabled(db):
         providers.append('email')
     providers.extend(settings.get_enabled_oauth_provider_names())
     return providers
@@ -101,6 +102,9 @@ class LinkedProvider(BaseModel):
     provider: str
     linked: bool
     identifier: str | None = None
+    #: Email, который будет забыт при отвязке: он получен от этого провайдера,
+    #: а пароля для входа по почте нет. Кабинет предупреждает перед отвязкой.
+    forgets_email: str | None = None
 
 
 class LinkedProvidersResponse(BaseModel):
@@ -113,12 +117,7 @@ class LinkInitResponse(BaseModel):
 
 
 class LinkCallbackRequest(BaseModel):
-    code: str = Field(
-        ...,
-        min_length=1,
-        max_length=2048,
-        description='Authorization code from provider',
-    )
+    code: str = Field(..., min_length=1, max_length=2048, description='Authorization code from provider')
     state: str = Field(..., min_length=1, max_length=128, description='CSRF state token')
     device_id: str | None = Field(None, max_length=256, description='Device ID from VK ID callback')
 
@@ -148,12 +147,7 @@ class LinkTelegramRequest(BaseModel):
     username: str | None = Field(None, max_length=256, description="User's username")
     photo_url: str | None = Field(None, max_length=2048, description="User's photo URL")
     auth_date: int | None = Field(None, description='Unix timestamp of authentication')
-    hash: str | None = Field(
-        None,
-        min_length=64,
-        max_length=64,
-        description='Authentication hash (SHA-256 hex)',
-    )
+    hash: str | None = Field(None, min_length=64, max_length=64, description='Authentication hash (SHA-256 hex)')
 
     @model_validator(mode='after')
     def check_exclusive(self) -> 'LinkTelegramRequest':
@@ -269,12 +263,7 @@ async def _exchange_and_link_oauth(
     try:
         token_data = await oauth_provider.exchange_code(code, **exchange_kwargs)
     except Exception as exc:
-        logger.error(
-            'OAuth code exchange failed',
-            context=log_context,
-            provider=provider,
-            exc_info=True,
-        )
+        logger.error('OAuth code exchange failed', context=log_context, provider=provider, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail='Failed to exchange authorization code',
@@ -284,12 +273,7 @@ async def _exchange_and_link_oauth(
     try:
         user_info = await oauth_provider.get_user_info(token_data)
     except Exception as exc:
-        logger.error(
-            'OAuth user info fetch failed',
-            context=log_context,
-            provider=provider,
-            exc_info=True,
-        )
+        logger.error('OAuth user info fetch failed', context=log_context, provider=provider, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail='Failed to fetch user information from provider',
@@ -397,16 +381,18 @@ router = APIRouter(prefix='/auth/account', tags=['Cabinet Account Linking'])
 @router.get('/linked-providers', response_model=LinkedProvidersResponse)
 async def get_linked_providers(
     user: User = Depends(get_current_cabinet_user),
+    db: AsyncSession = Depends(get_cabinet_db),
 ) -> LinkedProvidersResponse:
     """Return all auth methods with their link status for the current user."""
     providers: list[LinkedProvider] = []
-    for provider in _get_active_providers():
+    for provider in await _get_active_providers(db):
         identifier = _get_provider_identifier(user, provider)
         providers.append(
             LinkedProvider(
                 provider=provider,
                 linked=identifier is not None,
                 identifier=identifier,
+                forgets_email=provider_attested_email(user, provider) if identifier else None,
             )
         )
     return LinkedProvidersResponse(providers=providers)
@@ -710,9 +696,7 @@ async def link_telegram(
     )
     # BUG-1 fix: Sync all subscriptions with RemnaWave panel so it knows the new telegram_id
     try:
-        from app.services.remnawave_resync_service import (
-            resync_user_subscriptions_with_panel,
-        )
+        from app.services.remnawave_resync_service import resync_user_subscriptions_with_panel
 
         resync_result = await resync_user_subscriptions_with_panel(db, user)
         logger.info(
@@ -738,12 +722,7 @@ async def link_telegram(
 
 
 class ServerCompleteRequest(BaseModel):
-    code: str = Field(
-        ...,
-        min_length=1,
-        max_length=2048,
-        description='Authorization code from provider',
-    )
+    code: str = Field(..., min_length=1, max_length=2048, description='Authorization code from provider')
     state: str = Field(..., min_length=1, max_length=128, description='CSRF state token')
     provider: OAuthProviderName | None = Field(None, description='OAuth provider name (resolved from state if omitted)')
     device_id: str | None = Field(None, max_length=256, description='Device ID from VK ID callback')
@@ -964,7 +943,9 @@ async def execute_merge_endpoint(
     # RemnaWave user deletions are DEFERRED until after commit: an external delete
     # can't be rolled back with the DB, so deleting before commit would (on a
     # failed merge) leave a deleted panel user while the DB merge is rolled back.
-    deferred_deletions: list[tuple[str, int | None]] = []
+    deferred_deletions: list[int] = []
+    from app.services.grace_access_runtime import GraceAccessDeletionBlocked
+
     try:
         merged_user = await execute_merge(
             db=db,
@@ -976,6 +957,13 @@ async def execute_merge_endpoint(
             deferred_remnawave_deletions=deferred_deletions,
         )
         await db.commit()
+    except GraceAccessDeletionBlocked as exc:
+        await db.rollback()
+        await restore_merge_token(merge_token, consumed)
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail='Account merge is temporarily blocked until grace access is finished.',
+        ) from exc
     except ValueError as exc:
         await db.rollback()
         await restore_merge_token(merge_token, consumed)
@@ -983,13 +971,6 @@ async def execute_merge_endpoint(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail='Account merge cannot be completed. The accounts may have already been merged or deleted.',
-        ) from exc
-    except GraceAccessDeletionBlocked as exc:
-        await db.rollback()
-        await restore_merge_token(merge_token, consumed)
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail='Account merge is temporarily blocked until grace access is finished.',
         ) from exc
     except Exception as exc:
         await db.rollback()
@@ -1013,9 +994,7 @@ async def execute_merge_endpoint(
 
     # BUG-7 fix: Resync merged user's subscriptions with RemnaWave panel
     try:
-        from app.services.remnawave_resync_service import (
-            resync_user_subscriptions_with_panel,
-        )
+        from app.services.remnawave_resync_service import resync_user_subscriptions_with_panel
 
         resync_result = await resync_user_subscriptions_with_panel(db, merged_user)
         logger.info(

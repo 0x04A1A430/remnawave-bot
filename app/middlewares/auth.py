@@ -22,20 +22,30 @@ from app.utils.validators import sanitize_telegram_name
 logger = structlog.get_logger(__name__)
 
 
-async def _refresh_remnawave_description(
-    remnawave_uuid: str, description: str, telegram_id: int, user_id: int | None = None
-) -> None:
+def _is_blocked_non_admin(user: Any) -> bool:
+    """BLOCKED stops everyone except an account named in ADMIN_IDS/ADMIN_EMAILS.
+
+    Blocking such an account is refused at every write site, so a BLOCKED admin row can
+    only predate that guard — typically the broadcast auto-block after the owner muted
+    the bot. Honouring it here would lock the owner out of their own bot for good.
+    """
+    from app.database.models import UserStatus
+    from app.services.rbac_bootstrap_service import is_protected_from_blocking
+
+    return user.status == UserStatus.BLOCKED.value and not is_protected_from_blocking(user)
+
+
+async def _refresh_remnawave_description(remnawave_id: int, description: str, telegram_id: int) -> None:
     try:
+        from app.services.panel_sync import patch_panel_account
+
         remnawave_service = RemnaWaveService()
         async with remnawave_service.get_api_client() as api:
-            await api.update_user(uuid=remnawave_uuid, description=description, user_id=user_id)
-        logger.info(
-            '[Middleware] Описание пользователя обновлено в RemnaWave',
-            telegram_id=telegram_id,
-        )
+            await patch_panel_account(api, user_id=remnawave_id, description=description)
+        logger.info('✅ [Middleware] Описание пользователя обновлено в RemnaWave', telegram_id=telegram_id)
     except Exception as remnawave_error:
         logger.error(
-            '[Middleware] Ошибка обновления описания пользователя в RemnaWave',
+            '❌ [Middleware] Ошибка обновления описания пользователя в RemnaWave',
             telegram_id=telegram_id,
             remnawave_error=remnawave_error,
         )
@@ -82,20 +92,13 @@ class AuthMiddleware(BaseMiddleware):
 
                     if is_reg_process or is_channel_check or is_start_command:
                         if is_start_command:
-                            logger.info(
-                                'Пропускаем команду /start от пользователя',
-                                user_id=user.id,
-                            )
+                            logger.info('🚀 Пропускаем команду /start от пользователя', user_id=user.id)
                         elif is_channel_check:
                             logger.info(
-                                'Пропускаем незарегистрированного пользователя для проверки канала',
-                                user_id=user.id,
+                                '🔍 Пропускаем незарегистрированного пользователя для проверки канала', user_id=user.id
                             )
                         else:
-                            logger.info(
-                                'Пропускаем пользователя в процессе регистрации',
-                                user_id=user.id,
-                            )
+                            logger.info('🔍 Пропускаем пользователя в процессе регистрации', user_id=user.id)
                         data['db'] = db
                         data['db_user'] = None
                         data['is_admin'] = False
@@ -103,26 +106,29 @@ class AuthMiddleware(BaseMiddleware):
                         await db.commit()
                         return result
                     if isinstance(event, Message):
-                        await event.answer('Для начала работы необходимо выполнить команду /start')
+                        await event.answer('▶️ Для начала работы необходимо выполнить команду /start')
                     elif isinstance(event, CallbackQuery):
-                        await event.answer('Необходимо начать с команды /start', show_alert=True)
-                    logger.info(
-                        'Заблокирован незарегистрированный пользователь',
-                        user_id=user.id,
-                    )
+                        await event.answer('▶️ Необходимо начать с команды /start', show_alert=True)
+                    logger.info('🚫 Заблокирован незарегистрированный пользователь', user_id=user.id)
                     return None
                 from app.database.models import UserStatus
 
-                if db_user.status == UserStatus.BLOCKED.value:
+                if _is_blocked_non_admin(db_user):
                     if isinstance(event, Message):
-                        await event.answer('Ваш аккаунт заблокирован администратором.')
+                        await event.answer('🚫 Ваш аккаунт заблокирован администратором.')
                     elif isinstance(event, CallbackQuery):
-                        await event.answer('Ваш аккаунт заблокирован администратором.', show_alert=True)
-                    logger.info(
-                        'Заблокированный пользователь попытался использовать бота',
-                        user_id=user.id,
-                    )
+                        await event.answer('🚫 Ваш аккаунт заблокирован администратором.', show_alert=True)
+                    logger.info('🚫 Заблокированный пользователь попытался использовать бота', user_id=user.id)
                     return None
+
+                if db_user.status == UserStatus.BLOCKED.value:
+                    # Reached only by an env admin (the check above let them through).
+                    # Heal the stale row instead of just ignoring it, so the flag stops
+                    # suppressing their subscription reactivation and notifications too.
+                    db_user.status = UserStatus.ACTIVE.value
+                    db_user.updated_at = datetime.now(UTC)
+                    await db.commit()
+                    logger.info('♻️ Снят устаревший BLOCKED с аккаунта админа из env', user_id=user.id)
 
                 if db_user.status == UserStatus.DELETED.value:
                     state: FSMContext = data.get('state')
@@ -159,10 +165,7 @@ class AuthMiddleware(BaseMiddleware):
                     )
 
                     if is_start_or_registration:
-                        logger.info(
-                            'Удаленный пользователь начинает повторную регистрацию',
-                            user_id=user.id,
-                        )
+                        logger.info('🔄 Удаленный пользователь начинает повторную регистрацию', user_id=user.id)
                         data['db'] = db
                         data['db_user'] = None
                         data['is_admin'] = False
@@ -171,17 +174,13 @@ class AuthMiddleware(BaseMiddleware):
                         return result
                     if isinstance(event, Message):
                         await event.answer(
-                            'Ваш аккаунт был удален.\n Для повторной регистрации выполните команду /start'
+                            '❌ Ваш аккаунт был удален.\n🔄 Для повторной регистрации выполните команду /start'
                         )
                     elif isinstance(event, CallbackQuery):
                         await event.answer(
-                            'Ваш аккаунт был удален. Для повторной регистрации выполните /start',
-                            show_alert=True,
+                            '❌ Ваш аккаунт был удален. Для повторной регистрации выполните /start', show_alert=True
                         )
-                    logger.info(
-                        'Удаленный пользователь попытался использовать бота без /start',
-                        user_id=user.id,
-                    )
+                    logger.info('❌ Удаленный пользователь попытался использовать бота без /start', user_id=user.id)
                     return None
 
                 profile_updated = False
@@ -190,7 +189,7 @@ class AuthMiddleware(BaseMiddleware):
                     old_username = db_user.username
                     db_user.username = user.username
                     logger.info(
-                        '[Middleware] Username пользователя обновлен',
+                        '🔄 [Middleware] Username пользователя обновлен',
                         user_id=user.id,
                         old_username=old_username,
                         username=db_user.username,
@@ -203,7 +202,7 @@ class AuthMiddleware(BaseMiddleware):
                     old_first_name = db_user.first_name
                     db_user.first_name = safe_first
                     logger.info(
-                        '[Middleware] Имя пользователя обновлено',
+                        '🔄 [Middleware] Имя пользователя обновлено',
                         user_id=user.id,
                         old_first_name=old_first_name,
                         first_name=db_user.first_name,
@@ -214,7 +213,7 @@ class AuthMiddleware(BaseMiddleware):
                     old_last_name = db_user.last_name
                     db_user.last_name = safe_last
                     logger.info(
-                        '[Middleware] Фамилия пользователя обновлена',
+                        '🔄 [Middleware] Фамилия пользователя обновлена',
                         user_id=user.id,
                         old_last_name=old_last_name,
                         last_name=db_user.last_name,
@@ -225,23 +224,17 @@ class AuthMiddleware(BaseMiddleware):
 
                 if profile_updated:
                     db_user.updated_at = datetime.now(UTC)
-                    logger.info(
-                        '[Middleware] Профиль пользователя обновлен в middleware',
-                        user_id=user.id,
-                    )
+                    logger.info('💾 [Middleware] Профиль пользователя обновлен в middleware', user_id=user.id)
 
-                    if db_user.remnawave_uuid:
+                    if db_user.remnawave_id:
                         description = settings.format_remnawave_user_description(
-                            full_name=db_user.full_name,
-                            username=db_user.username,
-                            telegram_id=db_user.telegram_id,
+                            full_name=db_user.full_name, username=db_user.username, telegram_id=db_user.telegram_id
                         )
                         asyncio.create_task(
                             _refresh_remnawave_description(
-                                remnawave_uuid=db_user.remnawave_uuid,
+                                remnawave_id=db_user.remnawave_id,
                                 description=description,
                                 telegram_id=db_user.telegram_id,
-                                user_id=db_user.remnawave_id,
                             )
                         )
 
@@ -253,13 +246,12 @@ class AuthMiddleware(BaseMiddleware):
                             telegram_id=db_user.telegram_id,
                         )
                         for sub in getattr(db_user, 'subscriptions', None) or []:
-                            if sub.remnawave_uuid and sub.remnawave_uuid != db_user.remnawave_uuid:
+                            if sub.remnawave_id and sub.remnawave_id != db_user.remnawave_id:
                                 asyncio.create_task(
                                     _refresh_remnawave_description(
-                                        remnawave_uuid=sub.remnawave_uuid,
+                                        remnawave_id=sub.remnawave_id,
                                         description=description,
                                         telegram_id=db_user.telegram_id,
-                                        user_id=sub.remnawave_id,
                                     )
                                 )
 
@@ -272,16 +264,10 @@ class AuthMiddleware(BaseMiddleware):
                     await db.commit()
                 except (InterfaceError, OperationalError) as conn_err:
                     # Соединение закрылось (таймаут после долгой операции) - просто логируем
-                    logger.warning(
-                        'Соединение с БД закрыто после обработки, пропускаем commit',
-                        conn_err=conn_err,
-                    )
+                    logger.warning('⚠️ Соединение с БД закрыто после обработки, пропускаем commit', conn_err=conn_err)
                 except Exception as commit_err:
                     # Transaction aborted (e.g. handler swallowed a ProgrammingError) — rollback
-                    logger.warning(
-                        'Не удалось commit после обработки, rollback',
-                        commit_err=commit_err,
-                    )
+                    logger.warning('⚠️ Не удалось commit после обработки, rollback', commit_err=commit_err)
                     try:
                         await db.rollback()
                     except Exception:

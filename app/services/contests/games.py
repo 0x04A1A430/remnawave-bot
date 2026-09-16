@@ -97,7 +97,7 @@ class QuestButtonsStrategy(BaseGameStrategy):
                 idx = r * cols + c
                 row_buttons.append(
                     types.InlineKeyboardButton(
-                        text='',
+                        text='🎛',
                         callback_data=f'contest_pick_{round_id}_quest_{idx}',
                     )
                 )
@@ -157,7 +157,7 @@ class LockHackStrategy(BaseGameStrategy):
         for i in range(total):
             row.append(
                 types.InlineKeyboardButton(
-                    text='',
+                    text='🔒',
                     callback_data=f'contest_pick_{round_id}_locks_{i}',
                 )
             )
@@ -201,7 +201,7 @@ class ServerLotteryStrategy(BaseGameStrategy):
 
     game_type = GameType.SERVER_LOTTERY
 
-    DEFAULT_FLAGS = ['', '', '', '', '', '', '', '', '', '']
+    DEFAULT_FLAGS = ['🇸🇪', '🇸🇬', '🇺🇸', '🇷🇺', '🇩🇪', '🇯🇵', '🇧🇷', '🇦🇺', '🇨🇦', '🇫🇷']
 
     def build_payload(self, template_payload: dict[str, Any]) -> dict[str, Any]:
         flags = template_payload.get('flags') or self.DEFAULT_FLAGS
@@ -289,7 +289,7 @@ class BlitzReactionStrategy(BaseGameStrategy):
         )
 
         return GameRenderResult(
-            text=texts.t('CONTEST_BLITZ_PROMPT', 'Блиц! Нажми «Я здесь!»'),
+            text=texts.t('CONTEST_BLITZ_PROMPT', '⚡️ Блиц! Нажми «Я здесь!»'),
             keyboard=keyboard,
         )
 
@@ -357,7 +357,7 @@ class EmojiGuessStrategy(BaseGameStrategy):
     game_type = GameType.EMOJI_GUESS
 
     def build_payload(self, template_payload: dict[str, Any]) -> dict[str, Any]:
-        pairs = template_payload.get('pairs') or [{'question': '', 'answer': 'VPN'}]
+        pairs = template_payload.get('pairs') or [{'question': '🔐📡🌐', 'answer': 'VPN'}]
         pair = random.choice(pairs)
         return pair
 
@@ -369,7 +369,7 @@ class EmojiGuessStrategy(BaseGameStrategy):
         back_callback: str = 'contests_menu',
     ) -> GameRenderResult:
         texts = self._get_texts(language)
-        question = payload.get('question', '')
+        question = payload.get('question', '🤔')
         emoji_list = question.split()
         random.shuffle(emoji_list)
         shuffled_question = ' '.join(emoji_list)

@@ -47,7 +47,7 @@ class SpinResult:
     prize_type: str | None = None
     prize_value: int = 0
     prize_display_name: str = ''
-    emoji: str = ''
+    emoji: str = '🎁'
     color: str = '#3B82F6'
     rotation_degrees: float = 0.0
     message: str = ''
@@ -126,9 +126,7 @@ class FortuneWheelService:
         eligible_subs: list[EligibleSubscription] = []
         if config.spin_cost_days_enabled:
             if settings.is_multi_tariff_enabled():
-                from app.database.crud.subscription import (
-                    get_active_subscriptions_by_user_id,
-                )
+                from app.database.crud.subscription import get_active_subscriptions_by_user_id
 
                 active_subs = await get_active_subscriptions_by_user_id(db, user.id)
             else:
@@ -322,7 +320,7 @@ class FortuneWheelService:
         # Списываем с баланса
         user.balance_kopeks -= kopeks
         logger.info(
-            'Списано ₽ () с баланса user_id',
+            '💫 Списано ₽ (⭐) с баланса user_id',
             kopeks=round(kopeks / 100, 2),
             spin_cost_stars=config.spin_cost_stars,
             user_id=user.id,
@@ -331,11 +329,7 @@ class FortuneWheelService:
         return kopeks
 
     async def _process_days_payment(
-        self,
-        db: AsyncSession,
-        user: User,
-        config: WheelConfig,
-        subscription: Subscription | None = None,
+        self, db: AsyncSession, user: User, config: WheelConfig, subscription: Subscription | None = None
     ) -> int:
         """
         Обработать оплату днями подписки.
@@ -364,32 +358,18 @@ class FortuneWheelService:
         daily_price = price_30_days / 30
         kopeks = int(daily_price * config.spin_cost_days)
 
-        logger.info(
-            'Списано дней подписки у user_id',
-            spin_cost_days=config.spin_cost_days,
-            user_id=user.id,
-        )
+        logger.info('📅 Списано дней подписки у user_id', spin_cost_days=config.spin_cost_days, user_id=user.id)
 
         # Синхронизируем с RemnaWave
         try:
             subscription_service = SubscriptionService()
             result = await subscription_service.update_remnawave_user(db, subscription)
             if result is not None:
-                logger.info(
-                    'Списание дней синхронизировано с RemnaWave для user_id',
-                    user_id=user.id,
-                )
+                logger.info('✅ Списание дней синхронизировано с RemnaWave для user_id', user_id=user.id)
             else:
-                logger.error(
-                    'Не удалось синхронизировать списание дней с RemnaWave',
-                    user_id=user.id,
-                )
+                logger.error('⚠️ Не удалось синхронизировать списание дней с RemnaWave', user_id=user.id)
         except Exception as e:
-            logger.error(
-                'Ошибка синхронизации списания дней с RemnaWave',
-                error=e,
-                user_id=user.id,
-            )
+            logger.error('⚠️ Ошибка синхронизации списания дней с RemnaWave', error=e, user_id=user.id)
 
         return kopeks
 
@@ -408,7 +388,7 @@ class FortuneWheelService:
         prize_type = prize.prize_type
 
         if prize_type == WheelPrizeType.NOTHING.value:
-            logger.info('Пустой приз для user_id', user_id=user.id)
+            logger.info('🎰 Пустой приз для user_id', user_id=user.id)
             return None
 
         if prize_type == WheelPrizeType.BALANCE_BONUS.value:
@@ -422,9 +402,7 @@ class FortuneWheelService:
                 commit=False,
             )
             logger.info(
-                'Начислено ₽ на баланс user_id',
-                prize_value=round(prize.prize_value / 100, 2),
-                user_id=user.id,
+                '💰 Начислено ₽ на баланс user_id', prize_value=round(prize.prize_value / 100, 2), user_id=user.id
             )
             return None
 
@@ -471,7 +449,7 @@ class FortuneWheelService:
                             commit=False,
                         )
                         logger.info(
-                            'Суточный тариф: дней конвертированы в ₽ для user_id',
+                            '💰 Суточный тариф: дней конвертированы в ₽ для user_id',
                             prize_value=prize.prize_value,
                             balance_bonus=round(balance_bonus / 100, 2),
                             user_id=user.id,
@@ -486,24 +464,28 @@ class FortuneWheelService:
                             create_transaction=True,
                             commit=False,
                         )
-                        logger.info('Дни конвертированы в баланс для user_id', user_id=user.id)
+                        logger.info('💰 Дни конвертированы в баланс для user_id', user_id=user.id)
                 else:
+                    # Оверлей грейса, осевший в подписке (v4.10–4.11), — не её срок: вернуть до расчёта.
+                    from app.services.grace_access_echo import undo_grace_overlay_echo
+
+                    await undo_grace_overlay_echo(db, subscription)
                     # Обычная подписка - добавляем дни и синхронизируем с RemnaWave
                     subscription.end_date += timedelta(days=prize.prize_value)
                     subscription.updated_at = datetime.now(UTC)
-                    logger.info(
-                        'Начислено дней подписки user_id',
-                        prize_value=prize.prize_value,
-                        user_id=user.id,
-                    )
+                    # Условия тарифа на новый срок: база тарифа + активные докупки.
+                    from app.database.crud.subscription import reconcile_tariff_traffic_limit
+
+                    await reconcile_tariff_traffic_limit(db, subscription)
+                    logger.info('📅 Начислено дней подписки user_id', prize_value=prize.prize_value, user_id=user.id)
 
                     # Синхронизируем с RemnaWave
                     try:
                         subscription_service = SubscriptionService()
                         await subscription_service.update_remnawave_user(db, subscription)
-                        logger.info('Синхронизировано с RemnaWave для user_id', user_id=user.id)
+                        logger.info('✅ Синхронизировано с RemnaWave для user_id', user_id=user.id)
                     except Exception as e:
-                        logger.error('Ошибка синхронизации с RemnaWave', error=e)
+                        logger.error('⚠️ Ошибка синхронизации с RemnaWave', error=e)
             else:
                 # Если нет подписки - начисляем на баланс эквивалент
                 await add_user_balance(
@@ -514,7 +496,7 @@ class FortuneWheelService:
                     create_transaction=True,
                     commit=False,
                 )
-                logger.info('Дни конвертированы в баланс для user_id', user_id=user.id)
+                logger.info('💰 Дни конвертированы в баланс для user_id', user_id=user.id)
             return None
 
         if prize_type == WheelPrizeType.TRAFFIC_GB.value:
@@ -540,22 +522,15 @@ class FortuneWheelService:
             if subscription and subscription.traffic_limit_gb > 0:
                 subscription.traffic_limit_gb += prize.prize_value
                 subscription.updated_at = datetime.now(UTC)
-                logger.info(
-                    'Начислено трафика user_id',
-                    prize_value=prize.prize_value,
-                    user_id=user.id,
-                )
+                logger.info('📊 Начислено трафика user_id', prize_value=prize.prize_value, user_id=user.id)
 
                 # Синхронизируем с RemnaWave
                 try:
                     subscription_service = SubscriptionService()
                     await subscription_service.update_remnawave_user(db, subscription)
-                    logger.info(
-                        'Трафик синхронизирован с RemnaWave для user_id',
-                        user_id=user.id,
-                    )
+                    logger.info('✅ Трафик синхронизирован с RemnaWave для user_id', user_id=user.id)
                 except Exception as e:
-                    logger.error('Ошибка синхронизации трафика с RemnaWave', error=e)
+                    logger.error('⚠️ Ошибка синхронизации трафика с RemnaWave', error=e)
             else:
                 # Если безлимит или нет подписки - на баланс
                 await add_user_balance(
@@ -571,11 +546,7 @@ class FortuneWheelService:
         if prize_type == WheelPrizeType.PROMOCODE.value:
             # Генерация промокода
             promocode = await self._generate_prize_promocode(db, user, prize, config)
-            logger.info(
-                'Сгенерирован промокод для user_id',
-                code=promocode.code,
-                user_id=user.id,
-            )
+            logger.info('🎟️ Сгенерирован промокод для user_id', code=promocode.code, user_id=user.id)
             return promocode.code
 
         return None
@@ -610,12 +581,7 @@ class FortuneWheelService:
         return promocode
 
     async def spin(
-        self,
-        db: AsyncSession,
-        user: User,
-        payment_type: str,
-        *,
-        subscription_id: int | None = None,
+        self, db: AsyncSession, user: User, payment_type: str, *, subscription_id: int | None = None
     ) -> SpinResult:
         """
         Выполнить спин колеса.
@@ -672,9 +638,7 @@ class FortuneWheelService:
             # Resolve target subscription for days payment and prize application
             target_subscription = None
             if subscription_id:
-                from app.database.crud.subscription import (
-                    get_subscription_by_id_for_user,
-                )
+                from app.database.crud.subscription import get_subscription_by_id_for_user
 
                 target_subscription = await get_subscription_by_id_for_user(db, subscription_id, user.id)
                 if not target_subscription or not target_subscription.is_active:
@@ -740,8 +704,7 @@ class FortuneWheelService:
                 from sqlalchemy import text
 
                 result = await db.execute(
-                    text('SELECT id FROM promocodes WHERE code = :code'),
-                    {'code': generated_promocode},
+                    text('SELECT id FROM promocodes WHERE code = :code'), {'code': generated_promocode}
                 )
                 row = result.fetchone()
                 if row:
@@ -841,10 +804,7 @@ class FortuneWheelService:
         return 'дней'
 
     async def get_statistics(
-        self,
-        db: AsyncSession,
-        date_from: datetime | None = None,
-        date_to: datetime | None = None,
+        self, db: AsyncSession, date_from: datetime | None = None, date_to: datetime | None = None
     ) -> dict[str, Any]:
         """Получить статистику колеса."""
         return await get_wheel_statistics(db, date_from, date_to)

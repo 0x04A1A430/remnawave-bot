@@ -28,11 +28,7 @@ def _client_for_service_result(monkeypatch, result: tuple[bool, str]) -> TestCli
 def test_apple_iap_webhook_rejects_unsupported_media_type(monkeypatch) -> None:
     client = _client_for_service_result(monkeypatch, (True, 'processed'))
 
-    response = client.post(
-        settings.APPLE_IAP_WEBHOOK_PATH,
-        content='{}',
-        headers={'content-type': 'text/plain'},
-    )
+    response = client.post(settings.APPLE_IAP_WEBHOOK_PATH, content='{}', headers={'content-type': 'text/plain'})
 
     assert response.status_code == 415
     assert response.json() == {'status': 'error', 'reason': 'unsupported_media_type'}

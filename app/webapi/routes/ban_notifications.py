@@ -81,8 +81,7 @@ async def send_ban_notification(
         elif request.notification_type == 'warning':
             if not request.warning_message:
                 raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Для типа 'warning' требуется поле: warning_message",
+                    status_code=status.HTTP_400_BAD_REQUEST, detail="Для типа 'warning' требуется поле: warning_message"
                 )
 
             success, message, telegram_id = await ban_notification_service.send_warning_notification(

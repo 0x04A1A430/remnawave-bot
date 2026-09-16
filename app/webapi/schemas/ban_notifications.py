@@ -74,10 +74,5 @@ class BanNotificationResponse(BaseModel):
 
     class Config:
         json_schema_extra = {
-            'example': {
-                'success': True,
-                'message': 'Уведомление отправлено',
-                'telegram_id': 123456789,
-                'sent': True,
-            }
+            'example': {'success': True, 'message': 'Уведомление отправлено', 'telegram_id': 123456789, 'sent': True}
         }

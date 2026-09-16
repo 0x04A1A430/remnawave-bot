@@ -14,7 +14,7 @@ tariff_id WHERE status IN ('active','trial','limited')) и падал с Integri
    успел вставить запись — перехватываем IntegrityError, делаем rollback и
    возвращаем подписку, созданную параллельным потоком.
 
-GitHub issue: https://github.com/@xilarobot-DEV/remnawave-@xilarobot-telegram-bot/issues/2995
+GitHub issue: https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/issues/2995
 """
 
 from unittest.mock import AsyncMock, MagicMock
@@ -239,9 +239,7 @@ async def test_pending_trial_is_activated_not_duplicated(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_integrity_error_on_commit_returns_concurrent_subscription_multitariff(
-    monkeypatch,
-):
+async def test_integrity_error_on_commit_returns_concurrent_subscription_multitariff(monkeypatch):
     """Если commit падает с IntegrityError (гонка), делаем rollback, expunge объекта
     из сессии и возвращаем подписку, созданную конкурентным запросом (multi-tariff)."""
     monkeypatch.setattr(type(sub_crud.settings), 'is_multi_tariff_enabled', lambda self: True)
@@ -254,13 +252,7 @@ async def test_integrity_error_on_commit_returns_concurrent_subscription_multita
     )
     monkeypatch.setattr(sub_crud, 'generate_unique_short_id', AsyncMock(return_value='race-id'))
 
-    concurrent = _sub(
-        id=30,
-        user_id=177,
-        tariff_id=1,
-        status=SubscriptionStatus.ACTIVE.value,
-        is_trial=True,
-    )
+    concurrent = _sub(id=30, user_id=177, tariff_id=1, status=SubscriptionStatus.ACTIVE.value, is_trial=True)
     monkeypatch.setattr(
         sub_crud,
         'get_subscription_by_user_and_tariff',
@@ -319,9 +311,7 @@ async def test_integrity_error_on_commit_reraises_if_no_concurrent_sub(monkeypat
 
 
 @pytest.mark.asyncio
-async def test_integrity_error_from_unrelated_constraint_is_reraised_immediately(
-    monkeypatch,
-):
+async def test_integrity_error_from_unrelated_constraint_is_reraised_immediately(monkeypatch):
     """IntegrityError по постороннему constraint (не uq_subscriptions_user_tariff_active)
     должна пробрасываться немедленно — rollback выполняется, но поиск concurrent
     не запускается и подписка не возвращается."""
@@ -365,21 +355,13 @@ async def test_integrity_error_from_unrelated_constraint_is_reraised_immediately
 
 
 @pytest.mark.asyncio
-async def test_integrity_error_on_commit_returns_concurrent_subscription_single_tariff(
-    monkeypatch,
-):
+async def test_integrity_error_on_commit_returns_concurrent_subscription_single_tariff(monkeypatch):
     """Та же защита от гонки в режиме без multi-tariff: используем
     get_subscription_by_user_id вместо get_subscription_by_user_and_tariff."""
     monkeypatch.setattr(type(sub_crud.settings), 'is_multi_tariff_enabled', lambda self: False)
     monkeypatch.setattr(sub_crud, 'generate_unique_short_id', AsyncMock(return_value='single-id'))
 
-    concurrent = _sub(
-        id=40,
-        user_id=5,
-        tariff_id=None,
-        status=SubscriptionStatus.ACTIVE.value,
-        is_trial=True,
-    )
+    concurrent = _sub(id=40, user_id=5, tariff_id=None, status=SubscriptionStatus.ACTIVE.value, is_trial=True)
 
     # Первый вызов (при проверке existing) → None, второй (после rollback) → concurrent
     get_sub_mock = AsyncMock(side_effect=[None, concurrent])

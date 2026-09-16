@@ -82,6 +82,8 @@ class RenewalOptionResponse(BaseModel):
     price_rubles: float
     discount_percent: int = 0
     original_price_kopeks: int | None = None
+    # Период, отмеченный оператором как самый выгодный.
+    is_highlighted: bool = False
 
 
 class RenewalRequest(BaseModel):
@@ -217,10 +219,7 @@ class TariffPurchaseRequest(BaseModel):
     tariff_id: int = Field(..., description='Tariff ID to purchase')
     period_days: int = Field(..., ge=1, le=3650, description='Period in days')
     traffic_gb: int | None = Field(
-        None,
-        ge=0,
-        le=100_000,
-        description='Custom traffic in GB (for custom_traffic_enabled tariffs)',
+        None, ge=0, le=100_000, description='Custom traffic in GB (for custom_traffic_enabled tariffs)'
     )
     # When the user is renewing an EXISTING subscription (multi-tariff
     # mode), the frontend passes the explicit subscription_id so the

@@ -64,9 +64,7 @@ def _make_service(stub: StubCryptoBotService | None) -> PaymentService:
 
 
 @pytest.mark.anyio('asyncio')
-async def test_create_cryptobot_payment_success(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+async def test_create_cryptobot_payment_success(monkeypatch: pytest.MonkeyPatch) -> None:
     response = {
         'invoice_id': 12345,
         'bot_invoice_url': 'https://t.me/invoice',
@@ -127,9 +125,7 @@ async def test_create_cryptobot_payment_returns_none_when_service_missing() -> N
 
 
 @pytest.mark.anyio('asyncio')
-async def test_create_cryptobot_payment_handles_empty_response(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+async def test_create_cryptobot_payment_handles_empty_response(monkeypatch: pytest.MonkeyPatch) -> None:
     stub = StubCryptoBotService(response=None)
     service = _make_service(stub)
     db = DummySession()

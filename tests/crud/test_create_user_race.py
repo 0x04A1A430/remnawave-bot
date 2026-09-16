@@ -3,7 +3,7 @@
 доставка апдейта) должен идемпотентно возвращать уже существующего пользователя,
 а не выбрасывать необработанный ``IntegrityError`` по ``ix_users_telegram_id``.
 
-Issue: https://github.com/@xilarobot-DEV/remnawave-@xilarobot-telegram-bot/issues/2991
+Issue: https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/issues/2991
 
 Сценарий из отчёта (14.06.2026):
   - Первый поток выполнил INSERT и закоммитил.
@@ -143,32 +143,15 @@ def _patch_dependencies(
     default_group.id = promo_group_id
 
     return [
-        patch(
-            'app.database.crud.user.create_unique_referral_code',
-            new=AsyncMock(return_value=referral_code),
-        ),
+        patch('app.database.crud.user.create_unique_referral_code', new=AsyncMock(return_value=referral_code)),
         patch('app.database.crud.user._normalize_language_code', return_value='ru'),
-        patch(
-            'app.database.crud.user._get_or_create_default_promo_group',
-            new=AsyncMock(return_value=default_group),
-        ),
+        patch('app.database.crud.user._get_or_create_default_promo_group', new=AsyncMock(return_value=default_group)),
         patch('app.database.crud.user.sanitize_telegram_name', side_effect=lambda x: x),
-        patch(
-            'app.database.crud.user.get_user_by_telegram_id',
-            new=AsyncMock(return_value=existing_user),
-        ),
+        patch('app.database.crud.user.get_user_by_telegram_id', new=AsyncMock(return_value=existing_user)),
         # Redis — отключаем
-        patch(
-            'app.services.referral_service.get_pending_referral',
-            new=AsyncMock(return_value=None),
-            create=True,
-        ),
+        patch('app.services.referral_service.get_pending_referral', new=AsyncMock(return_value=None), create=True),
         # event_emitter — отключаем
-        patch(
-            'app.services.event_emitter.event_emitter',
-            new=MagicMock(emit=AsyncMock()),
-            create=True,
-        ),
+        patch('app.services.event_emitter.event_emitter', new=MagicMock(emit=AsyncMock()), create=True),
     ]
 
 
@@ -266,11 +249,7 @@ class TestCreateUserRaceCondition:
             patches[5],
             patches[6],
             patch('app.database.crud.user.User', return_value=new_user),
-            patch(
-                'app.services.event_emitter.event_emitter',
-                new=MagicMock(emit=emit_mock),
-                create=True,
-            ),
+            patch('app.services.event_emitter.event_emitter', new=MagicMock(emit=emit_mock), create=True),
         ):
             await create_user(db=db, telegram_id=TELEGRAM_ID, referral_code='refABC123')
 

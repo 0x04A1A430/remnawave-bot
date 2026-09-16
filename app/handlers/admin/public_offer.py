@@ -14,6 +14,7 @@ from app.services.public_offer_service import PublicOfferService
 from app.states import AdminStates
 from app.utils.decorators import admin_required, error_handler
 from app.utils.display_mode import display_mode_label
+from app.utils.telegram_html import stored_html_to_telegram_pages
 from app.utils.validators import get_html_help_text, validate_html_tags
 
 
@@ -50,17 +51,17 @@ async def _build_overview(
 
     status_text = texts.t(
         'ADMIN_PUBLIC_OFFER_STATUS_DISABLED',
-        'Показ оферты выключен или текст отсутствует.',
+        '⚠️ Показ оферты выключен или текст отсутствует.',
     )
     if offer and offer.is_enabled and has_content:
         status_text = texts.t(
             'ADMIN_PUBLIC_OFFER_STATUS_ENABLED',
-            'Оферта активна и показывается пользователям.',
+            '✅ Оферта активна и показывается пользователям.',
         )
     elif offer and offer.is_enabled:
         status_text = texts.t(
             'ADMIN_PUBLIC_OFFER_STATUS_ENABLED_EMPTY',
-            'Оферта включена, но текст пуст — пользователи её не увидят.',
+            '⚠️ Оферта включена, но текст пуст — пользователи её не увидят.',
         )
 
     updated_at = _format_timestamp(getattr(offer, 'updated_at', None))
@@ -93,7 +94,7 @@ async def _build_overview(
 
     header = texts.t(
         'ADMIN_PUBLIC_OFFER_HEADER',
-        '<b>Публичная оферта</b>',
+        '📄 <b>Публичная оферта</b>',
     )
     actions_prompt = texts.t(
         'ADMIN_PUBLIC_OFFER_ACTION_PROMPT',
@@ -122,7 +123,7 @@ async def _build_overview(
             types.InlineKeyboardButton(
                 text=texts.t(
                     'ADMIN_PUBLIC_OFFER_EDIT_BUTTON',
-                    'Изменить текст',
+                    '✏️ Изменить текст',
                 ),
                 callback_data='admin_public_offer_edit',
             )
@@ -135,7 +136,7 @@ async def _build_overview(
                 types.InlineKeyboardButton(
                     text=texts.t(
                         'ADMIN_PUBLIC_OFFER_VIEW_BUTTON',
-                        'Просмотреть текущий текст',
+                        '👀 Просмотреть текущий текст',
                     ),
                     callback_data='admin_public_offer_view',
                 )
@@ -144,12 +145,12 @@ async def _build_overview(
 
     toggle_text = texts.t(
         'ADMIN_PUBLIC_OFFER_ENABLE_BUTTON',
-        'Включить показ',
+        '✅ Включить показ',
     )
     if offer and offer.is_enabled:
         toggle_text = texts.t(
             'ADMIN_PUBLIC_OFFER_DISABLE_BUTTON',
-            'Отключить показ',
+            '🚫 Отключить показ',
         )
 
     buttons.append(
@@ -166,7 +167,7 @@ async def _build_overview(
             types.InlineKeyboardButton(
                 text=texts.t(
                     'ADMIN_PUBLIC_OFFER_DISPLAY_MODE_BUTTON',
-                    'Отображение: {mode}',
+                    '👁 Отображение: {mode}',
                 ).format(mode=display_mode_label(settings.PUBLIC_OFFER_DISPLAY_MODE)),
                 callback_data='admin_public_offer_display_mode',
             )
@@ -178,7 +179,7 @@ async def _build_overview(
             types.InlineKeyboardButton(
                 text=texts.t(
                     'ADMIN_PUBLIC_OFFER_HTML_HELP',
-                    'HTML помощь',
+                    'ℹ️ HTML помощь',
                 ),
                 callback_data='admin_public_offer_help',
             )
@@ -223,9 +224,9 @@ async def toggle_public_offer(
         'enabled' if updated_offer.is_enabled else 'disabled',
     )
     status_message = (
-        texts.t('ADMIN_PUBLIC_OFFER_ENABLED', 'Оферта включена')
+        texts.t('ADMIN_PUBLIC_OFFER_ENABLED', '✅ Оферта включена')
         if updated_offer.is_enabled
-        else texts.t('ADMIN_PUBLIC_OFFER_DISABLED', 'Оферта отключена')
+        else texts.t('ADMIN_PUBLIC_OFFER_DISABLED', '🚫 Оферта отключена')
     )
 
     overview_text, markup, _ = await _build_overview(db_user, db)
@@ -301,7 +302,7 @@ async def start_edit_public_offer(
     )
 
     message_text = (
-        f'<b>{texts.t("ADMIN_PUBLIC_OFFER_EDIT_TITLE", "Редактирование оферты")}</b>\n\n'
+        f'📝 <b>{texts.t("ADMIN_PUBLIC_OFFER_EDIT_TITLE", "Редактирование оферты")}</b>\n\n'
         f'{current_preview}{prompt}\n\n{hint}'
     )
 
@@ -311,14 +312,14 @@ async def start_edit_public_offer(
                 types.InlineKeyboardButton(
                     text=texts.t(
                         'ADMIN_PUBLIC_OFFER_HTML_HELP',
-                        'HTML помощь',
+                        'ℹ️ HTML помощь',
                     ),
                     callback_data='admin_public_offer_help',
                 )
             ],
             [
                 types.InlineKeyboardButton(
-                    text=texts.t('ADMIN_PUBLIC_OFFER_CANCEL', 'Отмена'),
+                    text=texts.t('ADMIN_PUBLIC_OFFER_CANCEL', '❌ Отмена'),
                     callback_data='admin_public_offer_cancel',
                 )
             ],
@@ -367,7 +368,7 @@ async def process_public_offer_edit(
         await message.answer(
             texts.t(
                 'ADMIN_PUBLIC_OFFER_TOO_LONG',
-                'Текст оферты слишком длинный. Максимум 4000 символов.',
+                '❌ Текст оферты слишком длинный. Максимум 4000 символов.',
             )
         )
         return
@@ -377,22 +378,20 @@ async def process_public_offer_edit(
         await message.answer(
             texts.t(
                 'ADMIN_PUBLIC_OFFER_HTML_ERROR',
-                'Ошибка в HTML: {error}',
+                '❌ Ошибка в HTML: {error}',
             ).format(error=error_message)
         )
         return
 
     await PublicOfferService.save_offer(db, db_user.language, new_text)
     logger.info(
-        'Админ обновил текст публичной оферты (символов)',
-        telegram_id=db_user.telegram_id,
-        new_text_count=len(new_text),
+        'Админ обновил текст публичной оферты (символов)', telegram_id=db_user.telegram_id, new_text_count=len(new_text)
     )
     await state.clear()
 
     success_text = texts.t(
         'ADMIN_PUBLIC_OFFER_SAVED',
-        'Публичная оферта обновлена.',
+        '✅ Публичная оферта обновлена.',
     )
 
     reply_markup = types.InlineKeyboardMarkup(
@@ -401,7 +400,7 @@ async def process_public_offer_edit(
                 types.InlineKeyboardButton(
                     text=texts.t(
                         'ADMIN_PUBLIC_OFFER_BACK_BUTTON',
-                        '← К настройкам оферты',
+                        '⬅️ К настройкам оферты',
                     ),
                     callback_data='admin_public_offer',
                 )
@@ -436,12 +435,9 @@ async def view_public_offer(
         )
         return
 
-    content = offer.content.strip()
+    # Как и на пользовательском экране: сырой HTML с <p> Telegram не разберёт.
     max_length = 3800
-    pages = PublicOfferService.split_content_into_pages(
-        content,
-        max_length=max_length,
-    )
+    pages = stored_html_to_telegram_pages(offer.content, max_length=max_length)
 
     if not pages:
         await callback.answer(
@@ -458,14 +454,14 @@ async def view_public_offer(
 
     header = texts.t(
         'ADMIN_PUBLIC_OFFER_VIEW_TITLE',
-        '<b>Текущий текст оферты</b>',
+        '👀 <b>Текущий текст оферты</b>',
     )
 
     note = ''
     if truncated:
         note = texts.t(
             'ADMIN_PUBLIC_OFFER_VIEW_TRUNCATED',
-            '\n\nТекст сокращён для отображения. Полную версию увидят пользователи в меню.',
+            '\n\n⚠️ Текст сокращён для отображения. Полную версию увидят пользователи в меню.',
         )
 
     keyboard = types.InlineKeyboardMarkup(
@@ -474,7 +470,7 @@ async def view_public_offer(
                 types.InlineKeyboardButton(
                     text=texts.t(
                         'ADMIN_PUBLIC_OFFER_BACK_BUTTON',
-                        '← К настройкам оферты',
+                        '⬅️ К настройкам оферты',
                     ),
                     callback_data='admin_public_offer',
                 )
@@ -483,7 +479,7 @@ async def view_public_offer(
                 types.InlineKeyboardButton(
                     text=texts.t(
                         'ADMIN_PUBLIC_OFFER_EDIT_BUTTON',
-                        'Изменить текст',
+                        '✏️ Изменить текст',
                     ),
                     callback_data='admin_public_offer_edit',
                 )
@@ -519,7 +515,7 @@ async def show_public_offer_html_help(
                 types.InlineKeyboardButton(
                     text=texts.t(
                         'ADMIN_PUBLIC_OFFER_RETURN_TO_EDIT',
-                        '← Назад к редактированию',
+                        '⬅️ Назад к редактированию',
                     ),
                     callback_data='admin_public_offer_edit',
                 )
@@ -531,7 +527,7 @@ async def show_public_offer_html_help(
             types.InlineKeyboardButton(
                 text=texts.t(
                     'ADMIN_PUBLIC_OFFER_BACK_BUTTON',
-                    '← К настройкам оферты',
+                    '⬅️ К настройкам оферты',
                 ),
                 callback_data='admin_public_offer',
             )

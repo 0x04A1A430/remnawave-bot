@@ -45,10 +45,7 @@ async def test_photo_send_times_out_and_skips(monkeypatch):
 
     # Force the logo branch: pretend the logo file exists and caption fits.
     monkeypatch.setattr('app.services.monitoring_service.LOGO_PATH', MagicMock(exists=lambda: True))
-    monkeypatch.setattr(
-        'app.services.monitoring_service.caption_exceeds_telegram_limit',
-        lambda _text: False,
-    )
+    monkeypatch.setattr('app.services.monitoring_service.caption_exceeds_telegram_limit', lambda _text: False)
     monkeypatch.setattr('app.utils.message_patch.get_logo_media', lambda: 'file_id_stub')
 
     bot = MagicMock()

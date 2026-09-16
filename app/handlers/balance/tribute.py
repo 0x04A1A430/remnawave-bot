@@ -29,14 +29,15 @@ async def start_tribute_payment(
         keyboard.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance', style='danger')])
 
         await callback.message.edit_text(
-            f'<b>Пополнение ограничено</b>\n\n{reason}\n\nЕсли вы считаете это ошибкой, вы можете обжаловать решение.',
+            f'🚫 <b>Пополнение ограничено</b>\n\n{reason}\n\n'
+            'Если вы считаете это ошибкой, вы можете обжаловать решение.',
             reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
         )
         await callback.answer()
         return
 
     if not settings.TRIBUTE_ENABLED:
-        await callback.answer('Оплата картой временно недоступна', show_alert=True)
+        await callback.answer('❌ Оплата картой временно недоступна', show_alert=True)
         return
 
     try:
@@ -50,7 +51,7 @@ async def start_tribute_payment(
         )
 
         if not payment_url:
-            await callback.answer('Ошибка создания платежа', show_alert=True)
+            await callback.answer('❌ Ошибка создания платежа', show_alert=True)
             return
 
         keyboard = types.InlineKeyboardMarkup(
@@ -61,12 +62,12 @@ async def start_tribute_payment(
         )
 
         message_text = (
-            '<b>Пополнение банковской картой</b>\n\n'
+            '💳 <b>Пополнение банковской картой</b>\n\n'
             '• Введите любую сумму от 100₽\n'
             '• Безопасная оплата через Tribute\n'
             '• Мгновенное зачисление на баланс\n'
             '• Принимаем карты Visa, MasterCard, МИР\n\n'
-            '• НЕ ОТПРАВЛЯТЬ ПЛАТЕЖ АНОНИМНО!\n\n'
+            '• 🚨 НЕ ОТПРАВЛЯТЬ ПЛАТЕЖ АНОНИМНО!\n\n'
             'Нажмите кнопку для перехода к оплате:'
         )
 
@@ -84,6 +85,6 @@ async def start_tribute_payment(
 
     except Exception as e:
         logger.error('Ошибка создания Tribute платежа', error=e)
-        await callback.answer('Ошибка создания платежа', show_alert=True)
+        await callback.answer('❌ Ошибка создания платежа', show_alert=True)
 
     await callback.answer()

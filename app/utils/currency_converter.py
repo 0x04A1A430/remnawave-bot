@@ -48,11 +48,7 @@ class CurrencyConverter:
     async def _fetch_exchange_rate(self) -> float | None:
         """Получает курс с нескольких источников"""
 
-        sources = [
-            self._fetch_from_cbr,
-            self._fetch_from_exchangerate_api,
-            self._fetch_from_fixer,
-        ]
+        sources = [self._fetch_from_cbr, self._fetch_from_exchangerate_api, self._fetch_from_fixer]
 
         for source in sources:
             try:
@@ -60,11 +56,7 @@ class CurrencyConverter:
                 if rate and 50 < rate < 200:  # Разумные границы курса
                     return rate
             except Exception as e:
-                logger.debug(
-                    'Ошибка получения курса из источника',
-                    __name__=source.__name__,
-                    error=e,
-                )
+                logger.debug('Ошибка получения курса из источника', __name__=source.__name__, error=e)
                 continue
 
         return None

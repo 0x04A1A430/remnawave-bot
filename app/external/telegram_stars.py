@@ -105,16 +105,11 @@ class TelegramStarsService:
             return None
 
     async def answer_pre_checkout_query(
-        self,
-        pre_checkout_query_id: str,
-        ok: bool = True,
-        error_message: str | None = None,
+        self, pre_checkout_query_id: str, ok: bool = True, error_message: str | None = None
     ) -> bool:
         try:
             await self.bot.answer_pre_checkout_query(
-                pre_checkout_query_id=pre_checkout_query_id,
-                ok=ok,
-                error_message=error_message,
+                pre_checkout_query_id=pre_checkout_query_id, ok=ok, error_message=error_message
             )
             logger.info('Ответ на pre_checkout_query отправлен', ok=ok)
             return True

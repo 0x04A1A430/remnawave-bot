@@ -32,7 +32,7 @@ async def create_subscription_conversion(
     await db.refresh(conversion)
 
     logger.info(
-        'Создана запись о конверсии для пользователя дн. → дн. за ₽',
+        '✅ Создана запись о конверсии для пользователя дн. → дн. за ₽',
         user_id=user_id,
         trial_duration_days=trial_duration_days,
         first_paid_period_days=first_paid_period_days,
@@ -89,11 +89,8 @@ async def get_conversion_statistics(db: AsyncSession) -> dict:
     )
     month_conversions = month_conversions_result.scalar() or 0
 
-    logger.info('Статистика конверсий:')
-    logger.info(
-        'Всего пользователей с подписками',
-        total_users_with_subscriptions=total_users_with_subscriptions,
-    )
+    logger.info('📊 Статистика конверсий:')
+    logger.info('Всего пользователей с подписками', total_users_with_subscriptions=total_users_with_subscriptions)
     logger.info('Оплативших подписку', users_with_paid=users_with_paid)
     logger.info('Рассчитанная конверсия', conversion_rate=conversion_rate)
 

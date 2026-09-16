@@ -15,11 +15,7 @@ from app.database.crud.news_categories import (
 from app.database.models import User
 
 from ..dependencies import get_cabinet_db, require_permission
-from ..schemas.news_categories import (
-    NewsCategoryCreate,
-    NewsCategoryResponse,
-    NewsCategoryUpdate,
-)
+from ..schemas.news_categories import NewsCategoryCreate, NewsCategoryResponse, NewsCategoryUpdate
 
 
 logger = structlog.get_logger(__name__)

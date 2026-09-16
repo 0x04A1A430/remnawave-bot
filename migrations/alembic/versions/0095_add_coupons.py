@@ -7,7 +7,7 @@ deep link grants a new subscription for the batch period or extends an
 existing one. ON DELETE CASCADE ties coupons to their batch.
 
 Revision ID: 0095
-Revises: 9110
+Revises: 0094
 Create Date: 2026-07-11
 
 """
@@ -19,7 +19,7 @@ from alembic import op
 
 
 revision: str = '0095'
-down_revision: Union[str, None] = '9110'
+down_revision: Union[str, None] = '0094'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

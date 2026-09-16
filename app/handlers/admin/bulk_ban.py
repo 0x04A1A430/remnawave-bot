@@ -23,7 +23,7 @@ async def start_bulk_ban_process(callback: types.CallbackQuery, db_user: User, s
     Начало процесса массовой блокировки пользователей
     """
     await callback.message.edit_text(
-        '<b>Массовая блокировка пользователей</b>\n\n'
+        '🛑 <b>Массовая блокировка пользователей</b>\n\n'
         'Введите список Telegram ID для блокировки.\n\n'
         '<b>Форматы ввода:</b>\n'
         '• По одному ID на строку\n'
@@ -38,7 +38,7 @@ async def start_bulk_ban_process(callback: types.CallbackQuery, db_user: User, s
         'Для отмены используйте команду /cancel',
         parse_mode='HTML',
         reply_markup=types.InlineKeyboardMarkup(
-            inline_keyboard=[[types.InlineKeyboardButton(text='Отмена', callback_data='admin_users')]]
+            inline_keyboard=[[types.InlineKeyboardButton(text='❌ Отмена', callback_data='admin_users')]]
         ),
     )
 
@@ -54,9 +54,9 @@ async def process_bulk_ban_list(message: types.Message, db_user: User, state: FS
     """
     if not message.text:
         await message.answer(
-            'Отправьте текстовое сообщение со списком Telegram ID',
+            '❌ Отправьте текстовое сообщение со списком Telegram ID',
             reply_markup=types.InlineKeyboardMarkup(
-                inline_keyboard=[[types.InlineKeyboardButton(text='Назад', callback_data='admin_users')]]
+                inline_keyboard=[[types.InlineKeyboardButton(text='🔙 Назад', callback_data='admin_users')]]
             ),
         )
         return
@@ -65,9 +65,9 @@ async def process_bulk_ban_list(message: types.Message, db_user: User, state: FS
 
     if not input_text:
         await message.answer(
-            'Введите корректный список Telegram ID',
+            '❌ Введите корректный список Telegram ID',
             reply_markup=types.InlineKeyboardMarkup(
-                inline_keyboard=[[types.InlineKeyboardButton(text='Назад', callback_data='admin_users')]]
+                inline_keyboard=[[types.InlineKeyboardButton(text='🔙 Назад', callback_data='admin_users')]]
             ),
         )
         return
@@ -78,27 +78,27 @@ async def process_bulk_ban_list(message: types.Message, db_user: User, state: FS
     except Exception as e:
         logger.error('Ошибка парсинга Telegram ID', error=e)
         await message.answer(
-            'Ошибка при обработке списка ID. Проверьте формат ввода.',
+            '❌ Ошибка при обработке списка ID. Проверьте формат ввода.',
             reply_markup=types.InlineKeyboardMarkup(
-                inline_keyboard=[[types.InlineKeyboardButton(text='Назад', callback_data='admin_users')]]
+                inline_keyboard=[[types.InlineKeyboardButton(text='🔙 Назад', callback_data='admin_users')]]
             ),
         )
         return
 
     if not telegram_ids:
         await message.answer(
-            'Не найдено корректных Telegram ID в списке',
+            '❌ Не найдено корректных Telegram ID в списке',
             reply_markup=types.InlineKeyboardMarkup(
-                inline_keyboard=[[types.InlineKeyboardButton(text='Назад', callback_data='admin_users')]]
+                inline_keyboard=[[types.InlineKeyboardButton(text='🔙 Назад', callback_data='admin_users')]]
             ),
         )
         return
 
     if len(telegram_ids) > 1000:  # Ограничение на количество ID за раз
         await message.answer(
-            f'Слишком много ID в списке ({len(telegram_ids)}). Максимум: 1000',
+            f'❌ Слишком много ID в списке ({len(telegram_ids)}). Максимум: 1000',
             reply_markup=types.InlineKeyboardMarkup(
-                inline_keyboard=[[types.InlineKeyboardButton(text='Назад', callback_data='admin_users')]]
+                inline_keyboard=[[types.InlineKeyboardButton(text='🔙 Назад', callback_data='admin_users')]]
             ),
         )
         return
@@ -116,19 +116,19 @@ async def process_bulk_ban_list(message: types.Message, db_user: User, state: FS
         )
 
         # Подготавливаем сообщение с результатами
-        result_text = '<b>Массовая блокировка завершена</b>\n\n'
-        result_text += '<b>Результаты:</b>\n'
-        result_text += f'Успешно заблокировано: {successfully_banned}\n'
-        result_text += f'Не найдено: {not_found}\n'
-        result_text += f'Ошибок: {len(error_ids)}\n\n'
-        result_text += f'Всего обработано: {len(telegram_ids)}'
+        result_text = '✅ <b>Массовая блокировка завершена</b>\n\n'
+        result_text += '📊 <b>Результаты:</b>\n'
+        result_text += f'✅ Успешно заблокировано: {successfully_banned}\n'
+        result_text += f'❌ Не найдено: {not_found}\n'
+        result_text += f'💥 Ошибок: {len(error_ids)}\n\n'
+        result_text += f'📈 Всего обработано: {len(telegram_ids)}'
 
         if successfully_banned > 0:
-            result_text += f'\nПроцент успеха: {round((successfully_banned / len(telegram_ids)) * 100, 1)}%'
+            result_text += f'\n🎯 Процент успеха: {round((successfully_banned / len(telegram_ids)) * 100, 1)}%'
 
         # Добавляем информацию об ошибках, если есть
         if error_ids:
-            result_text += '\n\n<b>Telegram ID с ошибками:</b>\n'
+            result_text += '\n\n⚠️ <b>Telegram ID с ошибками:</b>\n'
             result_text += f'<code>{", ".join(map(str, error_ids[:10]))}</code>'  # Показываем первые 10
             if len(error_ids) > 10:
                 result_text += f' и еще {len(error_ids) - 10}...'
@@ -137,16 +137,16 @@ async def process_bulk_ban_list(message: types.Message, db_user: User, state: FS
             result_text,
             parse_mode='HTML',
             reply_markup=types.InlineKeyboardMarkup(
-                inline_keyboard=[[types.InlineKeyboardButton(text='К пользователям', callback_data='admin_users')]]
+                inline_keyboard=[[types.InlineKeyboardButton(text='👥 К пользователям', callback_data='admin_users')]]
             ),
         )
 
     except Exception as e:
         logger.error('Ошибка при выполнении массовой блокировки', error=e)
         await message.answer(
-            'Произошла ошибка при выполнении массовой блокировки',
+            '❌ Произошла ошибка при выполнении массовой блокировки',
             reply_markup=types.InlineKeyboardMarkup(
-                inline_keyboard=[[types.InlineKeyboardButton(text='Назад', callback_data='admin_users')]]
+                inline_keyboard=[[types.InlineKeyboardButton(text='🔙 Назад', callback_data='admin_users')]]
             ),
         )
 

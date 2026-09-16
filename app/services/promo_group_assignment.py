@@ -126,16 +126,13 @@ async def maybe_assign_promo_group_by_total_spent(
         current_groups = await get_user_promo_groups(db, user_id)
         removed_any = False
         for upg in current_groups:
-            if upg.promo_group_id != target_group.id and upg.assigned_by in (
-                'auto',
-                'promocode',
-            ):
+            if upg.promo_group_id != target_group.id and upg.assigned_by in ('auto', 'promocode'):
                 await remove_user_from_promo_group(db, user_id, upg.promo_group_id, commit=False)
                 removed_any = True
                 logger.info(
                     'Удалена старая промогруппа перед автоназначением',
                     telegram_id=user.telegram_id,
-                    old_group_name=(upg.promo_group.name if upg.promo_group else upg.promo_group_id),
+                    old_group_name=upg.promo_group.name if upg.promo_group else upg.promo_group_id,
                     old_assigned_by=upg.assigned_by,
                 )
 
@@ -196,10 +193,6 @@ async def maybe_assign_promo_group_by_total_spent(
 
         return target_group
     except Exception as exc:
-        logger.error(
-            'Ошибка при автоматическом назначении промогруппы пользователю',
-            user_id=user_id,
-            exc=exc,
-        )
+        logger.error('Ошибка при автоматическом назначении промогруппы пользователю', user_id=user_id, exc=exc)
         await db.rollback()
         return None

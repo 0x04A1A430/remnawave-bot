@@ -58,10 +58,7 @@ class AppleIAPReconciliationService:
 
             drift: dict[str, object] = {}
             if fetched.get('productId') != apple_txn.product_id:
-                drift['product_id'] = {
-                    'stored': apple_txn.product_id,
-                    'apple': fetched.get('productId'),
-                }
+                drift['product_id'] = {'stored': apple_txn.product_id, 'apple': fetched.get('productId')}
             if fetched.get('revocationDate') and apple_txn.status != 'refunded':
                 drift['revocation'] = fetched.get('revocationDate')
             if fetched.get('appAccountToken') and fetched.get('appAccountToken') != apple_txn.app_account_token:
@@ -80,11 +77,7 @@ class AppleIAPReconciliationService:
 
         notifications = await get_unprocessed_apple_notifications(db, limit=limit)
         await db.commit()
-        logger.info(
-            'Apple IAP reconciliation complete',
-            checked=len(transactions),
-            drift_count=drift_count,
-        )
+        logger.info('Apple IAP reconciliation complete', checked=len(transactions), drift_count=drift_count)
         return AppleReconciliationResult(
             checked=len(transactions),
             drift_count=drift_count,

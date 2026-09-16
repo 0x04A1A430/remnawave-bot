@@ -1,8 +1,8 @@
-"""Tests: per-batch per-user coupon activation limit.
+"""Лимит активаций партии купонов на пользователя + удаление партии.
 
-``CouponBatch.max_per_user`` cap the number of coupons from one batch that a
-single user may redeem. ``0`` keeps the previous unlimited behaviour, ``1`` is
-typical for giveaways/contests.
+Купоны в партии одноразовые, но их много: без лимита один человек мог
+активировать всю раздачу. ``CouponBatch.max_per_user`` = 0 — прежнее поведение
+без ограничения, 1 и больше — раздачи/конкурсы.
 """
 
 from __future__ import annotations
@@ -58,19 +58,13 @@ async def _seed(db, *, max_per_user: int = 0, coupons: int = 3):
     db.add(user)
     await db.commit()
 
-    tariff = Tariff(
-        name='Muzzleoid',
-        is_active=True,
-        device_limit=1,
-        traffic_limit_gb=0,
-        period_prices={'30': 10000},
-    )
+    tariff = Tariff(name='Раздача', is_active=True, device_limit=1, traffic_limit_gb=0, period_prices={'30': 10000})
     db.add(tariff)
     await db.commit()
 
     batch = await create_coupon_batch(
         db,
-        name='Optimal',
+        name='Конкурс',
         tariff_id=tariff.id,
         period_days=30,
         coupons_count=coupons,
@@ -97,7 +91,7 @@ async def test_batch_stores_per_user_limit(monkeypatch):
 
 
 async def test_zero_limit_keeps_previous_unlimited_behaviour(monkeypatch):
-    """0 keeps the old unlimited behaviour: activating all coupons passes."""
+    """0 — прежнее поведение: сколько угодно купонов партии одному человеку."""
     async with memory_session(monkeypatch, TABLES) as db:
         user, _, batch = await _seed(db, max_per_user=0)
         coupons = await _coupons_of(db, batch.id)
@@ -107,6 +101,7 @@ async def test_zero_limit_keeps_previous_unlimited_behaviour(monkeypatch):
             coupon.redeemed_by = user.id
         await db.commit()
 
+        # Даже после трёх активаций проверка не срабатывает
         fresh = await _coupons_of(db, batch.id)
         await _check_per_user_limit(db, fresh[0], user)
 
@@ -116,6 +111,7 @@ async def test_limit_blocks_second_activation(monkeypatch):
         user, _, batch = await _seed(db, max_per_user=1)
         coupons = await _coupons_of(db, batch.id)
 
+        # Первый купон свободно проходит проверку
         await _check_per_user_limit(db, coupons[0], user)
 
         coupons[0].status = CouponStatus.REDEEMED.value
@@ -128,7 +124,7 @@ async def test_limit_blocks_second_activation(monkeypatch):
 
 
 async def test_limit_is_per_user_not_global(monkeypatch):
-    """A limit is per-user, not per-batch-global."""
+    """Лимит одного пользователя не мешает другим забрать свои купоны."""
     async with memory_session(monkeypatch, TABLES) as db:
         user, _, batch = await _seed(db, max_per_user=1)
         other = User(
@@ -147,20 +143,15 @@ async def test_limit_is_per_user_not_global(monkeypatch):
         coupons[0].redeemed_by = user.id
         await db.commit()
 
-        await _check_per_user_limit(db, coupons[1], other)
+        await _check_per_user_limit(db, coupons[1], other)  # не бросает
 
 
 async def test_limit_counts_only_this_batch(monkeypatch):
-    """Redemptions in one batch do not consume the limit of another batch."""
+    """Активации в другой партии не расходуют лимит текущей."""
     async with memory_session(monkeypatch, TABLES) as db:
         user, tariff, batch = await _seed(db, max_per_user=1)
         other_batch = await create_coupon_batch(
-            db,
-            name='Potato',
-            tariff_id=tariff.id,
-            period_days=30,
-            coupons_count=2,
-            max_per_user=1,
+            db, name='Другая', tariff_id=tariff.id, period_days=30, coupons_count=2, max_per_user=1
         )
 
         other_coupons = await _coupons_of(db, other_batch.id)
@@ -170,20 +161,20 @@ async def test_limit_counts_only_this_batch(monkeypatch):
 
         assert await count_batch_redemptions_by_user(db, batch.id, user.id) == 0
         coupons = await _coupons_of(db, batch.id)
-        await _check_per_user_limit(db, coupons[0], user)
+        await _check_per_user_limit(db, coupons[0], user)  # не бросает
 
 
 async def test_revoked_coupons_do_not_consume_limit(monkeypatch):
-    """Revoked coupons never count toward the per-user batch limit."""
+    """Считаем только реально погашенные — отозванные пользователю не достались."""
     async with memory_session(monkeypatch, TABLES) as db:
         user, _, batch = await _seed(db, max_per_user=1)
         coupons = await _coupons_of(db, batch.id)
 
         coupons[0].status = CouponStatus.REVOKED.value
-        coupons[0].redeemed_by = user.id
+        coupons[0].redeemed_by = user.id  # даже если поле осталось заполненным
         await db.commit()
 
-        await _check_per_user_limit(db, coupons[1], user)
+        await _check_per_user_limit(db, coupons[1], user)  # не бросает
 
 
 async def test_delete_batch_removes_batch_and_coupons(monkeypatch):

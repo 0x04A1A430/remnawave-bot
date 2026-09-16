@@ -118,10 +118,7 @@ class RioPayPaymentMixin:
                 return None
 
             logger.info(
-                'RioPay API: создан заказ',
-                order_id=order_id,
-                riopay_order_id=riopay_order_id,
-                payment_url=payment_url,
+                'RioPay API: создан заказ', order_id=order_id, riopay_order_id=riopay_order_id, payment_url=payment_url
             )
 
             # Сохраняем в БД
@@ -298,11 +295,7 @@ class RioPayPaymentMixin:
         FOR UPDATE lock already acquired by caller — do NOT acquire again here.
         """
         if payment.transaction_id:
-            logger.info(
-                'RioPay платеж уже привязан к транзакции',
-                order_id=payment.order_id,
-                trigger=trigger,
-            )
+            logger.info('RioPay платеж уже привязан к транзакции', order_id=payment.order_id, trigger=trigger)
             return True
 
         # --- Guest purchase flow (landing page / gift) ---
@@ -313,7 +306,7 @@ class RioPayPaymentMixin:
             db,
             metadata=riopay_metadata,
             payment_amount_kopeks=payment.amount_kopeks,
-            provider_payment_id=(str(riopay_order_id) if riopay_order_id else payment.order_id),
+            provider_payment_id=str(riopay_order_id) if riopay_order_id else payment.order_id,
             provider_name='riopay',
         )
         if guest_result is not None:
@@ -381,7 +374,7 @@ class RioPayPaymentMixin:
                 user_id=payment.user_id,
                 type=TransactionType.DEPOSIT,
                 payment_method=PaymentMethod.RIOPAY,
-                external_id=(str(riopay_order_id) if riopay_order_id else payment.order_id),
+                external_id=str(riopay_order_id) if riopay_order_id else payment.order_id,
             )
         except Exception as error:
             logger.error('Ошибка emit_transaction_side_effects RioPay', error=error)
@@ -425,10 +418,11 @@ class RioPayPaymentMixin:
 
                 keyboard = await self.build_topup_success_keyboard(user)
                 message = (
-                    '<b>Пополнение успешно!</b>\n\n'
-                    f'Сумма: {settings.format_price(payment.amount_kopeks)}\n'
-                    f'Способ: {display_name}\n'
-                    f'Транзакция: {transaction.id}'
+                    '✅ <b>Пополнение успешно!</b>\n\n'
+                    f'💰 Сумма: {settings.format_price(payment.amount_kopeks)}\n'
+                    f'💳 Способ: {display_name}\n'
+                    f'🆔 Транзакция: {transaction.id}\n\n'
+                    'Баланс пополнен автоматически!'
                 )
 
                 await self.bot.send_message(
@@ -447,10 +441,7 @@ class RioPayPaymentMixin:
             await send_cart_notification_after_topup(user, payment.amount_kopeks, db, getattr(self, 'bot', None))
         except Exception as error:
             logger.error(
-                'Ошибка при работе с сохраненной корзиной для пользователя',
-                user_id=user.id,
-                error=error,
-                exc_info=True,
+                'Ошибка при работе с сохраненной корзиной для пользователя', user_id=user.id, error=error, exc_info=True
             )
 
         logger.info(
@@ -538,10 +529,7 @@ class RioPayPaymentMixin:
                                 payment = locked
                             else:
                                 payment = locked
-                                logger.info(
-                                    'RioPay payment confirmed via API',
-                                    order_id=payment.order_id,
-                                )
+                                logger.info('RioPay payment confirmed via API', order_id=payment.order_id)
 
                                 callback_payload = {
                                     'check_source': 'api',

@@ -119,20 +119,12 @@ class WataService:
                             )
                             await asyncio.sleep(sleep_for)
                             continue
-                        logger.warning(
-                            'WATA API rate limited (429) — retries exhausted',
-                            method=method,
-                            path=path,
-                        )
+                        logger.warning('WATA API rate limited (429) — retries exhausted', method=method, path=path)
                         last_error = WataAPIError(f'WATA API rate limited on {method} {path}')
                         break
 
                     if response.status >= 400:
-                        logger.error(
-                            'WATA API error',
-                            response_status=response.status,
-                            response_text=response_text,
-                        )
+                        logger.error('WATA API error', response_status=response.status, response_text=response_text)
                         raise WataAPIError(f'WATA API returned status {response.status}: {response_text}')
 
                     if not response_text:
@@ -258,9 +250,7 @@ class WataService:
             params['paymentLinkId'] = payment_link_id
 
         logger.debug(
-            'Ищем WATA транзакции: order_id payment_link_id',
-            order_id=order_id,
-            payment_link_id=payment_link_id,
+            'Ищем WATA транзакции: order_id payment_link_id', order_id=order_id, payment_link_id=payment_link_id
         )
         return await self._request('GET', '/transactions', params=params)
 

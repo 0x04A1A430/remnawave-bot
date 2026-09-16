@@ -41,7 +41,7 @@ async def upsert_public_offer(
     await db.commit()
     await db.refresh(offer)
 
-    logger.info('Публичная оферта обновлена', language=language, offer_id=offer.id)
+    logger.info('✅ Публичная оферта обновлена', language=language, offer_id=offer.id)
 
     return offer
 
@@ -68,7 +68,7 @@ async def set_public_offer_enabled(
     await db.refresh(offer)
 
     logger.info(
-        'Статус публичной оферты для языка %s обновлен: %s',
+        '✅ Статус публичной оферты для языка %s обновлен: %s',
         language,
         'enabled' if offer.is_enabled else 'disabled',
     )

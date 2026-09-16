@@ -9,7 +9,7 @@ from app.cabinet.apple_iap import apple_iap_only_router
 from app.config import settings
 from app.webapi.docs import add_redoc_endpoint
 
-from .middleware import RequestLoggingMiddleware
+from .middleware import RequestLoggingMiddleware, RequestPathContextMiddleware
 from .routes import (
     backups,
     ban_notifications,
@@ -204,12 +204,7 @@ def create_web_api_app(lifespan: Any = None) -> FastAPI:
             allow_origins=['*'],
             allow_credentials=False,
             allow_methods=['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-            allow_headers=[
-                'Authorization',
-                'Content-Type',
-                'X-CSRF-Token',
-                'X-Telegram-Init-Data',
-            ],
+            allow_headers=['Authorization', 'Content-Type', 'X-CSRF-Token', 'X-Telegram-Init-Data'],
         )
     else:
         app.add_middleware(
@@ -217,16 +212,14 @@ def create_web_api_app(lifespan: Any = None) -> FastAPI:
             allow_origins=all_origins,
             allow_credentials=True,
             allow_methods=['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-            allow_headers=[
-                'Authorization',
-                'Content-Type',
-                'X-CSRF-Token',
-                'X-Telegram-Init-Data',
-            ],
+            allow_headers=['Authorization', 'Content-Type', 'X-CSRF-Token', 'X-Telegram-Init-Data'],
         )
 
     if settings.WEB_API_REQUEST_LOGGING:
         app.add_middleware(RequestLoggingMiddleware)
+
+    # Всегда: путь запроса нужен логу действий пользователя (таймлайн активности).
+    app.add_middleware(RequestPathContextMiddleware)
 
     app.include_router(health.router)
     app.include_router(stats.router, prefix='/stats', tags=['stats'])

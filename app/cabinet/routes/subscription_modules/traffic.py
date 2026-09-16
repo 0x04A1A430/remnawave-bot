@@ -69,10 +69,7 @@ async def get_traffic_packages(
     if is_tariff_mode:
         period_hint_days = 30
     elif subscription.end_date:
-        period_hint_days = max(
-            1,
-            math.ceil((subscription.end_date - datetime.now(UTC)).total_seconds() / 86400),
-        )
+        period_hint_days = max(1, math.ceil((subscription.end_date - datetime.now(UTC)).total_seconds() / 86400))
     else:
         period_hint_days = 30
 
@@ -245,10 +242,7 @@ async def purchase_traffic(
 
         # Получаем цену из глобальных настроек
         packages = settings.get_traffic_topup_packages()
-        matching_pkg = next(
-            (pkg for pkg in packages if pkg['gb'] == request.gb and pkg.get('enabled', True)),
-            None,
-        )
+        matching_pkg = next((pkg for pkg in packages if pkg['gb'] == request.gb and pkg.get('enabled', True)), None)
         if not matching_pkg:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -296,6 +290,9 @@ async def purchase_traffic(
         # Save cart for auto-purchase after balance top-up
         cart_data = {
             'cart_mode': 'add_traffic',
+            # Намерение пополнить ради этой корзины: без него тихая автопокупка после
+            # пополнения пропускает корзину, а кнопка «вернуться» её не знает.
+            'return_to_cart': True,
             'subscription_id': subscription.id,
             'traffic_gb': request.gb,
             'price_kopeks': final_price,
@@ -357,9 +354,9 @@ async def purchase_traffic(
     try:
         subscription_service = SubscriptionService()
         if settings.is_multi_tariff_enabled():
-            _should_create = not subscription.remnawave_uuid
+            _should_create = not subscription.remnawave_id
         else:
-            _should_create = not getattr(user, 'remnawave_uuid', None)
+            _should_create = not getattr(user, 'remnawave_id', None)
 
         async with asyncio.timeout(REMNAWAVE_SYNC_TIMEOUT):
             if _should_create:
@@ -367,13 +364,13 @@ async def purchase_traffic(
             else:
                 await subscription_service.update_remnawave_user(db, subscription)
                 if subscription.status == 'active':
-                    _enable_uuid = (
-                        subscription.remnawave_uuid
+                    _enable_panel_user_id = (
+                        subscription.remnawave_id
                         if settings.is_multi_tariff_enabled()
-                        else getattr(user, 'remnawave_uuid', None)
+                        else getattr(user, 'remnawave_id', None)
                     )
-                    if _enable_uuid:
-                        await subscription_service.enable_remnawave_user(_enable_uuid)
+                    if _enable_panel_user_id:
+                        await subscription_service.enable_remnawave_user(_enable_panel_user_id)
     except Exception as e:
         logger.error('Failed to sync traffic with RemnaWave', error=e)
         from app.services.remnawave_retry_queue import remnawave_retry_queue
@@ -431,11 +428,7 @@ async def purchase_traffic(
             request.yandex_cid,
         )
     except Exception as yconv_err:
-        logger.debug(
-            'yandex_conv purchase hook failed (non-fatal)',
-            user_id=user.id,
-            error=str(yconv_err),
-        )
+        logger.debug('yandex_conv purchase hook failed (non-fatal)', user_id=user.id, error=str(yconv_err))
 
     response: dict[str, Any] = {
         'success': True,
@@ -523,10 +516,7 @@ async def save_traffic_cart(
             )
 
         packages = settings.get_traffic_topup_packages()
-        matching_pkg = next(
-            (pkg for pkg in packages if pkg['gb'] == request.gb and pkg.get('enabled', True)),
-            None,
-        )
+        matching_pkg = next((pkg for pkg in packages if pkg['gb'] == request.gb and pkg.get('enabled', True)), None)
         if not matching_pkg:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -550,6 +540,9 @@ async def save_traffic_cart(
     # Save cart for auto-purchase after balance top-up
     cart_data = {
         'cart_mode': 'add_traffic',
+        # Намерение пополнить ради этой корзины: без него тихая автопокупка после
+        # пополнения пропускает корзину, а кнопка «вернуться» её не знает.
+        'return_to_cart': True,
         'subscription_id': subscription.id,
         'traffic_gb': request.gb,
         'price_kopeks': final_price,
@@ -559,11 +552,7 @@ async def save_traffic_cart(
         'description': f'Докупка {request.gb} ГБ трафика',
     }
     await user_cart_service.save_user_cart(user.id, cart_data)
-    logger.info(
-        'Cart saved for traffic purchase (cabinet save-cart) user +',
-        user_id=user.id,
-        gb=request.gb,
-    )
+    logger.info('Cart saved for traffic purchase (cabinet save-cart) user +', user_id=user.id, gb=request.gb)
 
     return {'success': True, 'cart_saved': True}
 
@@ -606,10 +595,7 @@ async def switch_traffic_package(
 
     # Get available packages
     packages = settings.get_traffic_packages()
-    current_pkg = next(
-        (p for p in packages if p['gb'] == current_traffic and p.get('enabled', True)),
-        None,
-    )
+    current_pkg = next((p for p in packages if p['gb'] == current_traffic and p.get('enabled', True)), None)
     new_pkg = next((p for p in packages if p['gb'] == new_traffic and p.get('enabled', True)), None)
 
     if not new_pkg:
@@ -686,9 +672,9 @@ async def switch_traffic_package(
     try:
         subscription_service = SubscriptionService()
         if settings.is_multi_tariff_enabled():
-            _should_create = not subscription.remnawave_uuid
+            _should_create = not subscription.remnawave_id
         else:
-            _should_create = not getattr(user, 'remnawave_uuid', None)
+            _should_create = not getattr(user, 'remnawave_id', None)
 
         async with asyncio.timeout(REMNAWAVE_SYNC_TIMEOUT):
             if _should_create:
@@ -801,16 +787,16 @@ async def refresh_traffic(
     try:
         remnawave_service = RemnaWaveService()
 
-        # Resolve panel UUID for traffic lookup
-        _traffic_uuid = (
-            subscription.remnawave_uuid
-            if settings.is_multi_tariff_enabled() and subscription.remnawave_uuid
-            else user.remnawave_uuid
+        # Resolve panel user id for traffic lookup
+        _traffic_panel_user_id = (
+            subscription.remnawave_id
+            if settings.is_multi_tariff_enabled() and subscription.remnawave_id
+            else user.remnawave_id
         )
         if user.telegram_id and not settings.is_multi_tariff_enabled():
             traffic_stats = await remnawave_service.get_user_traffic_stats(user.telegram_id)
-        elif _traffic_uuid:
-            traffic_stats = await remnawave_service.get_user_traffic_stats_by_uuid(_traffic_uuid)
+        elif _traffic_panel_user_id:
+            traffic_stats = await remnawave_service.get_user_traffic_stats_by_panel_id(_traffic_panel_user_id)
         else:
             traffic_stats = None
 
@@ -822,11 +808,9 @@ async def refresh_traffic(
                 'traffic_limit_bytes': int((subscription.traffic_limit_gb or 0) * (1024**3)),
                 'traffic_limit_gb': subscription.traffic_limit_gb or 0,
                 'traffic_used_percent': round(
-                    (
-                        ((subscription.traffic_used_gb or 0) / (subscription.traffic_limit_gb or 1)) * 100
-                        if subscription.traffic_limit_gb
-                        else 0
-                    ),
+                    ((subscription.traffic_used_gb or 0) / (subscription.traffic_limit_gb or 1)) * 100
+                    if subscription.traffic_limit_gb
+                    else 0,
                     1,
                 ),
                 'is_unlimited': (subscription.traffic_limit_gb or 0) == 0,

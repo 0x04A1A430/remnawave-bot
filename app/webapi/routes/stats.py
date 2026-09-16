@@ -7,14 +7,8 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.crud.referral import get_referral_statistics
-from app.database.crud.subscription import (
-    get_subscriptions_statistics,
-    get_trial_statistics,
-)
-from app.database.crud.transaction import (
-    REAL_PAYMENT_METHODS,
-    get_transactions_statistics,
-)
+from app.database.crud.subscription import get_subscriptions_statistics, get_trial_statistics
+from app.database.crud.transaction import REAL_PAYMENT_METHODS, get_transactions_statistics
 from app.database.crud.user import get_users_statistics
 from app.database.models import (
     Subscription,
@@ -26,6 +20,7 @@ from app.database.models import (
     User,
     UserStatus,
 )
+from app.utils.timezone import local_day_bounds
 
 from ..dependencies import get_db_session, require_api_token
 
@@ -79,11 +74,12 @@ async def _get_overview(db: AsyncSession) -> dict[str, object]:
         or 0
     )
 
-    today = datetime.now(UTC).date()
+    today_start, today_end = local_day_bounds()
     today_transactions = (
         await db.scalar(
             select(func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0)).where(
-                func.date(Transaction.created_at) == today,
+                Transaction.created_at >= today_start,
+                Transaction.created_at < today_end,
                 Transaction.type == TransactionType.DEPOSIT.value,
                 Transaction.payment_method.in_(REAL_PAYMENT_METHODS),
             )

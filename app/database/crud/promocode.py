@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.database.models import PromoCode, PromoCodeType, PromoCodeUse, User
+from app.utils.timezone import local_day_start
 
 
 logger = structlog.get_logger(__name__)
@@ -80,24 +81,15 @@ async def create_promocode(
     await db.refresh(promocode)
 
     if promo_group_id:
-        logger.info(
-            'Создан промокод: с промогруппой ID',
-            code=code,
-            promo_group_id=promo_group_id,
-        )
+        logger.info('✅ Создан промокод: с промогруппой ID', code=code, promo_group_id=promo_group_id)
     else:
-        logger.info('Создан промокод', code=code)
+        logger.info('✅ Создан промокод', code=code)
     return promocode
 
 
 async def check_user_promocode_usage(db: AsyncSession, user_id: int, promocode_id: int) -> bool:
     result = await db.execute(
-        select(PromoCodeUse).where(
-            and_(
-                PromoCodeUse.user_id == user_id,
-                PromoCodeUse.promocode_id == promocode_id,
-            )
-        )
+        select(PromoCodeUse).where(and_(PromoCodeUse.user_id == user_id, PromoCodeUse.promocode_id == promocode_id))
     )
     return result.scalar_one_or_none() is not None
 
@@ -113,28 +105,19 @@ async def create_promocode_use(db: AsyncSession, promocode_id: int, user_id: int
             await db.flush()
     except IntegrityError:
         logger.warning(
-            'Дублирующая запись использования промокода (race condition)',
+            '⚠️ Дублирующая запись использования промокода (race condition)',
             promocode_id=promocode_id,
             user_id=user_id,
         )
         return None
 
-    logger.info(
-        'Записано использование промокода пользователем',
-        promocode_id=promocode_id,
-        user_id=user_id,
-    )
+    logger.info('📝 Записано использование промокода пользователем', promocode_id=promocode_id, user_id=user_id)
     return promocode_use
 
 
 async def get_promocode_use_by_user_and_code(db: AsyncSession, user_id: int, promocode_id: int) -> PromoCodeUse | None:
     result = await db.execute(
-        select(PromoCodeUse).where(
-            and_(
-                PromoCodeUse.user_id == user_id,
-                PromoCodeUse.promocode_id == promocode_id,
-            )
-        )
+        select(PromoCodeUse).where(and_(PromoCodeUse.user_id == user_id, PromoCodeUse.promocode_id == promocode_id))
     )
     return result.scalar_one_or_none()
 
@@ -200,7 +183,7 @@ async def delete_promocode(db: AsyncSession, promocode: PromoCode) -> bool:
         await db.delete(promocode)
         await db.commit()
 
-        logger.info('Удален промокод', code=promocode.code)
+        logger.info('🗑️ Удален промокод', code=promocode.code)
         return True
 
     except Exception as e:
@@ -245,7 +228,7 @@ async def get_promocode_statistics(db: AsyncSession, promocode_id: int) -> dict:
     )
     total_uses = total_uses_result.scalar()
 
-    today = datetime.now(UTC).date()
+    today = local_day_start()
     today_uses_result = await db.execute(
         select(func.count(PromoCodeUse.id)).where(
             and_(PromoCodeUse.promocode_id == promocode_id, PromoCodeUse.used_at >= today)
@@ -269,8 +252,4 @@ async def get_promocode_statistics(db: AsyncSession, promocode_id: int) -> dict:
         use.user_telegram_id = user.telegram_id
         recent_uses.append(use)
 
-    return {
-        'total_uses': total_uses,
-        'today_uses': today_uses,
-        'recent_uses': recent_uses,
-    }
+    return {'total_uses': total_uses, 'today_uses': today_uses, 'recent_uses': recent_uses}

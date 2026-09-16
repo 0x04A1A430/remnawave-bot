@@ -4,7 +4,6 @@
 """
 
 import asyncio
-import re
 import time
 from datetime import UTC, datetime, timedelta
 
@@ -65,31 +64,15 @@ class BlacklistService:
 
             try:
                 # Заменяем github.com на raw.githubusercontent.com для получения raw содержимого
-                if re.match(r'https?://github\.com/', github_url):
+                if 'github.com' in github_url:
                     raw_url = github_url.replace('github.com', 'raw.githubusercontent.com').replace('/blob/', '/')
                 else:
                     raw_url = github_url
 
                 # Получаем содержимое файла
-                async with (
-                    aiohttp.ClientSession() as session,
-                    session.get(raw_url) as response,
-                ):
+                async with aiohttp.ClientSession() as session, session.get(raw_url) as response:
                     if response.status != 200:
-                        if response.status == 404:
-                            # Файл источника переехал/удалён — это проблема
-                            # конфигурации URL, а не сети. Работаем на стейл-
-                            # данных, если они есть; не спамим error'ом.
-                            logger.warning(
-                                'Чёрный список недоступен по заданному URL (404). '
-                                'Проверьте BLACKLIST_GITHUB_URL — используем ранее загруженные данные',
-                                url=raw_url,
-                            )
-                        else:
-                            logger.error(
-                                'Ошибка при получении черного списка',
-                                status=response.status,
-                            )
+                        logger.error('Ошибка при получении черного списка', status=response.status)
                         return False
 
                     content = await response.text()
@@ -146,10 +129,7 @@ class BlacklistService:
                 self.blacklist_data = blacklist_data
                 self.last_update = datetime.now(UTC)
                 self._check_cache.clear()
-                logger.info(
-                    'Черный список успешно обновлен. Найдено записей',
-                    blacklist_data_count=len(blacklist_data),
-                )
+                logger.info('Черный список успешно обновлен. Найдено записей', blacklist_data_count=len(blacklist_data))
                 return True
 
             except ValueError as e:
@@ -195,11 +175,7 @@ class BlacklistService:
         # Проверяем по Telegram ID
         for bl_id, bl_username, bl_reason in self.blacklist_data:
             if bl_id == telegram_id:
-                logger.info(
-                    'Пользователь найден в черном списке по ID',
-                    telegram_id=telegram_id,
-                    bl_reason=bl_reason,
-                )
+                logger.info('Пользователь найден в черном списке по ID', telegram_id=telegram_id, bl_reason=bl_reason)
                 self._check_cache[telegram_id] = (True, bl_reason, now)
                 return True, bl_reason
 
@@ -274,10 +250,7 @@ class BlacklistService:
         """
         success = await self.update_blacklist()
         if success:
-            return (
-                True,
-                f'Черный список обновлен успешно. Записей: {len(self.blacklist_data)}',
-            )
+            return True, f'Черный список обновлен успешно. Записей: {len(self.blacklist_data)}'
         return False, 'Ошибка обновления черного списка'
 
 

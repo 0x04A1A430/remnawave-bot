@@ -35,7 +35,7 @@ def _format_discount_lines(texts, group) -> list[str]:
     return [
         texts.t(
             'ADMIN_PROMO_GROUP_DISCOUNTS_HEADER',
-            'Скидки промогруппы:',
+            '💸 Скидки промогруппы:',
         ),
         texts.t(
             'ADMIN_PROMO_GROUP_DISCOUNT_LINE_SERVERS',
@@ -57,11 +57,11 @@ def _format_addon_discounts_line(texts, group: PromoGroup) -> str:
     if enabled:
         return texts.t(
             'ADMIN_PROMO_GROUP_ADDON_DISCOUNT_ENABLED',
-            'Скидки на доп. услуги: <b>включены</b>',
+            '🧩 Скидки на доп. услуги: <b>включены</b>',
         )
     return texts.t(
         'ADMIN_PROMO_GROUP_ADDON_DISCOUNT_DISABLED',
-        'Скидки на доп. услуги: <b>отключены</b>',
+        '🧩 Скидки на доп. услуги: <b>отключены</b>',
     )
 
 
@@ -70,11 +70,11 @@ def _get_addon_discounts_button_text(texts, group: PromoGroup) -> str:
     if enabled:
         return texts.t(
             'ADMIN_PROMO_GROUP_TOGGLE_ADDON_DISCOUNT_DISABLE',
-            'Отключить скидки на доп. услуги',
+            '🧩 Отключить скидки на доп. услуги',
         )
     return texts.t(
         'ADMIN_PROMO_GROUP_TOGGLE_ADDON_DISCOUNT_ENABLE',
-        'Включить скидки на доп. услуги',
+        '🧩 Включить скидки на доп. услуги',
     )
 
 
@@ -121,7 +121,7 @@ def _format_period_discounts_lines(texts, group: PromoGroup, language: str) -> l
 
     header = texts.t(
         'ADMIN_PROMO_GROUP_PERIOD_DISCOUNTS_HEADER',
-        'Скидки по периодам:',
+        '⏳ Скидки по периодам:',
     )
 
     lines = [header]
@@ -214,7 +214,7 @@ def _format_priority_line(texts, group: PromoGroup) -> str:
     priority = getattr(group, 'priority', 0)
     return texts.t(
         'ADMIN_PROMO_GROUP_PRIORITY_LINE',
-        'Приоритет: {priority}',
+        '🎯 Приоритет: {priority}',
     ).format(priority=priority)
 
 
@@ -293,7 +293,7 @@ def _build_edit_menu_content(
 ) -> tuple[str, types.InlineKeyboardMarkup]:
     header = texts.t(
         'ADMIN_PROMO_GROUP_EDIT_MENU_TITLE',
-        'Настройки промогруппы «{name}»',
+        '✏️ Настройки промогруппы «{name}»',
     ).format(name=html.escape(group.name))
 
     lines = [header]
@@ -319,7 +319,7 @@ def _build_edit_menu_content(
             types.InlineKeyboardButton(
                 text=texts.t(
                     'ADMIN_PROMO_GROUP_EDIT_FIELD_NAME',
-                    'Изменить название',
+                    '✏️ Изменить название',
                 ),
                 callback_data=f'promo_group_edit_field_{group.id}_name',
             )
@@ -328,7 +328,7 @@ def _build_edit_menu_content(
             types.InlineKeyboardButton(
                 text=texts.t(
                     'ADMIN_PROMO_GROUP_EDIT_FIELD_PRIORITY',
-                    'Приоритет',
+                    '🎯 Приоритет',
                 ),
                 callback_data=f'promo_group_edit_field_{group.id}_priority',
             )
@@ -337,7 +337,7 @@ def _build_edit_menu_content(
             types.InlineKeyboardButton(
                 text=texts.t(
                     'ADMIN_PROMO_GROUP_EDIT_FIELD_TRAFFIC',
-                    'Скидка на трафик',
+                    '🌐 Скидка на трафик',
                 ),
                 callback_data=f'promo_group_edit_field_{group.id}_traffic',
             )
@@ -346,7 +346,7 @@ def _build_edit_menu_content(
             types.InlineKeyboardButton(
                 text=texts.t(
                     'ADMIN_PROMO_GROUP_EDIT_FIELD_SERVERS',
-                    'Скидка на серверы',
+                    '🖥 Скидка на серверы',
                 ),
                 callback_data=f'promo_group_edit_field_{group.id}_servers',
             )
@@ -355,7 +355,7 @@ def _build_edit_menu_content(
             types.InlineKeyboardButton(
                 text=texts.t(
                     'ADMIN_PROMO_GROUP_EDIT_FIELD_DEVICES',
-                    'Скидка на устройства',
+                    '📱 Скидка на устройства',
                 ),
                 callback_data=f'promo_group_edit_field_{group.id}_devices',
             )
@@ -364,7 +364,7 @@ def _build_edit_menu_content(
             types.InlineKeyboardButton(
                 text=texts.t(
                     'ADMIN_PROMO_GROUP_EDIT_FIELD_PERIODS',
-                    'Скидки по периодам',
+                    '⏳ Скидки по периодам',
                 ),
                 callback_data=f'promo_group_edit_field_{group.id}_periods',
             )
@@ -379,7 +379,7 @@ def _build_edit_menu_content(
             types.InlineKeyboardButton(
                 text=texts.t(
                     'ADMIN_PROMO_GROUP_EDIT_FIELD_AUTO_ASSIGN',
-                    'Автовыдача по тратам',
+                    '🤖 Автовыдача по тратам',
                 ),
                 callback_data=f'promo_group_edit_field_{group.id}_auto',
             )
@@ -442,7 +442,7 @@ async def show_promo_groups_menu(
     groups = await get_promo_groups_with_counts(db)
 
     total_members = sum(count for _, count in groups)
-    header = texts.t('ADMIN_PROMO_GROUPS_TITLE', '<b>Промогруппы</b>')
+    header = texts.t('ADMIN_PROMO_GROUPS_TITLE', '💳 <b>Промогруппы</b>')
 
     if groups:
         summary = texts.t(
@@ -453,7 +453,7 @@ async def show_promo_groups_menu(
 
         keyboard_rows = []
         for group, member_count in groups:
-            icon = '' if group.is_default else ''
+            icon = '⭐' if group.is_default else '🎯'
             default_suffix = texts.t('ADMIN_PROMO_GROUPS_DEFAULT_LABEL', ' (базовая)') if group.is_default else ''
             members_label = texts.t(
                 'ADMIN_PROMO_GROUPS_MEMBERS_COUNT',
@@ -469,11 +469,7 @@ async def show_promo_groups_menu(
                 ]
             )
     else:
-        lines = [
-            header,
-            '',
-            texts.t('ADMIN_PROMO_GROUPS_EMPTY', 'Промогруппы не найдены.'),
-        ]
+        lines = [header, '', texts.t('ADMIN_PROMO_GROUPS_EMPTY', 'Промогруппы не найдены.')]
         keyboard_rows = []
 
     keyboard_rows.append([types.InlineKeyboardButton(text='Создать', callback_data='admin_promo_group_create')])
@@ -496,7 +492,7 @@ async def _get_group_or_alert(
     group_id = int(callback.data.split('_')[-1])
     group = await get_promo_group_by_id(db, group_id)
     if not group:
-        await callback.answer('Промогруппа не найдена', show_alert=True)
+        await callback.answer('❌ Промогруппа не найдена', show_alert=True)
         return None
     return group
 
@@ -520,7 +516,7 @@ async def show_promo_group_details(
     lines = [
         texts.t(
             'ADMIN_PROMO_GROUP_DETAILS_TITLE',
-            '<b>Промогруппа:</b> {name}',
+            '💳 <b>Промогруппа:</b> {name}',
         ).format(name=html.escape(group.name))
     ]
     lines.extend(_format_discount_lines(texts, group))
@@ -545,7 +541,7 @@ async def show_promo_group_details(
         keyboard_rows.append(
             [
                 types.InlineKeyboardButton(
-                    text=texts.t('ADMIN_PROMO_GROUP_MEMBERS_BUTTON', 'Участники'),
+                    text=texts.t('ADMIN_PROMO_GROUP_MEMBERS_BUTTON', '👥 Участники'),
                     callback_data=f'promo_group_members_{group.id}_page_1',
                 )
             ]
@@ -554,7 +550,7 @@ async def show_promo_group_details(
     keyboard_rows.append(
         [
             types.InlineKeyboardButton(
-                text=texts.t('ADMIN_PROMO_GROUP_EDIT_BUTTON', 'Изменить'),
+                text=texts.t('ADMIN_PROMO_GROUP_EDIT_BUTTON', '✏️ Изменить'),
                 callback_data=f'promo_group_edit_{group.id}',
             )
         ]
@@ -564,7 +560,7 @@ async def show_promo_group_details(
         keyboard_rows.append(
             [
                 types.InlineKeyboardButton(
-                    text=texts.t('ADMIN_PROMO_GROUP_DELETE_BUTTON', 'Удалить'),
+                    text=texts.t('ADMIN_PROMO_GROUP_DELETE_BUTTON', '🗑️ Удалить'),
                     callback_data=f'promo_group_delete_{group.id}',
                 )
             ]
@@ -612,10 +608,7 @@ async def start_create_promo_group(
     await state.set_state(AdminStates.creating_promo_group_name)
     await state.update_data(language=db_user.language)
     await callback.message.edit_text(
-        texts.t(
-            'ADMIN_PROMO_GROUP_CREATE_NAME_PROMPT',
-            'Введите название новой промогруппы:',
-        ),
+        texts.t('ADMIN_PROMO_GROUP_CREATE_NAME_PROMPT', 'Введите название новой промогруппы:'),
         reply_markup=types.InlineKeyboardMarkup(
             inline_keyboard=[
                 [types.InlineKeyboardButton(text=texts.BACK, callback_data='admin_promo_groups', style='danger')]
@@ -653,7 +646,7 @@ async def process_create_group_priority(message: types.Message, state: FSMContex
         await message.answer(
             texts.t(
                 'ADMIN_PROMO_GROUP_INVALID_PRIORITY',
-                'Приоритет должен быть неотрицательным целым числом',
+                '❌ Приоритет должен быть неотрицательным целым числом',
             )
         )
         return
@@ -813,7 +806,7 @@ async def process_create_group_auto_assign(
                     types.InlineKeyboardButton(
                         text=texts.t(
                             'ADMIN_PROMO_GROUP_CREATED_BACK_BUTTON',
-                            'К промогруппам',
+                            '↩️ К промогруппам',
                         ),
                         callback_data='admin_promo_groups',
                     )
@@ -858,7 +851,7 @@ async def prompt_edit_promo_group_field(
 ):
     parts = callback.data.split('_')
     if len(parts) < 6:
-        await callback.answer('Неверная команда', show_alert=True)
+        await callback.answer('❌ Неверная команда', show_alert=True)
         return
 
     group_id = int(parts[4])
@@ -866,7 +859,7 @@ async def prompt_edit_promo_group_field(
 
     group = await get_promo_group_by_id(db, group_id)
     if not group:
-        await callback.answer('Промогруппа не найдена', show_alert=True)
+        await callback.answer('❌ Промогруппа не найдена', show_alert=True)
         return
 
     await state.update_data(edit_group_id=group.id, language=db_user.language)
@@ -918,7 +911,7 @@ async def prompt_edit_promo_group_field(
             'Введите сумму общих трат (в ₽) для автовыдачи. Текущее значение: {current}.',
         ).format(current=_format_auto_assign_value(group.auto_assign_total_spent_kopeks))
     else:
-        await callback.answer('Неизвестный параметр', show_alert=True)
+        await callback.answer('❌ Неизвестный параметр', show_alert=True)
         return
 
     await callback.message.edit_text(prompt, reply_markup=reply_markup)
@@ -943,7 +936,7 @@ async def process_edit_group_name(
 
     group = await get_promo_group_by_id(db, data.get('edit_group_id'))
     if not group:
-        await message.answer('Промогруппа не найдена')
+        await message.answer('❌ Промогруппа не найдена')
         await state.clear()
         return
 
@@ -978,14 +971,14 @@ async def process_edit_group_priority(
         await message.answer(
             texts.t(
                 'ADMIN_PROMO_GROUP_INVALID_PRIORITY',
-                'Приоритет должен быть неотрицательным целым числом',
+                '❌ Приоритет должен быть неотрицательным целым числом',
             )
         )
         return
 
     group = await get_promo_group_by_id(db, data.get('edit_group_id'))
     if not group:
-        await message.answer('Промогруппа не найдена')
+        await message.answer('❌ Промогруппа не найдена')
         await state.clear()
         return
 
@@ -1020,7 +1013,7 @@ async def process_edit_group_traffic(
 
     group = await get_promo_group_by_id(db, data.get('edit_group_id'))
     if not group:
-        await message.answer('Промогруппа не найдена')
+        await message.answer('❌ Промогруппа не найдена')
         await state.clear()
         return
 
@@ -1055,7 +1048,7 @@ async def process_edit_group_servers(
 
     group = await get_promo_group_by_id(db, data.get('edit_group_id'))
     if not group:
-        await message.answer('Промогруппа не найдена')
+        await message.answer('❌ Промогруппа не найдена')
         await state.clear()
         return
 
@@ -1090,7 +1083,7 @@ async def process_edit_group_devices(
 
     group = await get_promo_group_by_id(db, data.get('edit_group_id'))
     if not group:
-        await message.answer('Промогруппа не найдена')
+        await message.answer('❌ Промогруппа не найдена')
         await state.clear()
         return
 
@@ -1130,7 +1123,7 @@ async def process_edit_group_period_discounts(
 
     group = await get_promo_group_by_id(db, data.get('edit_group_id'))
     if not group:
-        await message.answer('Промогруппа не найдена')
+        await message.answer('❌ Промогруппа не найдена')
         await state.clear()
         return
 
@@ -1170,7 +1163,7 @@ async def process_edit_group_auto_assign(
 
     group = await get_promo_group_by_id(db, data.get('edit_group_id'))
     if not group:
-        await message.answer('Промогруппа не найдена')
+        await message.answer('❌ Промогруппа не найдена')
         await state.clear()
         return
 
@@ -1205,7 +1198,7 @@ async def show_promo_group_members(
 
     group = await get_promo_group_by_id(db, group_id)
     if not group:
-        await callback.answer('Промогруппа не найдена', show_alert=True)
+        await callback.answer('❌ Промогруппа не найдена', show_alert=True)
         return
 
     texts = get_texts(db_user.language)
@@ -1215,7 +1208,7 @@ async def show_promo_group_members(
 
     title = texts.t(
         'ADMIN_PROMO_GROUP_MEMBERS_TITLE',
-        'Участники группы {name}',
+        '👥 Участники группы {name}',
     ).format(name=html.escape(group.name))
 
     if not members:
@@ -1272,10 +1265,7 @@ async def request_delete_promo_group(
 
     if group.is_default:
         await callback.answer(
-            texts.t(
-                'ADMIN_PROMO_GROUP_DELETE_FORBIDDEN',
-                'Базовую промогруппу нельзя удалить.',
-            ),
+            texts.t('ADMIN_PROMO_GROUP_DELETE_FORBIDDEN', 'Базовую промогруппу нельзя удалить.'),
             show_alert=True,
         )
         return
@@ -1312,10 +1302,7 @@ async def delete_promo_group_confirmed(
     success = await delete_promo_group(db, group)
     if not success:
         await callback.answer(
-            texts.t(
-                'ADMIN_PROMO_GROUP_DELETE_FORBIDDEN',
-                'Базовую промогруппу нельзя удалить.',
-            ),
+            texts.t('ADMIN_PROMO_GROUP_DELETE_FORBIDDEN', 'Базовую промогруппу нельзя удалить.'),
             show_alert=True,
         )
         return
@@ -1353,12 +1340,10 @@ async def toggle_promo_group_addon_discounts(
     )
 
     status_text = texts.t(
-        (
-            'ADMIN_PROMO_GROUP_ADDON_DISCOUNT_UPDATED_ENABLED'
-            if new_value
-            else 'ADMIN_PROMO_GROUP_ADDON_DISCOUNT_UPDATED_DISABLED'
-        ),
-        'Скидки на докупку доп. услуг {status}.',
+        'ADMIN_PROMO_GROUP_ADDON_DISCOUNT_UPDATED_ENABLED'
+        if new_value
+        else 'ADMIN_PROMO_GROUP_ADDON_DISCOUNT_UPDATED_DISABLED',
+        '🧩 Скидки на докупку доп. услуг {status}.',
     ).format(status='<b>включены</b>' if new_value else '<b>отключены</b>')
 
     await _send_edit_menu_after_update(

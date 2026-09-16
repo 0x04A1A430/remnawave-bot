@@ -202,10 +202,7 @@ class EtoplatezhiPaymentMixin:
             our_payment_id = str(etoplatezhi_payment_id) if etoplatezhi_payment_id else None
 
             if not our_payment_id or not etoplatezhi_status:
-                logger.warning(
-                    'Etoplatezhi callback: отсутствуют обязательные поля',
-                    payload=payload,
-                )
+                logger.warning('Etoplatezhi callback: отсутствуют обязательные поля', payload=payload)
                 return False
 
             # Определяем is_paid по статусу
@@ -225,19 +222,13 @@ class EtoplatezhiPaymentMixin:
             # Lock payment row immediately to prevent concurrent webhook processing (TOCTOU race)
             locked = await etoplatezhi_crud.get_etoplatezhi_payment_by_id_for_update(db, payment.id)
             if not locked:
-                logger.error(
-                    'Etoplatezhi: не удалось заблокировать платёж',
-                    payment_id=payment.id,
-                )
+                logger.error('Etoplatezhi: не удалось заблокировать платёж', payment_id=payment.id)
                 return False
             payment = locked
 
             # Проверка дублирования (re-check from locked row)
             if payment.is_paid:
-                logger.info(
-                    'Etoplatezhi callback: платеж уже обработан',
-                    order_id=payment.order_id,
-                )
+                logger.info('Etoplatezhi callback: платеж уже обработан', order_id=payment.order_id)
                 return True
 
             # Маппинг статуса
@@ -411,10 +402,7 @@ class EtoplatezhiPaymentMixin:
         should_credit_balance = created_transaction or not balance_already_credited
 
         if not should_credit_balance:
-            logger.info(
-                'Etoplatezhi платеж уже зачислил баланс ранее',
-                order_id=payment.order_id,
-            )
+            logger.info('Etoplatezhi платеж уже зачислил баланс ранее', order_id=payment.order_id)
             return True
 
         # Lock user row to prevent concurrent balance race conditions
@@ -464,9 +452,7 @@ class EtoplatezhiPaymentMixin:
 
         if getattr(self, 'bot', None):
             try:
-                from app.services.admin_notification_service import (
-                    AdminNotificationService,
-                )
+                from app.services.admin_notification_service import AdminNotificationService
 
                 notification_service = AdminNotificationService(self.bot)
                 await notification_service.send_balance_topup_notification(
@@ -491,7 +477,8 @@ class EtoplatezhiPaymentMixin:
                         '\u2705 <b>Пополнение успешно!</b>\n\n'
                         f'\U0001f4b0 Сумма: {settings.format_price(payment.amount_kopeks)}\n'
                         f'\U0001f4b3 Способ: {display_name}\n'
-                        f'\U0001f194 Транзакция: {transaction.id}'
+                        f'\U0001f194 Транзакция: {transaction.id}\n\n'
+                        'Баланс пополнен автоматически!'
                     ),
                     parse_mode='HTML',
                     reply_markup=keyboard,

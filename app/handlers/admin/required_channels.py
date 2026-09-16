@@ -4,12 +4,7 @@ import structlog
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.types import (
-    CallbackQuery,
-    InlineKeyboardButton,
-    InlineKeyboardMarkup,
-    Message,
-)
+from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
 from app.database.crud.required_channel import (
     add_channel,
@@ -41,7 +36,7 @@ class AddChannelStates(StatesGroup):
 def _channels_keyboard(channels: list) -> InlineKeyboardMarkup:
     buttons = []
     for ch in channels:
-        status = '' if ch.is_active else ''
+        status = '✅' if ch.is_active else '❌'
         title = ch.title or ch.channel_id
         buttons.append(
             [
@@ -51,18 +46,18 @@ def _channels_keyboard(channels: list) -> InlineKeyboardMarkup:
                 )
             ]
         )
-    buttons.append([InlineKeyboardButton(text='Добавить канал', callback_data='reqch:add')])
-    buttons.append([InlineKeyboardButton(text='Назад', callback_data='admin_submenu_settings')])
+    buttons.append([InlineKeyboardButton(text='➕ Добавить канал', callback_data='reqch:add')])
+    buttons.append([InlineKeyboardButton(text='◀️ Назад', callback_data='admin_submenu_settings')])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
 def _channel_detail_keyboard(channel_id: int, is_active: bool) -> InlineKeyboardMarkup:
-    toggle_text = 'Отключить' if is_active else 'Включить'
+    toggle_text = '❌ Отключить' if is_active else '✅ Включить'
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text=toggle_text, callback_data=f'reqch:toggle:{channel_id}')],
-            [InlineKeyboardButton(text='Удалить', callback_data=f'reqch:delete:{channel_id}')],
-            [InlineKeyboardButton(text='К списку', callback_data='reqch:list')],
+            [InlineKeyboardButton(text='🗑 Удалить', callback_data=f'reqch:delete:{channel_id}')],
+            [InlineKeyboardButton(text='◀️ К списку', callback_data='reqch:list')],
         ]
     )
 
@@ -74,11 +69,11 @@ async def show_channels_list(callback: CallbackQuery, **kwargs) -> None:
         channels = await get_all_channels(db)
 
     if not channels:
-        text = '<b>Обязательные каналы</b>\n\nКаналы не настроены. Нажмите «Добавить» чтобы создать.'
+        text = '<b>📢 Обязательные каналы</b>\n\nКаналы не настроены. Нажмите «Добавить» чтобы создать.'
     else:
-        lines = ['<b>Обязательные каналы</b>\n']
+        lines = ['<b>📢 Обязательные каналы</b>\n']
         for ch in channels:
-            status = '' if ch.is_active else ''
+            status = '✅' if ch.is_active else '❌'
             title = ch.title or ch.channel_id
             lines.append(f'{status} <code>{ch.channel_id}</code> — {title}')
         text = '\n'.join(lines)
@@ -102,7 +97,7 @@ async def view_channel(callback: CallbackQuery, **kwargs) -> None:
         await callback.answer('Канал не найден', show_alert=True)
         return
 
-    status = 'Активен' if ch.is_active else 'Отключён'
+    status = '✅ Активен' if ch.is_active else '❌ Отключён'
     text = (
         f'<b>{ch.title or "Без названия"}</b>\n\n'
         f'<b>ID:</b> <code>{ch.channel_id}</code>\n'
@@ -138,7 +133,7 @@ async def toggle_channel_handler(callback: CallbackQuery, **kwargs) -> None:
     async with AsyncSessionLocal() as db:
         channels = await get_all_channels(db)
     await callback.message.edit_text(
-        '<b>Обязательные каналы</b>',
+        '<b>📢 Обязательные каналы</b>',
         reply_markup=_channels_keyboard(channels),
     )
 
@@ -163,7 +158,7 @@ async def delete_channel_handler(callback: CallbackQuery, **kwargs) -> None:
     async with AsyncSessionLocal() as db:
         channels = await get_all_channels(db)
     await callback.message.edit_text(
-        '<b>Обязательные каналы</b>',
+        '<b>📢 Обязательные каналы</b>',
         reply_markup=_channels_keyboard(channels),
     )
 
@@ -176,7 +171,7 @@ async def delete_channel_handler(callback: CallbackQuery, **kwargs) -> None:
 async def start_add_channel(callback: CallbackQuery, state: FSMContext, **kwargs) -> None:
     await state.set_state(AddChannelStates.waiting_channel_id)
     await callback.message.edit_text(
-        '<b>Добавить канал</b>\n\n'
+        '<b>➕ Добавить канал</b>\n\n'
         'Отправьте числовой ID канала (например <code>1234567890</code>).\n'
         'Префикс <code>-100</code> добавляется автоматически.'
     )
@@ -259,13 +254,13 @@ async def process_channel_title(message: Message, state: FSMContext, **kwargs) -
             await channel_subscription_service.invalidate_channels_cache()
 
             text = (
-                'Канал добавлен!\n\n'
+                '✅ Канал добавлен!\n\n'
                 f'<b>ID:</b> <code>{ch.channel_id}</code>\n'
                 f'<b>Ссылка:</b> {ch.channel_link or "—"}\n'
                 f'<b>Название:</b> {ch.title or "—"}'
             )
         except Exception as e:
-            text = 'Ошибка добавления канала. Попробуйте ещё раз.'
+            text = '❌ Ошибка добавления канала. Попробуйте ещё раз.'
             logger.error('Error adding channel', error=e)
 
     async with AsyncSessionLocal() as db:

@@ -43,22 +43,12 @@ class WebAPIServer:
                 },
             },
             'loggers': {
-                'uvicorn': {
-                    'handlers': ['default'],
-                    'level': 'WARNING',
-                    'propagate': False,
-                },
+                'uvicorn': {'handlers': ['default'], 'level': 'WARNING', 'propagate': False},
                 'uvicorn.error': {'level': 'WARNING', 'propagate': False},
                 'uvicorn.access': {'level': 'ERROR', 'propagate': False},
                 'uvicorn.protocols': {'level': 'WARNING', 'propagate': False},
-                'uvicorn.protocols.websockets': {
-                    'level': 'WARNING',
-                    'propagate': False,
-                },
-                'uvicorn.protocols.websockets.websockets_impl': {
-                    'level': 'WARNING',
-                    'propagate': False,
-                },
+                'uvicorn.protocols.websockets': {'level': 'WARNING', 'propagate': False},
+                'uvicorn.protocols.websockets.websockets_impl': {'level': 'WARNING', 'propagate': False},
                 'websockets': {'level': 'WARNING', 'propagate': False},
                 'websockets.server': {'level': 'WARNING', 'propagate': False},
             },
@@ -79,18 +69,18 @@ class WebAPIServer:
 
     async def start(self) -> None:
         if self._task and not self._task.done():
-            logger.info('Административное веб-API уже запущено')
+            logger.info('🌐 Административное веб-API уже запущено')
             return
 
         async def _serve() -> None:
             try:
                 await self._server.serve()
             except Exception as error:  # pragma: no cover - логируем ошибки сервера
-                logger.exception('Ошибка работы веб-API', error=error)
+                logger.exception('❌ Ошибка работы веб-API', error=error)
                 raise
 
         logger.info(
-            'Запуск административного API',
+            '🌐 Запуск административного API',
             WEB_API_HOST=settings.WEB_API_HOST,
             WEB_API_PORT=settings.WEB_API_PORT,
         )
@@ -116,7 +106,7 @@ class WebAPIServer:
         if not self._task:
             return
 
-        logger.info('Остановка административного API')
+        logger.info('🛑 Остановка административного API')
         self._server.should_exit = True
         await self._task
         self._task = None

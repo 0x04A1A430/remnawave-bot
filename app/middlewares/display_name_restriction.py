@@ -65,7 +65,7 @@ CHAR_TRANSLATION = str.maketrans(
     }
 )
 
-COLLAPSE_PATTERN = re.compile(r"[\s\._\-/\\|,:;•·․⋅··`~'\"!?()\[\]{}<>+=]+")
+COLLAPSE_PATTERN = re.compile(r"[\s\._\-/\\|,:;•·﹒․⋅··`~'\"!?()\[\]{}<>+=]+")
 
 
 class DisplayNameRestrictionMiddleware(BaseMiddleware):
@@ -100,12 +100,12 @@ class DisplayNameRestrictionMiddleware(BaseMiddleware):
             texts = get_texts(language)
             warning = texts.get(
                 'SUSPICIOUS_DISPLAY_NAME_BLOCKED',
-                'Ваше отображаемое имя похоже на ссылку или служебный аккаунт. '
+                '🚫 Ваше отображаемое имя похоже на ссылку или служебный аккаунт. '
                 'Пожалуйста, измените имя и попробуйте снова.',
             )
 
             logger.warning(
-                'DisplayNameRestriction: user blocked due to suspicious name',
+                '🚫 DisplayNameRestriction: user blocked due to suspicious name',
                 user_id=user.id,
                 suspicious_value=suspicious_value,
             )

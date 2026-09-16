@@ -11,18 +11,11 @@ from pydantic import BaseModel
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database.crud.campaign import (
-    get_campaign_statistics,
-    get_campaigns_count,
-    get_campaigns_list,
-)
+from app.database.crud.campaign import get_campaign_statistics, get_campaigns_count, get_campaigns_list
+from app.database.crud.referral import not_referee_directed
 from app.database.crud.server_squad import get_server_statistics
 from app.database.crud.subscription import get_subscriptions_statistics
-from app.database.crud.transaction import (
-    REAL_PAYMENT_METHODS,
-    get_revenue_by_period,
-    get_transactions_statistics,
-)
+from app.database.crud.transaction import REAL_PAYMENT_METHODS, get_revenue_by_period, get_transactions_statistics
 from app.database.models import (
     ReferralEarning,
     Subscription,
@@ -34,6 +27,7 @@ from app.database.models import (
 )
 from app.services.remnawave_service import RemnaWaveService
 from app.services.version_service import version_service
+from app.utils.timezone import local_day_start, local_month_start
 
 from ..dependencies import get_cabinet_db, require_permission
 
@@ -51,7 +45,6 @@ router = APIRouter(prefix='/admin/stats', tags=['Cabinet Admin Stats'])
 class NodeStatus(BaseModel):
     """Node status info."""
 
-    id: int | None = None
     uuid: str
     name: str
     address: str
@@ -182,6 +175,9 @@ class TopReferrerItem(BaseModel):
     earnings_week_kopeks: int = 0
     earnings_month_kopeks: int = 0
     earnings_total_kopeks: int = 0
+    # Дни — вторая валюта программы: без них лидерборд «дневной» установки
+    # состоит из нулей, а лучший реферер не отличим от неактивного.
+    earnings_total_days: int = 0
 
 
 class TopReferrersResponse(BaseModel):
@@ -265,7 +261,7 @@ async def get_dashboard_stats(
 
         # Get financial statistics
         now = datetime.now(UTC)
-        month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        month_start = local_month_start(now)
 
         trans_stats = await get_transactions_statistics(db, month_start, now)
         all_time_stats = await get_transactions_statistics(
@@ -281,13 +277,9 @@ async def get_dashboard_stats(
         # Get tariff statistics
         tariff_stats = await _get_tariff_stats(db)
 
-        # Derive income_today from revenue_chart to ensure consistency with chart
-        today_str = now.date().isoformat()
-        income_today_from_chart = sum(
-            item.get('amount_kopeks', 0) for item in revenue_data if str(item.get('date', '')) == today_str
-        )
-        # Use chart-derived value if available, otherwise fall back to trans_stats
-        income_today_kopeks = income_today_from_chart or trans_stats.get('today', {}).get('income_kopeks', 0)
+        # «Сегодня» у сводки, графика и бота — один календарный день settings.TIMEZONE,
+        # поэтому пересчитывать сводку из графика по строке даты UTC больше не нужно (#3136).
+        income_today_kopeks = trans_stats.get('today', {}).get('income_kopeks', 0)
 
         # Build response
         return DashboardStats(
@@ -323,11 +315,9 @@ async def get_dashboard_stats(
             ),
             revenue_chart=[
                 RevenueData(
-                    date=(
-                        item.get('date', '').isoformat()
-                        if hasattr(item.get('date', ''), 'isoformat')
-                        else str(item.get('date', ''))
-                    ),
+                    date=item.get('date', '').isoformat()
+                    if hasattr(item.get('date', ''), 'isoformat')
+                    else str(item.get('date', '')),
                     amount_kopeks=item.get('amount_kopeks', 0),
                     amount_rubles=item.get('amount_kopeks', 0) / 100,
                 )
@@ -441,11 +431,7 @@ async def toggle_node(
 
         if success:
             logger.info('Admin d node', admin_id=admin.id, action=action, node_uuid=node_uuid)
-            return {
-                'success': True,
-                'message': f'Node {action}d',
-                'is_disabled': not is_disabled,
-            }
+            return {'success': True, 'message': f'Node {action}d', 'is_disabled': not is_disabled}
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f'Failed to {action} node',
@@ -474,7 +460,6 @@ async def _get_nodes_overview() -> NodesOverview:
 
         node_statuses = [
             NodeStatus(
-                id=n.get('id'),
                 uuid=n.get('uuid', ''),
                 name=n.get('name', 'Unknown'),
                 address=n.get('address', ''),
@@ -521,11 +506,11 @@ async def _get_tariff_stats(db: AsyncSession) -> TariffStats | None:
         tariffs = tariffs_result.scalars().all()
 
         if not tariffs:
-            logger.info('Нет тарифов в системе, пропускаем статистику')
+            logger.info('📊 Нет тарифов в системе, пропускаем статистику')
             return None
 
         now = datetime.now(UTC)
-        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        today_start = local_day_start(now)
         week_ago = now - timedelta(days=7)
         month_ago = now - timedelta(days=30)
 
@@ -536,8 +521,7 @@ async def _get_tariff_stats(db: AsyncSession) -> TariffStats | None:
             # Активные подписки на этом тарифе
             active_result = await db.execute(
                 select(func.count(Subscription.id)).where(
-                    Subscription.tariff_id == tariff.id,
-                    Subscription.status == SubscriptionStatus.ACTIVE.value,
+                    Subscription.tariff_id == tariff.id, Subscription.status == SubscriptionStatus.ACTIVE.value
                 )
             )
             active_count = active_result.scalar() or 0
@@ -583,10 +567,7 @@ async def _get_tariff_stats(db: AsyncSession) -> TariffStats | None:
             purchased_month = month_result.scalar() or 0
 
             logger.info(
-                'Тариф активных=, триал',
-                tariff_name=tariff.name,
-                active_count=active_count,
-                trial_count=trial_count,
+                '📊 Тариф активных=, триал', tariff_name=tariff.name, active_count=active_count, trial_count=trial_count
             )
 
             tariff_items.append(
@@ -603,10 +584,7 @@ async def _get_tariff_stats(db: AsyncSession) -> TariffStats | None:
 
             total_tariff_subscriptions += active_count
 
-        logger.info(
-            'Всего подписок по тарифам',
-            total_tariff_subscriptions=total_tariff_subscriptions,
-        )
+        logger.info('📊 Всего подписок по тарифам', total_tariff_subscriptions=total_tariff_subscriptions)
 
         return TariffStats(
             tariffs=tariff_items,
@@ -630,16 +608,13 @@ async def get_top_referrers(
     """Get top referrers with earnings breakdown by period."""
     try:
         now = datetime.now(UTC)
-        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        today_start = local_day_start(now)
         week_ago = now - timedelta(days=7)
         month_ago = now - timedelta(days=30)
 
         # Get all referrers with their stats
         referrers_query = await db.execute(
-            select(
-                User.referred_by_id.label('referrer_id'),
-                func.count(User.id).label('total_invited'),
-            )
+            select(User.referred_by_id.label('referrer_id'), func.count(User.id).label('total_invited'))
             .where(User.referred_by_id.isnot(None))
             .group_by(User.referred_by_id)
         )
@@ -648,10 +623,7 @@ async def get_top_referrers(
         # Get invited counts by period for each referrer
         # Today
         today_invited_query = await db.execute(
-            select(
-                User.referred_by_id.label('referrer_id'),
-                func.count(User.id).label('count'),
-            )
+            select(User.referred_by_id.label('referrer_id'), func.count(User.id).label('count'))
             .where(and_(User.referred_by_id.isnot(None), User.created_at >= today_start))
             .group_by(User.referred_by_id)
         )
@@ -661,10 +633,7 @@ async def get_top_referrers(
 
         # Week
         week_invited_query = await db.execute(
-            select(
-                User.referred_by_id.label('referrer_id'),
-                func.count(User.id).label('count'),
-            )
+            select(User.referred_by_id.label('referrer_id'), func.count(User.id).label('count'))
             .where(and_(User.referred_by_id.isnot(None), User.created_at >= week_ago))
             .group_by(User.referred_by_id)
         )
@@ -674,10 +643,7 @@ async def get_top_referrers(
 
         # Month
         month_invited_query = await db.execute(
-            select(
-                User.referred_by_id.label('referrer_id'),
-                func.count(User.id).label('count'),
-            )
+            select(User.referred_by_id.label('referrer_id'), func.count(User.id).label('count'))
             .where(and_(User.referred_by_id.isnot(None), User.created_at >= month_ago))
             .group_by(User.referred_by_id)
         )
@@ -687,23 +653,31 @@ async def get_top_referrers(
 
         # Get earnings from ReferralEarning table
         # Total earnings
+        # Подушевой агрегат: not_referee_directed() отбрасывает награды, полученные
+        # человеком КАК ПРИГЛАШЁННЫМ — они не его партнёрский доход. Дни считаются
+        # рядом с деньгами: без них лидерборд «дневной» программы состоит из нулей.
+        #
+        # Тот же предикат стоит и на периодных суммах ниже. Без него «всего» и
+        # «за месяц» считались бы по разным популяциям, и у приглашённого без
+        # единого реферала месячный доход оказывался бы больше общего.
         total_earnings_query = await db.execute(
             select(
                 ReferralEarning.user_id.label('referrer_id'),
                 func.sum(ReferralEarning.amount_kopeks).label('total'),
-            ).group_by(ReferralEarning.user_id)
+                func.sum(ReferralEarning.days_granted).label('total_days'),
+            )
+            .where(not_referee_directed())
+            .group_by(ReferralEarning.user_id)
         )
         for row in total_earnings_query:
             if row.referrer_id in referrers_data:
                 referrers_data[row.referrer_id]['earnings_total'] = row.total or 0
+                referrers_data[row.referrer_id]['earnings_total_days'] = int(row.total_days or 0)
 
         # Today earnings
         today_earnings_query = await db.execute(
-            select(
-                ReferralEarning.user_id.label('referrer_id'),
-                func.sum(ReferralEarning.amount_kopeks).label('total'),
-            )
-            .where(ReferralEarning.created_at >= today_start)
+            select(ReferralEarning.user_id.label('referrer_id'), func.sum(ReferralEarning.amount_kopeks).label('total'))
+            .where(and_(not_referee_directed(), ReferralEarning.created_at >= today_start))
             .group_by(ReferralEarning.user_id)
         )
         for row in today_earnings_query:
@@ -712,11 +686,8 @@ async def get_top_referrers(
 
         # Week earnings
         week_earnings_query = await db.execute(
-            select(
-                ReferralEarning.user_id.label('referrer_id'),
-                func.sum(ReferralEarning.amount_kopeks).label('total'),
-            )
-            .where(ReferralEarning.created_at >= week_ago)
+            select(ReferralEarning.user_id.label('referrer_id'), func.sum(ReferralEarning.amount_kopeks).label('total'))
+            .where(and_(not_referee_directed(), ReferralEarning.created_at >= week_ago))
             .group_by(ReferralEarning.user_id)
         )
         for row in week_earnings_query:
@@ -725,11 +696,8 @@ async def get_top_referrers(
 
         # Month earnings
         month_earnings_query = await db.execute(
-            select(
-                ReferralEarning.user_id.label('referrer_id'),
-                func.sum(ReferralEarning.amount_kopeks).label('total'),
-            )
-            .where(ReferralEarning.created_at >= month_ago)
+            select(ReferralEarning.user_id.label('referrer_id'), func.sum(ReferralEarning.amount_kopeks).label('total'))
+            .where(and_(not_referee_directed(), ReferralEarning.created_at >= month_ago))
             .group_by(ReferralEarning.user_id)
         )
         for row in month_earnings_query:
@@ -740,14 +708,9 @@ async def get_top_referrers(
         referrer_ids = list(referrers_data.keys())
         if referrer_ids:
             users_query = await db.execute(
-                select(
-                    User.id,
-                    User.telegram_id,
-                    User.username,
-                    User.first_name,
-                    User.last_name,
-                    User.email,
-                ).where(User.id.in_(referrer_ids))
+                select(User.id, User.telegram_id, User.username, User.first_name, User.last_name, User.email).where(
+                    User.id.in_(referrer_ids)
+                )
             )
             users_info = {u.id: u for u in users_query}
         else:
@@ -789,11 +752,14 @@ async def get_top_referrers(
                     earnings_week_kopeks=data.get('earnings_week', 0),
                     earnings_month_kopeks=data.get('earnings_month', 0),
                     earnings_total_kopeks=data.get('earnings_total', 0),
+                    earnings_total_days=data.get('earnings_total_days', 0),
                 )
             )
 
         # Sort by earnings and by invited
-        by_earnings = sorted(referrer_items, key=lambda x: x.earnings_total_kopeks, reverse=True)[:limit]
+        by_earnings = sorted(
+            referrer_items, key=lambda x: (x.earnings_total_kopeks, x.earnings_total_days), reverse=True
+        )[:limit]
         by_invited = sorted(referrer_items, key=lambda x: x.invited_count, reverse=True)[:limit]
 
         # Calculate totals
@@ -847,7 +813,7 @@ async def get_top_campaigns(
                     conversion_rate=stats.get('conversion_rate', 0.0),
                     total_revenue_kopeks=stats.get('total_revenue_kopeks', 0),
                     avg_revenue_per_user_kopeks=stats.get('avg_revenue_per_user_kopeks', 0),
-                    created_at=(campaign.created_at.isoformat() if campaign.created_at else None),
+                    created_at=campaign.created_at.isoformat() if campaign.created_at else None,
                 )
             )
 
@@ -883,7 +849,7 @@ async def get_recent_payments(
     """Get recent payments with user info."""
     try:
         now = datetime.now(UTC)
-        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        today_start = local_day_start(now)
         week_ago = now - timedelta(days=7)
 
         # Get recent transactions (deposits and subscription payments)
@@ -906,14 +872,9 @@ async def get_recent_payments(
         user_ids = list({t.user_id for t in transactions})
         if user_ids:
             users_query = await db.execute(
-                select(
-                    User.id,
-                    User.telegram_id,
-                    User.username,
-                    User.first_name,
-                    User.last_name,
-                    User.email,
-                ).where(User.id.in_(user_ids))
+                select(User.id, User.telegram_id, User.username, User.first_name, User.last_name, User.email).where(
+                    User.id.in_(user_ids)
+                )
             )
             users_info = {u.id: u for u in users_query}
         else:
@@ -984,12 +945,7 @@ async def get_recent_payments(
         today_total_result = await db.execute(
             select(func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0)).where(
                 and_(
-                    Transaction.type.in_(
-                        [
-                            TransactionType.DEPOSIT.value,
-                            TransactionType.SUBSCRIPTION_PAYMENT.value,
-                        ]
-                    ),
+                    Transaction.type.in_([TransactionType.DEPOSIT.value, TransactionType.SUBSCRIPTION_PAYMENT.value]),
                     Transaction.is_completed == True,
                     Transaction.created_at >= today_start,
                     Transaction.payment_method.in_(REAL_PAYMENT_METHODS),
@@ -1001,12 +957,7 @@ async def get_recent_payments(
         week_total_result = await db.execute(
             select(func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0)).where(
                 and_(
-                    Transaction.type.in_(
-                        [
-                            TransactionType.DEPOSIT.value,
-                            TransactionType.SUBSCRIPTION_PAYMENT.value,
-                        ]
-                    ),
+                    Transaction.type.in_([TransactionType.DEPOSIT.value, TransactionType.SUBSCRIPTION_PAYMENT.value]),
                     Transaction.is_completed == True,
                     Transaction.created_at >= week_ago,
                     Transaction.payment_method.in_(REAL_PAYMENT_METHODS),

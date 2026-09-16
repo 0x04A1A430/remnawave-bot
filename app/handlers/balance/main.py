@@ -15,11 +15,7 @@ from app.database.crud.transaction import (
     get_user_transactions_count,
 )
 from app.database.models import TransactionType, User
-from app.handlers.subscription.autopay import (
-    handle_confirm_unlink,
-    handle_saved_cards_list,
-    handle_unlink_card,
-)
+from app.handlers.subscription.autopay import handle_confirm_unlink, handle_saved_cards_list, handle_unlink_card
 from app.keyboards.inline import (
     get_back_keyboard,
     get_balance_keyboard,
@@ -56,11 +52,7 @@ CREDIT_TRANSACTION_TYPES: frozenset[str] = frozenset(
 
 
 async def route_payment_by_method(
-    message: types.Message,
-    db_user: User,
-    amount_kopeks: int,
-    state: FSMContext,
-    payment_method: str,
+    message: types.Message, db_user: User, amount_kopeks: int, state: FSMContext, payment_method: str
 ) -> bool:
     """
     Роутер платежей по методу оплаты.
@@ -152,31 +144,16 @@ async def route_payment_by_method(
 
         async with AsyncSessionLocal() as db:
             await process_freekassa_payment_amount(
-                message,
-                db_user,
-                db,
-                amount_kopeks,
-                state,
-                payment_method=payment_method,
+                message, db_user, db, amount_kopeks, state, payment_method=payment_method
             )
         return True
 
-    if payment_method in (
-        'kassa_ai',
-        'kassa_ai_sbp',
-        'kassa_ai_card',
-        'kassa_ai_sberpay',
-    ):
+    if payment_method in ('kassa_ai', 'kassa_ai_sbp', 'kassa_ai_card', 'kassa_ai_sberpay'):
         from .kassa_ai import process_kassa_ai_payment_amount
 
         async with AsyncSessionLocal() as db:
             await process_kassa_ai_payment_amount(
-                message,
-                db_user,
-                db,
-                amount_kopeks,
-                state,
-                payment_method=payment_method,
+                message, db_user, db, amount_kopeks, state, payment_method=payment_method
             )
         return True
 
@@ -222,12 +199,7 @@ async def route_payment_by_method(
             await process_etoplatezhi_payment_amount(message, db_user, db, amount_kopeks, state)
         return True
 
-    if payment_method in (
-        'antilopay',
-        'antilopay_sbp',
-        'antilopay_card',
-        'antilopay_sberpay',
-    ):
+    if payment_method in ('antilopay', 'antilopay_sbp', 'antilopay_card', 'antilopay_sberpay'):
         from .antilopay import process_antilopay_payment_amount
 
         async with AsyncSessionLocal() as db:
@@ -253,6 +225,20 @@ async def route_payment_by_method(
 
         async with AsyncSessionLocal() as db:
             await process_lava_payment_amount(message, db_user, db, amount_kopeks, state)
+        return True
+
+    if payment_method in ('paritypay', 'paritypay_card', 'paritypay_sbp'):
+        from .paritypay import process_paritypay_payment_amount
+
+        async with AsyncSessionLocal() as db:
+            await process_paritypay_payment_amount(message, db_user, db, amount_kopeks, state)
+        return True
+
+    if payment_method in ('tabpay', 'tabpay_card', 'tabpay_sbp'):
+        from .tabpay import process_tabpay_payment_amount
+
+        async with AsyncSessionLocal() as db:
+            await process_tabpay_payment_amount(message, db_user, db, amount_kopeks, state)
         return True
 
     if payment_method in ('cispay', 'cispay_card', 'cispay_sbp'):
@@ -283,19 +269,7 @@ async def show_balance_menu(callback: types.CallbackQuery, db_user: User, db: As
 
     balance_text = texts.BALANCE_INFO.format(balance=texts.format_price(db_user.balance_kopeks))
 
-    try:
-        from app.services.user_cart_service import user_cart_service
-
-        has_saved_cart = await user_cart_service.has_user_cart(db_user.id)
-    except Exception as e:
-        logger.error(
-            'Ошибка проверки сохраненной корзины в меню баланса',
-            db_user_id=db_user.id,
-            error=e,
-        )
-        has_saved_cart = False
-
-    reply_markup = get_balance_keyboard(db_user.language, has_saved_cart=has_saved_cart)
+    reply_markup = get_balance_keyboard(db_user.language)
 
     try:
         if callback.message and callback.message.text:
@@ -533,7 +507,8 @@ async def show_payment_methods(callback: types.CallbackQuery, db_user: User, db:
         keyboard.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance', style='danger')])
 
         await callback.message.edit_text(
-            f'<b>Пополнение ограничено</b>\n\n{reason}\n\nЕсли вы считаете это ошибкой, вы можете обжаловать решение.',
+            f'🚫 <b>Пополнение ограничено</b>\n\n{reason}\n\n'
+            'Если вы считаете это ошибкой, вы можете обжаловать решение.',
             reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
         )
         await callback.answer()
@@ -586,7 +561,7 @@ async def handle_payment_methods_unavailable(callback: types.CallbackQuery, db_u
     await callback.answer(
         texts.t(
             'PAYMENT_METHODS_UNAVAILABLE_ALERT',
-            'В данный момент автоматические способы оплаты временно недоступны. Для пополнения баланса обратитесь в техподдержку.',
+            '⚠️ В данный момент автоматические способы оплаты временно недоступны. Для пополнения баланса обратитесь в техподдержку.',
         ),
         show_alert=True,
     )
@@ -623,8 +598,7 @@ async def handle_successful_topup_with_cart(user_id: int, amount_kopeks: int, bo
                 inline_keyboard=[
                     [
                         types.InlineKeyboardButton(
-                            text='Вернуться к оформлению подписки',
-                            callback_data='return_to_saved_cart',
+                            text='🛒 Вернуться к оформлению подписки', callback_data='return_to_saved_cart'
                         )
                     ],
                     [types.InlineKeyboardButton(text='Мой баланс', callback_data='menu_balance', style='danger')],
@@ -640,18 +614,15 @@ async def handle_successful_topup_with_cart(user_id: int, amount_kopeks: int, bo
                 balance_hint = f'Не хватает: {texts.format_price(missing, round_kopeks=False)}'
 
             success_text = (
-                f'Баланс пополнен на {texts.format_price(amount_kopeks)}!\n\n'
-                f'Текущий баланс: {texts.format_price(user.balance_kopeks)}\n\n'
-                f'У вас есть сохранённая корзина на {texts.format_price(total_price)}\n'
+                f'✅ Баланс пополнен на {texts.format_price(amount_kopeks)}!\n\n'
+                f'💰 Текущий баланс: {texts.format_price(user.balance_kopeks)}\n\n'
+                f'🛒 У вас есть сохранённая корзина на {texts.format_price(total_price)}\n'
                 f'{balance_hint}\n\n'
                 f'Хотите продолжить оформление?'
             )
 
             await bot.send_message(
-                chat_id=user.telegram_id,
-                text=success_text,
-                reply_markup=keyboard,
-                parse_mode='HTML',
+                chat_id=user.telegram_id, text=success_text, reply_markup=keyboard, parse_mode='HTML'
             )
 
     except Exception as e:
@@ -696,8 +667,7 @@ async def request_support_topup(callback: types.CallbackQuery, db_user: User):
         inline_keyboard=[
             [
                 types.InlineKeyboardButton(
-                    text='Написать в поддержку',
-                    url=settings.get_support_contact_url() or 'https://t.me/',
+                    text='💬 Написать в поддержку', url=settings.get_support_contact_url() or 'https://t.me/'
                 )
             ],
             [types.InlineKeyboardButton(text=texts.BACK, callback_data='balance_topup', style='danger')],
@@ -753,7 +723,7 @@ async def process_topup_amount(message: types.Message, db_user: User, state: FSM
             if amount_kopeks < settings.YOOKASSA_MIN_AMOUNT_KOPEKS:
                 min_rubles = settings.YOOKASSA_MIN_AMOUNT_KOPEKS / 100
                 await message.answer(
-                    f'Минимальная сумма для оплаты через YooKassa: {min_rubles:.0f} ₽',
+                    f'❌ Минимальная сумма для оплаты через YooKassa: {min_rubles:.0f} ₽',
                     reply_markup=get_back_keyboard(db_user.language, callback_data='balance_topup'),
                 )
                 return
@@ -761,7 +731,7 @@ async def process_topup_amount(message: types.Message, db_user: User, state: FSM
             if amount_kopeks > settings.YOOKASSA_MAX_AMOUNT_KOPEKS:
                 max_rubles = settings.YOOKASSA_MAX_AMOUNT_KOPEKS / 100
                 await message.answer(
-                    f'Максимальная сумма для оплаты через YooKassa: {max_rubles:,.0f} ₽'.replace(',', ''),
+                    f'❌ Максимальная сумма для оплаты через YooKassa: {max_rubles:,.0f} ₽'.replace(',', ' '),
                     reply_markup=get_back_keyboard(db_user.language, callback_data='balance_topup'),
                 )
                 return
@@ -783,7 +753,7 @@ async def handle_sbp_payment(callback: types.CallbackQuery, db: AsyncSession):
         payment = await get_yookassa_payment_by_local_id(db, local_payment_id)
 
         if not payment:
-            await callback.answer('Платеж не найден', show_alert=True)
+            await callback.answer('❌ Платеж не найден', show_alert=True)
             return
 
         import json
@@ -792,7 +762,7 @@ async def handle_sbp_payment(callback: types.CallbackQuery, db: AsyncSession):
         confirmation_token = metadata.get('confirmation_token')
 
         if not confirmation_token:
-            await callback.answer('Токен подтверждения не найден', show_alert=True)
+            await callback.answer('❌ Токен подтверждения не найден', show_alert=True)
             return
 
         await callback.message.answer(
@@ -809,7 +779,13 @@ async def handle_sbp_payment(callback: types.CallbackQuery, db: AsyncSession):
 
     except Exception as e:
         logger.error('Ошибка обработки embedded платежа СБП', error=e)
-        await callback.answer('Ошибка обработки платежа', show_alert=True)
+        await callback.answer('❌ Ошибка обработки платежа', show_alert=True)
+
+
+async def _reply_after_answer(callback: types.CallbackQuery, text: str) -> None:
+    """Нажатие уже подтверждено — второй answer() Telegram отвергнет, поэтому пишем сообщением."""
+    if isinstance(callback.message, types.Message):
+        await callback.message.answer(text)
 
 
 @error_handler
@@ -822,15 +798,34 @@ async def handle_topup_amount_callback(
         _, method, amount_str = callback.data.split('|', 2)
         amount_kopeks = int(amount_str)
     except ValueError:
-        await callback.answer('Некорректный запрос', show_alert=True)
+        await callback.answer('❌ Некорректный запрос', show_alert=True)
         return
 
     if amount_kopeks <= 0:
-        await callback.answer('Некорректная сумма', show_alert=True)
+        await callback.answer('❌ Некорректная сумма', show_alert=True)
         return
 
+    # Сценарии, которым передаётся сам callback, отвечают на нажатие сами (у них свои алерты).
+    if method == 'tribute':
+        from .tribute import start_tribute_payment
+
+        await start_tribute_payment(callback, db_user)
+        return
+
+    if method == 'platega':
+        data = await state.get_data()
+        if (int(data.get('platega_method', 0)) if data else 0) <= 0:
+            from .platega import start_platega_payment
+
+            await state.update_data(platega_pending_amount=amount_kopeks)
+            await start_platega_payment(callback, db_user, state)
+            return
+
+    # Снимаем «часики» до похода к провайдеру: создание платежа может идти секунды, а Telegram
+    # ждёт ответ на нажатие недолго. Поздний answer() падал с «query is too old», собственный
+    # except считал это ошибкой пополнения и слал отчёт админам, хотя ссылка на оплату уже ушла.
+    await callback.answer()
     try:
-        # Особые случаи, требующие специальной логики
         if method.startswith('platega_m'):
             from app.database.database import AsyncSessionLocal
 
@@ -842,38 +837,26 @@ async def handle_topup_amount_callback(
             async with AsyncSessionLocal() as db:
                 await process_platega_payment_amount(callback.message, db_user, db, amount_kopeks, state)
         elif method == 'platega':
+            # Код способа уже лежит в состоянии — проверено выше.
             from app.database.database import AsyncSessionLocal
 
-            from .platega import process_platega_payment_amount, start_platega_payment
+            from .platega import process_platega_payment_amount
 
-            data = await state.get_data()
-            method_code = int(data.get('platega_method', 0)) if data else 0
-
-            if method_code > 0:
-                await state.set_state(BalanceStates.waiting_for_amount)
-                async with AsyncSessionLocal() as db:
-                    await process_platega_payment_amount(callback.message, db_user, db, amount_kopeks, state)
-            else:
-                await state.update_data(platega_pending_amount=amount_kopeks)
-                await start_platega_payment(callback, db_user, state)
-        elif method == 'tribute':
-            from .tribute import start_tribute_payment
-
-            await start_tribute_payment(callback, db_user)
-            return
+            await state.set_state(BalanceStates.waiting_for_amount)
+            async with AsyncSessionLocal() as db:
+                await process_platega_payment_amount(callback.message, db_user, db, amount_kopeks, state)
         # Стандартные методы через роутер
         else:
             await state.update_data(payment_method=method)
             await state.set_state(BalanceStates.waiting_for_amount)
             if not await route_payment_by_method(callback.message, db_user, amount_kopeks, state, method):
-                await callback.answer('Неизвестный способ оплаты', show_alert=True)
-                return
+                await _reply_after_answer(callback, '❌ Неизвестный способ оплаты')
 
-        await callback.answer()
-
+    except TelegramBadRequest:
+        raise  # устаревший запрос и прочие ответы Telegram классифицирует @error_handler
     except Exception as error:
         logger.error('Ошибка быстрого пополнения', error=error)
-        await callback.answer('Ошибка обработки запроса', show_alert=True)
+        await _reply_after_answer(callback, '❌ Ошибка обработки запроса')
 
 
 def register_balance_handlers(dp: Dispatcher):
@@ -929,11 +912,7 @@ def register_balance_handlers(dp: Dispatcher):
         F.data.startswith('pal24_method_'),
     )
 
-    from .platega import (
-        handle_platega_method_selection,
-        start_platega_direct_method,
-        start_platega_payment,
-    )
+    from .platega import handle_platega_method_selection, start_platega_direct_method, start_platega_payment
 
     dp.callback_query.register(start_platega_payment, F.data == 'topup_platega')
     dp.callback_query.register(
@@ -1028,21 +1007,13 @@ def register_balance_handlers(dp: Dispatcher):
     dp.callback_query.register(start_overpay_card_topup, F.data == 'topup_overpay_card')
     dp.callback_query.register(start_overpay_int_topup, F.data == 'topup_overpay_int')
 
-    from .aurapay import (
-        start_aurapay_card_topup,
-        start_aurapay_sbp_topup,
-        start_aurapay_topup,
-    )
+    from .aurapay import start_aurapay_card_topup, start_aurapay_sbp_topup, start_aurapay_topup
 
     dp.callback_query.register(start_aurapay_topup, F.data == 'topup_aurapay')
     dp.callback_query.register(start_aurapay_sbp_topup, F.data == 'topup_aurapay_sbp')
     dp.callback_query.register(start_aurapay_card_topup, F.data == 'topup_aurapay_card')
 
-    from .etoplatezhi import (
-        start_etoplatezhi_card_topup,
-        start_etoplatezhi_sbp_topup,
-        start_etoplatezhi_topup,
-    )
+    from .etoplatezhi import start_etoplatezhi_card_topup, start_etoplatezhi_sbp_topup, start_etoplatezhi_topup
 
     dp.callback_query.register(start_etoplatezhi_topup, F.data == 'topup_etoplatezhi')
     dp.callback_query.register(start_etoplatezhi_sbp_topup, F.data == 'topup_etoplatezhi_sbp')
@@ -1088,6 +1059,18 @@ def register_balance_handlers(dp: Dispatcher):
     dp.callback_query.register(start_cispay_topup, F.data == 'topup_cispay')
     dp.callback_query.register(start_cispay_card_topup, F.data == 'topup_cispay_card')
     dp.callback_query.register(start_cispay_sbp_topup, F.data == 'topup_cispay_sbp')
+
+    from .tabpay import start_tabpay_card_topup, start_tabpay_sbp_topup, start_tabpay_topup
+
+    dp.callback_query.register(start_tabpay_topup, F.data == 'topup_tabpay')
+    dp.callback_query.register(start_tabpay_card_topup, F.data == 'topup_tabpay_card')
+    dp.callback_query.register(start_tabpay_sbp_topup, F.data == 'topup_tabpay_sbp')
+
+    from .paritypay import start_paritypay_card_topup, start_paritypay_sbp_topup, start_paritypay_topup
+
+    dp.callback_query.register(start_paritypay_topup, F.data == 'topup_paritypay')
+    dp.callback_query.register(start_paritypay_card_topup, F.data == 'topup_paritypay_card')
+    dp.callback_query.register(start_paritypay_sbp_topup, F.data == 'topup_paritypay_sbp')
 
     from .mulenpay import check_mulenpay_payment_status
 

@@ -82,7 +82,7 @@ DEFAULT_TEMPLATES = [
         'attempts_per_user': 1,
         'times_per_day': 1,
         'schedule_times': '15:00',
-        'payload': {'flags': ['', '', '', '', '', '', '', '', '', '']},
+        'payload': {'flags': ['🇸🇪', '🇸🇬', '🇺🇸', '🇷🇺', '🇩🇪', '🇯🇵', '🇧🇷', '🇦🇺', '🇨🇦', '🇫🇷']},
         'is_enabled': False,
     },
     {
@@ -108,7 +108,7 @@ DEFAULT_TEMPLATES = [
         'attempts_per_user': 1,
         'times_per_day': 1,
         'schedule_times': '13:00',
-        'payload': {'pairs': [{'question': '', 'answer': 'VPN'}]},
+        'payload': {'pairs': [{'question': '🔐📡🌐', 'answer': 'VPN'}]},
         'is_enabled': False,
     },
     {
@@ -149,7 +149,7 @@ class ContestRotationService:
         await self._ensure_default_templates()
 
         self._task = asyncio.create_task(self._loop())
-        logger.info('Сервис ротационных конкурсов запущен')
+        logger.info('🎲 Сервис ротационных конкурсов запущен')
 
     async def stop(self) -> None:
         if self._task and not self._task.done():
@@ -234,11 +234,7 @@ class ContestRotationService:
                         ends_at=ends_at_utc,
                         payload=payload,
                     )
-                    logger.info(
-                        'Создан раунд для шаблона',
-                        round_obj_id=round_obj.id,
-                        slug=tpl.slug,
-                    )
+                    logger.info('Создан раунд для шаблона', round_obj_id=round_obj.id, slug=tpl.slug)
 
     def _get_timezone(self) -> ZoneInfo:
         tz_name = settings.TIMEZONE or 'UTC'
@@ -283,11 +279,11 @@ class ContestRotationService:
             prize_display = prize_value
 
         text = (
-            f'{texts.t("CONTEST_START_ANNOUNCEMENT", "Стартует игра")}: <b>{tpl.name}</b>\n'
+            f'🎲 {texts.t("CONTEST_START_ANNOUNCEMENT", "Стартует игра")}: <b>{tpl.name}</b>\n'
             f'{texts.t("CONTEST_PRIZE", "Приз")}: {prize_display} • {texts.t("CONTEST_WINNERS", "Победителей")}: {tpl.max_winners}\n'
             f'{texts.t("CONTEST_ATTEMPTS", "Попыток/польз")}: {tpl.attempts_per_user}\n\n'
             f'{texts.t("CONTEST_ELIGIBILITY", "Участвовать могут только с активной или триальной подпиской")}.\n'
-            f'<b>{texts.t("REMINDER", "Напоминание")}:</b> {texts.t("CONTEST_REMINDER_TEXT", "Не забудьте участвовать в конкурсах для получения бонусов")}!'
+            f'💡 <b>{texts.t("REMINDER", "Напоминание")}:</b> {texts.t("CONTEST_REMINDER_TEXT", "Не забудьте участвовать в конкурсах для получения бонусов")}!'
         )
 
         await asyncio.gather(
@@ -299,9 +295,7 @@ class ContestRotationService:
     async def _send_channel_announce(self, text: str) -> None:
         if not self.bot:
             return
-        from app.services.channel_subscription_service import (
-            channel_subscription_service,
-        )
+        from app.services.channel_subscription_service import channel_subscription_service
 
         channel_id = await channel_subscription_service.get_first_channel_id()
         if not channel_id:
@@ -322,12 +316,7 @@ class ContestRotationService:
         if bot_username:
             keyboard = InlineKeyboardMarkup(
                 inline_keyboard=[
-                    [
-                        InlineKeyboardButton(
-                            text='Играть',
-                            url=f'https://t.me/{bot_username}?start=contests',
-                        )
-                    ]
+                    [InlineKeyboardButton(text='🎲 Играть', url=f'https://t.me/{bot_username}?start=contests')]
                 ]
             )
 
@@ -352,7 +341,7 @@ class ContestRotationService:
             sent = failed = 0
 
             keyboard = InlineKeyboardMarkup(
-                inline_keyboard=[[InlineKeyboardButton(text='Играть', callback_data='contests_menu')]]
+                inline_keyboard=[[InlineKeyboardButton(text='🎲 Играть', callback_data='contests_menu')]]
             )
 
             while True:
@@ -410,10 +399,7 @@ class ContestRotationService:
             sub = getattr(u, 'subscription', None)
             if not sub:
                 continue
-            if sub.status in {
-                SubscriptionStatus.ACTIVE.value,
-                SubscriptionStatus.TRIAL.value,
-            }:
+            if sub.status in {SubscriptionStatus.ACTIVE.value, SubscriptionStatus.TRIAL.value}:
                 allowed.append(u)
         return allowed
 

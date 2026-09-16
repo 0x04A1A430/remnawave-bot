@@ -35,17 +35,9 @@ async def get_current_welcome_text_settings(db: AsyncSession) -> dict:
     welcome_text = result.scalar_one_or_none()
 
     if welcome_text:
-        return {
-            'text': welcome_text.text_content,
-            'is_enabled': welcome_text.is_enabled,
-            'id': welcome_text.id,
-        }
+        return {'text': welcome_text.text_content, 'is_enabled': welcome_text.is_enabled, 'id': welcome_text.id}
 
-    return {
-        'text': await get_current_welcome_text_or_default(),
-        'is_enabled': True,
-        'id': None,
-    }
+    return {'text': await get_current_welcome_text_or_default(), 'is_enabled': True, 'id': None}
 
 
 async def get_welcome_text_by_id(db: AsyncSession, welcome_text_id: int) -> WelcomeText | None:
@@ -95,21 +87,13 @@ async def toggle_welcome_text_status(db: AsyncSession, admin_id: int) -> bool:
             logger.info('Приветственный текст администратором', status=status, admin_id=admin_id)
             return welcome_text.is_enabled
         default_text = await get_current_welcome_text_or_default()
-        new_welcome_text = WelcomeText(
-            text_content=default_text,
-            is_active=True,
-            is_enabled=True,
-            created_by=admin_id,
-        )
+        new_welcome_text = WelcomeText(text_content=default_text, is_active=True, is_enabled=True, created_by=admin_id)
 
         db.add(new_welcome_text)
         await db.commit()
         await db.refresh(new_welcome_text)
 
-        logger.info(
-            'Создан и включен дефолтный приветственный текст администратором',
-            admin_id=admin_id,
-        )
+        logger.info('Создан и включен дефолтный приветственный текст администратором', admin_id=admin_id)
         return True
 
     except Exception as e:
@@ -126,10 +110,7 @@ async def set_welcome_text(db: AsyncSession, text_content: str, admin_id: int) -
         await db.execute(update(WelcomeText).values(is_active=False))
 
         new_welcome_text = WelcomeText(
-            text_content=text_content,
-            is_active=True,
-            is_enabled=current_enabled_status,
-            created_by=admin_id,
+            text_content=text_content, is_active=True, is_enabled=current_enabled_status, created_by=admin_id
         )
 
         db.add(new_welcome_text)
@@ -174,7 +155,7 @@ async def create_welcome_text(
     await db.refresh(welcome_text)
 
     logger.info(
-        'Создан приветственный текст',
+        '✅ Создан приветственный текст',
         welcome_text_id=welcome_text.id,
         is_active=welcome_text.is_active,
         is_enabled=welcome_text.is_enabled,
@@ -208,7 +189,7 @@ async def update_welcome_text(
     await db.refresh(welcome_text)
 
     logger.info(
-        'Обновлен приветственный текст',
+        '📝 Обновлен приветственный текст',
         welcome_text_id=welcome_text.id,
         is_active=welcome_text.is_active,
         is_enabled=welcome_text.is_enabled,
@@ -219,18 +200,18 @@ async def update_welcome_text(
 async def delete_welcome_text(db: AsyncSession, welcome_text: WelcomeText) -> None:
     await db.delete(welcome_text)
     await db.commit()
-    logger.info('Удален приветственный текст ID', welcome_text_id=welcome_text.id)
+    logger.info('🗑️ Удален приветственный текст ID', welcome_text_id=welcome_text.id)
 
 
 async def get_current_welcome_text_or_default() -> str:
     return (
-        'Привет, {user_name}!  3 дней VPN бесплатно! '
+        'Привет, {user_name}! 🎁 3 дней VPN бесплатно! '
         'Подключайтесь за минуту и забудьте о блокировках. '
-        'До 1 Гбит/с скорость '
-        'Умный VPN — можно не отключать для большинства российских сервисов '
-        'Современные протоколы — максимум защиты и анонимности '
-        'Всего 99₽/мес за 1 устройство '
-        'Жмите кнопку и подключайтесь!'
+        '✅ До 1 Гбит/с скорость '
+        '✅ Умный VPN — можно не отключать для большинства российских сервисов '
+        '✅ Современные протоколы — максимум защиты и анонимности '
+        '💉 Всего 99₽/мес за 1 устройство '
+        '👇 Жмите кнопку и подключайтесь!'
     )
 
 

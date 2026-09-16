@@ -41,7 +41,7 @@ async def upsert_privacy_policy(
     await db.commit()
     await db.refresh(policy)
 
-    logger.info('Политика конфиденциальности обновлена', language=language, policy_id=policy.id)
+    logger.info('✅ Политика конфиденциальности обновлена', language=language, policy_id=policy.id)
 
     return policy
 
@@ -68,7 +68,7 @@ async def set_privacy_policy_enabled(
     await db.refresh(policy)
 
     logger.info(
-        'Статус политики конфиденциальности для языка %s обновлен: %s',
+        '✅ Статус политики конфиденциальности для языка %s обновлен: %s',
         language,
         'enabled' if policy.is_enabled else 'disabled',
     )

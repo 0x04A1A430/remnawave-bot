@@ -9,6 +9,11 @@ import structlog
 from app.config import settings
 
 
+# Документация MulenPay ограничений на client не задаёт — поле встречается там
+# только в примере тела запроса. Предел выбран нами защитно и совпадает с
+# длиной колонки users.email, чтобы обрезка была недостижима на реальных данных.
+MULENPAY_CLIENT_MAX_LENGTH = 255
+
 logger = structlog.get_logger(__name__)
 
 
@@ -65,10 +70,7 @@ class MulenPayService:
 
                     if response.status >= 400:
                         logger.error(
-                            'MulenPay API error',
-                            response_status=response.status,
-                            endpoint=endpoint,
-                            raw_text=raw_text,
+                            'MulenPay API error', response_status=response.status, endpoint=endpoint, raw_text=raw_text
                         )
                         if response.status in self._retryable_statuses and attempt < self._max_retries:
                             await self._sleep_with_backoff(attempt)
@@ -77,11 +79,7 @@ class MulenPayService:
 
                     if data is None:
                         if raw_text:
-                            logger.warning(
-                                'MulenPay returned unexpected payload',
-                                endpoint=endpoint,
-                                raw_text=raw_text,
-                            )
+                            logger.warning('MulenPay returned unexpected payload', endpoint=endpoint, raw_text=raw_text)
                         return None
 
                     return data
@@ -145,11 +143,7 @@ class MulenPayService:
             try:
                 return json.loads(raw_text), raw_text
             except json.JSONDecodeError as error:
-                logger.error(
-                    'Failed to decode MulenPay JSON response',
-                    url=response.url,
-                    error=error,
-                )
+                logger.error('Failed to decode MulenPay JSON response', url=response.url, error=error)
                 return None, raw_text
 
         return None, raw_text
@@ -160,7 +154,7 @@ class MulenPayService:
 
     def _build_signature(self, currency: str, amount_str: str) -> str:
         raw_string = f'{currency}{amount_str}{self.shop_id}{self.secret_key}'.encode()
-        return hashlib.sha1(raw_string, usedforsecurity=False).hexdigest()  # provider-defined algorithm
+        return hashlib.sha1(raw_string).hexdigest()
 
     async def create_payment(
         self,
@@ -173,6 +167,7 @@ class MulenPayService:
         subscribe: str | None = None,
         hold_time: int | None = None,
         website_url: str | None = None,
+        client: str | None = None,
     ) -> dict[str, Any] | None:
         if not self.is_configured:
             logger.error('MulenPay service is not configured')
@@ -197,6 +192,10 @@ class MulenPayService:
             payload['holdTime'] = hold_time
         if website_url:
             payload['website_url'] = website_url
+        if client:
+            # Контакт плательщика, по которому MulenPay может с ним связаться.
+            # Значение уже нормализовано вызывающим слоем; срез — последний рубеж.
+            payload['client'] = client[:MULENPAY_CLIENT_MAX_LENGTH]
 
         response = await self._request('POST', '/v2/payments', json_data=payload)
         if not response or not response.get('success'):

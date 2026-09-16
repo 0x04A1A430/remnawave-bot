@@ -5,9 +5,7 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field, validator
 
 
-def _normalize_period_discounts(
-    value: dict[object, object] | None,
-) -> dict[int, int] | None:
+def _normalize_period_discounts(value: dict[object, object] | None) -> dict[int, int] | None:
     if value is None:
         return None
 

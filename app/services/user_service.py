@@ -70,6 +70,7 @@ class DeleteUserResult:
     bot_deleted: bool = False
     panel_deleted: bool = False
     panel_error: str | None = None
+    # Удаление отклонено guard'ом открытого grace-доступа (HTTP-слой мапит в 409)
     grace_blocked: bool = False
 
 
@@ -88,51 +89,44 @@ class UserService:
         """
         texts = get_texts(user.language)
 
-        has_active_subscription = subscription is not None and subscription.status in {
-            'active',
-            'trial',
-        }
+        has_active_subscription = subscription is not None and subscription.status in {'active', 'trial'}
 
         if has_active_subscription:
             # У пользователя есть активная подписка - обычное сообщение
             message = (
-                '<b>Баланс пополнен!</b>\n\n'
-                '<blockquote>'
-                f'<b>Сумма:</b> +{settings.format_price(amount_kopeks)}\n'
-                f'<b>Текущий баланс:</b> {settings.format_price(user.balance_kopeks)}\n'
-                '</blockquote>'
+                f'✅ <b>Баланс пополнен на {settings.format_price(amount_kopeks)}!</b>\n\n'
+                f'💳 Текущий баланс: {settings.format_price(user.balance_kopeks)}\n\n'
+                f'Спасибо за использование нашего сервиса! 🎉'
             )
             keyboard = types.InlineKeyboardMarkup(
                 inline_keyboard=[
-                    [types.InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu', style='danger')]
+                    [
+                        types.InlineKeyboardButton(
+                            text=texts.t('SUBSCRIPTION_EXTEND', '💎 Продлить подписку'),
+                            callback_data=extend_callback,
+                        )
+                    ]
                 ]
             )
         else:
             # НЕТ активной подписки - БОЛЬШОЕ ПРЕДУПРЕЖДЕНИЕ
             message = (
-                '<b>Баланс пополнен!</b>\n\n'
-                '<blockquote>'
-                f'<b>Сумма:</b> +{settings.format_price(amount_kopeks)}\n'
-                f'<b>Текущий баланс:</b> {settings.format_price(user.balance_kopeks)}\n'
-                '</blockquote>\n\n'
-                '<b>⚠️ ВАЖНО! Подписка не активна!</b>\n'
-                'Пополнение баланса НЕ активирует подписку автоматически.\n\n'
-                '<b>Выберите действие:</b>'
+                f'✅ <b>Баланс пополнен на {settings.format_price(amount_kopeks)}!</b>\n\n'
+                f'💳 Текущий баланс: {settings.format_price(user.balance_kopeks)}\n\n'
+                f'{"─" * 25}\n\n'
+                f'⚠️ <b>ВАЖНО!</b> ⚠️\n\n'
+                f'🔴 <b>ПОДПИСКА НЕ АКТИВНА!</b>\n\n'
+                f'Пополнение баланса НЕ активирует подписку автоматически!\n\n'
+                f'👇 <b>Выберите действие:</b>'
             )
             extend_callback = 'menu_subscription' if settings.is_multi_tariff_enabled() else 'subscription_extend'
             keyboard = types.InlineKeyboardMarkup(
                 inline_keyboard=[
+                    [types.InlineKeyboardButton(text='🚀 АКТИВИРОВАТЬ ПОДПИСКУ', callback_data='subscription_buy')],
+                    [types.InlineKeyboardButton(text='💎 ПРОДЛИТЬ ПОДПИСКУ', callback_data=extend_callback)],
                     [
                         types.InlineKeyboardButton(
-                            text='АКТИВИРОВАТЬ ПОДПИСКУ',
-                            callback_data='subscription_buy',
-                        )
-                    ],
-                    [types.InlineKeyboardButton(text='ПРОДЛИТЬ ПОДПИСКУ', callback_data=extend_callback)],
-                    [
-                        types.InlineKeyboardButton(
-                            text='ДОБАВИТЬ УСТРОЙСТВА',
-                            callback_data='subscription_add_devices',
+                            text='📱 ДОБАВИТЬ УСТРОЙСТВА', callback_data='subscription_add_devices'
                         )
                     ],
                 ]
@@ -155,34 +149,40 @@ class UserService:
         """
         if amount_kopeks > 0:
             # Пополнение
+            emoji = '💰'
             amount_text = f'+{settings.format_price(amount_kopeks)}'
             message = (
-                "<tg-emoji emoji-id='5776375003280838798'>✅</tg-emoji> <b>Баланс пополнен!</b>\n\n"
-                '<blockquote>'
-                f'<b>Сумма:</b> {amount_text}\n'
-                f'<b>Текущий баланс:</b> {settings.format_price(user.balance_kopeks)}\n'
-                '</blockquote>'
+                f'{emoji} <b>Баланс пополнен!</b>\n\n'
+                f'💵 <b>Сумма:</b> {amount_text}\n'
+                f'💳 <b>Текущий баланс:</b> {settings.format_price(user.balance_kopeks)}\n\n'
+                f'Спасибо за использование нашего сервиса! 🎉'
             )
         else:
             # Списание
+            emoji = '💸'
             amount_text = f'-{settings.format_price(abs(amount_kopeks))}'
             message = (
-                "<tg-emoji emoji-id='5877413297170419326'>💸</tg-emoji> <b>Средства списаны с баланса</b>\n\n"
-                '<blockquote>'
-                f'<b>Сумма:</b> {amount_text}\n'
-                f'<b>Текущий баланс:</b> {settings.format_price(user.balance_kopeks)}\n'
-                '</blockquote>\n\n'
-                'Если у вас есть вопросы, обратитесь в поддержку.'
+                f'{emoji} <b>Средства списаны с баланса</b>\n\n'
+                f'💵 <b>Сумма:</b> {amount_text}\n'
+                f'💳 <b>Текущий баланс:</b> {settings.format_price(user.balance_kopeks)}\n\n'
+                f'Если у вас есть вопросы, обратитесь в поддержку.'
             )
 
-        keyboard_rows = [
-            [
-                types.InlineKeyboardButton(
-                    text=get_texts(user.language).BACK, callback_data='back_to_menu', style='danger'
-                )
-            ]
-        ]
-        reply_markup = types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
+        keyboard_rows = []
+        subs = getattr(user, 'subscriptions', None) or []
+        has_extendable = any(sub.status in {'active', 'expired', 'trial'} for sub in subs)
+        if has_extendable:
+            extend_callback = 'menu_subscription' if settings.is_multi_tariff_enabled() else 'subscription_extend'
+            keyboard_rows.append(
+                [
+                    types.InlineKeyboardButton(
+                        text=get_texts(user.language).t('SUBSCRIPTION_EXTEND', '💎 Продлить подписку'),
+                        callback_data=extend_callback,
+                    )
+                ]
+            )
+
+        reply_markup = types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows) if keyboard_rows else None
 
         # Use unified notification delivery service
         context = {
@@ -211,9 +211,7 @@ class UserService:
                 return None
 
             if settings.is_multi_tariff_enabled():
-                from app.database.crud.subscription import (
-                    get_active_subscriptions_by_user_id,
-                )
+                from app.database.crud.subscription import get_active_subscriptions_by_user_id
 
                 active_subs = await get_active_subscriptions_by_user_id(db, user_id)
                 if active_subs:
@@ -541,11 +539,7 @@ class UserService:
 
             if amount_kopeks > 0:
                 await add_user_balance(
-                    db,
-                    user,
-                    amount_kopeks,
-                    description=description,
-                    payment_method=PaymentMethod.MANUAL,
+                    db, user, amount_kopeks, description=description, payment_method=PaymentMethod.MANUAL
                 )
                 logger.info(
                     'Админ пополнил баланс пользователя на ₽',
@@ -612,7 +606,7 @@ class UserService:
             await db.refresh(user)
 
             logger.info(
-                'Промогруппа пользователя обновлена',
+                '👥 Промогруппа пользователя обновлена',
                 telegram_id=user.telegram_id,
                 promo_group_name=promo_group.name,
             )
@@ -679,30 +673,33 @@ class UserService:
             return False, {'error': 'update_failed'}
 
     async def block_user(
-        self,
-        db: AsyncSession,
-        user_id: int,
-        admin_id: int,
-        reason: str = 'Заблокирован администратором',
+        self, db: AsyncSession, user_id: int, admin_id: int, reason: str = 'Заблокирован администратором'
     ) -> bool:
         try:
             user = await get_user_by_id(db, user_id)
             if not user:
                 return False
 
-            from app.database.crud.subscription import (
-                deactivate_subscription,
-                is_active_paid_subscription,
-            )
+            from app.services.rbac_bootstrap_service import is_protected_from_blocking
+
+            if is_protected_from_blocking(user):
+                logger.warning(
+                    'Отказ в блокировке: аккаунт прописан в ADMIN_IDS/ADMIN_EMAILS',
+                    admin_id=admin_id,
+                    user_id=user_id,
+                )
+                return False
+
+            from app.database.crud.subscription import deactivate_subscription, is_active_paid_subscription
 
             subs = getattr(user, 'subscriptions', None) or []
             has_active_paid = any(is_active_paid_subscription(sub) for sub in subs)
 
             if has_active_paid:
                 logger.info(
-                    'Пропуск отключения RemnaWave и подписки: у пользователя активная оплаченная подписка',
+                    '⏭️ Пропуск отключения RemnaWave и подписки: у пользователя активная оплаченная подписка',
                     user_id=user_id,
-                    remnawave_uuid=user.remnawave_uuid,
+                    remnawave_id=user.remnawave_id,
                 )
             else:
                 from app.services.subscription_service import SubscriptionService
@@ -712,33 +709,30 @@ class UserService:
                 if settings.is_multi_tariff_enabled():
                     # In multi-tariff mode, disable each subscription's panel user individually
                     for sub in subs:
-                        panel_uuid = sub.remnawave_uuid
-                        if panel_uuid:
+                        panel_user_id = sub.remnawave_id
+                        if panel_user_id:
                             try:
-                                await subscription_service.disable_remnawave_user(panel_uuid)
+                                await subscription_service.disable_remnawave_user(panel_user_id)
                                 logger.info(
-                                    'RemnaWave пользователь деактивирован при блокировке',
-                                    remnawave_uuid=panel_uuid,
+                                    '✅ RemnaWave пользователь деактивирован при блокировке',
+                                    remnawave_id=panel_user_id,
                                     subscription_id=sub.id,
                                 )
                             except Exception as e:
                                 logger.error(
-                                    'Ошибка деактивации RemnaWave при блокировке',
+                                    '❌ Ошибка деактивации RemnaWave при блокировке',
                                     error=e,
                                     subscription_id=sub.id,
                                 )
-                elif user.remnawave_uuid:
+                elif user.remnawave_id:
                     try:
-                        await subscription_service.disable_remnawave_user(user.remnawave_uuid)
+                        await subscription_service.disable_remnawave_user(user.remnawave_id)
                         logger.info(
-                            'RemnaWave пользователь деактивирован при блокировке',
-                            remnawave_uuid=user.remnawave_uuid,
+                            '✅ RemnaWave пользователь деактивирован при блокировке',
+                            remnawave_id=user.remnawave_id,
                         )
                     except Exception as e:
-                        logger.error(
-                            'Ошибка деактивации RemnaWave пользователя при блокировке',
-                            error=e,
-                        )
+                        logger.error('❌ Ошибка деактивации RemnaWave пользователя при блокировке', error=e)
 
                 for sub in subs:
                     if sub.status in ['active', 'trial']:
@@ -746,12 +740,7 @@ class UserService:
 
             await update_user(db, user, status=UserStatus.BLOCKED.value)
 
-            logger.info(
-                'Админ заблокировал пользователя',
-                admin_id=admin_id,
-                user_id=user_id,
-                reason=reason,
-            )
+            logger.info('Админ заблокировал пользователя', admin_id=admin_id, user_id=user_id, reason=reason)
             return True
 
         except Exception as e:
@@ -773,28 +762,22 @@ class UserService:
                 if sub.end_date and sub.end_date > now and sub.status != SubscriptionStatus.ACTIVE.value:
                     sub.status = SubscriptionStatus.ACTIVE.value
                     try:
-                        from app.services.subscription_service import (
-                            SubscriptionService,
-                        )
+                        from app.services.subscription_service import SubscriptionService
 
                         subscription_service = SubscriptionService()
                         await subscription_service.update_remnawave_user(db, sub)
                         logger.info(
-                            'RemnaWave подписка восстановлена при разблокировке',
+                            '✅ RemnaWave подписка восстановлена при разблокировке',
                             subscription_id=sub.id,
-                            remnawave_uuid=(
-                                sub.remnawave_uuid if settings.is_multi_tariff_enabled() else user.remnawave_uuid
-                            ),
+                            remnawave_id=sub.remnawave_id if settings.is_multi_tariff_enabled() else user.remnawave_id,
                         )
                     except Exception as e:
                         logger.error(
-                            'Ошибка восстановления RemnaWave подписки при разблокировке',
+                            '❌ Ошибка восстановления RemnaWave подписки при разблокировке',
                             subscription_id=sub.id,
                             error=e,
                         )
-                        from app.services.remnawave_retry_queue import (
-                            remnawave_retry_queue,
-                        )
+                        from app.services.remnawave_retry_queue import remnawave_retry_queue
 
                         if hasattr(sub, 'id') and hasattr(sub, 'user_id'):
                             remnawave_retry_queue.enqueue(
@@ -812,12 +795,7 @@ class UserService:
             return False
 
     async def delete_user_account(
-        self,
-        db: AsyncSession,
-        user_id: int,
-        admin_id: int,
-        *,
-        force_panel_delete: bool = False,
+        self, db: AsyncSession, user_id: int, admin_id: int, *, force_panel_delete: bool = False
     ) -> DeleteUserResult:
         """Полное удаление пользователя из бота и (опционально) из панели RemnaWave.
 
@@ -833,16 +811,12 @@ class UserService:
                 return result
 
             user_id_display = user.telegram_id or user.email or f'#{user.id}'
-            logger.info(
-                'Начинаем полное удаление пользователя',
-                user_id=user_id,
-                user_id_display=user_id_display,
-            )
+            logger.info('🗑️ Начинаем полное удаление пользователя', user_id=user_id, user_id_display=user_id_display)
 
             from app.config import settings
             from app.database.crud.subscription import is_active_paid_subscription
 
-            # Collect all panel UUIDs to process
+            # Collect all panel user ids to process
             subs = getattr(user, 'subscriptions', None) or []
             from app.services.grace_access_runtime import (
                 GraceAccessDeletionBlocked,
@@ -861,33 +835,62 @@ class UserService:
                 )
                 return result
 
-            if settings.is_multi_tariff_enabled():
-                panel_uuids = [sub.remnawave_uuid for sub in subs if sub.remnawave_uuid]
-            else:
-                panel_uuids = [user.remnawave_uuid] if user.remnawave_uuid else []
+            # Best-effort: stop Platega SBP autopay for every subscription of
+            # this user before the row disappears — the platega_subscriptions
+            # record CASCADE-deletes with its subscription, so cancelling
+            # after the delete would find nothing to cancel on Platega's side
+            # and the user keeps getting charged for a deleted account.
+            # NOTE: each cancellation commits its own transaction internally,
+            # which releases the grace-guard's Postgres advisory lock
+            # acquired just above. It therefore runs BEFORE the panel
+            # deletion/deactivation below (the first irreversible step in
+            # this flow), and the guard is re-acquired immediately after —
+            # closing that window before anything that can't be undone
+            # happens.
+            from app.services.payment.lava import cancel_lava_recurring_for_subscription_safe
+            from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
 
-            if panel_uuids:
+            for sub in subs:
+                await cancel_platega_recurring_for_subscription_safe(db, sub.id)
+
+                await cancel_lava_recurring_for_subscription_safe(db, sub.id)
+            try:
+                await ensure_no_open_grace_for_subscriptions(db, tuple(sub.id for sub in subs))
+            except GraceAccessDeletionBlocked as error:
+                result.panel_error = str(error)
+                result.grace_blocked = True
+                logger.warning(
+                    'User deletion blocked until grace access is restored',
+                    user_id=user_id,
+                    subscription_ids=error.subscription_ids,
+                )
+                return result
+
+            if settings.is_multi_tariff_enabled():
+                panel_user_ids = [sub.remnawave_id for sub in subs if sub.remnawave_id]
+            else:
+                panel_user_ids = [user.remnawave_id] if user.remnawave_id else []
+
+            if panel_user_ids:
                 if not force_panel_delete and any(is_active_paid_subscription(sub) for sub in subs):
                     logger.info(
-                        'Пропуск отключения RemnaWave при удалении: у пользователя активная оплаченная подписка',
+                        '⏭️ Пропуск отключения RemnaWave при удалении: у пользователя активная оплаченная подписка',
                         user_id=user_id,
                     )
                 else:
                     delete_mode = 'delete' if force_panel_delete else settings.get_remnawave_user_delete_mode()
 
-                    # Помечаем ВСЕ UUID до цикла, чтобы webhook от первого удаления
-                    # не пришёл раньше чем помечены остальные
+                    # Помечаем ВСЕ панельные id до цикла, чтобы webhook от первого
+                    # удаления не пришёл раньше чем помечены остальные
                     if delete_mode == 'delete':
-                        from app.services.remnawave_webhook_service import (
-                            RemnaWaveWebhookService,
-                        )
+                        from app.services.remnawave_webhook_service import RemnaWaveWebhookService
 
                         RemnaWaveWebhookService.mark_intentional_panel_deletion(
-                            panel_uuids=panel_uuids,
-                            telegram_id=(int(user.telegram_id) if user.telegram_id else None),
+                            panel_user_ids=panel_user_ids,
+                            telegram_id=int(user.telegram_id) if user.telegram_id else None,
                         )
 
-                    for panel_uuid in panel_uuids:
+                    for panel_user_id in panel_user_ids:
                         try:
                             from app.services.remnawave_service import RemnaWaveService
 
@@ -895,69 +898,73 @@ class UserService:
 
                             if delete_mode == 'delete':
                                 async with remnawave_service.get_api_client() as api:
-                                    delete_success = await api.delete_user(panel_uuid, user_id=user_id)
-                                    if delete_success:
-                                        result.panel_deleted = True
-                                        logger.info(
-                                            'RemnaWave пользователь удален из панели',
-                                            remnawave_uuid=panel_uuid,
-                                        )
-                                    else:
-                                        result.panel_error = 'Remnawave API вернул ошибку удаления'
-                                        logger.warning(
-                                            'Не удалось удалить пользователя из панели Remnawave',
-                                            remnawave_uuid=panel_uuid,
-                                        )
+                                    # 3.0.0: DELETE отвечает 204/202 без тела, поля isDeleted
+                                    # больше нет — успех это отсутствие исключения.
+                                    await api.delete_user(panel_user_id)
+                                    result.panel_deleted = True
+                                    logger.info(
+                                        '✅ RemnaWave пользователь удален из панели',
+                                        remnawave_id=panel_user_id,
+                                    )
                             else:
-                                from app.services.subscription_service import (
-                                    SubscriptionService,
-                                )
+                                from app.services.subscription_service import SubscriptionService
 
                                 subscription_service = SubscriptionService()
-                                disabled = await subscription_service.disable_remnawave_user(panel_uuid)
+                                disabled = await subscription_service.disable_remnawave_user(panel_user_id, db=db)
                                 result.panel_deleted = disabled
                                 if disabled:
                                     logger.info(
-                                        'RemnaWave пользователь деактивирован',
-                                        remnawave_uuid=panel_uuid,
+                                        '✅ RemnaWave пользователь деактивирован',
+                                        remnawave_id=panel_user_id,
                                         delete_mode=delete_mode,
                                     )
                                 else:
                                     result.panel_error = 'disable_remnawave_user вернул False'
                                     logger.warning(
-                                        'Не удалось деактивировать пользователя в RemnaWave',
-                                        remnawave_uuid=panel_uuid,
+                                        '⚠️ Не удалось деактивировать пользователя в RemnaWave',
+                                        remnawave_id=panel_user_id,
                                         delete_mode=delete_mode,
                                     )
 
                         except Exception as e:
+                            from app.external.remnawave_api import RemnaWaveAPIError, is_user_not_found_error
+
+                            # Панель уже не знает такого пользователя — цель достигнута.
+                            # Fallback-деактивация по несуществующему id гарантированно
+                            # провалится и покажет админу ошибку на успешном удалении.
+                            # RemnaWaveInvalidUserIdError сюда НЕ попадает (битая ссылка
+                            # в БД бота — не «пользователя нет»), уходит в общую ветку.
+                            if isinstance(e, RemnaWaveAPIError) and is_user_not_found_error(e):
+                                result.panel_deleted = True
+                                logger.info(
+                                    'ℹ️ RemnaWave пользователь уже отсутствует в панели',
+                                    remnawave_id=panel_user_id,
+                                    delete_mode=delete_mode,
+                                )
+                                continue
+
                             result.panel_error = 'Ошибка обработки пользователя в Remnawave'
                             logger.warning(
-                                'Ошибка обработки пользователя в Remnawave',
+                                '⚠️ Ошибка обработки пользователя в Remnawave',
                                 delete_mode=delete_mode,
-                                remnawave_uuid=panel_uuid,
+                                remnawave_id=panel_user_id,
                                 error=e,
                             )
                             if delete_mode == 'delete':
                                 try:
-                                    from app.services.subscription_service import (
-                                        SubscriptionService,
-                                    )
+                                    from app.services.subscription_service import SubscriptionService
 
                                     subscription_service = SubscriptionService()
-                                    disabled = await subscription_service.disable_remnawave_user(panel_uuid)
+                                    disabled = await subscription_service.disable_remnawave_user(panel_user_id, db=db)
                                     if disabled:
                                         result.panel_deleted = True
                                         result.panel_error = 'Удаление не удалось, пользователь деактивирован'
                                         logger.info(
-                                            'RemnaWave пользователь деактивирован как fallback',
-                                            remnawave_uuid=panel_uuid,
+                                            '✅ RemnaWave пользователь деактивирован как fallback',
+                                            remnawave_id=panel_user_id,
                                         )
                                 except Exception as fallback_e:
-                                    logger.error(
-                                        'Ошибка деактивации RemnaWave как fallback',
-                                        fallback_e=fallback_e,
-                                    )
+                                    logger.error('❌ Ошибка деактивации RemnaWave как fallback', fallback_e=fallback_e)
 
             try:
                 async with db.begin_nested():
@@ -967,14 +974,11 @@ class UserService:
                     sent_notifications = sent_notifications_result.scalars().all()
 
                     if sent_notifications:
-                        logger.info(
-                            'Удаляем уведомлений',
-                            sent_notifications_count=len(sent_notifications),
-                        )
+                        logger.info('🔄 Удаляем уведомлений', sent_notifications_count=len(sent_notifications))
                         await db.execute(delete(SentNotification).where(SentNotification.user_id == user_id))
                         await db.flush()
             except Exception as e:
-                logger.error('Ошибка удаления уведомлений', error=e)
+                logger.error('❌ Ошибка удаления уведомлений', error=e)
 
             try:
                 async with db.begin_nested():
@@ -982,13 +986,10 @@ class UserService:
                         update(UserMessage).where(UserMessage.created_by == user_id).values(created_by=None)
                     )
                     if user_messages_result.rowcount > 0:
-                        logger.info(
-                            'Обновлено пользовательских сообщений',
-                            rowcount=user_messages_result.rowcount,
-                        )
+                        logger.info('🔄 Обновлено пользовательских сообщений', rowcount=user_messages_result.rowcount)
                     await db.flush()
             except Exception as e:
-                logger.error('Ошибка обновления пользовательских сообщений', error=e)
+                logger.error('❌ Ошибка обновления пользовательских сообщений', error=e)
 
             try:
                 async with db.begin_nested():
@@ -996,10 +997,10 @@ class UserService:
                         update(PromoCode).where(PromoCode.created_by == user_id).values(created_by=None)
                     )
                     if promocodes_result.rowcount > 0:
-                        logger.info('Обновлено промокодов', rowcount=promocodes_result.rowcount)
+                        logger.info('🔄 Обновлено промокодов', rowcount=promocodes_result.rowcount)
                     await db.flush()
             except Exception as e:
-                logger.error('Ошибка обновления промокодов', error=e)
+                logger.error('❌ Ошибка обновления промокодов', error=e)
 
             try:
                 async with db.begin_nested():
@@ -1007,13 +1008,10 @@ class UserService:
                         update(WelcomeText).where(WelcomeText.created_by == user_id).values(created_by=None)
                     )
                     if welcome_texts_result.rowcount > 0:
-                        logger.info(
-                            'Обновлено приветственных текстов',
-                            rowcount=welcome_texts_result.rowcount,
-                        )
+                        logger.info('🔄 Обновлено приветственных текстов', rowcount=welcome_texts_result.rowcount)
                     await db.flush()
             except Exception as e:
-                logger.error('Ошибка обновления приветственных текстов', error=e)
+                logger.error('❌ Ошибка обновления приветственных текстов', error=e)
 
             try:
                 async with db.begin_nested():
@@ -1021,13 +1019,10 @@ class UserService:
                         update(User).where(User.referred_by_id == user_id).values(referred_by_id=None)
                     )
                     if referrals_result.rowcount > 0:
-                        logger.info(
-                            'Очищены реферальные ссылки у рефералов',
-                            rowcount=referrals_result.rowcount,
-                        )
+                        logger.info('🔗 Очищены реферальные ссылки у рефералов', rowcount=referrals_result.rowcount)
                     await db.flush()
             except Exception as e:
-                logger.error('Ошибка очистки реферальных ссылок', error=e)
+                logger.error('❌ Ошибка очистки реферальных ссылок', error=e)
 
             try:
                 async with db.begin_nested():
@@ -1037,10 +1032,7 @@ class UserService:
                     yookassa_payments = yookassa_result.scalars().all()
 
                     if yookassa_payments:
-                        logger.info(
-                            'Удаляем YooKassa платежей',
-                            yookassa_payments_count=len(yookassa_payments),
-                        )
+                        logger.info('🔄 Удаляем YooKassa платежей', yookassa_payments_count=len(yookassa_payments))
                         await db.execute(
                             update(YooKassaPayment)
                             .where(YooKassaPayment.user_id == user_id)
@@ -1050,7 +1042,7 @@ class UserService:
                         await db.execute(delete(YooKassaPayment).where(YooKassaPayment.user_id == user_id))
                         await db.flush()
             except Exception as e:
-                logger.error('Ошибка удаления YooKassa платежей', error=e)
+                logger.error('❌ Ошибка удаления YooKassa платежей', error=e)
 
             try:
                 async with db.begin_nested():
@@ -1060,10 +1052,7 @@ class UserService:
                     cryptobot_payments = cryptobot_result.scalars().all()
 
                     if cryptobot_payments:
-                        logger.info(
-                            'Удаляем CryptoBot платежей',
-                            cryptobot_payments_count=len(cryptobot_payments),
-                        )
+                        logger.info('🔄 Удаляем CryptoBot платежей', cryptobot_payments_count=len(cryptobot_payments))
                         await db.execute(
                             update(CryptoBotPayment)
                             .where(CryptoBotPayment.user_id == user_id)
@@ -1073,7 +1062,7 @@ class UserService:
                         await db.execute(delete(CryptoBotPayment).where(CryptoBotPayment.user_id == user_id))
                         await db.flush()
             except Exception as e:
-                logger.error('Ошибка удаления CryptoBot платежей', error=e)
+                logger.error('❌ Ошибка удаления CryptoBot платежей', error=e)
 
             try:
                 async with db.begin_nested():
@@ -1081,10 +1070,7 @@ class UserService:
                     platega_payments = platega_result.scalars().all()
 
                     if platega_payments:
-                        logger.info(
-                            'Удаляем Platega платежей',
-                            platega_payments_count=len(platega_payments),
-                        )
+                        logger.info('🔄 Удаляем Platega платежей', platega_payments_count=len(platega_payments))
                         await db.execute(
                             update(PlategaPayment).where(PlategaPayment.user_id == user_id).values(transaction_id=None)
                         )
@@ -1092,7 +1078,7 @@ class UserService:
                         await db.execute(delete(PlategaPayment).where(PlategaPayment.user_id == user_id))
                         await db.flush()
             except Exception as e:
-                logger.error('Ошибка удаления Platega платежей', error=e)
+                logger.error('❌ Ошибка удаления Platega платежей', error=e)
 
             try:
                 async with db.begin_nested():
@@ -1104,7 +1090,7 @@ class UserService:
                     if mulenpay_payments:
                         mulenpay_name = settings.get_mulenpay_display_name()
                         logger.info(
-                            'Удаляем платежей',
+                            '🔄 Удаляем платежей',
                             mulenpay_payments_count=len(mulenpay_payments),
                             mulenpay_name=mulenpay_name,
                         )
@@ -1118,7 +1104,7 @@ class UserService:
                         await db.flush()
             except Exception as e:
                 logger.error(
-                    'Ошибка удаления платежей',
+                    '❌ Ошибка удаления платежей',
                     get_mulenpay_display_name=settings.get_mulenpay_display_name(),
                     error=e,
                 )
@@ -1129,10 +1115,7 @@ class UserService:
                     pal24_payments = pal24_result.scalars().all()
 
                     if pal24_payments:
-                        logger.info(
-                            'Удаляем Pal24 платежей',
-                            pal24_payments_count=len(pal24_payments),
-                        )
+                        logger.info('🔄 Удаляем Pal24 платежей', pal24_payments_count=len(pal24_payments))
                         await db.execute(
                             update(Pal24Payment).where(Pal24Payment.user_id == user_id).values(transaction_id=None)
                         )
@@ -1140,7 +1123,7 @@ class UserService:
                         await db.execute(delete(Pal24Payment).where(Pal24Payment.user_id == user_id))
                         await db.flush()
             except Exception as e:
-                logger.error('Ошибка удаления Pal24 платежей', error=e)
+                logger.error('❌ Ошибка удаления Pal24 платежей', error=e)
 
             try:
                 async with db.begin_nested():
@@ -1148,10 +1131,7 @@ class UserService:
                     heleket_payments = heleket_result.scalars().all()
 
                     if heleket_payments:
-                        logger.info(
-                            'Удаляем Heleket платежей',
-                            heleket_payments_count=len(heleket_payments),
-                        )
+                        logger.info('🔄 Удаляем Heleket платежей', heleket_payments_count=len(heleket_payments))
                         await db.execute(
                             update(HeleketPayment).where(HeleketPayment.user_id == user_id).values(transaction_id=None)
                         )
@@ -1159,7 +1139,7 @@ class UserService:
                         await db.execute(delete(HeleketPayment).where(HeleketPayment.user_id == user_id))
                         await db.flush()
             except Exception as e:
-                logger.error('Ошибка удаления Heleket платежей', error=e)
+                logger.error('❌ Ошибка удаления Heleket платежей', error=e)
 
             # Удаляем Freekassa платежи
             try:
@@ -1170,10 +1150,7 @@ class UserService:
                     freekassa_payments = freekassa_payments_result.scalars().all()
 
                     if freekassa_payments:
-                        logger.info(
-                            'Удаляем Freekassa платежей',
-                            freekassa_payments_count=len(freekassa_payments),
-                        )
+                        logger.info('🔄 Удаляем Freekassa платежей', freekassa_payments_count=len(freekassa_payments))
                         await db.execute(
                             update(FreekassaPayment)
                             .where(FreekassaPayment.user_id == user_id)
@@ -1183,7 +1160,7 @@ class UserService:
                         await db.execute(delete(FreekassaPayment).where(FreekassaPayment.user_id == user_id))
                         await db.flush()
             except Exception as e:
-                logger.error('Ошибка удаления Freekassa платежей', error=e)
+                logger.error('❌ Ошибка удаления Freekassa платежей', error=e)
 
             # Удаляем Wata платежи (до транзакций, т.к. wata_payments.transaction_id -> transactions.id)
             try:
@@ -1192,10 +1169,7 @@ class UserService:
                     wata_payments = wata_payments_result.scalars().all()
 
                     if wata_payments:
-                        logger.info(
-                            'Удаляем Wata платежей',
-                            wata_payments_count=len(wata_payments),
-                        )
+                        logger.info('🔄 Удаляем Wata платежей', wata_payments_count=len(wata_payments))
                         await db.execute(
                             update(WataPayment).where(WataPayment.user_id == user_id).values(transaction_id=None)
                         )
@@ -1203,7 +1177,7 @@ class UserService:
                         await db.execute(delete(WataPayment).where(WataPayment.user_id == user_id))
                         await db.flush()
             except Exception as e:
-                logger.error('Ошибка удаления Wata платежей', error=e)
+                logger.error('❌ Ошибка удаления Wata платежей', error=e)
 
             # Удаляем CloudPayments платежи
             try:
@@ -1215,7 +1189,7 @@ class UserService:
 
                     if cloudpayments_payments:
                         logger.info(
-                            'Удаляем CloudPayments платежей',
+                            '🔄 Удаляем CloudPayments платежей',
                             cloudpayments_payments_count=len(cloudpayments_payments),
                         )
                         await db.execute(
@@ -1227,7 +1201,7 @@ class UserService:
                         await db.execute(delete(CloudPaymentsPayment).where(CloudPaymentsPayment.user_id == user_id))
                         await db.flush()
             except Exception as e:
-                logger.error('Ошибка удаления CloudPayments платежей', error=e)
+                logger.error('❌ Ошибка удаления CloudPayments платежей', error=e)
 
             # Удаляем KassaAi платежи
             try:
@@ -1236,10 +1210,7 @@ class UserService:
                     kassa_ai_payments = kassa_ai_result.scalars().all()
 
                     if kassa_ai_payments:
-                        logger.info(
-                            'Удаляем KassaAi платежей',
-                            kassa_ai_payments_count=len(kassa_ai_payments),
-                        )
+                        logger.info('🔄 Удаляем KassaAi платежей', kassa_ai_payments_count=len(kassa_ai_payments))
                         await db.execute(
                             update(KassaAiPayment).where(KassaAiPayment.user_id == user_id).values(transaction_id=None)
                         )
@@ -1247,7 +1218,7 @@ class UserService:
                         await db.execute(delete(KassaAiPayment).where(KassaAiPayment.user_id == user_id))
                         await db.flush()
             except Exception as e:
-                logger.error('Ошибка удаления KassaAi платежей', error=e)
+                logger.error('❌ Ошибка удаления KassaAi платежей', error=e)
 
             # Платёжные провайдеры, которые ссылаются на transactions через FK без ON DELETE,
             # но раньше не очищались в этом блоке. Без них DELETE FROM transactions падал с
@@ -1262,10 +1233,12 @@ class UserService:
                 JupiterPayment,
                 LavaPayment,
                 OverpayPayment,
+                ParityPayPayment,
                 PayPearPayment,
                 RioPayPayment,
                 RollyPayPayment,
                 SeverPayPayment,
+                TabPayPayment,
             )
 
             extra_payment_models = (
@@ -1281,6 +1254,8 @@ class UserService:
                 DonutPayment,
                 LavaPayment,
                 CisPayPayment,
+                TabPayPayment,
+                ParityPayPayment,
             )
             for model in extra_payment_models:
                 try:
@@ -1291,7 +1266,7 @@ class UserService:
                         await db.flush()
                 except Exception as error:
                     logger.error(
-                        'Ошибка удаления платежей провайдера',
+                        '❌ Ошибка удаления платежей провайдера',
                         provider=model.__tablename__,
                         error=str(error),
                     )
@@ -1310,7 +1285,7 @@ class UserService:
                     await db.execute(delete(AppleTransaction).where(AppleTransaction.user_id == user_id))
                     await db.flush()
             except Exception as error:
-                logger.error('Ошибка удаления Apple IAP платежей', error=str(error))
+                logger.error('❌ Ошибка удаления Apple IAP платежей', error=str(error))
 
             try:
                 async with db.begin_nested():
@@ -1318,11 +1293,11 @@ class UserService:
                     transactions = transactions_result.scalars().all()
 
                     if transactions:
-                        logger.info('Удаляем транзакций', transactions_count=len(transactions))
+                        logger.info('🔄 Удаляем транзакций', transactions_count=len(transactions))
                         await db.execute(delete(Transaction).where(Transaction.user_id == user_id))
                         await db.flush()
             except Exception as e:
-                logger.error('Ошибка удаления транзакций', error=e)
+                logger.error('❌ Ошибка удаления транзакций', error=e)
 
             try:
                 async with db.begin_nested():
@@ -1332,14 +1307,11 @@ class UserService:
                     promocode_uses = promocode_uses_result.scalars().all()
 
                     if promocode_uses:
-                        logger.info(
-                            'Удаляем использований промокодов',
-                            promocode_uses_count=len(promocode_uses),
-                        )
+                        logger.info('🔄 Удаляем использований промокодов', promocode_uses_count=len(promocode_uses))
                         await db.execute(delete(PromoCodeUse).where(PromoCodeUse.user_id == user_id))
                         await db.flush()
             except Exception as e:
-                logger.error('Ошибка удаления использований промокодов', error=e)
+                logger.error('❌ Ошибка удаления использований промокодов', error=e)
 
             try:
                 async with db.begin_nested():
@@ -1349,14 +1321,11 @@ class UserService:
                     referral_earnings = referral_earnings_result.scalars().all()
 
                     if referral_earnings:
-                        logger.info(
-                            'Удаляем реферальных доходов',
-                            referral_earnings_count=len(referral_earnings),
-                        )
+                        logger.info('🔄 Удаляем реферальных доходов', referral_earnings_count=len(referral_earnings))
                         await db.execute(delete(ReferralEarning).where(ReferralEarning.user_id == user_id))
                         await db.flush()
             except Exception as e:
-                logger.error('Ошибка удаления реферальных доходов', error=e)
+                logger.error('❌ Ошибка удаления реферальных доходов', error=e)
 
             try:
                 async with db.begin_nested():
@@ -1366,14 +1335,11 @@ class UserService:
                     referral_records = referral_records_result.scalars().all()
 
                     if referral_records:
-                        logger.info(
-                            'Удаляем записей о рефералах',
-                            referral_records_count=len(referral_records),
-                        )
+                        logger.info('🔄 Удаляем записей о рефералах', referral_records_count=len(referral_records))
                         await db.execute(delete(ReferralEarning).where(ReferralEarning.referral_id == user_id))
                         await db.flush()
             except Exception as e:
-                logger.error('Ошибка удаления записей о рефералах', error=e)
+                logger.error('❌ Ошибка удаления записей о рефералах', error=e)
 
             try:
                 async with db.begin_nested():
@@ -1383,16 +1349,13 @@ class UserService:
                     conversions = conversions_result.scalars().all()
 
                     if conversions:
-                        logger.info(
-                            'Удаляем записей конверсий',
-                            conversions_count=len(conversions),
-                        )
+                        logger.info('🔄 Удаляем записей конверсий', conversions_count=len(conversions))
                         await db.execute(
                             delete(SubscriptionConversion).where(SubscriptionConversion.user_id == user_id)
                         )
                         await db.flush()
             except Exception as e:
-                logger.error('Ошибка удаления записей конверсий', error=e)
+                logger.error('❌ Ошибка удаления записей конверсий', error=e)
 
             try:
                 async with db.begin_nested():
@@ -1403,13 +1366,12 @@ class UserService:
 
                     if broadcast_history:
                         logger.info(
-                            'Удаляем записей истории рассылок',
-                            broadcast_history_count=len(broadcast_history),
+                            '🔄 Удаляем записей истории рассылок', broadcast_history_count=len(broadcast_history)
                         )
                         await db.execute(delete(BroadcastHistory).where(BroadcastHistory.admin_id == user_id))
                         await db.flush()
             except Exception as e:
-                logger.error('Ошибка удаления истории рассылок', error=e)
+                logger.error('❌ Ошибка удаления истории рассылок', error=e)
 
             try:
                 async with db.begin_nested():
@@ -1419,10 +1381,7 @@ class UserService:
                     campaigns = campaigns_result.scalars().all()
 
                     if campaigns:
-                        logger.info(
-                            'Очищаем создателя у рекламных кампаний',
-                            campaigns_count=len(campaigns),
-                        )
+                        logger.info('🔄 Очищаем создателя у рекламных кампаний', campaigns_count=len(campaigns))
                         await db.execute(
                             update(AdvertisingCampaign)
                             .where(AdvertisingCampaign.created_by == user_id)
@@ -1430,7 +1389,7 @@ class UserService:
                         )
                         await db.flush()
             except Exception as e:
-                logger.error('Ошибка обновления рекламных кампаний', error=e)
+                logger.error('❌ Ошибка обновления рекламных кампаний', error=e)
 
             try:
                 async with db.begin_nested():
@@ -1438,7 +1397,7 @@ class UserService:
                     if subs:
                         all_squad_ids: set[str] = set()
                         for sub in subs:
-                            logger.info('Удаляем подписку', subscription_id=sub.id)
+                            logger.info('🔄 Удаляем подписку', subscription_id=sub.id)
                             if sub.connected_squads:
                                 all_squad_ids.update(sub.connected_squads)
                             await db.execute(
@@ -1463,12 +1422,9 @@ class UserService:
                                 if int_squad_ids:
                                     await remove_user_from_servers(db, int_squad_ids)
                             except Exception as sq_err:
-                                logger.warning(
-                                    'Не удалось уменьшить счётчик серверов',
-                                    error=sq_err,
-                                )
+                                logger.warning('⚠️ Не удалось уменьшить счётчик серверов', error=sq_err)
             except Exception as e:
-                logger.error('Ошибка удаления подписок', error=e)
+                logger.error('❌ Ошибка удаления подписок', error=e)
 
             try:
                 from app.database.models import (
@@ -1492,15 +1448,15 @@ class UserService:
                 await db.execute(update(AccessPolicy).where(AccessPolicy.created_by == user_id).values(created_by=None))
                 await db.execute(delete(User).where(User.id == user_id))
                 await db.commit()
-                logger.info('Пользователь окончательно удален из базы', user_id=user_id)
+                logger.info('✅ Пользователь окончательно удален из базы', user_id=user_id)
             except Exception as e:
-                logger.error('Ошибка финального удаления пользователя', error=e)
+                logger.error('❌ Ошибка финального удаления пользователя', error=e)
                 await db.rollback()
                 return result
 
             result.bot_deleted = True
             logger.info(
-                'Пользователь полностью удалён администратором',
+                '✅ Пользователь полностью удалён администратором',
                 user_id_display=user_id_display,
                 user_id=user_id,
                 admin_id=admin_id,
@@ -1508,7 +1464,7 @@ class UserService:
             return result
 
         except Exception as e:
-            logger.error('Критическая ошибка удаления пользователя', user_id=user_id, error=e)
+            logger.error('❌ Критическая ошибка удаления пользователя', user_id=user_id, error=e)
             await db.rollback()
             return result
 
@@ -1554,8 +1510,7 @@ class UserService:
 
             if skipped_active_sub > 0:
                 logger.info(
-                    'Пропущено неактивных пользователей с активной подпиской',
-                    skipped_active_sub=skipped_active_sub,
+                    'Пропущено неактивных пользователей с активной подпиской', skipped_active_sub=skipped_active_sub
                 )
             logger.info('Удалено неактивных пользователей', deleted_count=deleted_count)
             return deleted_count, skipped_active_sub
@@ -1571,9 +1526,7 @@ class UserService:
                 return {}
 
             if settings.is_multi_tariff_enabled():
-                from app.database.crud.subscription import (
-                    get_active_subscriptions_by_user_id,
-                )
+                from app.database.crud.subscription import get_active_subscriptions_by_user_id
 
                 active_subs = await get_active_subscriptions_by_user_id(db, user_id)
                 if active_subs:
@@ -1603,7 +1556,7 @@ class UserService:
                 'days_since_registration': days_since_registration,
                 'days_since_activity': days_since_activity,
                 'has_subscription': subscription is not None,
-                'subscription_active': (subscription.is_active if subscription else False),
+                'subscription_active': subscription.is_active if subscription else False,
                 'subscription_trial': subscription.is_trial if subscription else False,
                 'transactions_count': transactions_count,
                 'referrer_id': user.referred_by_id,
@@ -1611,11 +1564,7 @@ class UserService:
             }
 
         except Exception as e:
-            logger.error(
-                'Ошибка получения сводки активности пользователя',
-                user_id=user_id,
-                error=e,
-            )
+            logger.error('Ошибка получения сводки активности пользователя', user_id=user_id, error=e)
             return {}
 
     async def get_users_by_criteria(self, db: AsyncSession, criteria: dict[str, Any]) -> list[User]:

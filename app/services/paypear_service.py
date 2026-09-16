@@ -243,10 +243,7 @@ class PayPearService:
         if client_ip and client_ip in self.WEBHOOK_ALLOWED_IPS:
             return True
 
-        logger.warning(
-            'PayPear webhook: signature mismatch and IP not in allowlist',
-            client_ip=client_ip,
-        )
+        logger.warning('PayPear webhook: signature mismatch and IP not in allowlist', client_ip=client_ip)
         return False
 
 

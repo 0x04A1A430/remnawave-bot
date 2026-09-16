@@ -26,18 +26,11 @@ def anyio_backend() -> str:
 
 def _enable_token(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, 'CRYPTOBOT_API_TOKEN', 'token', raising=False)
-    monkeypatch.setattr(
-        type(settings),
-        'get_cryptobot_base_url',
-        lambda self: 'https://cryptobot.test',
-        raising=False,
-    )
+    monkeypatch.setattr(type(settings), 'get_cryptobot_base_url', lambda self: 'https://cryptobot.test', raising=False)
 
 
 @pytest.mark.anyio('asyncio')
-async def test_create_invoice_uses_make_request(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+async def test_create_invoice_uses_make_request(monkeypatch: pytest.MonkeyPatch) -> None:
     _enable_token(monkeypatch)
     service = CryptoBotService()
 
@@ -67,9 +60,7 @@ async def test_create_invoice_uses_make_request(
 
 
 @pytest.mark.anyio('asyncio')
-async def test_make_request_returns_none_without_token(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+async def test_make_request_returns_none_without_token(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, 'CRYPTOBOT_API_TOKEN', '', raising=False)
     service = CryptoBotService()
     result = await service._make_request('GET', 'getMe')
@@ -88,9 +79,9 @@ def test_verify_webhook_signature(monkeypatch: pytest.MonkeyPatch) -> None:
     assert service.verify_webhook_signature(body, 'invalid') is False
 
 
-def test_verify_webhook_signature_without_token(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_verify_webhook_signature_without_token(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Fail-closed: без настроенного токена подпись проверить нельзя, поэтому любой
+    # webhook ОТКЛОНЯЕТСЯ. Иначе подделанный webhook мог бы зачислить баланс.
     monkeypatch.setattr(settings, 'CRYPTOBOT_API_TOKEN', '', raising=False)
     service = CryptoBotService()
     assert service.verify_webhook_signature('{}', 'anything') is False

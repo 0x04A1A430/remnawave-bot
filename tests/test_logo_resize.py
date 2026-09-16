@@ -15,11 +15,7 @@ import pytest
 from PIL import Image
 
 from app.utils import message_patch
-from app.utils.message_patch import (
-    _LOGO_MAX_BYTES,
-    _LOGO_MAX_DIMENSION,
-    _prepare_logo_for_send,
-)
+from app.utils.message_patch import _LOGO_MAX_BYTES, _LOGO_MAX_DIMENSION, _prepare_logo_for_send
 
 
 def _write_png(path: Path, size: tuple[int, int]) -> Path:

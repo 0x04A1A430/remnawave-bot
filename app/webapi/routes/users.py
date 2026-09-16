@@ -27,13 +27,7 @@ from app.database.crud.user import (
     subtract_user_balance,
     update_user,
 )
-from app.database.models import (
-    PaymentMethod,
-    PromoGroup,
-    Subscription,
-    User,
-    UserStatus,
-)
+from app.database.models import PaymentMethod, PromoGroup, Subscription, User, UserStatus
 from app.services.manual_topup_service import ManualTopupKeyConflict, credit_manual_topup
 from app.services.subscription_service import SubscriptionService
 from app.utils.text_search import contains_conditions
@@ -74,9 +68,7 @@ def _serialize_promo_group(group: PromoGroup | None) -> PromoGroupSummary | None
     )
 
 
-def _serialize_subscription(
-    subscription: Subscription | None,
-) -> SubscriptionSummary | None:
+def _serialize_subscription(subscription: Subscription | None) -> SubscriptionSummary | None:
     if not subscription:
         return None
 
@@ -131,7 +123,13 @@ def _serialize_user(user: User) -> UserResponse:
 
 
 def _apply_search_filter(query, search: str):
-    conditions = contains_conditions((User.username, User.first_name, User.last_name, User.referral_code), search)
+    # lower() в SQL сворачивает регистр по локали базы: под `C` (наш docker-compose)
+    # кириллица не сворачивается, и «поз» не находил «Позитив».
+    # См. app/utils/text_search.py.
+    conditions = contains_conditions(
+        (User.username, User.first_name, User.last_name, User.referral_code),
+        search,
+    )
 
     if search.isdigit():
         numeric_search = int(search)
@@ -166,7 +164,10 @@ async def list_users(
     if search:
         base_query = _apply_search_filter(base_query, search)
 
-    total_query = base_query.with_only_columns(func.count()).order_by(None)
+    # Считаем по колонке: with_only_columns пересобирает FROM по новым колонкам, и
+    # у безаргументного func.count() таблицы взяться неоткуда — без фильтров запрос
+    # вырождался в `SELECT count(*)` и отдавал 1 вместо числа пользователей.
+    total_query = base_query.with_only_columns(func.count(User.id)).order_by(None)
     total = await db.scalar(total_query) or 0
 
     result = await db.execute(base_query.order_by(User.created_at.desc()).offset(offset).limit(limit))
@@ -485,11 +486,7 @@ async def _delete_subscription_if_exists(db: AsyncSession, subscription_id: int)
     await db.commit()
 
 
-@router.post(
-    '/{user_id}/subscription',
-    response_model=UserResponse,
-    status_code=status.HTTP_201_CREATED,
-)
+@router.post('/{user_id}/subscription', response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def create_user_subscription(
     user_id: int,
     payload: UserSubscriptionCreateRequest,
@@ -511,10 +508,7 @@ async def create_user_subscription(
 
             existing = await get_subscription_by_id(db, payload.subscription_id)
             if existing and existing.user_id != user.id:
-                raise HTTPException(
-                    status.HTTP_400_BAD_REQUEST,
-                    'Subscription does not belong to this user',
-                )
+                raise HTTPException(status.HTTP_400_BAD_REQUEST, 'Subscription does not belong to this user')
         elif payload.replace_existing and active_subs:
             if len(active_subs) == 1:
                 existing = active_subs[0]
@@ -582,10 +576,7 @@ async def create_user_subscription(
                 )
         else:
             if payload.duration_days is None:
-                raise HTTPException(
-                    status.HTTP_400_BAD_REQUEST,
-                    'duration_days is required for paid subscriptions',
-                )
+                raise HTTPException(status.HTTP_400_BAD_REQUEST, 'duration_days is required for paid subscriptions')
             device_limit = payload.device_limit
             if device_limit is None:
                 if forced_devices is not None:
@@ -642,11 +633,7 @@ async def create_user_subscription(
     return _serialize_user(user)
 
 
-@router.patch(
-    '/{user_id}/subscription',
-    response_model=UserResponse,
-    status_code=status.HTTP_201_CREATED,
-)
+@router.patch('/{user_id}/subscription', response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def patch_user_subscription(
     user_id: int,
     payload: UserSubscriptionCreateRequest,
@@ -676,14 +663,9 @@ async def delete_user_subscription(
 
             subscription = await get_subscription_by_id(db, subscription_id)
             if subscription and subscription.user_id != user.id:
-                raise HTTPException(
-                    status.HTTP_400_BAD_REQUEST,
-                    'Subscription does not belong to this user',
-                )
+                raise HTTPException(status.HTTP_400_BAD_REQUEST, 'Subscription does not belong to this user')
         else:
-            from app.database.crud.subscription import (
-                get_active_subscriptions_by_user_id,
-            )
+            from app.database.crud.subscription import get_active_subscriptions_by_user_id
 
             active_subs = await get_active_subscriptions_by_user_id(db, user.id)
             if not active_subs:
@@ -699,13 +681,21 @@ async def delete_user_subscription(
     if not subscription:
         raise HTTPException(status.HTTP_404_NOT_FOUND, 'User has no subscription')
 
+    # Подписка деактивируется — СБП-автопродление Platega обязано быть отменено,
+    # иначе следующий push-коллбек продлит и заново включит её, а банк продолжит списывать.
+    from app.services.payment.lava import cancel_lava_recurring_for_subscription_safe
+    from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
+
+    await cancel_platega_recurring_for_subscription_safe(db, subscription.id)
+
+    await cancel_lava_recurring_for_subscription_safe(db, subscription.id)
     await deactivate_subscription(db, subscription)
 
-    # Деактивируем пользователя в RemnaWave, если есть UUID
-    remnawave_uuid = subscription.remnawave_uuid if settings.is_multi_tariff_enabled() else user.remnawave_uuid
-    if remnawave_uuid:
+    # Деактивируем пользователя в RemnaWave, если есть панельная идентичность
+    panel_user_id = subscription.remnawave_id if settings.is_multi_tariff_enabled() else user.remnawave_id
+    if panel_user_id:
         subscription_service = SubscriptionService()
-        await subscription_service.disable_remnawave_user(remnawave_uuid)
+        await subscription_service.disable_remnawave_user(panel_user_id)
 
     # Перезагружаем пользователя
     user = await get_user_by_id(db, user.id)

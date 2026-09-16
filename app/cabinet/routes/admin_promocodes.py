@@ -278,22 +278,15 @@ def _validate_create_payload(payload: PromoCodeCreateRequest) -> None:
     }:
         if payload.subscription_days <= 0:
             raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                'Subscription days must be positive for this promo code type',
+                status.HTTP_400_BAD_REQUEST, 'Subscription days must be positive for this promo code type'
             )
 
     if payload.type == PromoCodeType.DISCOUNT:
         if payload.balance_bonus_kopeks <= 0 or payload.balance_bonus_kopeks > 100:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                'Discount percent must be between 1 and 100',
-            )
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, 'Discount percent must be between 1 and 100')
         # 0 hours = perpetual ("until first purchase"), matching the bot + service.
         if payload.subscription_days < 0:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                'Discount validity hours cannot be negative',
-            )
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, 'Discount validity hours cannot be negative')
 
     if normalized_valid_from and normalized_valid_until and normalized_valid_from > normalized_valid_until:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, 'valid_from cannot be greater than valid_until')
@@ -334,22 +327,15 @@ def _validate_update_payload(payload: PromoCodeUpdateRequest, promocode: PromoCo
     if new_type in {PromoCodeType.SUBSCRIPTION_DAYS, PromoCodeType.TRIAL_SUBSCRIPTION}:
         if subscription_days <= 0:
             raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                'Subscription days must be positive for this promo code type',
+                status.HTTP_400_BAD_REQUEST, 'Subscription days must be positive for this promo code type'
             )
 
     if new_type == PromoCodeType.DISCOUNT:
         if balance_bonus <= 0 or balance_bonus > 100:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                'Discount percent must be between 1 and 100',
-            )
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, 'Discount percent must be between 1 and 100')
         # 0 hours = perpetual ("until first purchase"), matching the bot + service.
         if subscription_days < 0:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                'Discount validity hours cannot be negative',
-            )
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, 'Discount validity hours cannot be negative')
 
     valid_from = _normalize_datetime(payload.valid_from) if payload.valid_from is not None else promocode.valid_from
     valid_until = _normalize_datetime(payload.valid_until) if payload.valid_until is not None else promocode.valid_until
@@ -481,10 +467,7 @@ async def update_promocode_endpoint(
         if normalized_code != promocode.code:
             existing = await get_promocode_by_code(db, normalized_code)
             if existing and existing.id != promocode_id:
-                raise HTTPException(
-                    status.HTTP_400_BAD_REQUEST,
-                    'Promo code with this code already exists',
-                )
+                raise HTTPException(status.HTTP_400_BAD_REQUEST, 'Promo code with this code already exists')
         updates['code'] = normalized_code
 
     if payload.type is not None:
@@ -603,10 +586,7 @@ async def admin_deactivate_discount_promocode(
         }
 
         error_code = result.get('error', 'server_error')
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST,
-            error_messages.get(error_code, 'Failed to deactivate'),
-        )
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, error_messages.get(error_code, 'Failed to deactivate'))
 
     # For non-promocode offers (admin offers, etc.) — just clear the fields
     old_percent = target_user.promo_offer_discount_percent

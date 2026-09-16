@@ -389,12 +389,7 @@ async def ban_user(
             minutes=request.minutes,
             reason=request.reason,
         )
-        logger.info(
-            'Admin banned user',
-            admin_id=admin.id,
-            username=request.username,
-            reason=request.reason,
-        )
+        logger.info('Admin banned user', admin_id=admin.id, username=request.username, reason=request.reason)
         return UnbanResponse(success=True, message='User banned successfully')
     except HTTPException:
         raise
@@ -857,11 +852,7 @@ async def whitelist_add(
     api = _get_ban_api()
     try:
         await _api_request(api, 'whitelist_add', username=request.username)
-        logger.info(
-            'Admin added to Ban System whitelist',
-            admin_id=admin.id,
-            username=request.username,
-        )
+        logger.info('Admin added to Ban System whitelist', admin_id=admin.id, username=request.username)
         return UnbanResponse(success=True, message=f'User {request.username} added to whitelist')
     except HTTPException:
         raise
@@ -878,11 +869,7 @@ async def whitelist_remove(
     api = _get_ban_api()
     try:
         await _api_request(api, 'whitelist_remove', username=request.username)
-        logger.info(
-            'Admin removed from Ban System whitelist',
-            admin_id=admin.id,
-            username=request.username,
-        )
+        logger.info('Admin removed from Ban System whitelist', admin_id=admin.id, username=request.username)
         return UnbanResponse(success=True, message=f'User {request.username} removed from whitelist')
     except HTTPException:
         raise

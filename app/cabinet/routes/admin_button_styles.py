@@ -235,9 +235,7 @@ async def update_button_styles(
     await load_button_styles_cache()
 
     logger.info(
-        'Admin updated button styles for sections',
-        telegram_id=admin.telegram_id,
-        changed_sections=changed_sections,
+        'Admin updated button styles for sections', telegram_id=admin.telegram_id, changed_sections=changed_sections
     )
 
     return _build_response(current)

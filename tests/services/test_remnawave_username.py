@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.config import settings
+from app.config import settings, transliterate_cyrillic
 
 
 # Note: эти тесты дёргают `format_remnawave_username` напрямую, поэтому
@@ -45,12 +45,7 @@ def test_format_remnawave_username_reserves_room_for_caller_suffix(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """reserve_suffix_chars=N → base fits in MAX-N so caller can append safely."""
-    monkeypatch.setattr(
-        settings,
-        'REMNAWAVE_USER_USERNAME_TEMPLATE',
-        '{email}_{telegram_id}',
-        raising=False,
-    )
+    monkeypatch.setattr(settings, 'REMNAWAVE_USER_USERNAME_TEMPLATE', '{email}_{telegram_id}', raising=False)
 
     suffix = '_49883b'  # 7 chars
     base = settings.format_remnawave_username(
@@ -98,17 +93,10 @@ def test_format_remnawave_username_does_not_go_below_min_with_huge_reserve() -> 
     assert len(name) >= settings.REMNAWAVE_USERNAME_MIN_LENGTH
 
 
-def test_format_remnawave_username_repro_38_char_bug(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_format_remnawave_username_repro_38_char_bug(monkeypatch: pytest.MonkeyPatch) -> None:
     """Exact production payload from log.rw/ARVm79dH must come out ≤ 36 chars."""
     # Production .env override exposes the duplication path:
-    monkeypatch.setattr(
-        settings,
-        'REMNAWAVE_USER_USERNAME_TEMPLATE',
-        '{email}_{telegram_id}',
-        raising=False,
-    )
+    monkeypatch.setattr(settings, 'REMNAWAVE_USER_USERNAME_TEMPLATE', '{email}_{telegram_id}', raising=False)
 
     suffix = '_49883b'
     base = settings.format_remnawave_username(
@@ -131,16 +119,9 @@ def test_format_remnawave_username_repro_38_char_bug(
 # ---------------------------------------------------------------------------
 
 
-def test_build_subscription_username_production_repro(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_build_subscription_username_production_repro(monkeypatch: pytest.MonkeyPatch) -> None:
     """Production repro through the high-level helper used by all 3 callers."""
-    monkeypatch.setattr(
-        settings,
-        'REMNAWAVE_USER_USERNAME_TEMPLATE',
-        '{email}_{telegram_id}',
-        raising=False,
-    )
+    monkeypatch.setattr(settings, 'REMNAWAVE_USER_USERNAME_TEMPLATE', '{email}_{telegram_id}', raising=False)
 
     final = settings.build_remnawave_subscription_username(
         full_name='Марина Дидык',
@@ -275,12 +256,7 @@ def test_skeleton_detector_uses_user_id_when_template_references_it(
 ) -> None:
     """Template that references {user_id} (which always has a value) must NOT
     trigger the fallback — the rendered username already carries unique data."""
-    monkeypatch.setattr(
-        settings,
-        'REMNAWAVE_USER_USERNAME_TEMPLATE',
-        'u_{user_id}_{username}',
-        raising=False,
-    )
+    monkeypatch.setattr(settings, 'REMNAWAVE_USER_USERNAME_TEMPLATE', 'u_{user_id}_{username}', raising=False)
 
     name = settings.format_remnawave_username(
         full_name='Email User',
@@ -295,3 +271,55 @@ def test_skeleton_detector_uses_user_id_when_template_references_it(
     # And the rendered result must NOT be the user_<identifier> fallback shape,
     # which would have wiped the template's own structure.
     assert name.startswith('u_42')
+
+
+def test_cyrillic_full_name_is_transliterated(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Issue #1659: кириллица в {full_name} должна транслитерироваться, а не выпадать.
+
+    Раньше «Шмель Тим 1234567890» схлопывался до «1234567890» — все кириллические
+    символы заменялись на подчёркивания и вычищались.
+    """
+    monkeypatch.setattr(settings, 'REMNAWAVE_USER_USERNAME_TEMPLATE', '{full_name} {telegram_id}', raising=False)
+
+    name = settings.format_remnawave_username(
+        full_name='Шмель Тим',
+        username=None,
+        telegram_id=1234567890,
+    )
+
+    assert name == 'Shmel_Tim_1234567890'
+
+
+def test_ascii_full_name_stays_unchanged(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Латинские имена не должны меняться транслитерацией."""
+    monkeypatch.setattr(settings, 'REMNAWAVE_USER_USERNAME_TEMPLATE', '{full_name} {telegram_id}', raising=False)
+
+    name = settings.format_remnawave_username(
+        full_name='Ivan Nginx',
+        username=None,
+        telegram_id=423839580,
+    )
+
+    assert name == 'Ivan_Nginx_423839580'
+
+
+def test_transliterate_cyrillic_preserves_case_and_non_cyrillic() -> None:
+    assert transliterate_cyrillic('Щука Юля-2 x') == 'Shchuka Yulya-2 x'
+    assert transliterate_cyrillic('подъезд') == 'podezd'
+    assert transliterate_cyrillic('no cyrillic') == 'no cyrillic'
+
+
+def test_transliterated_long_cyrillic_name_respects_max_length(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Транслитерация удлиняет строку (щ → shch) — итог всё равно должен влезать в лимит."""
+    monkeypatch.setattr(settings, 'REMNAWAVE_USER_USERNAME_TEMPLATE', '{full_name} {telegram_id}', raising=False)
+
+    name = settings.format_remnawave_username(
+        full_name='Щедрощащущевский Вячеслав Александрович',
+        username=None,
+        telegram_id=1234567890,
+    )
+
+    assert settings.REMNAWAVE_USERNAME_MIN_LENGTH <= len(name) <= settings.REMNAWAVE_USERNAME_MAX_LENGTH
+    assert all(ch.isalnum() or ch in {'_', '-'} for ch in name)

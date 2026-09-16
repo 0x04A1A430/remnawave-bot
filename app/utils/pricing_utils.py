@@ -251,7 +251,7 @@ def _build_simple_subscription_breakdown(
         'total_before_discount': total_before_discount,
         'total_discount': total_discount,
         'resolved_squad_uuids': resolved_uuids,
-        'applied_promo_group_id': (getattr(promo_group, 'id', None) if promo_group else None),
+        'applied_promo_group_id': getattr(promo_group, 'id', None) if promo_group else None,
         'period_discount_percent': period_discount_percent,
         'traffic_discount_percent': traffic_discount_percent,
         'devices_discount_percent': devices_discount_percent,
@@ -274,7 +274,7 @@ def _pluralize_days_ru(n: int) -> str:
 
 def format_period_description(days: int, language: str = 'ru') -> str:
     language_code = (language or 'ru').split('-')[0].lower()
-    if language_code in {'ru'}:
+    if language_code in {'ru', 'fa'}:
         if days == 30:
             return '1 месяц'
         if days == 60:

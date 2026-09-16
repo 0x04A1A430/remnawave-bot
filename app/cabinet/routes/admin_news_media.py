@@ -61,11 +61,7 @@ def _build_response(request: Request, saved: SavedMedia) -> NewsMediaUploadRespo
     )
 
 
-@router.post(
-    '/upload',
-    response_model=NewsMediaUploadResponse,
-    status_code=status.HTTP_201_CREATED,
-)
+@router.post('/upload', response_model=NewsMediaUploadResponse, status_code=status.HTTP_201_CREATED)
 async def upload_media(
     request: Request,
     file: UploadFile = File(...),

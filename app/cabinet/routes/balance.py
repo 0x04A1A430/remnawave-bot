@@ -183,16 +183,17 @@ async def get_payment_methods(
                 # Add descriptions based on method and option
                 if method_id in ('yookassa', 'pal24', 'cloudpayments', 'freekassa'):
                     if opt_id == 'card':
-                        opt_name = f'{opt_name}'
+                        opt_name = f'💳 {opt_name}'
                         description = 'Банковская карта'
                     elif opt_id == 'sbp':
-                        opt_name = f'{opt_name}'
+                        opt_name = f'🏦 {opt_name}'
                         description = 'Система быстрых платежей'
                 elif method_id == 'platega':
                     # Platega options already have descriptions from config
                     definitions = settings.get_platega_method_definitions()
                     info = definitions.get(int(opt_id), {}) if opt_id.isdigit() else {}
                     description = info.get('description') or info.get('name') or ''
+
                 formatted_options.append(
                     {
                         'id': opt_id,
@@ -276,7 +277,7 @@ async def create_stars_invoice(
         async with create_bot() as bot:
             invoice_url = await bot.create_invoice_link(
                 title='Пополнение баланса VPN',
-                description=f'Пополнение баланса на {normalized_kopeks / 100:.2f} ₽ ({stars_amount} )',
+                description=f'Пополнение баланса на {normalized_kopeks / 100:.2f} ₽ ({stars_amount} ⭐)',
                 payload=payload,
                 provider_token='',
                 currency='XTR',
@@ -361,9 +362,7 @@ async def create_topup(
             option = (request.payment_option or '').strip().lower()
             # Use description with telegram_id for tax receipts
             description = settings.get_balance_payment_description(
-                request.amount_kopeks,
-                telegram_user_id=user.telegram_id,
-                user_db_id=user.id,
+                request.amount_kopeks, telegram_user_id=user.telegram_id, user_db_id=user.id
             )
             if option == 'sbp':
                 result = await payment_service.create_yookassa_sbp_payment(
@@ -426,9 +425,7 @@ async def create_topup(
                 amount_usd=amount_usd,
                 asset=settings.CRYPTOBOT_DEFAULT_ASSET,
                 description=settings.get_balance_payment_description(
-                    request.amount_kopeks,
-                    telegram_user_id=user.telegram_id,
-                    user_db_id=user.id,
+                    request.amount_kopeks, telegram_user_id=user.telegram_id, user_db_id=user.id
                 ),
                 payload=f'cabinet_topup_{user.id}_{request.amount_kopeks}',
             )
@@ -489,9 +486,7 @@ async def create_topup(
                 user_id=user.id,
                 amount_kopeks=request.amount_kopeks,
                 description=settings.get_balance_payment_description(
-                    request.amount_kopeks,
-                    telegram_user_id=user.telegram_id,
-                    user_db_id=user.id,
+                    request.amount_kopeks, telegram_user_id=user.telegram_id, user_db_id=user.id
                 ),
                 language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
                 payment_method_code=method_code,
@@ -521,9 +516,7 @@ async def create_topup(
                 user_id=user.id,
                 amount_kopeks=request.amount_kopeks,
                 description=settings.get_balance_payment_description(
-                    request.amount_kopeks,
-                    telegram_user_id=user.telegram_id,
-                    user_db_id=user.id,
+                    request.amount_kopeks, telegram_user_id=user.telegram_id, user_db_id=user.id
                 ),
                 language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
                 return_url=cabinet_return_url,
@@ -552,9 +545,7 @@ async def create_topup(
                 user_id=user.id,
                 amount_kopeks=request.amount_kopeks,
                 description=settings.get_balance_payment_description(
-                    request.amount_kopeks,
-                    telegram_user_id=user.telegram_id,
-                    user_db_id=user.id,
+                    request.amount_kopeks, telegram_user_id=user.telegram_id, user_db_id=user.id
                 ),
                 language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
             )
@@ -586,9 +577,7 @@ async def create_topup(
                 user_id=user.id,
                 amount_kopeks=request.amount_kopeks,
                 description=settings.get_balance_payment_description(
-                    request.amount_kopeks,
-                    telegram_user_id=user.telegram_id,
-                    user_db_id=user.id,
+                    request.amount_kopeks, telegram_user_id=user.telegram_id, user_db_id=user.id
                 ),
                 language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
                 payment_method=option,
@@ -631,9 +620,7 @@ async def create_topup(
                 user_id=user.id,
                 amount_kopeks=request.amount_kopeks,
                 description=settings.get_balance_payment_description(
-                    request.amount_kopeks,
-                    telegram_user_id=user.telegram_id,
-                    user_db_id=user.id,
+                    request.amount_kopeks, telegram_user_id=user.telegram_id, user_db_id=user.id
                 ),
                 language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
                 return_url=cabinet_success_url,
@@ -662,9 +649,7 @@ async def create_topup(
                 user_id=user.id,
                 amount_kopeks=request.amount_kopeks,
                 description=settings.get_balance_payment_description(
-                    request.amount_kopeks,
-                    telegram_user_id=user.telegram_id,
-                    user_db_id=user.id,
+                    request.amount_kopeks, telegram_user_id=user.telegram_id, user_db_id=user.id
                 ),
                 telegram_id=user.telegram_id,
                 language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
@@ -694,9 +679,7 @@ async def create_topup(
                 user_id=user.id,
                 amount_kopeks=request.amount_kopeks,
                 description=settings.get_balance_payment_description(
-                    request.amount_kopeks,
-                    telegram_user_id=user.telegram_id,
-                    user_db_id=user.id,
+                    request.amount_kopeks, telegram_user_id=user.telegram_id, user_db_id=user.id
                 ),
                 language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
             )
@@ -728,9 +711,7 @@ async def create_topup(
                 user_id=user.id,
                 amount_kopeks=request.amount_kopeks,
                 description=settings.get_balance_payment_description(
-                    request.amount_kopeks,
-                    telegram_user_id=user.telegram_id,
-                    user_db_id=user.id,
+                    request.amount_kopeks, telegram_user_id=user.telegram_id, user_db_id=user.id
                 ),
                 email=getattr(user, 'email', None),
                 language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
@@ -759,9 +740,7 @@ async def create_topup(
                 user_id=user.id,
                 amount_kopeks=request.amount_kopeks,
                 description=settings.get_balance_payment_description(
-                    request.amount_kopeks,
-                    telegram_user_id=user.telegram_id,
-                    user_db_id=user.id,
+                    request.amount_kopeks, telegram_user_id=user.telegram_id, user_db_id=user.id
                 ),
                 language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
                 success_url=cabinet_success_url,
@@ -801,9 +780,7 @@ async def create_topup(
                 user_id=user.id,
                 amount_kopeks=request.amount_kopeks,
                 description=settings.get_balance_payment_description(
-                    request.amount_kopeks,
-                    telegram_user_id=user.telegram_id,
-                    user_db_id=user.id,
+                    request.amount_kopeks, telegram_user_id=user.telegram_id, user_db_id=user.id
                 ),
                 email=getattr(user, 'email', None),
                 language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
@@ -832,9 +809,7 @@ async def create_topup(
                 user_id=user.id,
                 amount_kopeks=request.amount_kopeks,
                 description=settings.get_balance_payment_description(
-                    request.amount_kopeks,
-                    telegram_user_id=user.telegram_id,
-                    user_db_id=user.id,
+                    request.amount_kopeks, telegram_user_id=user.telegram_id, user_db_id=user.id
                 ),
                 email=getattr(user, 'email', None),
                 language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
@@ -864,9 +839,7 @@ async def create_topup(
                 user_id=user.id,
                 amount_kopeks=request.amount_kopeks,
                 description=settings.get_balance_payment_description(
-                    request.amount_kopeks,
-                    telegram_user_id=user.telegram_id,
-                    user_db_id=user.id,
+                    request.amount_kopeks, telegram_user_id=user.telegram_id, user_db_id=user.id
                 ),
                 email=getattr(user, 'email', None),
                 language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
@@ -902,9 +875,7 @@ async def create_topup(
                 user_id=user.id,
                 amount_kopeks=request.amount_kopeks,
                 description=settings.get_balance_payment_description(
-                    request.amount_kopeks,
-                    telegram_user_id=user.telegram_id,
-                    user_db_id=user.id,
+                    request.amount_kopeks, telegram_user_id=user.telegram_id, user_db_id=user.id
                 ),
                 email=getattr(user, 'email', None),
                 language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
@@ -935,9 +906,7 @@ async def create_topup(
                 user_id=user.id,
                 amount_kopeks=request.amount_kopeks,
                 description=settings.get_balance_payment_description(
-                    request.amount_kopeks,
-                    telegram_user_id=user.telegram_id,
-                    user_db_id=user.id,
+                    request.amount_kopeks, telegram_user_id=user.telegram_id, user_db_id=user.id
                 ),
                 email=getattr(user, 'email', None),
                 language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
@@ -968,9 +937,7 @@ async def create_topup(
                 user_id=user.id,
                 amount_kopeks=request.amount_kopeks,
                 description=settings.get_balance_payment_description(
-                    request.amount_kopeks,
-                    telegram_user_id=user.telegram_id,
-                    user_db_id=user.id,
+                    request.amount_kopeks, telegram_user_id=user.telegram_id, user_db_id=user.id
                 ),
                 email=getattr(user, 'email', None),
                 language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
@@ -1001,9 +968,7 @@ async def create_topup(
                 user_id=user.id,
                 amount_kopeks=request.amount_kopeks,
                 description=settings.get_balance_payment_description(
-                    request.amount_kopeks,
-                    telegram_user_id=user.telegram_id,
-                    user_db_id=user.id,
+                    request.amount_kopeks, telegram_user_id=user.telegram_id, user_db_id=user.id
                 ),
                 email=getattr(user, 'email', None),
                 language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
@@ -1039,9 +1004,7 @@ async def create_topup(
                 user_id=user.id,
                 amount_kopeks=request.amount_kopeks,
                 description=settings.get_balance_payment_description(
-                    request.amount_kopeks,
-                    telegram_user_id=user.telegram_id,
-                    user_db_id=user.id,
+                    request.amount_kopeks, telegram_user_id=user.telegram_id, user_db_id=user.id
                 ),
                 email=getattr(user, 'email', None),
                 language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
@@ -1072,9 +1035,7 @@ async def create_topup(
                 user_id=user.id,
                 amount_kopeks=request.amount_kopeks,
                 description=settings.get_balance_payment_description(
-                    request.amount_kopeks,
-                    telegram_user_id=user.telegram_id,
-                    user_db_id=user.id,
+                    request.amount_kopeks, telegram_user_id=user.telegram_id, user_db_id=user.id
                 ),
                 email=getattr(user, 'email', None),
                 language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
@@ -1090,6 +1051,70 @@ async def create_topup(
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                     detail='Failed to create CisPay payment',
+                )
+
+        elif request.payment_method == 'tabpay':
+            if not settings.is_tabpay_enabled():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail='TabPay payment method is unavailable',
+                )
+
+            payment_service = PaymentService()
+            payment_method_type = request.payment_option or None
+            result = await payment_service.create_tabpay_payment(
+                db=db,
+                user_id=user.id,
+                amount_kopeks=request.amount_kopeks,
+                description=settings.get_balance_payment_description(
+                    request.amount_kopeks, telegram_user_id=user.telegram_id, user_db_id=user.id
+                ),
+                email=getattr(user, 'email', None),
+                language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
+                payment_method_type=payment_method_type,
+                return_url=cabinet_success_url,
+                fail_url=cabinet_failed_url,
+            )
+
+            if result and result.get('payment_url'):
+                payment_url = result.get('payment_url')
+                payment_id = str(result.get('local_payment_id') or result.get('order_id') or 'pending')
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail='Failed to create TabPay payment',
+                )
+
+        elif request.payment_method == 'paritypay':
+            if not settings.is_paritypay_enabled():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail='ParityPay payment method is unavailable',
+                )
+
+            payment_service = PaymentService()
+            payment_method_type = request.payment_option or None
+            result = await payment_service.create_paritypay_payment(
+                db=db,
+                user_id=user.id,
+                amount_kopeks=request.amount_kopeks,
+                description=settings.get_balance_payment_description(
+                    request.amount_kopeks, telegram_user_id=user.telegram_id, user_db_id=user.id
+                ),
+                email=getattr(user, 'email', None),
+                language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
+                payment_method_type=payment_method_type,
+                return_url=cabinet_success_url,
+                fail_url=cabinet_failed_url,
+            )
+
+            if result and result.get('payment_url'):
+                payment_url = result.get('payment_url')
+                payment_id = str(result.get('local_payment_id') or result.get('order_id') or 'pending')
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail='Failed to create ParityPay payment',
                 )
 
         else:
@@ -1129,172 +1154,198 @@ def _get_status_info(record: PendingPayment) -> tuple[str, str]:
     status = (record.status or '').lower()
 
     if record.is_paid:
-        return '', 'Оплачено'
+        return '✅', 'Оплачено'
 
     if record.method == PaymentMethod.PAL24:
         mapping = {
-            'new': ('', 'Ожидает оплаты'),
-            'process': ('', 'Обрабатывается'),
-            'success': ('', 'Оплачено'),
-            'fail': ('', 'Ошибка'),
-            'canceled': ('', 'Отменено'),
+            'new': ('⏳', 'Ожидает оплаты'),
+            'process': ('⌛', 'Обрабатывается'),
+            'success': ('✅', 'Оплачено'),
+            'fail': ('❌', 'Ошибка'),
+            'canceled': ('❌', 'Отменено'),
         }
-        return mapping.get(status, ('', 'Неизвестно'))
+        return mapping.get(status, ('❓', 'Неизвестно'))
 
     if record.method == PaymentMethod.MULENPAY:
         mapping = {
-            'created': ('', 'Ожидает оплаты'),
-            'processing': ('', 'Обрабатывается'),
-            'hold': ('', 'На удержании'),
-            'success': ('', 'Оплачено'),
-            'canceled': ('', 'Отменено'),
-            'error': ('', 'Ошибка'),
+            'created': ('⏳', 'Ожидает оплаты'),
+            'processing': ('⌛', 'Обрабатывается'),
+            'hold': ('🔒', 'На удержании'),
+            'success': ('✅', 'Оплачено'),
+            'canceled': ('❌', 'Отменено'),
+            'error': ('❌', 'Ошибка'),
         }
-        return mapping.get(status, ('', 'Неизвестно'))
+        return mapping.get(status, ('❓', 'Неизвестно'))
 
     if record.method == PaymentMethod.WATA:
         mapping = {
-            'opened': ('', 'Ожидает оплаты'),
-            'pending': ('', 'Ожидает оплаты'),
-            'processing': ('', 'Обрабатывается'),
-            'paid': ('', 'Оплачено'),
-            'closed': ('', 'Оплачено'),
-            'declined': ('', 'Отклонено'),
-            'canceled': ('', 'Отменено'),
-            'expired': ('', 'Истёк'),
+            'opened': ('⏳', 'Ожидает оплаты'),
+            'pending': ('⏳', 'Ожидает оплаты'),
+            'processing': ('⌛', 'Обрабатывается'),
+            'paid': ('✅', 'Оплачено'),
+            'closed': ('✅', 'Оплачено'),
+            'declined': ('❌', 'Отклонено'),
+            'canceled': ('❌', 'Отменено'),
+            'expired': ('⌛', 'Истёк'),
         }
-        return mapping.get(status, ('', 'Неизвестно'))
+        return mapping.get(status, ('❓', 'Неизвестно'))
 
     if record.method == PaymentMethod.PLATEGA:
         mapping = {
-            'pending': ('', 'Ожидает оплаты'),
-            'inprogress': ('', 'Обрабатывается'),
-            'confirmed': ('', 'Оплачено'),
-            'failed': ('', 'Ошибка'),
-            'canceled': ('', 'Отменено'),
-            'expired': ('', 'Истёк'),
+            'pending': ('⏳', 'Ожидает оплаты'),
+            'inprogress': ('⌛', 'Обрабатывается'),
+            'confirmed': ('✅', 'Оплачено'),
+            'failed': ('❌', 'Ошибка'),
+            'canceled': ('❌', 'Отменено'),
+            'expired': ('⌛', 'Истёк'),
         }
-        return mapping.get(status, ('', 'Неизвестно'))
+        return mapping.get(status, ('❓', 'Неизвестно'))
 
     if record.method == PaymentMethod.HELEKET:
         if status in {'pending', 'created', 'waiting', 'check', 'processing'}:
-            return '', 'Ожидает оплаты'
+            return '⏳', 'Ожидает оплаты'
         if status in {'paid', 'paid_over'}:
-            return '', 'Оплачено'
+            return '✅', 'Оплачено'
         if status in {'cancel', 'canceled', 'fail', 'failed', 'expired'}:
-            return '', 'Отменено'
-        return '', 'Неизвестно'
+            return '❌', 'Отменено'
+        return '❓', 'Неизвестно'
 
     if record.method == PaymentMethod.YOOKASSA:
         mapping = {
-            'pending': ('', 'Ожидает оплаты'),
-            'waiting_for_capture': ('', 'Обрабатывается'),
-            'succeeded': ('', 'Оплачено'),
-            'canceled': ('', 'Отменено'),
+            'pending': ('⏳', 'Ожидает оплаты'),
+            'waiting_for_capture': ('⌛', 'Обрабатывается'),
+            'succeeded': ('✅', 'Оплачено'),
+            'canceled': ('❌', 'Отменено'),
         }
-        return mapping.get(status, ('', 'Неизвестно'))
+        return mapping.get(status, ('❓', 'Неизвестно'))
 
     if record.method == PaymentMethod.CRYPTOBOT:
         mapping = {
-            'active': ('', 'Ожидает оплаты'),
-            'paid': ('', 'Оплачено'),
-            'expired': ('', 'Истёк'),
+            'active': ('⏳', 'Ожидает оплаты'),
+            'paid': ('✅', 'Оплачено'),
+            'expired': ('⌛', 'Истёк'),
         }
-        return mapping.get(status, ('', 'Неизвестно'))
+        return mapping.get(status, ('❓', 'Неизвестно'))
 
     if record.method == PaymentMethod.CLOUDPAYMENTS:
         mapping = {
-            'pending': ('', 'Ожидает оплаты'),
-            'authorized': ('', 'Авторизовано'),
-            'completed': ('', 'Оплачено'),
-            'failed': ('', 'Ошибка'),
+            'pending': ('⏳', 'Ожидает оплаты'),
+            'authorized': ('⌛', 'Авторизовано'),
+            'completed': ('✅', 'Оплачено'),
+            'failed': ('❌', 'Ошибка'),
         }
-        return mapping.get(status, ('', 'Неизвестно'))
+        return mapping.get(status, ('❓', 'Неизвестно'))
 
     if record.method == PaymentMethod.FREEKASSA:
         mapping = {
-            'pending': ('', 'Ожидает оплаты'),
-            'success': ('', 'Оплачено'),
-            'paid': ('', 'Оплачено'),
-            'canceled': ('', 'Отменено'),
-            'error': ('', 'Ошибка'),
+            'pending': ('⏳', 'Ожидает оплаты'),
+            'success': ('✅', 'Оплачено'),
+            'paid': ('✅', 'Оплачено'),
+            'canceled': ('❌', 'Отменено'),
+            'error': ('❌', 'Ошибка'),
         }
-        return mapping.get(status, ('', 'Неизвестно'))
+        return mapping.get(status, ('❓', 'Неизвестно'))
 
     if record.method == PaymentMethod.KASSA_AI:
         mapping = {
-            'pending': ('', 'Ожидает оплаты'),
-            'success': ('', 'Оплачено'),
-            'paid': ('', 'Оплачено'),
-            'canceled': ('', 'Отменено'),
-            'failed': ('', 'Ошибка'),
-            'expired': ('', 'Истёк'),
+            'pending': ('⏳', 'Ожидает оплаты'),
+            'success': ('✅', 'Оплачено'),
+            'paid': ('✅', 'Оплачено'),
+            'canceled': ('❌', 'Отменено'),
+            'failed': ('❌', 'Ошибка'),
+            'expired': ('⌛', 'Истёк'),
         }
-        return mapping.get(status, ('', 'Неизвестно'))
+        return mapping.get(status, ('❓', 'Неизвестно'))
 
     if record.method == PaymentMethod.RIOPAY:
         mapping = {
-            'pending': ('', 'Ожидает оплаты'),
-            'success': ('', 'Оплачено'),
-            'failed': ('', 'Ошибка'),
-            'canceled': ('', 'Отменено'),
-            'expired': ('', 'Истёк'),
-            'amount_mismatch': ('', 'Несовпадение суммы'),
+            'pending': ('⏳', 'Ожидает оплаты'),
+            'success': ('✅', 'Оплачено'),
+            'failed': ('❌', 'Ошибка'),
+            'canceled': ('❌', 'Отменено'),
+            'expired': ('⌛', 'Истёк'),
+            'amount_mismatch': ('⚠️', 'Несовпадение суммы'),
         }
-        return mapping.get(status, ('', 'Неизвестно'))
+        return mapping.get(status, ('❓', 'Неизвестно'))
 
     if record.method == PaymentMethod.JUPITER:
         mapping = {
-            'pending': ('', 'Ожидает оплаты'),
-            'processing': ('', 'Обрабатывается'),
-            'success': ('', 'Оплачено'),
-            'cancelled': ('', 'Отменено'),
-            'declined': ('', 'Отклонено'),
-            'error': ('', 'Ошибка'),
-            'amount_mismatch': ('', 'Несовпадение суммы'),
+            'pending': ('⏳', 'Ожидает оплаты'),
+            'processing': ('⌛', 'Обрабатывается'),
+            'success': ('✅', 'Оплачено'),
+            'cancelled': ('❌', 'Отменено'),
+            'declined': ('❌', 'Отклонено'),
+            'error': ('❌', 'Ошибка'),
+            'amount_mismatch': ('⚠️', 'Несовпадение суммы'),
         }
-        return mapping.get(status, ('', 'Неизвестно'))
+        return mapping.get(status, ('❓', 'Неизвестно'))
 
     if record.method == PaymentMethod.DONUT:
         mapping = {
-            'pending': ('', 'Ожидает оплаты'),
-            'created': ('', 'Создано'),
-            'processing': ('', 'Обрабатывается'),
-            'success': ('', 'Оплачено'),
-            'cancelled': ('', 'Отменено'),
-            'error': ('', 'Ошибка'),
-            'amount_mismatch': ('', 'Несовпадение суммы'),
+            'pending': ('⏳', 'Ожидает оплаты'),
+            'created': ('⏳', 'Создано'),
+            'processing': ('⌛', 'Обрабатывается'),
+            'success': ('✅', 'Оплачено'),
+            'cancelled': ('❌', 'Отменено'),
+            'error': ('❌', 'Ошибка'),
+            'amount_mismatch': ('⚠️', 'Несовпадение суммы'),
         }
-        return mapping.get(status, ('', 'Неизвестно'))
+        return mapping.get(status, ('❓', 'Неизвестно'))
 
     if record.method == PaymentMethod.LAVA:
         mapping = {
-            'pending': ('', 'Ожидает оплаты'),
-            'created': ('', 'Создано'),
-            'processing': ('', 'Обрабатывается'),
-            'success': ('', 'Оплачено'),
-            'cancel': ('', 'Отменено'),
-            'cancelled': ('', 'Отменено'),
-            'expired': ('', 'Истёк'),
-            'failed': ('', 'Ошибка'),
-            'error': ('', 'Ошибка'),
-            'amount_mismatch': ('', 'Несовпадение суммы'),
+            'pending': ('⏳', 'Ожидает оплаты'),
+            'created': ('⏳', 'Создано'),
+            'processing': ('⌛', 'Обрабатывается'),
+            'success': ('✅', 'Оплачено'),
+            'cancel': ('❌', 'Отменено'),
+            'cancelled': ('❌', 'Отменено'),
+            'expired': ('⌛', 'Истёк'),
+            'failed': ('❌', 'Ошибка'),
+            'error': ('❌', 'Ошибка'),
+            'amount_mismatch': ('⚠️', 'Несовпадение суммы'),
         }
-        return mapping.get(status, ('', 'Неизвестно'))
+        return mapping.get(status, ('❓', 'Неизвестно'))
 
     if record.method == PaymentMethod.CISPAY:
         mapping = {
-            'pending': ('', 'Ожидает оплаты'),
-            'success': ('', 'Оплачено'),
-            'declined': ('', 'Отклонено'),
-            'expired': ('', 'Истёк'),
-            'refunded': ('', 'Возвращён'),
-            'error': ('', 'Ошибка'),
-            'amount_mismatch': ('', 'Несовпадение суммы'),
+            'pending': ('⏳', 'Ожидает оплаты'),
+            'success': ('✅', 'Оплачено'),
+            'declined': ('❌', 'Отклонено'),
+            'expired': ('⌛', 'Истёк'),
+            'refunded': ('↩️', 'Возвращён'),
+            'error': ('❌', 'Ошибка'),
+            'amount_mismatch': ('⚠️', 'Несовпадение суммы'),
         }
-        return mapping.get(status, ('', 'Неизвестно'))
+        return mapping.get(status, ('❓', 'Неизвестно'))
 
-    return '', 'Неизвестно'
+    if record.method == PaymentMethod.PARITYPAY:
+        mapping = {
+            'pending': ('⏳', 'Ожидает оплаты'),
+            'success': ('✅', 'Оплачено'),
+            'declined': ('❌', 'Ошибка оплаты'),
+            'expired': ('⌛', 'Истёк'),
+            'refunded': ('↩️', 'Возвращён'),
+            'error': ('❌', 'Ошибка'),
+            'amount_mismatch': ('⚠️', 'Несовпадение суммы'),
+        }
+        return mapping.get(status, ('❓', 'Неизвестно'))
+
+    if record.method == PaymentMethod.TABPAY:
+        mapping = {
+            'pending': ('⏳', 'Ожидает оплаты'),
+            'processing': ('⌛', 'Оплачивается'),
+            'success': ('✅', 'Оплачено'),
+            'declined': ('❌', 'Отклонено'),
+            'expired': ('⌛', 'Истёк'),
+            'refunded': ('↩️', 'Возвращён'),
+            'canceled': ('❌', 'Отменён'),
+            'error': ('❌', 'Ошибка'),
+            'amount_mismatch': ('⚠️', 'Несовпадение суммы'),
+        }
+        return mapping.get(status, ('❓', 'Неизвестно'))
+
+    return '❓', 'Неизвестно'
 
 
 def _is_checkable(record: PendingPayment) -> bool:
@@ -1309,25 +1360,11 @@ def _is_checkable(record: PendingPayment) -> bool:
     if record.method == PaymentMethod.MULENPAY:
         return status in {'created', 'processing', 'hold'}
     if record.method == PaymentMethod.WATA:
-        return status in {
-            'opened',
-            'pending',
-            'processing',
-            'inprogress',
-            'in_progress',
-        }
+        return status in {'opened', 'pending', 'processing', 'inprogress', 'in_progress'}
     if record.method == PaymentMethod.PLATEGA:
         return status in {'pending', 'inprogress', 'in_progress'}
     if record.method == PaymentMethod.HELEKET:
-        return status not in {
-            'paid',
-            'paid_over',
-            'cancel',
-            'canceled',
-            'fail',
-            'failed',
-            'expired',
-        }
+        return status not in {'paid', 'paid_over', 'cancel', 'canceled', 'fail', 'failed', 'expired'}
     if record.method == PaymentMethod.YOOKASSA:
         return status in {'pending', 'waiting_for_capture'}
     if record.method == PaymentMethod.CRYPTOBOT:
@@ -1341,6 +1378,11 @@ def _is_checkable(record: PendingPayment) -> bool:
     if record.method == PaymentMethod.RIOPAY:
         return status == 'pending'
     if record.method == PaymentMethod.CISPAY:
+        return status == 'pending'
+    if record.method == PaymentMethod.TABPAY:
+        # PENDING держится 20 минут после начала оплаты, поэтому проверяем и его.
+        return status in {'pending', 'processing'}
+    if record.method == PaymentMethod.PARITYPAY:
         return status == 'pending'
     return False
 

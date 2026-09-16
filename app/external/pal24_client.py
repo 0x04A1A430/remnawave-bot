@@ -97,21 +97,12 @@ class Pal24Client:
                     payload = await response.json(content_type=None)
                 except aiohttp.ContentTypeError:
                     text_body = await response.text()
-                    logger.error(
-                        'Pal24 API returned non-JSON response',
-                        endpoint=endpoint,
-                        text_body=text_body,
-                    )
+                    logger.error('Pal24 API returned non-JSON response', endpoint=endpoint, text_body=text_body)
                     raise Pal24APIError(f'Pal24 API returned non-JSON response: {text_body}') from None
 
                 result = Pal24Response.from_payload(payload, status)
                 if status >= 400 or not result.success:
-                    logger.error(
-                        'Pal24 API error',
-                        status=status,
-                        endpoint=endpoint,
-                        payload=payload,
-                    )
+                    logger.error('Pal24 API error', status=status, endpoint=endpoint, payload=payload)
                     result.raise_for_status(endpoint)
 
                 return result
@@ -190,7 +181,7 @@ class Pal24Client:
         if not token:
             raise Pal24APIError('Pal24 signature token is not configured')
         raw = f'{out_sum}:{inv_id}:{token}'.encode()
-        return hashlib.md5(raw, usedforsecurity=False).hexdigest().upper()  # provider-defined algorithm
+        return hashlib.md5(raw).hexdigest().upper()
 
     @staticmethod
     def verify_signature(

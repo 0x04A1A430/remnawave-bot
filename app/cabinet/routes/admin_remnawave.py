@@ -143,7 +143,6 @@ def _parse_datetime(value: Any) -> datetime | None:
 def _serialize_node(node_data: dict[str, Any]) -> NodeInfo:
     """Serialize node data to NodeInfo model."""
     return NodeInfo(
-        id=node_data.get('id'),
         uuid=node_data.get('uuid', ''),
         name=node_data.get('name', ''),
         address=node_data.get('address', ''),
@@ -284,10 +283,7 @@ async def get_recap(
     _ensure_configured(service)
     data = await service.get_recap_statistics()
     if isinstance(data, dict) and data.get('error'):
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail='Failed to get RemnaWave recap',
-        )
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail='Failed to get RemnaWave recap')
     return RecapResponse(**data)
 
 
@@ -300,10 +296,7 @@ async def get_devices_stats(
     _ensure_configured(service)
     data = await service.get_devices_statistics()
     if isinstance(data, dict) and data.get('error'):
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail='Failed to get device statistics',
-        )
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail='Failed to get device statistics')
     return DevicesStatsResponse(**data)
 
 
@@ -318,10 +311,7 @@ async def get_top_consumers_route(
     _ensure_configured(service)
     data = await service.get_top_consumers(days=days, limit=limit)
     if isinstance(data, dict) and data.get('error'):
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail='Failed to get top consumers',
-        )
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail='Failed to get top consumers')
     return TopConsumersResponse(**data)
 
 
@@ -347,10 +337,7 @@ async def get_subscription_requests_route(
     _ensure_configured(service)
     data = await service.get_subscription_request_statistics()
     if isinstance(data, dict) and data.get('error'):
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail='Failed to get subscription request stats',
-        )
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail='Failed to get subscription request stats')
     return SubscriptionRequestStatsResponse(**data)
 
 
@@ -446,7 +433,10 @@ async def get_node_statistics(
     return NodeStatisticsResponse(
         node=_serialize_node(stats['node']),
         realtime=stats.get('realtime'),
-        usage_history=normalize_node_usage(stats.get('usage_history'), stats['node'].get('uuid', '')),
+        # Нормализуем той же функцией, что и Web API-близнец: схема здесь
+        # `list[dict[str, Any]]`, поэтому расхождение ключей pydantic не поймает,
+        # и фронт молча отрисовал бы пустые ячейки.
+        usage_history=normalize_node_usage(stats.get('usage_history'), node_uuid),
         last_updated=_parse_datetime(stats.get('last_updated')),
     )
 
@@ -505,15 +495,12 @@ async def perform_node_action(
 
     if success:
         logger.info(
-            'Admin performed on node',
-            telegram_id=admin.telegram_id,
-            action=payload.action,
-            node_uuid=node_uuid,
+            'Admin performed on node', telegram_id=admin.telegram_id, action=payload.action, node_uuid=node_uuid
         )
         return NodeActionResponse(
             success=True,
             message=messages.get(payload.action, 'Action completed'),
-            is_disabled=(payload.action == 'disable' if payload.action in ('enable', 'disable') else None),
+            is_disabled=payload.action == 'disable' if payload.action in ('enable', 'disable') else None,
         )
     raise HTTPException(
         status_code=status.HTTP_400_BAD_REQUEST,
@@ -715,11 +702,7 @@ async def get_squad_details(
     )
 
 
-@router.post(
-    '/squads',
-    response_model=SquadOperationResponse,
-    status_code=status.HTTP_201_CREATED,
-)
+@router.post('/squads', response_model=SquadOperationResponse, status_code=status.HTTP_201_CREATED)
 async def create_squad(
     payload: SquadCreateRequest,
     admin: User = Depends(require_permission('remnawave:manage')),
@@ -732,10 +715,7 @@ async def create_squad(
 
     if squad_uuid:
         logger.info(
-            'Admin created squad',
-            telegram_id=admin.telegram_id,
-            payload_name=payload.name,
-            squad_uuid=squad_uuid,
+            'Admin created squad', telegram_id=admin.telegram_id, payload_name=payload.name, squad_uuid=squad_uuid
         )
         return SquadOperationResponse(
             success=True,
@@ -820,12 +800,7 @@ async def perform_squad_action(
         message = 'Inbounds updated' if success else 'Failed to update inbounds'
 
     if success:
-        logger.info(
-            'Admin performed on squad',
-            telegram_id=admin.telegram_id,
-            action=action,
-            squad_uuid=squad_uuid,
-        )
+        logger.info('Admin performed on squad', telegram_id=admin.telegram_id, action=action, squad_uuid=squad_uuid)
 
     return SquadOperationResponse(success=success, message=message)
 
@@ -931,10 +906,7 @@ async def migrate_squad_users(
         )
 
     logger.info(
-        'Admin migrated users from to',
-        telegram_id=admin.telegram_id,
-        source_uuid=source_uuid,
-        target_uuid=target_uuid,
+        'Admin migrated users from to', telegram_id=admin.telegram_id, source_uuid=source_uuid, target_uuid=target_uuid
     )
 
     return MigrationResponse(
@@ -986,7 +958,7 @@ async def get_auto_sync_status(
 
     return AutoSyncStatus(
         enabled=status_obj.enabled,
-        times=([t.strftime('%H:%M') for t in status_obj.times] if status_obj.times else []),
+        times=[t.strftime('%H:%M') for t in status_obj.times] if status_obj.times else [],
         next_run=status_obj.next_run,
         is_running=status_obj.is_running,
         last_run_started_at=status_obj.last_run_started_at,
@@ -1075,11 +1047,7 @@ async def sync_from_panel(
 
     try:
         stats = await service.sync_users_from_panel(db, payload.mode)
-        logger.info(
-            'Admin synced from panel (mode: )',
-            telegram_id=admin.telegram_id,
-            mode=payload.mode,
-        )
+        logger.info('Admin synced from panel (mode: )', telegram_id=admin.telegram_id, mode=payload.mode)
         return SyncResponse(
             success=True,
             message='Sync from panel completed',
@@ -1108,6 +1076,30 @@ async def sync_to_panel(
         success=True,
         message='Sync to panel completed',
         data=stats,
+    )
+
+
+@router.post('/sync/full', response_model=SyncResponse)
+async def sync_full(
+    admin: User = Depends(require_permission('remnawave:sync')),
+    db: AsyncSession = Depends(get_cabinet_db),
+) -> SyncResponse:
+    """Полная синхронизация: из панели в бота и серверы — как в боте и по расписанию. Панель — истина, в неё не пишем."""
+    from app.services.remnawave_sync_service import FullSyncAlreadyRunning, perform_full_sync
+
+    service = _get_service()
+    _ensure_configured(service)
+
+    try:
+        user_stats, server_stats = await perform_full_sync(db, service)
+    except FullSyncAlreadyRunning as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    logger.info('Admin ran full sync', telegram_id=admin.telegram_id)
+
+    return SyncResponse(
+        success=True,
+        message='Full sync completed',
+        data={**user_stats, 'servers': server_stats},
     )
 
 

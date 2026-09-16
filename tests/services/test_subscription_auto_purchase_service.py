@@ -549,7 +549,6 @@ def _prepare_extend_race_guard_scenario(monkeypatch, *, recent_transactions: lis
     return user, subscription, subtract_mock
 
 
-@pytest.mark.skip(reason='fork does not support this feature')
 async def test_race_guard_fresh_updated_at_without_subscription_payment_allows_purchase(monkeypatch):
     """Свежий updated_at без SUBSCRIPTION_PAYMENT (только deposit) не блокирует автопокупку."""
     deposit = MagicMock()

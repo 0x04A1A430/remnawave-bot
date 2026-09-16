@@ -104,11 +104,7 @@ def _serialize_config(config: dict, is_enabled: bool, updated_at) -> MenuLayoutR
                 )
             )
         except Exception as e:
-            logger.warning(
-                'Ошибка сериализации ряда, пропускаю',
-                row_id=row_data.get('id'),
-                error=str(e),
-            )
+            logger.warning('Ошибка сериализации ряда, пропускаю', row_id=row_data.get('id'), error=str(e))
 
     buttons = {}
     for btn_id, btn_data in config.get('buttons', {}).items():
@@ -209,9 +205,9 @@ async def list_builtin_buttons(
                 id=btn_info['id'],
                 default_text=btn_info['default_text'],
                 callback_data=btn_info['callback_data'],
-                default_conditions=(
-                    ButtonConditions(**btn_info['default_conditions']) if btn_info.get('default_conditions') else None
-                ),
+                default_conditions=ButtonConditions(**btn_info['default_conditions'])
+                if btn_info.get('default_conditions')
+                else None,
                 supports_dynamic_text=btn_info.get('supports_dynamic_text', False),
                 supports_direct_open=btn_info.get('supports_direct_open', False),
             )
@@ -255,7 +251,7 @@ async def update_button(
             action=button.get('action', ''),
             enabled=button.get('enabled', True),
             visibility=button.get('visibility', 'all'),
-            conditions=(ButtonConditions(**button['conditions']) if button.get('conditions') else None),
+            conditions=ButtonConditions(**button['conditions']) if button.get('conditions') else None,
             dynamic_text=button.get('dynamic_text', False),
             open_mode=button.get('open_mode', 'callback'),
             webapp_url=button.get('webapp_url'),
@@ -279,7 +275,7 @@ async def reorder_rows(
             MenuRowConfig(
                 id=row['id'],
                 buttons=row.get('buttons', []),
-                conditions=(ButtonConditions(**row['conditions']) if row.get('conditions') else None),
+                conditions=ButtonConditions(**row['conditions']) if row.get('conditions') else None,
                 max_per_row=row.get('max_per_row', 2),
             )
             for row in rows
@@ -299,7 +295,7 @@ async def add_row(
         row_config = {
             'id': payload.id,
             'buttons': payload.buttons,
-            'conditions': (payload.conditions.model_dump(exclude_none=True) if payload.conditions else None),
+            'conditions': payload.conditions.model_dump(exclude_none=True) if payload.conditions else None,
             'max_per_row': payload.max_per_row,
         }
         row = await MenuLayoutService.add_row(db, row_config, payload.position)
@@ -307,7 +303,7 @@ async def add_row(
         return MenuRowConfig(
             id=row['id'],
             buttons=row.get('buttons', []),
-            conditions=(ButtonConditions(**row['conditions']) if row.get('conditions') else None),
+            conditions=ButtonConditions(**row['conditions']) if row.get('conditions') else None,
             max_per_row=row.get('max_per_row', 2),
         )
     except ValueError as e:
@@ -347,7 +343,7 @@ async def add_custom_button(
             'icon': payload.icon,
             'action': payload.action,
             'visibility': payload.visibility.value,
-            'conditions': (payload.conditions.model_dump(exclude_none=True) if payload.conditions else None),
+            'conditions': payload.conditions.model_dump(exclude_none=True) if payload.conditions else None,
             'dynamic_text': dynamic_text,
             'description': payload.description,
             'icon_custom_emoji_id': payload.icon_custom_emoji_id,
@@ -362,7 +358,7 @@ async def add_custom_button(
             action=button.get('action', ''),
             enabled=button.get('enabled', True),
             visibility=button.get('visibility', 'all'),
-            conditions=(ButtonConditions(**button['conditions']) if button.get('conditions') else None),
+            conditions=ButtonConditions(**button['conditions']) if button.get('conditions') else None,
             dynamic_text=button.get('dynamic_text', False),
             open_mode=button.get('open_mode', 'callback'),
             webapp_url=button.get('webapp_url'),
@@ -373,11 +369,7 @@ async def add_custom_button(
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(e)) from e
 
 
-@router.delete(
-    '/buttons/{button_id}',
-    status_code=status.HTTP_204_NO_CONTENT,
-    response_class=Response,
-)
+@router.delete('/buttons/{button_id}', status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
 async def delete_custom_button(
     button_id: str,
     _: Any = Security(require_api_token),
@@ -600,7 +592,7 @@ async def export_menu_layout(
             MenuRowConfig(
                 id=row_data['id'],
                 buttons=row_data.get('buttons', []),
-                conditions=(ButtonConditions(**row_data['conditions']) if row_data.get('conditions') else None),
+                conditions=ButtonConditions(**row_data['conditions']) if row_data.get('conditions') else None,
                 max_per_row=row_data.get('max_per_row', 2),
             )
         )
@@ -615,7 +607,7 @@ async def export_menu_layout(
             action=btn_data.get('action', ''),
             enabled=btn_data.get('enabled', True),
             visibility=btn_data.get('visibility', 'all'),
-            conditions=(ButtonConditions(**btn_data['conditions']) if btn_data.get('conditions') else None),
+            conditions=ButtonConditions(**btn_data['conditions']) if btn_data.get('conditions') else None,
             dynamic_text=btn_data.get('dynamic_text', False),
             open_mode=btn_data.get('open_mode', 'callback'),
             webapp_url=btn_data.get('webapp_url'),
@@ -667,9 +659,7 @@ async def validate_menu_layout(
     else:
         config = {
             'rows': [row.model_dump() for row in payload.rows] if payload.rows else [],
-            'buttons': (
-                {btn_id: btn.model_dump() for btn_id, btn in payload.buttons.items()} if payload.buttons else {}
-            ),
+            'buttons': {btn_id: btn.model_dump() for btn_id, btn in payload.buttons.items()} if payload.buttons else {},
         }
 
     result = MenuLayoutService.validate_config(config)
@@ -994,10 +984,5 @@ async def get_user_click_sequences(
             total=len(sequences),
         )
     except Exception as e:
-        logger.error(
-            'Error getting user sequences: user_id=, error',
-            user_id=user_id,
-            error=e,
-            exc_info=True,
-        )
+        logger.error('Error getting user sequences: user_id=, error', user_id=user_id, error=e, exc_info=True)
         raise HTTPException(status_code=500, detail=f'Internal server error: {e!s}')

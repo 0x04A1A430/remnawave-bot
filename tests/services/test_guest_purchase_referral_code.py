@@ -146,10 +146,7 @@ async def test_existing_email_user_with_referral_code_is_not_overwritten() -> No
     db.execute = AsyncMock(return_value=_single_result(existing_user))
 
     create_code_mock = AsyncMock(return_value='SHOULD-NOT-BE-USED')
-    with patch(
-        'app.services.guest_purchase_service.create_unique_referral_code',
-        create_code_mock,
-    ):
+    with patch('app.services.guest_purchase_service.create_unique_referral_code', create_code_mock):
         user, _ = await _find_or_create_user(db, 'email', 'existing@example.com')
 
     assert user.referral_code == 'ORIGINAL'

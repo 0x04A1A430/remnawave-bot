@@ -1,11 +1,9 @@
 import re
-from typing import Any
 
 from aiogram import types
 from aiogram.types import InlineKeyboardButton
 
 from app.config import settings
-from app.utils.button_emoji import parse_button_label
 from app.utils.button_styles_cache import CALLBACK_TO_SECTION, get_cached_button_styles
 
 
@@ -180,6 +178,7 @@ def build_miniapp_or_callback_button(
     cabinet_path: str | None = None,
     style: str | None = None,
     icon_custom_emoji_id: str | None = None,
+    style_key: str | None = None,
 ) -> InlineKeyboardButton:
     """Create a button that opens the cabinet miniapp or falls back to a callback.
 
@@ -202,9 +201,12 @@ def build_miniapp_or_callback_button(
     Only ``MINIAPP_CUSTOM_URL`` is considered here — the purchase-only URL
     (``MINIAPP_PURCHASE_URL``) is intentionally excluded because it cannot
     display subscription details and would load indefinitely.
-    """
 
-    parsed = parse_button_label(text)
+    ``style_key`` overrides which key is used to look up section styling.
+    Needed for dynamic callbacks (``se:{id}``) that carry an id and therefore
+    can never appear in the static style maps: without it such a button would
+    silently lose the color its static twin has.
+    """
 
     if settings.is_cabinet_mode():
         path = cabinet_path or CALLBACK_TO_CABINET_PATH.get(callback_data)
@@ -212,7 +214,8 @@ def build_miniapp_or_callback_button(
             url = build_cabinet_url(path)
             if url:
                 # Resolve per-section config from cache
-                section = CALLBACK_TO_SECTION.get(callback_data)
+                lookup_key = style_key or callback_data
+                section = CALLBACK_TO_SECTION.get(lookup_key)
                 section_cfg = get_cached_button_styles().get(section or '', {}) if section else {}
 
                 # Style chain: explicit param > per-section DB > global config > hardcoded default
@@ -223,20 +226,15 @@ def build_miniapp_or_callback_button(
                     resolved_style = _resolve_style(section_cfg['style'])
                 else:
                     resolved_style = _resolve_style((settings.CABINET_BUTTON_STYLE or '').strip()) or _resolve_style(
-                        CALLBACK_TO_CABINET_STYLE.get(callback_data)
+                        CALLBACK_TO_CABINET_STYLE.get(lookup_key)
                     )
 
-                # Emoji chain: explicit param > per-section DB > text tag
-                resolved_emoji = (
-                    icon_custom_emoji_id
-                    or section_cfg.get('icon_custom_emoji_id')
-                    or parsed.icon_custom_emoji_id
-                    or None
-                )
+                # Emoji chain: explicit param > per-section DB
+                resolved_emoji = icon_custom_emoji_id or section_cfg.get('icon_custom_emoji_id') or None
 
                 # Если есть кастом emoji — стрипаем ведущий юникод-эмодзи из текста,
                 # иначе у юзера будут две иконки слева (custom + default).
-                final_text = strip_leading_emoji(parsed.text) if resolved_emoji else parsed.text
+                final_text = strip_leading_emoji(text) if resolved_emoji else text
 
                 return InlineKeyboardButton(
                     text=final_text,
@@ -245,14 +243,52 @@ def build_miniapp_or_callback_button(
                     icon_custom_emoji_id=resolved_emoji or None,
                 )
 
-    kwargs: dict[str, Any] = {'text': parsed.text, 'callback_data': callback_data}
-    if parsed.icon_custom_emoji_id:
-        kwargs['icon_custom_emoji_id'] = parsed.icon_custom_emoji_id
-    return InlineKeyboardButton(**kwargs)
+    return InlineKeyboardButton(text=text, callback_data=callback_data)
+
+
+SUBSCRIPTION_EXTEND_CALLBACK = 'subscription_extend'
+
+
+def build_subscription_extend_button(
+    text: str,
+    subscription_id: int | None = None,
+    *,
+    style: str | None = None,
+    icon_custom_emoji_id: str | None = None,
+) -> InlineKeyboardButton:
+    """Кнопка «Продлить подписку» для уведомлений — единая точка на весь бот.
+
+    Ветвление «мультитариф → ``se:{id}``, иначе ``subscription_extend``» жило
+    копипастой в шести уведомлениях, и в cabinet-режиме половина из них уводила
+    пользователя в бота: динамический ``se:{id}`` в ``CALLBACK_TO_CABINET_PATH``
+    отсутствует (id заранее неизвестен), помощник не находил путь и молча
+    отдавал callback-кнопку. Получалось, что в одиночном режиме уведомление
+    вело в кабинет, а в мультитарифном — в бота.
+
+    В cabinet-режиме мультитарифа кнопка открывает страницу продления ИМЕННО
+    той подписки, о которой уведомление: ``/subscriptions/{id}/renew``. Без id
+    (и в одиночном режиме) — обычный ``subscription_extend``.
+    """
+    if settings.is_multi_tariff_enabled() and subscription_id:
+        return build_miniapp_or_callback_button(
+            text=text,
+            callback_data=f'se:{subscription_id}',
+            cabinet_path=f'/subscriptions/{subscription_id}/renew',
+            style=style,
+            icon_custom_emoji_id=icon_custom_emoji_id,
+            style_key=SUBSCRIPTION_EXTEND_CALLBACK,
+        )
+
+    return build_miniapp_or_callback_button(
+        text=text,
+        callback_data=SUBSCRIPTION_EXTEND_CALLBACK,
+        style=style,
+        icon_custom_emoji_id=icon_custom_emoji_id,
+    )
 
 
 # Префикс startapp/маршрута для диплинка на конкретный тикет в админ-кабинете.
-# Должен совпадать с разбором на стороне фронта (@xilarobot-cabinet): start_param
+# Должен совпадать с разбором на стороне фронта (bedolaga-cabinet): start_param
 # 'admin_ticket_<id>' и маршрут '/admin/tickets/<id>'.
 ADMIN_TICKET_DEEPLINK_PREFIX = 'admin_ticket_'
 

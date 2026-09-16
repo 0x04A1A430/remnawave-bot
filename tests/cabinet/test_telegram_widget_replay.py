@@ -30,20 +30,16 @@ async def test_widget_login_is_one_time_and_24h() -> None:
     validate = MagicMock(return_value=True)
     replay = AsyncMock(return_value=True)  # already used -> must be rejected
     with ExitStack() as s:
+        s.enter_context(patch('app.cabinet.routes.auth.get_client_ip', MagicMock(return_value='1.2.3.4')))
         s.enter_context(
-            patch(
-                'app.cabinet.routes.auth.get_client_ip',
-                MagicMock(return_value='1.2.3.4'),
-            )
-        )
-        s.enter_context(
-            patch(
-                'app.cabinet.routes.auth.RateLimitCache.is_ip_rate_limited',
-                AsyncMock(return_value=False),
-            )
+            patch('app.cabinet.routes.auth.RateLimitCache.is_ip_rate_limited', AsyncMock(return_value=False))
         )
         s.enter_context(patch('app.cabinet.routes.auth.validate_telegram_login_widget', validate))
         s.enter_context(patch('app.cabinet.routes.auth.TokenReplayCache.is_token_replayed', replay))
+        # Payload гасится после гейта согласия, поэтому до него доходит только
+        # известный активный пользователь (новому сначала ответили бы 428).
+        active_user = SimpleNamespace(id=1, telegram_id=123, status='active')
+        s.enter_context(patch('app.cabinet.routes.auth.get_user_by_telegram_id', AsyncMock(return_value=active_user)))
         with pytest.raises(HTTPException) as exc:
             await auth_telegram_widget(request=req, raw_request=MagicMock(), db=AsyncMock())
     assert exc.value.status_code == status.HTTP_401_UNAUTHORIZED
@@ -57,30 +53,15 @@ async def test_widget_link_is_one_time_and_24h() -> None:
     validate = MagicMock(return_value=True)
     replay = AsyncMock(return_value=True)
     with ExitStack() as s:
-        s.enter_context(
-            patch(
-                'app.cabinet.routes.account_linking.get_client_ip',
-                MagicMock(return_value='1.2.3.4'),
-            )
-        )
+        s.enter_context(patch('app.cabinet.routes.account_linking.get_client_ip', MagicMock(return_value='1.2.3.4')))
         s.enter_context(
             patch(
                 'app.cabinet.routes.account_linking.RateLimitCache.is_ip_rate_limited',
                 AsyncMock(return_value=False),
             )
         )
-        s.enter_context(
-            patch(
-                'app.cabinet.routes.account_linking.validate_telegram_login_widget',
-                validate,
-            )
-        )
-        s.enter_context(
-            patch(
-                'app.cabinet.routes.account_linking.TokenReplayCache.is_token_replayed',
-                replay,
-            )
-        )
+        s.enter_context(patch('app.cabinet.routes.account_linking.validate_telegram_login_widget', validate))
+        s.enter_context(patch('app.cabinet.routes.account_linking.TokenReplayCache.is_token_replayed', replay))
         with pytest.raises(HTTPException) as exc:
             await link_telegram(
                 request=req,

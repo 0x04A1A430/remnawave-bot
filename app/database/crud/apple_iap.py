@@ -6,12 +6,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database.models import (
-    AppleIAPAbuseEvent,
-    AppleIAPAccount,
-    AppleNotification,
-    AppleTransaction,
-)
+from app.database.models import AppleIAPAbuseEvent, AppleIAPAccount, AppleNotification, AppleTransaction
 
 
 logger = structlog.get_logger(__name__)
@@ -36,10 +31,7 @@ async def get_or_create_apple_iap_account(db: AsyncSession, user_id: int) -> App
     except IntegrityError:
         result = await db.execute(
             select(AppleIAPAccount)
-            .where(
-                AppleIAPAccount.user_id == user_id,
-                AppleIAPAccount.disabled_at.is_(None),
-            )
+            .where(AppleIAPAccount.user_id == user_id, AppleIAPAccount.disabled_at.is_(None))
             .with_for_update()
         )
         account = result.scalar_one()

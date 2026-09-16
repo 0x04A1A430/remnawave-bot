@@ -105,6 +105,6 @@ async def revive_deleted_user(
         telegram_id=user.telegram_id,
         email=user.email if user.email_verified else None,
         source=source,
-        previous_updated_at=(previous_updated_at.isoformat() if previous_updated_at else None),
+        previous_updated_at=previous_updated_at.isoformat() if previous_updated_at else None,
     )
     return user

@@ -129,11 +129,7 @@ async def _create_paypear_payment_and_respond(
             parse_mode='HTML',
         )
 
-    logger.info(
-        'PayPear payment created',
-        telegram_id=db_user.telegram_id,
-        amount_rub=amount_rub,
-    )
+    logger.info('PayPear payment created', telegram_id=db_user.telegram_id, amount_rub=amount_rub)
 
 
 @error_handler

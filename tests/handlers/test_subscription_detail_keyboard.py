@@ -127,11 +127,7 @@ async def test_show_subscription_detail_writes_active_subscription_id_to_fsm(
         autopay_days_before=3,
     )
 
-    monkeypatch.setattr(
-        my_subscriptions,
-        'get_subscription_by_id_for_user',
-        AsyncMock(return_value=subscription),
-    )
+    monkeypatch.setattr(my_subscriptions, 'get_subscription_by_id_for_user', AsyncMock(return_value=subscription))
 
     state = SimpleNamespace(update_data=AsyncMock())
     db_user = SimpleNamespace(id=1, language='ru')
@@ -158,13 +154,8 @@ async def test_show_subscription_detail_does_not_write_fsm_on_idor_miss(
 ) -> None:
     """When the subscription doesn't belong to the requesting user (IDOR check returns
     None), the handler must short-circuit BEFORE writing to FSM. Otherwise a malicious
-    callback with a foreign sub_id would poison the user's FSM with someone else's id.
-    """
-    monkeypatch.setattr(
-        my_subscriptions,
-        'get_subscription_by_id_for_user',
-        AsyncMock(return_value=None),
-    )
+    callback with a foreign sub_id would poison the user's FSM with someone else's id."""
+    monkeypatch.setattr(my_subscriptions, 'get_subscription_by_id_for_user', AsyncMock(return_value=None))
 
     state = SimpleNamespace(update_data=AsyncMock())
     db_user = SimpleNamespace(id=1, language='ru')

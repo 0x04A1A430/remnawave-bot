@@ -204,11 +204,7 @@ async def mark_cloudpayments_payment_as_paid(
     await db.flush()
     await db.refresh(payment)
 
-    logger.info(
-        'Marked CloudPayments payment as paid',
-        payment_id=payment.id,
-        invoice_id=payment.invoice_id,
-    )
+    logger.info('Marked CloudPayments payment as paid', payment_id=payment.id, invoice_id=payment.invoice_id)
 
     return payment
 

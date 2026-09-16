@@ -571,8 +571,7 @@ async def update_referral(
         fields['end_at'] = _to_utc_naive(fields['end_at'], fields.get('timezone') or contest.timezone)
     if 'daily_summary_times' in fields:
         fields['daily_summary_time'] = _primary_time(
-            fields['daily_summary_times'],
-            fields.get('daily_summary_time') or contest.daily_summary_time,
+            fields['daily_summary_times'], fields.get('daily_summary_time') or contest.daily_summary_time
         )
     elif 'daily_summary_time' in fields:
         # ensure type is time (pydantic provides time)

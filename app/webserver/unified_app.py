@@ -23,20 +23,6 @@ from . import payments, telegram
 logger = structlog.get_logger(__name__)
 
 
-async def _spawn_remnawave_id_backfill() -> None:
-    """Запускает бэкфилл remnawave_id в фоне, не блокируя стартап.
-
-    Пока панель на v2.8.1, собирает числовой id по remnawave_uuid у строк,
-    где remnawave_id ещё не заполнен, чтобы обновление на RemnaWave 3.0.0
-    (uuid → id) прошло без ручной миграции данных. В v3-режиме — no-op.
-    """
-    import asyncio
-
-    from app.services.remnawave_id_backfill_service import backfill_remnawave_ids
-
-    asyncio.create_task(backfill_remnawave_ids(), name='panel-user-id-backfill')
-
-
 def _attach_docs_alias(app: FastAPI, docs_url: str | None) -> None:
     if not docs_url:
         return
@@ -65,7 +51,7 @@ def _create_base_app(lifespan: Any = None) -> FastAPI:
         app = create_web_api_app(lifespan=lifespan)
     else:
         app = FastAPI(
-            title='RemnaWave Unified Server',
+            title='Bedolaga Unified Server',
             version=settings.WEB_API_VERSION,
             docs_url=docs_config.get('docs_url'),
             redoc_url=None,
@@ -77,7 +63,7 @@ def _create_base_app(lifespan: Any = None) -> FastAPI:
             app,
             redoc_url=docs_config.get('redoc_url'),
             openapi_url=docs_config.get('openapi_url'),
-            title='RemnaWave Unified Server',
+            title='Bedolaga Unified Server',
         )
 
         # Add cabinet routes even when web API is disabled
@@ -92,12 +78,7 @@ def _create_base_app(lifespan: Any = None) -> FastAPI:
                     allow_origins=['*'],
                     allow_credentials=False,
                     allow_methods=['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-                    allow_headers=[
-                        'Authorization',
-                        'Content-Type',
-                        'X-CSRF-Token',
-                        'X-Telegram-Init-Data',
-                    ],
+                    allow_headers=['Authorization', 'Content-Type', 'X-CSRF-Token', 'X-Telegram-Init-Data'],
                 )
             else:
                 app.add_middleware(
@@ -105,12 +86,7 @@ def _create_base_app(lifespan: Any = None) -> FastAPI:
                     allow_origins=cabinet_origins,
                     allow_credentials=True,
                     allow_methods=['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-                    allow_headers=[
-                        'Authorization',
-                        'Content-Type',
-                        'X-CSRF-Token',
-                        'X-Telegram-Init-Data',
-                    ],
+                    allow_headers=['Authorization', 'Content-Type', 'X-CSRF-Token', 'X-Telegram-Init-Data'],
                 )
             if settings.is_cabinet_enabled():
                 from app.cabinet.routes import router as cabinet_router
@@ -129,10 +105,7 @@ def _mount_uploads_static(app: FastAPI) -> None:
     uploads_path.mkdir(parents=True, exist_ok=True)
     try:
         app.mount('/uploads', StaticFiles(directory=uploads_path), name='media-uploads')
-        logger.info(
-            'Media uploads static files mounted at /uploads',
-            uploads_path=str(uploads_path),
-        )
+        logger.info('Media uploads static files mounted at /uploads', uploads_path=str(uploads_path))
     except RuntimeError as error:  # pragma: no cover - defensive guard
         logger.warning('Failed to mount media uploads static files', error=error)
 
@@ -140,15 +113,12 @@ def _mount_uploads_static(app: FastAPI) -> None:
 def _mount_miniapp_static(app: FastAPI) -> tuple[bool, Path]:
     static_path: Path = settings.get_miniapp_static_path()
     if not static_path.exists():
-        logger.debug(
-            'Miniapp static path does not exist, skipping mount',
-            static_path=static_path,
-        )
+        logger.debug('Miniapp static path does not exist, skipping mount', static_path=static_path)
         return False, static_path
 
     try:
         app.mount('/miniapp/static', StaticFiles(directory=static_path), name='miniapp-static')
-        logger.info('Miniapp static files mounted at /miniapp/static', static_path=static_path)
+        logger.info('📦 Miniapp static files mounted at /miniapp/static', static_path=static_path)
     except RuntimeError as error:  # pragma: no cover - defensive guard
         logger.warning('Не удалось смонтировать статические файлы миниаппа', error=error)
         return False, static_path
@@ -230,10 +200,7 @@ def create_unified_app(
         remnawave_router = create_remnawave_webhook_router(bot, remnawave_webhook_service)
         app.include_router(remnawave_router)
         app.state.remnawave_webhook_service = remnawave_webhook_service
-        logger.info(
-            'RemnaWave webhook router mounted',
-            REMNAWAVE_WEBHOOK_PATH=settings.REMNAWAVE_WEBHOOK_PATH,
-        )
+        logger.info('RemnaWave webhook router mounted', REMNAWAVE_WEBHOOK_PATH=settings.REMNAWAVE_WEBHOOK_PATH)
 
         # ВАЖНО: drain должен выполниться ПЕРЕД остановкой telegram-процессора
         # и disposable-email сервиса (последние могут закрыть aiogram session,
@@ -284,8 +251,6 @@ def create_unified_app(
     startup_handlers.append(disposable_email_service.start)
     shutdown_handlers.append(disposable_email_service.stop)
 
-    startup_handlers.append(_spawn_remnawave_id_backfill)
-
     miniapp_mounted, miniapp_path = _mount_miniapp_static(app)
     _mount_uploads_static(app)
 
@@ -335,7 +300,7 @@ def create_unified_app(
 
         remnawave_webhook_state = {
             'enabled': remnawave_webhook_enabled,
-            'path': (settings.REMNAWAVE_WEBHOOK_PATH if remnawave_webhook_enabled else None),
+            'path': settings.REMNAWAVE_WEBHOOK_PATH if remnawave_webhook_enabled else None,
         }
 
         return JSONResponse(

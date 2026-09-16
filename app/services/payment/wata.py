@@ -218,11 +218,7 @@ class WataPaymentMixin:
             payment = await payment_module.get_wata_payment_by_link_id(db, payment_link_id)
 
         if not payment:
-            logger.error(
-                'WATA платеж не найден',
-                order_id=order_id,
-                payment_link_id=payment_link_id,
-            )
+            logger.error('WATA платеж не найден', order_id=order_id, payment_link_id=payment_link_id)
             return False
 
         # Lock payment row immediately to prevent concurrent webhook processing (TOCTOU race)
@@ -242,10 +238,7 @@ class WataPaymentMixin:
 
         if status_lower == 'paid':
             if payment.is_paid:
-                logger.info(
-                    'WATA платеж уже помечен как оплачен',
-                    payment_link_id=payment.payment_link_id,
-                )
+                logger.info('WATA платеж уже помечен как оплачен', payment_link_id=payment.payment_link_id)
                 # Update callback payload without releasing the lock prematurely
                 payment.callback_payload = payload
                 payment.metadata_json = metadata
@@ -307,11 +300,7 @@ class WataPaymentMixin:
             try:
                 remote_link = await self.wata_service.get_payment_link(payment.payment_link_id)  # type: ignore[union-attr]
             except WataAPIError as error:
-                logger.error(
-                    'Ошибка получения WATA ссылки',
-                    payment_link_id=payment.payment_link_id,
-                    error=error,
-                )
+                logger.error('Ошибка получения WATA ссылки', payment_link_id=payment.payment_link_id, error=error)
             except Exception as error:  # pragma: no cover - safety net
                 logger.exception('Непредвиденная ошибка при запросе WATA ссылки', error=error)
 
@@ -340,11 +329,7 @@ class WataPaymentMixin:
                             transaction_id
                         )
                     except WataAPIError as error:
-                        logger.error(
-                            'Ошибка получения WATA транзакции',
-                            transaction_id=transaction_id,
-                            error=error,
-                        )
+                        logger.error('Ошибка получения WATA транзакции', transaction_id=transaction_id, error=error)
                     except Exception as error:  # pragma: no cover - safety net
                         logger.exception(
                             'Непредвиденная ошибка при запросе WATA транзакции',
@@ -366,15 +351,10 @@ class WataPaymentMixin:
                                 break
                     except WataAPIError as error:
                         logger.error(
-                            'Ошибка поиска WATA транзакций',
-                            payment_link_id=payment.payment_link_id,
-                            error=error,
+                            'Ошибка поиска WATA транзакций', payment_link_id=payment.payment_link_id, error=error
                         )
                     except Exception as error:  # pragma: no cover - safety net
-                        logger.exception(
-                            'Непредвиденная ошибка при поиске WATA транзакции',
-                            error=error,
-                        )
+                        logger.exception('Непредвиденная ошибка при поиске WATA транзакции', error=error)
 
         if not transaction_payload and not payment.is_paid and getattr(self, 'wata_service', None):
             fallback_transaction_id = transaction_id or _extract_transaction_id(payment)
@@ -407,16 +387,10 @@ class WataPaymentMixin:
                 wata_crud = import_module('app.database.crud.wata')
                 locked = await wata_crud.get_wata_payment_by_id_for_update(db, payment.id)
                 if not locked:
-                    logger.error(
-                        'WATA status check: не удалось заблокировать платёж',
-                        payment_id=payment.id,
-                    )
+                    logger.error('WATA status check: не удалось заблокировать платёж', payment_id=payment.id)
                 elif locked.is_paid:
                     # Another concurrent handler already processed — skip
-                    logger.info(
-                        'WATA платеж уже оплачен после блокировки',
-                        payment_link_id=locked.payment_link_id,
-                    )
+                    logger.info('WATA платеж уже оплачен после блокировки', payment_link_id=locked.payment_link_id)
                     payment = locked
                 else:
                     payment = locked
@@ -448,11 +422,7 @@ class WataPaymentMixin:
             paid_status = transaction_payload.get('status') or transaction_payload.get('statusName')
         else:
             paid_status = None
-        if paid_status and str(paid_status).lower() not in {
-            'paid',
-            'declined',
-            'pending',
-        }:
+        if paid_status and str(paid_status).lower() not in {'paid', 'declined', 'pending'}:
             logger.debug(
                 'Неизвестный статус WATA транзакции',
                 getattr=getattr(payment, 'payment_link_id', ''),
@@ -483,11 +453,7 @@ class WataPaymentMixin:
                 try:
                     await self.bot.delete_message(chat_id, message_id)
                 except Exception as delete_error:  # pragma: no cover - depends on rights
-                    logger.warning(
-                        'Не удалось удалить счёт WATA',
-                        message_id=message_id,
-                        delete_error=delete_error,
-                    )
+                    logger.warning('Не удалось удалить счёт WATA', message_id=message_id, delete_error=delete_error)
                 else:
                     existing_metadata.pop('invoice_message', None)
 
@@ -571,7 +537,7 @@ class WataPaymentMixin:
         promo_group = user.get_primary_promo_group()
         subscription = getattr(user, 'subscription', None)
         referrer_info = format_referrer_info(user)
-        topup_status = 'Первое пополнение' if was_first_topup else 'Пополнение'
+        topup_status = '🆕 Первое пополнение' if was_first_topup else '🔄 Пополнение'
 
         try:
             from app.services.referral_service import process_referral_topup
@@ -592,9 +558,7 @@ class WataPaymentMixin:
 
         if getattr(self, 'bot', None):
             try:
-                from app.services.admin_notification_service import (
-                    AdminNotificationService,
-                )
+                from app.services.admin_notification_service import AdminNotificationService
 
                 notification_service = AdminNotificationService(self.bot)
                 await notification_service.send_balance_topup_notification(
@@ -616,10 +580,11 @@ class WataPaymentMixin:
                 await self.bot.send_message(
                     user.telegram_id,
                     (
-                        '<b>Пополнение успешно!</b>\n\n'
-                        f'Сумма: {settings.format_price(payment.amount_kopeks)}\n'
-                        'Способ: WATA\n'
-                        f'Транзакция: {transaction.id}'
+                        '✅ <b>Пополнение успешно!</b>\n\n'
+                        f'💰 Сумма: {settings.format_price(payment.amount_kopeks)}\n'
+                        '🦊 Способ: WATA\n'
+                        f'🆔 Транзакция: {transaction.id}\n\n'
+                        'Баланс пополнен автоматически!'
                     ),
                     parse_mode='HTML',
                     reply_markup=keyboard,

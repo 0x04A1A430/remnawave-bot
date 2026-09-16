@@ -54,6 +54,10 @@ def _method_display(method: PaymentMethod) -> str:
         return settings.get_freekassa_display_name()
     if method == PaymentMethod.CISPAY:
         return settings.get_cispay_display_name()
+    if method == PaymentMethod.TABPAY:
+        return settings.get_tabpay_display_name()
+    if method == PaymentMethod.PARITYPAY:
+        return settings.get_paritypay_display_name()
     return method.value
 
 
@@ -65,125 +69,110 @@ def _status_info(
     status = (record.status or '').lower()
 
     if record.is_paid:
-        return '', texts.t('ADMIN_PAYMENT_STATUS_PAID', 'Paid')
+        return '✅', texts.t('ADMIN_PAYMENT_STATUS_PAID', '✅ Paid')
 
     if record.method == PaymentMethod.PAL24:
         mapping = {
-            'new': ('', texts.t('ADMIN_PAYMENT_STATUS_PENDING', 'Pending')),
-            'process': ('', texts.t('ADMIN_PAYMENT_STATUS_PROCESSING', 'Processing')),
-            'success': ('', texts.t('ADMIN_PAYMENT_STATUS_PAID', 'Paid')),
-            'fail': ('', texts.t('ADMIN_PAYMENT_STATUS_FAILED', 'Failed')),
-            'canceled': ('', texts.t('ADMIN_PAYMENT_STATUS_CANCELED', 'Cancelled')),
-            'cancel': ('', texts.t('ADMIN_PAYMENT_STATUS_CANCELED', 'Cancelled')),
+            'new': ('⏳', texts.t('ADMIN_PAYMENT_STATUS_PENDING', '⏳ Pending')),
+            'process': ('⌛', texts.t('ADMIN_PAYMENT_STATUS_PROCESSING', '⌛ Processing')),
+            'success': ('✅', texts.t('ADMIN_PAYMENT_STATUS_PAID', '✅ Paid')),
+            'fail': ('❌', texts.t('ADMIN_PAYMENT_STATUS_FAILED', '❌ Failed')),
+            'canceled': ('❌', texts.t('ADMIN_PAYMENT_STATUS_CANCELED', '❌ Cancelled')),
+            'cancel': ('❌', texts.t('ADMIN_PAYMENT_STATUS_CANCELED', '❌ Cancelled')),
         }
-        return mapping.get(status, ('', texts.t('ADMIN_PAYMENT_STATUS_UNKNOWN', 'Unknown')))
+        return mapping.get(status, ('❓', texts.t('ADMIN_PAYMENT_STATUS_UNKNOWN', '❓ Unknown')))
 
     if record.method == PaymentMethod.MULENPAY:
         mapping = {
-            'created': ('', texts.t('ADMIN_PAYMENT_STATUS_PENDING', 'Pending')),
-            'processing': (
-                '',
-                texts.t('ADMIN_PAYMENT_STATUS_PROCESSING', 'Processing'),
-            ),
-            'hold': ('', texts.t('ADMIN_PAYMENT_STATUS_ON_HOLD', 'Hold')),
-            'success': ('', texts.t('ADMIN_PAYMENT_STATUS_PAID', 'Paid')),
-            'canceled': ('', texts.t('ADMIN_PAYMENT_STATUS_CANCELED', 'Cancelled')),
-            'cancel': ('', texts.t('ADMIN_PAYMENT_STATUS_CANCELED', 'Cancelled')),
-            'error': ('', texts.t('ADMIN_PAYMENT_STATUS_FAILED', 'Failed')),
+            'created': ('⏳', texts.t('ADMIN_PAYMENT_STATUS_PENDING', '⏳ Pending')),
+            'processing': ('⌛', texts.t('ADMIN_PAYMENT_STATUS_PROCESSING', '⌛ Processing')),
+            'hold': ('🔒', texts.t('ADMIN_PAYMENT_STATUS_ON_HOLD', '🔒 Hold')),
+            'success': ('✅', texts.t('ADMIN_PAYMENT_STATUS_PAID', '✅ Paid')),
+            'canceled': ('❌', texts.t('ADMIN_PAYMENT_STATUS_CANCELED', '❌ Cancelled')),
+            'cancel': ('❌', texts.t('ADMIN_PAYMENT_STATUS_CANCELED', '❌ Cancelled')),
+            'error': ('⚠️', texts.t('ADMIN_PAYMENT_STATUS_FAILED', '❌ Failed')),
         }
-        return mapping.get(status, ('', texts.t('ADMIN_PAYMENT_STATUS_UNKNOWN', 'Unknown')))
+        return mapping.get(status, ('❓', texts.t('ADMIN_PAYMENT_STATUS_UNKNOWN', '❓ Unknown')))
 
     if record.method == PaymentMethod.WATA:
         mapping = {
-            'opened': ('', texts.t('ADMIN_PAYMENT_STATUS_PENDING', 'Pending')),
-            'pending': ('', texts.t('ADMIN_PAYMENT_STATUS_PENDING', 'Pending')),
-            'processing': (
-                '',
-                texts.t('ADMIN_PAYMENT_STATUS_PROCESSING', 'Processing'),
-            ),
-            'paid': ('', texts.t('ADMIN_PAYMENT_STATUS_PAID', 'Paid')),
-            'closed': ('', texts.t('ADMIN_PAYMENT_STATUS_PAID', 'Paid')),
-            'declined': ('', texts.t('ADMIN_PAYMENT_STATUS_FAILED', 'Failed')),
-            'canceled': ('', texts.t('ADMIN_PAYMENT_STATUS_CANCELED', 'Cancelled')),
-            'expired': ('', texts.t('ADMIN_PAYMENT_STATUS_EXPIRED', 'Expired')),
+            'opened': ('⏳', texts.t('ADMIN_PAYMENT_STATUS_PENDING', '⏳ Pending')),
+            'pending': ('⏳', texts.t('ADMIN_PAYMENT_STATUS_PENDING', '⏳ Pending')),
+            'processing': ('⌛', texts.t('ADMIN_PAYMENT_STATUS_PROCESSING', '⌛ Processing')),
+            'paid': ('✅', texts.t('ADMIN_PAYMENT_STATUS_PAID', '✅ Paid')),
+            'closed': ('✅', texts.t('ADMIN_PAYMENT_STATUS_PAID', '✅ Paid')),
+            'declined': ('❌', texts.t('ADMIN_PAYMENT_STATUS_FAILED', '❌ Failed')),
+            'canceled': ('❌', texts.t('ADMIN_PAYMENT_STATUS_CANCELED', '❌ Cancelled')),
+            'expired': ('⌛', texts.t('ADMIN_PAYMENT_STATUS_EXPIRED', '⌛ Expired')),
         }
-        return mapping.get(status, ('', texts.t('ADMIN_PAYMENT_STATUS_UNKNOWN', 'Unknown')))
+        return mapping.get(status, ('❓', texts.t('ADMIN_PAYMENT_STATUS_UNKNOWN', '❓ Unknown')))
 
     if record.method == PaymentMethod.PLATEGA:
         mapping = {
-            'pending': ('', texts.t('ADMIN_PAYMENT_STATUS_PENDING', 'Pending')),
-            'inprogress': (
-                '',
-                texts.t('ADMIN_PAYMENT_STATUS_PROCESSING', 'Processing'),
-            ),
-            'confirmed': ('', texts.t('ADMIN_PAYMENT_STATUS_PAID', 'Paid')),
-            'failed': ('', texts.t('ADMIN_PAYMENT_STATUS_FAILED', 'Failed')),
-            'canceled': ('', texts.t('ADMIN_PAYMENT_STATUS_CANCELED', 'Cancelled')),
-            'cancelled': ('', texts.t('ADMIN_PAYMENT_STATUS_CANCELED', 'Cancelled')),
-            'expired': ('', texts.t('ADMIN_PAYMENT_STATUS_EXPIRED', 'Expired')),
+            'pending': ('⏳', texts.t('ADMIN_PAYMENT_STATUS_PENDING', '⏳ Pending')),
+            'inprogress': ('⌛', texts.t('ADMIN_PAYMENT_STATUS_PROCESSING', '⌛ Processing')),
+            'confirmed': ('✅', texts.t('ADMIN_PAYMENT_STATUS_PAID', '✅ Paid')),
+            'failed': ('❌', texts.t('ADMIN_PAYMENT_STATUS_FAILED', '❌ Failed')),
+            'canceled': ('❌', texts.t('ADMIN_PAYMENT_STATUS_CANCELED', '❌ Cancelled')),
+            'cancelled': ('❌', texts.t('ADMIN_PAYMENT_STATUS_CANCELED', '❌ Cancelled')),
+            'expired': ('⌛', texts.t('ADMIN_PAYMENT_STATUS_EXPIRED', '⌛ Expired')),
         }
-        return mapping.get(status, ('', texts.t('ADMIN_PAYMENT_STATUS_UNKNOWN', 'Unknown')))
+        return mapping.get(status, ('❓', texts.t('ADMIN_PAYMENT_STATUS_UNKNOWN', '❓ Unknown')))
 
     if record.method == PaymentMethod.HELEKET:
         if status in {'pending', 'created', 'waiting', 'check', 'processing'}:
-            return '', texts.t('ADMIN_PAYMENT_STATUS_PENDING', 'Pending')
+            return '⏳', texts.t('ADMIN_PAYMENT_STATUS_PENDING', '⏳ Pending')
         if status in {'paid', 'paid_over'}:
-            return '', texts.t('ADMIN_PAYMENT_STATUS_PAID', 'Paid')
+            return '✅', texts.t('ADMIN_PAYMENT_STATUS_PAID', '✅ Paid')
         if status in {'cancel', 'canceled', 'fail', 'failed', 'expired'}:
-            return '', texts.t('ADMIN_PAYMENT_STATUS_CANCELED', 'Cancelled')
-        return '', texts.t('ADMIN_PAYMENT_STATUS_UNKNOWN', 'Unknown')
+            return '❌', texts.t('ADMIN_PAYMENT_STATUS_CANCELED', '❌ Cancelled')
+        return '❓', texts.t('ADMIN_PAYMENT_STATUS_UNKNOWN', '❓ Unknown')
 
     if record.method == PaymentMethod.YOOKASSA:
         mapping = {
-            'pending': ('', texts.t('ADMIN_PAYMENT_STATUS_PENDING', 'Pending')),
-            'waiting_for_capture': (
-                '',
-                texts.t('ADMIN_PAYMENT_STATUS_PROCESSING', 'Processing'),
-            ),
-            'succeeded': ('', texts.t('ADMIN_PAYMENT_STATUS_PAID', 'Paid')),
-            'canceled': ('', texts.t('ADMIN_PAYMENT_STATUS_CANCELED', 'Cancelled')),
+            'pending': ('⏳', texts.t('ADMIN_PAYMENT_STATUS_PENDING', '⏳ Pending')),
+            'waiting_for_capture': ('⌛', texts.t('ADMIN_PAYMENT_STATUS_PROCESSING', '⌛ Processing')),
+            'succeeded': ('✅', texts.t('ADMIN_PAYMENT_STATUS_PAID', '✅ Paid')),
+            'canceled': ('❌', texts.t('ADMIN_PAYMENT_STATUS_CANCELED', '❌ Cancelled')),
         }
-        return mapping.get(status, ('', texts.t('ADMIN_PAYMENT_STATUS_UNKNOWN', 'Unknown')))
+        return mapping.get(status, ('❓', texts.t('ADMIN_PAYMENT_STATUS_UNKNOWN', '❓ Unknown')))
 
     if record.method == PaymentMethod.CRYPTOBOT:
         mapping = {
-            'active': ('', texts.t('ADMIN_PAYMENT_STATUS_PENDING', 'Pending')),
-            'paid': ('', texts.t('ADMIN_PAYMENT_STATUS_PAID', 'Paid')),
-            'expired': ('', texts.t('ADMIN_PAYMENT_STATUS_EXPIRED', 'Expired')),
+            'active': ('⏳', texts.t('ADMIN_PAYMENT_STATUS_PENDING', '⏳ Pending')),
+            'paid': ('✅', texts.t('ADMIN_PAYMENT_STATUS_PAID', '✅ Paid')),
+            'expired': ('⌛', texts.t('ADMIN_PAYMENT_STATUS_EXPIRED', '⌛ Expired')),
         }
-        return mapping.get(status, ('', texts.t('ADMIN_PAYMENT_STATUS_UNKNOWN', 'Unknown')))
+        return mapping.get(status, ('❓', texts.t('ADMIN_PAYMENT_STATUS_UNKNOWN', '❓ Unknown')))
 
     if record.method == PaymentMethod.TELEGRAM_STARS:
         if record.is_paid:
-            return '', texts.t('ADMIN_PAYMENT_STATUS_PAID', 'Paid')
-        return '', texts.t('ADMIN_PAYMENT_STATUS_PENDING', 'Pending')
+            return '✅', texts.t('ADMIN_PAYMENT_STATUS_PAID', '✅ Paid')
+        return '⏳', texts.t('ADMIN_PAYMENT_STATUS_PENDING', '⏳ Pending')
 
     if record.method == PaymentMethod.FREEKASSA:
         mapping = {
-            'pending': ('', texts.t('ADMIN_PAYMENT_STATUS_PENDING', 'Pending')),
-            'success': ('', texts.t('ADMIN_PAYMENT_STATUS_PAID', 'Paid')),
-            'paid': ('', texts.t('ADMIN_PAYMENT_STATUS_PAID', 'Paid')),
-            'canceled': ('', texts.t('ADMIN_PAYMENT_STATUS_CANCELED', 'Cancelled')),
-            'error': ('', texts.t('ADMIN_PAYMENT_STATUS_FAILED', 'Failed')),
+            'pending': ('⏳', texts.t('ADMIN_PAYMENT_STATUS_PENDING', '⏳ Pending')),
+            'success': ('✅', texts.t('ADMIN_PAYMENT_STATUS_PAID', '✅ Paid')),
+            'paid': ('✅', texts.t('ADMIN_PAYMENT_STATUS_PAID', '✅ Paid')),
+            'canceled': ('❌', texts.t('ADMIN_PAYMENT_STATUS_CANCELED', '❌ Cancelled')),
+            'error': ('❌', texts.t('ADMIN_PAYMENT_STATUS_FAILED', '❌ Failed')),
         }
-        return mapping.get(status, ('', texts.t('ADMIN_PAYMENT_STATUS_UNKNOWN', 'Unknown')))
+        return mapping.get(status, ('❓', texts.t('ADMIN_PAYMENT_STATUS_UNKNOWN', '❓ Unknown')))
 
     if record.method == PaymentMethod.KASSA_AI:
         mapping = {
-            'pending': ('', texts.t('ADMIN_PAYMENT_STATUS_PENDING', 'Pending')),
-            'created': ('', texts.t('ADMIN_PAYMENT_STATUS_PENDING', 'Pending')),
-            'processing': (
-                '',
-                texts.t('ADMIN_PAYMENT_STATUS_PROCESSING', 'Processing'),
-            ),
-            'success': ('', texts.t('ADMIN_PAYMENT_STATUS_PAID', 'Paid')),
-            'paid': ('', texts.t('ADMIN_PAYMENT_STATUS_PAID', 'Paid')),
-            'canceled': ('', texts.t('ADMIN_PAYMENT_STATUS_CANCELED', 'Cancelled')),
-            'error': ('', texts.t('ADMIN_PAYMENT_STATUS_FAILED', 'Failed')),
+            'pending': ('⏳', texts.t('ADMIN_PAYMENT_STATUS_PENDING', '⏳ Pending')),
+            'created': ('⏳', texts.t('ADMIN_PAYMENT_STATUS_PENDING', '⏳ Pending')),
+            'processing': ('⌛', texts.t('ADMIN_PAYMENT_STATUS_PROCESSING', '⌛ Processing')),
+            'success': ('✅', texts.t('ADMIN_PAYMENT_STATUS_PAID', '✅ Paid')),
+            'paid': ('✅', texts.t('ADMIN_PAYMENT_STATUS_PAID', '✅ Paid')),
+            'canceled': ('❌', texts.t('ADMIN_PAYMENT_STATUS_CANCELED', '❌ Cancelled')),
+            'error': ('❌', texts.t('ADMIN_PAYMENT_STATUS_FAILED', '❌ Failed')),
         }
-        return mapping.get(status, ('', texts.t('ADMIN_PAYMENT_STATUS_UNKNOWN', 'Unknown')))
+        return mapping.get(status, ('❓', texts.t('ADMIN_PAYMENT_STATUS_UNKNOWN', '❓ Unknown')))
 
-    return '', texts.t('ADMIN_PAYMENT_STATUS_UNKNOWN', 'Unknown')
+    return '❓', texts.t('ADMIN_PAYMENT_STATUS_UNKNOWN', '❓ Unknown')
 
 
 def _is_checkable(record: PendingPayment) -> bool:
@@ -197,25 +186,11 @@ def _is_checkable(record: PendingPayment) -> bool:
     if record.method == PaymentMethod.MULENPAY:
         return status in {'created', 'processing', 'hold'}
     if record.method == PaymentMethod.WATA:
-        return status in {
-            'opened',
-            'pending',
-            'processing',
-            'inprogress',
-            'in_progress',
-        }
+        return status in {'opened', 'pending', 'processing', 'inprogress', 'in_progress'}
     if record.method == PaymentMethod.PLATEGA:
         return status in {'pending', 'inprogress', 'in_progress'}
     if record.method == PaymentMethod.HELEKET:
-        return status not in {
-            'paid',
-            'paid_over',
-            'cancel',
-            'canceled',
-            'fail',
-            'failed',
-            'expired',
-        }
+        return status not in {'paid', 'paid_over', 'cancel', 'canceled', 'fail', 'failed', 'expired'}
     if record.method == PaymentMethod.YOOKASSA:
         return status in {'pending', 'waiting_for_capture'}
     if record.method == PaymentMethod.CRYPTOBOT:
@@ -246,11 +221,11 @@ def _build_list_keyboard(
 
     for record in records:
         number = _record_display_number(record)
-        details_template = texts.t('ADMIN_PAYMENTS_ITEM_DETAILS', '#{number}')
+        details_template = texts.t('ADMIN_PAYMENTS_ITEM_DETAILS', '📄 #{number}')
         try:
             button_text = details_template.format(number=number)
         except Exception:  # pragma: no cover - fallback for broken localization
-            button_text = f'{number}'
+            button_text = f'📄 {number}'
         buttons.append(
             [
                 InlineKeyboardButton(
@@ -265,7 +240,7 @@ def _build_list_keyboard(
         buttons.append(
             [
                 InlineKeyboardButton(
-                    text=texts.t('ADMIN_PAYMENTS_CHECK_ALL', 'Проверить все'),
+                    text=texts.t('ADMIN_PAYMENTS_CHECK_ALL', '🔄 Проверить все'),
                     callback_data='admin_payments_check_all',
                 )
             ]
@@ -276,7 +251,7 @@ def _build_list_keyboard(
         buttons.append(
             [
                 InlineKeyboardButton(
-                    text=texts.t('ADMIN_PAYMENTS_EXPORT', 'Выгрузить в файл'),
+                    text=texts.t('ADMIN_PAYMENTS_EXPORT', '📥 Выгрузить в файл'),
                     callback_data='admin_payments_export',
                 )
             ]
@@ -287,7 +262,7 @@ def _build_list_keyboard(
         if page > 1:
             navigation_row.append(
                 InlineKeyboardButton(
-                    text='←',
+                    text='⬅️',
                     callback_data=f'admin_payments_page_{page - 1}',
                 )
             )
@@ -302,7 +277,7 @@ def _build_list_keyboard(
         if page < total_pages:
             navigation_row.append(
                 InlineKeyboardButton(
-                    text='→',
+                    text='➡️',
                     callback_data=f'admin_payments_page_{page + 1}',
                 )
             )
@@ -339,7 +314,7 @@ def _build_detail_keyboard(
         rows.append(
             [
                 InlineKeyboardButton(
-                    text=texts.t('ADMIN_PAYMENT_OPEN_LINK', 'Open link'),
+                    text=texts.t('ADMIN_PAYMENT_OPEN_LINK', '🔗 Open link'),
                     url=payment_url,
                 )
             ]
@@ -349,7 +324,7 @@ def _build_detail_keyboard(
         rows.append(
             [
                 InlineKeyboardButton(
-                    text=texts.t('ADMIN_PAYMENT_CHECK_BUTTON', 'Check status'),
+                    text=texts.t('ADMIN_PAYMENT_CHECK_BUTTON', '🔁 Check status'),
                     callback_data=f'admin_payment_check_{record.method.value}_{record.local_id}',
                 )
             ]
@@ -362,7 +337,7 @@ def _build_detail_keyboard(
 def _format_user_line(user: User) -> str:
     username = format_username(user.username, user.telegram_id, user.full_name)
     user_id_display = user.telegram_id or user.email or f'#{user.id}'
-    return f'{html.escape(username)} (<code>{user_id_display}</code>)'
+    return f'👤 {html.escape(username)} (<code>{user_id_display}</code>)'
 
 
 def _build_record_lines(
@@ -388,14 +363,14 @@ def _build_record_lines(
     lines = [
         f'{index}. <b>{html.escape(method_name)}</b> — {amount}',
         f'   {emoji} {status_text}',
-        f'   {created} ({age})',
+        f'   🕒 {created} ({age})',
         _format_user_line(record.user),
     ]
 
     if identifier:
-        lines.append(f'   ID: <code>{identifier}</code>')
+        lines.append(f'   🆔 ID: <code>{identifier}</code>')
     else:
-        lines.append(f'   ID: <code>{display_number}</code>')
+        lines.append(f'   🆔 ID: <code>{display_number}</code>')
 
     return lines
 
@@ -414,98 +389,103 @@ def _build_payment_details_text(record: PendingPayment, *, texts, language: str)
     raw_identifier = record.identifier or record.local_id
     identifier = html.escape(str(raw_identifier)) if raw_identifier is not None else '—'
     lines = [
-        texts.t('ADMIN_PAYMENT_DETAILS_TITLE', '<b>Payment details</b>'),
+        texts.t('ADMIN_PAYMENT_DETAILS_TITLE', '💳 <b>Payment details</b>'),
         '',
         f'<b>{html.escape(method_name)}</b>',
         f'{emoji} {status_text}',
         '',
-        f'{texts.t("ADMIN_PAYMENT_AMOUNT", "Amount")}: {amount}',
-        f'{texts.t("ADMIN_PAYMENT_CREATED", "Created")}: {created} ({age})',
-        f'ID: <code>{identifier}</code>',
+        f'💰 {texts.t("ADMIN_PAYMENT_AMOUNT", "Amount")}: {amount}',
+        f'🕒 {texts.t("ADMIN_PAYMENT_CREATED", "Created")}: {created} ({age})',
+        f'🆔 ID: <code>{identifier}</code>',
         _format_user_line(record.user),
     ]
 
     if record.expires_at:
         expires_at = format_datetime(record.expires_at)
-        lines.append(f'{texts.t("ADMIN_PAYMENT_EXPIRES", "Expires")}: {expires_at}')
+        lines.append(f'⏳ {texts.t("ADMIN_PAYMENT_EXPIRES", "Expires")}: {expires_at}')
 
     payment = record.payment
 
     if record.method == PaymentMethod.PAL24:
         if getattr(payment, 'payment_status', None):
             lines.append(
-                f'{texts.t("ADMIN_PAYMENT_GATEWAY_STATUS", "Gateway status")}: '
+                f'💳 {texts.t("ADMIN_PAYMENT_GATEWAY_STATUS", "Gateway status")}: '
                 f'{html.escape(str(payment.payment_status))}'
             )
         if getattr(payment, 'payment_method', None):
             lines.append(
-                f'{texts.t("ADMIN_PAYMENT_GATEWAY_METHOD", "Method")}: {html.escape(str(payment.payment_method))}'
+                f'🏦 {texts.t("ADMIN_PAYMENT_GATEWAY_METHOD", "Method")}: {html.escape(str(payment.payment_method))}'
             )
         if getattr(payment, 'balance_amount', None):
             lines.append(
-                f'{texts.t("ADMIN_PAYMENT_GATEWAY_AMOUNT", "Gateway amount")}: '
+                f'💱 {texts.t("ADMIN_PAYMENT_GATEWAY_AMOUNT", "Gateway amount")}: '
                 f'{html.escape(str(payment.balance_amount))}'
             )
         if getattr(payment, 'payer_account', None):
             lines.append(
-                f'{texts.t("ADMIN_PAYMENT_GATEWAY_ACCOUNT", "Payer account")}: '
+                f'👛 {texts.t("ADMIN_PAYMENT_GATEWAY_ACCOUNT", "Payer account")}: '
                 f'{html.escape(str(payment.payer_account))}'
             )
 
     if record.method == PaymentMethod.MULENPAY:
         if getattr(payment, 'mulen_payment_id', None):
             lines.append(
-                f'{texts.t("ADMIN_PAYMENT_GATEWAY_ID", "Gateway ID")}: {html.escape(str(payment.mulen_payment_id))}'
+                f'🧾 {texts.t("ADMIN_PAYMENT_GATEWAY_ID", "Gateway ID")}: {html.escape(str(payment.mulen_payment_id))}'
             )
 
     if record.method == PaymentMethod.WATA:
         if getattr(payment, 'order_id', None):
-            lines.append(f'{texts.t("ADMIN_PAYMENT_GATEWAY_ID", "Gateway ID")}: {html.escape(str(payment.order_id))}')
+            lines.append(
+                f'🧾 {texts.t("ADMIN_PAYMENT_GATEWAY_ID", "Gateway ID")}: {html.escape(str(payment.order_id))}'
+            )
         if getattr(payment, 'terminal_public_id', None):
-            lines.append(f'Terminal: {html.escape(str(payment.terminal_public_id))}')
+            lines.append(f'🏦 Terminal: {html.escape(str(payment.terminal_public_id))}')
 
     if record.method == PaymentMethod.HELEKET:
         if getattr(payment, 'order_id', None):
-            lines.append(f'{texts.t("ADMIN_PAYMENT_GATEWAY_ID", "Gateway ID")}: {html.escape(str(payment.order_id))}')
+            lines.append(
+                f'🧾 {texts.t("ADMIN_PAYMENT_GATEWAY_ID", "Gateway ID")}: {html.escape(str(payment.order_id))}'
+            )
         if getattr(payment, 'payer_amount', None) and getattr(payment, 'payer_currency', None):
             lines.append(
-                f'{texts.t("ADMIN_PAYMENT_PAYER_AMOUNT", "Paid amount")}: '
+                f'🪙 {texts.t("ADMIN_PAYMENT_PAYER_AMOUNT", "Paid amount")}: '
                 f'{html.escape(str(payment.payer_amount))} {html.escape(str(payment.payer_currency))}'
             )
 
     if record.method == PaymentMethod.YOOKASSA:
         if getattr(payment, 'payment_method_type', None):
             lines.append(
-                f'{texts.t("ADMIN_PAYMENT_GATEWAY_METHOD", "Method")}: {html.escape(str(payment.payment_method_type))}'
+                f'💳 {texts.t("ADMIN_PAYMENT_GATEWAY_METHOD", "Method")}: '
+                f'{html.escape(str(payment.payment_method_type))}'
             )
         if getattr(payment, 'confirmation_url', None):
-            lines.append(texts.t('ADMIN_PAYMENT_HAS_LINK', 'Payment link is available above.'))
+            lines.append(texts.t('ADMIN_PAYMENT_HAS_LINK', '🔗 Payment link is available above.'))
 
     if record.method == PaymentMethod.CRYPTOBOT:
         if getattr(payment, 'amount', None) and getattr(payment, 'asset', None):
             lines.append(
-                f'{texts.t("ADMIN_PAYMENT_CRYPTO_AMOUNT", "Crypto amount")}: '
+                f'🪙 {texts.t("ADMIN_PAYMENT_CRYPTO_AMOUNT", "Crypto amount")}: '
                 f'{html.escape(str(payment.amount))} {html.escape(str(payment.asset))}'
             )
         if getattr(payment, 'bot_invoice_url', None) or getattr(payment, 'mini_app_invoice_url', None):
-            lines.append(texts.t('ADMIN_PAYMENT_HAS_LINK', 'Payment link is available above.'))
+            lines.append(texts.t('ADMIN_PAYMENT_HAS_LINK', '🔗 Payment link is available above.'))
         if getattr(payment, 'status', None):
             lines.append(
-                f'{texts.t("ADMIN_PAYMENT_GATEWAY_STATUS", "Gateway status")}: {html.escape(str(payment.status))}'
+                f'📊 {texts.t("ADMIN_PAYMENT_GATEWAY_STATUS", "Gateway status")}: {html.escape(str(payment.status))}'
             )
 
     if record.method == PaymentMethod.TELEGRAM_STARS:
         description = getattr(payment, 'description', '') or ''
         if description:
-            lines.append(f'{html.escape(description)}')
+            lines.append(f'📝 {html.escape(description)}')
         if getattr(payment, 'external_id', None):
             lines.append(
-                f'{texts.t("ADMIN_PAYMENT_GATEWAY_ID", "Gateway ID")}: {html.escape(str(payment.external_id))}'
+                f'🧾 {texts.t("ADMIN_PAYMENT_GATEWAY_ID", "Gateway ID")}: {html.escape(str(payment.external_id))}'
             )
 
     if _is_checkable(record):
         lines.append('')
-        lines.append(texts.t('ADMIN_PAYMENT_CHECK_HINT', 'You can trigger a manual status check.'))
+        lines.append(texts.t('ADMIN_PAYMENT_CHECK_HINT', 'ℹ️ You can trigger a manual status check.'))
 
     return '\n'.join(lines)
 
@@ -546,7 +526,7 @@ async def show_payments_overview(
     start_index = (page - 1) * PAGE_SIZE
     page_records = records[start_index : start_index + PAGE_SIZE]
 
-    header = texts.t('ADMIN_PAYMENTS_TITLE', '<b>Top-up verification</b>')
+    header = texts.t('ADMIN_PAYMENTS_TITLE', '💳 <b>Top-up verification</b>')
     description = texts.t(
         'ADMIN_PAYMENTS_DESCRIPTION',
         'Pending invoices created during the last 24 hours.',
@@ -570,7 +550,7 @@ async def show_payments_overview(
         if has_checkable:
             lines.append('')
             lines.append(
-                texts.t('ADMIN_PAYMENTS_CHECKABLE_COUNT', 'Доступно для проверки: {count}').format(
+                texts.t('ADMIN_PAYMENTS_CHECKABLE_COUNT', '🔄 Доступно для проверки: {count}').format(
                     count=len(checkable_records)
                 )
             )
@@ -615,13 +595,13 @@ async def show_payment_details(
 ) -> None:
     parsed = _parse_method_and_id(callback.data, prefix='admin_payment_')
     if not parsed:
-        await callback.answer('Invalid payment reference', show_alert=True)
+        await callback.answer('❌ Invalid payment reference', show_alert=True)
         return
 
     method, payment_id = parsed
     record = await get_payment_record(db, method, payment_id)
     if not record:
-        await callback.answer('Платеж не найден', show_alert=True)
+        await callback.answer('❌ Платеж не найден', show_alert=True)
         return
 
     await _render_payment_details(callback, db_user, record)
@@ -640,7 +620,7 @@ async def manual_check_payment(
     parsed = _parse_method_and_id(callback.data, prefix='admin_payment_check_')
     if not parsed:
         logger.warning('Failed to parse', callback_data=callback.data)
-        await callback.answer('Invalid payment reference', show_alert=True)
+        await callback.answer('❌ Invalid payment reference', show_alert=True)
         return
 
     method, payment_id = parsed
@@ -654,23 +634,12 @@ async def manual_check_payment(
         await callback.answer(texts.t('ADMIN_PAYMENT_NOT_FOUND', 'Payment not found.'), show_alert=True)
         return
 
-    logger.info(
-        'Record found: status is_paid',
-        record_status=record.status,
-        is_paid=record.is_paid,
-    )
+    logger.info('Record found: status is_paid', record_status=record.status, is_paid=record.is_paid)
 
     if not _is_checkable(record):
-        logger.info(
-            'Payment not checkable: method status',
-            method=method,
-            record_status=record.status,
-        )
+        logger.info('Payment not checkable: method status', method=method, record_status=record.status)
         await callback.answer(
-            texts.t(
-                'ADMIN_PAYMENT_CHECK_NOT_AVAILABLE',
-                'Manual check is not available for this invoice.',
-            ),
+            texts.t('ADMIN_PAYMENT_CHECK_NOT_AVAILABLE', 'Manual check is not available for this invoice.'),
             show_alert=True,
         )
         return
@@ -731,7 +700,7 @@ async def check_all_payments(
         return
 
     await callback.answer(
-        texts.t('ADMIN_PAYMENTS_CHECKING_ALL', 'Проверяю {count} платежей...').format(count=len(checkable_records)),
+        texts.t('ADMIN_PAYMENTS_CHECKING_ALL', '🔄 Проверяю {count} платежей...').format(count=len(checkable_records)),
     )
 
     payment_service = PaymentService(callback.bot)
@@ -748,31 +717,20 @@ async def check_all_payments(
             if updated and updated.is_paid and not record.is_paid:
                 confirmed += 1
         except Exception as e:
-            logger.error(
-                'Check failed',
-                method=record.method.value,
-                local_id=record.local_id,
-                error=e,
-                exc_info=True,
-            )
+            logger.error('Check failed', method=record.method.value, local_id=record.local_id, error=e, exc_info=True)
             failed += 1
 
-    logger.info(
-        'Check complete: checked confirmed failed',
-        checked=checked,
-        confirmed=confirmed,
-        failed=failed,
-    )
+    logger.info('Check complete: checked confirmed failed', checked=checked, confirmed=confirmed, failed=failed)
 
     # Показываем результат
     result_lines = [
-        texts.t('ADMIN_PAYMENTS_CHECK_ALL_RESULT', '<b>Результат проверки</b>'),
+        texts.t('ADMIN_PAYMENTS_CHECK_ALL_RESULT', '🔄 <b>Результат проверки</b>'),
         '',
-        texts.t('ADMIN_PAYMENTS_CHECK_ALL_CHECKED', 'Проверено: {count}').format(count=checked),
-        texts.t('ADMIN_PAYMENTS_CHECK_ALL_CONFIRMED', 'Подтверждено: {count}').format(count=confirmed),
+        texts.t('ADMIN_PAYMENTS_CHECK_ALL_CHECKED', '✅ Проверено: {count}').format(count=checked),
+        texts.t('ADMIN_PAYMENTS_CHECK_ALL_CONFIRMED', '💰 Подтверждено: {count}').format(count=confirmed),
     ]
     if failed:
-        result_lines.append(texts.t('ADMIN_PAYMENTS_CHECK_ALL_FAILED', 'Ошибок: {count}').format(count=failed))
+        result_lines.append(texts.t('ADMIN_PAYMENTS_CHECK_ALL_FAILED', '❌ Ошибок: {count}').format(count=failed))
 
     # Перезагружаем список платежей
     records = await list_recent_pending_payments(db)
@@ -782,7 +740,7 @@ async def check_all_payments(
     checkable_records = [r for r in records if _is_checkable(r) and not r.is_paid]
 
     result_lines.append('')
-    result_lines.append(texts.t('ADMIN_PAYMENTS_TITLE', '<b>Top-up verification</b>'))
+    result_lines.append(texts.t('ADMIN_PAYMENTS_TITLE', '💳 <b>Top-up verification</b>'))
 
     if page_records:
         result_lines.append('')
@@ -879,7 +837,7 @@ async def export_payments(
         document=BufferedInputFile(file_bytes, filename=filename),
         caption=texts.t(
             'ADMIN_PAYMENTS_EXPORT_CAPTION',
-            'Экспорт платежей\n\nВсего записей: {count}\nОплачено: {paid}\nОжидают: {pending}',
+            '📥 Экспорт платежей\n\n📊 Всего записей: {count}\n💰 Оплачено: {paid}\n⏳ Ожидают: {pending}',
         ).format(
             count=len(export_data),
             paid=sum(1 for r in export_data if r['is_paid']),
@@ -887,7 +845,7 @@ async def export_payments(
         ),
     )
 
-    await callback.answer(texts.t('ADMIN_PAYMENTS_EXPORT_SUCCESS', 'Файл отправлен'))
+    await callback.answer(texts.t('ADMIN_PAYMENTS_EXPORT_SUCCESS', '✅ Файл отправлен'))
 
 
 def register_handlers(dp: Dispatcher) -> None:

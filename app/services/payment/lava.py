@@ -542,10 +542,11 @@ class LavaPaymentMixin:
                 await self.bot.send_message(
                     user.telegram_id,
                     (
-                        '<b>Пополнение успешно!</b>\n\n'
-                        f'Сумма: {settings.format_price(payment.amount_kopeks)}\n'
-                        f'Способ: {display_name}\n'
-                        f'Транзакция: {transaction.id}'
+                        '✅ <b>Пополнение успешно!</b>\n\n'
+                        f'\U0001f4b0 Сумма: {settings.format_price(payment.amount_kopeks)}\n'
+                        f'\U0001f4b3 Способ: {display_name}\n'
+                        f'\U0001f194 Транзакция: {transaction.id}\n\n'
+                        'Баланс пополнен автоматически!'
                     ),
                     parse_mode='HTML',
                     reply_markup=keyboard,
@@ -683,9 +684,9 @@ class LavaPaymentMixin:
 
             texts = get_texts(user.language)
             messages = {
-                'confirmed': texts.t('LAVA_RECURRING_NOTIFY_CONFIRMED', 'Подписка продлена автосписанием Lava.'),
-                'failed': texts.t('LAVA_RECURRING_NOTIFY_FAILED', 'Не удалось списать оплату по автопродлению Lava.'),
-                'cancelled': texts.t('LAVA_RECURRING_NOTIFY_CANCELLED', 'Автопродление Lava отменено.'),
+                'confirmed': texts.t('LAVA_RECURRING_NOTIFY_CONFIRMED', '✅ Подписка продлена автосписанием Lava.'),
+                'failed': texts.t('LAVA_RECURRING_NOTIFY_FAILED', '⚠️ Не удалось списать оплату по автопродлению Lava.'),
+                'cancelled': texts.t('LAVA_RECURRING_NOTIFY_CANCELLED', 'ℹ️ Автопродление Lava отменено.'),
             }
             text = messages.get(kind)
             if text:
@@ -1060,11 +1061,18 @@ class LavaPaymentMixin:
             # Лок строки подписки: продление — read-modify-write ``end_date``,
             # и конкурентное продление (ручное/другой коллбек) без него теряло
             # бы одно из двух.
-            from app.database.crud.subscription import _lock_subscription_row
+            from app.database.crud.subscription import _lock_subscription_row, reconcile_tariff_traffic_limit
 
             await _lock_subscription_row(db, subscription)
+            # Оверлей грейса, осевший в подписке, — не её срок: иначе новый период
+            # отсчитывался бы от конца грейса.
+            from app.services.grace_access_echo import undo_grace_overlay_echo
+
+            await undo_grace_overlay_echo(db, subscription)
 
             subscription.extend_subscription(record.charge_days)
+            # Условия тарифа на новый период: база тарифа + активные докупки.
+            await reconcile_tariff_traffic_limit(db, subscription)
 
             # Списание по локально ОТМЕНЁННОЙ записи = удалённая отмена не
             # прошла. Деньги взяты — продлеваем честно, но запись НЕ воскрешаем

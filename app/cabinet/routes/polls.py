@@ -15,11 +15,7 @@ from app.database.crud.poll import (
     record_poll_answer,
 )
 from app.database.models import Poll, PollQuestion, PollResponse, User
-from app.services.poll_service import (
-    get_next_question,
-    get_question_option,
-    reward_user_for_poll,
-)
+from app.services.poll_service import get_next_question, get_question_option, reward_user_for_poll
 
 from ..dependencies import get_cabinet_db, get_current_cabinet_user
 

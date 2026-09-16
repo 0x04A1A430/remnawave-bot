@@ -147,12 +147,7 @@ def test_group_keyboard_omits_fsm_buttons_keeps_reliable():
     # Group/channel recipient: no FSM buttons (reply, block-by-time), but the
     # reliable callbacks + URL buttons remain.
     kb = get_ticket_notification_keyboard(
-        7,
-        user_id=42,
-        telegram_id=123,
-        username='john',
-        is_admin=False,
-        fsm_enabled=False,
+        7, user_id=42, telegram_id=123, username='john', is_admin=False, fsm_enabled=False
     )
     callbacks = _callbacks(kb)
     # FSM buttons are gone:
@@ -283,13 +278,7 @@ def cabinet_settings(monkeypatch):
     MINIAPP_* are fields → patch on the instance.
     """
 
-    def _configure(
-        *,
-        cabinet_mode=True,
-        custom_url='https://cab.example.com',
-        short_name='cabinet',
-        bot='mybot',
-    ):
+    def _configure(*, cabinet_mode=True, custom_url='https://cab.example.com', short_name='cabinet', bot='mybot'):
         from app.config import settings
 
         monkeypatch.setattr(type(settings), 'is_cabinet_mode', lambda self: cabinet_mode, raising=False)

@@ -68,8 +68,13 @@ class UserSubscriptionInfo(BaseModel):
     autopay_enabled: bool = False
     is_active: bool = False
     days_remaining: int = 0
+    # Открыт временный доступ (грейс) до этого числа; None — обычная подписка.
+    grace_until: datetime | None = None
     purchased_traffic_gb: int = 0
     traffic_purchases: list[TrafficPurchaseItem] = []
+
+    # Platega SBP auto-renewal (admin view only — populated by the async
+    # builder; the sync builder leaves both at their None default).
     sbp_recurring_status: str | None = None
     sbp_recurring_id: int | None = None
 
@@ -98,6 +103,8 @@ class SubscriptionListItem(BaseModel):
     traffic_used_gb: float = 0
     traffic_limit_gb: int = 0
     device_limit: int = 0
+    # Открыт временный доступ (грейс) до этого числа; None — обычная подписка.
+    grace_until: datetime | None = None
 
 
 class UserListItem(BaseModel):
@@ -114,6 +121,11 @@ class UserListItem(BaseModel):
     balance_rubles: float
     created_at: datetime
     last_activity: datetime | None = None
+    # Подключён к VPN прямо сейчас (по панели); None — панель не ответила, неизвестно.
+    is_online: bool | None = None
+    # Отметка последнего подключения из панели — по ней кабинет сам гасит зелёную точку,
+    # не дожидаясь следующего ответа сервера. None — сейчас не подключён либо панель молчит.
+    online_at: datetime | None = None
 
     # Subscription summary
     has_subscription: bool = False
@@ -126,6 +138,8 @@ class UserListItem(BaseModel):
     traffic_limit_gb: int = 0
     device_limit: int = 0
     days_remaining: int = 0
+    # Временный доступ (грейс) у показанной подписки — до какого числа он открыт.
+    grace_until: datetime | None = None
 
     # All subscriptions (multi-tariff)
     subscriptions: list[SubscriptionListItem] = []
@@ -153,6 +167,14 @@ class UsersListResponse(BaseModel):
     limit: int = 50
 
 
+class UserByRemnawaveResponse(BaseModel):
+    """Subscription-level owner resolved from an exact Remnawave user id."""
+
+    user_id: int
+    subscription_id: int
+    matched_remnawave_id: int | None = None
+
+
 # === User Detail ===
 
 
@@ -167,6 +189,35 @@ class UserTransactionItem(BaseModel):
     payment_method: str | None = None
     is_completed: bool = True
     created_at: datetime
+
+
+class UserActivityItem(BaseModel):
+    """Одна запись в таймлайне активности пользователя (бот + кабинет).
+
+    ``type`` — источник записи (transaction, event, promocode, coupon, ticket,
+    wheel_spin, poll, gift_sent, gift_received, referral_earning, cabinet_login,
+    withdrawal); ``subtype`` уточняет его (тип транзакции, event_type события,
+    статус тикета и т.п.). ``title`` — сырой человекочитаемый текст источника
+    (описание транзакции, код промокода, название тикета) — локализованный
+    заголовок строит фронт по type/subtype.
+    """
+
+    type: str
+    subtype: str | None = None
+    source: str | None = None  # 'bot' | 'cabinet' — где произошло действие, если известно
+    title: str | None = None
+    amount_kopeks: int | None = None
+    timestamp: datetime
+    meta: dict[str, Any] | None = None
+
+
+class UserActivityResponse(BaseModel):
+    """Paginated user activity timeline."""
+
+    items: list[UserActivityItem]
+    total: int
+    offset: int = 0
+    limit: int = 50
 
 
 class UserReferralInfo(BaseModel):
@@ -240,8 +291,12 @@ class UserDetailResponse(BaseModel):
     # Recent transactions
     recent_transactions: list[UserTransactionItem] = []
 
-    # Remnawave UUID
-    remnawave_uuid: str | None = None
+    # Remnawave panel user id
+    remnawave_id: int | None = None
+
+    # Режим продаж бота: плитки карточки в классике, тарифах и мультитарифе разные.
+    sales_mode: str = 'tariffs'
+    multi_tariff_enabled: bool = False
 
 
 # === Panel Info ===
@@ -293,10 +348,7 @@ class UpdateBalanceRequest(BaseModel):
     """Request to update user balance."""
 
     amount_kopeks: int = Field(
-        ...,
-        ge=-2_000_000_000,
-        le=2_000_000_000,
-        description='Amount in kopeks (positive to add, negative to subtract)',
+        ..., ge=-2_000_000_000, le=2_000_000_000, description='Amount in kopeks (positive to add, negative to subtract)'
     )
     description: str = Field(default='Admin balance adjustment', max_length=500)
     create_transaction: bool = Field(default=True, description='Create transaction record')
@@ -373,6 +425,21 @@ class UpdateUserStatusResponse(BaseModel):
     success: bool
     old_status: str
     new_status: str
+    message: str
+
+
+class SendUserMessageRequest(BaseModel):
+    """Request to send a direct Telegram message to a user (parity with the
+    bot's «Отправить сообщение» action in the admin user card)."""
+
+    # 4096 — лимит Telegram на текст сообщения
+    text: str = Field(..., min_length=1, max_length=4096, description='Message text (HTML)')
+
+
+class SendUserMessageResponse(BaseModel):
+    """Response after sending a direct message."""
+
+    success: bool
     message: str
 
 
@@ -560,8 +627,7 @@ class UserSearchRequest(BaseModel):
 
     query: str = Field(..., min_length=1, max_length=255)
     search_by: list[str] = Field(
-        default=['telegram_id', 'username', 'first_name', 'last_name', 'email'],
-        description='Fields to search in',
+        default=['telegram_id', 'username', 'first_name', 'last_name', 'email'], description='Fields to search in'
     )
     limit: int = Field(default=20, ge=1, le=100)
 
@@ -635,7 +701,7 @@ class UserAvailableTariffsResponse(BaseModel):
 class PanelUserInfo(BaseModel):
     """User info from panel."""
 
-    uuid: str | None = None
+    id: int
     short_uuid: str | None = None
     username: str | None = None
     status: str | None = None
@@ -653,8 +719,7 @@ class SyncFromPanelRequest(BaseModel):
     update_subscription: bool = Field(default=True, description='Update subscription data')
     update_traffic: bool = Field(default=True, description='Update traffic usage')
     create_if_missing: bool = Field(
-        default=False,
-        description='Create subscription if user exists in panel but not in bot',
+        default=False, description='Create subscription if user exists in panel but not in bot'
     )
 
 
@@ -684,7 +749,7 @@ class SyncToPanelResponse(BaseModel):
     success: bool
     message: str
     action: str = ''  # created, updated, no_changes
-    panel_uuid: str | None = None
+    panel_user_id: int | None = None
     changes: dict[str, Any] = {}
     errors: list[str] = []
 
@@ -694,7 +759,7 @@ class PanelSyncStatusResponse(BaseModel):
 
     user_id: int
     telegram_id: int | None = None
-    remnawave_uuid: str | None = None
+    remnawave_id: int | None = None
     last_sync: datetime | None = None
 
     # Multi-tariff context
@@ -717,6 +782,12 @@ class PanelSyncStatusResponse(BaseModel):
     panel_traffic_used_gb: float = 0
     panel_device_limit: int = 0
     panel_squads: list[str] = []
+
+    # Открытый временный доступ (грейс): пока он идёт, панель намеренно держит
+    # его настройки — дату, статус, лимит и сквад. Бот их не перенимает, поэтому
+    # расхождением это не считается.
+    grace_open: bool = False
+    grace_until: datetime | None = None
 
     # Differences
     has_differences: bool = False
@@ -756,6 +827,9 @@ class ResetTrialResponse(BaseModel):
     message: str
     subscription_deleted: bool = False
     has_used_trial_reset: bool = False
+    # Главный ответ на вопрос админа: сможет ли человек взять триал после нажатия.
+    # Без него кнопка сообщала «успешно» даже когда ничего не менялось.
+    trial_available: bool = False
 
 
 class ResetSubscriptionRequest(BaseModel):

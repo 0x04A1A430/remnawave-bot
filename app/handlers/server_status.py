@@ -42,10 +42,7 @@ async def _render_server_status(
     texts = get_texts(db_user.language)
 
     if settings.get_server_status_mode() != 'xray':
-        await callback.answer(
-            texts.t('SERVER_STATUS_NOT_CONFIGURED', 'Функция недоступна.'),
-            show_alert=True,
-        )
+        await callback.answer(texts.t('SERVER_STATUS_NOT_CONFIGURED', 'Функция недоступна.'), show_alert=True)
         return
 
     try:
@@ -93,7 +90,7 @@ def _build_status_message(
 
     current_online, current_offline = pages[current_index] if pages else ([], [])
 
-    lines: list[str] = [texts.t('SERVER_STATUS_TITLE', '<b>Статус серверов</b>')]
+    lines: list[str] = [texts.t('SERVER_STATUS_TITLE', '📊 <b>Статус серверов</b>')]
 
     if total_servers == 0:
         lines.append('')
@@ -116,18 +113,18 @@ def _build_status_message(
         [
             '',
             summary,
-            texts.t('SERVER_STATUS_UPDATED_AT', 'Обновлено: {time}').format(time=updated_at),
+            texts.t('SERVER_STATUS_UPDATED_AT', '⏱ Обновлено: {time}').format(time=updated_at),
             '',
         ]
     )
 
     if current_online:
-        lines.append(texts.t('SERVER_STATUS_AVAILABLE', '<b>Доступны</b>'))
+        lines.append(texts.t('SERVER_STATUS_AVAILABLE', '✅ <b>Доступны</b>'))
         lines.extend(_format_server_lines(current_online, texts, online=True))
         lines.append('')
 
     if current_offline:
-        lines.append(texts.t('SERVER_STATUS_UNAVAILABLE', '<b>Недоступны</b>'))
+        lines.append(texts.t('SERVER_STATUS_UNAVAILABLE', '❌ <b>Недоступны</b>'))
         lines.extend(_format_server_lines(current_offline, texts, online=False))
         lines.append('')
 

@@ -22,14 +22,8 @@ logger = structlog.get_logger(__name__)
 
 
 FREEKASSA_SUB_METHODS = {
-    'freekassa_sbp': {
-        'payment_system_id': 44,
-        'get_name': settings.get_freekassa_sbp_display_name,
-    },
-    'freekassa_card': {
-        'payment_system_id': 36,
-        'get_name': settings.get_freekassa_card_display_name,
-    },
+    'freekassa_sbp': {'payment_system_id': 44, 'get_name': settings.get_freekassa_sbp_display_name},
+    'freekassa_card': {'payment_system_id': 36, 'get_name': settings.get_freekassa_card_display_name},
 }
 
 
@@ -134,13 +128,11 @@ async def _create_freekassa_payment_and_respond(
         keyboard_rows.append(
             [
                 InlineKeyboardButton(
-                    text=_support_parsed.text,
-                    url=support_url,
-                    **(
-                        {'icon_custom_emoji_id': _support_parsed.icon_custom_emoji_id}
-                        if _support_parsed.icon_custom_emoji_id
-                        else {}
-                    ),
+                    text=texts.t(
+                        'PAY_BUTTON',
+                        '💳 Оплатить {amount}₽',
+                    ).format(amount=f'{amount_rub:.0f}'),
+                    url=payment_url,
                 )
             ]
         )
@@ -153,7 +145,10 @@ async def _create_freekassa_payment_and_respond(
 
     response_text = texts.t(
         'FREEKASSA_PAYMENT_CREATED',
-        '<b>Оплата через {name}</b>\n\nСумма: <code>{amount}₽</code>',
+        '💳 <b>Оплата через {name}</b>\n\n'
+        'Сумма: <b>{amount}₽</b>\n\n'
+        'Нажмите кнопку ниже для оплаты.\n'
+        'После успешной оплаты баланс будет пополнен автоматически.',
     ).format(name=html.escape(display_name), amount=f'{amount_rub:.2f}')
 
     if edit_message:
@@ -169,11 +164,7 @@ async def _create_freekassa_payment_and_respond(
             parse_mode='HTML',
         )
 
-    logger.info(
-        'Freekassa payment created',
-        telegram_id=db_user.telegram_id,
-        amount_rub=amount_rub,
-    )
+    logger.info('Freekassa payment created', telegram_id=db_user.telegram_id, amount_rub=amount_rub)
 
 
 @error_handler
@@ -201,7 +192,7 @@ async def process_freekassa_payment_amount(
         keyboard.append([InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance', style='danger')])
 
         await message.answer(
-            f'<b>Пополнение ограничено</b>\n\n{reason}',
+            f'🚫 <b>Пополнение ограничено</b>\n\n{reason}',
             parse_mode='HTML',
             reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard),
         )
@@ -290,7 +281,7 @@ async def _start_freekassa_topup_impl(
         keyboard.append([InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance', style='danger')])
 
         await callback.message.edit_text(
-            f'<b>Пополнение ограничено</b>\n\n{reason}',
+            f'🚫 <b>Пополнение ограничено</b>\n\n{reason}',
             parse_mode='HTML',
             reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard),
         )
@@ -308,7 +299,7 @@ async def _start_freekassa_topup_impl(
     await callback.message.edit_text(
         texts.t(
             'FREEKASSA_ENTER_AMOUNT',
-            '<b>Пополнение через {name}</b>\n\n'
+            '💳 <b>Пополнение через {name}</b>\n\n'
             'Введите сумму пополнения в рублях.\n\n'
             'Минимум: {min_amount}₽\n'
             'Максимум: {max_amount}₽',

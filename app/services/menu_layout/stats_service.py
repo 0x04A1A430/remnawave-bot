@@ -9,7 +9,9 @@ from sqlalchemy import Integer, and_, case, desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.database.local_date import local_date_expr
 from app.database.models import ButtonClickLog
+from app.utils.timezone import local_day_start
 
 
 class MenuLayoutStatsService:
@@ -50,29 +52,37 @@ class MenuLayoutStatsService:
         callback_data: str | None = None,
         button_type: str | None = None,
         button_text: str | None = None,
+        telegram_id: int | None = None,
     ) -> ButtonClickLog | None:
         """Записать клик по кнопке.
 
         Args:
-            user_id: Telegram ID пользователя (из middleware) или internal User.id (из API)
+            user_id: внутренний User.id (кабинет, Mini App, внешний API)
+            telegram_id: Telegram ID (middleware бота знает только его)
+
+        Порядок поиска детерминирован: telegram_id ищется только в своей
+        колонке, user_id — сначала в своей, и лишь для внешнего API (где
+        исторически присылали что угодно) — по telegram_id. Раньше одно число
+        искали в обеих колонках без порядка, и при совпадении внутреннего id
+        одного человека с Telegram ID другого клик уходил чужому.
         """
         try:
-            # Проверяем существование пользователя перед вставкой
-            # чтобы избежать ошибки foreign key в логах БД
-            # user_id может быть telegram_id (из middleware) или internal id (из API)
+            from sqlalchemy import select
+
+            from app.database.models import User
+
+            # Проверяем существование пользователя перед вставкой,
+            # чтобы избежать ошибки foreign key в логах БД.
             actual_user_id = None
-            if user_id is not None:
-                from sqlalchemy import or_, select
-
-                from app.database.models import User
-
-                # Пробуем найти пользователя по telegram_id или по internal id
-                result = await db.execute(
-                    select(User.id).where(or_(User.telegram_id == user_id, User.id == user_id)).limit(1)
-                )
-                found_user_id = result.scalar_one_or_none()
-                if found_user_id is not None:
-                    actual_user_id = found_user_id  # Используем internal User.id для FK
+            if telegram_id is not None:
+                result = await db.execute(select(User.id).where(User.telegram_id == telegram_id).limit(1))
+                actual_user_id = result.scalar_one_or_none()
+            elif user_id is not None:
+                result = await db.execute(select(User.id).where(User.id == user_id).limit(1))
+                actual_user_id = result.scalar_one_or_none()
+                if actual_user_id is None:
+                    result = await db.execute(select(User.id).where(User.telegram_id == user_id).limit(1))
+                    actual_user_id = result.scalar_one_or_none()
 
             click_log = ButtonClickLog(
                 button_id=button_id,
@@ -97,7 +107,7 @@ class MenuLayoutStatsService:
     ) -> dict[str, Any]:
         """Получить статистику кликов по конкретной кнопке."""
         now = datetime.now(UTC)
-        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        today_start = local_day_start(now)
         week_ago = now - timedelta(days=7)
         month_ago = now - timedelta(days=days)
 
@@ -110,10 +120,7 @@ class MenuLayoutStatsService:
         # Клики сегодня
         today_result = await db.execute(
             select(func.count(ButtonClickLog.id)).where(
-                and_(
-                    ButtonClickLog.button_id == button_id,
-                    ButtonClickLog.clicked_at >= today_start,
-                )
+                and_(ButtonClickLog.button_id == button_id, ButtonClickLog.clicked_at >= today_start)
             )
         )
         clicks_today = today_result.scalar() or 0
@@ -121,10 +128,7 @@ class MenuLayoutStatsService:
         # Клики за неделю
         week_result = await db.execute(
             select(func.count(ButtonClickLog.id)).where(
-                and_(
-                    ButtonClickLog.button_id == button_id,
-                    ButtonClickLog.clicked_at >= week_ago,
-                )
+                and_(ButtonClickLog.button_id == button_id, ButtonClickLog.clicked_at >= week_ago)
             )
         )
         clicks_week = week_result.scalar() or 0
@@ -132,10 +136,7 @@ class MenuLayoutStatsService:
         # Клики за месяц
         month_result = await db.execute(
             select(func.count(ButtonClickLog.id)).where(
-                and_(
-                    ButtonClickLog.button_id == button_id,
-                    ButtonClickLog.clicked_at >= month_ago,
-                )
+                and_(ButtonClickLog.button_id == button_id, ButtonClickLog.clicked_at >= month_ago)
             )
         )
         clicks_month = month_result.scalar() or 0
@@ -178,17 +179,12 @@ class MenuLayoutStatsService:
         # Группировка по дате
         result = await db.execute(
             select(
-                func.date(ButtonClickLog.clicked_at).label('date'),
+                local_date_expr(ButtonClickLog.clicked_at, db).label('date'),
                 func.count(ButtonClickLog.id).label('count'),
             )
-            .where(
-                and_(
-                    ButtonClickLog.button_id == button_id,
-                    ButtonClickLog.clicked_at >= start_date,
-                )
-            )
-            .group_by(func.date(ButtonClickLog.clicked_at))
-            .order_by(func.date(ButtonClickLog.clicked_at))
+            .where(and_(ButtonClickLog.button_id == button_id, ButtonClickLog.clicked_at >= start_date))
+            .group_by(local_date_expr(ButtonClickLog.clicked_at, db))
+            .order_by(local_date_expr(ButtonClickLog.clicked_at, db))
         )
 
         return [{'date': str(row.date), 'count': row.count} for row in result.all()]
@@ -201,7 +197,7 @@ class MenuLayoutStatsService:
     ) -> list[dict[str, Any]]:
         """Получить статистику по всем кнопкам."""
         now = datetime.now(UTC)
-        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        today_start = local_day_start(now)
         week_ago = now - timedelta(days=7)
         month_ago = now - timedelta(days=days)
 
@@ -266,12 +262,7 @@ class MenuLayoutStatsService:
                 func.count(ButtonClickLog.id).label('clicks_total'),
                 func.count(func.distinct(ButtonClickLog.user_id)).label('unique_users'),
             )
-            .where(
-                and_(
-                    ButtonClickLog.clicked_at >= start_date,
-                    ButtonClickLog.button_type.isnot(None),
-                )
-            )
+            .where(and_(ButtonClickLog.clicked_at >= start_date, ButtonClickLog.button_type.isnot(None)))
             .group_by(ButtonClickLog.button_type)
             .order_by(desc(func.count(ButtonClickLog.id)))
         )
@@ -339,26 +330,14 @@ class MenuLayoutStatsService:
 
         result = await db.execute(query.group_by(weekday_expr).order_by(weekday_expr))
 
-        weekday_names = [
-            'Понедельник',
-            'Вторник',
-            'Среда',
-            'Четверг',
-            'Пятница',
-            'Суббота',
-            'Воскресенье',
-        ]
+        weekday_names = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота', 'Воскресенье']
 
         # Создаем словарь для быстрого доступа по weekday
         stats_dict = {int(row.weekday): row.count for row in result.all()}
 
         # Возвращаем все дни недели, даже если count = 0
         return [
-            {
-                'weekday': weekday,
-                'weekday_name': weekday_names[weekday],
-                'count': stats_dict.get(weekday, 0),
-            }
+            {'weekday': weekday, 'weekday_name': weekday_names[weekday], 'count': stats_dict.get(weekday, 0)}
             for weekday in range(7)
         ]
 
@@ -377,12 +356,7 @@ class MenuLayoutStatsService:
             ButtonClickLog.user_id,
             func.count(ButtonClickLog.id).label('clicks_count'),
             func.max(ButtonClickLog.clicked_at).label('last_click_at'),
-        ).where(
-            and_(
-                ButtonClickLog.clicked_at >= start_date,
-                ButtonClickLog.user_id.isnot(None),
-            )
-        )
+        ).where(and_(ButtonClickLog.clicked_at >= start_date, ButtonClickLog.user_id.isnot(None)))
 
         if button_id:
             query = query.where(ButtonClickLog.button_id == button_id)
@@ -423,10 +397,7 @@ class MenuLayoutStatsService:
 
         query_current = query_current.where(ButtonClickLog.clicked_at >= current_start)
         query_previous = query_previous.where(
-            and_(
-                ButtonClickLog.clicked_at >= previous_start,
-                ButtonClickLog.clicked_at < previous_end,
-            )
+            and_(ButtonClickLog.clicked_at >= previous_start, ButtonClickLog.clicked_at < previous_end)
         )
 
         current_result = await db.execute(query_current)
@@ -455,7 +426,7 @@ class MenuLayoutStatsService:
             'change': {
                 'absolute': current_count - previous_count,
                 'percent': round(change_percent, 2),
-                'trend': ('up' if change_percent > 0 else 'down' if change_percent < 0 else 'stable'),
+                'trend': 'up' if change_percent > 0 else 'down' if change_percent < 0 else 'stable',
             },
         }
 

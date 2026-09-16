@@ -178,17 +178,12 @@ async def mark_offer_claimed(
             details=details,
         )
     except Exception as exc:  # pragma: no cover - defensive logging
-        logger.warning(
-            'Failed to record promo offer claim log for offer',
-            offer_id=offer.id,
-            exc=exc,
-        )
+        logger.warning('Failed to record promo offer claim log for offer', offer_id=offer.id, exc=exc)
         try:
             await db.rollback()
         except Exception as rollback_error:  # pragma: no cover - defensive logging
             logger.warning(
-                'Failed to rollback session after promo offer claim log failure',
-                rollback_error=rollback_error,
+                'Failed to rollback session after promo offer claim log failure', rollback_error=rollback_error
             )
 
     return offer
@@ -239,16 +234,13 @@ async def deactivate_expired_offers(db: AsyncSession) -> int:
             )
         except Exception as exc:  # pragma: no cover - defensive logging
             logger.warning(
-                'Failed to record promo offer disable log for offer',
-                payload=payload.get('offer_id'),
-                exc=exc,
+                'Failed to record promo offer disable log for offer', payload=payload.get('offer_id'), exc=exc
             )
             try:
                 await db.rollback()
             except Exception as rollback_error:  # pragma: no cover - defensive logging
                 logger.warning(
-                    'Failed to rollback session after promo offer disable log failure',
-                    rollback_error=rollback_error,
+                    'Failed to rollback session after promo offer disable log failure', rollback_error=rollback_error
                 )
 
     return count

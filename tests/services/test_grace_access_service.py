@@ -31,9 +31,10 @@ GIB = 1024**3
 EXPIRED_SQUAD = '11111111-1111-1111-1111-111111111111'
 LIMITED_SQUAD = '22222222-2222-2222-2222-222222222222'
 REGULAR_SQUAD = '33333333-3333-3333-3333-333333333333'
-# The session/panel operations are keyed by the numeric Remnawave id.
-PANEL_ID = 9001
-OTHER_PANEL_ID = 9002
+# Remnawave 3.0.0 идентифицирует панельного пользователя числовым id;
+# поля uuid у записи больше нет.
+PANEL_ID = 4242
+OTHER_PANEL_ID = 7777
 
 
 def test_runtime_mode_values_are_explicit_and_fail_closed() -> None:
@@ -102,8 +103,8 @@ class MemoryGraceStore:
 class FakePanelGateway:
     def __init__(self, snapshot: GracePanelSnapshot) -> None:
         self.snapshot = snapshot
-        self.applied_overlays: list[tuple[str, GracePanelOverlay]] = []
-        self.restored_snapshots: list[tuple[str, GracePanelSnapshot]] = []
+        self.applied_overlays: list[tuple[int, GracePanelOverlay]] = []
+        self.restored_snapshots: list[tuple[int, GracePanelSnapshot]] = []
         self.applied_billing: list[GraceBillingState] = []
         self.applied_billing_overlays: list[GracePanelOverlay] = []
         self.fail_overlay_attempts = 0
@@ -243,7 +244,7 @@ def make_service(
     return service, store, panel, billing_gateway
 
 
-async def test_subscription_kind_priority_and_feature_flags() -> None:
+def test_subscription_kind_priority_and_feature_flags() -> None:
     now = datetime(2026, 7, 15, 12, tzinfo=UTC)
     regular = make_billing(status='expired', end_at=now)
     trial = replace(regular, is_trial=True)
@@ -271,7 +272,7 @@ async def test_subscription_kind_priority_and_feature_flags() -> None:
     assert billing_is_eligible(overlapping, GraceReason.EXPIRED, make_policy(trial_enabled=True)) is True
 
 
-async def test_limited_incident_key_tracks_end_limit_and_reset_timestamp() -> None:
+def test_limited_incident_key_tracks_end_limit_and_reset_timestamp() -> None:
     now = datetime(2026, 7, 15, 12, tzinfo=UTC)
     billing = make_billing(status='limited', end_at=now + timedelta(days=30))
     unknown = build_incident_key(billing, GraceReason.LIMITED)
@@ -292,6 +293,7 @@ async def test_limited_incident_key_tracks_end_limit_and_reset_timestamp() -> No
     )
 
 
+@pytest.mark.asyncio
 async def test_expired_grace_changes_only_panel_overlay() -> None:
     now = datetime(2026, 7, 15, 12, tzinfo=UTC)
     clock = MutableClock(now)
@@ -314,6 +316,7 @@ async def test_expired_grace_changes_only_panel_overlay() -> None:
     assert store.only_session().state is GraceSessionState.ACTIVE
 
 
+@pytest.mark.asyncio
 async def test_limited_grace_adds_bytes_above_usage_without_resetting_usage() -> None:
     now = datetime(2026, 7, 15, 12, tzinfo=UTC)
     clock = MutableClock(now)
@@ -344,6 +347,7 @@ async def test_limited_grace_adds_bytes_above_usage_without_resetting_usage() ->
     assert panel.restored_snapshots == []
 
 
+@pytest.mark.asyncio
 async def test_same_incident_is_not_granted_twice() -> None:
     now = datetime(2026, 7, 15, 12, tzinfo=UTC)
     clock = MutableClock(now)
@@ -359,6 +363,7 @@ async def test_same_incident_is_not_granted_twice() -> None:
     assert len(panel.applied_overlays) == 1
 
 
+@pytest.mark.asyncio
 async def test_pending_session_retries_same_overlay_after_temporary_error() -> None:
     now = datetime(2026, 7, 15, 12, tzinfo=UTC)
     clock = MutableClock(now)
@@ -381,6 +386,7 @@ async def test_pending_session_retries_same_overlay_after_temporary_error() -> N
     assert len(panel.applied_overlays) == 1
 
 
+@pytest.mark.asyncio
 async def test_pending_retry_accepts_only_known_external_squad_detach_intermediate() -> None:
     now = datetime(2026, 7, 15, 12, tzinfo=UTC)
     clock = MutableClock(now)
@@ -410,6 +416,7 @@ async def test_pending_retry_accepts_only_known_external_squad_detach_intermedia
     assert len(panel.applied_overlays) == 1
 
 
+@pytest.mark.asyncio
 async def test_pending_retry_never_reenables_an_unexpected_manual_panel_state() -> None:
     now = datetime(2026, 7, 15, 12, tzinfo=UTC)
     clock = MutableClock(now)
@@ -441,6 +448,7 @@ async def test_pending_retry_never_reenables_an_unexpected_manual_panel_state() 
     assert panel.applied_billing == [billing]
 
 
+@pytest.mark.asyncio
 async def test_timeout_restores_original_panel_values_once() -> None:
     now = datetime(2026, 7, 15, 12, tzinfo=UTC)
     clock = MutableClock(now)
@@ -467,6 +475,7 @@ async def test_timeout_restores_original_panel_values_once() -> None:
     assert len(panel.applied_overlays) == 1
 
 
+@pytest.mark.asyncio
 async def test_limited_snapshot_restore_stays_restoring_while_panel_derives_status() -> None:
     now = datetime(2026, 7, 15, 12, tzinfo=UTC)
     clock = MutableClock(now)
@@ -509,6 +518,7 @@ async def test_limited_snapshot_restore_stays_restoring_while_panel_derives_stat
     ]
 
 
+@pytest.mark.asyncio
 async def test_payment_wins_over_grace_snapshot() -> None:
     now = datetime(2026, 7, 15, 12, tzinfo=UTC)
     clock = MutableClock(now)
@@ -534,6 +544,58 @@ async def test_payment_wins_over_grace_snapshot() -> None:
     assert completed.completion_reason is GraceCompletionReason.PAID
 
 
+@pytest.mark.asyncio
+async def test_grace_overlay_echoed_into_billing_is_not_a_payment() -> None:
+    """Баг 2026-09-15: импорт перенёс оверлей грейса в бота — ACTIVE, дата конца
+    грейса, сквад грейса, лимит «расход + квота». Воркер принял более позднюю дату
+    за продление и закрыл грейс как оплату, отправив это эхо в панель. Эхо
+    собственного оверлея — не оплата и не конфликт: грейс идёт дальше, панель не
+    трогаем."""
+    now = datetime(2026, 9, 15, 6, 16, tzinfo=UTC)
+    clock = MutableClock(now)
+    billing = make_billing(status='expired', end_at=now - timedelta(minutes=1))
+    snapshot = make_snapshot(expire_at=billing.end_at)
+    service, store, panel, billing_gateway = make_service(billing=billing, snapshot=snapshot, clock=clock)
+    await service.start_if_eligible(billing, GraceReason.EXPIRED)
+    session = store.only_session()
+    assert session.state is GraceSessionState.ACTIVE
+    overlay = session.overlay
+
+    billing_gateway.state = replace(
+        billing,
+        status='active',
+        # Панель хранит миллисекунды — эхо может отличаться на доли секунды.
+        end_at=overlay.expire_at + timedelta(milliseconds=400),
+        traffic_limit_bytes=overlay.traffic_limit_bytes,
+        squad_uuids=overlay.squad_uuids,
+    )
+    clock.advance(timedelta(minutes=26))
+
+    result = await service.reconcile()
+
+    assert result.paid == 0
+    assert panel.applied_billing == [], 'эхо оверлея не уходит в панель как «оплаченное» состояние'
+    assert store.only_session().state is GraceSessionState.ACTIVE
+
+
+@pytest.mark.asyncio
+async def test_a_real_renewal_during_grace_is_still_a_payment() -> None:
+    now = datetime(2026, 9, 15, 6, 16, tzinfo=UTC)
+    clock = MutableClock(now)
+    billing = make_billing(status='expired', end_at=now - timedelta(minutes=1))
+    snapshot = make_snapshot(expire_at=billing.end_at)
+    service, store, panel, billing_gateway = make_service(billing=billing, snapshot=snapshot, clock=clock)
+    await service.start_if_eligible(billing, GraceReason.EXPIRED)
+    paid = replace(billing, status='active', end_at=now + timedelta(days=30))
+    billing_gateway.state = paid
+
+    result = await service.reconcile()
+
+    assert result.paid == 1
+    assert panel.applied_billing == [paid]
+
+
+@pytest.mark.asyncio
 async def test_confirmed_panel_sync_can_finish_payment_without_duplicate_panel_update() -> None:
     now = datetime(2026, 7, 15, 12, 0, tzinfo=UTC)
     clock = MutableClock(now)
@@ -563,6 +625,7 @@ async def test_confirmed_panel_sync_can_finish_payment_without_duplicate_panel_u
     assert completed.completion_reason is GraceCompletionReason.PAID
 
 
+@pytest.mark.asyncio
 async def test_canonical_squad_change_ends_grace_and_applies_fresh_billing() -> None:
     now = datetime(2026, 7, 15, 12, 0, tzinfo=UTC)
     clock = MutableClock(now)
@@ -590,6 +653,7 @@ async def test_canonical_squad_change_ends_grace_and_applies_fresh_billing() -> 
     assert completed.completion_reason is GraceCompletionReason.CONFLICT
 
 
+@pytest.mark.asyncio
 @pytest.mark.parametrize('relinked_panel_id', [OTHER_PANEL_ID, None])
 async def test_panel_identity_change_restores_the_old_user_instead_of_pushing_billing_onto_it(
     relinked_panel_id: int | None,
@@ -621,6 +685,7 @@ async def test_panel_identity_change_restores_the_old_user_instead_of_pushing_bi
     assert completed.completion_reason is GraceCompletionReason.CONFLICT
 
 
+@pytest.mark.asyncio
 async def test_limited_canonical_change_waits_without_error_then_completes() -> None:
     now = datetime(2026, 7, 15, 12, tzinfo=UTC)
     clock = MutableClock(now)
@@ -680,6 +745,7 @@ async def test_limited_canonical_change_waits_without_error_then_completes() -> 
     ]
 
 
+@pytest.mark.asyncio
 async def test_limited_transition_conflict_completes_without_retry_error() -> None:
     now = datetime(2026, 7, 15, 12, tzinfo=UTC)
     clock = MutableClock(now)
@@ -721,6 +787,7 @@ async def test_limited_transition_conflict_completes_without_retry_error() -> No
     assert panel.applied_billing_overlays == [started.session.overlay]
 
 
+@pytest.mark.asyncio
 async def test_webhook_suppression_matches_only_grace_echo() -> None:
     now = datetime(2026, 7, 15, 12, tzinfo=UTC)
     clock = MutableClock(now)
@@ -756,6 +823,7 @@ async def test_webhook_suppression_matches_only_grace_echo() -> None:
     assert await service.should_suppress_webhook(42, 'user.enabled', grace_echo) is True
 
 
+@pytest.mark.asyncio
 async def test_unlimited_panel_limit_becomes_exact_grace_quota_above_usage() -> None:
     now = datetime(2026, 7, 15, 12, tzinfo=UTC)
     clock = MutableClock(now)
@@ -763,7 +831,7 @@ async def test_unlimited_panel_limit_becomes_exact_grace_quota_above_usage() -> 
         status='expired',
         end_at=now - timedelta(days=1),
         traffic_limit_bytes=0,
-        used_traffic_bytes=50 * 1024**3,
+        used_traffic_bytes=50 * GIB,
     )
     snapshot = make_snapshot(
         expire_at=billing.end_at,
@@ -778,6 +846,7 @@ async def test_unlimited_panel_limit_becomes_exact_grace_quota_above_usage() -> 
     assert result.session.overlay.traffic_limit_bytes == 51 * GIB
 
 
+@pytest.mark.asyncio
 async def test_expired_and_exhausted_subscription_receives_temporary_bytes() -> None:
     now = datetime(2026, 7, 15, 12, tzinfo=UTC)
     clock = MutableClock(now)
@@ -789,8 +858,8 @@ async def test_expired_and_exhausted_subscription_receives_temporary_bytes() -> 
     )
     snapshot = make_snapshot(
         expire_at=billing.end_at,
-        traffic_limit_bytes=10 * 1024**3,
-        used_traffic_bytes=10 * 1024**3,
+        traffic_limit_bytes=10 * GIB,
+        used_traffic_bytes=10 * GIB,
     )
     service, _, _, _ = make_service(billing=billing, snapshot=snapshot, clock=clock)
 
@@ -800,6 +869,7 @@ async def test_expired_and_exhausted_subscription_receives_temporary_bytes() -> 
     assert result.session.overlay.traffic_limit_bytes == 11 * GIB
 
 
+@pytest.mark.asyncio
 async def test_drain_never_activates_a_pending_session() -> None:
     now = datetime(2026, 7, 15, 12, tzinfo=UTC)
     clock = MutableClock(now)
@@ -817,6 +887,7 @@ async def test_drain_never_activates_a_pending_session() -> None:
     assert store.only_session().completion_reason is GraceCompletionReason.DRAINED
 
 
+@pytest.mark.asyncio
 async def test_normal_drain_keeps_active_session_until_its_deadline() -> None:
     now = datetime(2026, 7, 15, 12, tzinfo=UTC)
     clock = MutableClock(now)
@@ -835,6 +906,7 @@ async def test_normal_drain_keeps_active_session_until_its_deadline() -> None:
     assert store.only_session().completion_reason is GraceCompletionReason.TIMEOUT
 
 
+@pytest.mark.asyncio
 async def test_blocked_user_is_revoked_immediately() -> None:
     now = datetime(2026, 7, 15, 12, tzinfo=UTC)
     clock = MutableClock(now)
@@ -855,6 +927,7 @@ async def test_blocked_user_is_revoked_immediately() -> None:
     assert store.only_session().completion_reason is GraceCompletionReason.REVOKED
 
 
+@pytest.mark.asyncio
 async def test_limited_grace_fails_closed_when_panel_omits_usage() -> None:
     now = datetime(2026, 7, 15, 12, tzinfo=UTC)
     clock = MutableClock(now)
@@ -882,6 +955,7 @@ async def test_limited_grace_fails_closed_when_panel_omits_usage() -> None:
     assert panel.applied_overlays == []
 
 
+@pytest.mark.asyncio
 async def test_expired_grace_fails_closed_when_panel_omits_usage() -> None:
     now = datetime(2026, 7, 15, 12, tzinfo=UTC)
     clock = MutableClock(now)
@@ -904,6 +978,7 @@ async def test_expired_grace_fails_closed_when_panel_omits_usage() -> None:
     assert panel.applied_overlays == []
 
 
+@pytest.mark.asyncio
 async def test_disabling_kind_flag_does_not_interrupt_an_open_session() -> None:
     now = datetime(2026, 7, 15, 12, tzinfo=UTC)
     clock = MutableClock(now)
@@ -934,6 +1009,7 @@ async def test_disabling_kind_flag_does_not_interrupt_an_open_session() -> None:
     assert store.only_session().state is GraceSessionState.ACTIVE
 
 
+@pytest.mark.asyncio
 async def test_limited_grace_can_repeat_after_a_new_traffic_period() -> None:
     now = datetime(2026, 7, 15, 12, tzinfo=UTC)
     clock = MutableClock(now)
@@ -975,6 +1051,7 @@ async def test_limited_grace_can_repeat_after_a_new_traffic_period() -> None:
     assert first.session.incident_key != second.session.incident_key
 
 
+@pytest.mark.asyncio
 async def test_external_squad_is_detached_only_in_overlay_and_kept_in_snapshot() -> None:
     now = datetime(2026, 7, 15, 12, tzinfo=UTC)
     clock = MutableClock(now)
@@ -997,26 +1074,7 @@ async def test_external_squad_is_detached_only_in_overlay_and_kept_in_snapshot()
     assert panel.snapshot.external_squad_uuid is None
 
 
-async def test_external_squad_is_assigned_when_policy_configured() -> None:
-    """GRACE_ACCESS_EXTERNAL_SQUAD_UUID задан — грейс выдаёт external squad вместо отвязки."""
-    now = datetime(2026, 7, 15, 12, tzinfo=UTC)
-    clock = MutableClock(now)
-    external_squad = '44444444-4444-4444-4444-444444444444'
-    billing = replace(
-        make_billing(status='expired', end_at=now - timedelta(minutes=1)),
-        external_squad_uuid=external_squad,
-    )
-    snapshot = make_snapshot(expire_at=billing.end_at)
-    policy = make_policy(external_squad_uuid=external_squad)
-    service, _, panel, _ = make_service(billing=billing, snapshot=snapshot, clock=clock, policy=policy)
-
-    result = await service.start_if_eligible(billing, GraceReason.EXPIRED)
-
-    assert result.session is not None
-    assert result.session.overlay.external_squad_uuid == external_squad
-    assert panel.snapshot.external_squad_uuid == external_squad
-
-
+@pytest.mark.asyncio
 async def test_manual_panel_change_is_terminal_conflict_and_never_reapplied() -> None:
     now = datetime(2026, 7, 15, 12, tzinfo=UTC)
     clock = MutableClock(now)
@@ -1035,6 +1093,7 @@ async def test_manual_panel_change_is_terminal_conflict_and_never_reapplied() ->
     assert store.only_session().completion_reason is GraceCompletionReason.CONFLICT
 
 
+@pytest.mark.asyncio
 async def test_unexpected_active_panel_state_fails_closed_to_billing() -> None:
     now = datetime(2026, 7, 15, 12, tzinfo=UTC)
     clock = MutableClock(now)
@@ -1057,6 +1116,7 @@ async def test_unexpected_active_panel_state_fails_closed_to_billing() -> None:
     assert store.only_session().completion_reason is GraceCompletionReason.CONFLICT
 
 
+@pytest.mark.asyncio
 async def test_restore_conflict_is_terminal_instead_of_blocking_drain_forever() -> None:
     now = datetime(2026, 7, 15, 12, tzinfo=UTC)
     clock = MutableClock(now)
@@ -1074,6 +1134,7 @@ async def test_restore_conflict_is_terminal_instead_of_blocking_drain_forever() 
     assert store.only_session().last_error is not None
 
 
+@pytest.mark.asyncio
 async def test_intentional_admin_expiry_is_suppressed_for_current_incident() -> None:
     now = datetime(2026, 7, 15, 12, tzinfo=UTC)
     clock = MutableClock(now)
@@ -1089,3 +1150,63 @@ async def test_intentional_admin_expiry_is_suppressed_for_current_incident() -> 
     assert result.decision is GraceStartDecision.NOT_ELIGIBLE
     assert store.sessions == {}
     assert panel.applied_overlays == []
+
+
+@pytest.mark.asyncio
+async def test_grace_external_squad_policy_options() -> None:
+    now = datetime(2026, 7, 15, 12, tzinfo=UTC)
+    clock = MutableClock(now)
+    billing = make_billing(status='expired', end_at=now)
+    snapshot = replace(
+        make_snapshot(expire_at=now),
+        external_squad_uuid='original-ext-squad-uuid',
+    )
+
+    # 1. Default policy (external_squad_uuid=None): overlay has external_squad_uuid=None
+    service_default, _, panel_default, _ = make_service(
+        billing=billing,
+        snapshot=snapshot,
+        clock=clock,
+        policy=make_policy(external_squad_uuid=None),
+    )
+    result_default = await service_default.start_if_eligible(billing, GraceReason.EXPIRED)
+    assert result_default.decision is GraceStartDecision.STARTED
+    # applied_overlays хранит пары (remnawave_id, overlay) — сам overlay второй.
+    assert panel_default.applied_overlays[0][1].external_squad_uuid is None
+
+    # 2. Custom external squad: overlay receives configured external_squad_uuid
+    service_custom, _, panel_custom, _ = make_service(
+        billing=billing,
+        snapshot=snapshot,
+        clock=clock,
+        policy=make_policy(external_squad_uuid='emergency-ext-squad-uuid'),
+    )
+    result_custom = await service_custom.start_if_eligible(billing, GraceReason.EXPIRED)
+    assert result_custom.decision is GraceStartDecision.STARTED
+    assert panel_custom.applied_overlays[0][1].external_squad_uuid == 'emergency-ext-squad-uuid'
+
+    # 3. 'keep': сохраняется внешний сквад, уже назначенный пользователю.
+    #
+    # Значение описано в .env.example и в комментарии к настройке, но кода под
+    # него не было: строка 'keep' уходила бы в панель как UUID, то есть настройка
+    # назначала бы несуществующий сквад.
+    service_keep, _, panel_keep, _ = make_service(
+        billing=billing,
+        snapshot=snapshot,
+        clock=clock,
+        policy=make_policy(external_squad_uuid='keep'),
+    )
+    result_keep = await service_keep.start_if_eligible(billing, GraceReason.EXPIRED)
+    assert result_keep.decision is GraceStartDecision.STARTED
+    assert panel_keep.applied_overlays[0][1].external_squad_uuid == 'original-ext-squad-uuid'
+
+    # 4. 'keep' при отсутствующем внешнем скваде: сохранять нечего.
+    service_keep_empty, _, panel_keep_empty, _ = make_service(
+        billing=billing,
+        snapshot=replace(make_snapshot(expire_at=now), external_squad_uuid=None),
+        clock=clock,
+        policy=make_policy(external_squad_uuid='keep'),
+    )
+    result_keep_empty = await service_keep_empty.start_if_eligible(billing, GraceReason.EXPIRED)
+    assert result_keep_empty.decision is GraceStartDecision.STARTED
+    assert panel_keep_empty.applied_overlays[0][1].external_squad_uuid is None

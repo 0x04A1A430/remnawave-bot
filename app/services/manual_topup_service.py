@@ -222,7 +222,9 @@ async def credit_manual_topup(
         if apply_topup_bonuses:
             from app.services.payment.common import send_cart_notification_after_topup
 
-            await send_cart_notification_after_topup(locked, amount_kopeks, db, bot)
+            # notify_email=False — письмо для юзеров без Telegram уже ушло из
+            # _notify_user, под общим гейтом notify_user.
+            await send_cart_notification_after_topup(locked, amount_kopeks, db, bot, notify_email=False)
     except Exception as error:
         logger.error(
             'Ошибка пост-обработки ручного пополнения (деньги зачислены)',

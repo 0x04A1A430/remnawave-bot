@@ -310,13 +310,7 @@ async def sync_servers(
         # Sync with database
         created, updated, removed = await sync_with_remnawave(db, squads)
 
-        logger.info(
-            'Admin synced servers: + ~',
-            admin_id=admin.id,
-            created=created,
-            updated=updated,
-            removed=removed,
-        )
+        logger.info('Admin synced servers: + ~', admin_id=admin.id, created=created, updated=updated, removed=removed)
 
         return ServerSyncResponse(
             created=created,

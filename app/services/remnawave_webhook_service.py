@@ -11,15 +11,17 @@ from __future__ import annotations
 import asyncio
 import html
 import re
+from dataclasses import replace
 from datetime import UTC, datetime
 from typing import Any
 
 import structlog
 from aiogram import Bot
-from aiogram.types import InlineKeyboardMarkup
-from sqlalchemy import delete, inspect as sa_inspect
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from sqlalchemy import delete, inspect as sa_inspect, select
 from sqlalchemy.exc import PendingRollbackError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 from sqlalchemy.orm.exc import StaleDataError
 
 from app.config import settings
@@ -32,27 +34,16 @@ from app.database.crud.subscription import (
     reactivate_subscription,
     update_subscription_usage,
 )
-from app.database.crud.user import (
-    get_user_by_id,
-    get_user_by_remnawave_id,
-    get_user_by_remnawave_uuid,
-    get_user_by_telegram_id,
-)
-from app.database.models import (
-    Subscription,
-    SubscriptionServer,
-    SubscriptionStatus,
-    User,
-)
+from app.database.crud.user import get_user_by_id, get_user_by_remnawave_id, get_user_by_telegram_id
+from app.database.models import Subscription, SubscriptionServer, SubscriptionStatus, User
+from app.external.remnawave_api import RemnaWaveAPIError, RemnaWaveInvalidUserIdError
 from app.localization.texts import get_texts
 from app.services.admin_notification_service import AdminNotificationService
-from app.services.grace_access_runtime import get_open_grace_overlay, grace_access_runtime
-from app.services.grace_access_service import GraceReason, webhook_matches_overlay
-from app.services.notification_delivery_service import (
-    NotificationType,
-    notification_delivery_service,
-)
-from app.utils.miniapp_buttons import build_miniapp_or_callback_button
+from app.services.grace_access_runtime import get_open_grace_subscription_ids, grace_access_runtime
+from app.services.grace_access_service import GraceReason
+from app.services.notification_delivery_service import NotificationType, notification_delivery_service
+from app.services.panel_sync import WEBHOOK, project_onto_subscription, read_panel_user
+from app.utils.miniapp_buttons import build_miniapp_or_callback_button, build_subscription_extend_button
 
 
 logger = structlog.get_logger(__name__)
@@ -114,42 +105,42 @@ _EXPIRATION_HOURS_TO_TEXT_KEY: dict[int, str] = {
 
 # Admin event display names for notification messages
 _ADMIN_NODE_EVENTS: dict[str, str] = {
-    'node.created': 'Нода создана',
-    'node.modified': 'Нода изменена',
-    'node.disabled': 'Нода отключена',
-    'node.enabled': 'Нода включена',
-    'node.deleted': 'Нода удалена',
-    'node.connection_lost': 'Потеряно соединение с нодой',
-    'node.connection_restored': 'Соединение с нодой восстановлено',
-    'node.traffic_notify': 'Уведомление о трафике ноды',
+    'node.created': '🟢 Нода создана',
+    'node.modified': '🔧 Нода изменена',
+    'node.disabled': '🔴 Нода отключена',
+    'node.enabled': '🟢 Нода включена',
+    'node.deleted': '🗑️ Нода удалена',
+    'node.connection_lost': '🚨 Потеряно соединение с нодой',
+    'node.connection_restored': '✅ Соединение с нодой восстановлено',
+    'node.traffic_notify': '📊 Уведомление о трафике ноды',
 }
 
 _ADMIN_SERVICE_EVENTS: dict[str, str] = {
-    'service.panel_started': 'Панель RemnaWave запущена',
-    'service.login_attempt_failed': 'Неудачная попытка входа в панель',
-    'service.login_attempt_success': 'Успешный вход в панель',
-    'service.subpage_config_changed': 'Конфиг страницы подписки изменён',
+    'service.panel_started': '🚀 Панель RemnaWave запущена',
+    'service.login_attempt_failed': '🔐 Неудачная попытка входа в панель',
+    'service.login_attempt_success': '🔓 Успешный вход в панель',
+    'service.subpage_config_changed': '📄 Конфиг страницы подписки изменён',
     # 2.8.0: новые события жизненного цикла API-токена панели (security-релевантно)
-    'service.api_token_created': 'Создан API-токен панели',
-    'service.api_token_deleted': 'Удалён API-токен панели',
+    'service.api_token_created': '🔑 Создан API-токен панели',
+    'service.api_token_deleted': '🗝️ Удалён API-токен панели',
 }
 
 _ADMIN_CRM_EVENTS: dict[str, str] = {
-    'crm.infra_billing_node_payment_in_7_days': 'Оплата ноды через 7 дней',
-    'crm.infra_billing_node_payment_in_48hrs': 'Оплата ноды через 48 часов',
-    'crm.infra_billing_node_payment_in_24hrs': 'Оплата ноды через 24 часа',
-    'crm.infra_billing_node_payment_due_today': 'Оплата ноды сегодня',
-    'crm.infra_billing_node_payment_overdue_24hrs': 'Просрочка оплаты ноды: 24 часа',
-    'crm.infra_billing_node_payment_overdue_48hrs': 'Просрочка оплаты ноды: 48 часов',
-    'crm.infra_billing_node_payment_overdue_7_days': 'Просрочка оплаты ноды: 7 дней',
+    'crm.infra_billing_node_payment_in_7_days': '💳 Оплата ноды через 7 дней',
+    'crm.infra_billing_node_payment_in_48hrs': '💳 Оплата ноды через 48 часов',
+    'crm.infra_billing_node_payment_in_24hrs': '⚠️ Оплата ноды через 24 часа',
+    'crm.infra_billing_node_payment_due_today': '🔴 Оплата ноды сегодня',
+    'crm.infra_billing_node_payment_overdue_24hrs': '❗ Просрочка оплаты ноды: 24 часа',
+    'crm.infra_billing_node_payment_overdue_48hrs': '❗ Просрочка оплаты ноды: 48 часов',
+    'crm.infra_billing_node_payment_overdue_7_days': '🚨 Просрочка оплаты ноды: 7 дней',
 }
 
 _ADMIN_ERROR_EVENTS: dict[str, str] = {
-    'errors.bandwidth_usage_threshold_reached_max_notifications': 'Достигнут лимит уведомлений о трафике',
+    'errors.bandwidth_usage_threshold_reached_max_notifications': '⚠️ Достигнут лимит уведомлений о трафике',
 }
 
 _ADMIN_TORRENT_BLOCKER_EVENTS: dict[str, str] = {
-    'torrent_blocker.report': 'Торрент-блокировщик: обнаружен торрент',
+    'torrent_blocker.report': '🚫 Торрент-блокировщик: обнаружен торрент',
 }
 
 _ADMIN_NODE_CONNECTION_EVENTS = frozenset({'node.connection_lost', 'node.connection_restored'})
@@ -162,7 +153,7 @@ class RemnaWaveWebhookService:
     # For multi-worker setups, move to Redis or another shared store.
     _recent_recreations: dict[int, datetime] = {}
     _RECREATION_GUARD_SECONDS: int = 120  # 2-minute cooldown
-    _intentional_panel_deletions_by_uuid: dict[str, datetime] = {}
+    _intentional_panel_deletions_by_id: dict[int, datetime] = {}
     _intentional_panel_deletions_by_telegram_id: dict[int, datetime] = {}
     _INTENTIONAL_PANEL_DELETION_GUARD_SECONDS: int = 300
     _MAX_INTENTIONAL_ENTRIES: int = 10_000
@@ -192,17 +183,11 @@ class RemnaWaveWebhookService:
         # перезапуска кода). Class-level defaults остаются как safety net.
         self._NODE_EVENT_COALESCE_WINDOW_SECONDS = float(
             getattr(
-                settings,
-                'REMNAWAVE_WEBHOOK_NODE_COALESCE_WINDOW_SECONDS',
-                self._NODE_EVENT_COALESCE_WINDOW_SECONDS,
+                settings, 'REMNAWAVE_WEBHOOK_NODE_COALESCE_WINDOW_SECONDS', self._NODE_EVENT_COALESCE_WINDOW_SECONDS
             )
         )
         self._NODE_EVENT_BUFFER_MAX = int(
-            getattr(
-                settings,
-                'REMNAWAVE_WEBHOOK_NODE_BUFFER_MAX',
-                self._NODE_EVENT_BUFFER_MAX,
-            )
+            getattr(settings, 'REMNAWAVE_WEBHOOK_NODE_BUFFER_MAX', self._NODE_EVENT_BUFFER_MAX)
         )
 
         # Per-instance coalescing state for node.connection_* events.
@@ -267,17 +252,17 @@ class RemnaWaveWebhookService:
 
     @classmethod
     def _prune_intentional_panel_deletions(cls) -> None:
-        if not cls._intentional_panel_deletions_by_uuid and not cls._intentional_panel_deletions_by_telegram_id:
+        if not cls._intentional_panel_deletions_by_id and not cls._intentional_panel_deletions_by_telegram_id:
             return
 
         now = datetime.now(UTC)
-        uuid_keys = [
+        panel_keys = [
             key
-            for key, created_at in cls._intentional_panel_deletions_by_uuid.items()
+            for key, created_at in cls._intentional_panel_deletions_by_id.items()
             if (now - created_at).total_seconds() >= cls._INTENTIONAL_PANEL_DELETION_GUARD_SECONDS
         ]
-        for key in uuid_keys:
-            del cls._intentional_panel_deletions_by_uuid[key]
+        for key in panel_keys:
+            del cls._intentional_panel_deletions_by_id[key]
 
         telegram_keys = [
             key
@@ -291,22 +276,31 @@ class RemnaWaveWebhookService:
     def mark_intentional_panel_deletion(
         cls,
         *,
-        panel_uuids: list[str] | None = None,
+        panel_user_ids: list[int] | None = None,
         telegram_id: int | None = None,
     ) -> None:
         cls._prune_intentional_panel_deletions()
 
-        total = len(cls._intentional_panel_deletions_by_uuid) + len(cls._intentional_panel_deletions_by_telegram_id)
+        total = len(cls._intentional_panel_deletions_by_id) + len(cls._intentional_panel_deletions_by_telegram_id)
         if total >= cls._MAX_INTENTIONAL_ENTRIES:
             logger.warning('Intentional deletion guard at capacity, skipping', total=total)
             return
 
         now = datetime.now(UTC)
 
-        for panel_uuid in panel_uuids or []:
-            normalized = (panel_uuid or '').strip()
-            if normalized:
-                cls._intentional_panel_deletions_by_uuid[normalized] = now
+        for raw_id in panel_user_ids or []:
+            panel_user_id = cls._coerce_panel_user_id(raw_id)
+            if panel_user_id is None:
+                continue
+            # Ёмкость проверяется поэлементно, а не только на входе: этот кэш —
+            # защита от разрастания памяти, а один вызов со списком длиннее
+            # остатка ёмкости иначе перелетал бы лимит на произвольную величину.
+            if panel_user_id not in cls._intentional_panel_deletions_by_id and total >= cls._MAX_INTENTIONAL_ENTRIES:
+                logger.warning('Intentional deletion guard hit capacity mid-batch', total=total)
+                break
+            if panel_user_id not in cls._intentional_panel_deletions_by_id:
+                total += 1
+            cls._intentional_panel_deletions_by_id[panel_user_id] = now
 
         if telegram_id is not None:
             cls._intentional_panel_deletions_by_telegram_id[int(telegram_id)] = now
@@ -315,39 +309,33 @@ class RemnaWaveWebhookService:
     def _is_intentional_panel_deletion_event(cls, data: dict[str, Any]) -> bool:
         cls._prune_intentional_panel_deletions()
 
-        candidate_uuids: list[str] = []
+        candidate_ids: list[int] = []
         candidate_telegram_ids: list[int] = []
 
-        for value in (data.get('uuid'), data.get('userUuid')):
-            if value:
-                candidate_uuids.append(str(value).strip())
+        nested_user = data.get('user') if isinstance(data.get('user'), dict) else {}
+
+        for value in (data.get('id'), nested_user.get('id')):
+            panel_user_id = cls._coerce_panel_user_id(value)
+            if panel_user_id is not None:
+                candidate_ids.append(panel_user_id)
 
         telegram_id = data.get('telegramId')
         if telegram_id:
             try:
                 candidate_telegram_ids.append(int(telegram_id))
             except (TypeError, ValueError):
+                # Конверт вебхука — внешние данные: непригодный telegramId это
+                # просто «кандидата нет», а не повод ронять обработку хука.
                 pass
 
-        nested_user = data.get('user')
-        if isinstance(nested_user, dict):
-            nested_uuid = nested_user.get('uuid')
-            if nested_uuid:
-                candidate_uuids.append(str(nested_uuid).strip())
+        nested_tid = nested_user.get('telegramId')
+        if nested_tid:
+            try:
+                candidate_telegram_ids.append(int(nested_tid))
+            except (TypeError, ValueError):
+                pass  # см. выше: непригодный telegramId — просто отсутствие кандидата
 
-            nested_tid = nested_user.get('telegramId')
-            if nested_tid:
-                try:
-                    candidate_telegram_ids.append(int(nested_tid))
-                except (TypeError, ValueError):
-                    pass
-
-        # v3.0.0: также проверяем userId (числовой)
-        user_id_val = data.get('userId')
-        if user_id_val is not None:
-            candidate_uuids.append(str(user_id_val).strip())
-
-        return any(uid in cls._intentional_panel_deletions_by_uuid for uid in candidate_uuids) or any(
+        return any(pid in cls._intentional_panel_deletions_by_id for pid in candidate_ids) or any(
             tid in cls._intentional_panel_deletions_by_telegram_id for tid in candidate_telegram_ids
         )
 
@@ -373,10 +361,7 @@ class RemnaWaveWebhookService:
         # Check user-scoped handlers (require DB session)
         if user_handler:
             if db is None:
-                logger.error(
-                    'RemnaWave webhook: DB session required for user event',
-                    event_name=event_name,
-                )
+                logger.error('RemnaWave webhook: DB session required for user event', event_name=event_name)
                 return False
             return await self._process_user_event(db, event_name, data, user_handler)
 
@@ -387,22 +372,13 @@ class RemnaWaveWebhookService:
         """Resolve user and execute user-scoped handler."""
         user, subscription = await self._resolve_user_and_subscription(db, data)
         if not user:
-            if not self._payload_has_user_identifiers(data):
-                # Панель прислала событие вовсе без идентификаторов
-                # (telegramId/uuid/userId пусты и на верхнем уровне, и в nested
-                # user) — сопоставить с пользователем невозможно в принципе.
-                # Это шум панели, а не проблема бота: debug вместо warning,
-                # чтобы не засорять логи и не будить алерты.
-                logger.debug(
-                    'RemnaWave webhook: event carries no user identifiers — skipped',
-                    event_name=event_name,
-                )
-                return False
+            panel_user_id, short_uuid = self._extract_panel_identity(data)
             logger.warning(
-                'RemnaWave webhook: user not found for event , data telegramId= uuid',
+                'RemnaWave webhook: user not found for event',
                 event_name=event_name,
-                data=data.get('telegramId'),
-                data_2=data.get('uuid'),
+                telegram_id=data.get('telegramId'),
+                panel_user_id=panel_user_id,
+                short_uuid=short_uuid,
             )
             return False
 
@@ -436,9 +412,7 @@ class RemnaWaveWebhookService:
             return True
         except Exception:
             logger.exception(
-                'Error processing RemnaWave webhook event for user',
-                event_name=event_name,
-                user_id=user_id,
+                'Error processing RemnaWave webhook event for user', event_name=event_name, user_id=user_id
             )
             try:
                 await db.rollback()
@@ -456,20 +430,15 @@ class RemnaWaveWebhookService:
                 invalidate_app_config_cache()
                 logger.info(
                     'Webhook: subpage config changed — app config cache invalidated',
-                    action=(
-                        data.get('subpageConfig', {}).get('action')
-                        if isinstance(data.get('subpageConfig'), dict)
-                        else None
-                    ),
+                    action=data.get('subpageConfig', {}).get('action')
+                    if isinstance(data.get('subpageConfig'), dict)
+                    else None,
                 )
             except Exception:
                 logger.warning('Failed to invalidate app config cache on subpage_config_changed')
 
         if event_name in _ADMIN_NODE_CONNECTION_EVENTS and not settings.REMNAWAVE_WEBHOOK_NOTIFY_NODE_CONNECTION_STATUS:
-            logger.debug(
-                'RemnaWave node connection notifications disabled, skipping event',
-                event_name=event_name,
-            )
+            logger.debug('RemnaWave node connection notifications disabled, skipping event', event_name=event_name)
             return True
 
         if not self._admin_service.is_enabled:
@@ -552,11 +521,7 @@ class RemnaWaveWebhookService:
         subpage = data.get('subpageConfig')
         if isinstance(subpage, dict):
             action = subpage.get('action', '')
-            action_labels = {
-                'CREATED': 'Создан',
-                'UPDATED': 'Обновлён',
-                'DELETED': 'Удалён',
-            }
+            action_labels = {'CREATED': 'Создан', 'UPDATED': 'Обновлён', 'DELETED': 'Удалён'}
             lines.append(f'Действие: {action_labels.get(action, html.escape(str(action)))}')
             sub_uuid = subpage.get('uuid', '')
             if sub_uuid:
@@ -786,60 +751,146 @@ class RemnaWaveWebhookService:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _payload_has_user_identifiers(data: dict) -> bool:
-        """Есть ли в payload хоть один идентификатор пользователя.
+    def _coerce_panel_user_id(value: Any) -> int | None:
+        """Привести идентификатор панельного пользователя из payload к int.
 
-        Проверяет верхний уровень (telegramId/uuid/userId/userUuid) и вложенный
-        ``user`` — ровно те ключи, которые читает _resolve_user_and_subscription.
+        Панель шлёт число, но JSON-мосты и старые снапшоты иногда доносят строку.
+        Всё, что не приводится к положительному int, идентификатором не является
+        и должно остаться None — иначе сравнение приклеит хук к чужой строке.
         """
-        if any(data.get(key) not in (None, '') for key in ('telegramId', 'uuid', 'userId', 'userUuid')):
-            return True
-        nested = data.get('user')
-        if isinstance(nested, dict):
-            return any(nested.get(key) not in (None, '') for key in ('telegramId', 'uuid', 'userId'))
-        return False
+        if value is None or isinstance(value, bool):
+            return None
+        try:
+            panel_user_id = int(value)
+        except (TypeError, ValueError):
+            return None
+        return panel_user_id if panel_user_id > 0 else None
+
+    @classmethod
+    def _extract_panel_identity(cls, data: dict[str, Any]) -> tuple[int | None, str | None]:
+        """Единая точка извлечения панельной идентичности из payload вебхука.
+
+        Remnawave 3.0.0 удалил ``uuid`` из UsersSchema — запись панели опознаётся
+        числовым ``id``. Источники:
+        * ``data.id`` — user-scope события (UsersSchema);
+        * ``data.user.id`` — вложенный объект (torrent_blocker, device-события);
+        * ``data.hwidUserDevice.userId`` — scope ``user_hwid_devices``, число,
+          присутствующее в обеих версиях панели.
+
+        ``shortUuid`` возвращается вторичным ключом: колонка
+        ``subscriptions.remnawave_short_uuid`` переживает апгрейд панели и даёт
+        сопоставить подписку там, где числовая идентичность ещё не проставлена.
+
+        ⚠️ ``vlessUuid`` из payload выглядит похоже, но это VLESS-креденшл, а не
+        идентификатор записи — подставлять его сюда нельзя.
+        """
+        nested_user = data.get('user') if isinstance(data.get('user'), dict) else {}
+        hwid_device = data.get('hwidUserDevice') if isinstance(data.get('hwidUserDevice'), dict) else {}
+
+        panel_user_id: int | None = None
+        for value in (data.get('id'), nested_user.get('id'), hwid_device.get('userId')):
+            panel_user_id = cls._coerce_panel_user_id(value)
+            if panel_user_id is not None:
+                break
+
+        short_uuid: str | None = None
+        for value in (data.get('shortUuid'), nested_user.get('shortUuid')):
+            if value:
+                short_uuid = str(value).strip() or None
+                if short_uuid:
+                    break
+
+        return panel_user_id, short_uuid
+
+    @staticmethod
+    def _panel_identity_filters(panel_user_id: int | None, short_uuid: str | None) -> list[Any]:
+        """Условия сопоставления подписки с панельной идентичностью, по приоритету.
+
+        Числовой id — первичный ключ идентичности, ``shortUuid`` — вторичный.
+        Пустые значения в список НЕ попадают: иначе SQLAlchemy сгенерирует
+        ``IS NULL`` и хук приклеится к произвольной непровиженной подписке.
+        """
+        filters: list[Any] = []
+        if panel_user_id is not None:
+            filters.append(Subscription.remnawave_id == panel_user_id)
+        if short_uuid:
+            filters.append(Subscription.remnawave_short_uuid == short_uuid)
+        return filters
+
+    async def _find_subscription_by_panel_identity(
+        self,
+        db: AsyncSession,
+        panel_user_id: int | None,
+        short_uuid: str | None,
+        *,
+        user_id: int | None = None,
+        load_user: bool = False,
+    ) -> Subscription | None:
+        """Найти подписку по панельной идентичности: сначала по id, потом по shortUuid.
+
+        ``limit(1)`` обязателен: ``remnawave_id`` защищён partial unique index'ом,
+        а ``remnawave_short_uuid`` — только обычным индексом, и дубль по нему не
+        должен ронять резолв исключением.
+        """
+        filters = self._panel_identity_filters(panel_user_id, short_uuid)
+        if not filters:
+            return None
+
+        for identity_filter in filters:
+            query = select(Subscription)
+            if load_user:
+                query = query.options(
+                    selectinload(Subscription.user).selectinload(User.subscriptions).selectinload(Subscription.tariff),
+                    selectinload(Subscription.tariff),
+                )
+            else:
+                query = query.options(selectinload(Subscription.tariff))
+            query = query.where(identity_filter)
+            if user_id is not None:
+                query = query.where(Subscription.user_id == user_id)
+            result = await db.execute(query.limit(1))
+            subscription = result.scalars().first()
+            if subscription:
+                return subscription
+
+        return None
 
     async def _resolve_user_and_subscription(
         self, db: AsyncSession, data: dict
     ) -> tuple[User | None, Subscription | None]:
-        """Find bot user by telegramId or uuid/userId from webhook payload.
+        """Find bot user by panel id, shortUuid or telegramId from webhook payload.
 
-        Handles both user-scope events (top-level telegramId/uuid/userId) and
-        device-scope events (userUuid/userId, or nested user.telegramId/user.uuid).
+        Handles both user-scope events (top-level id/telegramId) and
+        device-scope events (hwidUserDevice.userId, or nested user.id/user.telegramId).
 
-        In multi-tariff mode, resolves subscription by remnawave_uuid from payload
+        In multi-tariff mode, resolves subscription by remnawave_id from payload
         (each subscription has its own Remnawave user).
         """
         user: User | None = None
-        remnawave_uuid: str | None = None
 
-        # Extract Remnawave UUID from payload (used for subscription lookup in multi-tariff)
-        remnawave_uuid = data.get('uuid') or data.get('userUuid')
-        remnawave_id = data.get('userId')
-        if not remnawave_uuid:
-            nested_user = data.get('user')
-            if isinstance(nested_user, dict):
-                remnawave_uuid = nested_user.get('uuid')
-                if remnawave_id is None:
-                    remnawave_id = nested_user.get('userId')
+        # Панельная идентичность из payload (она же — ключ резолва подписки в multi-tariff)
+        panel_user_id, short_uuid = self._extract_panel_identity(data)
 
-        # Try top-level telegramId first
-        telegram_id = data.get('telegramId')
-        if telegram_id:
-            try:
-                user = await get_user_by_telegram_id(db, int(telegram_id))
-            except (ValueError, TypeError):
-                pass
+        # Числовой id панели пробуем ПЕРВЫМ: telegramId сам по себе исключает
+        # email-only пользователей (users.telegram_id nullable), а в multi-tariff
+        # принципиально не может указать, КАКУЮ подписку имел в виду хук — все
+        # подписки одного бот-юзера делят один telegramId.
+        if panel_user_id is not None:
+            user = await get_user_by_remnawave_id(db, panel_user_id)
 
-        # Try top-level uuid
-        if not user and remnawave_uuid:
-            user = await get_user_by_remnawave_uuid(db, remnawave_uuid)
+        # Try top-level telegramId
+        if not user:
+            telegram_id = data.get('telegramId')
+            if telegram_id:
+                try:
+                    user = await get_user_by_telegram_id(db, int(telegram_id))
+                except (ValueError, TypeError):
+                    # Непригодный telegramId в конверте — значит по нему искать
+                    # нечего; ниже пробуем остальные ключи опознания.
+                    pass
 
-        # Try top-level userId (v3.0.0+)
-        if not user and remnawave_id is not None:
-            user = await get_user_by_remnawave_id(db, remnawave_id)
-
-        # Try nested user object (e.g. user_hwid_devices events)
+        # Try nested user object (e.g. user_hwid_devices events).
+        # Вложенный user.id уже учтён в _extract_panel_identity выше.
         if not user:
             nested_user = data.get('user')
             if isinstance(nested_user, dict):
@@ -848,79 +899,49 @@ class RemnaWaveWebhookService:
                     try:
                         user = await get_user_by_telegram_id(db, int(nested_tid))
                     except (ValueError, TypeError):
-                        pass
-                if not user:
-                    nested_uuid = nested_user.get('uuid')
-                    if nested_uuid:
-                        user = await get_user_by_remnawave_uuid(db, nested_uuid)
-                if not user:
-                    nested_pid = nested_user.get('userId')
-                    if nested_pid is not None:
-                        user = await get_user_by_remnawave_id(db, nested_pid)
+                        pass  # как и выше: непригодный telegramId — просто нет совпадения
 
-        # Multi-tariff: try finding user through subscription's remnawave_uuid
-        if not user and remnawave_uuid and settings.is_multi_tariff_enabled():
-            from sqlalchemy import select as sa_select
-            from sqlalchemy.orm import selectinload as sa_selectinload
-
-            sub_result = await db.execute(
-                sa_select(Subscription)
-                .options(
-                    sa_selectinload(Subscription.user)
-                    .selectinload(User.subscriptions)
-                    .selectinload(Subscription.tariff),
-                    sa_selectinload(Subscription.tariff),
-                )
-                .where(Subscription.remnawave_uuid == remnawave_uuid)
-                .limit(1)
-            )
-            found_sub = sub_result.scalar_one_or_none()
+        # Последняя попытка найти ПОЛЬЗОВАТЕЛЯ — через панельную идентичность
+        # подписки. Не гейтится на multi-tariff намеренно: в single-tariff
+        # email-only пользователь не имеет telegram_id, а `users.remnawave_id`
+        # пуст, пока не отработал бэкфил, — и тогда единственный оставшийся ключ
+        # это shortUuid, который панель кладёт в каждое пользовательское
+        # событие. Выбор конкретной подписки ниже по-прежнему зависит от режима.
+        if not user:
+            found_sub = await self._find_subscription_by_panel_identity(db, panel_user_id, short_uuid, load_user=True)
             if found_sub and found_sub.user:
                 return found_sub.user, found_sub
 
         if not user:
             return None, None
 
-        # In multi-tariff mode, find subscription by remnawave_uuid (per-subscription)
-        if settings.is_multi_tariff_enabled() and remnawave_uuid:
-            from sqlalchemy import select
-            from sqlalchemy.orm import selectinload
-
-            result = await db.execute(
-                select(Subscription)
-                .options(selectinload(Subscription.tariff))
-                .where(
-                    Subscription.remnawave_uuid == remnawave_uuid,
-                    Subscription.user_id == user.id,
-                )
+        # In multi-tariff mode, find subscription by panel identity (per-subscription)
+        if settings.is_multi_tariff_enabled() and (panel_user_id is not None or short_uuid):
+            subscription = await self._find_subscription_by_panel_identity(
+                db, panel_user_id, short_uuid, user_id=user.id
             )
-            subscription = result.scalar_one_or_none()
             if subscription:
                 return user, subscription
 
-            # Fallback 1: search ALL user's subscriptions by remnawave_uuid
+            # Fallback 1: search ALL user's subscriptions by panel identity
             # (covers recently merged accounts where user_id might differ)
             logger.warning(
-                'Webhook: подписка не найдена по remnawave_uuid + user_id, '
-                'fallback на поиск по remnawave_uuid среди всех подписок пользователя',
-                remnawave_uuid=remnawave_uuid,
+                'Webhook: подписка не найдена по панельной идентичности + user_id, '
+                'fallback на поиск по идентичности среди всех подписок пользователя',
+                panel_user_id=panel_user_id,
+                short_uuid=short_uuid,
                 user_id=user.id,
             )
-            fallback1_result = await db.execute(
-                select(Subscription)
-                .options(selectinload(Subscription.tariff))
-                .where(Subscription.remnawave_uuid == remnawave_uuid)
-                .limit(1)
-            )
-            fallback1_sub = fallback1_result.scalar_one_or_none()
+            fallback1_sub = await self._find_subscription_by_panel_identity(db, panel_user_id, short_uuid)
             if fallback1_sub:
                 if fallback1_sub.user_id == user.id:
                     return user, fallback1_sub
                 # Subscription belongs to a different user (transferred or merged)
                 logger.warning(
-                    'Webhook: подписка найдена по remnawave_uuid, '
+                    'Webhook: подписка найдена по панельной идентичности, '
                     'но принадлежит другому пользователю — игнорируем (IDOR prevention)',
-                    remnawave_uuid=remnawave_uuid,
+                    panel_user_id=panel_user_id,
+                    short_uuid=short_uuid,
                     webhook_user_id=user.id,
                     subscription_user_id=fallback1_sub.user_id,
                     subscription_id=fallback1_sub.id,
@@ -931,7 +952,8 @@ class RemnaWaveWebhookService:
             # Fallback 2: all lookups exhausted
             logger.warning(
                 'Webhook: подписка не найдена ни по одному методу поиска, возвращаем (user, None)',
-                remnawave_uuid=remnawave_uuid,
+                panel_user_id=panel_user_id,
+                short_uuid=short_uuid,
                 user_id=user.id,
             )
 
@@ -962,12 +984,9 @@ class RemnaWaveWebhookService:
     def _get_renew_keyboard(self, user: User, subscription_id: int | None = None) -> InlineKeyboardMarkup:
         texts = get_texts(user.language)
         button_text = texts.get('WEBHOOK_RENEW_BUTTON', 'Renew subscription')
-        extend_callback = (
-            f'se:{subscription_id}' if settings.is_multi_tariff_enabled() and subscription_id else 'subscription_extend'
-        )
         return InlineKeyboardMarkup(
             inline_keyboard=[
-                [build_miniapp_or_callback_button(text=button_text, callback_data=extend_callback)],
+                [build_subscription_extend_button(button_text, subscription_id)],
             ]
         )
 
@@ -1000,22 +1019,6 @@ class RemnaWaveWebhookService:
             ]
         )
 
-    async def _grace_access_active(self, db: AsyncSession, subscription_id: int) -> bool:
-        """True when an open grace session exists for the subscription.
-
-        During grace the panel keeps a temporary overlay (status/expiry owned by
-        the grace runtime), so panel-driven "subscription expiring" notifications
-        are meaningless and must be suppressed.
-        """
-        try:
-            return await get_open_grace_overlay(db, subscription_id) is not None
-        except Exception:
-            logger.exception(
-                'Grace access check failed; notification proceeds',
-                subscription_id=subscription_id,
-            )
-            return False
-
     async def _notify_user(
         self,
         user: User,
@@ -1035,19 +1038,12 @@ class RemnaWaveWebhookService:
         per-event toggles from Settings.
         """
         if not settings.WEBHOOK_NOTIFY_USER_ENABLED:
-            logger.debug(
-                'Webhook user notifications disabled globally, skipping',
-                text_key=text_key,
-            )
+            logger.debug('Webhook user notifications disabled globally, skipping', text_key=text_key)
             return
 
         setting_key = _TEXT_KEY_TO_SETTING.get(text_key)
         if setting_key and not getattr(settings, setting_key, True):
-            logger.debug(
-                'Webhook notification disabled via',
-                text_key=text_key,
-                setting_key=setting_key,
-            )
+            logger.debug('Webhook notification disabled via', text_key=text_key, setting_key=setting_key)
             return
 
         expiry_days_by_text_key = {
@@ -1069,11 +1065,7 @@ class RemnaWaveWebhookService:
         texts = get_texts(user.language)
         message = texts.get(text_key)
         if not message:
-            logger.warning(
-                'Missing locale key for language',
-                text_key=text_key,
-                language=user.language,
-            )
+            logger.warning('Missing locale key for language', text_key=text_key, language=user.language)
             return
 
         # Inject tariff_label for multi-tariff subscription identification
@@ -1093,18 +1085,12 @@ class RemnaWaveWebhookService:
             try:
                 message = message.format(**format_kwargs)
             except (KeyError, IndexError):
-                logger.warning(
-                    'Failed to format message with kwargs',
-                    text_key=text_key,
-                    format_kwargs=format_kwargs,
-                )
+                logger.warning('Failed to format message with kwargs', text_key=text_key, format_kwargs=format_kwargs)
                 return
 
         # Append "Close" button to every webhook notification keyboard
-        from app.utils.button_emoji import make_button
-
-        close_text = texts.get('WEBHOOK_CLOSE_BUTTON', 'Закрыть')
-        close_row = [make_button(text=close_text, callback_data='webhook:close', style='danger')]
+        close_text = texts.get('WEBHOOK_CLOSE_BUTTON', '✖️ Закрыть')
+        close_row = [InlineKeyboardButton(text=close_text, callback_data='webhook:close')]
         if reply_markup:
             reply_markup = InlineKeyboardMarkup(
                 inline_keyboard=[*reply_markup.inline_keyboard, close_row],
@@ -1129,11 +1115,7 @@ class RemnaWaveWebhookService:
                 telegram_markup=reply_markup,
             )
         except Exception:
-            logger.exception(
-                'Notification delivery failed for user , text_key',
-                user_id=user.id,
-                text_key=text_key,
-            )
+            logger.exception('Notification delivery failed for user , text_key', user_id=user.id, text_key=text_key)
 
     # ------------------------------------------------------------------
     # Webhook timestamp helper
@@ -1149,18 +1131,11 @@ class RemnaWaveWebhookService:
     # ------------------------------------------------------------------
 
     async def _handle_user_expired(
-        self,
-        db: AsyncSession,
-        user: User,
-        subscription: Subscription | None,
-        data: dict,
+        self, db: AsyncSession, user: User, subscription: Subscription | None, data: dict
     ) -> None:
         if not subscription:
             # Подписка уже удалена из БД — фантомный хук от панели, игнорируем
-            logger.info(
-                'Webhook user.expired: подписка не найдена в БД (уже удалена), пропуск',
-                user_id=user.id,
-            )
+            logger.info('Webhook user.expired: подписка не найдена в БД (уже удалена), пропуск', user_id=user.id)
             return
 
         # Суточные подписки управляются DailySubscriptionService.
@@ -1188,11 +1163,7 @@ class RemnaWaveWebhookService:
         self._stamp_webhook_update(subscription)
         if subscription.status != SubscriptionStatus.EXPIRED.value:
             await expire_subscription(db, subscription)
-            logger.info(
-                'Webhook: subscription expired for user',
-                subscription_id=subscription.id,
-                user_id=user.id,
-            )
+            logger.info('Webhook: subscription expired for user', subscription_id=subscription.id, user_id=user.id)
         else:
             await db.commit()
 
@@ -1210,18 +1181,11 @@ class RemnaWaveWebhookService:
         )
 
     async def _handle_user_disabled(
-        self,
-        db: AsyncSession,
-        user: User,
-        subscription: Subscription | None,
-        data: dict,
+        self, db: AsyncSession, user: User, subscription: Subscription | None, data: dict
     ) -> None:
         if not subscription:
             # Подписка уже удалена из БД — фантомный хук от панели, игнорируем
-            logger.info(
-                'Webhook user.disabled: подписка не найдена в БД (уже удалена), пропуск',
-                user_id=user.id,
-            )
+            logger.info('Webhook user.disabled: подписка не найдена в БД (уже удалена), пропуск', user_id=user.id)
             return
 
         # Суточные подписки управляются DailySubscriptionService — не деактивируем
@@ -1258,86 +1222,50 @@ class RemnaWaveWebhookService:
         self._stamp_webhook_update(subscription)
         if subscription.status != SubscriptionStatus.DISABLED.value:
             await deactivate_subscription(db, subscription)
-            logger.info(
-                'Webhook: subscription disabled for user',
-                subscription_id=subscription.id,
-                user_id=user.id,
-            )
+            logger.info('Webhook: subscription disabled for user', subscription_id=subscription.id, user_id=user.id)
         else:
             await db.commit()
 
         await self._notify_user(
-            user,
-            'WEBHOOK_SUB_DISABLED',
-            reply_markup=self._get_subscription_keyboard(user),
-            subscription=subscription,
+            user, 'WEBHOOK_SUB_DISABLED', reply_markup=self._get_subscription_keyboard(user), subscription=subscription
         )
 
     async def _handle_user_enabled(
-        self,
-        db: AsyncSession,
-        user: User,
-        subscription: Subscription | None,
-        data: dict,
+        self, db: AsyncSession, user: User, subscription: Subscription | None, data: dict
     ) -> None:
         if not subscription:
-            logger.info(
-                'Webhook user.enabled: подписка не найдена в БД (уже удалена), пропуск',
-                user_id=user.id,
-            )
+            logger.info('Webhook user.enabled: подписка не найдена в БД (уже удалена), пропуск', user_id=user.id)
             return
 
         self._stamp_webhook_update(subscription)
-        if subscription.status in (
-            SubscriptionStatus.DISABLED.value,
-            SubscriptionStatus.LIMITED.value,
-        ):
+        if subscription.status in (SubscriptionStatus.DISABLED.value, SubscriptionStatus.LIMITED.value):
             await reactivate_subscription(db, subscription)
-            logger.info(
-                'Webhook: subscription re-enabled for user',
-                subscription_id=subscription.id,
-                user_id=user.id,
-            )
+            logger.info('Webhook: subscription re-enabled for user', subscription_id=subscription.id, user_id=user.id)
         else:
             await db.commit()
 
         await self._notify_user(
-            user,
-            'WEBHOOK_SUB_ENABLED',
-            reply_markup=self._get_connect_keyboard(user),
-            subscription=subscription,
+            user, 'WEBHOOK_SUB_ENABLED', reply_markup=self._get_connect_keyboard(user), subscription=subscription
         )
 
     async def _handle_user_limited(
-        self,
-        db: AsyncSession,
-        user: User,
-        subscription: Subscription | None,
-        data: dict,
+        self, db: AsyncSession, user: User, subscription: Subscription | None, data: dict
     ) -> None:
         if not subscription:
-            logger.info(
-                'Webhook user.limited: подписка не найдена в БД (уже удалена), пропуск',
-                user_id=user.id,
-            )
+            logger.info('Webhook user.limited: подписка не найдена в БД (уже удалена), пропуск', user_id=user.id)
             return
 
         candidate_at = datetime.now(UTC)
         subscription.grace_candidate_reason = GraceReason.LIMITED.value
         subscription.grace_candidate_at = candidate_at
         self._stamp_webhook_update(subscription)
-        if subscription.status in (
-            SubscriptionStatus.ACTIVE.value,
-            SubscriptionStatus.TRIAL.value,
-        ):
+        if subscription.status in (SubscriptionStatus.ACTIVE.value, SubscriptionStatus.TRIAL.value):
             subscription.status = SubscriptionStatus.LIMITED.value
             subscription.updated_at = datetime.now(UTC)
             await db.commit()
             await db.refresh(subscription)
             logger.info(
-                'Webhook: subscription limited (traffic) for user',
-                subscription_id=subscription.id,
-                user_id=user.id,
+                'Webhook: subscription limited (traffic) for user', subscription_id=subscription.id, user_id=user.id
             )
         else:
             await db.commit()
@@ -1349,39 +1277,22 @@ class RemnaWaveWebhookService:
         )
 
         await self._notify_user(
-            user,
-            'WEBHOOK_SUB_LIMITED',
-            reply_markup=self._get_traffic_keyboard(user),
-            subscription=subscription,
+            user, 'WEBHOOK_SUB_LIMITED', reply_markup=self._get_traffic_keyboard(user), subscription=subscription
         )
 
     async def _handle_user_traffic_reset(
-        self,
-        db: AsyncSession,
-        user: User,
-        subscription: Subscription | None,
-        data: dict,
+        self, db: AsyncSession, user: User, subscription: Subscription | None, data: dict
     ) -> None:
         if not subscription:
-            logger.info(
-                'Webhook user.traffic_reset: подписка не найдена в БД (уже удалена), пропуск',
-                user_id=user.id,
-            )
+            logger.info('Webhook user.traffic_reset: подписка не найдена в БД (уже удалена), пропуск', user_id=user.id)
             return
 
         self._stamp_webhook_update(subscription)
         await update_subscription_usage(db, subscription, 0.0)
         # Re-enable if was disabled/limited due to traffic limit
-        if subscription.status in (
-            SubscriptionStatus.DISABLED.value,
-            SubscriptionStatus.LIMITED.value,
-        ):
+        if subscription.status in (SubscriptionStatus.DISABLED.value, SubscriptionStatus.LIMITED.value):
             await reactivate_subscription(db, subscription)
-        logger.info(
-            'Webhook: traffic reset for subscription , user',
-            subscription_id=subscription.id,
-            user_id=user.id,
-        )
+        logger.info('Webhook: traffic reset for subscription , user', subscription_id=subscription.id, user_id=user.id)
 
         await self._notify_user(
             user,
@@ -1391,158 +1302,60 @@ class RemnaWaveWebhookService:
         )
 
     async def _handle_user_modified(
-        self,
-        db: AsyncSession,
-        user: User,
-        subscription: Subscription | None,
-        data: dict,
+        self, db: AsyncSession, user: User, subscription: Subscription | None, data: dict
     ) -> None:
         """Sync subscription fields from webhook payload without notifying user."""
         if not subscription:
             return
 
-        # While a grace overlay is open, the panel's status/expireAt/traffic limit
-        # are grace-owned values. Their user.modified echoes must be masked so they
-        # cannot overwrite the canonical billing state (which would make the
-        # reconciliation treat the session as recovered and revert the grace squad).
-        # Usage and URLs still keep synchronizing below.
-        try:
-            grace_overlay = await get_open_grace_overlay(db, subscription.id)
-        except Exception:
-            logger.exception(
-                'Grace overlay lookup failed; user.modified sync proceeds unmasked',
-                subscription_id=subscription.id,
-            )
-            grace_overlay = None
-        mask_grace_fields = grace_overlay is not None and webhook_matches_overlay(data, grace_overlay)
-        if mask_grace_fields:
-            logger.info(
-                'Webhook user.modified masked as a grace overlay echo',
-                subscription_id=subscription.id,
-                user_id=user.id,
-            )
+        grace_open = subscription.id in await get_open_grace_subscription_ids(db)
 
-        changed = False
+        snapshot = read_panel_user(data)
+        # Ссылки приходят по сети: сохраняем только то, что прошло проверку, иначе
+        # в базу попадает чужой адрес и уезжает пользователю (хранимый XSS).
+        if snapshot.subscription_url and not self._is_valid_url(snapshot.subscription_url):
+            snapshot = replace(snapshot, subscription_url=None)
+        if snapshot.crypto_link and not self._is_valid_link(snapshot.crypto_link):
+            snapshot = replace(snapshot, crypto_link=None)
 
-        # Sync traffic limit (grace-owned: masked during an open overlay)
-        traffic_limit_bytes = data.get('trafficLimitBytes')
-        if traffic_limit_bytes is not None and not mask_grace_fields:
-            try:
-                new_limit_gb = int(traffic_limit_bytes) // (1024**3)
-                if subscription.traffic_limit_gb != new_limit_gb:
-                    subscription.traffic_limit_gb = new_limit_gb
-                    changed = True
-            except (ValueError, TypeError):
-                pass
-
-        # Sync used traffic. usedTrafficBytes живёт в nested userTraffic
-        # (ExtendedUsersSchema.userTraffic; базовый UsersSchema плоского поля не
-        # содержит) — читаем nested-first, как _get_user_traffic_bytes в sync-сервисе,
-        # с fallback на плоский ключ для старых панелей. Без этого used-traffic не
-        # синхронизировался из user.modified-вебхуков (поле всегда было None).
-        user_traffic = data.get('userTraffic')
-        used_traffic_bytes = (
-            user_traffic.get('usedTrafficBytes')
-            if isinstance(user_traffic, dict) and user_traffic.get('usedTrafficBytes') is not None
-            else data.get('usedTrafficBytes')
+        changed_fields = project_onto_subscription(
+            subscription,
+            snapshot,
+            policy=WEBHOOK,
+            grace_open=grace_open,
         )
-        if used_traffic_bytes is not None:
-            try:
-                new_used_gb = round(int(used_traffic_bytes) / (1024**3), 2)
-                subscription.traffic_used_gb = new_used_gb
-                changed = True
-            except (ValueError, TypeError):
-                pass
-
-        # Sync expire date — panel is the source of truth for user.modified events.
-        # НО: если подписка намеренно ОТКЛЮЧЕНА в боте (обнуление/деактивация админом),
-        # не воскрешаем её срок из устаревшего panel expireAt — иначе наспамленные дни
-        # могли бы «вернуться» после обнуления (см. crud.reset_subscription). Статус
-        # отдельно синхронизируется ниже: при panel ACTIVE + future end_date подписка
-        # всё равно может корректно реактивироваться через обычное продление/активацию.
-        expire_at = data.get('expireAt')
-        if expire_at and subscription.status != SubscriptionStatus.DISABLED.value and not mask_grace_fields:
-            try:
-                parsed_dt = datetime.fromisoformat(expire_at.replace('Z', '+00:00'))
-                new_end_date = parsed_dt.astimezone(UTC)
-                if subscription.end_date != new_end_date:
-                    old_end_date = subscription.end_date
-                    subscription.end_date = new_end_date
-                    changed = True
-                    if old_end_date and new_end_date < old_end_date:
-                        logger.info(
-                            'Webhook: end_date обновлена назад (панель авторитетна)',
-                            subscription_id=subscription.id,
-                            old_end_date=old_end_date,
-                            new_end_date=new_end_date,
-                        )
-            except (ValueError, TypeError):
-                pass
-
-        # Sync status from panel
-        panel_status = data.get('status')
-        if panel_status and not mask_grace_fields:
-            now = datetime.now(UTC)
-            end_date = subscription.end_date
-            if panel_status == 'ACTIVE' and end_date and end_date > now:
-                if subscription.status != SubscriptionStatus.ACTIVE.value:
-                    subscription.status = SubscriptionStatus.ACTIVE.value
-                    changed = True
-                    logger.info(
-                        'Webhook: subscription reactivated (→ active) for user',
-                        subscription_id=subscription.id,
-                        subscription_status=subscription.status,
-                        user_id=user.id,
-                    )
-            elif panel_status == 'DISABLED':
-                if subscription.status != SubscriptionStatus.DISABLED.value:
-                    subscription.status = SubscriptionStatus.DISABLED.value
-                    changed = True
-
-        # Sync subscription URL (validate to prevent stored XSS)
-        subscription_url = data.get('subscriptionUrl')
-        if (
-            subscription_url
-            and self._is_valid_url(subscription_url)
-            and subscription.subscription_url != subscription_url
-        ):
-            subscription.subscription_url = subscription_url
-            changed = True
-
-        # Sync subscription crypto link (for HAPP_CRYPT4_LINK)
-        subscription_crypto_link = data.get('subscriptionCryptoLink') or (data.get('happ') or {}).get('cryptoLink', '')
-        if subscription_crypto_link and self._is_valid_link(subscription_crypto_link):
-            if subscription.subscription_crypto_link != subscription_crypto_link:
-                subscription.subscription_crypto_link = subscription_crypto_link
-                changed = True
-        # NOTE: панель не включает cryptoLink в каждый webhook user.modified
-        # Отсутствие поля не означает что его нужно сбрасывать
+        changed = bool(changed_fields)
 
         # Always stamp to protect from sync overwrite, even if no fields changed
         self._stamp_webhook_update(subscription)
+        if grace_open:
+            logger.debug(
+                'Webhook user.modified: grace-owned fields masked; usage/links still synchronized',
+                subscription_id=subscription.id,
+            )
         if changed:
             subscription.updated_at = datetime.now(UTC)
             logger.info(
                 'Webhook: subscription modified (synced from panel) for user',
                 subscription_id=subscription.id,
                 user_id=user.id,
+                fields=sorted(changed_fields),
             )
         await db.commit()
 
     async def _handle_user_deleted(
-        self,
-        db: AsyncSession,
-        user: User,
-        subscription: Subscription | None,
-        data: dict,
+        self, db: AsyncSession, user: User, subscription: Subscription | None, data: dict
     ) -> None:
+        panel_user_id, short_uuid = self._extract_panel_identity(data)
+
         # Suppress webhook if this deletion was initiated by delete_user_account —
         # prevents deadlock between the ongoing deletion transaction and this handler
         if self._is_intentional_panel_deletion_event(data):
             logger.info(
                 'Webhook user.deleted suppressed — intentional panel deletion in progress',
                 user_id=user.id,
-                uuid=data.get('uuid'),
+                panel_user_id=panel_user_id,
+                short_uuid=short_uuid,
             )
             return
 
@@ -1627,26 +1440,44 @@ class RemnaWaveWebhookService:
             subscription.connected_squads = []
             subscription.updated_at = datetime.now(UTC)
 
-            # Always clear stale UUID — panel user was deleted
-            subscription.remnawave_uuid = None
+            # Always clear stale panel identity — panel user was deleted.
+            # Исторический uuid — вместе с ним: пара «мёртвый uuid + будущий
+            # новый id» отравляет карту бэкфила ровно так же, как на соседних
+            # строках ниже.
             subscription.remnawave_id = None
+            subscription.remnawave_uuid = None
 
             await db.execute(delete(SubscriptionServer).where(SubscriptionServer.subscription_id == sub_id))
 
         # Clear remnawave linkage
+        # Запоминаем удалённый аккаунт ДО очистки: ниже по нему проверяются
+        # соседние подписки, а в single-tariff идентичность живёт именно здесь.
+        # Пока значение стиралось раньше цикла, соседям было нечем проверяться,
+        # и они молча оставались активными при удалённом панельном аккаунте.
+        deleted_panel_user_id = getattr(user, 'remnawave_id', None)
         if not settings.is_multi_tariff_enabled():
-            if user.remnawave_uuid:
-                user.remnawave_uuid = None
+            if user.remnawave_id:
                 user.remnawave_id = None
+            # И uuid — тот же инвариант, что в `validate_and_clean_subscription`.
+            user.remnawave_uuid = None
         elif subscription is None:
-            panel_uuid = data.get('uuid') or data.get('userUuid')
-            if panel_uuid:
+            # Идентичность обязана быть непустой: сравнение None с None приклеило бы
+            # очистку к первой попавшейся непровиженной подписке.
+            if panel_user_id is not None or short_uuid:
                 await db.refresh(user, ['subscriptions'])
                 for sub in getattr(user, 'subscriptions', None) or []:
-                    if getattr(sub, 'remnawave_uuid', None) == panel_uuid:
-                        sub.remnawave_uuid = None
-                        sub.remnawave_short_uuid = None
+                    sub_panel_id = getattr(sub, 'remnawave_id', None)
+                    sub_short_uuid = getattr(sub, 'remnawave_short_uuid', None)
+                    matched = (panel_user_id is not None and sub_panel_id == panel_user_id) or (
+                        bool(short_uuid) and sub_short_uuid == short_uuid
+                    )
+                    if matched:
                         sub.remnawave_id = None
+                        sub.remnawave_short_uuid = None
+                        # Тот же инвариант, что двумя ветками выше: аккаунт
+                        # удалён, поэтому исторический uuid тоже не должен
+                        # пережить его и отравить карту бэкфила.
+                        sub.remnawave_uuid = None
                         break
 
         # Deactivate sibling subscriptions whose panel user also no longer exists.
@@ -1661,35 +1492,70 @@ class RemnaWaveWebhookService:
         for other_sub in getattr(user, 'subscriptions', None) or []:
             if other_sub.id == sub_id:
                 continue
-            if other_sub.status in (
-                SubscriptionStatus.EXPIRED.value,
-                SubscriptionStatus.DISABLED.value,
-            ):
+            if other_sub.status in (SubscriptionStatus.EXPIRED.value, SubscriptionStatus.DISABLED.value):
                 continue
 
             # Never expire a sibling that is still valid by its own end_date. Another
             # subscription's panel user being deleted must not retroactively kill a
-            # paid, not-yet-expired sub — e.g. a pre-multi-tariff sub whose panel UUID
-            # lives on user.remnawave_uuid. (Bug: deleting a 2nd, expired sub expired
+            # paid, not-yet-expired sub — e.g. a pre-multi-tariff sub whose panel id
+            # lives on user.remnawave_id. (Bug: deleting a 2nd, expired sub expired
             # the original active one and wiped its squads.)
             other_end = _aware(other_sub.end_date)
             if other_end is not None and other_end > now:
                 continue
 
-            # Resolve the sibling's panel UUID — fall back to user.remnawave_uuid in
-            # BOTH modes, since pre-multi-tariff subs store the panel UUID there.
-            sibling_uuid = getattr(other_sub, 'remnawave_uuid', None) or getattr(user, 'remnawave_uuid', None)
+            # Resolve the sibling's panel id — fall back to user.remnawave_id in
+            # BOTH modes, since pre-multi-tariff subs store the panel identity there.
+            sibling_panel_id = getattr(other_sub, 'remnawave_id', None) or getattr(user, 'remnawave_id', None)
+
+            # Свой shortUuid — точный ключ соседа, и спросить его надо ДО того,
+            # как падать на id удалённого аккаунта: тот по определению ответит
+            # «нет», и проверка превратилась бы в штамп, истекающий соседей без
+            # единого вопроса об их собственной идентичности.
+            sibling_short_uuid = (getattr(other_sub, 'remnawave_short_uuid', None) or '').strip()
+            if not sibling_panel_id and sibling_short_uuid and subscription_service.is_configured:
+                try:
+                    async with subscription_service.get_api_client() as api:
+                        own_account = await api.get_user_by_short_uuid(sibling_short_uuid)
+                except Exception as exc:
+                    logger.warning(
+                        'Webhook user.deleted: sibling short_uuid check failed, leaving subscription untouched',
+                        other_sub_id=other_sub.id,
+                        error=str(exc),
+                    )
+                    continue
+                if own_account is not None:
+                    continue  # у соседа собственный живой аккаунт — не трогаем
+
+            sibling_panel_id = sibling_panel_id or deleted_panel_user_id
 
             # Only expire when the panel POSITIVELY reports the user is gone. If we
-            # cannot verify (no uuid, API not configured, or a transient error), leave
+            # cannot verify (no id, API not configured, or a transient error), leave
             # the sub untouched — an unverifiable check must never expire a live sub.
-            if not sibling_uuid or not subscription_service.is_configured:
+            if not sibling_panel_id or not subscription_service.is_configured:
                 continue
             try:
                 async with subscription_service.get_api_client() as api:
-                    panel_user = await api.get_user_by_uuid(
-                        sibling_uuid, user_id=other_sub.remnawave_id if other_sub else None
-                    )
+                    panel_user = await api.get_user_by_id(sibling_panel_id)
+            except RemnaWaveInvalidUserIdError:
+                # Непригодный локальный идентификатор — это битые данные бота, а не
+                # доказательство того, что панельного пользователя нет.
+                logger.warning(
+                    'Webhook user.deleted: sibling has an unusable panel id, leaving subscription untouched',
+                    other_sub_id=other_sub.id,
+                    sibling_panel_id=sibling_panel_id,
+                )
+                continue
+            except RemnaWaveAPIError as exc:
+                # 400/422/5xx = «не проверяемо». Явный 404 клиент отдаёт как None —
+                # только он означает «пользователь удалён».
+                logger.warning(
+                    'Webhook user.deleted: sibling liveness check failed, leaving subscription untouched',
+                    other_sub_id=other_sub.id,
+                    status_code=exc.status_code,
+                    error=str(exc),
+                )
+                continue
             except Exception as exc:
                 logger.warning(
                     'Webhook user.deleted: sibling liveness check failed, leaving subscription untouched',
@@ -1706,9 +1572,15 @@ class RemnaWaveWebhookService:
             other_sub.remnawave_short_uuid = None
             other_sub.connected_squads = []
             other_sub.updated_at = now
-            if settings.is_multi_tariff_enabled():
-                other_sub.remnawave_uuid = None
-                other_sub.remnawave_id = None
+            # Панель только что подтвердила, что аккаунта нет, а строка чистится
+            # целиком — держать числовой id смысла нет ни в одном режиме. Раньше
+            # в single-tariff он оставался и продолжал адресовать удалённого
+            # пользователя, из-за чего бэкфилл считал строку уже связанной.
+            other_sub.remnawave_id = None
+            # И исторический uuid — тот же инвариант, что в
+            # `validate_and_clean_subscription`: строка с uuid удалённого
+            # аккаунта отравляет карту бэкфила, если позже получит новый id.
+            other_sub.remnawave_uuid = None
             await db.execute(delete(SubscriptionServer).where(SubscriptionServer.subscription_id == other_sub.id))
             logger.info(
                 'Webhook user.deleted: deactivated sibling subscription (panel user gone)',
@@ -1725,68 +1597,11 @@ class RemnaWaveWebhookService:
             subscription=subscription,
         )
 
-    async def _attempt_panel_recreation(self, db: AsyncSession, user: User, subscription: Subscription) -> bool:
-        """Re-create user in RemnaWave panel after spurious user.deleted webhook.
-
-        Called when a user.deleted webhook arrives but the subscription still has a
-        future end_date, indicating the deletion was likely spurious (e.g., RemnaWave
-        resync when modifying another user). Attempts to restore VPN access by
-        creating/updating the user in the panel.
-
-        Returns True if recreation succeeded, False otherwise.
-        """
-        # Update the recreation guard timestamp to the actual recreation start time
-        if subscription.id is not None:
-            self._recent_recreations[subscription.id] = datetime.now(UTC)
-
-        try:
-            from app.services.subscription_service import SubscriptionService
-
-            service = SubscriptionService()
-            if not service.is_configured:
-                logger.warning(
-                    'RemnaWave not configured, cannot re-create panel user after user.deleted',
-                    user_id=user.id,
-                )
-                return False
-
-            remnawave_user = await service.create_remnawave_user(db, subscription)
-            if remnawave_user:
-                logger.info(
-                    'Webhook user.deleted: successfully re-created user in panel',
-                    user_id=user.id,
-                    subscription_id=subscription.id,
-                    new_uuid=remnawave_user.uuid,
-                )
-                return True
-
-            logger.error(
-                'Webhook user.deleted: failed to re-create user in panel',
-                user_id=user.id,
-                subscription_id=subscription.id,
-            )
-            return False
-        except Exception as e:
-            logger.error(
-                'Webhook user.deleted: error re-creating user in panel',
-                user_id=user.id,
-                subscription_id=subscription.id,
-                error=e,
-            )
-            return False
-
     async def _handle_user_revoked(
-        self,
-        db: AsyncSession,
-        user: User,
-        subscription: Subscription | None,
-        data: dict,
+        self, db: AsyncSession, user: User, subscription: Subscription | None, data: dict
     ) -> None:
         if not subscription:
-            logger.info(
-                'Webhook user.revoked: подписка не найдена в БД, пропуск',
-                user_id=user.id,
-            )
+            logger.info('Webhook user.revoked: подписка не найдена в БД, пропуск', user_id=user.id)
             return
 
         new_url = data.get('subscriptionUrl')
@@ -1816,44 +1631,25 @@ class RemnaWaveWebhookService:
         await db.commit()
 
         await self._notify_user(
-            user,
-            'WEBHOOK_SUB_REVOKED',
-            reply_markup=self._get_connect_keyboard(user),
-            subscription=subscription,
+            user, 'WEBHOOK_SUB_REVOKED', reply_markup=self._get_connect_keyboard(user), subscription=subscription
         )
 
     async def _handle_user_created(
-        self,
-        db: AsyncSession,
-        user: User,
-        subscription: Subscription | None,
-        data: dict,
+        self, db: AsyncSession, user: User, subscription: Subscription | None, data: dict
     ) -> None:
+        panel_user_id, short_uuid = self._extract_panel_identity(data)
         logger.info(
             'Webhook: user created externally in panel',
             user_id=user.id,
-            data=data.get('uuid'),
+            panel_user_id=panel_user_id,
+            short_uuid=short_uuid,
         )
 
     async def _handle_expires_in_72h(
-        self,
-        db: AsyncSession,
-        user: User,
-        subscription: Subscription | None,
-        data: dict,
+        self, db: AsyncSession, user: User, subscription: Subscription | None, data: dict
     ) -> None:
         if not subscription:
-            logger.info(
-                'Webhook expires_72h: подписка не найдена в БД, пропуск',
-                user_id=user.id,
-            )
-            return
-        if await self._grace_access_active(db, subscription.id):
-            logger.info(
-                'Webhook expires_72h: пропуск уведомления — активен grace-доступ',
-                subscription_id=subscription.id,
-                user_id=user.id,
-            )
+            logger.info('Webhook expires_72h: подписка не найдена в БД, пропуск', user_id=user.id)
             return
         await self._notify_user(
             user,
@@ -1863,24 +1659,10 @@ class RemnaWaveWebhookService:
         )
 
     async def _handle_expires_in_48h(
-        self,
-        db: AsyncSession,
-        user: User,
-        subscription: Subscription | None,
-        data: dict,
+        self, db: AsyncSession, user: User, subscription: Subscription | None, data: dict
     ) -> None:
         if not subscription:
-            logger.info(
-                'Webhook expires_48h: подписка не найдена в БД, пропуск',
-                user_id=user.id,
-            )
-            return
-        if await self._grace_access_active(db, subscription.id):
-            logger.info(
-                'Webhook expires_48h: пропуск уведомления — активен grace-доступ',
-                subscription_id=subscription.id,
-                user_id=user.id,
-            )
+            logger.info('Webhook expires_48h: подписка не найдена в БД, пропуск', user_id=user.id)
             return
         await self._notify_user(
             user,
@@ -1890,24 +1672,10 @@ class RemnaWaveWebhookService:
         )
 
     async def _handle_expires_in_24h(
-        self,
-        db: AsyncSession,
-        user: User,
-        subscription: Subscription | None,
-        data: dict,
+        self, db: AsyncSession, user: User, subscription: Subscription | None, data: dict
     ) -> None:
         if not subscription:
-            logger.info(
-                'Webhook expires_24h: подписка не найдена в БД, пропуск',
-                user_id=user.id,
-            )
-            return
-        if await self._grace_access_active(db, subscription.id):
-            logger.info(
-                'Webhook expires_24h: пропуск уведомления — активен grace-доступ',
-                subscription_id=subscription.id,
-                user_id=user.id,
-            )
+            logger.info('Webhook expires_24h: подписка не найдена в БД, пропуск', user_id=user.id)
             return
         await self._notify_user(
             user,
@@ -1917,17 +1685,10 @@ class RemnaWaveWebhookService:
         )
 
     async def _handle_expired_24h_ago(
-        self,
-        db: AsyncSession,
-        user: User,
-        subscription: Subscription | None,
-        data: dict,
+        self, db: AsyncSession, user: User, subscription: Subscription | None, data: dict
     ) -> None:
         if not subscription:
-            logger.info(
-                'Webhook expired_24h_ago: подписка не найдена в БД, пропуск',
-                user_id=user.id,
-            )
+            logger.info('Webhook expired_24h_ago: подписка не найдена в БД, пропуск', user_id=user.id)
             return
         await self._notify_user(
             user,
@@ -1937,11 +1698,7 @@ class RemnaWaveWebhookService:
         )
 
     async def _handle_user_expiration(
-        self,
-        db: AsyncSession,
-        user: User,
-        subscription: Subscription | None,
-        data: dict,
+        self, db: AsyncSession, user: User, subscription: Subscription | None, data: dict
     ) -> None:
         """Remnawave 2.8.0: единое событие user.expiration (заменило 4 старых).
 
@@ -1951,10 +1708,7 @@ class RemnaWaveWebhookService:
         значения из EXPIRATION_NOTIFICATIONS получают ближайшее по смыслу сообщение.
         """
         if not subscription:
-            logger.info(
-                'Webhook user.expiration: подписка не найдена в БД, пропуск',
-                user_id=user.id,
-            )
+            logger.info('Webhook user.expiration: подписка не найдена в БД, пропуск', user_id=user.id)
             return
 
         # Ресивер кладёт envelope-meta вебхука в data['_meta'] (см.
@@ -1965,11 +1719,7 @@ class RemnaWaveWebhookService:
         try:
             hours = int(raw)
         except (TypeError, ValueError):
-            logger.warning(
-                'Webhook user.expiration: некорректное meta.expiration',
-                user_id=user.id,
-                raw=raw,
-            )
+            logger.warning('Webhook user.expiration: некорректное meta.expiration', user_id=user.id, raw=raw)
             return
 
         text_key = _EXPIRATION_HOURS_TO_TEXT_KEY.get(hours)
@@ -1988,14 +1738,6 @@ class RemnaWaveWebhookService:
                 text_key=text_key,
             )
 
-        if await self._grace_access_active(db, subscription.id):
-            logger.info(
-                'Webhook user.expiration: пропуск уведомления — активен grace-доступ',
-                subscription_id=subscription.id,
-                user_id=user.id,
-            )
-            return
-
         await self._notify_user(
             user,
             text_key,
@@ -2004,11 +1746,7 @@ class RemnaWaveWebhookService:
         )
 
     async def _handle_first_connected(
-        self,
-        db: AsyncSession,
-        user: User,
-        subscription: Subscription | None,
-        data: dict,
+        self, db: AsyncSession, user: User, subscription: Subscription | None, data: dict
     ) -> None:
         logger.info('Webhook: user first VPN connection', user_id=user.id)
         await self._notify_user(
@@ -2019,11 +1757,7 @@ class RemnaWaveWebhookService:
         )
 
     async def _handle_bandwidth_threshold(
-        self,
-        db: AsyncSession,
-        user: User,
-        subscription: Subscription | None,
-        data: dict,
+        self, db: AsyncSession, user: User, subscription: Subscription | None, data: dict
     ) -> None:
         # Respect user notification preferences
         from app.utils.notification_prefs import is_traffic_warning_enabled
@@ -2032,8 +1766,10 @@ class RemnaWaveWebhookService:
             logger.debug('Traffic warning disabled by user prefs', user_id=user.id)
             return
 
-        # Extract threshold percentage from meta or data
-        percent = data.get('thresholdPercent') or data.get('threshold', '')
+        # 3.4.3: data — объект пользователя, сработавший порог лежит в
+        # lastTriggeredThreshold (0 = ещё не срабатывал). thresholdPercent/threshold
+        # и _meta.thresholdPercent — терпимость к нестандартным панелям.
+        percent = data.get('lastTriggeredThreshold') or data.get('thresholdPercent') or data.get('threshold', '')
         if not percent:
             # Envelope-meta живёт в data['_meta'] (ресивер), не в 'meta'.
             meta = data.get('_meta', {})
@@ -2052,11 +1788,7 @@ class RemnaWaveWebhookService:
         )
 
     async def _handle_user_not_connected(
-        self,
-        db: AsyncSession,
-        user: User,
-        subscription: Subscription | None,
-        data: dict,
+        self, db: AsyncSession, user: User, subscription: Subscription | None, data: dict
     ) -> None:
         meta = data.get('_meta') or {}
         hours = meta.get('notConnectedAfterHours')
@@ -2080,96 +1812,66 @@ class RemnaWaveWebhookService:
     # Device event handlers (user_hwid_devices scope)
     # ------------------------------------------------------------------
 
-    _PLATFORM_EMOJI: dict[str, str] = {
-        'Windows': "<tg-emoji emoji-id='5818956713507689486'>🪟</tg-emoji>",
-        'macOS': "<tg-emoji emoji-id='5818956713507689486'>🪟</tg-emoji>",
-        'Linux': "<tg-emoji emoji-id='5818956713507689486'>🪟</tg-emoji>",
-        'iOS': "<tg-emoji emoji-id='5818920837645867167'>🍏</tg-emoji>",
-        'Android': "<tg-emoji emoji-id='5819078828017849357'>🤖</tg-emoji>",
-    }
+    @staticmethod
+    def _extract_device_name(data: dict) -> str:
+        """Extract device name from webhook payload.
 
-    @classmethod
-    def _extract_device_info(cls, data: dict) -> tuple[str, str]:
-        """Extract device info from webhook payload.
-
-        Returns (platform_str, tag_str) where platform_str includes emoji.
         RemnaWave sends device info in data['hwidUserDevice'] nested object.
+        Builds a composite name: "tag (platform)" or just "platform" or hwid short.
         """
         device_obj = data.get('hwidUserDevice')
         if not isinstance(device_obj, dict):
+            # Fallback: top-level fields
             raw = data.get('deviceName') or data.get('tag') or data.get('hwid') or ''
-            return '', html.escape(str(raw)) if raw else ''
+            return html.escape(str(raw)) if raw else ''
 
-        platform = (device_obj.get('platform') or '').strip()
-        # Читаемое имя устройства (модель) приоритетнее HWID/tag:
-        # панель шлёт deviceModel/model/name, например "iPhone 14 Pro (27.0)".
+        # В 3.0.0 у устройства есть deviceModel/platform/osVersion/userAgent —
+        # полей `tag`/`deviceName`/`name` в схеме нет и не было, поэтому раньше
+        # человекочитаемое имя не подставлялось никогда. Оставляем их последними
+        # как терпимость к нестандартным полезным нагрузкам.
         tag = (
             device_obj.get('deviceModel')
-            or device_obj.get('model')
-            or device_obj.get('name')
-            or device_obj.get('deviceName')
             or device_obj.get('tag')
+            or device_obj.get('deviceName')
+            or device_obj.get('name')
             or ''
         ).strip()
-        hwid = (device_obj.get('hwid') or device_obj.get('deviceId') or device_obj.get('id') or '').strip()
+        platform = (device_obj.get('platform') or '').strip()
+        hwid = (device_obj.get('hwid') or '').strip()
 
-        emoji = cls._PLATFORM_EMOJI.get(platform, '')
-        platform_display = f'{emoji} {html.escape(platform)}' if emoji else html.escape(platform)
-
-        if not tag and hwid:
+        if tag and platform:
+            return html.escape(f'{tag} ({platform})')
+        if tag:
+            return html.escape(tag)
+        if platform and hwid:
+            # Show platform + short hwid suffix for identification
             hwid_short = hwid[:8] if len(hwid) > 8 else hwid
-            tag = html.escape(hwid_short)
-        elif tag:
-            tag = html.escape(tag)
-
-        return platform_display, tag
-
-    @classmethod
-    def _extract_device_name(cls, data: dict) -> str:
-        """Legacy helper — returns combined platform+tag string."""
-        platform_display, tag = cls._extract_device_info(data)
-        if platform_display and tag:
-            return f'{platform_display} ({tag})'
-        return platform_display or tag
+            return html.escape(f'{platform} ({hwid_short})')
+        if platform:
+            return html.escape(platform)
+        if hwid:
+            hwid_short = hwid[:12] if len(hwid) > 12 else hwid
+            return html.escape(hwid_short)
+        return ''
 
     async def _handle_device_added(
-        self,
-        db: AsyncSession,
-        user: User,
-        subscription: Subscription | None,
-        data: dict,
+        self, db: AsyncSession, user: User, subscription: Subscription | None, data: dict
     ) -> None:
-        platform_display, tag = self._extract_device_info(data)
-        device_name = f'{platform_display} ({tag})' if platform_display and tag else platform_display or tag
-        logger.info(
-            'Webhook: device added for user',
-            user_id=user.id,
-            device_name=device_name or '(empty)',
-        )
+        device_name = self._extract_device_name(data)
+        logger.info('Webhook: device added for user', user_id=user.id, device_name=device_name or '(empty)')
         await self._notify_user(
             user,
             'WEBHOOK_DEVICE_ADDED',
             reply_markup=self._get_subscription_keyboard(user),
-            format_kwargs={
-                'device': tag or '—',
-                'platform': platform_display or '—',
-            },
+            format_kwargs={'device': device_name or '—'},
             subscription=subscription,
         )
 
     async def _handle_device_deleted(
-        self,
-        db: AsyncSession,
-        user: User,
-        subscription: Subscription | None,
-        data: dict,
+        self, db: AsyncSession, user: User, subscription: Subscription | None, data: dict
     ) -> None:
         device_name = self._extract_device_name(data)
-        logger.info(
-            'Webhook: device deleted for user',
-            user_id=user.id,
-            device_name=device_name or '(empty)',
-        )
+        logger.info('Webhook: device deleted for user', user_id=user.id, device_name=device_name or '(empty)')
         await self._notify_user(
             user,
             'WEBHOOK_DEVICE_DELETED',
@@ -2179,11 +1881,7 @@ class RemnaWaveWebhookService:
         )
 
     async def _handle_torrent_detected(
-        self,
-        db: AsyncSession,
-        user: User,
-        subscription: Subscription | None,
-        data: dict,
+        self, db: AsyncSession, user: User, subscription: Subscription | None, data: dict
     ) -> None:
         logger.info('Webhook: torrent detected for user', user_id=user.id)
         await self._notify_user(

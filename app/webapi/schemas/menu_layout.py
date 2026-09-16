@@ -64,8 +64,7 @@ class ButtonConditions(BaseModel):
     min_referrals: int | None = Field(default=None, ge=0, description='Минимальное количество рефералов')
     has_referrals: bool | None = Field(default=None, description='Есть рефералы')
     promo_group_ids: list[str] | None = Field(
-        default=None,
-        description='Список ID промо-групп (пользователь должен быть в одной из них)',
+        default=None, description='Список ID промо-групп (пользователь должен быть в одной из них)'
     )
     exclude_promo_group_ids: list[str] | None = Field(
         default=None, description='Исключить пользователей из этих промо-групп'
@@ -86,19 +85,12 @@ class MenuButtonConfig(BaseModel):
     type: ButtonType = Field(..., description='Тип кнопки')
     builtin_id: str | None = Field(default=None, description='ID встроенной кнопки (для type=builtin)')
     text: dict[str, str] = Field(..., description='Локализованные тексты кнопки: {lang_code: text}')
-    icon: str | None = Field(
-        default=None,
-        max_length=100,
-        description='Эмодзи/иконка кнопки (отдельно от текста)',
-    )
+    icon: str | None = Field(default=None, max_length=100, description='Эмодзи/иконка кнопки (отдельно от текста)')
     action: str = Field(..., description='callback_data или URL в зависимости от типа')
     enabled: bool = Field(default=True, description='Кнопка активна')
     visibility: ButtonVisibility = Field(default=ButtonVisibility.ALL, description='Видимость кнопки')
     conditions: ButtonConditions | None = Field(default=None, description='Дополнительные условия показа')
-    dynamic_text: bool = Field(
-        default=False,
-        description='Текст содержит плейсхолдеры ({balance}, {username} и т.д.)',
-    )
+    dynamic_text: bool = Field(default=False, description='Текст содержит плейсхолдеры ({balance}, {username} и т.д.)')
     open_mode: ButtonOpenMode = Field(
         default=ButtonOpenMode.CALLBACK,
         description='Режим открытия: callback (через бота) или direct (сразу Mini App)',
@@ -110,9 +102,7 @@ class MenuButtonConfig(BaseModel):
     description: str | None = Field(default=None, max_length=200, description='Описание кнопки для админ-панели')
     sort_order: int | None = Field(default=None, description='Порядок сортировки (для отображения в админке)')
     icon_custom_emoji_id: str | None = Field(
-        default=None,
-        max_length=100,
-        description='ID кастомного Telegram emoji (Bot API 9.4+)',
+        default=None, max_length=100, description='ID кастомного Telegram emoji (Bot API 9.4+)'
     )
 
     model_config = ConfigDict(extra='ignore')
@@ -197,9 +187,7 @@ class ButtonUpdateRequest(BaseModel):
     description: str | None = Field(default=None, max_length=200, description='Описание кнопки')
     sort_order: int | None = Field(default=None, description='Порядок сортировки')
     icon_custom_emoji_id: str | None = Field(
-        default=None,
-        max_length=100,
-        description='ID кастомного Telegram emoji (Bot API 9.4+)',
+        default=None, max_length=100, description='ID кастомного Telegram emoji (Bot API 9.4+)'
     )
 
     model_config = ConfigDict(extra='forbid')
@@ -239,9 +227,7 @@ class AddCustomButtonRequest(BaseModel):
     row_id: str | None = Field(default=None, description='ID строки для добавления кнопки')
     description: str | None = Field(default=None, max_length=200, description='Описание кнопки для админ-панели')
     icon_custom_emoji_id: str | None = Field(
-        default=None,
-        max_length=100,
-        description='ID кастомного Telegram emoji (Bot API 9.4+)',
+        default=None, max_length=100, description='ID кастомного Telegram emoji (Bot API 9.4+)'
     )
 
     model_config = ConfigDict(extra='forbid')
@@ -376,10 +362,7 @@ class MenuLayoutImportRequest(BaseModel):
     version: int
     rows: list[MenuRowConfig]
     buttons: dict[str, MenuButtonConfig]
-    merge_mode: str = Field(
-        default='replace',
-        description='Режим импорта: replace (заменить всё), merge (объединить)',
-    )
+    merge_mode: str = Field(default='replace', description='Режим импорта: replace (заменить всё), merge (объединить)')
 
     model_config = ConfigDict(extra='forbid')
 

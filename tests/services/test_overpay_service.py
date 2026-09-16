@@ -48,9 +48,7 @@ def service(monkeypatch: pytest.MonkeyPatch) -> tuple[OverpayService, FakeClient
 
 
 @pytest.mark.asyncio
-async def test_create_payment_uses_explicit_project_id(
-    service: tuple[OverpayService, FakeClient],
-) -> None:
+async def test_create_payment_uses_explicit_project_id(service: tuple[OverpayService, FakeClient]) -> None:
     svc, fake = service
     fake.post_responses = [FakeResponse(201, {'id': 'op-1', 'resultUrl': 'https://pay.overpay.io/form'})]
 
@@ -66,9 +64,7 @@ async def test_create_payment_uses_explicit_project_id(
 
 
 @pytest.mark.asyncio
-async def test_create_payment_defaults_to_settings_project_id(
-    service: tuple[OverpayService, FakeClient],
-) -> None:
+async def test_create_payment_defaults_to_settings_project_id(service: tuple[OverpayService, FakeClient]) -> None:
     svc, fake = service
     fake.post_responses = [FakeResponse(201, {'id': 'op-2', 'resultUrl': 'https://pay'})]
 
@@ -78,9 +74,7 @@ async def test_create_payment_defaults_to_settings_project_id(
 
 
 @pytest.mark.asyncio
-async def test_create_payment_s2s_payload_contract(
-    service: tuple[OverpayService, FakeClient],
-) -> None:
+async def test_create_payment_s2s_payload_contract(service: tuple[OverpayService, FakeClient]) -> None:
     svc, fake = service
     fake.post_responses = [FakeResponse(201, {'id': 'order-9', 'status': 'pending'})]
 
@@ -110,9 +104,7 @@ async def test_create_payment_s2s_payload_contract(
 
 
 @pytest.mark.asyncio
-async def test_create_payment_s2s_omits_client_without_email(
-    service: tuple[OverpayService, FakeClient],
-) -> None:
+async def test_create_payment_s2s_omits_client_without_email(service: tuple[OverpayService, FakeClient]) -> None:
     svc, fake = service
     fake.post_responses = [FakeResponse(201, {'id': 'order-11', 'status': 'pending'})]
 
@@ -128,9 +120,7 @@ async def test_create_payment_s2s_omits_client_without_email(
 
 
 @pytest.mark.asyncio
-async def test_create_payment_s2s_raises_on_error(
-    service: tuple[OverpayService, FakeClient],
-) -> None:
+async def test_create_payment_s2s_raises_on_error(service: tuple[OverpayService, FakeClient]) -> None:
     svc, fake = service
     fake.post_responses = [FakeResponse(400, {'message': 'bad terminal'})]
 
@@ -146,22 +136,12 @@ async def test_create_payment_s2s_raises_on_error(
 
 
 @pytest.mark.asyncio
-async def test_wait_for_redirect_link_polls_until_link(
-    service: tuple[OverpayService, FakeClient],
-) -> None:
+async def test_wait_for_redirect_link_polls_until_link(service: tuple[OverpayService, FakeClient]) -> None:
     svc, fake = service
     fake.get_responses = [
         FakeResponse(200, {'orders': [{'status': 'pending', 'interaction': {}}]}),
         FakeResponse(
-            200,
-            {
-                'orders': [
-                    {
-                        'status': 'pending',
-                        'interaction': {'redirectLink': 'https://qr.nspk.ru/AS1'},
-                    }
-                ]
-            },
+            200, {'orders': [{'status': 'pending', 'interaction': {'redirectLink': 'https://qr.nspk.ru/AS1'}}]}
         ),
     ]
 
@@ -177,22 +157,12 @@ class InvalidJsonResponse(FakeResponse):
 
 
 @pytest.mark.asyncio
-async def test_wait_for_redirect_link_survives_invalid_json(
-    service: tuple[OverpayService, FakeClient],
-) -> None:
+async def test_wait_for_redirect_link_survives_invalid_json(service: tuple[OverpayService, FakeClient]) -> None:
     svc, fake = service
     fake.get_responses = [
         InvalidJsonResponse(200),
         FakeResponse(
-            200,
-            {
-                'orders': [
-                    {
-                        'status': 'pending',
-                        'interaction': {'redirectLink': 'https://qr.nspk.ru/AS2'},
-                    }
-                ]
-            },
+            200, {'orders': [{'status': 'pending', 'interaction': {'redirectLink': 'https://qr.nspk.ru/AS2'}}]}
         ),
     ]
 
@@ -203,9 +173,7 @@ async def test_wait_for_redirect_link_survives_invalid_json(
 
 
 @pytest.mark.asyncio
-async def test_wait_for_redirect_link_stops_on_declined(
-    service: tuple[OverpayService, FakeClient],
-) -> None:
+async def test_wait_for_redirect_link_stops_on_declined(service: tuple[OverpayService, FakeClient]) -> None:
     svc, fake = service
     fake.get_responses = [FakeResponse(200, {'orders': [{'status': 'declined', 'interaction': {}}]})]
 
@@ -216,9 +184,7 @@ async def test_wait_for_redirect_link_stops_on_declined(
 
 
 @pytest.mark.asyncio
-async def test_wait_for_redirect_link_gives_up_after_attempts(
-    service: tuple[OverpayService, FakeClient],
-) -> None:
+async def test_wait_for_redirect_link_gives_up_after_attempts(service: tuple[OverpayService, FakeClient]) -> None:
     svc, fake = service
     fake.get_responses = [FakeResponse(200, {'orders': [{'status': 'processing'}]}) for _ in range(4)]
 

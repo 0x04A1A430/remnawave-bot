@@ -102,11 +102,7 @@ class RioPayService:
             ) as response:
                 if response.status == 201:
                     data = await response.json(content_type=None)
-                    logger.info(
-                        'RioPay API order created',
-                        status_code=response.status,
-                        order_id=data.get('id'),
-                    )
+                    logger.info('RioPay API order created', status_code=response.status, order_id=data.get('id'))
                     return data
 
                 # Ошибка

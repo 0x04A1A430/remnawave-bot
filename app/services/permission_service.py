@@ -14,12 +14,7 @@ from typing import TYPE_CHECKING
 import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database.crud.rbac import (
-    SUPERADMIN_LEVEL,
-    AccessPolicyCRUD,
-    AuditLogCRUD,
-    UserRoleCRUD,
-)
+from app.database.crud.rbac import SUPERADMIN_LEVEL, AccessPolicyCRUD, AuditLogCRUD, UserRoleCRUD
 
 
 if TYPE_CHECKING:
@@ -57,6 +52,7 @@ PERMISSION_REGISTRY: dict[str, list[str]] = {
         'balance',
         'subscription',
         'send_offer',
+        'send_message',
         'referral',
     ],
     'tickets': ['read', 'reply', 'close', 'settings'],
@@ -79,8 +75,10 @@ PERMISSION_REGISTRY: dict[str, list[str]] = {
     'settings': ['read', 'edit'],
     'roles': ['read', 'create', 'edit', 'delete', 'assign'],
     'audit_log': ['read', 'export'],
+    'system_errors': ['read', 'manage'],
     'channels': ['read', 'edit'],
     'ban_system': ['read', 'edit', 'ban', 'unban'],
+    'reachability': ['read', 'run'],
     'wheel': ['read', 'edit'],
     'apps': ['read', 'edit'],
     'email_templates': ['read', 'edit'],

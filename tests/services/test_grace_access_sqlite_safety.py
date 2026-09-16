@@ -6,9 +6,6 @@ from pathlib import Path
 import pytest
 
 
-# Same DDL the fork installs for SQLite in app/database/migrations.py
-# (_ensure_runtime_schema_guards): a BEFORE DELETE trigger that aborts when an
-# open grace-access session still references the subscription.
 DELETE_GUARD_SQL = """
 CREATE TRIGGER trg_guard_open_grace_subscription_delete
 BEFORE DELETE ON subscriptions

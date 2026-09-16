@@ -35,6 +35,8 @@ def _build_subscription() -> SimpleNamespace:
         subscription_crypto_link='https://old-crypto',
         connected_squads=[],
         remnawave_short_uuid='short',
+        # Панельная идентичность после миграции на 3.0.0 — числовой id, не uuid.
+        remnawave_id=4242,
         tariff_id=None,
         is_daily_paused=False,
         last_daily_charge_at=None,
@@ -44,14 +46,12 @@ def _build_subscription() -> SimpleNamespace:
 
 
 @pytest.mark.anyio('asyncio')
-async def test_users_subscription_trial_calls_remnawave_sync(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+async def test_users_subscription_trial_calls_remnawave_sync(monkeypatch: pytest.MonkeyPatch) -> None:
     fake_user = SimpleNamespace(id=1)
     created_subscription = _build_subscription()
     service_instance = SimpleNamespace(
         update_remnawave_user=AsyncMock(return_value=None),
-        create_remnawave_user=AsyncMock(return_value=SimpleNamespace(uuid='new')),
+        create_remnawave_user=AsyncMock(return_value=SimpleNamespace(id=4243)),
     )
 
     monkeypatch.setattr(users, '_get_user_by_id_or_telegram_id', AsyncMock(return_value=fake_user))
@@ -70,15 +70,13 @@ async def test_users_subscription_trial_calls_remnawave_sync(
 
 
 @pytest.mark.anyio('asyncio')
-async def test_users_subscription_paid_calls_remnawave_sync(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+async def test_users_subscription_paid_calls_remnawave_sync(monkeypatch: pytest.MonkeyPatch) -> None:
     fake_user = SimpleNamespace(id=1)
     created_subscription = _build_subscription()
     created_subscription.is_trial = False
     service_instance = SimpleNamespace(
         update_remnawave_user=AsyncMock(return_value=None),
-        create_remnawave_user=AsyncMock(return_value=SimpleNamespace(uuid='new')),
+        create_remnawave_user=AsyncMock(return_value=SimpleNamespace(id=4243)),
     )
 
     monkeypatch.setattr(users, '_get_user_by_id_or_telegram_id', AsyncMock(return_value=fake_user))
@@ -115,12 +113,10 @@ def test_users_search_filter_skips_internal_id_for_out_of_int32() -> None:
 
 
 @pytest.mark.anyio('asyncio')
-async def test_subscriptions_extend_calls_remnawave_sync(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+async def test_subscriptions_extend_calls_remnawave_sync(monkeypatch: pytest.MonkeyPatch) -> None:
     subscription = _build_subscription()
     service_instance = SimpleNamespace(
-        update_remnawave_user=AsyncMock(return_value=SimpleNamespace(uuid='ok')),
+        update_remnawave_user=AsyncMock(return_value=SimpleNamespace(id=4242)),
         create_remnawave_user=AsyncMock(return_value=None),
     )
     get_subscription_mock = AsyncMock(side_effect=[subscription, subscription])
@@ -144,9 +140,7 @@ async def test_subscriptions_extend_calls_remnawave_sync(
 
 
 @pytest.mark.anyio('asyncio')
-async def test_subscriptions_extend_rolls_back_when_sync_fails(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+async def test_subscriptions_extend_rolls_back_when_sync_fails(monkeypatch: pytest.MonkeyPatch) -> None:
     subscription = _build_subscription()
     service_instance = SimpleNamespace(
         update_remnawave_user=AsyncMock(return_value=None),
@@ -170,12 +164,14 @@ async def test_subscriptions_extend_rolls_back_when_sync_fails(
 
     assert error.value.status_code == 500
     restore_mock.assert_awaited_once()
+    # Панельная идентичность после 3.0.0 — числовой remnawave_id, и он обязан быть
+    # в снапшоте отката: провалившийся синк мог успеть перепривязать строку.
+    snapshot = restore_mock.await_args.args[2]
+    assert snapshot['remnawave_id'] == 4242
 
 
 @pytest.mark.anyio('asyncio')
-async def test_subscriptions_extend_returns_500_when_rollback_fails(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+async def test_subscriptions_extend_returns_500_when_rollback_fails(monkeypatch: pytest.MonkeyPatch) -> None:
     subscription = _build_subscription()
     service_instance = SimpleNamespace(
         update_remnawave_user=AsyncMock(return_value=None),
@@ -202,16 +198,14 @@ async def test_subscriptions_extend_returns_500_when_rollback_fails(
 
 
 @pytest.mark.anyio('asyncio')
-async def test_users_patch_subscription_delegates_to_post(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+async def test_users_patch_subscription_delegates_to_post(monkeypatch: pytest.MonkeyPatch) -> None:
     """PATCH /users/{id}/subscription is a documented alias for POST and must route
     through the same handler. Without this test a refactor of the delegation chain could
     silently break the PATCH endpoint while the POST tests stay green."""
     fake_user = SimpleNamespace(id=42)
     created_subscription = _build_subscription()
     service_instance = SimpleNamespace(
-        update_remnawave_user=AsyncMock(return_value=SimpleNamespace(uuid='ok')),
+        update_remnawave_user=AsyncMock(return_value=SimpleNamespace(id=4242)),
         create_remnawave_user=AsyncMock(return_value=None),
     )
 
@@ -248,8 +242,7 @@ async def test_users_subscription_replace_existing_restores_on_sync_failure(
     """When replace_existing=True and Remnawave sync fails, the user's prior subscription
     state must be restored from the pre-mutation snapshot — NOT hard-deleted. The earlier
     two create-sync tests both used replace_existing=False, which exercises the
-    _delete_subscription_if_exists branch; this test pins the snapshot-restore branch.
-    """
+    _delete_subscription_if_exists branch; this test pins the snapshot-restore branch."""
     fake_user = SimpleNamespace(id=7)
     existing_subscription = _build_subscription()
     replaced_subscription = _build_subscription()
@@ -261,11 +254,7 @@ async def test_users_subscription_replace_existing_restores_on_sync_failure(
     )
 
     monkeypatch.setattr(users, '_get_user_by_id_or_telegram_id', AsyncMock(return_value=fake_user))
-    monkeypatch.setattr(
-        users,
-        'get_subscription_by_user_id',
-        AsyncMock(return_value=existing_subscription),
-    )
+    monkeypatch.setattr(users, 'get_subscription_by_user_id', AsyncMock(return_value=existing_subscription))
     monkeypatch.setattr(users, 'replace_subscription', AsyncMock(return_value=replaced_subscription))
     monkeypatch.setattr(users, 'SubscriptionService', lambda: sync_failure_service)
     monkeypatch.setattr(users, 'get_user_by_id', AsyncMock(return_value=fake_user))
@@ -285,4 +274,5 @@ async def test_users_subscription_replace_existing_restores_on_sync_failure(
     restore_mock.assert_awaited_once()
     restore_args = restore_mock.await_args
     assert restore_args.args[1] == existing_subscription.id
+    assert restore_args.args[2]['remnawave_id'] == existing_subscription.remnawave_id
     delete_mock.assert_not_awaited()

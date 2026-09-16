@@ -40,16 +40,14 @@ class EventEmitter:
         """Зарегистрировать WebSocket подключение."""
         self._websocket_connections.add(websocket)
         logger.debug(
-            'WebSocket connection registered. Total',
-            websocket_connections_count=len(self._websocket_connections),
+            'WebSocket connection registered. Total', websocket_connections_count=len(self._websocket_connections)
         )
 
     def unregister_websocket(self, websocket: Any) -> None:
         """Отменить регистрацию WebSocket подключения."""
         self._websocket_connections.discard(websocket)
         logger.debug(
-            'WebSocket connection unregistered. Total',
-            websocket_connections_count=len(self._websocket_connections),
+            'WebSocket connection unregistered. Total', websocket_connections_count=len(self._websocket_connections)
         )
 
     async def emit(

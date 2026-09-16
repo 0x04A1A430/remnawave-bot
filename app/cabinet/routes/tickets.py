@@ -10,17 +10,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.cabinet.routes.media import make_media_token
-from app.cabinet.routes.websocket import (
-    notify_admins_new_ticket,
-    notify_admins_ticket_reply,
-)
-from app.config import settings
+from app.cabinet.routes.websocket import notify_admins_new_ticket, notify_admins_ticket_reply
+from app.database.crud.ticket import TicketCRUD
 from app.database.crud.ticket_notification import TicketNotificationCRUD
 from app.database.models import Ticket, TicketMessage, User
-from app.handlers.tickets import (
-    notify_admins_about_new_ticket,
-    notify_admins_about_ticket_reply,
-)
+from app.handlers.tickets import notify_admins_about_new_ticket, notify_admins_about_ticket_reply
+from app.services.support_settings_service import SupportSettingsService
 
 from ..dependencies import get_cabinet_db, get_current_cabinet_user
 from ..schemas.tickets import (
@@ -37,6 +32,40 @@ from ..schemas.tickets import (
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix='/tickets', tags=['Cabinet Tickets'])
+
+# Сентинел «вечной» блокировки из TicketCRUD.is_user_globally_blocked (datetime.max).
+_PERMANENT_BLOCK_YEAR = 9999
+
+
+def _ensure_tickets_enabled() -> None:
+    """Отказать, если тикеты выключены (режим поддержки ``contact``).
+
+    Режим спрашиваем у сервиса, а не у ``settings``: persisted-значение живёт в
+    data/support_settings.json, а в ``settings`` оно попадает только при первой
+    загрузке сервиса в процессе. До неё ``settings`` отдаёт значение из ``.env``,
+    и свежеперезапущенный бот пускал бы в тикеты вопреки выключенному режиму.
+    """
+    if not SupportSettingsService.is_tickets_enabled():
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail='Support tickets are disabled',
+        )
+
+
+async def _ensure_not_blocked(db: AsyncSession, user: User) -> None:
+    """Отказать, если пользователь заблокирован в поддержке.
+
+    Бот-путь (``app/handlers/tickets.py``) проверяет глобальную блокировку и при
+    создании тикета, и при ответе; кабинет её не проверял вовсе.
+    """
+    blocked_until = await TicketCRUD.is_user_globally_blocked(db, user.id)
+    if not blocked_until:
+        return
+    if blocked_until.year >= _PERMANENT_BLOCK_YEAR:
+        detail = 'You are blocked from contacting support'
+    else:
+        detail = f'You are blocked from contacting support until {blocked_until.strftime("%d.%m.%Y %H:%M")} UTC'
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=detail)
 
 
 def _message_to_response(message: TicketMessage) -> TicketMessageResponse:
@@ -58,7 +87,7 @@ def _message_to_response(message: TicketMessage) -> TicketMessageResponse:
         has_media=bool(message.media_file_id) or bool(items),
         media_type=message.media_type,
         media_file_id=message.media_file_id,
-        media_token=(make_media_token(message.media_file_id) if message.media_file_id else None),
+        media_token=make_media_token(message.media_file_id) if message.media_file_id else None,
         media_caption=message.media_caption,
         media_items=items,
         created_at=message.created_at,
@@ -96,12 +125,7 @@ async def get_tickets(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Get user's support tickets."""
-    # Check if tickets are enabled
-    if not settings.is_support_tickets_enabled():
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail='Support tickets are disabled',
-        )
+    _ensure_tickets_enabled()
 
     # Base query
     query = select(Ticket).where(Ticket.user_id == user.id).options(selectinload(Ticket.messages))
@@ -144,11 +168,14 @@ async def create_ticket(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Create a new support ticket."""
-    # Check if tickets are enabled
-    if not settings.is_support_tickets_enabled():
+    _ensure_tickets_enabled()
+    await _ensure_not_blocked(db, user)
+
+    # Один незакрытый тикет на пользователя — паритет с бот-путём
+    if await TicketCRUD.user_has_active_ticket(db, user.id):
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail='Support tickets are disabled',
+            status_code=status.HTTP_409_CONFLICT,
+            detail='You already have an open ticket',
         )
 
     # Create ticket
@@ -239,7 +266,7 @@ async def create_ticket(
         created_at=ticket.created_at,
         updated_at=ticket.updated_at,
         closed_at=ticket.closed_at,
-        is_reply_blocked=(ticket.is_reply_blocked if hasattr(ticket, 'is_reply_blocked') else False),
+        is_reply_blocked=ticket.is_reply_blocked if hasattr(ticket, 'is_reply_blocked') else False,
         messages=messages,
     )
 
@@ -251,6 +278,8 @@ async def get_ticket(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Get ticket with all messages."""
+    _ensure_tickets_enabled()
+
     query = (
         select(Ticket).where(Ticket.id == ticket_id, Ticket.user_id == user.id).options(selectinload(Ticket.messages))
     )
@@ -275,7 +304,7 @@ async def get_ticket(
         created_at=ticket.created_at,
         updated_at=ticket.updated_at or ticket.created_at,
         closed_at=ticket.closed_at,
-        is_reply_blocked=(ticket.is_reply_blocked if hasattr(ticket, 'is_reply_blocked') else False),
+        is_reply_blocked=ticket.is_reply_blocked if hasattr(ticket, 'is_reply_blocked') else False,
         messages=messages_response,
     )
 
@@ -288,6 +317,9 @@ async def add_ticket_message(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Add message to existing ticket."""
+    _ensure_tickets_enabled()
+    await _ensure_not_blocked(db, user)
+
     # Get ticket
     query = select(Ticket).where(Ticket.id == ticket_id, Ticket.user_id == user.id)
     result = await db.execute(query)

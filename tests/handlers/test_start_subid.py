@@ -14,10 +14,7 @@ class TestSplitStartParamSubid:
 
     def test_returns_param_unchanged_when_no_delimiter(self) -> None:
         assert _split_start_param_subid('clkcl') == ('clkcl', None)
-        assert _split_start_param_subid('GIFT_abc123def456') == (
-            'GIFT_abc123def456',
-            None,
-        )
+        assert _split_start_param_subid('GIFT_abc123def456') == ('GIFT_abc123def456', None)
         assert _split_start_param_subid('webauth_tok_xyz') == ('webauth_tok_xyz', None)
 
     def test_returns_none_pair_for_empty_or_none(self) -> None:
@@ -34,10 +31,7 @@ class TestSplitStartParamSubid:
 
     def test_partitions_on_first_delimiter_only(self) -> None:
         # If subid itself contains the delimiter substring it stays intact.
-        assert _split_start_param_subid('clkcl_subid_aa_subid_bb') == (
-            'clkcl',
-            'aa_subid_bb',
-        )
+        assert _split_start_param_subid('clkcl_subid_aa_subid_bb') == ('clkcl', 'aa_subid_bb')
 
     def test_rejects_subid_exceeding_column_limit(self) -> None:
         oversized = 'x' * 256
@@ -46,10 +40,7 @@ class TestSplitStartParamSubid:
 
     def test_accepts_subid_at_column_limit(self) -> None:
         max_size = 'x' * 255
-        assert _split_start_param_subid(f'clkcl_subid_{max_size}') == (
-            'clkcl',
-            max_size,
-        )
+        assert _split_start_param_subid(f'clkcl_subid_{max_size}') == ('clkcl', max_size)
 
     @pytest.mark.parametrize(
         ('param', 'expected'),

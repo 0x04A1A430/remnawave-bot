@@ -88,10 +88,7 @@ def db() -> AsyncMock:
 def _common_oauth_patches(local_user_to_return: SimpleNamespace | None) -> list:
     """Patches shared across email-merge tests so we don't repeat 7 mocks per case."""
     return [
-        patch(
-            'app.cabinet.routes.oauth.validate_oauth_state',
-            AsyncMock(return_value={'linking': 'false'}),
-        ),
+        patch('app.cabinet.routes.oauth.validate_oauth_state', AsyncMock(return_value={'linking': 'false'})),
         patch(
             'app.cabinet.routes.oauth.get_provider',
             return_value=MagicMock(
@@ -100,18 +97,9 @@ def _common_oauth_patches(local_user_to_return: SimpleNamespace | None) -> list:
             ),
         ),
         # No provider_id match → falls into the email-merge branch (step 6).
-        patch(
-            'app.cabinet.routes.oauth.get_user_by_oauth_provider',
-            AsyncMock(return_value=None),
-        ),
-        patch(
-            'app.cabinet.routes.oauth.get_user_by_email',
-            AsyncMock(return_value=local_user_to_return),
-        ),
-        patch(
-            'app.cabinet.routes.oauth.set_user_oauth_provider_id',
-            AsyncMock(return_value=None),
-        ),
+        patch('app.cabinet.routes.oauth.get_user_by_oauth_provider', AsyncMock(return_value=None)),
+        patch('app.cabinet.routes.oauth.get_user_by_email', AsyncMock(return_value=local_user_to_return)),
+        patch('app.cabinet.routes.oauth.set_user_oauth_provider_id', AsyncMock(return_value=None)),
         patch(
             'app.cabinet.routes.oauth._finalize_oauth_login',
             AsyncMock(return_value=MagicMock(name='AuthResponse')),
@@ -120,9 +108,7 @@ def _common_oauth_patches(local_user_to_return: SimpleNamespace | None) -> list:
 
 
 @pytest.mark.asyncio
-async def test_email_merge_revives_deleted_user_when_both_verified(
-    db: AsyncMock,
-) -> None:
+async def test_email_merge_revives_deleted_user_when_both_verified(db: AsyncMock) -> None:
     """REGRESSION: with BOTH IdP and local row email_verified, a DELETED row gets revived.
 
     Pinned at source level by `test_email_merge_requires_local_user_email_verified`
@@ -144,9 +130,7 @@ async def test_email_merge_revives_deleted_user_when_both_verified(
 
 
 @pytest.mark.asyncio
-async def test_email_merge_blocks_409_when_local_email_unverified(
-    db: AsyncMock,
-) -> None:
+async def test_email_merge_blocks_409_when_local_email_unverified(db: AsyncMock) -> None:
     """SECURITY: local row with email_verified=False must NOT be merged.
 
     Pre-fix this fell through to create_user_by_oauth which hits the

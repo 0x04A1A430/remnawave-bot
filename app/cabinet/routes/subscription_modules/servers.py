@@ -33,10 +33,7 @@ async def get_available_countries(
 ) -> dict[str, Any]:
     """Get available countries/servers for the user."""
     from app.database.crud.server_squad import get_available_server_squads
-    from app.utils.pricing_utils import (
-        apply_percentage_discount,
-        calculate_prorated_price,
-    )
+    from app.utils.pricing_utils import apply_percentage_discount, calculate_prorated_price
 
     subscription = await resolve_subscription(db, user, subscription_id)
 
@@ -107,19 +104,12 @@ async def update_countries(
     subscription_id: int | None = QueryParam(None, description='Subscription ID for multi-tariff'),
 ) -> dict[str, Any]:
     """Update subscription countries/servers."""
-    from app.database.crud.server_squad import (
-        add_user_to_servers,
-        get_available_server_squads,
-        get_server_ids_by_uuids,
-    )
+    from app.database.crud.server_squad import add_user_to_servers, get_available_server_squads, get_server_ids_by_uuids
     from app.database.crud.subscription import add_subscription_servers
     from app.database.crud.transaction import create_transaction
     from app.database.crud.user import subtract_user_balance
     from app.database.models import TransactionType
-    from app.utils.pricing_utils import (
-        apply_percentage_discount,
-        calculate_prorated_price,
-    )
+    from app.utils.pricing_utils import apply_percentage_discount, calculate_prorated_price
 
     subscription = await resolve_subscription(db, user, subscription_id)
 
@@ -249,9 +239,9 @@ async def update_countries(
 
         subscription_service = SubscriptionService()
         _has_panel = (
-            getattr(subscription, 'remnawave_uuid', None)
+            getattr(subscription, 'remnawave_id', None)
             if settings.is_multi_tariff_enabled()
-            else getattr(user, 'remnawave_uuid', None)
+            else getattr(user, 'remnawave_id', None)
         )
         if _has_panel:
             await subscription_service.update_remnawave_user(db, subscription, sync_squads=True)

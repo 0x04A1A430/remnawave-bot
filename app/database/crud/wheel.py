@@ -15,6 +15,7 @@ from app.database.models import (
     WheelPrize,
     WheelSpin,
 )
+from app.utils.timezone import local_day_start
 
 
 logger = structlog.get_logger(__name__)
@@ -53,7 +54,7 @@ async def get_or_create_wheel_config(db: AsyncSession) -> WheelConfig:
     db.add(config)
     await db.commit()
     await db.refresh(config)
-    logger.info('Создана дефолтная конфигурация колеса удачи')
+    logger.info('🎡 Создана дефолтная конфигурация колеса удачи')
     return config
 
 
@@ -68,7 +69,7 @@ async def update_wheel_config(db: AsyncSession, **kwargs) -> WheelConfig:
     config.updated_at = datetime.now(UTC)
     await db.commit()
     await db.refresh(config)
-    logger.info('Обновлена конфигурация колеса', kwargs=kwargs)
+    logger.info('🎡 Обновлена конфигурация колеса', kwargs=kwargs)
     return config
 
 
@@ -101,7 +102,7 @@ async def create_wheel_prize(
     prize_value: int,
     display_name: str,
     prize_value_kopeks: int,
-    emoji: str = '',
+    emoji: str = '🎁',
     color: str = '#3B82F6',
     sort_order: int = 0,
     manual_probability: float | None = None,
@@ -129,7 +130,7 @@ async def create_wheel_prize(
     db.add(prize)
     await db.commit()
     await db.refresh(prize)
-    logger.info('Создан приз колеса', display_name=display_name, prize_type=prize_type)
+    logger.info('🎁 Создан приз колеса', display_name=display_name, prize_type=prize_type)
     return prize
 
 
@@ -146,7 +147,7 @@ async def update_wheel_prize(db: AsyncSession, prize_id: int, **kwargs) -> Wheel
     prize.updated_at = datetime.now(UTC)
     await db.commit()
     await db.refresh(prize)
-    logger.info('Обновлен приз колеса ID', prize_id=prize_id, kwargs=kwargs)
+    logger.info('🎁 Обновлен приз колеса ID', prize_id=prize_id, kwargs=kwargs)
     return prize
 
 
@@ -158,7 +159,7 @@ async def delete_wheel_prize(db: AsyncSession, prize_id: int) -> bool:
 
     await db.delete(prize)
     await db.commit()
-    logger.info('Удален приз колеса ID', prize_id=prize_id)
+    logger.info('🗑️ Удален приз колеса ID', prize_id=prize_id)
     return True
 
 
@@ -170,7 +171,7 @@ async def reorder_wheel_prizes(db: AsyncSession, prize_ids: list[int]) -> bool:
             prize.sort_order = index
 
     await db.commit()
-    logger.info('Переупорядочены призы колеса', prize_ids=prize_ids)
+    logger.info('🔄 Переупорядочены призы колеса', prize_ids=prize_ids)
     return True
 
 
@@ -211,7 +212,7 @@ async def create_wheel_spin(
     db.add(spin)
     await db.commit()
     await db.refresh(spin)
-    logger.info('Создан спин колеса', user_id=user_id, prize_display_name=prize_display_name)
+    logger.info('🎰 Создан спин колеса', user_id=user_id, prize_display_name=prize_display_name)
     return spin
 
 
@@ -235,7 +236,7 @@ async def mark_spin_applied(db: AsyncSession, spin_id: int) -> WheelSpin | None:
 
 async def get_user_spins_today(db: AsyncSession, user_id: int) -> int:
     """Получить количество спинов пользователя за сегодня."""
-    today_start = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+    today_start = local_day_start()
 
     result = await db.execute(
         select(func.count(WheelSpin.id)).where(
@@ -319,10 +320,6 @@ async def get_wheel_statistics(
         conditions.append(WheelSpin.created_at >= date_from)
     if date_to:
         conditions.append(WheelSpin.created_at <= date_to)
-
-    base_query = select(WheelSpin)
-    if conditions:
-        base_query = base_query.where(and_(*conditions))
 
     # Общие метрики
     result = await db.execute(

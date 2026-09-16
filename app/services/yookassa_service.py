@@ -7,9 +7,7 @@ from typing import Any
 import structlog
 from yookassa import Configuration, Payment as YooKassaPayment
 from yookassa.domain.common.confirmation_type import ConfirmationType
-from yookassa.domain.exceptions.not_found_error import (
-    NotFoundError as YooKassaNotFoundError,
-)
+from yookassa.domain.exceptions.not_found_error import NotFoundError as YooKassaNotFoundError
 from yookassa.domain.request.payment_request_builder import PaymentRequestBuilder
 
 from app.config import settings
@@ -66,10 +64,7 @@ def _patch_yookassa_timeout() -> None:
     try:
         from yookassa.client import ApiClient
     except Exception as exc:  # pragma: no cover — defensive
-        logger.warning(
-            'Could not import yookassa.client.ApiClient for timeout patch',
-            error=str(exc),
-        )
+        logger.warning('Could not import yookassa.client.ApiClient for timeout patch', error=str(exc))
         return
 
     if getattr(ApiClient, '_timeout_patched', False):
@@ -170,18 +165,12 @@ class YooKassaService:
 
         if not self.configured:
             self.return_url = 'https://t.me/'
-            logger.warning(
-                'YooKassa не активна, используем заглушку return_url',
-                return_url=self.return_url,
-            )
+            logger.warning('YooKassa не активна, используем заглушку return_url', return_url=self.return_url)
         elif configured_return_url:
             self.return_url = configured_return_url
         elif bot_username_for_default_return:
             self.return_url = f'https://t.me/{bot_username_for_default_return}'
-            logger.info(
-                'YOOKASSA_RETURN_URL не установлен, используем бота',
-                return_url=self.return_url,
-            )
+            logger.info('YOOKASSA_RETURN_URL не установлен, используем бота', return_url=self.return_url)
         else:
             self.return_url = 'https://t.me/'
             logger.warning(
@@ -227,12 +216,7 @@ class YooKassaService:
             builder = PaymentRequestBuilder()
             builder.set_amount({'value': str(round(amount, 2)), 'currency': currency.upper()})
             builder.set_capture(True)
-            builder.set_confirmation(
-                {
-                    'type': ConfirmationType.REDIRECT,
-                    'return_url': return_url or self.return_url,
-                }
-            )
+            builder.set_confirmation({'type': ConfirmationType.REDIRECT, 'return_url': return_url or self.return_url})
             builder.set_description(description)
             builder.set_metadata(metadata)
 
@@ -240,20 +224,14 @@ class YooKassaService:
                 {
                     'description': description[:128],
                     'quantity': '1.00',
-                    'amount': {
-                        'value': str(round(amount, 2)),
-                        'currency': currency.upper(),
-                    },
+                    'amount': {'value': str(round(amount, 2)), 'currency': currency.upper()},
                     'vat_code': int(getattr(settings, 'YOOKASSA_VAT_CODE', 1)),
                     'payment_mode': getattr(settings, 'YOOKASSA_PAYMENT_MODE', 'full_payment'),
                     'payment_subject': getattr(settings, 'YOOKASSA_PAYMENT_SUBJECT', 'service'),
                 }
             ]
 
-            receipt_data_dict: dict[str, Any] = {
-                'customer': customer_contact_for_receipt,
-                'items': receipt_items_list,
-            }
+            receipt_data_dict: dict[str, Any] = {'customer': customer_contact_for_receipt, 'items': receipt_items_list}
 
             builder.set_receipt(receipt_data_dict)
 
@@ -278,8 +256,7 @@ class YooKassaService:
             loop = asyncio.get_running_loop()
             async with asyncio.timeout(30):
                 response = await loop.run_in_executor(
-                    _yookassa_executor,
-                    lambda: YooKassaPayment.create(payment_request, idempotence_key),
+                    _yookassa_executor, lambda: YooKassaPayment.create(payment_request, idempotence_key)
                 )
 
             logger.info(
@@ -291,7 +268,7 @@ class YooKassaService:
 
             return {
                 'id': response.id,
-                'confirmation_url': (response.confirmation.confirmation_url if response.confirmation else None),
+                'confirmation_url': response.confirmation.confirmation_url if response.confirmation else None,
                 'status': response.status,
                 'metadata': response.metadata,
                 'amount_value': float(response.amount.value),
@@ -299,11 +276,9 @@ class YooKassaService:
                 'idempotence_key_used': idempotence_key,
                 'paid': response.paid,
                 'refundable': response.refundable,
-                'created_at': (
-                    response.created_at.isoformat()
-                    if hasattr(response.created_at, 'isoformat')
-                    else str(response.created_at)
-                ),
+                'created_at': response.created_at.isoformat()
+                if hasattr(response.created_at, 'isoformat')
+                else str(response.created_at),
                 'description_from_yk': response.description,
                 'test_mode': response.test if hasattr(response, 'test') else None,
             }
@@ -363,20 +338,14 @@ class YooKassaService:
                 {
                     'description': description[:128],
                     'quantity': '1.00',
-                    'amount': {
-                        'value': str(round(amount, 2)),
-                        'currency': currency.upper(),
-                    },
+                    'amount': {'value': str(round(amount, 2)), 'currency': currency.upper()},
                     'vat_code': int(getattr(settings, 'YOOKASSA_VAT_CODE', 1)),
                     'payment_mode': getattr(settings, 'YOOKASSA_PAYMENT_MODE', 'full_payment'),
                     'payment_subject': getattr(settings, 'YOOKASSA_PAYMENT_SUBJECT', 'service'),
                 }
             ]
 
-            receipt_data_dict: dict[str, Any] = {
-                'customer': customer_contact_for_receipt,
-                'items': receipt_items_list,
-            }
+            receipt_data_dict: dict[str, Any] = {'customer': customer_contact_for_receipt, 'items': receipt_items_list}
 
             builder.set_receipt(receipt_data_dict)
 
@@ -396,8 +365,7 @@ class YooKassaService:
             loop = asyncio.get_running_loop()
             async with asyncio.timeout(30):
                 response = await loop.run_in_executor(
-                    _yookassa_executor,
-                    lambda: YooKassaPayment.create(payment_request, idempotence_key),
+                    _yookassa_executor, lambda: YooKassaPayment.create(payment_request, idempotence_key)
                 )
 
             logger.info(
@@ -411,16 +379,12 @@ class YooKassaService:
             # YooKassa покажет QR на десктопе или список банков на мобильном
             return {
                 'id': response.id,
-                'qr_confirmation_data': (
-                    response.confirmation.confirmation_data
-                    if response.confirmation and hasattr(response.confirmation, 'confirmation_data')
-                    else None
-                ),
-                'confirmation_url': (
-                    response.confirmation.confirmation_url
-                    if response.confirmation and hasattr(response.confirmation, 'confirmation_url')
-                    else None
-                ),
+                'qr_confirmation_data': response.confirmation.confirmation_data
+                if response.confirmation and hasattr(response.confirmation, 'confirmation_data')
+                else None,
+                'confirmation_url': response.confirmation.confirmation_url
+                if response.confirmation and hasattr(response.confirmation, 'confirmation_url')
+                else None,
                 'status': response.status,
                 'metadata': response.metadata,
                 'amount_value': float(response.amount.value),
@@ -428,11 +392,9 @@ class YooKassaService:
                 'idempotence_key_used': idempotence_key,
                 'paid': response.paid,
                 'refundable': response.refundable,
-                'created_at': (
-                    response.created_at.isoformat()
-                    if hasattr(response.created_at, 'isoformat')
-                    else str(response.created_at)
-                ),
+                'created_at': response.created_at.isoformat()
+                if hasattr(response.created_at, 'isoformat')
+                else str(response.created_at),
                 'description_from_yk': response.description,
                 'test_mode': response.test if hasattr(response, 'test') else None,
             }
@@ -446,16 +408,12 @@ class YooKassaService:
             return None
 
         try:
-            logger.info(
-                'Получение информации о платеже YooKassa',
-                payment_id_in_yookassa=payment_id_in_yookassa,
-            )
+            logger.info('Получение информации о платеже YooKassa', payment_id_in_yookassa=payment_id_in_yookassa)
 
             loop = asyncio.get_running_loop()
             async with asyncio.timeout(30):
                 payment_info_yk = await loop.run_in_executor(
-                    _yookassa_executor,
-                    lambda: YooKassaPayment.find_one(payment_id_in_yookassa),
+                    _yookassa_executor, lambda: YooKassaPayment.find_one(payment_id_in_yookassa)
                 )
 
             if payment_info_yk:
@@ -474,46 +432,33 @@ class YooKassaService:
                     'metadata': payment_info_yk.metadata,
                     'description': payment_info_yk.description,
                     'refundable': payment_info_yk.refundable,
-                    'created_at': (
-                        payment_info_yk.created_at.isoformat()
-                        if hasattr(payment_info_yk.created_at, 'isoformat')
-                        else str(payment_info_yk.created_at)
-                    ),
-                    'captured_at': (
-                        payment_info_yk.captured_at.isoformat()
-                        if payment_info_yk.captured_at and hasattr(payment_info_yk.captured_at, 'isoformat')
-                        else None
-                    ),
-                    'payment_method_type': (
-                        payment_info_yk.payment_method.type if payment_info_yk.payment_method else None
-                    ),
-                    'payment_method_id': (
-                        payment_info_yk.payment_method.id if payment_info_yk.payment_method else None
-                    ),
-                    'payment_method_saved': (
-                        payment_info_yk.payment_method.saved
-                        if payment_info_yk.payment_method and hasattr(payment_info_yk.payment_method, 'saved')
-                        else False
-                    ),
-                    'payment_method_card': (
-                        {
-                            'first6': payment_info_yk.payment_method.card.first6,
-                            'last4': payment_info_yk.payment_method.card.last4,
-                            'card_type': payment_info_yk.payment_method.card.card_type,
-                            'expiry_month': payment_info_yk.payment_method.card.expiry_month,
-                            'expiry_year': payment_info_yk.payment_method.card.expiry_year,
-                        }
-                        if payment_info_yk.payment_method
-                        and hasattr(payment_info_yk.payment_method, 'card')
-                        and payment_info_yk.payment_method.card
-                        else None
-                    ),
-                    'test_mode': (payment_info_yk.test if hasattr(payment_info_yk, 'test') else None),
+                    'created_at': payment_info_yk.created_at.isoformat()
+                    if hasattr(payment_info_yk.created_at, 'isoformat')
+                    else str(payment_info_yk.created_at),
+                    'captured_at': payment_info_yk.captured_at.isoformat()
+                    if payment_info_yk.captured_at and hasattr(payment_info_yk.captured_at, 'isoformat')
+                    else None,
+                    'payment_method_type': payment_info_yk.payment_method.type
+                    if payment_info_yk.payment_method
+                    else None,
+                    'payment_method_id': payment_info_yk.payment_method.id if payment_info_yk.payment_method else None,
+                    'payment_method_saved': payment_info_yk.payment_method.saved
+                    if payment_info_yk.payment_method and hasattr(payment_info_yk.payment_method, 'saved')
+                    else False,
+                    'payment_method_card': {
+                        'first6': payment_info_yk.payment_method.card.first6,
+                        'last4': payment_info_yk.payment_method.card.last4,
+                        'card_type': payment_info_yk.payment_method.card.card_type,
+                        'expiry_month': payment_info_yk.payment_method.card.expiry_month,
+                        'expiry_year': payment_info_yk.payment_method.card.expiry_year,
+                    }
+                    if payment_info_yk.payment_method
+                    and hasattr(payment_info_yk.payment_method, 'card')
+                    and payment_info_yk.payment_method.card
+                    else None,
+                    'test_mode': payment_info_yk.test if hasattr(payment_info_yk, 'test') else None,
                 }
-            logger.warning(
-                'Платеж не найден в YooKassa',
-                payment_id_in_yookassa=payment_id_in_yookassa,
-            )
+            logger.warning('Платеж не найден в YooKassa', payment_id_in_yookassa=payment_id_in_yookassa)
             return None
         except YooKassaNotFoundError:
             logger.warning(
@@ -572,19 +517,13 @@ class YooKassaService:
                 {
                     'description': description[:128],
                     'quantity': '1.00',
-                    'amount': {
-                        'value': str(round(amount, 2)),
-                        'currency': currency.upper(),
-                    },
+                    'amount': {'value': str(round(amount, 2)), 'currency': currency.upper()},
                     'vat_code': str(getattr(settings, 'YOOKASSA_VAT_CODE', 1)),
                     'payment_mode': getattr(settings, 'YOOKASSA_PAYMENT_MODE', 'full_payment'),
                     'payment_subject': getattr(settings, 'YOOKASSA_PAYMENT_SUBJECT', 'service'),
                 }
             ]
-            receipt_data_dict: dict[str, Any] = {
-                'customer': customer_contact_for_receipt,
-                'items': receipt_items_list,
-            }
+            receipt_data_dict: dict[str, Any] = {'customer': customer_contact_for_receipt, 'items': receipt_items_list}
             builder.set_receipt(receipt_data_dict)
 
             if not idempotence_key:
@@ -604,8 +543,7 @@ class YooKassaService:
             loop = asyncio.get_running_loop()
             async with asyncio.timeout(30):
                 response = await loop.run_in_executor(
-                    _yookassa_executor,
-                    lambda: YooKassaPayment.create(payment_request, idempotence_key),
+                    _yookassa_executor, lambda: YooKassaPayment.create(payment_request, idempotence_key)
                 )
 
             logger.info(
@@ -624,11 +562,9 @@ class YooKassaService:
                 'amount_currency': response.amount.currency,
                 'idempotence_key_used': idempotence_key,
                 'refundable': response.refundable,
-                'created_at': (
-                    response.created_at.isoformat()
-                    if hasattr(response.created_at, 'isoformat')
-                    else str(response.created_at)
-                ),
+                'created_at': response.created_at.isoformat()
+                if hasattr(response.created_at, 'isoformat')
+                else str(response.created_at),
                 'description_from_yk': response.description,
                 'test_mode': response.test if hasattr(response, 'test') else None,
             }

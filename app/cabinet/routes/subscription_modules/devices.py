@@ -53,28 +53,17 @@ REMNAWAVE_SYNC_TIMEOUT = 10.0
 router = APIRouter()
 
 
-def _resolve_panel_uuid(subscription: Subscription | None, user: User) -> str | None:
-    """Resolve RemnaWave panel UUID: per-subscription in multi-tariff, user-level otherwise.
+def _resolve_panel_user_id(subscription: Subscription | None, user: User) -> int | None:
+    """Resolve RemnaWave panel user id: per-subscription in multi-tariff, user-level otherwise.
 
-    Multi-tariff: each subscription is its OWN panel user — return the sub's UUID
-    and do NOT fall back to ``user.remnawave_uuid`` when it's null. The fallback
+    Multi-tariff: each subscription is its OWN panel user — return the sub's id
+    and do NOT fall back to ``user.remnawave_id`` when it's null. The fallback
     would read/operate on another tariff's panel user, making HWID devices/limit
     look shared across tariffs (баг с общим лимитом «по наименьшему тарифу»).
     """
     if settings.is_multi_tariff_enabled() and subscription is not None:
-        return subscription.remnawave_uuid
-    return user.remnawave_uuid
-
-
-def _resolve_panel_identifiers(subscription: Subscription | None, user: User) -> tuple[str | None, int | None]:
-    """Resolve (panel uuid, remnawave_id) — v3.0.0 users are keyed by numeric id.
-
-    Mirrors _resolve_panel_uuid: per-subscription in multi-tariff, user-level
-    otherwise. In v3 the uuid field is gone, so remnawave_id is the primary key.
-    """
-    if settings.is_multi_tariff_enabled() and subscription is not None:
-        return subscription.remnawave_uuid, subscription.remnawave_id
-    return user.remnawave_uuid, user.remnawave_id
+        return subscription.remnawave_id
+    return user.remnawave_id
 
 
 @router.post('/devices')
@@ -200,6 +189,9 @@ async def purchase_devices_legacy(
         try:
             cart_data = {
                 'cart_mode': 'add_devices',
+                # Намерение пополнить ради этой корзины: без него тихая автопокупка после
+                # пополнения пропускает корзину, а кнопка «вернуться» её не знает.
+                'return_to_cart': True,
                 'devices_to_add': request.devices,
                 'price_kopeks': total_price,
                 'base_price_kopeks': base_total_price,
@@ -288,9 +280,9 @@ async def purchase_devices_legacy(
     try:
         service = SubscriptionService()
         if settings.is_multi_tariff_enabled():
-            _should_create = not subscription.remnawave_uuid
+            _should_create = not subscription.remnawave_id
         else:
-            _should_create = not getattr(user, 'remnawave_uuid', None)
+            _should_create = not getattr(user, 'remnawave_id', None)
 
         async with asyncio.timeout(REMNAWAVE_SYNC_TIMEOUT):
             if _should_create:
@@ -363,10 +355,7 @@ async def purchase_devices(
         # Resolve subscription (ownership validated), then lock the row for concurrent safety
         resolved = await resolve_subscription(db, user, subscription_id)
         if not resolved:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail='У вас нет активной подписки',
-            )
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='У вас нет активной подписки')
 
         result = await db.execute(
             select(Subscription)
@@ -478,6 +467,9 @@ async def purchase_devices(
             try:
                 cart_data = {
                     'cart_mode': 'add_devices',
+                    # Намерение пополнить ради этой корзины: без него тихая автопокупка после
+                    # пополнения пропускает корзину, а кнопка «вернуться» её не знает.
+                    'return_to_cart': True,
                     'devices_to_add': request.devices,
                     'price_kopeks': price_kopeks,
                     'base_price_kopeks': base_price_prorated,
@@ -566,9 +558,9 @@ async def purchase_devices(
         service = SubscriptionService()
         try:
             if settings.is_multi_tariff_enabled():
-                _should_create = not subscription.remnawave_uuid
+                _should_create = not subscription.remnawave_id
             else:
-                _should_create = not getattr(user, 'remnawave_uuid', None)
+                _should_create = not getattr(user, 'remnawave_id', None)
 
             async with asyncio.timeout(REMNAWAVE_SYNC_TIMEOUT):
                 if _should_create:
@@ -598,10 +590,7 @@ async def purchase_devices(
             )
         else:
             logger.info(
-                'User purchased devices for kopeks',
-                user_id=user.id,
-                devices=request.devices,
-                price_kopeks=price_kopeks,
+                'User purchased devices for kopeks', user_id=user.id, devices=request.devices, price_kopeks=price_kopeks
             )
 
         # Отправляем уведомление админам
@@ -638,11 +627,7 @@ async def purchase_devices(
                 request.yandex_cid,
             )
         except Exception as yconv_err:
-            logger.debug(
-                'yandex_conv purchase hook failed (non-fatal)',
-                user_id=user.id,
-                error=str(yconv_err),
-            )
+            logger.debug('yandex_conv purchase hook failed (non-fatal)', user_id=user.id, error=str(yconv_err))
 
         response: dict[str, Any] = {
             'success': True,
@@ -767,6 +752,9 @@ async def save_devices_cart(
     # Save cart for auto-purchase after balance top-up
     cart_data = {
         'cart_mode': 'add_devices',
+        # Намерение пополнить ради этой корзины: без него тихая автопокупка после
+        # пополнения пропускает корзину, а кнопка «вернуться» её не знает.
+        'return_to_cart': True,
         'devices_to_add': request.devices,
         'price_kopeks': price_kopeks,
         'base_price_kopeks': base_total_price,
@@ -775,14 +763,14 @@ async def save_devices_cart(
     }
     await user_cart_service.save_user_cart(user.id, cart_data)
     logger.info(
-        'Cart saved for device purchase (cabinet save-cart) user + devices',
-        user_id=user.id,
-        devices=request.devices,
+        'Cart saved for device purchase (cabinet save-cart) user + devices', user_id=user.id, devices=request.devices
     )
 
     return {'success': True, 'cart_saved': True}
 
 
+# Отказы обоих эндпоинтов несут ``reason_code`` — кабинет переводит его сам; ``reason``
+# остаётся текстом для кабинетов, которые кода ещё не знают (тест-сторож в tests/cabinet).
 @router.get('/devices/price')
 async def get_device_price(
     devices: int = 1,
@@ -797,6 +785,7 @@ async def get_device_price(
         return {
             'available': False,
             'reason': 'Нет активной подписки',
+            'reason_code': 'no_active_subscription',
         }
 
     tariff = None
@@ -818,6 +807,7 @@ async def get_device_price(
         return {
             'available': False,
             'reason': 'Докупка устройств недоступна',
+            'reason_code': 'devices_unavailable',
         }
 
     # Check max device limit
@@ -828,6 +818,7 @@ async def get_device_price(
         return {
             'available': False,
             'reason': f'Достигнут максимум устройств ({max_device_limit})',
+            'reason_code': 'max_devices_reached',
             'current_device_limit': current_devices,
             'max_device_limit': max_device_limit,
         }
@@ -836,6 +827,7 @@ async def get_device_price(
         return {
             'available': False,
             'reason': f'Можно добавить максимум {can_add} устройств',
+            'reason_code': 'can_add_limited',
             'current_device_limit': current_devices,
             'max_device_limit': max_device_limit,
             'can_add': can_add,
@@ -930,8 +922,8 @@ async def get_devices(
             detail='No subscription found',
         )
 
-    _puuid, _remnawave_id = _resolve_panel_identifiers(subscription, user)
-    if not _puuid and _remnawave_id is None:
+    _panel_user_id = _resolve_panel_user_id(subscription, user)
+    if not _panel_user_id:
         return {
             'devices': [],
             'total': 0,
@@ -941,7 +933,7 @@ async def get_devices(
     try:
         service = RemnaWaveService()
         async with service.get_api_client() as api:
-            response = await api.get_user_devices_all(_puuid, user_id=_remnawave_id)
+            response = await api.get_user_devices_all(_panel_user_id)
 
             devices_list = response.get('devices', [])
             # Подтягиваем все локальные alias'ы юзера одним запросом — дешевле
@@ -986,10 +978,7 @@ async def get_devices(
         # Панель медленная/недоступна — деградируем мягко (пустой список) и логируем
         # WARNING, как соседние читатели устройств (device_ownership, miniapp), чтобы
         # транзиентный таймаут панели не спамил админ-чат ошибками.
-        logger.warning(
-            'Failed to load devices from RemnaWave (panel slow/unavailable)',
-            error=str(e)[:200],
-        )
+        logger.warning('Failed to load devices from RemnaWave (panel slow/unavailable)', error=str(e)[:200])
         return {
             'devices': [],
             'total': 0,
@@ -1077,25 +1066,35 @@ async def delete_device(
             detail='No subscription found',
         )
 
-    _puuid, _remnawave_id = _resolve_panel_identifiers(subscription, user)
-    if not _puuid and _remnawave_id is None:
+    _panel_user_id = _resolve_panel_user_id(subscription, user)
+    if not _panel_user_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='User UUID not found',
+            detail='Panel user not found',
         )
 
     try:
         service = RemnaWaveService()
         async with service.get_api_client() as api:
-            delete_data = api._fmt_hwid_delete_payload(_puuid, _remnawave_id, hwid)
-            await api._make_request('POST', '/api/hwid/devices/delete', data=delete_data)
+            # Тело запроса в 3.0.0 — {'userId': int, 'hwid': str}; собираем его не
+            # руками, а клиентом: он валидирует идентификатор на границе и
+            # проверяет, что hwid действительно пропал из ответа панели.
+            removed = await api.remove_device(_panel_user_id, hwid)
 
-            return {
-                'success': True,
-                'message': 'Device deleted successfully',
-                'deleted_hwid': hwid,
-            }
+        if not removed:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail='Failed to delete device',
+            )
 
+        return {
+            'success': True,
+            'message': 'Device deleted successfully',
+            'deleted_hwid': hwid,
+        }
+
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error('Error deleting device', error=e)
         raise HTTPException(
@@ -1121,18 +1120,18 @@ async def delete_all_devices(
             detail='No subscription found',
         )
 
-    _puuid, _remnawave_id = _resolve_panel_identifiers(subscription, user)
-    if not _puuid and _remnawave_id is None:
+    _panel_user_id = _resolve_panel_user_id(subscription, user)
+    if not _panel_user_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='User UUID not found',
+            detail='Panel user not found',
         )
 
     try:
         service = RemnaWaveService()
         async with service.get_api_client() as api:
             # Get all devices first
-            response = await api.get_user_devices_all(_puuid, user_id=_remnawave_id)
+            response = await api.get_user_devices_all(_panel_user_id)
 
             if not response:
                 return {
@@ -1149,27 +1148,25 @@ async def delete_all_devices(
                     'deleted_count': 0,
                 }
 
-            deleted_count = 0
-            for device in devices_list:
-                device_hwid = device.get('hwid')
-                if device_hwid:
-                    try:
-                        delete_data = api._fmt_hwid_delete_payload(_puuid, _remnawave_id, device_hwid)
-                        await api._make_request('POST', '/api/hwid/devices/delete', data=delete_data)
-                        deleted_count += 1
-                    except Exception as device_error:
-                        logger.error(
-                            'Error deleting device',
-                            device_hwid=device_hwid,
-                            device_error=device_error,
-                        )
+            # 3.0.0 даёт атомарный `POST /api/hwid/devices/delete-all` — на него
+            # переведены все остальные места. Здесь оставался цикл «по одному
+            # запросу на устройство», и он ко всему прочему возвращал
+            # `success: true` даже когда не удалилось НИ ОДНО устройство.
+            total = len(devices_list)
+            if not await api.reset_user_devices(_panel_user_id):
+                raise HTTPException(
+                    status_code=status.HTTP_502_BAD_GATEWAY,
+                    detail='Failed to delete devices',
+                )
 
             return {
                 'success': True,
-                'message': f'Deleted {deleted_count} devices',
-                'deleted_count': deleted_count,
+                'message': f'Deleted {total} devices',
+                'deleted_count': total,
             }
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error('Error deleting all devices', error=e)
         raise HTTPException(
@@ -1196,6 +1193,7 @@ async def get_device_reduction_info(
         return {
             'available': False,
             'reason': 'No subscription found',
+            'reason_code': 'no_subscription',
             'current_device_limit': 0,
             'min_device_limit': 1,
             'can_reduce': 0,
@@ -1207,15 +1205,26 @@ async def get_device_reduction_info(
         return {
             'available': False,
             'reason': 'Device reduction is not available for trial subscriptions',
+            'reason_code': 'trial',
             'current_device_limit': subscription.device_limit or 1,
             'min_device_limit': 1,
             'can_reduce': 0,
             'connected_devices_count': 0,
         }
 
-    # Minimum device limit for decrease is always 1 (tariff's device_limit is the
-    # number of devices included at purchase, not the floor for decrease)
-    min_device_limit = 1
+    # По умолчанию нижняя граница уменьшения — лимит устройств тарифа
+    # (ALLOW_DEVICES_BELOW_TARIFF_LIMIT=True возвращает прежнее поведение с 1).
+    # Тариф грузим явно: ленивый доступ к subscription.tariff в async-сессии
+    # падает MissingGreenlet.
+    from app.utils.subscription_utils import resolve_min_device_limit
+
+    _tariff = None
+    if subscription.tariff_id:
+        from app.database.crud.tariff import get_tariff_by_id
+
+        _tariff = await get_tariff_by_id(db, subscription.tariff_id)
+
+    min_device_limit = resolve_min_device_limit(_tariff)
 
     current_device_limit = subscription.device_limit or 1
 
@@ -1224,6 +1233,7 @@ async def get_device_reduction_info(
         return {
             'available': False,
             'reason': 'Already at minimum device limit',
+            'reason_code': 'at_minimum',
             'current_device_limit': current_device_limit,
             'min_device_limit': min_device_limit,
             'can_reduce': 0,
@@ -1232,19 +1242,16 @@ async def get_device_reduction_info(
 
     # Get connected devices count
     connected_devices_count = 0
-    _puuid, _remnawave_id = _resolve_panel_identifiers(subscription, user)
-    if _puuid or _remnawave_id is not None:
+    _panel_user_id = _resolve_panel_user_id(subscription, user)
+    if _panel_user_id:
         try:
             service = RemnaWaveService()
             async with service.get_api_client() as api:
-                response = await api.get_user_devices_all(_puuid, user_id=_remnawave_id)
+                response = await api.get_user_devices_all(_panel_user_id)
                 if response:
                     connected_devices_count = response.get('total', 0)
         except Exception as e:
-            logger.warning(
-                'Failed to get connected devices count (panel slow/unavailable)',
-                error=str(e)[:200],
-            )
+            logger.warning('Failed to get connected devices count (panel slow/unavailable)', error=str(e)[:200])
 
     can_reduce = current_device_limit - min_device_limit
 
@@ -1299,9 +1306,19 @@ async def reduce_devices(
             detail='Device reduction is not available for trial subscriptions',
         )
 
-    # Minimum device limit for decrease is always 1 (tariff's device_limit is the
-    # number of devices included at purchase, not the floor for decrease)
-    min_device_limit = 1
+    # По умолчанию нижняя граница уменьшения — лимит устройств тарифа
+    # (ALLOW_DEVICES_BELOW_TARIFF_LIMIT=True возвращает прежнее поведение с 1).
+    # Тариф грузим явно: ленивый доступ к subscription.tariff в async-сессии
+    # падает MissingGreenlet.
+    from app.utils.subscription_utils import resolve_min_device_limit
+
+    _tariff = None
+    if subscription.tariff_id:
+        from app.database.crud.tariff import get_tariff_by_id
+
+        _tariff = await get_tariff_by_id(db, subscription.tariff_id)
+
+    min_device_limit = resolve_min_device_limit(_tariff)
 
     current_device_limit = subscription.device_limit or 1
 
@@ -1321,12 +1338,12 @@ async def reduce_devices(
     # Get connected devices and remove excess (last connected ones)
     connected_devices_count = 0
     devices_removed_count = 0
-    _puuid, _remnawave_id = _resolve_panel_identifiers(subscription, user)
-    if _puuid or _remnawave_id is not None:
+    _panel_user_id = _resolve_panel_user_id(subscription, user)
+    if _panel_user_id:
         try:
             service = RemnaWaveService()
             async with service.get_api_client() as api:
-                response = await api.get_user_devices_all(_puuid, user_id=_remnawave_id)
+                response = await api.get_user_devices_all(_panel_user_id)
                 if response:
                     devices_list = response.get('devices', [])
                     connected_devices_count = len(devices_list)
@@ -1353,24 +1370,11 @@ async def reduce_devices(
                             device_hwid = device.get('hwid')
                             if device_hwid:
                                 try:
-                                    delete_data = api._fmt_hwid_delete_payload(_puuid, _remnawave_id, device_hwid)
-                                    await api._make_request(
-                                        'POST',
-                                        '/api/hwid/devices/delete',
-                                        data=delete_data,
-                                    )
-                                    devices_removed_count += 1
-                                    logger.info(
-                                        'Removed device for user',
-                                        device_hwid=device_hwid,
-                                        user_id=user.id,
-                                    )
+                                    if await api.remove_device(_panel_user_id, device_hwid):
+                                        devices_removed_count += 1
+                                        logger.info('Removed device for user', device_hwid=device_hwid, user_id=user.id)
                                 except Exception as del_error:
-                                    logger.error(
-                                        'Error removing device',
-                                        device_hwid=device_hwid,
-                                        del_error=del_error,
-                                    )
+                                    logger.error('Error removing device', device_hwid=device_hwid, del_error=del_error)
         except Exception as e:
             logger.error('Error checking/removing devices', error=e)
 

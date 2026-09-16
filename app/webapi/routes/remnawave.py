@@ -22,6 +22,7 @@ from ..schemas.remnawave import (
     RemnaWaveNodeActionResponse,
     RemnaWaveNodeListResponse,
     RemnaWaveNodeStatisticsResponse,
+    RemnaWaveNodeUsageItem,
     RemnaWaveNodeUsageResponse,
     RemnaWaveOperationResponse,
     RemnaWaveSquad,
@@ -112,6 +113,16 @@ def _serialize_node(node_data: dict[str, Any]) -> RemnaWaveNode:
         system=node_data.get('system'),
         active_plugin_uuid=node_data.get('active_plugin_uuid'),
     )
+
+
+def _serialize_node_usage(raw_items: Any, node_uuid: str) -> list[RemnaWaveNodeUsageItem]:
+    """Типизированная обёртка над общей нормализацией.
+
+    Сама форма живёт в ``app/utils/panel_node_usage`` — её делит кабинетный
+    хендлер-близнец (``app/cabinet/routes/admin_remnawave.py``), чтобы две
+    админские поверхности не разъезжались по ключам.
+    """
+    return [RemnaWaveNodeUsageItem(**item) for item in normalize_node_usage(raw_items, node_uuid)]
 
 
 def _parse_last_updated(value: Any) -> datetime | None:
@@ -210,7 +221,7 @@ async def get_node_statistics(
         raise HTTPException(status.HTTP_404_NOT_FOUND, 'Не удалось получить информацию по ноде')
 
     node_data = _serialize_node(stats['node'])
-    usage_history = normalize_node_usage(stats.get('usage_history'), stats['node'].get('uuid', ''))
+    usage_history = _serialize_node_usage(stats.get('usage_history'), node_uuid)
     realtime = stats.get('realtime')
     last_updated = _parse_last_updated(stats.get('last_updated'))
 
@@ -239,7 +250,7 @@ async def get_node_usage_range(
         raise HTTPException(status.HTTP_400_BAD_REQUEST, 'Некорректный диапазон дат')
 
     usage = await service.get_node_user_usage_by_range(node_uuid, start_dt, end_dt)
-    return RemnaWaveNodeUsageResponse(items=normalize_node_usage(usage, node_uuid))
+    return RemnaWaveNodeUsageResponse(items=_serialize_node_usage(usage, node_uuid))
 
 
 @router.post('/nodes/{node_uuid}/actions', response_model=RemnaWaveNodeActionResponse)
@@ -306,11 +317,7 @@ async def get_squad_details(
     return RemnaWaveSquad(**squad)
 
 
-@router.post(
-    '/squads',
-    response_model=RemnaWaveOperationResponse,
-    status_code=status.HTTP_201_CREATED,
-)
+@router.post('/squads', response_model=RemnaWaveOperationResponse, status_code=status.HTTP_201_CREATED)
 async def create_squad(
     payload: RemnaWaveSquadCreateRequest,
     _: Any = Security(require_api_token),
@@ -412,10 +419,7 @@ async def get_user_traffic(
     return RemnaWaveUserTrafficResponse(telegram_id=telegram_id, **stats)
 
 
-@router.get(
-    '/squads/{squad_uuid}/migration-preview',
-    response_model=RemnaWaveSquadMigrationPreviewResponse,
-)
+@router.get('/squads/{squad_uuid}/migration-preview', response_model=RemnaWaveSquadMigrationPreviewResponse)
 async def preview_squad_migration(
     squad_uuid: str,
     _: Any = Security(require_api_token),

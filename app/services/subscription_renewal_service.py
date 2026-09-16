@@ -21,13 +21,7 @@ from app.database.crud.subscription import (
 )
 from app.database.crud.transaction import create_transaction
 from app.database.crud.user import subtract_user_balance
-from app.database.models import (
-    PaymentMethod,
-    Subscription,
-    Transaction,
-    TransactionType,
-    User,
-)
+from app.database.models import PaymentMethod, Subscription, Transaction, TransactionType, User
 from app.services.admin_notification_service import AdminNotificationService
 from app.services.pricing_engine import RenewalPricing
 from app.services.remnawave_service import RemnaWaveConfigurationError
@@ -427,11 +421,9 @@ class SubscriptionRenewalService:
 
         # Determine expired state BEFORE extend_subscription mutates the object
         now = datetime.now(UTC)
-        was_expired = subscription_before.status in (
-            'expired',
-            'disabled',
-            'limited',
-        ) or (subscription_before.end_date is not None and subscription_before.end_date <= now)
+        was_expired = subscription_before.status in ('expired', 'disabled', 'limited') or (
+            subscription_before.end_date is not None and subscription_before.end_date <= now
+        )
 
         try:
             subscription_after = await extend_subscription(db, subscription_before, period_days)
@@ -509,9 +501,9 @@ class SubscriptionRenewalService:
         try:
             await db.refresh(user)
             if settings.is_multi_tariff_enabled():
-                _should_create = not subscription_after.remnawave_uuid
+                _should_create = subscription_after.remnawave_id is None
             else:
-                _should_create = not getattr(user, 'remnawave_uuid', None)
+                _should_create = getattr(user, 'remnawave_id', None) is None
 
             async with asyncio.timeout(REMNAWAVE_SYNC_TIMEOUT):
                 if _should_create:
@@ -541,7 +533,7 @@ class SubscriptionRenewalService:
             remnawave_retry_queue.enqueue(
                 subscription_id=subscription_after.id,
                 user_id=subscription_after.user_id,
-                action=('create' if not getattr(subscription_after, 'remnawave_uuid', None) else 'update'),
+                action='create' if getattr(subscription_after, 'remnawave_id', None) is None else 'update',
             )
 
         # Сброс привязанных устройств при продлении (если включено)
@@ -550,24 +542,31 @@ class SubscriptionRenewalService:
                 from app.services.remnawave_service import RemnaWaveService
 
                 rw_service = RemnaWaveService()
-                _uuid = (
-                    getattr(subscription_after, 'remnawave_uuid', None)
-                    if settings.is_multi_tariff_enabled()
-                    else getattr(user, 'remnawave_uuid', None)
-                )
-                _remnawave_id = (
+                _panel_user_id = (
                     getattr(subscription_after, 'remnawave_id', None)
                     if settings.is_multi_tariff_enabled()
                     else getattr(user, 'remnawave_id', None)
                 )
-                if _uuid or _remnawave_id is not None:
+                if _panel_user_id is not None:
                     async with rw_service.get_api_client() as api:
-                        await api.reset_user_devices(_uuid, user_id=_remnawave_id)
-                    logger.info(
-                        'Devices reset on renewal',
-                        subscription_id=subscription_after.id,
-                        user_id=user.id,
-                    )
+                        # reset_user_devices не бросает при отказе панели — ловит
+                        # внутри и возвращает False. Это самый частый вызов сброса
+                        # (каждое автопродление), и безусловный success-лог тут
+                        # означал бы, что поддержка закроет тикет «не могу
+                        # добавить устройство» как ошибку пользователя.
+                        _devices_reset = await api.reset_user_devices(_panel_user_id)
+                    if _devices_reset:
+                        logger.info(
+                            'Devices reset on renewal',
+                            subscription_id=subscription_after.id,
+                            user_id=user.id,
+                        )
+                    else:
+                        logger.error(
+                            'Failed to reset devices on renewal',
+                            subscription_id=subscription_after.id,
+                            user_id=user.id,
+                        )
             except Exception as error:
                 logger.warning('Failed to reset devices on renewal', error=error, exc_info=True)
 

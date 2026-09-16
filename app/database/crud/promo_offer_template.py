@@ -11,13 +11,13 @@ from app.database.models import PromoOfferTemplate
 
 UPDATED_TEMPLATE_MESSAGES = {
     'extend_discount': (
-        'Экономия {discount_percent}% при продлении\n\n'
+        '💎 Экономия {discount_percent}% при продлении\n\n'
         'Скидка суммируется с промогруппой и действует один раз.\n'
         'Срок действия предложения — {valid_hours} ч.\n'
         'После активации скидка действует {active_discount_hours} ч.'
     ),
     'purchase_discount': (
-        'Вернитесь со скидкой {discount_percent}%\n\n'
+        '🎯 Вернитесь со скидкой {discount_percent}%\n\n'
         'Скидка суммируется с промогруппой и действует один раз.\n'
         'Предложение действует {valid_hours} ч.\n'
         'После активации скидка действует {active_discount_hours} ч.'
@@ -27,14 +27,14 @@ UPDATED_TEMPLATE_MESSAGES = {
 
 LEGACY_TEMPLATE_MESSAGES = {
     'extend_discount': (
-        '<b>Экономия {discount_percent}% при продлении</b>\n\n'
+        '💎 <b>Экономия {discount_percent}% при продлении</b>\n\n'
         'Активируйте предложение и получите дополнительную скидку на оплату продления. '
         'Она суммируется с вашими промогрупповыми скидками и действует один раз.\n'
         'Срок действия предложения — {valid_hours} ч.\n'
         'После активации скидка действует {active_discount_hours} ч.'
     ),
     'purchase_discount': (
-        '<b>Вернитесь со скидкой {discount_percent}%</b>\n\n'
+        '🎯 <b>Вернитесь со скидкой {discount_percent}%</b>\n\n'
         'После активации мы применим дополнительную скидку к вашей следующей оплате подписки. '
         'Скидка суммируется с промогруппой и действует один раз.\n'
         'Предложение действует {valid_hours} ч.\n'
@@ -48,11 +48,11 @@ DEFAULT_TEMPLATES: tuple[dict, ...] = (
         'offer_type': 'test_access',
         'name': 'Тестовые сервера',
         'message_text': (
-            '<b>Испытайте новые сервера</b>\n\n'
+            '🔥 <b>Испытайте новые сервера</b>\n\n'
             'Активируйте предложение и получите временный доступ к дополнительным сквадам на {test_duration_hours} ч.\n'
             'Предложение действительно {valid_hours} ч.'
         ),
-        'button_text': 'Попробовать серверы',
+        'button_text': '🚀 Попробовать серверы',
         'valid_hours': 24,
         'discount_percent': 0,
         'bonus_amount_kopeks': 0,
@@ -64,7 +64,7 @@ DEFAULT_TEMPLATES: tuple[dict, ...] = (
         'offer_type': 'extend_discount',
         'name': 'Скидка на продление',
         'message_text': UPDATED_TEMPLATE_MESSAGES['extend_discount'],
-        'button_text': 'Получить скидку',
+        'button_text': '🎁 Получить скидку',
         'valid_hours': 24,
         'discount_percent': 20,
         'bonus_amount_kopeks': 0,
@@ -76,7 +76,7 @@ DEFAULT_TEMPLATES: tuple[dict, ...] = (
         'offer_type': 'purchase_discount',
         'name': 'Скидка на покупку',
         'message_text': UPDATED_TEMPLATE_MESSAGES['purchase_discount'],
-        'button_text': 'Забрать скидку',
+        'button_text': '🎁 Забрать скидку',
         'valid_hours': 48,
         'discount_percent': 25,
         'bonus_amount_kopeks': 0,

@@ -294,10 +294,7 @@ async def _fetch_personal_revenue(db: AsyncSession, user_ids: set[int]) -> dict[
         return {}
 
     stmt = (
-        select(
-            ReferralEarning.user_id,
-            func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0),
-        )
+        select(ReferralEarning.user_id, func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0))
         .where(ReferralEarning.user_id.in_(user_ids))
         .group_by(ReferralEarning.user_id)
     )
@@ -343,10 +340,7 @@ async def _fetch_personal_spent(db: AsyncSession, user_ids: set[int]) -> dict[in
         return {}
 
     stmt = (
-        select(
-            Transaction.user_id,
-            func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0),
-        )
+        select(Transaction.user_id, func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0))
         .where(
             and_(
                 Transaction.user_id.in_(user_ids),
@@ -504,10 +498,7 @@ async def _fetch_campaign_stats(
     user_spent: dict[int, int] = {}
     if all_campaign_users:
         spent_stmt = (
-            select(
-                Transaction.user_id,
-                func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0),
-            )
+            select(Transaction.user_id, func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0))
             .where(
                 and_(
                     Transaction.user_id.in_(all_campaign_users),
@@ -1313,10 +1304,7 @@ async def get_network_campaign_detail(
     total_spent = 0
     if campaign_user_ids:
         spent_stmt = (
-            select(
-                Transaction.user_id,
-                func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0),
-            )
+            select(Transaction.user_id, func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0))
             .where(
                 and_(
                     Transaction.user_id.in_(campaign_user_ids),
@@ -1499,10 +1487,7 @@ async def search_referral_network(
         campaign_user_spent: dict[int, int] = {}
         if all_campaign_user_ids:
             spent_stmt = (
-                select(
-                    Transaction.user_id,
-                    func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0),
-                )
+                select(Transaction.user_id, func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0))
                 .where(
                     and_(
                         Transaction.user_id.in_(all_campaign_user_ids),

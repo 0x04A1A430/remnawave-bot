@@ -31,9 +31,7 @@ from app.handlers.start import _persist_pending_subid_after_registration
 
 
 @pytest.mark.anyio('asyncio')
-async def test_drain_calls_upsert_subid_with_pending_value(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+async def test_drain_calls_upsert_subid_with_pending_value(monkeypatch: pytest.MonkeyPatch) -> None:
     """Happy path: FSM has pending_subid → drain calls upsert_subid with
     (db, user.id, subid, source='telegram'). Pins the exact call shape."""
     user = SimpleNamespace(id=42)
@@ -50,9 +48,7 @@ async def test_drain_calls_upsert_subid_with_pending_value(
 
 
 @pytest.mark.anyio('asyncio')
-async def test_drain_is_noop_when_no_pending_subid(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+async def test_drain_is_noop_when_no_pending_subid(monkeypatch: pytest.MonkeyPatch) -> None:
     """No pending_subid in FSM → drain returns without calling upsert. This is the
     common case for users who came to /start without an affiliate link."""
     user = SimpleNamespace(id=42)
@@ -67,9 +63,7 @@ async def test_drain_is_noop_when_no_pending_subid(
 
 
 @pytest.mark.anyio('asyncio')
-async def test_drain_is_noop_when_pending_subid_is_empty_string(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+async def test_drain_is_noop_when_pending_subid_is_empty_string(monkeypatch: pytest.MonkeyPatch) -> None:
     """Empty-string subid (defensive — parser rejects this, but a future bug or
     DB-side coercion could leave one) → drain treats as missing, no DB write."""
     user = SimpleNamespace(id=42)
@@ -102,9 +96,7 @@ async def test_drain_swallows_upsert_failure(monkeypatch: pytest.MonkeyPatch) ->
 
 
 @pytest.mark.anyio('asyncio')
-async def test_drain_is_noop_when_get_data_returns_none(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+async def test_drain_is_noop_when_get_data_returns_none(monkeypatch: pytest.MonkeyPatch) -> None:
     """state.get_data() returning None (aiogram quirk on fresh state) → drain treats
     as no pending data. The `data = ... or {}` guard in the function handles this."""
     user = SimpleNamespace(id=42)

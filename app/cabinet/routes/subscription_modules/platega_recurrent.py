@@ -6,7 +6,8 @@ POST /subscription/platega-recurrent/cancel
 
 All three gate on ``settings.is_platega_recurrent_enabled()`` before doing
 anything else. ``resolve_subscription`` is imported at module level (unlike
-most other lazy imports here) so tests can monkeypatch it directly.
+most other lazy imports here) so tests can monkeypatch it directly, mirroring
+``subscription_modules/traffic.py``.
 """
 
 from __future__ import annotations

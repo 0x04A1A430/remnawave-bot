@@ -61,7 +61,7 @@ class TelegramStarsMixin:
 
             invoice_link = await self.bot.create_invoice_link(
                 title='Пополнение баланса VPN',
-                description=f'{description} (≈{stars_amount} )',
+                description=f'{description} (≈{stars_amount} ⭐)',
                 payload=payload or f'balance_topup_{amount_kopeks}',
                 provider_token='',
                 currency='XTR',
@@ -143,9 +143,9 @@ class TelegramStarsMixin:
             )
 
             transaction_description = (
-                f'Оплата подписки через Telegram Stars ({stars_amount} )'
+                f'Оплата подписки через Telegram Stars ({stars_amount} ⭐)'
                 if simple_payload
-                else f'Пополнение через Telegram Stars ({stars_amount} )'
+                else f'Пополнение через Telegram Stars ({stars_amount} ⭐)'
             )
             transaction_type = TransactionType.SUBSCRIPTION_PAYMENT if simple_payload else TransactionType.DEPOSIT
 
@@ -167,10 +167,7 @@ class TelegramStarsMixin:
 
             user = await get_user_by_id(db, user_id)
             if not user:
-                logger.error(
-                    'Пользователь с ID не найден при обработке Stars платежа',
-                    user_id=user_id,
-                )
+                logger.error('Пользователь с ID не найден при обработке Stars платежа', user_id=user_id)
                 await db.rollback()
                 return False
 
@@ -282,10 +279,7 @@ class TelegramStarsMixin:
         tail = payload[len(prefix) :]
         parts = tail.split('_', 2)
         if len(parts) < 3:
-            logger.warning(
-                'Payload Stars simple subscription имеет некорректный формат',
-                payload=payload,
-            )
+            logger.warning('Payload Stars simple subscription имеет некорректный формат', payload=payload)
             return None
 
         user_part, subscription_part, period_part = parts
@@ -293,10 +287,7 @@ class TelegramStarsMixin:
         try:
             payload_user_id = int(user_part)
         except ValueError:
-            logger.warning(
-                'Не удалось разобрать user_id в payload Stars simple subscription',
-                payload=payload,
-            )
+            logger.warning('Не удалось разобрать user_id в payload Stars simple subscription', payload=payload)
             return None
 
         if payload_user_id != expected_user_id:
@@ -310,20 +301,14 @@ class TelegramStarsMixin:
         try:
             subscription_id = int(subscription_part)
         except ValueError:
-            logger.warning(
-                'Не удалось разобрать subscription_id в payload Stars simple subscription',
-                payload=payload,
-            )
+            logger.warning('Не удалось разобрать subscription_id в payload Stars simple subscription', payload=payload)
             return None
 
         period_days: int | None = None
         try:
             period_days = int(period_part)
         except ValueError:
-            logger.warning(
-                'Не удалось разобрать период в payload Stars simple subscription',
-                payload=payload,
-            )
+            logger.warning('Не удалось разобрать период в payload Stars simple subscription', payload=payload)
 
         return _SimpleSubscriptionPayload(
             subscription_id=subscription_id,
@@ -393,10 +378,7 @@ class TelegramStarsMixin:
             )
         except Exception as error:
             logger.error(
-                'Ошибка активации pending подписки для пользователя',
-                user_id=user.id,
-                error=error,
-                exc_info=True,
+                'Ошибка активации pending подписки для пользователя', user_id=user.id, error=error, exc_info=True
             )
             # Активация не удалась — откатываем незакоммиченную транзакцию (commit=False),
             # чтобы не осталось «оплаты без подписки». Telegram повторит платёж → обработаем заново.
@@ -430,11 +412,7 @@ class TelegramStarsMixin:
 
             await consume_user_promo_offer(db, user.id)
         except Exception as promo_error:
-            logger.warning(
-                'Ошибка потребления промо-оффера при Stars оплате',
-                user_id=user.id,
-                error=promo_error,
-            )
+            logger.warning('Ошибка потребления промо-оффера при Stars оплате', user_id=user.id, error=promo_error)
 
         try:
             from app.services.subscription_service import SubscriptionService
@@ -485,30 +463,30 @@ class TelegramStarsMixin:
 
                         _t = await get_tariff_by_id(db, subscription.tariff_id)
                         if _t:
-                            tariff_line = f'\n Тариф: «{_t.name}»'
+                            tariff_line = f'\n📦 Тариф: «{_t.name}»'
                     except Exception:
                         pass
                 success_message = (
-                    '<b>Подписка успешно активирована!</b>\n\n'
-                    f'Период: {period_display} дней\n'
-                    f'Устройства: {getattr(subscription, "device_limit", 1)}\n'
-                    f'Трафик: {traffic_label}\n'
-                    f'Оплата: {stars_amount}  ({settings.format_price(amount_kopeks)})'
+                    '✅ <b>Подписка успешно активирована!</b>\n\n'
+                    f'📅 Период: {period_display} дней\n'
+                    f'📱 Устройства: {getattr(subscription, "device_limit", 1)}\n'
+                    f'📊 Трафик: {traffic_label}\n'
+                    f'⭐ Оплата: {stars_amount} ⭐ ({settings.format_price(amount_kopeks)})'
                     f'{tariff_line}\n\n'
-                    "Для подключения перейдите в раздел 'Моя подписка'"
+                    "🔗 Для подключения перейдите в раздел 'Моя подписка'"
                 )
 
                 keyboard = types.InlineKeyboardMarkup(
                     inline_keyboard=[
                         [
                             types.InlineKeyboardButton(
-                                text='Моя подписка',
+                                text='📱 Моя подписка',
                                 callback_data='menu_subscription',
                             )
                         ],
                         [
                             types.InlineKeyboardButton(
-                                text='Главное меню',
+                                text='🏠 Главное меню',
                                 callback_data='back_to_menu',
                             )
                         ],
@@ -522,22 +500,14 @@ class TelegramStarsMixin:
                     parse_mode='HTML',
                 )
                 logger.info(
-                    'Пользователь получил уведомление об оплате подписки через Stars',
-                    telegram_id=user.telegram_id,
+                    '✅ Пользователь получил уведомление об оплате подписки через Stars', telegram_id=user.telegram_id
                 )
             except Exception as error:  # pragma: no cover - диагностический лог
-                from aiogram.exceptions import (
-                    TelegramForbiddenError,
-                    TelegramNetworkError,
-                    TelegramServerError,
-                )
+                from aiogram.exceptions import TelegramForbiddenError, TelegramNetworkError, TelegramServerError
 
                 # Подписка уже активирована, уведомление — best-effort.
                 # Транзиентные сетевые ошибки не должны попадать в админ-чат.
-                if isinstance(
-                    error,
-                    (TelegramNetworkError, TelegramServerError, TelegramForbiddenError),
-                ):
+                if isinstance(error, (TelegramNetworkError, TelegramServerError, TelegramForbiddenError)):
                     logger.warning(
                         'Не доставлено Stars-уведомление о подписке (транзиент)',
                         telegram_id=user.telegram_id,
@@ -545,17 +515,11 @@ class TelegramStarsMixin:
                         error_type=type(error).__name__,
                     )
                 else:
-                    logger.error(
-                        'Ошибка отправки уведомления о подписке через Stars',
-                        error=error,
-                        exc_info=True,
-                    )
+                    logger.error('Ошибка отправки уведомления о подписке через Stars', error=error, exc_info=True)
 
         if getattr(self, 'bot', None):
             try:
-                from app.services.admin_notification_service import (
-                    AdminNotificationService,
-                )
+                from app.services.admin_notification_service import AdminNotificationService
 
                 notification_service = AdminNotificationService(self.bot)
                 await notification_service.send_subscription_purchase_notification(
@@ -565,13 +529,11 @@ class TelegramStarsMixin:
                     transaction,
                     period_display,
                     was_trial_conversion=False,
-                    purchase_type=('renewal' if user.has_had_paid_subscription else 'first_purchase'),
+                    purchase_type='renewal' if user.has_had_paid_subscription else 'first_purchase',
                 )
             except Exception as admin_error:  # pragma: no cover - диагностический лог
                 logger.error(
-                    'Ошибка уведомления администраторов о подписке через Stars',
-                    admin_error=admin_error,
-                    exc_info=True,
+                    'Ошибка уведомления администраторов о подписке через Stars', admin_error=admin_error, exc_info=True
                 )
 
         # Начисляем реферальную комиссию за прямую покупку подписки
@@ -585,13 +547,10 @@ class TelegramStarsMixin:
                 getattr(self, 'bot', None),
             )
         except Exception as ref_error:
-            logger.error(
-                'Ошибка реферального начисления при покупке подписки через Stars',
-                ref_error=ref_error,
-            )
+            logger.error('Ошибка реферального начисления при покупке подписки через Stars', ref_error=ref_error)
 
         logger.info(
-            'Обработан Stars платеж как покупка подписки',
+            '✅ Обработан Stars платеж как покупка подписки',
             user_id=user.id,
             stars_amount=stars_amount,
             format_price=settings.format_price(amount_kopeks),
@@ -625,7 +584,7 @@ class TelegramStarsMixin:
         promo_group = user.get_primary_promo_group()
         subscription = getattr(user, 'subscription', None)
         referrer_info = format_referrer_info(user)
-        topup_status = 'Первое пополнение' if was_first_topup else 'Пополнение'
+        topup_status = '🆕 Первое пополнение' if was_first_topup else '🔄 Пополнение'
 
         await db.commit()
 
@@ -643,11 +602,8 @@ class TelegramStarsMixin:
             description=transaction.description,
         )
 
-        description_for_referral = f'Пополнение Stars: {settings.format_price(amount_kopeks)} ({stars_amount} )'
-        logger.info(
-            'Проверка реферальной логики для описания',
-            description_for_referral=description_for_referral,
-        )
+        description_for_referral = f'Пополнение Stars: {settings.format_price(amount_kopeks)} ({stars_amount} ⭐)'
+        logger.info('🔍 Проверка реферальной логики для описания', description_for_referral=description_for_referral)
 
         lower_description = description_for_referral.lower()
         contains_allowed_keywords = any(
@@ -657,7 +613,7 @@ class TelegramStarsMixin:
         allow_referral = contains_allowed_keywords and not contains_forbidden_keywords
 
         if allow_referral:
-            logger.info('Вызов process_referral_topup для пользователя', user_id=user.id)
+            logger.info('🔞 Вызов process_referral_topup для пользователя', user_id=user.id)
             try:
                 from app.services.referral_service import process_referral_topup
 
@@ -671,8 +627,7 @@ class TelegramStarsMixin:
                 logger.error('Ошибка обработки реферального пополнения', error=error)
         else:
             logger.info(
-                'Описание не подходит для реферальной логики',
-                description_for_referral=description_for_referral,
+                '❌ Описание не подходит для реферальной логики', description_for_referral=description_for_referral
             )
 
         if was_first_topup and not user.has_made_first_topup and not user.referred_by_id:
@@ -682,7 +637,7 @@ class TelegramStarsMixin:
         await db.refresh(user)
 
         logger.info(
-            'Баланс пользователя изменен: → (Δ +)',
+            '💰 Баланс пользователя изменен: → (Δ +)',
             telegram_id=user.telegram_id,
             old_balance=old_balance,
             balance_kopeks=user.balance_kopeks,
@@ -691,9 +646,7 @@ class TelegramStarsMixin:
 
         if getattr(self, 'bot', None):
             try:
-                from app.services.admin_notification_service import (
-                    AdminNotificationService,
-                )
+                from app.services.admin_notification_service import AdminNotificationService
 
                 notification_service = AdminNotificationService(self.bot)
                 await notification_service.send_balance_topup_notification(
@@ -707,11 +660,7 @@ class TelegramStarsMixin:
                     db=db,
                 )
             except Exception as error:  # pragma: no cover - диагностический лог
-                logger.error(
-                    'Ошибка отправки уведомления о пополнении Stars',
-                    error=error,
-                    exc_info=True,
-                )
+                logger.error('Ошибка отправки уведомления о пополнении Stars', error=error, exc_info=True)
 
         # Проверяем наличие сохраненной корзины для возврата к оформлению подписки
         try:
@@ -720,14 +669,11 @@ class TelegramStarsMixin:
             await send_cart_notification_after_topup(user, amount_kopeks, db, getattr(self, 'bot', None))
         except Exception as error:  # pragma: no cover - диагностический лог
             logger.error(
-                'Ошибка при работе с сохраненной корзиной для пользователя',
-                user_id=user.id,
-                error=error,
-                exc_info=True,
+                'Ошибка при работе с сохраненной корзиной для пользователя', user_id=user.id, error=error, exc_info=True
             )
 
         logger.info(
-            'Обработан Stars платеж',
+            '✅ Обработан Stars платеж',
             user_id=user.id,
             stars_amount=stars_amount,
             format_price=settings.format_price(amount_kopeks),

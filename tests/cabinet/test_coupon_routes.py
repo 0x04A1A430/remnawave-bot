@@ -2,7 +2,7 @@
 
 Follows the house pattern for admin-route tests: a route-registration smoke
 test on the aggregate router plus direct handler calls with hand-built fakes
-(`admin=SimpleNamespace(...)`, `db=AsyncMock()`) вЂ” `require_permission` and
+(`admin=SimpleNamespace(...)`, `db=AsyncMock()`) — `require_permission` and
 `get_cabinet_db` are bypassed by passing the already-resolved arguments.
 """
 
@@ -44,6 +44,7 @@ def _batch(**overrides) -> SimpleNamespace:
 
 def test_coupon_routes_registered(registered_paths) -> None:
     assert registered_paths.get('/cabinet/admin/coupons') == {'GET', 'POST'}
+    # DELETE — полное удаление партии (в отличие от /revoke, который гасит купоны)
     assert registered_paths.get('/cabinet/admin/coupons/{batch_id}') == {'GET', 'DELETE'}
     assert registered_paths.get('/cabinet/admin/coupons/{batch_id}/links') == {'GET'}
     assert registered_paths.get('/cabinet/admin/coupons/{batch_id}/revoke') == {'POST'}
@@ -63,6 +64,7 @@ def test_coupons_permissions_registered() -> None:
 # --- Admin: create batch ---------------------------------------------------
 
 
+@pytest.mark.asyncio
 async def test_create_batch_returns_links_and_tokens(monkeypatch: pytest.MonkeyPatch) -> None:
     from app.cabinet.routes import admin_coupons
     from app.cabinet.schemas.coupons import CouponBatchCreateRequest
@@ -94,6 +96,7 @@ async def test_create_batch_returns_links_and_tokens(monkeypatch: pytest.MonkeyP
     assert kwargs['valid_until'] is not None
 
 
+@pytest.mark.asyncio
 async def test_create_batch_rejects_inactive_tariff() -> None:
     from app.cabinet.routes import admin_coupons
     from app.cabinet.schemas.coupons import CouponBatchCreateRequest
@@ -109,6 +112,7 @@ async def test_create_batch_rejects_inactive_tariff() -> None:
     assert exc_info.value.status_code == 400
 
 
+@pytest.mark.asyncio
 async def test_create_batch_rejects_blank_name() -> None:
     from app.cabinet.routes import admin_coupons
     from app.cabinet.schemas.coupons import CouponBatchCreateRequest
@@ -125,6 +129,7 @@ async def test_create_batch_rejects_blank_name() -> None:
 # --- Admin: card / links / revoke -----------------------------------------
 
 
+@pytest.mark.asyncio
 async def test_get_batch_404_when_missing() -> None:
     from app.cabinet.routes import admin_coupons
 
@@ -134,6 +139,7 @@ async def test_get_batch_404_when_missing() -> None:
     assert exc_info.value.status_code == 404
 
 
+@pytest.mark.asyncio
 async def test_links_export_counts_active_only(monkeypatch: pytest.MonkeyPatch) -> None:
     from app.cabinet.routes import admin_coupons
 
@@ -152,6 +158,7 @@ async def test_links_export_counts_active_only(monkeypatch: pytest.MonkeyPatch) 
     assert tokens_mock.await_args.kwargs.get('status') == 'active', 'export must include only still-active coupons'
 
 
+@pytest.mark.asyncio
 async def test_revoke_returns_count_and_updated_card() -> None:
     from app.cabinet.routes import admin_coupons
 
@@ -182,6 +189,7 @@ def _redeem_result(renewed: bool = False) -> CouponRedemptionResult:
     )
 
 
+@pytest.mark.asyncio
 async def test_redeem_success_for_telegram_user_sends_no_email() -> None:
     from app.cabinet.routes import coupon as coupon_routes
     from app.cabinet.schemas.coupons import CouponRedeemRequest
@@ -202,6 +210,7 @@ async def test_redeem_success_for_telegram_user_sends_no_email() -> None:
     send_mock.assert_not_called()
 
 
+@pytest.mark.asyncio
 async def test_redeem_notifies_email_only_user() -> None:
     from app.cabinet.routes import coupon as coupon_routes
     from app.cabinet.schemas.coupons import CouponRedeemRequest
@@ -225,6 +234,7 @@ async def test_redeem_notifies_email_only_user() -> None:
     assert kwargs['context']['new_expires_at']
 
 
+@pytest.mark.asyncio
 async def test_redeem_maps_service_errors_to_structured_contract() -> None:
     from app.cabinet.routes import coupon as coupon_routes
     from app.cabinet.schemas.coupons import CouponRedeemRequest
@@ -254,6 +264,7 @@ def _status_request() -> MagicMock:
     return MagicMock()
 
 
+@pytest.mark.asyncio
 async def test_public_status_returns_offer_for_active_coupon(monkeypatch: pytest.MonkeyPatch) -> None:
     from app.cabinet.routes import coupon as coupon_routes
 
@@ -276,6 +287,7 @@ async def test_public_status_returns_offer_for_active_coupon(monkeypatch: pytest
     assert response.bot_link == f'https://t.me/testbot?start=coupon_{VALID_TOKEN}'
 
 
+@pytest.mark.asyncio
 async def test_public_status_is_uniform_404_for_consumed_coupon() -> None:
     from app.cabinet.routes import coupon as coupon_routes
 
@@ -290,6 +302,7 @@ async def test_public_status_is_uniform_404_for_consumed_coupon() -> None:
     assert exc_info.value.status_code == 404
 
 
+@pytest.mark.asyncio
 async def test_public_status_rate_limited() -> None:
     from app.cabinet.routes import coupon as coupon_routes
 
@@ -302,6 +315,7 @@ async def test_public_status_rate_limited() -> None:
     assert exc_info.value.status_code == 429
 
 
+@pytest.mark.asyncio
 async def test_public_status_rejects_malformed_token_without_db_hit() -> None:
     from app.cabinet.routes import coupon as coupon_routes
 

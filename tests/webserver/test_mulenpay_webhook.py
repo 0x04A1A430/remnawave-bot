@@ -125,9 +125,7 @@ def test_verify_rejects_tampered_amount() -> None:
     assert _verify_mulenpay_signature(_build_request(body), body) is False
 
 
-def test_verify_rejects_when_secret_not_configured(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_verify_rejects_when_secret_not_configured(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, 'MULENPAY_SECRET_KEY', None, raising=False)
 
     data = {'id': 1, 'amount': '1.00'}
@@ -162,13 +160,7 @@ def test_verify_ignores_http_headers_completely() -> None:
     spoofing trivial when the secret leaked, because Authorization: Bearer
     could replay the secret. New flow only inspects body-level sign field.
     """
-    data = {
-        'id': 1,
-        'amount': '1.00',
-        'currency': 'rub',
-        'uuid': 'u',
-        'payment_status': 'success',
-    }
+    data = {'id': 1, 'amount': '1.00', 'currency': 'rub', 'uuid': 'u', 'payment_status': 'success'}
     payload = {**data, 'sign': 'invalid'}
     body = json.dumps(payload).encode('utf-8')
 
@@ -186,13 +178,7 @@ def test_verify_ignores_http_headers_completely() -> None:
 
 
 def test_verify_is_case_insensitive_for_hex_sign() -> None:
-    data = {
-        'id': 7,
-        'amount': '50.00',
-        'currency': 'rub',
-        'uuid': 'x',
-        'payment_status': 'success',
-    }
+    data = {'id': 7, 'amount': '50.00', 'currency': 'rub', 'uuid': 'x', 'payment_status': 'success'}
     expected = _sign(data)
     payload = {**data, 'sign': expected.upper()}
     body = json.dumps(payload).encode('utf-8')
@@ -243,13 +229,7 @@ def _get_route(router, path: str, method: str = 'POST'):
 
 @pytest.mark.anyio
 async def test_route_returns_200_on_valid_sign(monkeypatch: pytest.MonkeyPatch) -> None:
-    data = {
-        'id': 1,
-        'amount': '100.00',
-        'currency': 'rub',
-        'uuid': 'u',
-        'payment_status': 'success',
-    }
+    data = {'id': 1, 'amount': '100.00', 'currency': 'rub', 'uuid': 'u', 'payment_status': 'success'}
     payload = {**data, 'sign': _sign(data)}
     body = json.dumps(payload).encode('utf-8')
 
@@ -273,9 +253,7 @@ async def test_route_returns_200_on_valid_sign(monkeypatch: pytest.MonkeyPatch) 
 
 
 @pytest.mark.anyio
-async def test_route_returns_401_on_invalid_sign(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+async def test_route_returns_401_on_invalid_sign(monkeypatch: pytest.MonkeyPatch) -> None:
     body = json.dumps({'id': 1, 'amount': '100.00', 'sign': 'bad'}).encode('utf-8')
 
     payment_service = SimpleNamespace(process_mulenpay_callback=AsyncMock())

@@ -53,7 +53,7 @@ class ReferralContestService:
             return
 
         self._task = asyncio.create_task(self._run_loop())
-        logger.info('Сервис конкурсов запущен')
+        logger.info('🏆 Сервис конкурсов запущен')
 
     async def stop(self) -> None:
         if self._task and not self._task.done():
@@ -94,12 +94,7 @@ class ReferralContestService:
                 except asyncio.CancelledError:
                     raise
                 except Exception as exc:
-                    logger.error(
-                        'Ошибка обработки конкурса',
-                        contest_id=contest.id,
-                        title=contest.title,
-                        exc=exc,
-                    )
+                    logger.error('Ошибка обработки конкурса', contest_id=contest.id, title=contest.title, exc=exc)
 
     async def _maybe_send_daily_summary(
         self,
@@ -266,15 +261,10 @@ class ReferralContestService:
                 await self.bot.send_message(user.telegram_id, text, disable_web_page_preview=True)
             except (TelegramForbiddenError, TelegramNotFound):
                 logger.info(
-                    'Не удалось отправить сообщение участнику (вероятно, блокировка)',
-                    telegram_id=user.telegram_id,
+                    'Не удалось отправить сообщение участнику (вероятно, блокировка)', telegram_id=user.telegram_id
                 )
             except Exception as exc:
-                logger.error(
-                    'Ошибка отправки участнику конкурса',
-                    telegram_id=user.telegram_id,
-                    exc=exc,
-                )
+                logger.error('Ошибка отправки участнику конкурса', telegram_id=user.telegram_id, exc=exc)
 
     async def _notify_admins(
         self,
@@ -294,7 +284,7 @@ class ReferralContestService:
             return
 
         lines = [
-            '<b>Конкурс рефералов</b>',
+            '🏆 <b>Конкурс рефералов</b>',
             f'Название: <b>{html.escape(contest.title)}</b>',
             f'Статус: {"финал" if is_final else "дневная сводка"}',
             f'Временная зона: <code>{tz.key}</code>',
@@ -305,7 +295,7 @@ class ReferralContestService:
 
         if leaderboard:
             for idx, (name, score, _, is_virtual) in enumerate(leaderboard[:5], start=1):
-                virt_mark = ' ' if is_virtual else ''
+                virt_mark = ' 👻' if is_virtual else ''
                 lines.append(f'{idx}. {html.escape(name)}{virt_mark} — {score}')
         else:
             lines.append('Пока нет участников.')
@@ -343,17 +333,15 @@ class ReferralContestService:
         if not self.bot:
             return
 
-        from app.services.channel_subscription_service import (
-            channel_subscription_service,
-        )
+        from app.services.channel_subscription_service import channel_subscription_service
 
         channel_id = await channel_subscription_service.get_first_channel_id()
         if not channel_id:
             return
 
         lines = [
-            f'{html.escape(contest.title)}',
-            'Итоги конкурса' if is_final else 'Промежуточные итоги',
+            f'🏆 {html.escape(contest.title)}',
+            '🏁 Итоги конкурса' if is_final else '📊 Промежуточные итоги',
             f'Время зоны: {tz.key}',
             f'Всего участников: <b>{len(leaderboard)}</b>',
             '',
@@ -379,11 +367,7 @@ class ReferralContestService:
         except (TelegramForbiddenError, TelegramNotFound):
             logger.info('Не удалось отправить сводку конкурса в канал', channel_id=channel_id)
         except Exception as exc:
-            logger.error(
-                'Ошибка отправки сводки конкурса в канал',
-                channel_id=channel_id,
-                exc=exc,
-            )
+            logger.error('Ошибка отправки сводки конкурса в канал', channel_id=channel_id, exc=exc)
 
     def _build_participant_message(
         self,
@@ -396,9 +380,9 @@ class ReferralContestService:
         today_events: int,
         is_final: bool,
     ) -> str:
-        status_line = 'Итоги конкурса' if is_final else 'Промежуточные итоги'
+        status_line = '🏁 Итоги конкурса' if is_final else '📊 Промежуточные итоги'
         lines = [
-            f'{html.escape(contest.title)}',
+            f'🏆 {html.escape(contest.title)}',
             status_line,
             '',
             f'Ваше место: <b>{rank}</b>',
@@ -650,11 +634,7 @@ class ReferralContestService:
                         user_id=user.id,
                     )
             except Exception as exc:
-                logger.error(
-                    'Не удалось записать зачёт регистрации для конкурса',
-                    contest_id=contest.id,
-                    exc=exc,
-                )
+                logger.error('Не удалось записать зачёт регистрации для конкурса', contest_id=contest.id, exc=exc)
 
     async def sync_contest(
         self,

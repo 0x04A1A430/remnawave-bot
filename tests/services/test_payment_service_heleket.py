@@ -158,9 +158,7 @@ async def test_create_heleket_payment_returns_none_without_service() -> None:
 
 
 @pytest.mark.anyio('asyncio')
-async def test_create_heleket_payment_handles_empty_response(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+async def test_create_heleket_payment_handles_empty_response(monkeypatch: pytest.MonkeyPatch) -> None:
     stub = StubHeleketService(response=None)
     service = _make_service(stub)
     db = DummySession()
@@ -191,9 +189,7 @@ async def test_create_heleket_payment_handles_empty_response(
 
 
 @pytest.mark.anyio('asyncio')
-async def test_sync_heleket_payment_status_success(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+async def test_sync_heleket_payment_status_success(monkeypatch: pytest.MonkeyPatch) -> None:
     info_response = {
         'state': 0,
         'result': {
@@ -239,9 +235,7 @@ async def test_sync_heleket_payment_status_success(
 
 
 @pytest.mark.anyio('asyncio')
-async def test_sync_heleket_payment_status_without_response(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+async def test_sync_heleket_payment_status_without_response(monkeypatch: pytest.MonkeyPatch) -> None:
     stub = StubHeleketService(response=None, info_response=None)
     service = _make_service(stub)
     db = DummySession()
@@ -272,9 +266,7 @@ async def test_sync_heleket_payment_status_without_response(
 
 
 @pytest.mark.anyio('asyncio')
-async def test_sync_heleket_payment_status_history_fallback(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+async def test_sync_heleket_payment_status_history_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
     stub = StubHeleketService(response=None, info_response=None)
     stub.list_response = {
         'state': 0,

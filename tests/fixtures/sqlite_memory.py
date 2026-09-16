@@ -1,8 +1,7 @@
-"""In-memory SQLite fixture for tests that exercise models/CRUD against a real DB.
+"""In-memory SQLite сессия для тестов, которым нужны реальные запросы к БД.
 
-Ports the upstream ``memory_session`` test helper. Runs ``create_all`` on the
-subset of tables the test declares, because PostgreSQL ``JSONB`` columns (e.g.
-User.notification_settings) are not natively supported on SQLite.
+Полный ``create_all`` не годится: часть таблиц использует JSONB, поэтому здесь
+регистрируется рендер JSONB как JSON и таблицы создаются точечным списком.
 """
 
 from __future__ import annotations
@@ -21,12 +20,16 @@ from app.database.models import Base
 
 @compiles(JSONB, 'sqlite')
 def _compile_jsonb_on_sqlite(type_, compiler, **kw) -> str:
-    """SQLite cannot compile JSONB, emit plain JSON instead."""
+    """SQLite не компилирует JSONB (например, User.notification_settings)."""
     return 'JSON'
 
 
 def ensure_real_aiosqlite(monkeypatch) -> None:
-    """Remove a fake aiosqlite stubbed into sys.modules by the session conftest."""
+    """Снять заглушку sys.modules['aiosqlite'] из conftest перед созданием engine.
+
+    conftest подставляет пустой модуль для окружений без aiosqlite, и эта заглушка
+    перекрывает физически установленный пакет — create_async_engine падает.
+    """
     stub = sys.modules.get('aiosqlite')
     if stub is not None and not hasattr(stub, 'connect'):
         monkeypatch.delitem(sys.modules, 'aiosqlite', raising=False)
@@ -34,11 +37,14 @@ def ensure_real_aiosqlite(monkeypatch) -> None:
 
 @contextlib.asynccontextmanager
 async def memory_session(monkeypatch, tables: Sequence[Table]) -> AsyncIterator[AsyncSession]:
-    """Yield an in-memory SQLite session with only the given tables created."""
+    """Сессия к :memory: БД, где созданы только переданные таблицы."""
     ensure_real_aiosqlite(monkeypatch)
     engine = create_async_engine('sqlite+aiosqlite:///:memory:')
     async with engine.begin() as conn:
         await conn.run_sync(lambda c: Base.metadata.create_all(c, tables=list(tables)))
+    # autoflush=False повторяет прод (app/database/database.py): иначе тест
+    # видит ещё не отправленные в БД изменения, которых в проде на этом месте
+    # не будет, и пропускает целый класс ошибок «SELECT читает старое значение».
     maker = async_sessionmaker(engine, expire_on_commit=False, autoflush=False)
     try:
         async with maker() as session:

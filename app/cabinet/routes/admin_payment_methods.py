@@ -15,7 +15,6 @@ from app.services.payment_method_config_service import (
     get_all_promo_groups,
     get_config_by_method_id,
     normalize_quick_amounts,
-    strip_tg_emoji,
     update_config,
     update_sort_order,
 )
@@ -126,18 +125,15 @@ def _enrich_config(config, defaults: dict) -> PaymentMethodConfigResponse:
     available_sub_options = None
     raw_options = method_def.get('available_sub_options')
     if raw_options:
-        available_sub_options = [
-            SubOptionInfo(id=opt['id'], name=strip_tg_emoji(opt.get('name')) or opt['name']) for opt in raw_options
-        ]
+        available_sub_options = [SubOptionInfo(**opt) for opt in raw_options]
 
     return PaymentMethodConfigResponse(
         method_id=config.method_id,
         sort_order=config.sort_order,
         is_enabled=config.is_enabled,
         display_name=config.display_name,
-        description=strip_tg_emoji(config.description),
-        default_display_name=strip_tg_emoji(method_def.get('default_display_name', config.method_id))
-        or method_def.get('default_display_name', config.method_id),
+        description=config.description,
+        default_display_name=method_def.get('default_display_name', config.method_id),
         sub_options=config.sub_options,
         available_sub_options=available_sub_options,
         quick_amounts=getattr(config, 'quick_amounts', None),
@@ -205,11 +201,7 @@ async def update_payment_methods_order(
 ):
     """Batch update sort order for payment methods."""
     await update_sort_order(db, request.method_ids)
-    logger.info(
-        'Admin updated payment methods order',
-        admin_id=admin.id,
-        method_ids=request.method_ids,
-    )
+    logger.info('Admin updated payment methods order', admin_id=admin.id, method_ids=request.method_ids)
     return {'success': True}
 
 

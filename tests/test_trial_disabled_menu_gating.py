@@ -51,10 +51,7 @@ def test_keyboard_hides_trial_when_disabled_for_all():
         kb = get_main_menu_keyboard(has_had_paid_subscription=False, has_active_subscription=False)
         assert not _menu_has_trial(kb)
     finally:
-        settings.TRIAL_DURATION_DAYS, settings.TRIAL_DISABLED_FOR = (
-            orig_days,
-            orig_disabled,
-        )
+        settings.TRIAL_DURATION_DAYS, settings.TRIAL_DISABLED_FOR = orig_days, orig_disabled
 
 
 # --- Surface 2: custom-menu constructor path ------------------------------
@@ -80,10 +77,7 @@ def test_menu_layout_hides_trial_when_disabled():
         settings.TRIAL_DISABLED_FOR = 'all'
         assert MenuLayoutService._evaluate_conditions(cond, ctx) is False
     finally:
-        settings.TRIAL_DURATION_DAYS, settings.TRIAL_DISABLED_FOR = (
-            orig_days,
-            orig_disabled,
-        )
+        settings.TRIAL_DURATION_DAYS, settings.TRIAL_DISABLED_FOR = orig_days, orig_disabled
 
 
 # --- Surface 3: handlers --------------------------------------------------

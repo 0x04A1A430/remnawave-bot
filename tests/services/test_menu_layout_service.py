@@ -15,7 +15,7 @@ async def test_build_button_connect_direct_mode_with_url():
     button_config = {
         'type': 'builtin',
         'builtin_id': 'connect',
-        'text': {'ru': "<tg-emoji emoji-id='5879585266426973039'>🌐</tg-emoji> Подключиться"},
+        'text': {'ru': '🔗 Подключиться'},
         'action': 'subscription_connect',
         'open_mode': 'direct',
         'webapp_url': 'https://example.com/miniapp',
@@ -34,8 +34,8 @@ async def test_build_button_connect_direct_mode_with_url():
 
     assert button is not None
     assert isinstance(button, InlineKeyboardButton)
-    assert button.url is not None
-    assert button.url == 'https://example.com/miniapp'
+    assert button.web_app is not None
+    assert button.web_app.url == 'https://example.com/miniapp'
     assert button.callback_data is None
 
 
@@ -45,7 +45,7 @@ async def test_build_button_connect_direct_mode_with_subscription_url():
     button_config = {
         'type': 'builtin',
         'builtin_id': 'connect',
-        'text': {'ru': "<tg-emoji emoji-id='5879585266426973039'>🌐</tg-emoji> Подключиться"},
+        'text': {'ru': '🔗 Подключиться'},
         'action': 'subscription_connect',
         'open_mode': 'direct',
         'webapp_url': None,
@@ -73,8 +73,8 @@ async def test_build_button_connect_direct_mode_with_subscription_url():
 
         assert button is not None
         assert isinstance(button, InlineKeyboardButton)
-        assert button.url is not None
-        assert button.url == 'https://subscription.example.com/link'
+        assert button.web_app is not None
+        assert button.web_app.url == 'https://subscription.example.com/link'
 
 
 @pytest.mark.anyio
@@ -83,7 +83,7 @@ async def test_build_button_connect_callback_mode():
     button_config = {
         'type': 'builtin',
         'builtin_id': 'connect',
-        'text': {'ru': "<tg-emoji emoji-id='5879585266426973039'>🌐</tg-emoji> Подключиться"},
+        'text': {'ru': '🔗 Подключиться'},
         'action': 'subscription_connect',
         'open_mode': 'callback',
         'webapp_url': None,
@@ -112,7 +112,7 @@ async def test_build_button_connect_direct_mode_fallback_to_callback():
     button_config = {
         'type': 'builtin',
         'builtin_id': 'connect',
-        'text': {'ru': "<tg-emoji emoji-id='5879585266426973039'>🌐</tg-emoji> Подключиться"},
+        'text': {'ru': '🔗 Подключиться'},
         'action': 'subscription_connect',
         'open_mode': 'direct',
         'webapp_url': None,

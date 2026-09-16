@@ -14,8 +14,8 @@ from aiogram.exceptions import (
     TelegramRetryAfter,
     TelegramServerError,
 )
-from sqlalchemy import select
-from sqlalchemy.exc import MissingGreenlet
+from sqlalchemy import inspect as sa_inspect, select
+from sqlalchemy.exc import MissingGreenlet, NoInspectionAvailable
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -35,6 +35,7 @@ from app.database.models import (
 )
 from app.utils.formatters import format_username_link
 from app.utils.message_patch import caption_exceeds_telegram_limit
+from app.utils.rich_admin import classic_admin_html_to_rich, try_send_rich_admin_message
 from app.utils.timezone import format_local_datetime
 
 
@@ -75,6 +76,29 @@ class NotificationCategory(StrEnum):
 
 
 logger = structlog.get_logger(__name__)
+
+
+def _loaded_relationship(instance: object, name: str) -> Any:
+    """Значение связи, только если она УЖЕ загружена; иначе None и никакого IO.
+
+    ``getattr(obj, name, None)`` для этого не годится: у незагруженной связи
+    async-сессия не отдаёт None, а лезет в базу — и падает MissingGreenlet, потому
+    что default у getattr срабатывает лишь на AttributeError.
+
+    Ровно на этом падало уведомление о регистрации по рекламной кампании:
+    apply_campaign_bonus перечитывает пользователя через ``db.refresh(user)``
+    (сам по себе — фикс прошлого MissingGreenlet), а refresh сбрасывает ранее
+    загруженные связи, включая promo_group.
+    """
+    try:
+        state = sa_inspect(instance)
+    except NoInspectionAvailable:
+        # Не ORM-объект (тестовые фейки, SimpleNamespace) — обычный доступ безопасен.
+        return getattr(instance, name, None)
+
+    if name in state.unloaded:
+        return None
+    return state.dict.get(name)
 
 
 class AdminNotificationService:
@@ -119,7 +143,7 @@ class AdminNotificationService:
             if referrer.telegram_id:
                 return f'ID {referrer.telegram_id}'
             if referrer.email:
-                return f'{html.escape(referrer.email)}'
+                return f'📧 {html.escape(referrer.email)}'
             return f'User#{referred_by_id}'
 
         except Exception as e:
@@ -127,10 +151,17 @@ class AdminNotificationService:
             return f'ID {referred_by_id}'
 
     async def _get_user_promo_group(self, db: AsyncSession, user: User) -> PromoGroup | None:
-        if getattr(user, 'promo_group', None):
-            return user.promo_group
+        promo_group = _loaded_relationship(user, 'promo_group')
+        if promo_group:
+            return promo_group
 
-        if not user.promo_group_id:
+        try:
+            promo_group_id = user.promo_group_id
+        except Exception:
+            # Инстанс отвязан от сессии или протух — колонка тоже ушла бы в ленивую
+            # подгрузку. Берём последнее известное значение из __dict__.
+            promo_group_id = user.__dict__.get('promo_group_id')
+        if not promo_group_id:
             return None
 
         try:
@@ -139,16 +170,17 @@ class AdminNotificationService:
             # relationship might not be available — fallback to direct fetch
             pass
 
-        if getattr(user, 'promo_group', None):
-            return user.promo_group
+        promo_group = _loaded_relationship(user, 'promo_group')
+        if promo_group:
+            return promo_group
 
         try:
-            return await get_promo_group_by_id(db, user.promo_group_id)
+            return await get_promo_group_by_id(db, promo_group_id)
         except Exception as e:
             logger.error(
                 'Ошибка загрузки промогруппы пользователя',
-                promo_group_id=user.promo_group_id,
-                telegram_id=user.telegram_id,
+                promo_group_id=promo_group_id,
+                telegram_id=user.__dict__.get('telegram_id'),
                 e=e,
             )
             return None
@@ -178,7 +210,7 @@ class AdminNotificationService:
 
         email = getattr(user, 'email', None)
         if email:
-            return f'{html.escape(email)}'
+            return f'📧 {html.escape(email)}'
 
         return f'User#{getattr(user, "id", "Unknown")}'
 
@@ -207,16 +239,10 @@ class AdminNotificationService:
     ) -> None:
         """Persist subscription-related event for external dashboards."""
 
-        # user.id читаем ДО любых операций с БД: после упавшего commit сессия
-        # переходит в pending-rollback, и обращение к атрибутам ORM бросает
-        # PendingRollbackError вместо исходной ошибки (см. #инцидент с таймаутом
-        # блокировки строки users).
-        user_id = user.id if user is not None else None
-
         try:
             await create_subscription_event(
                 db,
-                user_id=user_id,
+                user_id=user.id,
                 event_type=event_type,
                 subscription_id=subscription.id if subscription else None,
                 transaction_id=transaction.id if transaction else None,
@@ -230,7 +256,7 @@ class AdminNotificationService:
             logger.error(
                 'Не удалось сохранить событие подписки для пользователя',
                 event_type=event_type,
-                user_id=user_id,
+                getattr=getattr(user, 'id', 'unknown'),
                 exc_info=True,
             )
 
@@ -239,7 +265,7 @@ class AdminNotificationService:
             except Exception:
                 logger.error(
                     'Не удалось выполнить rollback после ошибки события подписки пользователя',
-                    user_id=user_id,
+                    getattr=getattr(user, 'id', 'unknown'),
                     exc_info=True,
                 )
 
@@ -277,9 +303,9 @@ class AdminNotificationService:
             discount_lines.append(f'• Периоды: {formatted_periods}')
 
         if promo_group.apply_discounts_to_addons:
-            discount_lines.append('• Доп. услуги:  скидка действует')
+            discount_lines.append('• Доп. услуги: ✅ скидка действует')
         else:
-            discount_lines.append('• Доп. услуги:  без скидки')
+            discount_lines.append('• Доп. услуги: ❌ без скидки')
 
         return discount_lines
 
@@ -288,7 +314,7 @@ class AdminNotificationService:
         promo_group: PromoGroup | None,
         *,
         title: str = 'Промогруппа',
-        icon: str = '',
+        icon: str = '🏷️',
     ) -> str:
         if not promo_group:
             return f'{icon} <b>{title}:</b> —'
@@ -297,55 +323,58 @@ class AdminNotificationService:
 
         discount_lines = self._format_promo_group_discounts(promo_group)
         if discount_lines:
-            lines.append('<b>Скидки:</b>')
+            lines.append('💸 <b>Скидки:</b>')
             lines.extend(discount_lines)
         else:
-            lines.append('<b>Скидки:</b> отсутствуют')
+            lines.append('💸 <b>Скидки:</b> отсутствуют')
 
         return '\n'.join(lines)
 
     def _get_promocode_type_display(self, promo_type: str | None) -> str:
         mapping = {
-            PromoCodeType.BALANCE.value: 'Бонус на баланс',
-            PromoCodeType.SUBSCRIPTION_DAYS.value: 'Доп. дни подписки',
-            PromoCodeType.TRIAL_SUBSCRIPTION.value: 'Триал подписка',
-            PromoCodeType.PROMO_GROUP.value: 'Промогруппа',
-            PromoCodeType.DISCOUNT.value: 'Скидка',
+            PromoCodeType.BALANCE.value: '💰 Бонус на баланс',
+            PromoCodeType.SUBSCRIPTION_DAYS.value: '⏰ Доп. дни подписки',
+            PromoCodeType.TRIAL_SUBSCRIPTION.value: '🎁 Триал подписка',
+            PromoCodeType.PROMO_GROUP.value: '👥 Промогруппа',
+            PromoCodeType.DISCOUNT.value: '💸 Скидка',
+            PromoCodeType.BALANCE_AND_DAYS.value: '💰📅 Баланс + дни подписки',
         }
 
         if not promo_type:
-            return 'Не указан'
+            return 'ℹ️ Не указан'
 
-        return mapping.get(promo_type, f'{promo_type}')
+        return mapping.get(promo_type, f'ℹ️ {promo_type}')
 
     def _format_campaign_bonus(self, campaign: AdvertisingCampaign, *, tariff_name: str | None = None) -> list[str]:
         if campaign.is_balance_bonus:
             return [
-                f'Баланс: {settings.format_price(campaign.balance_bonus_kopeks or 0)}',
+                f'💰 Баланс: {settings.format_price(campaign.balance_bonus_kopeks or 0)}',
             ]
 
         if campaign.is_subscription_bonus:
             default_devices = getattr(settings, 'DEFAULT_DEVICE_LIMIT', 1)
             details = [
-                f'{campaign.subscription_duration_days or 0} дн. '
-                f'•  {campaign.subscription_traffic_gb or 0} ГБ '
-                f'•  {campaign.subscription_device_limit or default_devices} устр.',
+                (
+                    f'📅 {campaign.subscription_duration_days or 0} дн. '
+                    f'• 📊 {campaign.subscription_traffic_gb or 0} ГБ '
+                    f'• 📱 {campaign.subscription_device_limit or default_devices} устр.'
+                ),
             ]
             if campaign.subscription_squads:
-                details.append(f'Сквады: {len(campaign.subscription_squads)} шт.')
+                details.append(f'🌐 Сквады: {len(campaign.subscription_squads)} шт.')
             return details
 
         if campaign.is_tariff_bonus:
             name = tariff_name or f'ID {campaign.tariff_id}'
-            details = [f'Тариф: <b>{name}</b>']
+            details = [f'📦 Тариф: <b>{name}</b>']
             if campaign.tariff_duration_days:
-                details.append(f'Период: {campaign.tariff_duration_days} дней')
+                details.append(f'📅 Период: {campaign.tariff_duration_days} дней')
             return details
 
         if campaign.is_none_bonus:
-            return ['Только отслеживание']
+            return ['🔗 Только отслеживание']
 
-        return ['Бонусы не предусмотрены']
+        return ['ℹ️ Бонусы не предусмотрены']
 
     async def send_trial_activation_notification(
         self,
@@ -368,10 +397,7 @@ class AdminNotificationService:
                 extra={
                     'charged_amount_kopeks': charged_amount_kopeks,
                     'trial_duration_days': (
-                        max(
-                            1,
-                            round((subscription.end_date - subscription.start_date).total_seconds() / 86400),
-                        )
+                        max(1, round((subscription.end_date - subscription.start_date).total_seconds() / 86400))
                         if subscription.end_date and subscription.start_date
                         else settings.TRIAL_DURATION_DAYS
                     ),
@@ -387,7 +413,7 @@ class AdminNotificationService:
             if not self._is_enabled():
                 return False
 
-            user_status = 'Новый' if not user.has_had_paid_subscription else 'Существующий'
+            user_status = '🆕 Новый' if not user.has_had_paid_subscription else '🔄 Существующий'
             promo_group = await self._get_user_promo_group(db, user)
             user_display = self._get_user_display(user)
 
@@ -401,7 +427,7 @@ class AdminNotificationService:
 
             payment_block = ''
             if charged_amount_kopeks and charged_amount_kopeks > 0:
-                payment_block = f'\n <b>Оплата за активацию:</b> {settings.format_price(charged_amount_kopeks)}'
+                payment_block = f'\n💳 <b>Оплата за активацию:</b> {settings.format_price(charged_amount_kopeks)}'
 
             user_id_label = self._get_user_identifier_label(user)
             user_id_display = self._get_user_identifier_display(user)
@@ -410,32 +436,31 @@ class AdminNotificationService:
             tariff_name = await self._get_tariff_name(db, subscription)
 
             message_lines = [
-                '<b>АКТИВАЦИЯ ТРИАЛА</b>',
+                '🎯 <b>АКТИВАЦИЯ ТРИАЛА</b>',
                 '',
-                f'<b>Пользователь:</b> {user_display}',
-                f'<b>{user_id_label}:</b> {user_id_display}',
-                f'<b>Username:</b> @{html.escape(getattr(user, "username", None) or "отсутствует")}',
-                f'<b>Статус:</b> {user_status}',
+                f'👤 <b>Пользователь:</b> {user_display}',
+                f'🆔 <b>{user_id_label}:</b> {user_id_display}',
+                f'📱 <b>Username:</b> {format_username_link(getattr(user, "username", None), "отсутствует")}',
+                f'👥 <b>Статус:</b> {user_status}',
                 '',
             ]
 
             # Промогруппа — только название, без скидок
             if promo_group:
-                message_lines.append(f'<b>Промогруппа:</b> {html.escape(promo_group.name)}')
+                message_lines.append(f'🏷️ <b>Промогруппа:</b> {html.escape(promo_group.name)}')
             else:
-                message_lines.append('<b>Промогруппа:</b> —')
+                message_lines.append('🏷️ <b>Промогруппа:</b> —')
 
             # Тариф триала (если есть)
             if tariff_name:
-                message_lines.append(f'<b>Тариф:</b> {tariff_name}')
+                message_lines.append(f'📦 <b>Тариф:</b> {tariff_name}')
 
             message_lines.append('')
 
             trial_duration_days = settings.TRIAL_DURATION_DAYS
             if subscription.end_date and subscription.start_date:
                 trial_duration_days = max(
-                    1,
-                    round((subscription.end_date - subscription.start_date).total_seconds() / 86400),
+                    1, round((subscription.end_date - subscription.start_date).total_seconds() / 86400)
                 )
 
             trial_traffic_gb = (
@@ -446,11 +471,11 @@ class AdminNotificationService:
 
             message_lines.extend(
                 [
-                    '<b>Параметры триала:</b>',
-                    f'Период: {trial_duration_days} дней',
-                    f'Трафик: {self._format_traffic(trial_traffic_gb)}',
-                    f'Устройства: {trial_device_limit}',
-                    f'Сервер: {subscription.connected_squads[0] if subscription.connected_squads else "По умолчанию"}',
+                    '⏰ <b>Параметры триала:</b>',
+                    f'📅 Период: {trial_duration_days} дней',
+                    f'📊 Трафик: {self._format_traffic(trial_traffic_gb)}',
+                    f'📱 Устройства: {trial_device_limit}',
+                    f'🌐 Сервер: {subscription.connected_squads[0] if subscription.connected_squads else "По умолчанию"}',
                 ]
             )
 
@@ -459,17 +484,17 @@ class AdminNotificationService:
 
             message_lines.append('')
             message_lines.append(
-                f'<b>Действует до:</b> {format_local_datetime(subscription.end_date, "%d.%m.%Y %H:%M")}'
+                f'📆 <b>Действует до:</b> {format_local_datetime(subscription.end_date, "%d.%m.%Y %H:%M")}'
             )
 
             # Реферер — только если есть
             if user.referred_by_id:
                 referrer_info = await self._get_referrer_info(db, user.referred_by_id)
                 if referrer_info != 'Нет':
-                    message_lines.append(f'<b>Реферер:</b> {referrer_info}')
+                    message_lines.append(f'🔗 <b>Реферер:</b> {referrer_info}')
 
             message_lines.append('')
-            message_lines.append(f'<i>{format_local_datetime(datetime.now(UTC), "%d.%m.%Y %H:%M:%S")}</i>')
+            message_lines.append(f'⏰ <i>{format_local_datetime(datetime.now(UTC), "%d.%m.%Y %H:%M:%S")}</i>')
 
             return await self._send_message('\n'.join(message_lines), category=NotificationCategory.TRIALS)
 
@@ -501,7 +526,7 @@ class AdminNotificationService:
         period_days: int,
         was_trial_conversion: bool = False,
         amount_kopeks: int | None = None,
-        purchase_type: (str | None) = None,  # 'first_purchase', 'renewal', 'tariff_switch', None (auto-detect)
+        purchase_type: str | None = None,  # 'first_purchase', 'renewal', 'tariff_switch', None (auto-detect)
     ) -> bool:
         try:
             total_amount = (
@@ -516,15 +541,13 @@ class AdminNotificationService:
                 transaction=transaction,
                 amount_kopeks=total_amount,
                 message='Subscription purchase',
-                occurred_at=(
-                    (transaction.completed_at or transaction.created_at) if transaction else datetime.now(UTC)
-                ),
+                occurred_at=(transaction.completed_at or transaction.created_at) if transaction else datetime.now(UTC),
                 extra={
                     'period_days': period_days,
                     'was_trial_conversion': was_trial_conversion,
-                    'payment_method': (
-                        self._get_payment_method_display(transaction.payment_method) if transaction else 'Баланс'
-                    ),
+                    'payment_method': self._get_payment_method_display(transaction.payment_method)
+                    if transaction
+                    else 'Баланс',
                 },
             )
 
@@ -533,19 +556,19 @@ class AdminNotificationService:
 
             # Определяем тип операции и заголовок
             if purchase_type == 'tariff_switch':
-                event_title = 'СМЕНА ТАРИФА'
+                event_title = '🔄 СМЕНА ТАРИФА'
                 user_status = 'Смена тарифа'
             elif was_trial_conversion:
-                event_title = 'КОНВЕРСИЯ ИЗ ТРИАЛА'
+                event_title = '🔄 КОНВЕРСИЯ ИЗ ТРИАЛА'
                 user_status = 'Конверсия'
             elif purchase_type == 'first_purchase':
-                event_title = 'ПОКУПКА ПОДПИСКИ'
+                event_title = '💎 ПОКУПКА ПОДПИСКИ'
                 user_status = 'Первая покупка'
             elif purchase_type == 'renewal' or (purchase_type is None and user.has_had_paid_subscription):
-                event_title = 'ПРОДЛЕНИЕ ПОДПИСКИ'
+                event_title = '💎 ПРОДЛЕНИЕ ПОДПИСКИ'
                 user_status = 'Продление'
             else:
-                event_title = 'ПОКУПКА ПОДПИСКИ'
+                event_title = '💎 ПОКУПКА ПОДПИСКИ'
                 user_status = 'Первая покупка'
 
             # Получаем название тарифа
@@ -560,42 +583,42 @@ class AdminNotificationService:
             message_lines = [
                 f'<b>{event_title}</b>',
                 '',
-                f'{user_display} ({user_id_display})',
+                f'👤 {user_display} ({user_id_display})',
             ]
 
             # Добавляем username только если есть
             username = getattr(user, 'username', None)
             if username:
-                message_lines.append(f'@{html.escape(username)}')
+                message_lines.append(f'📱 {format_username_link(username)}')
 
-            message_lines.append(f'{user_status}')
+            message_lines.append(f'📋 {user_status}')
 
             # Тариф (если есть)
             if tariff_name:
-                message_lines.append(f'Тариф: <b>{tariff_name}</b>')
+                message_lines.append(f'🏷️ Тариф: <b>{tariff_name}</b>')
 
             message_lines.extend(
                 [
                     '',
-                    f'<b>{settings.format_price(total_amount)}</b> • {payment_method}',
-                    f'{period_days} дн. • до {format_local_datetime(subscription.end_date, "%d.%m.%Y")}',
-                    f'{self._format_traffic(subscription.traffic_limit_gb)} •  {subscription.device_limit} устр.',
-                    f'{servers_info}',
+                    f'💵 <b>{settings.format_price(total_amount)}</b> • {payment_method}',
+                    f'📅 {period_days} дн. • до {format_local_datetime(subscription.end_date, "%d.%m.%Y")}',
+                    f'📊 {self._format_traffic(subscription.traffic_limit_gb)} • 📱 {subscription.device_limit} устр.',
+                    f'🌐 {servers_info}',
                 ]
             )
 
             # Баланс после покупки
-            message_lines.append(f'Баланс: {settings.format_price(user.balance_kopeks)}')
+            message_lines.append(f'💰 Баланс: {settings.format_price(user.balance_kopeks)}')
 
             # Реферер (только если есть)
             if user.referred_by_id:
                 referrer_info = await self._get_referrer_info(db, user.referred_by_id)
                 if referrer_info != 'Нет':
-                    message_lines.append(f'Реф: {referrer_info}')
+                    message_lines.append(f'🔗 Реф: {referrer_info}')
 
             # ID транзакции (только если есть)
             if transaction:
-                message_lines.append(f'#{transaction.id}')
+                message_lines.append(f'🆔 #{transaction.id}')
 
             message_lines.extend(
                 [
@@ -624,29 +647,26 @@ class AdminNotificationService:
             return False
 
         try:
-            from app.utils.markdown_to_telegram import (
-                github_markdown_to_telegram_html,
-                truncate_for_blockquote,
-            )
+            from app.utils.markdown_to_telegram import github_markdown_to_telegram_html, truncate_for_blockquote
 
-            repo = getattr(settings, 'VERSION_CHECK_REPO', 'fr1ngg/remnawave-@xilarobot-telegram-bot')
+            repo = getattr(settings, 'VERSION_CHECK_REPO', 'fr1ngg/remnawave-bedolaga-telegram-bot')
             release_url = f'https://github.com/{repo}/releases/tag/{latest_version.tag_name}'
             repo_url = f'https://github.com/{repo}'
             timestamp = format_local_datetime(datetime.now(UTC), '%d.%m.%Y %H:%M:%S')
 
             if latest_version.prerelease:
-                header = '<b>Pre-release</b>'
+                header = '🧪 <b>Pre-release</b>'
             elif latest_version.is_dev:
-                header = '<b>Dev build</b>'
+                header = '🔧 <b>Dev build</b>'
             else:
-                header = '<b>Доступно обновление</b>'
+                header = '🆕 <b>Доступно обновление</b>'
 
             # -- message prefix (everything before blockquote) --
             prefix_lines = [
                 header,
                 '',
                 f'<code>{current_version}</code>  →  <b><a href="{release_url}">{latest_version.tag_name}</a></b>',
-                f'{latest_version.formatted_date}',
+                f'📅 {latest_version.formatted_date}',
                 '',
             ]
             message_prefix = '\n'.join(prefix_lines)
@@ -689,15 +709,15 @@ class AdminNotificationService:
             return False
 
         try:
-            message = f"""<b>ОШИБКА ПРОВЕРКИ ОБНОВЛЕНИЙ</b>
+            message = f"""⚠️ <b>ОШИБКА ПРОВЕРКИ ОБНОВЛЕНИЙ</b>
 
-    <b>Текущая версия:</b> <code>{current_version}</code>
-    <b>Ошибка:</b> {error_message}
+    📦 <b>Текущая версия:</b> <code>{current_version}</code>
+    ❌ <b>Ошибка:</b> {error_message}
 
-    Следующая попытка через час.
-    Проверьте доступность GitHub API и настройки сети.
+    🔄 Следующая попытка через час.
+    ⚙️ Проверьте доступность GitHub API и настройки сети.
 
-    <i>Система автоматических обновлений • {format_local_datetime(datetime.now(UTC), '%d.%m.%Y %H:%M:%S')}</i>"""
+    ⚙️ <i>Система автоматических обновлений • {format_local_datetime(datetime.now(UTC), '%d.%m.%Y %H:%M:%S')}</i>"""
 
             return await self._send_message(message, category=NotificationCategory.ERRORS)
 
@@ -725,39 +745,41 @@ class AdminNotificationService:
 
         # --- Основной блок ---
         message_lines: list[str] = [
-            '<b>ПОПОЛНЕНИЕ БАЛАНСА</b>',
+            '💰 <b>ПОПОЛНЕНИЕ БАЛАНСА</b>',
             '',
-            f'{user_display} ({user_id_display})',
+            f'👤 {user_display} ({user_id_display})',
         ]
 
         username = getattr(user, 'username', None)
         if username:
-            message_lines.append(f'@{html.escape(username)}')
+            message_lines.append(f'📱 {format_username_link(username)}')
 
-        message_lines.append(f'{topup_status}')
+        message_lines.append(f'💳 {topup_status}')
 
         # Промогруппа -- только название
         if promo_group:
-            message_lines.append(f'Промогруппа: {html.escape(promo_group.name)}')
+            message_lines.append(f'🏷️ Промогруппа: {html.escape(promo_group.name)}')
 
         message_lines.append('')
 
         # --- Детали пополнения ---
         message_lines.extend(
             [
-                f'<b>{settings.format_price(transaction.amount_kopeks)}</b> | {payment_method}',
+                f'💵 <b>{settings.format_price(transaction.amount_kopeks)}</b> | {payment_method}',
                 '',
-                f'{settings.format_price(old_balance)} →  {settings.format_price(user.balance_kopeks)}'
-                f' (<b>+{settings.format_price(balance_change)}</b>)',
+                (
+                    f'📉 {settings.format_price(old_balance)} → 📈 {settings.format_price(user.balance_kopeks)}'
+                    f' (<b>+{settings.format_price(balance_change)}</b>)'
+                ),
             ]
         )
 
         # --- Подписка ---
-        message_lines.append(f'Подписка: {subscription_status}')
+        message_lines.append(f'📱 Подписка: {subscription_status}')
 
         # --- Реферер (только если есть) ---
         if referrer_info and referrer_info != 'Нет':
-            message_lines.append(f'Реферер: {referrer_info}')
+            message_lines.append(f'🔗 Реферер: {referrer_info}')
 
         # --- Expandable blockquote с техническими деталями ---
         detail_lines: list[str] = [
@@ -881,16 +903,10 @@ class AdminNotificationService:
             logger.info('Сообщение уведомления создано успешно')
         except Exception as error:
             logger.info(
-                'Перехвачена ошибка при создании сообщения уведомления',
-                __name__=type(error).__name__,
-                error=error,
+                'Перехвачена ошибка при создании сообщения уведомления', __name__=type(error).__name__, error=error
             )
             if not self._is_lazy_loading_error(error):
-                logger.error(
-                    'Ошибка подготовки уведомления о пополнении',
-                    error=error,
-                    exc_info=True,
-                )
+                logger.error('Ошибка подготовки уведомления о пополнении', error=error, exc_info=True)
                 return False
 
             if db is None:
@@ -902,8 +918,7 @@ class AdminNotificationService:
                 return False
 
             logger.warning(
-                'Повторная загрузка данных для уведомления о пополнении после ошибки ленивой загрузки',
-                error=error,
+                'Повторная загрузка данных для уведомления о пополнении после ошибки ленивой загрузки', error=error
             )
 
             try:
@@ -994,32 +1009,32 @@ class AdminNotificationService:
             user_id_label = self._get_user_identifier_label(user)
             user_id_display = self._get_user_identifier_display(user)
 
-            message = f"""<b>ПРОДЛЕНИЕ ПОДПИСКИ</b>
+            message = f"""⏰ <b>ПРОДЛЕНИЕ ПОДПИСКИ</b>
 
-<b>Пользователь:</b> {user_display}
-<b>{user_id_label}:</b> {user_id_display}
-<b>Username:</b> @{html.escape(getattr(user, 'username', None) or 'отсутствует')}
+👤 <b>Пользователь:</b> {user_display}
+🆔 <b>{user_id_label}:</b> {user_id_display}
+📱 <b>Username:</b> {format_username_link(getattr(user, 'username', None), 'отсутствует')}
 
 {promo_block}
 
-<b>Платеж:</b>
-Сумма: {settings.format_price(abs(transaction.amount_kopeks))}
-Способ: {payment_method}
-ID транзакции: {transaction.id}
+💰 <b>Платеж:</b>
+💵 Сумма: {settings.format_price(abs(transaction.amount_kopeks))}
+💳 Способ: {payment_method}
+🆔 ID транзакции: {transaction.id}
 
-<b>Продление:</b>
-Добавлено дней: {extended_days}
-Было до: {format_local_datetime(old_end_date, '%d.%m.%Y %H:%M')}
-Стало до: {format_local_datetime(current_end_date, '%d.%m.%Y %H:%M')}
+📅 <b>Продление:</b>
+➕ Добавлено дней: {extended_days}
+📆 Было до: {format_local_datetime(old_end_date, '%d.%m.%Y %H:%M')}
+📆 Стало до: {format_local_datetime(current_end_date, '%d.%m.%Y %H:%M')}
 
-<b>Текущие параметры:</b>
-Трафик: {self._format_traffic(subscription.traffic_limit_gb)}
-Устройства: {subscription.device_limit}
-Серверы: {servers_info}
+📱 <b>Текущие параметры:</b>
+📊 Трафик: {self._format_traffic(subscription.traffic_limit_gb)}
+📱 Устройства: {subscription.device_limit}
+🌐 Серверы: {servers_info}
 
-<b>Баланс после операции:</b> {settings.format_price(current_balance)}
+💰 <b>Баланс после операции:</b> {settings.format_price(current_balance)}
 
-<i>{format_local_datetime(datetime.now(UTC), '%d.%m.%Y %H:%M:%S')}</i>"""
+⏰ <i>{format_local_datetime(datetime.now(UTC), '%d.%m.%Y %H:%M:%S')}</i>"""
 
             return await self._send_message(message, category=NotificationCategory.RENEWALS)
 
@@ -1081,18 +1096,18 @@ ID транзакции: {transaction.id}
             user_id_display = self._get_user_identifier_display(user)
 
             message_lines = [
-                '<b>АКТИВАЦИЯ ПРОМОКОДА</b>',
+                '🎫 <b>АКТИВАЦИЯ ПРОМОКОДА</b>',
                 '',
-                f'<b>Пользователь:</b> {user_display}',
-                f'<b>{user_id_label}:</b> {user_id_display}',
-                f'<b>Username:</b> @{html.escape(getattr(user, "username", None) or "отсутствует")}',
+                f'👤 <b>Пользователь:</b> {user_display}',
+                f'🆔 <b>{user_id_label}:</b> {user_id_display}',
+                f'📱 <b>Username:</b> {format_username_link(getattr(user, "username", None), "отсутствует")}',
                 '',
                 promo_block,
                 '',
-                '<b>Промокод:</b>',
-                f'Код: <code>{promocode_data.get("code")}</code>',
-                f'Тип: {type_display}',
-                f'Использования: {usage_info}',
+                '🎟️ <b>Промокод:</b>',
+                f'🔖 Код: <code>{promocode_data.get("code")}</code>',
+                f'🧾 Тип: {type_display}',
+                f'📊 Использования: {usage_info}',
             ]
 
             promo_type = promocode_data.get('type')
@@ -1100,39 +1115,39 @@ ID транзакции: {transaction.id}
             subscription_days = promocode_data.get('subscription_days', 0)
 
             if promo_type == PromoCodeType.DISCOUNT.value:
-                message_lines.append(f'Скидка: {balance_bonus}%')
+                message_lines.append(f'💸 Скидка: {balance_bonus}%')
                 if subscription_days:
-                    message_lines.append(f'Срок действия скидки: {subscription_days} ч.')
+                    message_lines.append(f'⏳ Срок действия скидки: {subscription_days} ч.')
                 else:
-                    message_lines.append('Срок действия скидки: до первой покупки')
+                    message_lines.append('⏳ Срок действия скидки: до первой покупки')
             else:
                 if balance_bonus:
-                    message_lines.append(f'Бонус на баланс: {settings.format_price(balance_bonus)}')
+                    message_lines.append(f'💰 Бонус на баланс: {settings.format_price(balance_bonus)}')
                 if subscription_days:
-                    message_lines.append(f'Доп. дни подписки: {subscription_days}')
+                    message_lines.append(f'📅 Доп. дни подписки: {subscription_days}')
 
             valid_until = promocode_data.get('valid_until')
             if valid_until:
                 message_lines.append(
-                    f'Действует до: {format_local_datetime(valid_until, "%d.%m.%Y %H:%M")}'
+                    f'⏳ Действует до: {format_local_datetime(valid_until, "%d.%m.%Y %H:%M")}'
                     if isinstance(valid_until, datetime)
-                    else f'Действует до: {valid_until}'
+                    else f'⏳ Действует до: {valid_until}'
                 )
 
             message_lines.extend(
                 [
                     '',
-                    '<b>Баланс:</b>',
+                    '💼 <b>Баланс:</b>',
                     (
                         f'{settings.format_price(balance_before_kopeks)} → {settings.format_price(balance_after_kopeks)}'
                         if balance_before_kopeks is not None and balance_after_kopeks is not None
-                        else 'Баланс не изменился'
+                        else 'ℹ️ Баланс не изменился'
                     ),
                     '',
-                    '<b>Эффект:</b>',
-                    effect_description.strip() or 'Промокод активирован',
+                    '📝 <b>Эффект:</b>',
+                    effect_description.strip() or '✅ Промокод активирован',
                     '',
-                    f'<i>{format_local_datetime(datetime.now(UTC), "%d.%m.%Y %H:%M:%S")}</i>',
+                    f'⏰ <i>{format_local_datetime(datetime.now(UTC), "%d.%m.%Y %H:%M:%S")}</i>',
                 ]
             )
 
@@ -1199,26 +1214,26 @@ ID транзакции: {transaction.id}
 
         try:
             full_name = telegram_user.full_name or telegram_user.username or str(telegram_user.id)
-            user_status = 'Новый' if not user else 'Существующий'
+            user_status = '🆕 Новый' if not user else '👥 Существующий'
 
             message_lines = [
-                '<b>ПЕРЕХОД ПО РК</b>',
+                '📣 <b>ПЕРЕХОД ПО РК</b>',
                 '',
-                f'{html.escape(campaign.name)} (<code>{html.escape(campaign.start_parameter)}</code>)',
+                f'🧾 {html.escape(campaign.name)} (<code>{html.escape(campaign.start_parameter)}</code>)',
                 '',
-                f'{html.escape(full_name)} (<code>{telegram_user.id}</code>)',
+                f'👤 {html.escape(full_name)} (<code>{telegram_user.id}</code>)',
             ]
 
             if telegram_user.username:
-                message_lines.append(f'@{html.escape(telegram_user.username)}')
+                message_lines.append(f'📱 {format_username_link(telegram_user.username)}')
 
-            message_lines.append(f'{user_status}')
+            message_lines.append(f'📋 {user_status}')
 
             # Промогруппа — только если есть
             if user:
                 promo_group = await self._get_user_promo_group(db, user)
                 if promo_group:
-                    message_lines.append(f'Промогруппа: {html.escape(promo_group.name)}')
+                    message_lines.append(f'🏷️ Промогруппа: {html.escape(promo_group.name)}')
 
             message_lines.append('')
 
@@ -1303,18 +1318,18 @@ ID транзакции: {transaction.id}
 
         try:
             message_lines = [
-                '<b>РЕГИСТРАЦИЯ ПО РК</b>',
+                '✅ <b>РЕГИСТРАЦИЯ ПО РК</b>',
                 '',
-                f'{html.escape(campaign.name)} (<code>{html.escape(campaign.start_parameter)}</code>)',
+                f'🧾 {html.escape(campaign.name)} (<code>{html.escape(campaign.start_parameter)}</code>)',
                 '',
-                f'{html.escape(telegram_user_name)} (<code>{telegram_user_id}</code>)',
+                f'👤 {html.escape(telegram_user_name)} (<code>{telegram_user_id}</code>)',
             ]
             if telegram_username:
-                message_lines.append(f'@{html.escape(telegram_username)}')
+                message_lines.append(f'📱 {format_username_link(telegram_username)}')
 
             promo_group = await self._get_user_promo_group(db, user)
             if promo_group:
-                message_lines.append(f'Промогруппа: {html.escape(promo_group.name)}')
+                message_lines.append(f'🏷️ Промогруппа: {html.escape(promo_group.name)}')
 
             message_lines.append('')
 
@@ -1382,12 +1397,14 @@ ID транзакции: {transaction.id}
             return False
 
         try:
-            title = 'АВТОМАТИЧЕСКАЯ СМЕНА ПРОМОГРУППЫ' if automatic else 'СМЕНА ПРОМОГРУППЫ'
+            title = '🤖 АВТОМАТИЧЕСКАЯ СМЕНА ПРОМОГРУППЫ' if automatic else '👥 СМЕНА ПРОМОГРУППЫ'
             initiator_line = None
             if initiator:
-                initiator_line = f'<b>Инициатор:</b> {html.escape(initiator.full_name)} (ID: {initiator.telegram_id})'
+                initiator_line = (
+                    f'👮 <b>Инициатор:</b> {html.escape(initiator.full_name)} (ID: {initiator.telegram_id})'
+                )
             elif automatic:
-                initiator_line = 'Автоматическое назначение'
+                initiator_line = '🤖 Автоматическое назначение'
             user_display = self._get_user_display(user)
             user_id_label = self._get_user_identifier_label(user)
             user_id_display = self._get_user_identifier_display(user)
@@ -1395,18 +1412,18 @@ ID транзакции: {transaction.id}
             message_lines = [
                 f'{title}',
                 '',
-                f'<b>Пользователь:</b> {user_display}',
-                f'<b>{user_id_label}:</b> {user_id_display}',
-                f'<b>Username:</b> @{html.escape(getattr(user, "username", None) or "отсутствует")}',
+                f'👤 <b>Пользователь:</b> {user_display}',
+                f'🆔 <b>{user_id_label}:</b> {user_id_display}',
+                f'📱 <b>Username:</b> {format_username_link(getattr(user, "username", None), "отсутствует")}',
                 '',
-                self._format_promo_group_block(new_group, title='Новая промогруппа', icon=''),
+                self._format_promo_group_block(new_group, title='Новая промогруппа', icon='🏆'),
             ]
 
             if old_group and old_group.id != new_group.id:
                 message_lines.extend(
                     [
                         '',
-                        self._format_promo_group_block(old_group, title='Предыдущая промогруппа', icon=''),
+                        self._format_promo_group_block(old_group, title='Предыдущая промогруппа', icon='♻️'),
                     ]
                 )
 
@@ -1414,13 +1431,13 @@ ID транзакции: {transaction.id}
                 message_lines.extend(['', initiator_line])
 
             if reason:
-                message_lines.extend(['', f'Причина: {reason}'])
+                message_lines.extend(['', f'📝 Причина: {reason}'])
 
             message_lines.extend(
                 [
                     '',
-                    f'Баланс пользователя: {settings.format_price(user.balance_kopeks)}',
-                    f'<i>{format_local_datetime(datetime.now(UTC), "%d.%m.%Y %H:%M:%S")}</i>',
+                    f'💰 Баланс пользователя: {settings.format_price(user.balance_kopeks)}',
+                    f'⏰ <i>{format_local_datetime(datetime.now(UTC), "%d.%m.%Y %H:%M:%S")}</i>',
                 ]
             )
 
@@ -1450,7 +1467,7 @@ ID транзакции: {transaction.id}
 
         Returns:
             'admin'     — полный набор кнопок;
-            'moderator' — набор без «К пользователю» (@admin_required);
+            'moderator' — набор без «👤 К пользователю» (@admin_required);
             'group'     — групповой/супергруппа/канал админ-чат: только надёжные
                           (не-FSM) кнопки, т.к. конкретного получателя не определить
                           и FSM-ввод в общем чате не работает (privacy mode бота);
@@ -1492,39 +1509,31 @@ ID транзакции: {transaction.id}
             logger.debug('Уведомление подавлено (категория отключена)', category=category.value)
             return False
 
+        thread_id = self._resolve_topic_id(category)
+
+        # Rich-вид (Bot API 10.1): заголовок, разделители, footer с tg-time.
+        # При недоступности/ошибке молча продолжаем классическим путём ниже
+        # (там ретраи и обработка flood control).
+        try:
+            rich_html = classic_admin_html_to_rich(text)
+            if await try_send_rich_admin_message(
+                self.bot, self.chat_id, rich_html, thread_id=thread_id, reply_markup=reply_markup
+            ):
+                logger.info('Rich-уведомление отправлено в чат', chat_id=self.chat_id, category=category)
+                return True
+        except Exception as rich_error:
+            logger.warning('Сбой rich-рендера админ-уведомления', error=str(rich_error))
+
         message_kwargs: dict[str, Any] = {
             'chat_id': self.chat_id,
             'text': text,
             'parse_mode': 'HTML',
             'disable_web_page_preview': True,
         }
-        thread_id = self._resolve_topic_id(category)
         if thread_id:
             message_kwargs['message_thread_id'] = thread_id
         if reply_markup is not None:
             message_kwargs['reply_markup'] = reply_markup
-
-        # Rich-вид (Bot API 10.1): конвертация классического HTML-текста в
-        # rich. При недоступности/переполнении — классический путь с ретраями ниже.
-        try:
-            from app.utils.rich_admin import classic_admin_html_to_rich, try_send_rich_admin_message
-
-            rich_html = classic_admin_html_to_rich(text)
-            if rich_html and await try_send_rich_admin_message(
-                self.bot,
-                self.chat_id,
-                rich_html,
-                thread_id=thread_id,
-                reply_markup=reply_markup,
-            ):
-                logger.info(
-                    'Уведомление отправлено rich-сообщением в чат',
-                    chat_id=self.chat_id,
-                    category=category,
-                )
-                return True
-        except Exception as rich_error:
-            logger.warning('Сбой rich-уведомления', error=str(rich_error))
 
         # ВАЖНО: вся ветка ошибок ниже логируется через logger.warning, а не
         # logger.error. Иначе TelegramNotifierProcessor попытается переслать
@@ -1534,11 +1543,7 @@ ID транзакции: {transaction.id}
         for attempt in range(1, max_attempts + 1):
             try:
                 await self.bot.send_message(**message_kwargs)
-                logger.info(
-                    'Уведомление отправлено в чат',
-                    chat_id=self.chat_id,
-                    category=category,
-                )
+                logger.info('Уведомление отправлено в чат', chat_id=self.chat_id, category=category)
                 return True
 
             except TelegramForbiddenError:
@@ -1635,16 +1640,17 @@ ID транзакции: {transaction.id}
 
             # Event title
             if is_cabinet and purchase.is_gift:
-                event_title = 'ПОДАРОК ИЗ КАБИНЕТА'
+                event_title = '🎁 ПОДАРОК ИЗ КАБИНЕТА'
             elif is_pending_activation:
-                event_title = 'ПОКУПКА С ЛЕНДИНГА (ожидает активации)'
+                event_title = '⏳ ПОКУПКА С ЛЕНДИНГА (ожидает активации)'
             elif purchase.is_gift:
-                event_title = 'ПОКУПКА В ПОДАРОК С ЛЕНДИНГА'
+                event_title = '🎁 ПОКУПКА В ПОДАРОК С ЛЕНДИНГА'
             else:
-                event_title = 'ПОКУПКА С ЛЕНДИНГА'
+                event_title = '🛒 ПОКУПКА С ЛЕНДИНГА'
 
             # Contact info
             contact_display = html.escape(purchase.contact_value or '—')
+            contact_icon = '📧' if purchase.contact_type == 'email' else '📱'
 
             payment_method = self._get_payment_method_display(purchase.payment_method)
 
@@ -1657,10 +1663,14 @@ ID транзакции: {transaction.id}
                 # Cabinet gift: show buyer with link to user profile
                 buyer = getattr(purchase, 'buyer', None)
                 if buyer:
-                    buyer_name = f'@{buyer.username}' if buyer.username else buyer.email or f'id:{buyer.id}'
-                    message_lines.append(f'Покупатель: <code>{html.escape(buyer_name)}</code>')
+                    if buyer.username:
+                        buyer_display = format_username_link(buyer.username)
+                    else:
+                        buyer_name = buyer.email or f'id:{buyer.id}'
+                        buyer_display = f'<code>{html.escape(buyer_name)}</code>'
+                    message_lines.append(f'👤 Покупатель: {buyer_display}')
                 else:
-                    message_lines.append(f'Покупатель: <code>{contact_display}</code>')
+                    message_lines.append(f'{contact_icon} Покупатель: <code>{contact_display}</code>')
             else:
                 # Landing: show page slug and buyer contact
                 landing_slug = '—'
@@ -1673,30 +1683,31 @@ ID транзакции: {transaction.id}
                 except Exception:
                     if purchase.landing_id:
                         landing_slug = f'ID:{purchase.landing_id}'
-                message_lines.append(f'Страница: <b>/buy/{html.escape(landing_slug)}</b>')
-                message_lines.append(f'Покупатель: <code>{contact_display}</code>')
+                message_lines.append(f'🌐 Страница: <b>/buy/{html.escape(landing_slug)}</b>')
+                message_lines.append(f'{contact_icon} Покупатель: <code>{contact_display}</code>')
 
             if purchase.is_gift:
                 if purchase.gift_recipient_value:
+                    recipient_icon = '📧' if purchase.gift_recipient_type == 'email' else '📱'
                     recipient_value = html.escape(purchase.gift_recipient_value)
-                    message_lines.append(f'Получатель: <code>{recipient_value}</code>')
+                    message_lines.append(f'{recipient_icon} Получатель: <code>{recipient_value}</code>')
                 else:
-                    message_lines.append('Получатель: <i>по коду активации</i>')
+                    message_lines.append('🔗 Получатель: <i>по коду активации</i>')
                 if purchase.gift_message:
                     raw_msg = purchase.gift_message[:100]
                     suffix = '…' if len(purchase.gift_message) > 100 else ''
-                    message_lines.append(f'<i>{html.escape(raw_msg)}{suffix}</i>')
+                    message_lines.append(f'💬 <i>{html.escape(raw_msg)}{suffix}</i>')
 
             # Payment details in blockquote
             payment_lines = [
                 '<blockquote>',
-                f'Тариф: <b>{html.escape(tariff_name)}</b>',
-                f'Период: {purchase.period_days} дн.',
-                f'<b>{settings.format_price(purchase.amount_kopeks)}</b> • {payment_method}',
+                f'🏷️ Тариф: <b>{html.escape(tariff_name)}</b>',
+                f'📅 Период: {purchase.period_days} дн.',
+                f'💵 <b>{settings.format_price(purchase.amount_kopeks)}</b> • {payment_method}',
             ]
 
             if purchase.payment_id:
-                payment_lines.append(f'{html.escape(str(purchase.payment_id))}')
+                payment_lines.append(f'🆔 {html.escape(str(purchase.payment_id))}')
 
             payment_lines.append('</blockquote>')
             message_lines.extend(payment_lines)
@@ -1707,6 +1718,80 @@ ID транзакции: {transaction.id}
 
         except Exception as e:
             logger.error('Ошибка отправки уведомления о гостевой покупке', error=e)
+            return False
+
+    async def send_grace_access_notification(
+        self,
+        *,
+        event: str,
+        user: User,
+        subscription: Subscription,
+        tariff_name: str | None,
+        reason: str,
+        grace_until: datetime,
+        hours: int,
+        quota_gb: float,
+        allowed: str,
+        completion_reason: str | None = None,
+        last_error: str | None = None,
+    ) -> bool:
+        """Выдача или завершение grace-доступа — в чат админов, категория «Продления».
+
+        Владелец: «выдача втухлую — это тупо»: админ обязан видеть, кому, почему и до
+        какого срока бот временно оставил доступ к тому, что оператор назвал в
+        GRACE_ACCESS_ALLOWED_SERVICES (``allowed``, уже экранировано), и чем это
+        закончилось — продлением, истечением срока или конфликтом с панелью.
+        """
+        try:
+            user_display = self._get_user_display(user)
+            user_id_label = self._get_user_identifier_label(user)
+            user_id_display = self._get_user_identifier_display(user)
+            username = format_username_link(getattr(user, 'username', None), 'отсутствует')
+            subscription_line = f'#{subscription.id}'
+            if tariff_name:
+                subscription_line += f' «{html.escape(tariff_name)}»'
+            reason_line = 'исчерпан трафик' if reason == 'limited' else 'срок подписки истёк'
+            quota_text = f'{quota_gb:g} ГБ'
+            until_text = format_local_datetime(grace_until, '%d.%m.%Y %H:%M')
+
+            if event == 'granted':
+                message = f"""🛟 <b>GRACE-ДОСТУП ВЫДАН</b>
+
+👤 <b>Пользователь:</b> {user_display}
+🆔 <b>{user_id_label}:</b> {user_id_display}
+📱 <b>Username:</b> {username}
+
+📋 <b>Подписка:</b> {subscription_line}
+⚠️ <b>Почему:</b> {reason_line}
+🛟 <b>Что выдано:</b> {allowed}, {quota_text} на {hours} ч.
+⏳ <b>Действует до:</b> {until_text}
+
+⏰ <i>{format_local_datetime(datetime.now(UTC), '%d.%m.%Y %H:%M:%S')}</i>"""
+            else:
+                outcomes = {
+                    'paid': '✅ человек продлил подписку — вернули обычный тариф',
+                    'timeout': '⌛ срок grace вышел, подписку не продлили — доступ закрыт',
+                    'drained': '🚰 grace выключают (слив) — доступ закрыт',
+                    'revoked': '🚫 отозван: пользователь заблокирован или подписка отключена',
+                    'conflict': '⚠️ конфликт с панелью — доступ закрыт',
+                }
+                outcome = outcomes.get(completion_reason or '', f'завершён ({completion_reason or "?"})')
+                error_line = f'\n❗ <code>{html.escape(last_error)}</code>' if last_error else ''
+                message = f"""🛟 <b>GRACE-ДОСТУП ЗАВЕРШЁН</b>
+
+👤 <b>Пользователь:</b> {user_display}
+🆔 <b>{user_id_label}:</b> {user_id_display}
+📱 <b>Username:</b> {username}
+
+📋 <b>Подписка:</b> {subscription_line}
+⚠️ <b>Был выдан:</b> {reason_line}, до {until_text}
+🏁 <b>Итог:</b> {outcome}{error_line}
+
+⏰ <i>{format_local_datetime(datetime.now(UTC), '%d.%m.%Y %H:%M:%S')}</i>"""
+
+            return await self._send_message(message, category=NotificationCategory.RENEWALS)
+        except Exception as error:
+            logger.error('Ошибка отправки уведомления о grace-доступе', error=error)
             return False
 
     async def send_webhook_notification(self, text: str) -> bool:
@@ -1721,27 +1806,29 @@ ID транзакции: {transaction.id}
 
     def _get_payment_method_display(self, payment_method: str | None) -> str:
         if not payment_method:
-            return 'С баланса'
+            return '💰 С баланса'
 
         method_names: dict[str, str] = {
-            'telegram_stars': 'Telegram Stars',
-            'yookassa': 'YooKassa (карта)',
-            'tribute': 'Tribute (карта)',
-            'mulenpay': f'{settings.get_mulenpay_display_name()} (карта)',
-            'pal24': f'{settings.get_pal24_display_name()} (СБП)',
-            'cryptobot': f'{settings.get_cryptobot_display_name()} (крипто)',
-            'heleket': f'{settings.get_heleket_display_name()} (крипто)',
-            'wata': f'{settings.get_wata_display_name()}',
-            'platega': f'{settings.get_platega_display_name()}',
-            'cloudpayments': f'{settings.get_cloudpayments_display_name()}',
-            'freekassa': f'{settings.get_freekassa_display_name()}',
-            'kassa_ai': f'{settings.get_kassa_ai_display_name()}',
-            'cispay': f'{settings.get_cispay_display_name()}',
-            'manual': 'Вручную (админ)',
-            'balance': 'С баланса',
+            'telegram_stars': '⭐ Telegram Stars',
+            'yookassa': '💳 YooKassa (карта)',
+            'tribute': '💎 Tribute (карта)',
+            'mulenpay': f'💳 {settings.get_mulenpay_display_name()} (карта)',
+            'pal24': f'🏦 {settings.get_pal24_display_name()} (СБП)',
+            'cryptobot': f'🪙 {settings.get_cryptobot_display_name()} (крипто)',
+            'heleket': f'🪙 {settings.get_heleket_display_name()} (крипто)',
+            'wata': f'💳 {settings.get_wata_display_name()}',
+            'platega': f'💳 {settings.get_platega_display_name()}',
+            'cloudpayments': f'💳 {settings.get_cloudpayments_display_name()}',
+            'freekassa': f'💳 {settings.get_freekassa_display_name()}',
+            'kassa_ai': f'💳 {settings.get_kassa_ai_display_name()}',
+            'cispay': f'💳 {settings.get_cispay_display_name()}',
+            'tabpay': f'💳 {settings.get_tabpay_display_name()}',
+            'paritypay': f'💳 {settings.get_paritypay_display_name()}',
+            'manual': '🛠️ Вручную (админ)',
+            'balance': '💰 С баланса',
         }
 
-        return method_names.get(payment_method, f'{html.escape(payment_method)}')
+        return method_names.get(payment_method, f'💳 {html.escape(payment_method)}')
 
     def _format_traffic(self, traffic_gb: int) -> str:
         if traffic_gb == 0:
@@ -1750,17 +1837,17 @@ ID транзакции: {transaction.id}
 
     def _get_subscription_status(self, subscription: Subscription | None) -> str:
         if not subscription:
-            return 'Нет подписки'
+            return '❌ Нет подписки'
 
         if subscription.is_trial:
-            return f'Триал (до {format_local_datetime(subscription.end_date, "%d.%m")})'
+            return f'🎯 Триал (до {format_local_datetime(subscription.end_date, "%d.%m")})'
         if subscription.is_active:
-            return f'Активна (до {format_local_datetime(subscription.end_date, "%d.%m")})'
-        return 'Неактивна'
+            return f'✅ Активна (до {format_local_datetime(subscription.end_date, "%d.%m")})'
+        return '❌ Неактивна'
 
     async def _get_servers_info(self, squad_uuids: list) -> str:
         if not squad_uuids:
-            return 'Нет серверов'
+            return '❌ Нет серверов'
 
         try:
             from app.handlers.subscription import get_servers_display_names
@@ -1782,52 +1869,54 @@ ID транзакции: {transaction.id}
 
             if event_type == 'enable':
                 if details.get('auto_enabled', False):
-                    icon = ''
+                    icon = '⚠️'
                     title = 'АВТОМАТИЧЕСКОЕ ВКЛЮЧЕНИЕ ТЕХРАБОТ'
                 else:
-                    icon = ''
+                    icon = '🔧'
                     title = 'ВКЛЮЧЕНИЕ ТЕХРАБОТ'
 
             elif event_type == 'disable':
-                icon = ''
+                icon = '✅'
                 title = 'ОТКЛЮЧЕНИЕ ТЕХРАБОТ'
 
             elif event_type == 'api_status':
                 if status == 'online':
-                    icon = ''
+                    icon = '🟢'
                     title = 'API REMNAWAVE ВОССТАНОВЛЕНО'
                 else:
-                    icon = ''
+                    icon = '🔴'
                     title = 'API REMNAWAVE НЕДОСТУПНО'
 
             elif event_type == 'monitoring':
                 if status == 'started':
-                    icon = ''
+                    icon = '🔍'
                     title = 'МОНИТОРИНГ ЗАПУЩЕН'
                 else:
-                    icon = ''
+                    icon = '⏹️'
                     title = 'МОНИТОРИНГ ОСТАНОВЛЕН'
             else:
-                icon = ''
+                icon = 'ℹ️'
                 title = 'СИСТЕМА ТЕХРАБОТ'
 
             message_parts = [f'{icon} <b>{title}</b>', '']
 
             if event_type == 'enable':
                 if details.get('reason'):
-                    message_parts.append(f'<b>Причина:</b> {details["reason"]}')
+                    message_parts.append(f'📋 <b>Причина:</b> {details["reason"]}')
 
                 if details.get('enabled_at'):
                     enabled_at = details['enabled_at']
                     if isinstance(enabled_at, str):
                         enabled_at = datetime.fromisoformat(enabled_at)
                     message_parts.append(
-                        f'<b>Время включения:</b> {format_local_datetime(enabled_at, "%d.%m.%Y %H:%M:%S")}'
+                        f'🕐 <b>Время включения:</b> {format_local_datetime(enabled_at, "%d.%m.%Y %H:%M:%S")}'
                     )
 
-                message_parts.append(f'<b>Автоматически:</b> {"Да" if details.get("auto_enabled", False) else "Нет"}')
+                message_parts.append(
+                    f'🤖 <b>Автоматически:</b> {"Да" if details.get("auto_enabled", False) else "Нет"}'
+                )
                 message_parts.append('')
-                message_parts.append('Обычные пользователи временно не могут использовать бота.')
+                message_parts.append('❗ Обычные пользователи временно не могут использовать бота.')
 
             elif event_type == 'disable':
                 if details.get('disabled_at'):
@@ -1835,7 +1924,7 @@ ID транзакции: {transaction.id}
                     if isinstance(disabled_at, str):
                         disabled_at = datetime.fromisoformat(disabled_at)
                     message_parts.append(
-                        f'<b>Время отключения:</b> {format_local_datetime(disabled_at, "%d.%m.%Y %H:%M:%S")}'
+                        f'🕐 <b>Время отключения:</b> {format_local_datetime(disabled_at, "%d.%m.%Y %H:%M:%S")}'
                     )
 
                 if details.get('duration'):
@@ -1847,47 +1936,49 @@ ID транзакции: {transaction.id}
                             duration_str = f'{hours}ч {minutes}мин'
                         else:
                             duration_str = f'{minutes}мин'
-                        message_parts.append(f'<b>Длительность:</b> {duration_str}')
+                        message_parts.append(f'⏱️ <b>Длительность:</b> {duration_str}')
 
-                message_parts.append(f'<b>Было автоматическим:</b> {"Да" if details.get("was_auto", False) else "Нет"}')
+                message_parts.append(
+                    f'🤖 <b>Было автоматическим:</b> {"Да" if details.get("was_auto", False) else "Нет"}'
+                )
                 message_parts.append('')
-                message_parts.append('Сервис снова доступен для пользователей.')
+                message_parts.append('✅ Сервис снова доступен для пользователей.')
 
             elif event_type == 'api_status':
-                message_parts.append(f'<b>API URL:</b> {details.get("api_url", "неизвестно")}')
+                message_parts.append(f'🔗 <b>API URL:</b> {details.get("api_url", "неизвестно")}')
 
                 if status == 'online':
                     if details.get('response_time'):
-                        message_parts.append(f'<b>Время отклика:</b> {details["response_time"]} сек')
+                        message_parts.append(f'⚡ <b>Время отклика:</b> {details["response_time"]} сек')
 
                     if details.get('consecutive_failures', 0) > 0:
-                        message_parts.append(f'<b>Неудачных попыток было:</b> {details["consecutive_failures"]}')
+                        message_parts.append(f'🔄 <b>Неудачных попыток было:</b> {details["consecutive_failures"]}')
 
                     message_parts.append('')
                     message_parts.append('API снова отвечает на запросы.')
 
                 else:
                     if details.get('consecutive_failures'):
-                        message_parts.append(f'<b>Попытка №:</b> {details["consecutive_failures"]}')
+                        message_parts.append(f'🔄 <b>Попытка №:</b> {details["consecutive_failures"]}')
 
                     if details.get('error'):
                         error_msg = str(details['error'])[:100]
-                        message_parts.append(f'<b>Ошибка:</b> {error_msg}')
+                        message_parts.append(f'❌ <b>Ошибка:</b> {error_msg}')
 
                     message_parts.append('')
-                    message_parts.append('Началась серия неудачных проверок API.')
+                    message_parts.append('⚠️ Началась серия неудачных проверок API.')
 
             elif event_type == 'monitoring':
                 if status == 'started':
                     if details.get('check_interval'):
-                        message_parts.append(f'<b>Интервал проверки:</b> {details["check_interval"]} сек')
+                        message_parts.append(f'🔄 <b>Интервал проверки:</b> {details["check_interval"]} сек')
 
                     if details.get('auto_enable_configured') is not None:
                         auto_enable = 'Включено' if details['auto_enable_configured'] else 'Отключено'
-                        message_parts.append(f'<b>Автовключение:</b> {auto_enable}')
+                        message_parts.append(f'🤖 <b>Автовключение:</b> {auto_enable}')
 
                     if details.get('max_failures'):
-                        message_parts.append(f'<b>Порог ошибок:</b> {details["max_failures"]}')
+                        message_parts.append(f'🎯 <b>Порог ошибок:</b> {details["max_failures"]}')
 
                     message_parts.append('')
                     message_parts.append('Система будет следить за доступностью API.')
@@ -1896,7 +1987,7 @@ ID транзакции: {transaction.id}
                     message_parts.append('Автоматический мониторинг API остановлен.')
 
             message_parts.append('')
-            message_parts.append(f'<i>{format_local_datetime(datetime.now(UTC), "%d.%m.%Y %H:%M:%S")}</i>')
+            message_parts.append(f'⏰ <i>{format_local_datetime(datetime.now(UTC), "%d.%m.%Y %H:%M:%S")}</i>')
 
             message = '\n'.join(message_parts)
 
@@ -1914,26 +2005,10 @@ ID транзакции: {transaction.id}
             details = details or {}
 
             status_config = {
-                'online': {
-                    'icon': '',
-                    'title': 'ПАНЕЛЬ REMNAWAVE ДОСТУПНА',
-                    'alert_type': 'success',
-                },
-                'offline': {
-                    'icon': '',
-                    'title': 'ПАНЕЛЬ REMNAWAVE НЕДОСТУПНА',
-                    'alert_type': 'error',
-                },
-                'degraded': {
-                    'icon': '',
-                    'title': 'ПАНЕЛЬ REMNAWAVE РАБОТАЕТ СО СБОЯМИ',
-                    'alert_type': 'warning',
-                },
-                'maintenance': {
-                    'icon': '',
-                    'title': 'ПАНЕЛЬ REMNAWAVE НА ОБСЛУЖИВАНИИ',
-                    'alert_type': 'info',
-                },
+                'online': {'icon': '🟢', 'title': 'ПАНЕЛЬ REMNAWAVE ДОСТУПНА', 'alert_type': 'success'},
+                'offline': {'icon': '🔴', 'title': 'ПАНЕЛЬ REMNAWAVE НЕДОСТУПНА', 'alert_type': 'error'},
+                'degraded': {'icon': '🟡', 'title': 'ПАНЕЛЬ REMNAWAVE РАБОТАЕТ СО СБОЯМИ', 'alert_type': 'warning'},
+                'maintenance': {'icon': '🔧', 'title': 'ПАНЕЛЬ REMNAWAVE НА ОБСЛУЖИВАНИИ', 'alert_type': 'info'},
             }
 
             config = status_config.get(status, status_config['offline'])
@@ -1941,63 +2016,63 @@ ID транзакции: {transaction.id}
             message_parts = [f'{config["icon"]} <b>{config["title"]}</b>', '']
 
             if details.get('api_url'):
-                message_parts.append(f'<b>URL:</b> {details["api_url"]}')
+                message_parts.append(f'🔗 <b>URL:</b> {details["api_url"]}')
 
             if details.get('response_time'):
-                message_parts.append(f'<b>Время отклика:</b> {details["response_time"]} сек')
+                message_parts.append(f'⚡ <b>Время отклика:</b> {details["response_time"]} сек')
 
             if details.get('last_check'):
                 last_check = details['last_check']
                 if isinstance(last_check, str):
                     last_check = datetime.fromisoformat(last_check)
-                message_parts.append(f'<b>Последняя проверка:</b> {format_local_datetime(last_check, "%H:%M:%S")}')
+                message_parts.append(f'🕐 <b>Последняя проверка:</b> {format_local_datetime(last_check, "%H:%M:%S")}')
 
             if status == 'online':
                 if details.get('uptime'):
-                    message_parts.append(f'<b>Время работы:</b> {details["uptime"]}')
+                    message_parts.append(f'⏱️ <b>Время работы:</b> {details["uptime"]}')
 
                 if details.get('users_online'):
-                    message_parts.append(f'<b>Пользователей онлайн:</b> {details["users_online"]}')
+                    message_parts.append(f'👥 <b>Пользователей онлайн:</b> {details["users_online"]}')
 
                 message_parts.append('')
-                message_parts.append('Все системы работают нормально.')
+                message_parts.append('✅ Все системы работают нормально.')
 
             elif status == 'offline':
                 if details.get('error'):
                     error_msg = str(details['error'])[:150]
-                    message_parts.append(f'<b>Ошибка:</b> {error_msg}')
+                    message_parts.append(f'❌ <b>Ошибка:</b> {error_msg}')
 
                 if details.get('consecutive_failures'):
-                    message_parts.append(f'<b>Неудачных попыток:</b> {details["consecutive_failures"]}')
+                    message_parts.append(f'🔄 <b>Неудачных попыток:</b> {details["consecutive_failures"]}')
 
                 message_parts.append('')
-                message_parts.append('Панель недоступна. Проверьте соединение и статус сервера.')
+                message_parts.append('⚠️ Панель недоступна. Проверьте соединение и статус сервера.')
 
             elif status == 'degraded':
                 if details.get('issues'):
                     issues = details['issues']
                     if isinstance(issues, list):
-                        message_parts.append('<b>Обнаруженные проблемы:</b>')
+                        message_parts.append('⚠️ <b>Обнаруженные проблемы:</b>')
                         for issue in issues[:3]:
                             message_parts.append(f'   • {issue}')
                     else:
-                        message_parts.append(f'<b>Проблема:</b> {issues}')
+                        message_parts.append(f'⚠️ <b>Проблема:</b> {issues}')
 
                 message_parts.append('')
                 message_parts.append('Панель работает, но возможны задержки или сбои.')
 
             elif status == 'maintenance':
                 if details.get('maintenance_reason'):
-                    message_parts.append(f'<b>Причина:</b> {html.escape(details["maintenance_reason"])}')
+                    message_parts.append(f'🔧 <b>Причина:</b> {html.escape(details["maintenance_reason"])}')
 
                 if details.get('estimated_duration'):
-                    message_parts.append(f'<b>Ожидаемая длительность:</b> {details["estimated_duration"]}')
+                    message_parts.append(f'⏰ <b>Ожидаемая длительность:</b> {details["estimated_duration"]}')
 
                 message_parts.append('')
                 message_parts.append('Панель временно недоступна для обслуживания.')
 
             message_parts.append('')
-            message_parts.append(f'<i>{format_local_datetime(datetime.now(UTC), "%d.%m.%Y %H:%M:%S")}</i>')
+            message_parts.append(f'⏰ <i>{format_local_datetime(datetime.now(UTC), "%d.%m.%Y %H:%M:%S")}</i>')
 
             message = '\n'.join(message_parts)
 
@@ -2026,11 +2101,11 @@ ID транзакции: {transaction.id}
 
             # Определяем заголовок по типу операции
             update_titles = {
-                'traffic': 'ДОКУПКА ТРАФИКА',
-                'devices': 'ДОКУПКА УСТРОЙСТВ',
-                'servers': 'СМЕНА СЕРВЕРОВ',
+                'traffic': '📊 ДОКУПКА ТРАФИКА',
+                'devices': '📱 ДОКУПКА УСТРОЙСТВ',
+                'servers': '🌐 СМЕНА СЕРВЕРОВ',
             }
-            title = update_titles.get(update_type, 'ИЗМЕНЕНИЕ ПОДПИСКИ')
+            title = update_titles.get(update_type, '⚙️ ИЗМЕНЕНИЕ ПОДПИСКИ')
 
             # Получаем название тарифа
             tariff_name = await self._get_tariff_name(db, subscription)
@@ -2039,17 +2114,17 @@ ID транзакции: {transaction.id}
             message_lines = [
                 f'<b>{title}</b>',
                 '',
-                f'{user_display} ({user_id_display})',
+                f'👤 {user_display} ({user_id_display})',
             ]
 
             # Добавляем username только если есть
             username = getattr(user, 'username', None)
             if username:
-                message_lines.append(f'@{html.escape(username)}')
+                message_lines.append(f'📱 {format_username_link(username)}')
 
             # Тариф (если есть)
             if tariff_name:
-                message_lines.append(f'Тариф: <b>{tariff_name}</b>')
+                message_lines.append(f'🏷️ Тариф: <b>{tariff_name}</b>')
 
             message_lines.append('')
 
@@ -2057,27 +2132,27 @@ ID транзакции: {transaction.id}
             if update_type == 'servers':
                 old_servers_info = await self._format_servers_detailed(old_value)
                 new_servers_info = await self._format_servers_detailed(new_value)
-                message_lines.append(f'{old_servers_info} → {new_servers_info}')
+                message_lines.append(f'🔄 {old_servers_info} → {new_servers_info}')
             elif update_type == 'traffic':
                 old_formatted = self._format_update_value(old_value, update_type)
                 new_formatted = self._format_update_value(new_value, update_type)
-                message_lines.append(f'{old_formatted} → {new_formatted}')
+                message_lines.append(f'🔄 {old_formatted} → {new_formatted}')
             elif update_type == 'devices':
-                message_lines.append(f'{old_value} → {new_value} устр.')
+                message_lines.append(f'🔄 {old_value} → {new_value} устр.')
             else:
-                message_lines.append(f'{old_value} → {new_value}')
+                message_lines.append(f'🔄 {old_value} → {new_value}')
 
             # Стоимость операции
             if price_paid > 0:
-                message_lines.append(f'<b>{settings.format_price(price_paid)}</b>')
+                message_lines.append(f'💵 <b>{settings.format_price(price_paid)}</b>')
             else:
-                message_lines.append('Бесплатно')
+                message_lines.append('💸 Бесплатно')
 
             message_lines.extend(
                 [
                     '',
-                    f'До {format_local_datetime(subscription.end_date, "%d.%m.%Y")}',
-                    f'Баланс: {settings.format_price(user.balance_kopeks)}',
+                    f'📅 До {format_local_datetime(subscription.end_date, "%d.%m.%Y")}',
+                    f'💰 Баланс: {settings.format_price(user.balance_kopeks)}',
                 ]
             )
 
@@ -2085,7 +2160,7 @@ ID транзакции: {transaction.id}
             if user.referred_by_id:
                 referrer_info = await self._get_referrer_info(db, user.referred_by_id)
                 if referrer_info != 'Нет':
-                    message_lines.append(f'Реф: {referrer_info}')
+                    message_lines.append(f'🔗 Реф: {referrer_info}')
 
             message_lines.extend(
                 [
@@ -2120,7 +2195,7 @@ ID транзакции: {transaction.id}
     def _format_update_value(self, value: Any, update_type: str) -> str:
         if update_type == 'traffic':
             if value == 0:
-                return 'Безлимитный'
+                return '♾ Безлимитный'
             return f'{value} ГБ'
         if update_type == 'devices':
             return f'{value} устройств'
@@ -2144,37 +2219,37 @@ ID транзакции: {transaction.id}
             user_id_display = self._get_user_identifier_display(user)
 
             message_lines = [
-                '<b>ЗАЯВКА НА ПАРТНЁРКУ</b>',
+                '🤝 <b>ЗАЯВКА НА ПАРТНЁРКУ</b>',
                 '',
-                f'{user_display} ({user_id_display})',
+                f'👤 {user_display} ({user_id_display})',
             ]
 
             username = getattr(user, 'username', None)
             if username:
-                message_lines.append(f'@{html.escape(username)}')
+                message_lines.append(f'📱 {format_username_link(username)}')
 
             message_lines.append('')
 
             if application_data.get('company_name'):
-                message_lines.append(f'Компания: {html.escape(str(application_data["company_name"]))}')
+                message_lines.append(f'🏢 Компания: {html.escape(str(application_data["company_name"]))}')
             if application_data.get('telegram_channel'):
-                message_lines.append(f'Канал: {html.escape(str(application_data["telegram_channel"]))}')
+                message_lines.append(f'📢 Канал: {html.escape(str(application_data["telegram_channel"]))}')
             if application_data.get('website_url'):
-                message_lines.append(f'Сайт: {html.escape(str(application_data["website_url"]))}')
+                message_lines.append(f'🌐 Сайт: {html.escape(str(application_data["website_url"]))}')
             if application_data.get('description'):
                 desc = str(application_data['description'])
                 if len(desc) > 200:
                     desc = desc[:197] + '...'
-                message_lines.append(f'{html.escape(desc)}')
+                message_lines.append(f'📝 {html.escape(desc)}')
             if application_data.get('expected_monthly_referrals'):
-                message_lines.append(f'Ожидаемых рефералов: {application_data["expected_monthly_referrals"]}/мес')
+                message_lines.append(f'👥 Ожидаемых рефералов: {application_data["expected_monthly_referrals"]}/мес')
             if application_data.get('desired_commission_percent'):
-                message_lines.append(f'Желаемая комиссия: {application_data["desired_commission_percent"]}%')
+                message_lines.append(f'💰 Желаемая комиссия: {application_data["desired_commission_percent"]}%')
 
             message_lines.extend(
                 [
                     '',
-                    f'<i>{format_local_datetime(datetime.now(UTC), "%d.%m.%Y %H:%M:%S")}</i>',
+                    f'⏰ <i>{format_local_datetime(datetime.now(UTC), "%d.%m.%Y %H:%M:%S")}</i>',
                 ]
             )
 
@@ -2199,20 +2274,20 @@ ID транзакции: {transaction.id}
             user_id_display = self._get_user_identifier_display(user)
 
             message_lines = [
-                '<b>ЗАПРОС НА ВЫВОД СРЕДСТВ</b>',
+                '💸 <b>ЗАПРОС НА ВЫВОД СРЕДСТВ</b>',
                 '',
-                f'{user_display} ({user_id_display})',
+                f'👤 {user_display} ({user_id_display})',
             ]
 
             username = getattr(user, 'username', None)
             if username:
-                message_lines.append(f'@{html.escape(username)}')
+                message_lines.append(f'📱 {format_username_link(username)}')
 
             message_lines.extend(
                 [
                     '',
-                    f'<b>Сумма: {settings.format_price(amount_kopeks)}</b>',
-                    f'Баланс: {settings.format_price(user.balance_kopeks)}',
+                    f'💵 <b>Сумма: {settings.format_price(amount_kopeks)}</b>',
+                    f'💰 Баланс: {settings.format_price(user.balance_kopeks)}',
                 ]
             )
 
@@ -2220,12 +2295,12 @@ ID транзакции: {transaction.id}
                 details = str(payment_details)
                 if len(details) > 200:
                     details = details[:197] + '...'
-                message_lines.extend(['', f'Реквизиты: {html.escape(details)}'])
+                message_lines.extend(['', f'💳 Реквизиты: {html.escape(details)}'])
 
             message_lines.extend(
                 [
                     '',
-                    f'<i>{format_local_datetime(datetime.now(UTC), "%d.%m.%Y %H:%M:%S")}</i>',
+                    f'⏰ <i>{format_local_datetime(datetime.now(UTC), "%d.%m.%Y %H:%M:%S")}</i>',
                 ]
             )
 
@@ -2249,26 +2324,26 @@ ID транзакции: {transaction.id}
 
         try:
             message_lines = [
-                '<b>МАССОВАЯ БЛОКИРОВКА ПОЛЬЗОВАТЕЛЕЙ</b>',
+                '🛑 <b>МАССОВАЯ БЛОКИРОВКА ПОЛЬЗОВАТЕЛЕЙ</b>',
                 '',
-                f'<b>Администратор:</b> {html.escape(admin_name)}',
-                f'<b>ID администратора:</b> {admin_user_id}',
+                f'👮 <b>Администратор:</b> {html.escape(admin_name)}',
+                f'🆔 <b>ID администратора:</b> {admin_user_id}',
                 '',
-                '<b>Результаты:</b>',
-                f'Успешно заблокировано: {successfully_banned}',
-                f'Не найдено: {not_found}',
-                f'Ошибок: {errors}',
+                '📊 <b>Результаты:</b>',
+                f'✅ Успешно заблокировано: {successfully_banned}',
+                f'❌ Не найдено: {not_found}',
+                f'💥 Ошибок: {errors}',
             ]
 
             total_processed = successfully_banned + not_found + errors
             if total_processed > 0:
                 success_rate = (successfully_banned / total_processed) * 100
-                message_lines.append(f'Успешность: {success_rate:.1f}%')
+                message_lines.append(f'📈 Успешность: {success_rate:.1f}%')
 
             message_lines.extend(
                 [
                     '',
-                    f'<i>{format_local_datetime(datetime.now(UTC), "%d.%m.%Y %H:%M:%S")}</i>',
+                    f'⏰ <i>{format_local_datetime(datetime.now(UTC), "%d.%m.%Y %H:%M:%S")}</i>',
                 ]
             )
 
@@ -2399,8 +2474,5 @@ ID транзакции: {transaction.id}
             logger.error('Ошибка отправки уведомления о подозрительной активности', error=e)
             return False
         except Exception as e:
-            logger.error(
-                'Неожиданная ошибка при отправке уведомления о подозрительной активности',
-                error=e,
-            )
+            logger.error('Неожиданная ошибка при отправке уведомления о подозрительной активности', error=e)
             return False

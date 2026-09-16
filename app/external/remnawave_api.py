@@ -1,19 +1,23 @@
 import asyncio
 import base64
 import json
-import math
 import re
 import ssl
+import time
+from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any
+from typing import Any, ClassVar
 from urllib.parse import urlparse
 
 import aiohttp
 import structlog
+from Crypto.Cipher import PKCS1_v1_5
+from Crypto.PublicKey import RSA
 
 from app.config import settings
+from app.external.remnawave_errors import RemnaWaveAPIError, RemnaWaveInvalidUserIdError, coerce_panel_user_id
 
 
 logger = structlog.get_logger(__name__)
@@ -34,6 +38,22 @@ class TrafficLimitStrategy(Enum):
     MONTH_ROLLING = 'MONTH_ROLLING'
 
 
+# Имя внутреннего сквада по контракту панели (POST/PATCH /api/internal-squads, 3.4.3):
+# 2–30 символов, латиница, цифры, пробел, дефис, подчёркивание. Проверяем на своей
+# границе — иначе админ получает от панели безликий 400.
+INTERNAL_SQUAD_NAME_MIN_LENGTH = 2
+INTERNAL_SQUAD_NAME_MAX_LENGTH = 30
+INTERNAL_SQUAD_NAME_PATTERN = r'^[A-Za-z0-9_\s-]+$'
+_INTERNAL_SQUAD_NAME_RE = re.compile(INTERNAL_SQUAD_NAME_PATTERN)
+
+
+def is_valid_internal_squad_name(name: str) -> bool:
+    """Имя сквада, которое примет панель."""
+    if not INTERNAL_SQUAD_NAME_MIN_LENGTH <= len(name) <= INTERNAL_SQUAD_NAME_MAX_LENGTH:
+        return False
+    return _INTERNAL_SQUAD_NAME_RE.fullmatch(name) is not None
+
+
 @dataclass
 class UserTraffic:
     """Данные о трафике пользователя (новая структура API)"""
@@ -45,9 +65,13 @@ class UserTraffic:
     last_connected_node_uuid: str | None = None
 
 
-@dataclass(kw_only=True)
+@dataclass
 class RemnaWaveUser:
-    uuid: str | None = None
+    # Remnawave 3.0.0 удалил поле `uuid` из UsersSchema: запись пользователя
+    # идентифицируется только числовым `id`. `short_uuid` и `vless_uuid`
+    # сохранились, но идентификаторами записи не являются — `vless_uuid` это
+    # VLESS-креденшл, `short_uuid` — публичный ключ ссылки на подписку.
+    id: int
     short_uuid: str
     username: str
     status: UserStatus
@@ -73,7 +97,6 @@ class RemnaWaveUser:
     happ_link: str | None = None
     happ_crypto_link: str | None = None
     external_squad_uuid: str | None = None
-    id: int | None = None
 
     @property
     def used_traffic_bytes(self) -> int:
@@ -143,6 +166,26 @@ class RemnaWaveAccessibleNode:
 
 
 @dataclass
+class RemnaWaveHost:
+    """Хост панели — то, куда подключаются пользователи: адрес, порт, SNI, инбаунд."""
+
+    uuid: str
+    remark: str
+    address: str
+    port: int | None = None
+    sni: str | None = None
+    host: str | None = None
+    is_disabled: bool = False
+    is_hidden: bool = False
+    # 3.4.3: у хоста массив `tags`; поля `tag` в схеме панели нет.
+    tags: list[str] = field(default_factory=list)
+    security_layer: str | None = None
+    config_profile_uuid: str | None = None
+    config_profile_inbound_uuid: str | None = None
+    view_position: int = 0
+
+
+@dataclass
 class RemnaWaveNode:
     uuid: str
     name: str
@@ -173,11 +216,13 @@ class RemnaWaveNode:
     versions: dict[str, str] | None = None  # {xray, node}
     system: dict[str, Any] | None = None  # {info: {arch, cpus, cpuModel, memoryTotal, ...}, stats: {...}}
     active_plugin_uuid: str | None = None
-    # v3.1.0: панель возвращает числовой id рядом с uuid (additive; роуты по-прежнему принимают {uuid})
-    id: int | None = None
     # Адреса узла: [{ip, status}], status ∈ INBOUND/OUTBOUND/MANAGEMENT/...
     # Нужны, чтобы предложить выбор исходного адреса в GeoCheck (3.3.0).
     ips: list[dict[str, Any]] = field(default_factory=list)
+    # Активный профиль конфигурации и UUID его активных инбаундов (configProfile.activeInbounds[].uuid).
+    # По ним хост панели (inbound.configProfileInboundUuid) привязывается к ноде.
+    active_config_profile_uuid: str | None = None
+    active_inbound_uuids: list[str] = field(default_factory=list)
 
     @property
     def is_node_online(self) -> bool:
@@ -223,20 +268,15 @@ class RemnaWaveExternalSquad:
     templates: list[dict[str, str]]
     subscription_settings: dict[str, Any] | None = None
     host_overrides: dict[str, Any] | None = None
-    response_headers: dict[str, str] | None = None
+    # 3.0.0: `responseHeaders` разделён на добавляемые (имя → значение) и
+    # удаляемые (список имён). Существующие значения панель мигрирует сама.
+    response_headers_add: dict[str, str] | None = None
+    response_headers_remove: list[str] | None = None
     hwid_settings: dict[str, Any] | None = None
     custom_remarks: dict[str, Any] | None = None
     subpage_config_uuid: str | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
-
-
-class RemnaWaveAPIError(Exception):
-    def __init__(self, message: str, status_code: int = None, response_data: dict = None):
-        self.message = message
-        self.status_code = status_code
-        self.response_data = response_data
-        super().__init__(self.message)
 
 
 class RemnaWaveTransientError(RemnaWaveAPIError):
@@ -247,7 +287,184 @@ class RemnaWaveTransientError(RemnaWaveAPIError):
     surfaced by the monitoring service, not by per-request error logs."""
 
 
+def is_expire_in_past_error(error: RemnaWaveAPIError) -> bool:
+    """Панель отвергла ``expireAt`` как прошедшую дату.
+
+    Ответ 3.x: ``400 {"message": "Validation failed", "errors": [{"path":
+    ["expireAt"], "message": "Expiration date cannot be in the past"}]}``
+    (снято с живой панели 3.4.3). Панель сравнивает дату со СВОИМИ часами, так
+    что «ближайшее будущее» по часам бота для неё бывает прошлым.
+    """
+    if getattr(error, 'status_code', None) != 400:
+        return False
+    errors = (error.response_data or {}).get('errors') or []
+    for item in errors:
+        if not isinstance(item, dict):
+            continue
+        path = item.get('path') or []
+        message = str(item.get('message') or '').lower()
+        if 'expireAt' in path or 'past' in message:
+            return True
+    return False
+
+
+# Remnawave 3.4.3: у 404 NotFound 27 кодов — пользователя из них касаются только два.
+# Сообщения — для панелей, не приславших errorCode.
+USER_NOT_FOUND_ERROR_CODES = frozenset({'A025', 'A063'})
+USER_NOT_FOUND_MESSAGES = frozenset({'user not found', 'user with specified params not found', 'users not found'})
+
+# Протухший externalSquadUuid панель не отличает от прочих сбоев записи: на создании
+# отвечает A018 «Failed to create user», на обновлении A039 «Update user error» (оба 500),
+# а при проверке самого сквада — 404 A182 «External squad not found». Повтор без поля
+# уместен только когда поле действительно уходило в запросе.
+STALE_EXTERNAL_SQUAD_ERROR_CODES = frozenset({'A018', 'A039', 'A182'})
+
+
+def _panel_error_code(error: RemnaWaveAPIError) -> str:
+    data = error.response_data if isinstance(error.response_data, dict) else {}
+    return str(data.get('errorCode') or '').strip()
+
+
+def _panel_error_message(error: RemnaWaveAPIError) -> str:
+    data = error.response_data if isinstance(error.response_data, dict) else {}
+    return str(data.get('message') or error.message or '').strip().lower()
+
+
+def is_user_not_found_error(error: RemnaWaveAPIError) -> bool:
+    """Панель сообщила, что такого пользователя НЕТ (удалён / протух идентификатор).
+
+    Только явный признак: код ``A025``/``A063`` либо 404 с сообщением про пользователя.
+    404 у панели имеет 27 причин (внешний сквад ``A182``, внутренний ``A118``,
+    HWID-устройство ``A204``…), а ``A018`` — это «Failed to create user» (500). Любое
+    расширение этой проверки уводит вызывающий код в ветку «пользователя нет → создать»
+    и плодит дубли в панели. Статус 400 сюда намеренно НЕ входит: см.
+    ``RemnaWaveInvalidUserIdError``. Сверено с OpenAPI 3.4.3.
+    """
+    if isinstance(error, RemnaWaveInvalidUserIdError):
+        return False
+    error_code = _panel_error_code(error)
+    if error_code in USER_NOT_FOUND_ERROR_CODES:
+        return True
+    if error_code:
+        return False
+    if error.status_code != 404:
+        return False
+    return _panel_error_message(error) in USER_NOT_FOUND_MESSAGES
+
+
+def is_stale_external_squad_error(error: RemnaWaveAPIError) -> bool:
+    """Панель отвергла запись из-за ``externalSquadUuid`` (или не смогла её отличить)."""
+    if _panel_error_code(error) in STALE_EXTERNAL_SQUAD_ERROR_CODES:
+        return True
+    return 'external squad not found' in _panel_error_message(error)
+
+
+# Публичный RSA-ключ Happ для crypt4-ссылок — тот же, которым официальная страница
+# подписки Remnawave шифрует ссылку в браузере (@kastov/cryptohapp: JSEncrypt =
+# RSA PKCS#1 v1.5 + base64). Ключ публичный, расшифровать ссылку может только
+# приложение Happ своим приватным ключом.
+HAPP_CRYPTO_V4_PUBLIC_KEY = """-----BEGIN PUBLIC KEY-----
+MIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEA3UZ0M3L4K+WjM3vkbQnz
+ozHg/cRbEXvQ6i4A8RVN4OM3rK9kU01FdjyoIgywve8OEKsFnVwERZAQZ1Trv60B
+hmaM76QQEE+EUlIOL9EpwKWGtTL5lYC1sT9XJMNP3/CI0gP5wwQI88cY/xedpOEB
+W72EmOOShHUm/b/3m+HPmqwc4ugKj5zWV5SyiT829aFA5DxSjmIIFBAms7DafmSq
+LFTYIQL5cShDY2u+/sqyAw9yZIOoqW2TFIgIHhLPWek/ocDU7zyOrlu1E0SmcQQb
+LFqHq02fsnH6IcqTv3N5Adb/CkZDDQ6HvQVBmqbKZKf7ZdXkqsc/Zw27xhG7OfXC
+tUmWsiL7zA+KoTd3avyOh93Q9ju4UQsHthL3Gs4vECYOCS9dsXXSHEY/1ngU/hjO
+WFF8QEE/rYV6nA4PTyUvo5RsctSQL/9DJX7XNh3zngvif8LsCN2MPvx6X+zLouBX
+zgBkQ9DFfZAGLWf9TR7KVjZC/3NsuUCDoAOcpmN8pENBbeB0puiKMMWSvll36+2M
+YR1Xs0MgT8Y9TwhE2+TnnTJOhzmHi/BxiUlY/w2E0s4ax9GHAmX0wyF4zeV7kDkc
+vHuEdc0d7vDmdw0oqCqWj0Xwq86HfORu6tm1A8uRATjb4SzjTKclKuoElVAVa5Jo
+oh/uZMozC65SmDw+N5p6Su8CAwEAAQ==
+-----END PUBLIC KEY-----"""
+
+HAPP_CRYPTO_V4_DEEP_LINK_PREFIX = 'happ://crypt4/'
+
+# Официальный Happ crypto API: POST {"url": ...} -> {"encrypted_link": "happ://crypt5/..."}.
+# Запасной источник crypt-ссылок, если локальное шифрование выключено/не удалось.
+HAPP_CRYPTO_API_URL = 'https://crypto.happ.su/api-v2.php'
+HAPP_CRYPTO_API_COOLDOWN_SECONDS = 600
+HAPP_CRYPTO_API_CACHE_MAX = 512
+
+
+# 429 от панели — троттлинг, не ошибка приложения: терпеливая шкала повторов и ОБЩАЯ
+# пауза на все запросы процесса (иначе параллельные задачи прохода продолжают долбить
+# панель, и лимит не отпускает).
+RATE_LIMIT_MAX_RETRIES = 6
+RATE_LIMIT_BASE_DELAY = 2.0
+RATE_LIMIT_MAX_DELAY = 30.0
+
+# Свой темп запросов (settings.REMNAWAVE_API_REQUESTS_PER_MINUTE, 0 — без ограничения):
+# перед панелью часто стоит прокси с лимитом (шаблонный Caddyfile Remnawave: rate_limit
+# 100/мин с одного IP на /api/*), и массовый проход упирается в него за секунды.
+# Скользящее окно в минуту на весь процесс — как у самого прокси.
+PACE_WINDOW_SECONDS = 60.0
+
+
+def _retry_after_seconds(headers: Any) -> float | None:
+    """``Retry-After`` в секундах; HTTP-дату не разбираем — тогда своя шкала."""
+    raw = headers.get('Retry-After') if headers else None
+    if not raw:
+        return None
+    try:
+        return max(0.0, float(raw))
+    except (TypeError, ValueError):
+        return None
+
+
 class RemnaWaveAPI:
+    # Remnawave 2.8.0 удалил POST /api/system/tools/happ/encrypt (панель теперь
+    # генерирует crypt-ссылки на клиенте своего subpage). Клиент создаётся на каждый
+    # запрос, поэтому состояние happ-шифрования держим на классе (сбрасывается рестартом):
+    #  - _happ_encrypt_unavailable: после первого 404 не дёргаем удалённый эндпоинт
+    #    (иначе 404 + warning на каждый вызов get_subscription_info/enrich_user_with_happ_link);
+    #  - _happ_api_disabled_until: monotonic-метка охлаждения официального Happ API после
+    #    сбоя сервиса (сеть/5xx), чтобы внешний сервис не тормозил горячие пути
+    #    (enrich на каждом get_user_by_*);
+    #  - _happ_api_cache: subscription_url -> crypt-ссылка, спасает от повторных внешних
+    #    вызовов, пока ссылка не сохранена в БД (клиент пересоздаётся на каждый запрос);
+    #  - _happ_api_failed_urls: URL, которые Happ API отверг (4xx/мусор в ответе) —
+    #    их не ретраим, но и весь fallback из-за них не выключаем.
+    #  - _happ_local_cache: subscription_url -> crypt4-ссылка локального шифрования.
+    #    Паддинг PKCS#1 v1.5 случайный, без кэша каждый вызов даёт новую ссылку для
+    #    того же URL — и синки (сравнение с сохранённой subscription_crypto_link)
+    #    видели бы ложное «изменение» на каждом проходе.
+    _happ_encrypt_unavailable: bool = False
+    _happ_api_disabled_until: float = 0.0
+    _happ_api_cache: ClassVar[dict[str, str]] = {}
+    _happ_api_failed_urls: ClassVar[set[str]] = set()
+    _happ_local_cache: ClassVar[dict[str, str]] = {}
+    # Момент (monotonic), до которого все запросы процесса ждут после 429.
+    _throttled_until: ClassVar[float] = 0.0
+    # Моменты последних запросов процесса — окно собственного темпа (см. PACE_WINDOW_SECONDS).
+    _request_times: ClassVar[deque[float]] = deque()
+    _pace_clock = staticmethod(time.monotonic)
+
+    @classmethod
+    def _throttle(cls, delay: float) -> None:
+        cls._throttled_until = max(cls._throttled_until, time.monotonic() + delay)
+
+    @classmethod
+    async def _wait_for_shared_throttle(cls) -> None:
+        wait = cls._throttled_until - time.monotonic()
+        if wait > 0:
+            await asyncio.sleep(wait)
+
+    @classmethod
+    async def _wait_for_pace(cls) -> None:
+        """Дождаться свободного места в окне собственного темпа; повторы тоже считаются."""
+        limit = settings.REMNAWAVE_API_REQUESTS_PER_MINUTE
+        if limit <= 0:
+            return
+        while True:
+            now = cls._pace_clock()
+            while cls._request_times and now - cls._request_times[0] >= PACE_WINDOW_SECONDS:
+                cls._request_times.popleft()
+            if len(cls._request_times) < limit:
+                cls._request_times.append(now)
+                return
+            await asyncio.sleep(cls._request_times[0] + PACE_WINDOW_SECONDS - now)
+
     def __init__(
         self,
         base_url: str,
@@ -271,14 +488,7 @@ class RemnaWaveAPI:
     def _detect_connection_type(self) -> str:
         parsed = urlparse(self.base_url)
 
-        local_hosts = [
-            'localhost',
-            '127.0.0.1',
-            'remnawave',
-            'remnawave-backend',
-            'app',
-            'api',
-        ]
+        local_hosts = ['localhost', '127.0.0.1', 'remnawave', 'remnawave-backend', 'app', 'api']
 
         if parsed.hostname in local_hosts:
             return 'local'
@@ -327,11 +537,7 @@ class RemnaWaveAPI:
     async def __aenter__(self):
         conn_type = self._detect_connection_type()
 
-        logger.debug(
-            'Подключение к Remnawave: (тип: )',
-            base_url=self.base_url,
-            conn_type=conn_type,
-        )
+        logger.debug('Подключение к Remnawave: (тип: )', base_url=self.base_url, conn_type=conn_type)
 
         headers = self._prepare_auth_headers()
 
@@ -385,11 +591,7 @@ class RemnaWaveAPI:
             await self.session.close()
 
     async def _make_request(
-        self,
-        method: str,
-        endpoint: str,
-        data: dict | None = None,
-        params: dict | None = None,
+        self, method: str, endpoint: str, data: dict | None = None, params: dict | None = None
     ) -> dict:
         if not self.session:
             raise RemnaWaveAPIError('Session not initialized. Use async context manager.')
@@ -397,8 +599,12 @@ class RemnaWaveAPI:
         url = f'{self.base_url}{endpoint}'
         max_retries = 3
         base_delay = 1.0
+        attempt = 0  # транзиентные сбои: 502/503/504 и обрывы связи
+        rate_limit_hits = 0  # 429: свой счётчик и своя, более терпеливая шкала
 
-        for attempt in range(max_retries + 1):
+        while True:
+            await self._wait_for_shared_throttle()
+            await self._wait_for_pace()
             try:
                 kwargs = {'url': url, 'params': params}
 
@@ -416,14 +622,39 @@ class RemnaWaveAPI:
                     except json.JSONDecodeError:
                         response_data = {'raw_response': response_text}
 
-                    if response.status in (429, 502, 503, 504) and attempt < max_retries:
-                        retry_after = float(response.headers.get('Retry-After', base_delay * (2**attempt)))
+                    if response.status == 429:
+                        delay = _retry_after_seconds(response.headers) or min(
+                            RATE_LIMIT_BASE_DELAY * (2**rate_limit_hits), RATE_LIMIT_MAX_DELAY
+                        )
+                        rate_limit_hits += 1
+                        # Пауза общая; ждёт её начало цикла — одна точка ожидания на всех.
+                        RemnaWaveAPI._throttle(delay)
+                        if rate_limit_hits <= RATE_LIMIT_MAX_RETRIES:
+                            logger.warning(
+                                'Панель ограничила частоту запросов (429) — общая пауза',
+                                method=method,
+                                endpoint=endpoint,
+                                delay=delay,
+                                attempt=rate_limit_hits,
+                                max_retries=RATE_LIMIT_MAX_RETRIES,
+                            )
+                            continue
+                        logger.warning(
+                            'Панель ограничивает частоту запросов (429) после всех повторов',
+                            method=method,
+                            endpoint=endpoint,
+                        )
+                        raise RemnaWaveTransientError(f'Rate limited: {method} {endpoint}', 429, response_data)
+
+                    if response.status in (502, 503, 504) and attempt < max_retries:
+                        retry_after = _retry_after_seconds(response.headers) or base_delay * (2**attempt)
+                        attempt += 1
                         logger.warning(
                             'Retryable %s on %s %s, retry %s/%s after %ss',
                             response.status,
                             method,
                             endpoint,
-                            attempt + 1,
+                            attempt,
                             max_retries,
                             retry_after,
                         )
@@ -437,7 +668,7 @@ class RemnaWaveAPI:
                         is_harmless = response.status == 400 and (
                             'already enabled' in error_lower or 'already disabled' in error_lower
                         )
-                        # 404 = "not found" — это всегда обрабатывает вызывающий код (get_user_by_uuid
+                        # 404 = "not found" — это всегда обрабатывает вызывающий код (get_user_by_id
                         # → None, delete → success, sync → пересоздание). Логировать его как error
                         # нельзя: error-логи буферизуются и сыплют отчётом в админ-чат (например, при
                         # просмотре юзера с протухшим panel uuid — A063). Понижаем до warning.
@@ -456,12 +687,13 @@ class RemnaWaveAPI:
             except aiohttp.ClientError as e:
                 if attempt < max_retries:
                     delay = base_delay * (2**attempt)
+                    attempt += 1
                     logger.warning(
                         'Request failed on retry / after s',
                         method=method,
                         endpoint=endpoint,
                         e=e,
-                        attempt=attempt + 1,
+                        attempt=attempt,
                         max_retries=max_retries,
                         delay=delay,
                     )
@@ -488,8 +720,6 @@ class RemnaWaveAPI:
                     error=str(e)[:200],
                 )
                 raise RemnaWaveTransientError(f'Request timed out: {method} {endpoint}') from e
-
-        raise RemnaWaveTransientError(f'Max retries exceeded for {method} {endpoint}')
 
     async def create_user(
         self,
@@ -538,215 +768,170 @@ class RemnaWaveAPI:
         try:
             response = await self._make_request('POST', '/api/users', data)
         except RemnaWaveAPIError as e:
-            # A039 = FK violation on externalSquadUuid — retry without it
-            error_code = (e.response_data or {}).get('errorCode', '')
-            if error_code == 'A039' and 'externalSquadUuid' in data:
-                stale_uuid = data.pop('externalSquadUuid')
+            # Протухший externalSquadUuid (A018 на создании / A182) — повтор без него.
+            if is_stale_external_squad_error(e) and 'externalSquadUuid' in data:
+                retry_data = {key: value for key, value in data.items() if key != 'externalSquadUuid'}
                 logger.warning(
-                    'A039 FK violation on externalSquadUuid, retrying without it',
-                    stale_uuid=stale_uuid,
+                    'Панель отвергла создание с externalSquadUuid — повтор без него',
+                    error_code=_panel_error_code(e),
+                    stale_uuid=data['externalSquadUuid'],
                     username=data.get('username'),
                 )
-                response = await self._make_request('POST', '/api/users', data)
+                response = await self._make_request('POST', '/api/users', retry_data)
             else:
                 logger.error('POST /api/users FAILED — full payload', payload=data)
                 raise
         user = self._parse_user(response['response'])
         logger.info(
             'POST /api/users response',
-            uuid=user.uuid,
+            panel_user_id=user.id,
             response_hwidDeviceLimit=user.hwid_device_limit,
         )
-        return user
+        return await self.enrich_user_with_happ_link(user)
 
-    def _use_user_id(self) -> bool:
-        return settings.REMNAWAVE_USE_USER_ID
-
-    def _fmt_user_path(self, uuid: str, user_id: int | None = None) -> str:
-        user_id = self._sanitize_user_id(user_id)
-        if self._use_user_id() and user_id is not None:
-            return f'/api/users/{user_id}'
-        uuid = self._sanitize_uuid(uuid)
-        if uuid is None:
-            raise ValueError('Cannot build user path: invalid uuid and no valid user_id')
-        return f'/api/users/{uuid}'
-
-    def _fmt_user_body_id(self, uuid: str, user_id: int | None = None) -> dict[str, str | int]:
-        user_id = self._sanitize_user_id(user_id)
-        if self._use_user_id() and user_id is not None:
-            return {'id': user_id}
-        uuid = self._sanitize_uuid(uuid)
-        if uuid is None:
-            raise ValueError('Cannot build user body id: invalid uuid and no valid user_id')
-        return {'id': uuid}
-
-    def _fmt_hwid_user_key(self, user_uuid: str, user_id: int | None = None) -> str:
-        user_id = self._sanitize_user_id(user_id)
-        if self._use_user_id() and user_id is not None:
-            return 'userId'
-        return 'userUuid'
-
-    def _fmt_hwid_path(self, user_uuid: str, user_id: int | None = None) -> str:
-        """Path to a user's HWID devices. v3.0.0: numeric userId in the path."""
-        user_id = self._sanitize_user_id(user_id)
-        if self._use_user_id() and user_id is not None:
-            return f'/api/hwid/devices/{user_id}'
-        user_uuid = self._sanitize_uuid(user_uuid)
-        if user_uuid is None:
-            raise ValueError('Cannot build hwid path: invalid uuid and no valid user_id')
-        return f'/api/hwid/devices/{user_uuid}'
-
-    def _fmt_hwid_delete_payload(self, user_uuid: str, user_id: int | None, hwid: str) -> dict[str, str]:
-        """Body for POST /api/hwid/devices/delete.
-
-        v2: ``{'userUuid': uuid, 'hwid': hwid}``; v3.0.0: ``{'userId': id, 'hwid': hwid}``.
-        """
-        user_id = self._sanitize_user_id(user_id)
-        hwid_key = self._fmt_hwid_user_key(user_uuid, user_id)
-        if self._use_user_id() and user_id is not None:
-            _uid = user_id
-        else:
-            _uid = self._sanitize_uuid(user_uuid)
-            if _uid is None:
-                raise ValueError('Cannot build hwid delete payload: invalid uuid and no valid user_id')
-        return {hwid_key: _uid, 'hwid': hwid}
-
-    async def get_user_by_uuid(self, uuid: str, user_id: int | None = None) -> RemnaWaveUser | None:
+    async def get_user_by_id(self, user_id: int) -> RemnaWaveUser | None:
+        panel_user_id = coerce_panel_user_id(user_id)
         try:
-            response = await self._make_request('GET', self._fmt_user_path(uuid, user_id))
+            response = await self._make_request('GET', f'/api/users/{panel_user_id}')
             user = self._parse_user(response['response'])
-            return user
+            return await self.enrich_user_with_happ_link(user)
         except RemnaWaveAPIError as e:
             if e.status_code == 404:
                 return None
             raise
 
-    async def get_user_by_telegram_id(self, telegram_id: int) -> list[RemnaWaveUser]:
-        # v3.0.0: GET /api/users/by-telegram-id/{id} удалён — используем /api/users/stream?telegramId=
-        if self._use_user_id():
-            return await self._get_users_by_stream_filter({'telegramId': telegram_id})
+    async def get_user_by_short_uuid(self, short_uuid: str) -> RemnaWaveUser | None:
+        """``GET /api/users/by-short-uuid/{shortUuid}`` — сохранился в 3.0.0.
+
+        Вместе с ``by-username`` это единственные панельные ворота, через
+        которые строку без числового id ещё можно опознать; на них построен
+        бэкфил.
+        """
         try:
-            response = await self._make_request('GET', f'/api/users/by-telegram-id/{telegram_id}')
-            users_data = response.get('response', [])
-            if not users_data:
-                return []
-            users = [self._parse_user(user) for user in users_data]
-            return users
+            response = await self._make_request('GET', f'/api/users/by-short-uuid/{short_uuid}')
+            user = self._parse_user(response['response'])
+            return await self.enrich_user_with_happ_link(user)
         except RemnaWaveAPIError as e:
             if e.status_code == 404:
-                return []
+                return None
             raise
-
-    async def _get_users_by_stream_filter(self, filters: dict[str, Any]) -> list[RemnaWaveUser]:
-        """Full walk of /api/users/stream filtered by query params (v3.0.0)."""
-        users: list[RemnaWaveUser] = []
-        cursor: str | None = None
-        while True:
-            params: dict[str, Any] = {'size': 500, **filters}
-            if cursor is not None:
-                params['cursor'] = cursor
-            response = await self._make_request('GET', '/api/users/stream', params=params)
-            data = response.get('response', {})
-            batch = data.get('users', [])
-            users.extend(self._parse_user(user) for user in batch)
-            if not data.get('hasMore') or not data.get('nextCursor'):
-                break
-            cursor = data['nextCursor']
-        return users
-
-    @staticmethod
-    def _description_matches_telegram_id(description: str | None, telegram_id: int | None) -> bool:
-        """True, если description несёт маркер telegram_id.
-
-        Бот пишет в описание сегмент ``TG: <id>``; также поддерживается формат
-        ``{tg_username} - {tg_id}``, где id — отдельный токен.
-        """
-        if not description or telegram_id is None:
-            return False
-        tid = str(telegram_id)
-        tokens = re.split(r'[\s\-–—|,;:()/.]+', description)
-        return tid in tokens
-
-    async def resolve_user_id_by_telegram_description(self, telegram_id: int) -> int | None:
-        """Ищет числовой remnawave_id по telegram, сверяя description.
-
-        v2: GET /api/users/by-telegram-id/{id} (id второй попыткой).
-        v3.0.0: uuid у юзеров НЕТ, remnawave_id может быть пустым в БД —
-        сначала фильтр /api/users/stream?telegramId=, затем полный обход стрима
-        с матчем по Description (``{tg_username} - {tg_id}`` / ``TG: <id>``).
-        """
-        if not self._use_user_id():
-            users = await self.get_user_by_telegram_id(telegram_id)
-            for user in users:
-                if user.id is not None:
-                    return user.id
-            return None
-        try:
-            users = await self._get_users_by_stream_filter({'telegramId': telegram_id})
-        except Exception:
-            users = []
-        for user in users:
-            if user.id is not None:
-                return user.id
-        for user in await self._get_users_by_stream_filter({}):
-            if self._description_matches_telegram_id(user.description, telegram_id):
-                return user.id
-        return None
 
     async def get_user_by_username(self, username: str) -> RemnaWaveUser | None:
         try:
             response = await self._make_request('GET', f'/api/users/by-username/{username}')
             user = self._parse_user(response['response'])
-            return user
+            return await self.enrich_user_with_happ_link(user)
         except RemnaWaveAPIError as e:
             if e.status_code == 404:
                 return None
             raise
 
-    async def get_user_by_email(self, email: str) -> list[RemnaWaveUser]:
-        """Get users by email address."""
-        # v3.0.0: GET /api/users/by-email/{email} удалён — используем /api/users/stream?email=
-        if self._use_user_id():
-            return await self._get_users_by_stream_filter({'email': email})
-        try:
-            response = await self._make_request('GET', f'/api/users/by-email/{email}')
-            users_data = response.get('response', [])
-            if not users_data:
-                return []
-            # Handle both single object and array responses
-            if isinstance(users_data, dict):
-                users_data = [users_data]
-            users = [self._parse_user(user) for user in users_data]
-            return users
-        except RemnaWaveAPIError as e:
-            if e.status_code == 404:
-                return []
-            raise
-
-    async def get_subscription_request_history(
+    async def resolve_user(
         self,
-        uuid: str,
-        offset: int = 0,
-        limit: int = 20,
+        *,
         user_id: int | None = None,
-    ) -> dict:
+        short_uuid: str | None = None,
+        username: str | None = None,
+    ) -> dict[str, Any] | None:
+        """``POST /api/users/resolve`` → ``{id, username, shortUuid}`` или None.
+
+        Панель требует ровно одно из полей. Дешевле, чем ``get_user_by_*``:
+        отдаёт только идентификаторы, без полного профиля и без обогащения
+        happ-ссылкой — то, что нужно для сопоставления строк.
+        """
+        provided = {
+            'id': coerce_panel_user_id(user_id) if user_id is not None else None,
+            'shortUuid': short_uuid,
+            'username': username,
+        }
+        data = {key: value for key, value in provided.items() if value is not None}
+        if len(data) != 1:
+            raise RemnaWaveAPIError(f'resolve_user requires exactly one identifier, got {sorted(data)}')
+
+        try:
+            response = await self._make_request('POST', '/api/users/resolve', data)
+        except RemnaWaveAPIError as e:
+            if is_user_not_found_error(e):
+                return None
+            raise
+        return response.get('response') or None
+
+    async def find_users_by_telegram_id(self, telegram_id: int) -> list[RemnaWaveUser]:
+        """Замена удалённому ``GET /api/users/by-telegram-id/{telegramId}``.
+
+        В 3.0.0 поиск живёт в ``GET /api/users/stream`` как query-фильтр.
+        """
+        # Обогащение включено: заменённый `GET /api/users/by-telegram-id` его
+        # делал, и вызывающие читают `happ_crypto_link` из результата.
+        return await self.find_users(telegram_id=telegram_id, enrich_happ_links=True)
+
+    async def find_users_by_email(self, email: str) -> list[RemnaWaveUser]:
+        """Замена удалённому ``GET /api/users/by-email/{email}``."""
+        return await self.find_users(email=email, enrich_happ_links=True)
+
+    async def find_users(
+        self,
+        *,
+        telegram_id: int | None = None,
+        email: str | None = None,
+        tag: str | None = None,
+        status: UserStatus | None = None,
+        traffic_limit_strategy: TrafficLimitStrategy | None = None,
+        external_squad_uuid: str | None = None,
+        enrich_happ_links: bool = False,
+        max_results: int | None = None,
+    ) -> list[RemnaWaveUser]:
+        """Полный обход ``GET /api/users/stream`` с фильтрами (3.0.0).
+
+        Фильтры применяет панель, поэтому обход обычно укладывается в одну
+        страницу. ``max_results`` ограничивает выборку, когда вызывающему нужен
+        лишь факт существования.
+        """
+        filters: dict[str, Any] = {}
+        if telegram_id is not None:
+            filters['telegramId'] = telegram_id
+        if email is not None:
+            filters['email'] = email
+        if tag is not None:
+            filters['tag'] = tag
+        if status is not None:
+            filters['status'] = status.value
+        if traffic_limit_strategy is not None:
+            filters['trafficLimitStrategy'] = traffic_limit_strategy.value
+        if external_squad_uuid is not None:
+            filters['externalSquadUuid'] = external_squad_uuid
+
+        found: list[RemnaWaveUser] = []
+        cursor: str | None = None
+        while True:
+            page = await self.get_all_users_page_stream(
+                cursor=cursor,
+                size=1000,
+                enrich_happ_links=enrich_happ_links,
+                filters=filters,
+            )
+            found.extend(page['users'])
+            if max_results is not None and len(found) >= max_results:
+                return found[:max_results]
+            if not page['hasMore'] or not page['nextCursor']:
+                return found
+            cursor = page['nextCursor']
+
+    async def get_subscription_request_history(self, user_id: int) -> dict:
         """Get subscription request history for a panel user.
 
         Returns dict with 'total' and 'records' list.
         Each record has: id, userId, requestAt, requestIp, userAgent.
-        v3.1.0: каждый record также несёт srrResponseType (string) и srrRuleName
-        (string|null) — какое правило запроса подписки обработало запрос.
-        Records передаются как есть (сырые dict с панели), поэтому эти поля
-        пробрасываются в бота автоматически.
 
-        Remnawave 2.8.0+: поле ``userUuid`` (uuid) переименовано в ``userId``
-        (числовой внутренний id пользователя панели).
+        Эндпоинт всегда отдаёт последние записи целиком: ни в 2.8, ни в 3.0
+        схема команды не принимает offset/limit — прежние параметры панель
+        просто игнорировала.
         """
+        panel_user_id = coerce_panel_user_id(user_id)
         try:
             response = await self._make_request(
                 'GET',
-                f'{self._fmt_user_path(uuid, user_id)}/subscription-request-history',
-                params={'offset': offset, 'limit': limit},
+                f'/api/users/{panel_user_id}/subscription-request-history',
             )
             return response.get('response', {'total': 0, 'records': []})
         except RemnaWaveAPIError:
@@ -754,7 +939,7 @@ class RemnaWaveAPI:
 
     async def update_user(
         self,
-        uuid: str,
+        user_id: int,
         status: UserStatus | None = None,
         traffic_limit_bytes: int | None = None,
         traffic_limit_strategy: TrafficLimitStrategy | None = None,
@@ -765,10 +950,13 @@ class RemnaWaveAPI:
         description: str | None = None,
         tag: str | None = None,
         active_internal_squads: list[str] | None = None,
-        external_squad_uuid: str | None | type(...) = ...,
-        user_id: int | None = None,
+        external_squad_uuid: str | type(...) | None = ...,
     ) -> RemnaWaveUser:
-        data = self._fmt_user_body_id(uuid, user_id)
+        # 3.0.0: UpdateUserCommand.RequestBodySchema не имеет поля `uuid`, а
+        # .refine((d) => d.username ?? d.id) требует хотя бы один из двух —
+        # неизвестный ключ zod срезает молча, и запрос падает в 400.
+        panel_user_id = coerce_panel_user_id(user_id)
+        data = {'id': panel_user_id}
 
         if status:
             data['status'] = status.value
@@ -796,96 +984,97 @@ class RemnaWaveAPI:
         try:
             response = await self._make_request('PATCH', '/api/users', data)
         except RemnaWaveAPIError as e:
-            # A039 = FK violation on externalSquadUuid — retry without it
-            error_code = (e.response_data or {}).get('errorCode', '')
-            if error_code == 'A039' and 'externalSquadUuid' in data:
-                stale_uuid = data.pop('externalSquadUuid')
+            # Протухший externalSquadUuid (A039 на обновлении / A182) — повтор без него.
+            if is_stale_external_squad_error(e) and 'externalSquadUuid' in data:
+                retry_data = {key: value for key, value in data.items() if key != 'externalSquadUuid'}
                 logger.warning(
-                    'A039 FK violation on externalSquadUuid, retrying without it',
-                    stale_uuid=stale_uuid,
-                    uuid=uuid,
+                    'Панель отвергла обновление с externalSquadUuid — повтор без него',
+                    error_code=_panel_error_code(e),
+                    stale_uuid=data['externalSquadUuid'],
+                    panel_user_id=panel_user_id,
                 )
-                response = await self._make_request('PATCH', '/api/users', data)
+                response = await self._make_request('PATCH', '/api/users', retry_data)
             else:
-                logger.error('PATCH /api/users FAILED — full payload', payload=data)
+                # «User not found» — не error: как и 404 в _make_request, его
+                # обрабатывает вызывающий код (пересоздание пользователя), а
+                # error-логи буферизуются и сыплют отчётом в админ-чат.
+                log = logger.warning if is_user_not_found_error(e) else logger.error
+                log('PATCH /api/users FAILED — full payload', payload=data)
                 raise
         user = self._parse_user(response['response'])
         logger.info(
             'PATCH /api/users response',
-            uuid=uuid,
+            panel_user_id=panel_user_id,
             response_hwidDeviceLimit=user.hwid_device_limit,
         )
-        return user
+        return await self.enrich_user_with_happ_link(user)
 
-    async def delete_user(self, uuid: str, user_id: int | None = None) -> bool:
-        # v3.0.0: DELETE возвращает 204 без тела. Отсутствие ошибки == успех.
-        response = await self._make_request('DELETE', self._fmt_user_path(uuid, user_id))
-        return response.get('response', {}).get('isDeleted', True)
+    async def delete_user(self, user_id: int) -> bool:
+        # 3.0.0: DELETE отвечает 204 (синхронно) либо 202 (в очередь) — тела нет,
+        # поля `isDeleted` больше не существует. Успех = отсутствие исключения.
+        panel_user_id = coerce_panel_user_id(user_id)
+        await self._make_request('DELETE', f'/api/users/{panel_user_id}')
+        return True
 
-    async def enable_user(self, uuid: str, user_id: int | None = None) -> RemnaWaveUser:
-        response = await self._make_request('POST', f'{self._fmt_user_path(uuid, user_id)}/actions/enable')
+    async def enable_user(self, user_id: int) -> RemnaWaveUser:
+        panel_user_id = coerce_panel_user_id(user_id)
+        response = await self._make_request('POST', f'/api/users/{panel_user_id}/actions/enable')
         user = self._parse_user(response['response'])
-        return user
+        return await self.enrich_user_with_happ_link(user)
 
-    async def disable_user(self, uuid: str, user_id: int | None = None) -> RemnaWaveUser:
-        response = await self._make_request('POST', f'{self._fmt_user_path(uuid, user_id)}/actions/disable')
+    async def disable_user(self, user_id: int) -> RemnaWaveUser:
+        panel_user_id = coerce_panel_user_id(user_id)
+        response = await self._make_request('POST', f'/api/users/{panel_user_id}/actions/disable')
         user = self._parse_user(response['response'])
-        return user
+        return await self.enrich_user_with_happ_link(user)
 
-    async def reset_user_traffic(self, uuid: str, user_id: int | None = None) -> RemnaWaveUser:
-        response = await self._make_request('POST', f'{self._fmt_user_path(uuid, user_id)}/actions/reset-traffic')
+    async def reset_user_traffic(self, user_id: int) -> RemnaWaveUser:
+        panel_user_id = coerce_panel_user_id(user_id)
+        response = await self._make_request('POST', f'/api/users/{panel_user_id}/actions/reset-traffic')
         user = self._parse_user(response['response'])
-        return user
+        return await self.enrich_user_with_happ_link(user)
+
+    async def extend_user_expiration(self, user_id: int, days: int) -> RemnaWaveUser:
+        """``POST /api/users/{userId}/actions/extend`` — новое в 3.0.0.
+
+        Истёкшему пользователю дата считается от текущего момента и статус
+        становится ACTIVE; активному дни добавляются к текущей дате. DISABLED и
+        LIMITED продлеваются, но статус не меняют.
+        """
+        panel_user_id = coerce_panel_user_id(user_id)
+        if days < 1:
+            raise RemnaWaveAPIError(f'extend_user_expiration requires days >= 1, got {days}')
+        response = await self._make_request('POST', f'/api/users/{panel_user_id}/actions/extend', {'days': days})
+        user = self._parse_user(response['response'])
+        return await self.enrich_user_with_happ_link(user)
 
     async def revoke_user_subscription(
-        self,
-        uuid: str,
-        new_short_uuid: str | None = None,
-        revoke_only_passwords: bool = False,
-        user_id: int | None = None,
+        self, user_id: int, new_short_uuid: str | None = None, revoke_only_passwords: bool = False
     ) -> RemnaWaveUser:
         """
         Отзывает подписку пользователя (меняет ссылку/пароли).
 
         Args:
-            uuid: UUID пользователя
+            user_id: числовой id пользователя панели
             new_short_uuid: Новый короткий UUID (опционально, рекомендуется генерировать автоматически)
             revoke_only_passwords: Если True, меняются только пароли без изменения URL подписки
         """
+        panel_user_id = coerce_panel_user_id(user_id)
         data = {}
         if new_short_uuid:
             data['shortUuid'] = new_short_uuid
         if revoke_only_passwords:
             data['revokeOnlyPasswords'] = True
 
-        response = await self._make_request('POST', f'{self._fmt_user_path(uuid, user_id)}/actions/revoke', data)
+        response = await self._make_request('POST', f'/api/users/{panel_user_id}/actions/revoke', data)
         user = self._parse_user(response['response'])
-        return user
+        return await self.enrich_user_with_happ_link(user)
 
-    async def extend_user_subscription(
-        self,
-        uuid: str,
-        days: int,
-        user_id: int | None = None,
-    ) -> RemnaWaveUser:
-        """Продлевает подписку пользователя (Remnawave 3.0.0+).
-
-        ``POST /api/users/{userId}/actions/extend`` с телом ``{'days': N}``:
-        - если пользователь EXPIRED — новая дата считается от текущего момента,
-          пользователь становится ACTIVE;
-        - если пользователь ACTIVE — дни добавляются к текущей дате истечения.
-        """
-        response = await self._make_request(
-            'POST',
-            f'{self._fmt_user_path(uuid, user_id)}/actions/extend',
-            {'days': days},
-        )
-        return self._parse_user(response['response'])
-
-    async def get_user_accessible_nodes(self, uuid: str, user_id: int | None = None) -> list[RemnaWaveAccessibleNode]:
+    async def get_user_accessible_nodes(self, user_id: int) -> list[RemnaWaveAccessibleNode]:
         """Получает список доступных нод для пользователя"""
+        panel_user_id = coerce_panel_user_id(user_id)
         try:
-            response = await self._make_request('GET', f'{self._fmt_user_path(uuid, user_id)}/accessible-nodes')
+            response = await self._make_request('GET', f'/api/users/{panel_user_id}/accessible-nodes')
             nodes_data = response.get('response', {}).get('activeNodes', [])
             result = []
             for node in nodes_data:
@@ -909,32 +1098,69 @@ class RemnaWaveAPI:
                 return []
             raise
 
-    async def get_all_users(self, start: int = 0, size: int = 100) -> dict[str, Any]:
+    async def get_all_users(self, start: int = 0, size: int = 100, enrich_happ_links: bool = False) -> dict[str, Any]:
         params = {'start': start, 'size': size}
         response = await self._make_request('GET', '/api/users', params=params)
 
         users = [self._parse_user(user) for user in response['response']['users']]
 
+        if enrich_happ_links:
+            users = [await self.enrich_user_with_happ_link(u) for u in users]
+
         return {'users': users, 'total': response['response']['total']}
 
-    async def get_all_users_page_stream(self, cursor: str | None = None, size: int = 500) -> dict[str, Any]:
-        """Одна страница keyset-пагинации пользователей (Remnawave 2.8.0+).
+    async def get_users_by_last_online(self, start: int = 0, size: int = 1000) -> list[RemnaWaveUser]:
+        """Страница ``GET /api/users`` по убыванию ``userTraffic.onlineAt`` — как сортирует таблица панели.
+
+        Фильтр по ``onlineAt`` у панели — только точное равенство; «кто подключён сейчас»
+        выбирается этой сортировкой (никогда не подключавшиеся — в конце). ``size`` по
+        контракту 1..1000.
+        """
+        params = {
+            'start': max(0, start),
+            'size': max(1, min(size, 1000)),
+            'sorting': json.dumps([{'id': 'userTraffic.onlineAt', 'desc': True}]),
+        }
+        response = await self._make_request('GET', '/api/users', params=params)
+        return [self._parse_user(user) for user in response['response']['users']]
+
+    async def get_all_users_page_stream(
+        self,
+        cursor: str | None = None,
+        size: int = 500,
+        enrich_happ_links: bool = False,
+        filters: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Одна страница keyset-пагинации пользователей.
 
         ``GET /api/users/stream`` — курсорная пагинация, устойчивая к мутациям
         во время полного обхода (offset-пагинация ``/api/users`` сдвигается, если
         пользователей удаляют/создают между страницами). Передавай ``nextCursor``
         из предыдущего ответа; на первой странице ``cursor=None``.
 
+        ``filters`` — query-фильтры 3.0.0 (``telegramId``, ``email``, ``tag``,
+        ``status``, ``trafficLimitStrategy``, ``externalSquadUuid``); на них
+        построены замены удалённым ``by-telegram-id`` / ``by-email``.
+
         Возвращает ``{'users': [...], 'nextCursor': str | None, 'hasMore': bool}``.
         """
-        params: dict[str, Any] = {'size': size}
+        # Контракт панели (zod): size строго 1..1000, иначе 400 «Validation
+        # failed». Настраиваемые батчи (TRAFFIC_CHECK_BATCH_SIZE) со времён
+        # offset-пагинации могли быть больше — клэмпим, а не роняем весь обход.
+        params: dict[str, Any] = {'size': max(1, min(size, 1000))}
         if cursor is not None:
+            # Запрос коерсит курсор в число (z.coerce.number), а ответ отдаёт
+            # его строкой — прокидываем как есть, панель приведёт сама.
             params['cursor'] = cursor
+        if filters:
+            params.update(filters)
 
         response = await self._make_request('GET', '/api/users/stream', params=params)
         data = response['response']
 
         users = [self._parse_user(user) for user in data['users']]
+        if enrich_happ_links:
+            users = [await self.enrich_user_with_happ_link(u) for u in users]
 
         return {
             'users': users,
@@ -942,13 +1168,13 @@ class RemnaWaveAPI:
             'hasMore': bool(data.get('hasMore')),
         }
 
-    async def get_all_users_stream(self, size: int = 500) -> list[RemnaWaveUser]:
+    async def get_all_users_stream(self, size: int = 500, enrich_happ_links: bool = False) -> list[RemnaWaveUser]:
         """Полный обход всех пользователей панели через курсорную пагинацию (2.8.0+)."""
         all_users: list[RemnaWaveUser] = []
         cursor: str | None = None
 
         while True:
-            page = await self.get_all_users_page_stream(cursor=cursor, size=size)
+            page = await self.get_all_users_page_stream(cursor=cursor, size=size, enrich_happ_links=enrich_happ_links)
             all_users.extend(page['users'])
             if not page['hasMore'] or not page['nextCursor']:
                 break
@@ -987,8 +1213,9 @@ class RemnaWaveAPI:
         return self._parse_internal_squad(response['response'])
 
     async def delete_internal_squad(self, uuid: str) -> bool:
-        response = await self._make_request('DELETE', f'/api/internal-squads/{uuid}')
-        return response.get('response', {}).get('isDeleted', True)
+        # 3.0.0: DELETE отдаёт 204/202 без тела — `isDeleted` больше нет.
+        await self._make_request('DELETE', f'/api/internal-squads/{uuid}')
+        return True
 
     async def get_internal_squad_accessible_nodes(self, uuid: str) -> list[RemnaWaveAccessibleNode]:
         """Получает список доступных нод для Internal Squad"""
@@ -1003,15 +1230,45 @@ class RemnaWaveAPI:
     async def add_users_to_internal_squad(self, uuid: str) -> bool:
         """Добавляет всех пользователей в Internal Squad (bulk action).
 
-        v3.0.0: bulk-операции возвращают 202/204 без тела — успех == True.
+        3.0.0: bulk-операции отвечают 202 (выполняются в фоне) либо 204 — тела
+        нет, поля `eventSent` в контракте не осталось. Успех = нет исключения.
         """
-        response = await self._make_request('POST', f'/api/internal-squads/{uuid}/bulk-actions/add-users')
-        return response.get('response', {}).get('eventSent', True)
+        await self._make_request('POST', f'/api/internal-squads/{uuid}/bulk-actions/add-users')
+        return True
 
     async def remove_users_from_internal_squad(self, uuid: str) -> bool:
         """Удаляет всех пользователей из Internal Squad (bulk action)"""
-        response = await self._make_request('DELETE', f'/api/internal-squads/{uuid}/bulk-actions/remove-users')
-        return response.get('response', {}).get('eventSent', True)
+        await self._make_request('DELETE', f'/api/internal-squads/{uuid}/bulk-actions/remove-users')
+        return True
+
+    async def add_many_users_to_internal_squad(self, uuid: str, user_ids: list[int]) -> bool:
+        """``POST /api/internal-squads/{uuid}/bulk-actions/add-many-users`` — новое в 3.0.0.
+
+        До 1000 идентификаторов за вызов, выполняется в фоне (202).
+        """
+        payload = [coerce_panel_user_id(value) for value in user_ids]
+        if not payload:
+            return True
+        if len(payload) > 1000:
+            raise RemnaWaveAPIError(f'add_many_users_to_internal_squad accepts at most 1000 ids, got {len(payload)}')
+        await self._make_request(
+            'POST', f'/api/internal-squads/{uuid}/bulk-actions/add-many-users', {'userIds': payload}
+        )
+        return True
+
+    async def remove_many_users_from_internal_squad(self, uuid: str, user_ids: list[int]) -> bool:
+        """``DELETE /api/internal-squads/{uuid}/bulk-actions/remove-many-users`` — новое в 3.0.0."""
+        payload = [coerce_panel_user_id(value) for value in user_ids]
+        if not payload:
+            return True
+        if len(payload) > 1000:
+            raise RemnaWaveAPIError(
+                f'remove_many_users_from_internal_squad accepts at most 1000 ids, got {len(payload)}'
+            )
+        await self._make_request(
+            'DELETE', f'/api/internal-squads/{uuid}/bulk-actions/remove-many-users', {'userIds': payload}
+        )
+        return True
 
     async def reorder_internal_squads(self, items: list[dict[str, Any]]) -> list[RemnaWaveInternalSquad]:
         """
@@ -1052,7 +1309,8 @@ class RemnaWaveAPI:
         templates: list[dict[str, str]] | None = None,
         subscription_settings: dict[str, Any] | None = None,
         host_overrides: dict[str, Any] | None = None,
-        response_headers: dict[str, str] | None = None,
+        response_headers_add: dict[str, str] | None = None,
+        response_headers_remove: list[str] | None = None,
         hwid_settings: dict[str, Any] | None = None,
         custom_remarks: dict[str, Any] | None = None,
         subpage_config_uuid: str | None = None,
@@ -1066,8 +1324,13 @@ class RemnaWaveAPI:
             data['subscriptionSettings'] = subscription_settings
         if host_overrides is not None:
             data['hostOverrides'] = host_overrides
-        if response_headers is not None:
-            data['responseHeaders'] = response_headers
+        # 3.0.0 разделил `responseHeaders` на добавляемые и удаляемые. Старый ключ
+        # zod срезает молча: PATCH возвращает 200, а настройка хедеров тихо
+        # теряется — поэтому имя поля тут важнее, чем кажется.
+        if response_headers_add is not None:
+            data['responseHeadersAdd'] = response_headers_add
+        if response_headers_remove is not None:
+            data['responseHeadersRemove'] = response_headers_remove
         if hwid_settings is not None:
             data['hwidSettings'] = hwid_settings
         if custom_remarks is not None:
@@ -1080,18 +1343,18 @@ class RemnaWaveAPI:
 
     async def delete_external_squad(self, uuid: str) -> bool:
         """Удаляет External Squad"""
-        response = await self._make_request('DELETE', f'/api/external-squads/{uuid}')
-        return response.get('response', {}).get('isDeleted', True)
+        await self._make_request('DELETE', f'/api/external-squads/{uuid}')
+        return True
 
     async def add_users_to_external_squad(self, uuid: str) -> bool:
         """Добавляет всех пользователей в External Squad (bulk action)"""
-        response = await self._make_request('POST', f'/api/external-squads/{uuid}/bulk-actions/add-users')
-        return response.get('response', {}).get('eventSent', True)
+        await self._make_request('POST', f'/api/external-squads/{uuid}/bulk-actions/add-users')
+        return True
 
     async def remove_users_from_external_squad(self, uuid: str) -> bool:
         """Удаляет всех пользователей из External Squad (bulk action)"""
-        response = await self._make_request('DELETE', f'/api/external-squads/{uuid}/bulk-actions/remove-users')
-        return response.get('response', {}).get('eventSent', True)
+        await self._make_request('DELETE', f'/api/external-squads/{uuid}/bulk-actions/remove-users')
+        return True
 
     async def reorder_external_squads(self, items: list[dict[str, Any]]) -> list[RemnaWaveExternalSquad]:
         data = {'items': items}
@@ -1109,7 +1372,8 @@ class RemnaWaveAPI:
             templates=squad_data.get('templates', []),
             subscription_settings=squad_data.get('subscriptionSettings'),
             host_overrides=squad_data.get('hostOverrides'),
-            response_headers=squad_data.get('responseHeaders'),
+            response_headers_add=squad_data.get('responseHeadersAdd'),
+            response_headers_remove=squad_data.get('responseHeadersRemove'),
             hwid_settings=squad_data.get('hwidSettings'),
             custom_remarks=squad_data.get('customRemarks'),
             subpage_config_uuid=squad_data.get('subpageConfigUuid'),
@@ -1120,6 +1384,11 @@ class RemnaWaveAPI:
     async def get_all_nodes(self) -> list[RemnaWaveNode]:
         response = await self._make_request('GET', '/api/nodes')
         return [self._parse_node(node) for node in response['response']]
+
+    async def get_all_hosts(self) -> list[RemnaWaveHost]:
+        """GET /api/hosts — все хосты панели (включая отключённые и скрытые)."""
+        response = await self._make_request('GET', '/api/hosts')
+        return [self._parse_host(host) for host in response.get('response') or []]
 
     async def get_node_by_uuid(self, uuid: str) -> RemnaWaveNode | None:
         try:
@@ -1139,72 +1408,51 @@ class RemnaWaveAPI:
         return self._parse_node(response['response'])
 
     async def restart_node(self, uuid: str, force_restart: bool = False) -> bool:
-        # Remnawave 2.8.0+: команда рестарта ноды принимает forceRestart в теле
-        # запроса (раньше body не было). Старые панели игнорируют лишнее поле.
-        # 3.0.0: рестарт — bulk-операция, возвращает 202/204 без тела.
+        # Команда рестарта ноды принимает forceRestart в теле запроса.
+        # Поле ответа `eventSent` вычищено из контракта 3.0.0 — рестарт
+        # асинхронный, успех = панель приняла запрос.
         data = {'forceRestart': force_restart}
-        response = await self._make_request('POST', f'/api/nodes/{uuid}/actions/restart', data)
-        return response.get('response', {}).get('eventSent', True)
+        await self._make_request('POST', f'/api/nodes/{uuid}/actions/restart', data)
+        return True
 
     async def restart_all_nodes(self, force_restart: bool = False) -> bool:
         data = {'forceRestart': force_restart}
-        response = await self._make_request('POST', '/api/nodes/actions/restart-all', data)
-        return response.get('response', {}).get('eventSent', True)
+        await self._make_request('POST', '/api/nodes/actions/restart-all', data)
+        return True
 
     async def get_subscription_info(self, short_uuid: str) -> SubscriptionInfo:
         response = await self._make_request('GET', f'/api/sub/{short_uuid}/info')
         info = self._parse_subscription_info(response['response'])
+        # Обогащаем happ_crypto_link если его нет но есть subscription_url
+        if not info.happ_crypto_link and info.subscription_url:
+            encrypted = await self.encrypt_happ_crypto_link(info.subscription_url)
+            if encrypted:
+                info.happ_crypto_link = encrypted
         return info
 
-    async def get_subscription_by_short_uuid(self, short_uuid: str) -> str:
-        async with self.session.get(f'{self.base_url}/api/sub/{short_uuid}') as response:
+    async def get_subscription_links_by_short_uuid(self, short_uuid: str) -> list[str]:
+        """Remnawave 2.x: защищённая ``GET /api/subscriptions/by-short-uuid/{shortUuid}`` → ``response.links``."""
+        response = await self._make_request('GET', f'/api/subscriptions/by-short-uuid/{short_uuid}')
+        data = response.get('response') if isinstance(response, dict) else None
+        return [str(link) for link in ((data or {}).get('links') or []) if link]
+
+    async def get_public_subscription(
+        self, short_uuid: str, *, user_agent: str | None = None, headers: dict[str, str] | None = None
+    ) -> tuple[str, dict[str, str]]:
+        """Публичная подписка как её видит клиент: тело и заголовки ответа (``x-hwid-active`` и т. п.)."""
+        request_headers = dict(headers or {})
+        if user_agent:
+            request_headers['User-Agent'] = user_agent
+        async with self.session.get(
+            f'{self.base_url}/api/sub/{short_uuid}', headers=request_headers or None
+        ) as response:
             if response.status >= 400:
                 raise RemnaWaveAPIError(f'Failed to get subscription: {response.status}')
-            return await response.text()
+            return await response.text(), {key.lower(): value for key, value in response.headers.items()}
 
-    async def get_subscription_by_client_type(self, short_uuid: str, client_type: str) -> str:
-        valid_types = [
-            'stash',
-            'singbox',
-            'singbox-legacy',
-            'mihomo',
-            'json',
-            'v2ray-json',
-            'clash',
-        ]
-        if client_type not in valid_types:
-            raise ValueError(f'Invalid client type. Must be one of: {valid_types}')
-
-        async with self.session.get(f'{self.base_url}/api/sub/{short_uuid}/{client_type}') as response:
-            if response.status >= 400:
-                raise RemnaWaveAPIError(f'Failed to get subscription: {response.status}')
-            return await response.text()
-
-    async def get_subscription_links(self, short_uuid: str) -> dict[str, str]:
-        base_url = f'{self.base_url}/api/sub/{short_uuid}'
-
-        links = {
-            'base': base_url,
-            'stash': f'{base_url}/stash',
-            'singbox': f'{base_url}/singbox',
-            'singbox_legacy': f'{base_url}/singbox-legacy',
-            'mihomo': f'{base_url}/mihomo',
-            'json': f'{base_url}/json',
-            'v2ray_json': f'{base_url}/v2ray-json',
-            'clash': f'{base_url}/clash',
-        }
-
-        return links
-
-    async def get_outline_subscription(self, short_uuid: str, encoded_tag: str) -> str:
-        async with self.session.get(f'{self.base_url}/api/sub/outline/{short_uuid}/ss/{encoded_tag}') as response:
-            if response.status >= 400:
-                raise RemnaWaveAPIError(f'Failed to get outline subscription: {response.status}')
-            return await response.text()
-
-    async def get_system_stats(self, tz: str | None = None) -> dict[str, Any]:
-        params = {'tz': tz} if tz else None
-        response = await self._make_request('GET', '/api/system/stats', params=params)
+    async def get_system_stats(self) -> dict[str, Any]:
+        """``GET /api/system/stats`` — без query-параметров (``tz`` есть только у ``/stats/bandwidth``)."""
+        response = await self._make_request('GET', '/api/system/stats')
         return response['response']
 
     async def get_health(self) -> dict[str, Any]:
@@ -1329,10 +1577,14 @@ class RemnaWaveAPI:
             logger.warning('Failed to get nodes metrics for realtime usage', error=e)
             return []
 
-    async def get_user_stats_usage(
-        self, user_uuid: str, start_date: str, end_date: str, user_id: int | None = None
-    ) -> dict[str, Any]:
-        return await self.get_bandwidth_stats_user_legacy(user_uuid, start_date, end_date, user_id=user_id)
+    async def get_user_stats_usage(self, user_id: int, start_date: str, end_date: str) -> dict[str, Any]:
+        """Потребление трафика пользователем за период.
+
+        Раньше уходило в ``.../legacy``; в 3.0.0 legacy-эндпоинты удалены, и
+        форма ответа другая: ``{categories, sparklineData, topNodes, series}``
+        вместо плоского словаря с ``total``.
+        """
+        return await self.get_bandwidth_stats_user(user_id, start_date, end_date)
 
     # ============== Connections API (GeoCheck, 3.3.0) ==============
 
@@ -1387,38 +1639,42 @@ class RemnaWaveAPI:
     async def get_bandwidth_stats_node_users(
         self, node_uuid: str, start_date: str, end_date: str, top_users_limit: int = 10
     ) -> dict[str, Any]:
-        params = {
-            'start': start_date,
-            'end': end_date,
-            'topUsersLimit': top_users_limit,
-        }
+        params = {'start': start_date, 'end': end_date, 'topUsersLimit': top_users_limit}
         response = await self._make_request('GET', f'/api/bandwidth-stats/nodes/{node_uuid}/users', params=params)
         return response['response']
 
-    async def get_bandwidth_stats_node_users_legacy(
-        self, node_uuid: str, start_date: str, end_date: str
+    async def get_bandwidth_stats_nodes_usage(
+        self,
+        node_uuids: list[str],
+        start_date: str,
+        end_date: str,
+        min_total_bytes: int = 0,
     ) -> dict[str, Any]:
-        params = {'start': start_date, 'end': end_date}
+        """``POST /api/bandwidth-stats/nodes/usage`` — новое в 3.0.0.
+
+        Замена удалённому ``.../users/legacy`` там, где нужна привязка трафика к
+        конкретным пользователям: отдаёт ``{nodes: [{uuid, users: [{id,
+        totalBytes}]}]}``. В отличие от legacy — без разбивки по дням.
+
+        Идентификаторы узлов идут телом, а период и порог — query-параметрами:
+        так устроена команда в контракте. Даты строго ``YYYY-MM-DD``, не ISO с
+        ``Z`` — иначе панель отвечает 400.
+        """
+        if not node_uuids:
+            raise RemnaWaveAPIError('get_bandwidth_stats_nodes_usage requires at least one node uuid')
         response = await self._make_request(
-            'GET', f'/api/bandwidth-stats/nodes/{node_uuid}/users/legacy', params=params
+            'POST',
+            '/api/bandwidth-stats/nodes/usage',
+            {'nodesUuids': node_uuids},
+            params={'start': start_date, 'end': end_date, 'minTotalBytes': min_total_bytes},
         )
         return response['response']
 
-    async def get_bandwidth_stats_user(
-        self, user_uuid: str, start_date: str, end_date: str, user_id: int | None = None
-    ) -> dict[str, Any]:
+    async def get_bandwidth_stats_user(self, user_id: int, start_date: str, end_date: str) -> dict[str, Any]:
+        panel_user_id = coerce_panel_user_id(user_id)
         params = {'start': start_date, 'end': end_date}
-        _uid = user_id if (self._use_user_id() and user_id is not None) else user_uuid
-        response = await self._make_request('GET', f'/api/bandwidth-stats/users/{_uid}', params=params)
+        response = await self._make_request('GET', f'/api/bandwidth-stats/users/{panel_user_id}', params=params)
         return response['response']
-
-    async def get_bandwidth_stats_user_legacy(
-        self, user_uuid: str, start_date: str, end_date: str, user_id: int | None = None
-    ) -> dict[str, Any]:
-        params = {'start': start_date, 'end': end_date}
-        _uid = user_id if (self._use_user_id() and user_id is not None) else user_uuid
-        response = await self._make_request('GET', f'/api/bandwidth-stats/users/{_uid}/legacy', params=params)
-        return response
 
     # ============== Subscription Page Configs API ==============
 
@@ -1453,8 +1709,8 @@ class RemnaWaveAPI:
         return self._parse_subscription_page_config(response['response'])
 
     async def delete_subscription_page_config(self, uuid: str) -> bool:
-        response = await self._make_request('DELETE', f'/api/subscription-page-configs/{uuid}')
-        return response.get('response', {}).get('isDeleted', True)
+        await self._make_request('DELETE', f'/api/subscription-page-configs/{uuid}')
+        return True
 
     async def reorder_subscription_page_configs(self, items: list[dict[str, Any]]) -> list[SubscriptionPageConfig]:
         data = {'items': items}
@@ -1467,22 +1723,10 @@ class RemnaWaveAPI:
         response = await self._make_request('POST', '/api/subscription-page-configs/actions/clone', data)
         return self._parse_subscription_page_config(response['response'])
 
-    async def get_subpage_config_by_short_uuid(self, short_uuid: str) -> dict[str, Any] | None:
-        try:
-            response = await self._make_request('GET', f'/api/subscriptions/subpage-config/{short_uuid}')
-            return response.get('response')
-        except RemnaWaveAPIError as e:
-            if e.status_code == 404:
-                return None
-            raise
-
     def _parse_subscription_page_config(self, data: dict) -> SubscriptionPageConfig:
         """Парсит данные конфигурации страницы подписки"""
         return SubscriptionPageConfig(
-            uuid=data['uuid'],
-            name=data['name'],
-            view_position=data['viewPosition'],
-            config=data.get('config'),
+            uuid=data['uuid'], name=data['name'], view_position=data['viewPosition'], config=data.get('config')
         )
 
     async def get_all_hwid_devices(self) -> dict[str, Any]:
@@ -1504,82 +1748,88 @@ class RemnaWaveAPI:
 
         return {'devices': all_devices, 'total': len(all_devices)}
 
-    async def get_all_panel_subscriptions(self) -> list[dict[str, Any]]:
-        """GET /api/subscriptions — all panel subscriptions."""
-        response = await self._make_request('GET', '/api/subscriptions')
-        return response.get('response') or []
-
-    async def get_user_devices(self, user_uuid: str, user_id: int | None = None) -> dict[str, Any]:
-        _uid = user_id if (self._use_user_id() and user_id is not None) else user_uuid
+    async def get_user_devices(self, user_id: int) -> dict[str, Any]:
+        panel_user_id = coerce_panel_user_id(user_id)
         try:
-            response = await self._make_request('GET', f'/api/hwid/devices/{_uid}')
+            response = await self._make_request('GET', f'/api/hwid/devices/{panel_user_id}')
             return response['response']
         except RemnaWaveAPIError as e:
             if e.status_code == 404:
                 return {'total': 0, 'devices': []}
             raise
 
-    async def get_user_devices_all(self, user_uuid: str, user_id: int | None = None) -> dict[str, Any]:
-        """GET /api/hwid/devices/{user_uuid} — all devices for a user (paginated)."""
-        _uid = user_id if (self._use_user_id() and user_id is not None) else user_uuid
-        all_devices: list[dict[str, Any]] = []
-        start = 0
-        page_size = 1000
+    async def get_user_devices_all(self, user_id: int) -> dict[str, Any]:
+        """``GET /api/hwid/devices/{userId}`` — все устройства пользователя одним ответом.
 
+        Ручка не пагинируется: ``start``/``size`` — параметры общего
+        ``GET /api/hwid/devices``, здесь их нет. Элементы несут ``userId`` (число).
+        """
+        panel_user_id = coerce_panel_user_id(user_id)
         try:
-            while True:
-                response = await self._make_request(
-                    'GET',
-                    f'/api/hwid/devices/{_uid}',
-                    params={'start': start, 'size': page_size},
-                )
-                data = response.get('response', {'devices': [], 'total': 0})
-                devices = data.get('devices', [])
-                total = data.get('total', 0)
-                all_devices.extend(devices)
-
-                if len(all_devices) >= total or not devices:
-                    break
-                start += len(devices)
+            response = await self._make_request('GET', f'/api/hwid/devices/{panel_user_id}')
         except RemnaWaveAPIError as e:
             if e.status_code == 404:
                 return {'total': 0, 'devices': []}
             raise
 
-        return {'devices': all_devices, 'total': len(all_devices)}
+        data = response.get('response') if isinstance(response, dict) else None
+        payload = data if isinstance(data, dict) else {}
+        devices = list(payload.get('devices') or [])
+        total = payload.get('total')
+        return {'devices': devices, 'total': total if isinstance(total, int) else len(devices)}
 
-    async def reset_user_devices(self, user_uuid: str, user_id: int | None = None) -> bool:
+    async def reset_user_devices(self, user_id: int) -> bool:
+        """Снести все HWID-устройства пользователя одним запросом.
+
+        Раньше это был цикл из N удалений с эвристикой «успех, если упало меньше
+        половины». ``POST /api/hwid/devices/delete-all`` с телом ``{userId}``
+        делает то же атомарно, поэтому и результат теперь однозначный.
+        """
         try:
-            devices_info = await self.get_user_devices_all(user_uuid, user_id=user_id)
-            devices = devices_info.get('devices', [])
-
-            if not devices:
-                return True
-
-            failed_count = 0
-            hwid_key = self._fmt_hwid_user_key(user_uuid, user_id)
-            _uid = user_id if (self._use_user_id() and user_id is not None) else user_uuid
-            for device in devices:
-                device_hwid = device.get('hwid')
-                if device_hwid:
-                    try:
-                        delete_data = {hwid_key: _uid, 'hwid': device_hwid}
-                        await self._make_request('POST', '/api/hwid/devices/delete', data=delete_data)
-                    except Exception as device_error:
-                        logger.error(
-                            'Ошибка удаления устройства',
-                            device_hwid=device_hwid,
-                            device_error=device_error,
-                        )
-                        failed_count += 1
-
-            return failed_count < len(devices) / 2
-
-        except Exception as e:
-            logger.error('Ошибка при сбросе устройств', error=e)
+            panel_user_id = coerce_panel_user_id(user_id)
+        except RemnaWaveInvalidUserIdError as e:
+            logger.error('Сброс устройств: непригодный идентификатор', error=e.message)
             return False
 
-    async def remove_device(self, user_uuid: str, device_hwid: str, user_id: int | None = None) -> bool:
+        try:
+            result = await self._make_request('POST', '/api/hwid/devices/delete-all', data={'userId': panel_user_id})
+        except RemnaWaveAPIError as e:
+            if e.status_code == 404:
+                return True  # пользователя/устройств уже нет — цель достигнута
+            logger.error(
+                'Ошибка при сбросе устройств',
+                panel_user_id=panel_user_id,
+                status_code=e.status_code,
+                error=e.message,
+            )
+            return False
+        except Exception as e:
+            logger.error('Ошибка при сбросе устройств', panel_user_id=panel_user_id, error=e)
+            return False
+
+        # Ответ несёт состояние ПОСЛЕ удаления (`{total, devices}` по контракту).
+        # Игнорировать его нельзя: панель может ответить 200, оставив устройства
+        # на месте, и вызывающий отрапортует пользователю ложный успех.
+        payload = (result or {}).get('response') if isinstance(result, dict) else None
+        if isinstance(payload, dict):
+            remaining = payload.get('total')
+            if remaining is None:
+                remaining = len(payload.get('devices') or [])
+            try:
+                remaining = int(remaining)
+            except (TypeError, ValueError):
+                remaining = 0
+            if remaining > 0:
+                logger.error(
+                    'Панель приняла сброс устройств, но устройства остались',
+                    panel_user_id=panel_user_id,
+                    remaining=remaining,
+                )
+                return False
+
+        return True
+
+    async def remove_device(self, user_id: int, device_hwid: str) -> bool:
         """Удалить одно HWID-устройство пользователя.
 
         Возвращает True только когда устройство действительно отсутствует.
@@ -1591,19 +1841,18 @@ class RemnaWaveAPI:
         Панели, отвечающие «голым» ack без списка devices, обрабатываются как раньше
         (успешный запрос == удалено).
         """
-        hwid_key = self._fmt_hwid_user_key(user_uuid, user_id)
-        _uid = user_id if (self._use_user_id() and user_id is not None) else user_uuid
-        delete_data = {hwid_key: _uid, 'hwid': device_hwid}
+        try:
+            delete_data = {'userId': coerce_panel_user_id(user_id), 'hwid': device_hwid}
+        except RemnaWaveInvalidUserIdError as e:
+            logger.error('Удаление устройства: непригодный идентификатор', error=e.message)
+            return False
         try:
             response = await self._make_request('POST', '/api/hwid/devices/delete', data=delete_data)
         except RemnaWaveAPIError as e:
             if e.status_code == 404:
                 return True  # устройства уже нет — цель достигнута
             logger.error(
-                'Ошибка удаления устройства',
-                device_hwid=device_hwid,
-                status_code=e.status_code,
-                error=e.message,
+                'Ошибка удаления устройства', device_hwid=device_hwid, status_code=e.status_code, error=e.message
             )
             return False
         except Exception as e:
@@ -1623,6 +1872,164 @@ class RemnaWaveAPI:
                 return False
 
         return True
+
+    async def encrypt_happ_crypto_link(self, link_to_encrypt: str) -> str | None:
+        encrypted = self._encrypt_locally(link_to_encrypt)
+        if encrypted:
+            return encrypted
+        encrypted = await self._encrypt_via_panel(link_to_encrypt)
+        if encrypted:
+            return encrypted
+        return await self._encrypt_via_happ_api(link_to_encrypt)
+
+    @staticmethod
+    def _encrypt_locally(link_to_encrypt: str) -> str | None:
+        """Шифрует ссылку подписки в happ://crypt4/... локально, без сети.
+
+        Повторяет алгоритм официальной страницы подписки Remnawave
+        (@kastov/cryptohapp): RSA PKCS#1 v1.5 публичным ключом Happ + base64.
+        В отличие от панельного эндпоинта (удалён в 2.8.0) и внешнего Happ API
+        (лимиты, cooldown, утечка URL подписки вовне) работает всегда и бесплатно.
+        """
+        if not settings.HAPP_CRYPTOLINK_LOCAL_ENCRYPTION_ENABLED:
+            return None
+        cached = RemnaWaveAPI._happ_local_cache.get(link_to_encrypt)
+        if cached:
+            return cached
+        try:
+            key = RSA.import_key(HAPP_CRYPTO_V4_PUBLIC_KEY)
+            payload = link_to_encrypt.encode('utf-8')
+            # Лимит PKCS#1 v1.5 — размер ключа минус 11 байт (501 для RSA-4096)
+            if len(payload) > key.size_in_bytes() - 11:
+                logger.warning('Ссылка слишком длинная для happ crypt4', length=len(payload))
+                return None
+            encrypted = PKCS1_v1_5.new(key).encrypt(payload)
+            link = HAPP_CRYPTO_V4_DEEP_LINK_PREFIX + base64.b64encode(encrypted).decode('ascii')
+            if len(RemnaWaveAPI._happ_local_cache) >= HAPP_CRYPTO_API_CACHE_MAX:
+                RemnaWaveAPI._happ_local_cache.clear()
+            RemnaWaveAPI._happ_local_cache[link_to_encrypt] = link
+            return link
+        except Exception as e:
+            logger.warning('Не удалось локально зашифровать happ ссылку', error=e)
+            return None
+
+    async def _encrypt_via_panel(self, link_to_encrypt: str) -> str | None:
+        # Эндпоинт удалён в Remnawave 2.8.0 — после первого 404 больше не дёргаем.
+        if RemnaWaveAPI._happ_encrypt_unavailable:
+            return None
+        try:
+            data = {'linkToEncrypt': link_to_encrypt}
+            response = await self._make_request('POST', '/api/system/tools/happ/encrypt', data)
+            return response.get('response', {}).get('encryptedLink')
+        except RemnaWaveAPIError as e:
+            if e.status_code == 404:
+                RemnaWaveAPI._happ_encrypt_unavailable = True
+                logger.info(
+                    'happ-encrypt эндпоинт недоступен (удалён в Remnawave 2.8.0) — '
+                    'переключаюсь на официальный Happ API до рестарта'
+                )
+                return None
+            logger.warning('Не удалось зашифровать happ ссылку', message=e.message)
+            return None
+        except Exception as e:
+            logger.warning('Ошибка при шифровании happ ссылки', error=e)
+            return None
+
+    async def _encrypt_via_happ_api(self, link_to_encrypt: str) -> str | None:
+        """Fallback: официальный Happ crypto API v2 -> happ://crypt5/... ."""
+        if not settings.HAPP_CRYPTOLINK_API_FALLBACK_ENABLED:
+            return None
+
+        cached = RemnaWaveAPI._happ_api_cache.get(link_to_encrypt)
+        if cached:
+            return cached
+
+        if link_to_encrypt in RemnaWaveAPI._happ_api_failed_urls:
+            return None
+
+        if time.monotonic() < RemnaWaveAPI._happ_api_disabled_until:
+            return None
+
+        try:
+            encrypted = await self._call_happ_crypto_api(link_to_encrypt)
+        except RemnaWaveAPIError as e:
+            # 429 — троттлинг сервиса (лечится паузой ниже), остальные 4xx — отказ
+            # по конкретному URL: не выключаем fallback глобально, просто не ретраим
+            # этот URL до рестарта.
+            if e.status_code is not None and 400 <= e.status_code < 500 and e.status_code != 429:
+                self._remember_failed_happ_url(link_to_encrypt)
+                logger.warning('Happ crypto API отклонил ссылку', status=e.status_code)
+                return None
+            RemnaWaveAPI._happ_api_disabled_until = time.monotonic() + HAPP_CRYPTO_API_COOLDOWN_SECONDS
+            logger.warning(
+                'Happ crypto API недоступен — пауза перед повторными попытками',
+                error=e,
+                cooldown_seconds=HAPP_CRYPTO_API_COOLDOWN_SECONDS,
+            )
+            return None
+        except Exception as e:
+            RemnaWaveAPI._happ_api_disabled_until = time.monotonic() + HAPP_CRYPTO_API_COOLDOWN_SECONDS
+            logger.warning(
+                'Happ crypto API недоступен — пауза перед повторными попытками',
+                error=e,
+                cooldown_seconds=HAPP_CRYPTO_API_COOLDOWN_SECONDS,
+            )
+            return None
+
+        if not encrypted or not encrypted.startswith('happ://'):
+            # 200 с мусором в теле — считаем проблемой конкретного URL, не сервиса.
+            self._remember_failed_happ_url(link_to_encrypt)
+            logger.warning('Happ crypto API вернул неожиданный ответ', has_link=bool(encrypted))
+            return None
+
+        if len(RemnaWaveAPI._happ_api_cache) >= HAPP_CRYPTO_API_CACHE_MAX:
+            RemnaWaveAPI._happ_api_cache.clear()
+        RemnaWaveAPI._happ_api_cache[link_to_encrypt] = encrypted
+        return encrypted
+
+    @staticmethod
+    def _remember_failed_happ_url(link_to_encrypt: str) -> None:
+        if len(RemnaWaveAPI._happ_api_failed_urls) >= HAPP_CRYPTO_API_CACHE_MAX:
+            RemnaWaveAPI._happ_api_failed_urls.clear()
+        RemnaWaveAPI._happ_api_failed_urls.add(link_to_encrypt)
+
+    async def _call_happ_crypto_api(self, link_to_encrypt: str) -> str | None:
+        # Отдельная сессия: панельные заголовки (X-Api-Key/Authorization) не должны
+        # утекать на внешний сервис.
+        timeout = aiohttp.ClientTimeout(total=10, connect=5)
+        async with (
+            aiohttp.ClientSession(timeout=timeout) as session,
+            session.post(HAPP_CRYPTO_API_URL, json={'url': link_to_encrypt}) as response,
+        ):
+            if response.status != 200:
+                raise RemnaWaveAPIError(f'Happ crypto API вернул статус {response.status}', response.status)
+            try:
+                payload = await response.json(content_type=None)
+            except ValueError:
+                # 200 с не-JSON телом — мусор по конкретному URL, а не сбой сервиса:
+                # None уводит вызывающего в per-URL ветку, а не в глобальный cooldown.
+                payload = None
+        if not isinstance(payload, dict):
+            return None
+        encrypted = payload.get('encrypted_link')
+        return encrypted if isinstance(encrypted, str) else None
+
+    async def enrich_user_with_happ_link(self, user: RemnaWaveUser) -> RemnaWaveUser:
+        if not user.happ_crypto_link and user.subscription_url:
+            # Сначала локальное шифрование (мгновенно, без сети), затем панельный
+            # эндпоинт (2.7.x). Внешний Happ API на этом горячем пути (enrich зовётся
+            # на каждом get_user_by_*) дёргаем только когда crypt-ссылки реально нужны
+            # боту (happ_cryptolink-режим); кабинет генерирует недостающие ссылки сам —
+            # по факту CRYPT-шаблона в app-config, — так что URL подписок не утекают
+            # вовне без надобности.
+            encrypted = self._encrypt_locally(user.subscription_url) or await self._encrypt_via_panel(
+                user.subscription_url
+            )
+            if not encrypted and settings.is_happ_cryptolink_mode():
+                encrypted = await self._encrypt_via_happ_api(user.subscription_url)
+            if encrypted:
+                user.happ_crypto_link = encrypted
+        return user
 
     def _parse_user_traffic(self, traffic_data: dict | None) -> UserTraffic | None:
         """Парсит данные трафика из нового формата API"""
@@ -1650,10 +2057,7 @@ class RemnaWaveAPI:
         try:
             status = UserStatus(status_str)
         except ValueError:
-            logger.warning(
-                'Неизвестный статус пользователя: используем ACTIVE',
-                status_str=status_str,
-            )
+            logger.warning('Неизвестный статус пользователя: используем ACTIVE', status_str=status_str)
             status = UserStatus.ACTIVE
 
         # Получаем trafficLimitStrategy с fallback
@@ -1661,18 +2065,12 @@ class RemnaWaveAPI:
         try:
             traffic_strategy = TrafficLimitStrategy(strategy_str)
         except ValueError:
-            logger.warning(
-                'Неизвестная стратегия трафика: используем NO_RESET',
-                strategy_str=strategy_str,
-            )
+            logger.warning('Неизвестная стратегия трафика: используем NO_RESET', strategy_str=strategy_str)
             traffic_strategy = TrafficLimitStrategy.NO_RESET
 
         return RemnaWaveUser(
-            # v3.0.0: uuid может отсутствовать, а может прийти как NaN/'' —
-            # отбрасываем их в None, чтобы в БД писался NULL: колонка
-            # users.remnawave_uuid UNIQUE, ''/NaN у двух юзеров ломает её.
-            uuid=self._sanitize_uuid(user_data.get('uuid')),
-            short_uuid=self._sanitize_uuid(user_data.get('shortUuid')) or '',
+            id=int(user_data['id']),
+            short_uuid=user_data['shortUuid'],
             username=user_data['username'],
             status=status,
             # Remnawave 2.8.0 ослабил валидацию trafficLimitBytes (integer → number),
@@ -1699,7 +2097,6 @@ class RemnaWaveAPI:
             happ_link=happ_link,
             happ_crypto_link=happ_crypto_link,
             external_squad_uuid=user_data.get('externalSquadUuid'),
-            id=self._sanitize_user_id(user_data.get('id')),
         )
 
     def _parse_optional_datetime(self, date_str: str | None) -> datetime | None:
@@ -1716,41 +2113,6 @@ class RemnaWaveAPI:
             return int(value)
         except (ValueError, TypeError):
             return default
-
-    @staticmethod
-    def _sanitize_user_id(user_id: Any) -> int | None:
-        """Return a valid numeric panel user id, or None.
-
-        Rejects ``float('nan')``/infinity (JSON literal ``NaN`` parsed by
-        ``json.loads``), bools and non-integer garbage so we never build
-        ``/api/users/nan`` style URLs (panel rejects those with 400 A063-ish).
-        """
-        if user_id is None or isinstance(user_id, bool):
-            return None
-        if isinstance(user_id, float):
-            if math.isnan(user_id) or math.isinf(user_id) or not user_id.is_integer():
-                return None
-            return int(user_id)
-        try:
-            return int(user_id)
-        except (ValueError, TypeError):
-            return None
-
-    @staticmethod
-    def _sanitize_uuid(uuid_value: Any) -> str | None:
-        """Return a usable panel uuid string, or None for NaN/garbage.
-
-        v3.0.0 панель может не вернуть uuid вовсе, а может прислать JSON-literal
-        ``NaN`` (json.loads -> float('nan')) или строку ``"NaN"``. Такие значения
-        нельзя писать в ``users.remnawave_uuid`` (колонка UNIQUE, а ``''``/``NaN``
-        у двух юзеров ломают её) и нельзя подставлять в URL ``/api/users/<uuid>``.
-        """
-        if not isinstance(uuid_value, str):
-            return None
-        uuid_value = uuid_value.strip()
-        if not uuid_value or uuid_value.lower() in ('nan', 'inf', '-inf', 'infinity', '-infinity'):
-            return None
-        return uuid_value
 
     def _parse_inbound(self, inbound_data: dict) -> RemnaWaveInbound:
         """Парсит данные inbound"""
@@ -1791,7 +2153,28 @@ class RemnaWaveAPI:
             active_inbounds=node_data.get('activeInbounds', []),
         )
 
+    @staticmethod
+    def _parse_host(data: dict) -> RemnaWaveHost:
+        inbound = data.get('inbound') or {}
+        port = data.get('port')
+        return RemnaWaveHost(
+            uuid=data['uuid'],
+            remark=data.get('remark') or '',
+            address=data.get('address') or '',
+            port=int(port) if port is not None else None,
+            sni=data.get('sni') or None,
+            host=data.get('host') or None,
+            is_disabled=bool(data.get('isDisabled', False)),
+            is_hidden=bool(data.get('isHidden', False)),
+            tags=[str(tag) for tag in (data.get('tags') or []) if tag],
+            security_layer=data.get('securityLayer') or None,
+            config_profile_uuid=inbound.get('configProfileUuid') or None,
+            config_profile_inbound_uuid=inbound.get('configProfileInboundUuid') or None,
+            view_position=int(data.get('viewPosition') or 0),
+        )
+
     def _parse_node(self, node_data: dict) -> RemnaWaveNode:
+        config_profile = node_data.get('configProfile') or {}
         return RemnaWaveNode(
             uuid=node_data['uuid'],
             name=node_data['name'],
@@ -1829,8 +2212,13 @@ class RemnaWaveAPI:
             versions=node_data.get('versions'),
             system=node_data.get('system'),
             active_plugin_uuid=node_data.get('activePluginUuid'),
-            id=self._sanitize_user_id(node_data.get('id')),  # v3.1.0
             ips=node_data.get('ips') or [],
+            active_config_profile_uuid=config_profile.get('activeConfigProfileUuid') or None,
+            active_inbound_uuids=[
+                str(inbound['uuid'])
+                for inbound in config_profile.get('activeInbounds') or []
+                if isinstance(inbound, dict) and inbound.get('uuid')
+            ],
         )
 
     def _parse_subscription_info(self, data: dict) -> SubscriptionInfo:

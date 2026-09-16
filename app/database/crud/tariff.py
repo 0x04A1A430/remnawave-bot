@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.database.models import PromoGroup, Subscription, SubscriptionStatus, Tariff
+from app.utils.panel_tag import normalize_panel_tag
 
 
 logger = structlog.get_logger(__name__)
@@ -27,6 +28,22 @@ def _normalize_period_prices(period_prices: dict[int, int] | None) -> dict[str, 
             normalized[str(period)] = price
 
     return normalized
+
+
+def _resolve_highlight_period(period_prices: dict[str, int], highlight: int | None) -> int | None:
+    """Выделенным может быть только период, который у тарифа действительно есть.
+
+    Периоды правят, и выделенный могут удалить. Хранить его после этого нельзя:
+    метка молча ничего не выделяет, а если тот же период когда-нибудь вернут —
+    внезапно всплывает старое решение оператора.
+    """
+    if highlight is None:
+        return None
+    try:
+        days = int(highlight)
+    except (TypeError, ValueError):
+        return None
+    return days if str(days) in period_prices else None
 
 
 async def get_all_tariffs(
@@ -175,6 +192,8 @@ async def create_tariff(
     allowed_squads: list[str] | None = None,
     server_traffic_limits: dict[str, dict] | None = None,
     period_prices: dict[int, int] | None = None,
+    highlight_period_days: int | None = None,
+    is_highlighted: bool = False,
     tier_level: int = 1,
     is_trial_available: bool = False,
     allow_traffic_topup: bool = True,
@@ -184,6 +203,8 @@ async def create_tariff(
     max_topup_traffic_gb: int = 0,
     is_daily: bool = False,
     daily_price_kopeks: int = 0,
+    # UUID продукта Lava для рекуррентных подписок
+    lava_product_id: str | None = None,
     # Произвольное количество дней
     custom_days_enabled: bool = False,
     price_per_day_kopeks: int = 0,
@@ -197,9 +218,13 @@ async def create_tariff(
     # Видимость в разделе подарков
     show_in_gift: bool = True,
     # Режим сброса трафика
-    traffic_reset_mode: (str | None) = None,  # DAY, WEEK, MONTH, MONTH_ROLLING, NO_RESET, None = глобальная настройка
+    traffic_reset_mode: str | None = None,  # DAY, WEEK, MONTH, MONTH_ROLLING, NO_RESET, None = глобальная настройка
     # Внешний сквад RemnaWave
     external_squad_uuid: str | None = None,
+    # Свой тег панели (нормализуется; недопустимый — ValueError)
+    panel_tag: str | None = None,
+    # Дни триала на тарифе; None = глобальный TRIAL_DURATION_DAYS
+    trial_duration_days: int | None = None,
 ) -> Tariff:
     """Создает новый тариф."""
     normalized_prices = _normalize_period_prices(period_prices)
@@ -216,6 +241,8 @@ async def create_tariff(
         allowed_squads=allowed_squads or [],
         server_traffic_limits=server_traffic_limits or {},
         period_prices=normalized_prices,
+        highlight_period_days=_resolve_highlight_period(normalized_prices, highlight_period_days),
+        is_highlighted=is_highlighted,
         tier_level=max(1, tier_level),
         is_trial_available=is_trial_available,
         allow_traffic_topup=allow_traffic_topup,
@@ -224,6 +251,7 @@ async def create_tariff(
         max_topup_traffic_gb=max(0, max_topup_traffic_gb),
         is_daily=is_daily,
         daily_price_kopeks=max(0, daily_price_kopeks),
+        lava_product_id=(lava_product_id or '').strip() or None,
         # Произвольное количество дней
         custom_days_enabled=custom_days_enabled,
         price_per_day_kopeks=max(0, price_per_day_kopeks),
@@ -240,6 +268,8 @@ async def create_tariff(
         traffic_reset_mode=traffic_reset_mode,
         # Внешний сквад
         external_squad_uuid=external_squad_uuid,
+        panel_tag=normalize_panel_tag(panel_tag),
+        trial_duration_days=trial_duration_days,
     )
 
     db.add(tariff)
@@ -280,13 +310,15 @@ async def update_tariff(
     traffic_limit_gb: int | None = None,
     device_limit: int | None = None,
     device_price_kopeks: int | None = ...,  # ... = не передан, None = сбросить
-    max_device_limit: (int | None) = ...,  # ... = не передан, None = сбросить (без лимита)
+    max_device_limit: int | None = ...,  # ... = не передан, None = сбросить (без лимита)
     allowed_squads: list[str] | None = None,
     server_traffic_limits: dict[str, dict] | None = None,
     period_prices: dict[int, int] | None = None,
+    highlight_period_days: int | None = ...,  # ... = не передан, None = снять выделение
+    is_highlighted: bool | None = None,
     tier_level: int | None = None,
     is_trial_available: bool | None = None,
-    trial_duration_days: (int | None) = ...,  # ... = не передан, None = сбросить к дефолту (TRIAL_DURATION_DAYS)
+    trial_duration_days: int | None = ...,  # ... = не передан, None = сбросить к дефолту (TRIAL_DURATION_DAYS)
     allow_traffic_topup: bool | None = None,
     promo_group_ids: list[int] | None = None,
     traffic_topup_enabled: bool | None = None,
@@ -294,6 +326,7 @@ async def update_tariff(
     max_topup_traffic_gb: int | None = None,
     is_daily: bool | None = None,
     daily_price_kopeks: int | None = None,
+    lava_product_id: str | None = None,
     # Произвольное количество дней
     custom_days_enabled: bool | None = None,
     price_per_day_kopeks: int | None = None,
@@ -307,9 +340,11 @@ async def update_tariff(
     # Видимость в разделе подарков
     show_in_gift: bool | None = None,
     # Режим сброса трафика
-    traffic_reset_mode: (str | None) = ...,  # ... = не передан, None = сбросить к глобальной настройке
+    traffic_reset_mode: str | None = ...,  # ... = не передан, None = сбросить к глобальной настройке
     # Внешний сквад RemnaWave
-    external_squad_uuid: (str | None) = ...,  # ... = не передан, None = убрать внешний сквад
+    external_squad_uuid: str | None = ...,  # ... = не передан, None = убрать внешний сквад
+    # Свой тег панели: ... = не передан, None/'' = снять
+    panel_tag: str | None = ...,
 ) -> Tariff:
     """Обновляет существующий тариф."""
     if name is not None:
@@ -338,6 +373,16 @@ async def update_tariff(
         tariff.allow_traffic_topup = allow_traffic_topup
     if period_prices is not None:
         tariff.period_prices = _normalize_period_prices(period_prices)
+    if highlight_period_days is not ...:
+        tariff.highlight_period_days = _resolve_highlight_period(tariff.period_prices or {}, highlight_period_days)
+    elif period_prices is not None:
+        # Периоды переписали, а выделение осталось прежним — проверяем, что
+        # выделенный период пережил правку.
+        tariff.highlight_period_days = _resolve_highlight_period(
+            tariff.period_prices or {}, tariff.highlight_period_days
+        )
+    if is_highlighted is not None:
+        tariff.is_highlighted = is_highlighted
     if tier_level is not None:
         tariff.tier_level = max(1, tier_level)
     if is_trial_available is not None:
@@ -355,6 +400,9 @@ async def update_tariff(
         tariff.is_daily = is_daily
     if daily_price_kopeks is not None:
         tariff.daily_price_kopeks = max(0, daily_price_kopeks)
+    if lava_product_id is not None:
+        # Пустая строка = отвязать тариф от продукта Lava
+        tariff.lava_product_id = lava_product_id.strip() or None
     # Произвольное количество дней
     if custom_days_enabled is not None:
         tariff.custom_days_enabled = custom_days_enabled
@@ -379,6 +427,8 @@ async def update_tariff(
     # Режим сброса трафика
     if traffic_reset_mode is not ...:
         tariff.traffic_reset_mode = traffic_reset_mode
+    if panel_tag is not ...:
+        tariff.panel_tag = normalize_panel_tag(panel_tag)
     # Внешний сквад
     if external_squad_uuid is not ...:
         tariff.external_squad_uuid = external_squad_uuid
@@ -584,10 +634,7 @@ async def sync_default_tariff_from_config(db: AsyncSession) -> Tariff | None:
         db.add(new_tariff)
         await db.commit()
         await db.refresh(new_tariff)
-        logger.info(
-            "Создан дефолтный тариф 'Стандартный' из конфига",
-            period_prices=period_prices,
-        )
+        logger.info("Создан дефолтный тариф 'Стандартный' из конфига", period_prices=period_prices)
         return new_tariff
 
     return None
@@ -617,11 +664,7 @@ async def load_period_prices_from_db(db: AsyncSession) -> None:
             return
 
         if not tariff.period_prices:
-            logger.warning(
-                'Тариф найден, но period_prices пуст',
-                tariff_name=tariff.name,
-                tariff_id=tariff.id,
-            )
+            logger.warning('Тариф найден, но period_prices пуст', tariff_name=tariff.name, tariff_id=tariff.id)
             return
 
         # Преобразуем строковые ключи в int
@@ -635,10 +678,7 @@ async def load_period_prices_from_db(db: AsyncSession) -> None:
                 {f'{d}д': f'{p // 100}₽' for d, p in period_prices.items()},
             )
         else:
-            logger.warning(
-                'Тариф не имеет активных периодов (все цены = 0)',
-                tariff_name=tariff.name,
-            )
+            logger.warning('Тариф не имеет активных периодов (все цены = 0)', tariff_name=tariff.name)
 
     except Exception as e:
         logger.error('Ошибка загрузки периодов из БД', e=e)

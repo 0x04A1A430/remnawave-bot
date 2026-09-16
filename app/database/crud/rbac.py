@@ -248,12 +248,7 @@ class UserRoleCRUD:
         db.add(user_role)
         await db.flush()
         await db.refresh(user_role)
-        logger.info(
-            'Assigned role to user',
-            user_role_id=user_role.id,
-            user_id=user_id,
-            role_id=role_id,
-        )
+        logger.info('Assigned role to user', user_role_id=user_role.id, user_id=user_id, role_id=role_id)
         return user_role
 
     @staticmethod
@@ -339,12 +334,7 @@ class AccessPolicyCRUD:
         db.add(policy)
         await db.flush()
         await db.refresh(policy)
-        logger.info(
-            'Created access policy',
-            policy_id=policy.id,
-            name=policy.name,
-            effect=policy.effect,
-        )
+        logger.info('Created access policy', policy_id=policy.id, name=policy.name, effect=policy.effect)
         return policy
 
     @staticmethod

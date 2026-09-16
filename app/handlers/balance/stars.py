@@ -22,7 +22,7 @@ async def start_stars_payment(callback: types.CallbackQuery, db_user: User, stat
     texts = get_texts(db_user.language)
 
     if not settings.TELEGRAM_STARS_ENABLED:
-        await callback.answer('Пополнение через Stars временно недоступно', show_alert=True)
+        await callback.answer('❌ Пополнение через Stars временно недоступно', show_alert=True)
         return
 
     # Проверка ограничения на пополнение
@@ -35,7 +35,8 @@ async def start_stars_payment(callback: types.CallbackQuery, db_user: User, stat
         keyboard.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance', style='danger')])
 
         await callback.message.edit_text(
-            f'<b>Пополнение ограничено</b>\n\n{reason}\n\nЕсли вы считаете это ошибкой, вы можете обжаловать решение.',
+            f'🚫 <b>Пополнение ограничено</b>\n\n{reason}\n\n'
+            'Если вы считаете это ошибкой, вы можете обжаловать решение.',
             reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
         )
         await callback.answer()
@@ -71,7 +72,8 @@ async def process_stars_payment_amount(message: types.Message, db_user: User, am
         keyboard.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance', style='danger')])
 
         await message.answer(
-            f'<b>Пополнение ограничено</b>\n\n{reason}\n\nЕсли вы считаете это ошибкой, вы можете обжаловать решение.',
+            f'🚫 <b>Пополнение ограничено</b>\n\n{reason}\n\n'
+            'Если вы считаете это ошибкой, вы можете обжаловать решение.',
             reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
             parse_mode='HTML',
         )
@@ -81,7 +83,7 @@ async def process_stars_payment_amount(message: types.Message, db_user: User, am
     texts = get_texts(db_user.language)
 
     if not settings.TELEGRAM_STARS_ENABLED:
-        await message.answer('Оплата Stars временно недоступна')
+        await message.answer('⚠️ Оплата Stars временно недоступна')
         return
 
     try:
@@ -95,8 +97,6 @@ async def process_stars_payment_amount(message: types.Message, db_user: User, am
             description=f'Пополнение баланса на {texts.format_price(amount_kopeks)}',
             payload=f'balance_{db_user.id}_{amount_kopeks}',
         )
-
-        from app.utils.button_emoji import make_button
 
         keyboard = types.InlineKeyboardMarkup(
             inline_keyboard=[
@@ -124,18 +124,13 @@ async def process_stars_payment_amount(message: types.Message, db_user: User, am
             try:
                 await message.bot.delete_message(prompt_chat_id, prompt_message_id)
             except Exception as delete_error:  # pragma: no cover - диагностический лог
-                logger.warning(
-                    'Не удалось удалить сообщение с запросом суммы Stars',
-                    delete_error=delete_error,
-                )
-
-        star_emoji = "<tg-emoji emoji-id='5958376256788502078'>⭐️</tg-emoji>"
+                logger.warning('Не удалось удалить сообщение с запросом суммы Stars', delete_error=delete_error)
 
         invoice_message = await message.answer(
-            f'{star_emoji} <b>Оплата через Telegram Stars</b>\n\n'
-            f'Сумма: {texts.format_price(amount_kopeks)}\n'
-            f'{star_emoji} К оплате: {stars_amount} звезд\n'
-            f'Курс: {stars_rate}₽ за звезду\n\n'
+            f'⭐ <b>Оплата через Telegram Stars</b>\n\n'
+            f'💰 Сумма: {texts.format_price(amount_kopeks)}\n'
+            f'⭐ К оплате: {stars_amount} звезд\n'
+            f'📊 Курс: {stars_rate}₽ за звезду\n\n'
             f'Нажмите кнопку ниже для оплаты:',
             reply_markup=keyboard,
             parse_mode='HTML',
@@ -150,4 +145,4 @@ async def process_stars_payment_amount(message: types.Message, db_user: User, am
 
     except Exception as e:
         logger.error('Ошибка создания Stars invoice', error=e)
-        await message.answer('Ошибка создания платежа')
+        await message.answer('⚠️ Ошибка создания платежа')

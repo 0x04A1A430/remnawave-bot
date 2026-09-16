@@ -12,12 +12,7 @@ from datetime import UTC, datetime
 import structlog
 from aiogram import Bot
 from aiogram.enums import ChatMemberStatus
-from aiogram.exceptions import (
-    TelegramBadRequest,
-    TelegramForbiddenError,
-    TelegramNetworkError,
-    TelegramRetryAfter,
-)
+from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError, TelegramNetworkError, TelegramRetryAfter
 
 from app.database.crud.required_channel import (
     get_active_channels,
@@ -39,11 +34,7 @@ _API_DELAY = 0.05  # 50ms between calls -> ~20/sec safe rate
 # неопределённым (None: текущее состояние сохраняется, авто-деактивации НЕ будет).
 _MAX_RETRY_AFTER = 5.0
 
-GOOD_STATUSES = (
-    ChatMemberStatus.MEMBER,
-    ChatMemberStatus.ADMINISTRATOR,
-    ChatMemberStatus.CREATOR,
-)
+GOOD_STATUSES = (ChatMemberStatus.MEMBER, ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.CREATOR)
 
 # How long a DB record is considered fresh (no API call needed)
 DB_FRESHNESS_SECONDS = 1800  # 30 min
@@ -308,11 +299,7 @@ class ChannelSubscriptionService:
                 await asyncio.sleep(_API_DELAY)
                 return member.status in GOOD_STATUSES
             except TelegramRetryAfter as e:
-                logger.warning(
-                    'Rate limited by Telegram',
-                    retry_after=e.retry_after,
-                    channel_id=channel_id,
-                )
+                logger.warning('Rate limited by Telegram', retry_after=e.retry_after, channel_id=channel_id)
                 if e.retry_after > _MAX_RETRY_AFTER:
                     # Слишком долгий FloodWait — не вешаем хендлер; результат неизвестен.
                     logger.warning(
@@ -364,11 +351,7 @@ class ChannelSubscriptionService:
                 logger.warning('Network error checking channel', channel_id=channel_id)
                 return None  # Uncertain — transient, the next check will probably succeed
             except Exception as e:
-                logger.error(
-                    'Unexpected error checking channel',
-                    channel_id=channel_id,
-                    error=str(e),
-                )
+                logger.error('Unexpected error checking channel', channel_id=channel_id, error=str(e))
                 return None  # Uncertain — same logic, do not deactivate on unknown failures
 
 

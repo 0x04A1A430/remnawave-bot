@@ -84,10 +84,7 @@ class ReportingService:
             return
 
         self._task = asyncio.create_task(self._auto_daily_loop(send_time))
-        logger.info(
-            'Сервис отчетов запущен: ежедневная отправка в по МСК',
-            send_time=send_time.strftime('%H:%M'),
-        )
+        logger.info('📊 Сервис отчетов запущен: ежедневная отправка в по МСК', send_time=send_time.strftime('%H:%M'))
 
     async def stop(self) -> None:
         if self._task and not self._task.done():
@@ -129,10 +126,7 @@ class ReportingService:
                         report_date=report_date,
                         send_to_topic=True,
                     )
-                    logger.info(
-                        'Автоматический отчет за отправлен',
-                        report_date=report_date.strftime('%d.%m.%Y'),
-                    )
+                    logger.info('📊 Автоматический отчет за отправлен', report_date=report_date.strftime('%d.%m.%Y'))
                 except asyncio.CancelledError:
                     raise
                 except Exception as exc:
@@ -169,15 +163,17 @@ class ReportingService:
 
         topic_id = settings.get_reports_topic_id()
 
+        # Rich-вид (Bot API 10.1): заголовок, разделители, footer с tg-time.
+        # При недоступности — классический HTML ниже.
         try:
             from app.utils.rich_admin import classic_admin_html_to_rich, try_send_rich_admin_message
 
             rich_html = classic_admin_html_to_rich(report_text, footer_label='Отчёт')
             if await try_send_rich_admin_message(self.bot, chat_id, rich_html, thread_id=topic_id):
-                logger.info('Отчет отправлен rich-сообщением в чат', chat_id=chat_id)
+                logger.info('Rich-отчёт отправлен в чат', chat_id=chat_id)
                 return
         except Exception as rich_error:
-            logger.warning('Сбой rich-отчёта', error=str(rich_error))
+            logger.warning('Сбой rich-рендера отчёта', error=str(rich_error))
 
         try:
             await self.bot.send_message(
@@ -263,15 +259,15 @@ class ReportingService:
 
         lines: list[str] = []
         header = (
-            f'<b>Отчет за {period_range.label}</b>'
+            f'📊 <b>Отчет за {period_range.label}</b>'
             if period == ReportPeriod.DAILY
-            else f'<b>Отчет за период {period_range.label}</b>'
+            else f'📊 <b>Отчет за период {period_range.label}</b>'
         )
         lines += [header, '']
 
         # TL;DR
         lines += [
-            '<b>Итог по периоду</b>',
+            '🧭 <b>Итог по периоду</b>',
             f'• Новых пользователей: <b>{stats["new_users"]}</b>',
             f'• Новых триалов: <b>{stats["new_trials"]}</b>',
             (
@@ -285,7 +281,7 @@ class ReportingService:
 
         # Подписки
         lines += [
-            '<b>Подписки</b>',
+            '💎 <b>Подписки</b>',
             f'• Активные триалы сейчас: {totals["active_trials"]}',
             f'• Активные платные сейчас: {totals["active_paid"]}',
             '',
@@ -293,7 +289,7 @@ class ReportingService:
 
         # Финансы
         lines += [
-            '<b>Финансы</b>',
+            '💰 <b>Финансы</b>',
             (
                 '• Оплаты подписок: '
                 f'{stats["subscription_payments_count"]} на сумму {self._format_amount(stats["subscription_payments_amount"])}'
@@ -308,7 +304,7 @@ class ReportingService:
 
         # Поддержка
         lines += [
-            '<b>Поддержка</b>',
+            '🎟️ <b>Поддержка</b>',
             f'• Новых тикетов: {stats["new_tickets"]}',
             f'• Активных тикетов сейчас: {totals["open_tickets"]}',
             '',
@@ -316,14 +312,14 @@ class ReportingService:
 
         # Активность пользователей
         lines += [
-            '<b>Активность пользователей</b>',
+            '👤 <b>Активность пользователей</b>',
             f'• Пользователей с активной платной подпиской: {usage["active_paid_users"]}',
             f'• Пользователей, ни разу не подключившихся: {usage["never_connected_users"]}',
             '',
         ]
 
         # Топ по рефералам
-        lines += ['<b>Топ по рефералам (за период)</b>']
+        lines += ['🤝 <b>Топ по рефералам (за период)</b>']
         if top_referrers:
             for index, row in enumerate(top_referrers, 1):
                 referrer_label = escape(row['referrer_label'], quote=False)
@@ -534,10 +530,7 @@ class ReportingService:
             for user in urows.scalars().all():
                 users_map[user.id] = self._user_label(user)
         return [
-            {
-                'referrer_label': users_map.get(ref_id, f'User #{ref_id}'),
-                'count': int(count or 0),
-            }
+            {'referrer_label': users_map.get(ref_id, f'User #{ref_id}'), 'count': int(count or 0)}
             for ref_id, count in rows
         ]
 

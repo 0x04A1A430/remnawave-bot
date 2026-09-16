@@ -50,9 +50,7 @@ class _PaymentServiceStub(PaymentCommonMixin):
 
 
 @pytest.mark.anyio
-async def test_send_payment_success_notification_recovers_missing_greenlet(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+async def test_send_payment_success_notification_recovers_missing_greenlet(monkeypatch: pytest.MonkeyPatch) -> None:
     service = _PaymentServiceStub()
     lazy_user = _LazyUser()
 

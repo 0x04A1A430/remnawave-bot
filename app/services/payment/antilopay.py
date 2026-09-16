@@ -229,10 +229,7 @@ class AntilopayPaymentMixin:
 
             # Проверка дублирования (re-check from locked row)
             if payment.is_paid:
-                logger.info(
-                    'Antilopay callback: платеж уже обработан',
-                    order_id=payment.order_id,
-                )
+                logger.info('Antilopay callback: платеж уже обработан', order_id=payment.order_id)
                 return True
 
             # Маппинг статуса
@@ -456,9 +453,7 @@ class AntilopayPaymentMixin:
 
         if getattr(self, 'bot', None):
             try:
-                from app.services.admin_notification_service import (
-                    AdminNotificationService,
-                )
+                from app.services.admin_notification_service import AdminNotificationService
 
                 notification_service = AdminNotificationService(self.bot)
                 await notification_service.send_balance_topup_notification(
@@ -483,7 +478,8 @@ class AntilopayPaymentMixin:
                         '\u2705 <b>Пополнение успешно!</b>\n\n'
                         f'\U0001f4b0 Сумма: {settings.format_price(payment.amount_kopeks)}\n'
                         f'\U0001f4b3 Способ: {display_name}\n'
-                        f'\U0001f194 Транзакция: {transaction.id}'
+                        f'\U0001f194 Транзакция: {transaction.id}\n\n'
+                        'Баланс пополнен автоматически!'
                     ),
                     parse_mode='HTML',
                     reply_markup=keyboard,

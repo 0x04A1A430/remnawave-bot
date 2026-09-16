@@ -70,9 +70,7 @@ def _make_request(init_data: str | None = None) -> MagicMock:
     return req
 
 
-def _credentials(
-    token: str = 'fake.jwt.token',  # noqa: S107
-) -> MagicMock:
+def _credentials(token: str = 'fake.jwt.token') -> MagicMock:  # noqa: S107 — pytest fixture sentinel, not a real secret
     return MagicMock(credentials=token)
 
 
@@ -90,17 +88,12 @@ def db() -> AsyncMock:
 
 
 @pytest.mark.asyncio
-async def test_dependencies_auto_revives_deleted_user_with_valid_init_data(
-    db: AsyncMock,
-) -> None:
+async def test_dependencies_auto_revives_deleted_user_with_valid_init_data(db: AsyncMock) -> None:
     """REGRESSION: signed initData proving same telegram_id → revive in place."""
     user = _make_user(status_value=UserStatus.DELETED.value, telegram_id=555)
 
     with (
-        patch(
-            'app.cabinet.dependencies.get_token_payload',
-            return_value={'sub': '100', 'type': 'access'},
-        ),
+        patch('app.cabinet.dependencies.get_token_payload', return_value={'sub': '100', 'type': 'access'}),
         patch('app.cabinet.dependencies.get_user_by_id', AsyncMock(return_value=user)),
         patch(
             'app.cabinet.dependencies.validate_telegram_init_data',
@@ -110,15 +103,8 @@ async def test_dependencies_auto_revives_deleted_user_with_valid_init_data(
             'app.cabinet.dependencies.blacklist_service.is_user_blacklisted',
             AsyncMock(return_value=(False, None)),
         ),
-        patch(
-            'app.cabinet.dependencies.maintenance_service.is_maintenance_active',
-            return_value=False,
-        ),
-        patch(
-            'app.cabinet.dependencies.settings.CHANNEL_IS_REQUIRED_SUB',
-            False,
-            create=True,
-        ),
+        patch('app.cabinet.dependencies.maintenance_service.is_maintenance_active', return_value=False),
+        patch('app.cabinet.dependencies.settings.CHANNEL_IS_REQUIRED_SUB', False, create=True),
     ):
         result = await get_current_cabinet_user(
             request=_make_request(init_data='valid-signed-init-data'),
@@ -146,10 +132,7 @@ async def test_dependencies_rejects_deleted_user_without_init_data(
     monkeypatch.setattr(deps_settings, 'BOT_USERNAME', 'mybot', raising=False)
 
     with (
-        patch(
-            'app.cabinet.dependencies.get_token_payload',
-            return_value={'sub': '100', 'type': 'access'},
-        ),
+        patch('app.cabinet.dependencies.get_token_payload', return_value={'sub': '100', 'type': 'access'}),
         patch('app.cabinet.dependencies.get_user_by_id', AsyncMock(return_value=user)),
     ):
         with pytest.raises(HTTPException) as exc:
@@ -169,9 +152,7 @@ async def test_dependencies_rejects_deleted_user_without_init_data(
 
 
 @pytest.mark.asyncio
-async def test_dependencies_rejects_deleted_user_with_mismatched_init_data(
-    db: AsyncMock,
-) -> None:
+async def test_dependencies_rejects_deleted_user_with_mismatched_init_data(db: AsyncMock) -> None:
     """initData proving DIFFERENT telegram_id → cross-account 401, NOT revival.
 
     This is the exact attack vector the cross-account guard already
@@ -181,10 +162,7 @@ async def test_dependencies_rejects_deleted_user_with_mismatched_init_data(
     user = _make_user(status_value=UserStatus.DELETED.value, telegram_id=555)
 
     with (
-        patch(
-            'app.cabinet.dependencies.get_token_payload',
-            return_value={'sub': '100', 'type': 'access'},
-        ),
+        patch('app.cabinet.dependencies.get_token_payload', return_value={'sub': '100', 'type': 'access'}),
         patch('app.cabinet.dependencies.get_user_by_id', AsyncMock(return_value=user)),
         patch(
             'app.cabinet.dependencies.validate_telegram_init_data',
@@ -206,9 +184,7 @@ async def test_dependencies_rejects_deleted_user_with_mismatched_init_data(
 
 
 @pytest.mark.asyncio
-async def test_dependencies_blocks_revival_for_blacklisted_deleted_user(
-    db: AsyncMock,
-) -> None:
+async def test_dependencies_blocks_revival_for_blacklisted_deleted_user(db: AsyncMock) -> None:
     """A DELETED + blacklisted row must NOT be revived. Banned stays banned.
 
     Blacklist runs BEFORE the status branch (security audit fix), so the
@@ -219,10 +195,7 @@ async def test_dependencies_blocks_revival_for_blacklisted_deleted_user(
     user = _make_user(status_value=UserStatus.DELETED.value, telegram_id=555)
 
     with (
-        patch(
-            'app.cabinet.dependencies.get_token_payload',
-            return_value={'sub': '100', 'type': 'access'},
-        ),
+        patch('app.cabinet.dependencies.get_token_payload', return_value={'sub': '100', 'type': 'access'}),
         patch('app.cabinet.dependencies.get_user_by_id', AsyncMock(return_value=user)),
         patch(
             'app.cabinet.dependencies.validate_telegram_init_data',
@@ -247,9 +220,7 @@ async def test_dependencies_blocks_revival_for_blacklisted_deleted_user(
 
 
 @pytest.mark.asyncio
-async def test_dependencies_blacklist_runs_before_status_check_for_no_init_data(
-    db: AsyncMock,
-) -> None:
+async def test_dependencies_blacklist_runs_before_status_check_for_no_init_data(db: AsyncMock) -> None:
     """REGRESSION: blacklisted+DELETED without initData must still return
     blacklisted code, NOT the friendly account_deleted screen.
 
@@ -260,10 +231,7 @@ async def test_dependencies_blacklist_runs_before_status_check_for_no_init_data(
     user = _make_user(status_value=UserStatus.DELETED.value, telegram_id=555)
 
     with (
-        patch(
-            'app.cabinet.dependencies.get_token_payload',
-            return_value={'sub': '100', 'type': 'access'},
-        ),
+        patch('app.cabinet.dependencies.get_token_payload', return_value={'sub': '100', 'type': 'access'}),
         patch('app.cabinet.dependencies.get_user_by_id', AsyncMock(return_value=user)),
         patch(
             'app.cabinet.dependencies.blacklist_service.is_user_blacklisted',
@@ -285,17 +253,12 @@ async def test_dependencies_blacklist_runs_before_status_check_for_no_init_data(
 
 
 @pytest.mark.asyncio
-async def test_dependencies_preserves_blocked_status_with_generic_message(
-    db: AsyncMock,
-) -> None:
+async def test_dependencies_preserves_blocked_status_with_generic_message(db: AsyncMock) -> None:
     """Status=BLOCKED is an admin action, not inactivity — generic 403."""
     user = _make_user(status_value=UserStatus.BLOCKED.value)
 
     with (
-        patch(
-            'app.cabinet.dependencies.get_token_payload',
-            return_value={'sub': '100', 'type': 'access'},
-        ),
+        patch('app.cabinet.dependencies.get_token_payload', return_value={'sub': '100', 'type': 'access'}),
         patch('app.cabinet.dependencies.get_user_by_id', AsyncMock(return_value=user)),
     ):
         with pytest.raises(HTTPException) as exc:
@@ -323,24 +286,14 @@ async def test_dependencies_active_user_still_passes_through(db: AsyncMock) -> N
     user = _make_user(status_value=UserStatus.ACTIVE.value)
 
     with (
-        patch(
-            'app.cabinet.dependencies.get_token_payload',
-            return_value={'sub': '100', 'type': 'access'},
-        ),
+        patch('app.cabinet.dependencies.get_token_payload', return_value={'sub': '100', 'type': 'access'}),
         patch('app.cabinet.dependencies.get_user_by_id', AsyncMock(return_value=user)),
         patch(
             'app.cabinet.dependencies.blacklist_service.is_user_blacklisted',
             AsyncMock(return_value=(False, None)),
         ),
-        patch(
-            'app.cabinet.dependencies.maintenance_service.is_maintenance_active',
-            return_value=False,
-        ),
-        patch(
-            'app.cabinet.dependencies.settings.CHANNEL_IS_REQUIRED_SUB',
-            False,
-            create=True,
-        ),
+        patch('app.cabinet.dependencies.maintenance_service.is_maintenance_active', return_value=False),
+        patch('app.cabinet.dependencies.settings.CHANNEL_IS_REQUIRED_SUB', False, create=True),
     ):
         result = await get_current_cabinet_user(
             request=_make_request(init_data=None),
@@ -364,10 +317,7 @@ async def test_dependencies_auto_revive_persists_via_db_commit(db: AsyncMock) ->
     user = _make_user(status_value=UserStatus.DELETED.value, telegram_id=555)
 
     with (
-        patch(
-            'app.cabinet.dependencies.get_token_payload',
-            return_value={'sub': '100', 'type': 'access'},
-        ),
+        patch('app.cabinet.dependencies.get_token_payload', return_value={'sub': '100', 'type': 'access'}),
         patch('app.cabinet.dependencies.get_user_by_id', AsyncMock(return_value=user)),
         patch(
             'app.cabinet.dependencies.validate_telegram_init_data',
@@ -377,15 +327,8 @@ async def test_dependencies_auto_revive_persists_via_db_commit(db: AsyncMock) ->
             'app.cabinet.dependencies.blacklist_service.is_user_blacklisted',
             AsyncMock(return_value=(False, None)),
         ),
-        patch(
-            'app.cabinet.dependencies.maintenance_service.is_maintenance_active',
-            return_value=False,
-        ),
-        patch(
-            'app.cabinet.dependencies.settings.CHANNEL_IS_REQUIRED_SUB',
-            False,
-            create=True,
-        ),
+        patch('app.cabinet.dependencies.maintenance_service.is_maintenance_active', return_value=False),
+        patch('app.cabinet.dependencies.settings.CHANNEL_IS_REQUIRED_SUB', False, create=True),
     ):
         await get_current_cabinet_user(
             request=_make_request(init_data='valid-signed-init-data'),
@@ -416,10 +359,7 @@ async def test_dependencies_rejects_deleted_user_with_invalid_init_data(
     monkeypatch.setattr(deps_settings, 'BOT_USERNAME', 'mybot', raising=False)
 
     with (
-        patch(
-            'app.cabinet.dependencies.get_token_payload',
-            return_value={'sub': '100', 'type': 'access'},
-        ),
+        patch('app.cabinet.dependencies.get_token_payload', return_value={'sub': '100', 'type': 'access'}),
         patch('app.cabinet.dependencies.get_user_by_id', AsyncMock(return_value=user)),
         # Validator says "nope" — tampered or expired initData.
         patch('app.cabinet.dependencies.validate_telegram_init_data', return_value=None),
@@ -455,10 +395,7 @@ async def test_dependencies_deleted_email_only_user_without_telegram_id(
     monkeypatch.setattr(deps_settings, 'BOT_USERNAME', 'mybot', raising=False)
 
     with (
-        patch(
-            'app.cabinet.dependencies.get_token_payload',
-            return_value={'sub': '100', 'type': 'access'},
-        ),
+        patch('app.cabinet.dependencies.get_token_payload', return_value={'sub': '100', 'type': 'access'}),
         patch('app.cabinet.dependencies.get_user_by_id', AsyncMock(return_value=user)),
     ):
         with pytest.raises(HTTPException) as exc:

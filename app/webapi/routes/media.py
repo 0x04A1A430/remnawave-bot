@@ -51,12 +51,7 @@ def _build_media_url(request: Request, file_id: str) -> str:
     return str(request.url_for('download_media', file_id=file_id))
 
 
-@router.post(
-    '/upload',
-    response_model=MediaUploadResponse,
-    tags=['media'],
-    status_code=status.HTTP_201_CREATED,
-)
+@router.post('/upload', response_model=MediaUploadResponse, tags=['media'], status_code=status.HTTP_201_CREATED)
 async def upload_media(
     request: Request,
     _: Any = Security(require_api_token),
