@@ -827,6 +827,9 @@ class ResetTrialResponse(BaseModel):
     message: str
     subscription_deleted: bool = False
     has_used_trial_reset: bool = False
+    # Главный ответ на вопрос админа: сможет ли человек взять триал после нажатия.
+    # Без него кнопка сообщала «успешно» даже когда ничего не менялось.
+    trial_available: bool = False
 
 
 class ResetSubscriptionRequest(BaseModel):

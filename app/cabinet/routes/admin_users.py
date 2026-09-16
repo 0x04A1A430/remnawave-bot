@@ -3036,18 +3036,32 @@ async def reset_user_trial(
                 wiped = await wipe_trial_subscriptions(db, subs_to_delete)
                 subscription_deleted = wiped > 0
 
-    user.updated_at = datetime.now(UTC)
+    now = datetime.now(UTC)
+    # Отметку «когда-то платил» не снимаем — по ней считаются конверсия и выручка.
+    # Дата сброса перекрывает её до появления следующей подписки (User.is_trial_already_used).
+    user.trial_reset_at = now
+    user.updated_at = now
 
     await db.commit()
+    await db.refresh(user, ['subscriptions'])
 
     reason_text = f' (reason: {request.reason})' if request.reason else ''
     logger.info('Admin reset trial for user', admin_id=admin.id, user_id=user_id, reason_text=reason_text)
 
+    # Оставшаяся непробная подписка сама закрывает триал. Сносить её сброс триала не
+    # должен, но и молчать нельзя: раньше ответ был «успешно» даже тогда, когда для
+    # человека не менялось ничего, — и кнопка выглядела сломанной.
+    trial_available = not user.is_trial_already_used()
     return ResetTrialResponse(
-        success=True,
-        message='Trial reset successfully. User can now activate a new trial.',
+        success=trial_available,
+        message=(
+            'Trial reset successfully. User can now activate a new trial.'
+            if trial_available
+            else 'Trial is still unavailable: the user has another subscription. Remove it first.'
+        ),
         subscription_deleted=subscription_deleted,
         has_used_trial_reset=True,
+        trial_available=trial_available,
     )
 
 

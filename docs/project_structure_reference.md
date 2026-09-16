@@ -2884,6 +2884,9 @@
 - `migrations/alembic/versions/0122_subscription_grace_overlay_expire_at.py` — Python-модуль
   Классы: нет
   Функции: `upgrade`, `downgrade`
+- `migrations/alembic/versions/0123_user_trial_reset_at.py` — Python-модуль
+  Классы: нет
+  Функции: `upgrade`, `downgrade`
 
 ## scripts
 
@@ -3301,6 +3304,9 @@
 - `tests/cabinet/test_renewal_single_tariff_mode.py` — Python-модуль
   Классы: нет
   Функции: `single_tariff_mode`, `panel`, `test_expired_subscription_gets_tariff_periods_without_multi_tariff`, `test_resolve_subscription_without_multi_tariff_loads_the_tariff` — Любой маршрут, взявший подписку через resolve_subscription, может читать её тариф.
+- `tests/cabinet/test_reset_trial_actually_reopens_trial.py` — Python-модуль
+  Классы: нет
+  Функции: `test_paid_once_but_nothing_left_gets_the_trial_back`, `test_expired_trial_of_a_former_payer_is_wiped_and_reopened`, `test_new_trial_after_the_reset_closes_it_again` — Сброс одноразовый: взял новый триал — снова закрыто, второй раз не выдаст., `test_live_paid_subscription_gets_an_honest_refusal` — Живая платная подписка сама закрывает триал — кнопка обязана сказать это, а не врать.
 - `tests/cabinet/test_role_grant_subset.py` — Python-модуль
   Классы: нет
   Функции: `test_permission_covered_wildcards`, `test_cannot_grant_permissions_not_held`, `test_superadmin_exempt_and_does_not_query`
