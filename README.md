@@ -1,1 +1,1 @@
-C:/Users/cy7su/Desktop/а/remnawave-bot-dev/docs/README.md
+docs/README.md
