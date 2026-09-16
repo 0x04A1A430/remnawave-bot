@@ -50,7 +50,7 @@ def tracked_paths() -> list[Path]:
     # Аргументы фиксированы, путь к git взят из PATH через which — внешнего
     # ввода здесь нет.
     result = subprocess.run(  # noqa: S603
-        [git, 'ls-files', '-z', '--cached'],
+        [git, 'ls-tree', '-r', '--name-only', '-z', 'HEAD'],
         cwd=ROOT,
         capture_output=True,
         check=True,
