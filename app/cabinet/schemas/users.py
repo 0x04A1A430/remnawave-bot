@@ -783,6 +783,12 @@ class PanelSyncStatusResponse(BaseModel):
     panel_device_limit: int = 0
     panel_squads: list[str] = []
 
+    # Открытый временный доступ (грейс): пока он идёт, панель намеренно держит
+    # его настройки — дату, статус, лимит и сквад. Бот их не перенимает, поэтому
+    # расхождением это не считается.
+    grace_open: bool = False
+    grace_until: datetime | None = None
+
     # Differences
     has_differences: bool = False
     differences: list[str] = []

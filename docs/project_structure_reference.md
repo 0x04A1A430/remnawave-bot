@@ -3256,6 +3256,9 @@
 - `tests/cabinet/test_oauth_revival_security.py` — Python-модуль
   Классы: нет
   Функции: `test_email_merge_requires_local_user_email_verified` — Source-level guard: the email-merge branch checks user.email_verified., `test_revived_log_field_uses_pre_revival_snapshot` — `revived=<bool>` in the logger.info call must come from a snapshot, `test_revive_called_without_commit_kwarg` — Architect's call: revive_deleted_user no longer accepts `commit=`., `test_revive_service_does_not_commit` — Hard pin: revive_deleted_user implementation does not commit.
+- `tests/cabinet/test_panel_sync_status_grace.py` — Python-модуль
+  Классы: нет
+  Функции: `test_open_grace_is_not_a_difference` — Дата, статус, лимит и сквад грейса — так и задумано, а не расхождение., `test_without_grace_the_same_panel_data_is_a_difference` — Те же данные панели без грейса обязаны остаться расхождением., `test_traffic_used_is_still_compared_during_grace` — Расход трафика панель ведёт и в грейсе — его сверять надо по-прежнему.
 - `tests/cabinet/test_platega_recurrent_admin.py` — Python-модуль
   Классы: нет
   Функции: `test_async_builder_populates_sbp_status_when_gate_on`, `test_async_builder_leaves_sbp_status_none_without_active_record` — Gate on, but no active Platega subscription for this subscription_id., `test_async_builder_skips_query_when_gate_off`, `test_sync_builder_never_sets_sbp_fields` — The sync builder has no DB access and must leave both fields at their, `test_route_registered`, `test_cancel_sbp_recurring_owned_subscription_cancels_and_awaits_helper`, `test_cancel_sbp_recurring_wrong_owner_404_and_helper_not_called`, `test_cancel_sbp_recurring_missing_subscription_404` — Same 404 path for a subscription_id that doesn't exist at all.
