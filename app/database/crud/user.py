@@ -984,7 +984,9 @@ def _users_list_conditions(
             sub_conditions.append(Subscription.status == subscription_status)
         if tariff_ids:
             sub_conditions.append(Subscription.tariff_id.in_(tariff_ids))
-        sub_query = select(Subscription.user_id).where(and_(*sub_conditions)).distinct().scalar_subquery()
+        sub_query = (
+            select(Subscription.user_id).where(and_(*sub_conditions)).distinct().correlate(None).scalar_subquery()
+        )
         conditions.append(User.id.in_(sub_query))
 
     if promo_group_id:
@@ -994,17 +996,23 @@ def _users_list_conditions(
         conditions.append(
             or_(
                 User.promo_group_id == promo_group_id,
-                User.id.in_(select(UserPromoGroup.user_id).where(UserPromoGroup.promo_group_id == promo_group_id)),
+                User.id.in_(
+                    select(UserPromoGroup.user_id)
+                    .where(UserPromoGroup.promo_group_id == promo_group_id)
+                    .correlate(None)
+                ),
             )
         )
 
     if campaign_id:
         conditions.append(
             exists(
-                select(AdvertisingCampaignRegistration.id).where(
+                select(AdvertisingCampaignRegistration.id)
+                .where(
                     AdvertisingCampaignRegistration.user_id == User.id,
                     AdvertisingCampaignRegistration.campaign_id == campaign_id,
                 )
+                .correlate(User)
             )
         )
 
@@ -1017,6 +1025,7 @@ def _users_list_conditions(
                     AdvertisingCampaignRegistration.user_id == User.id,
                     AdvertisingCampaign.partner_user_id == partner_id,
                 )
+                .correlate(User)
             )
         )
 
@@ -1043,6 +1052,7 @@ def _users_list_conditions(
                     Subscription.end_date <= now + timedelta(days=expires_within_days),
                     ~and_(Tariff.is_daily.is_(True), Subscription.is_daily_paused.is_(False)),
                 )
+                .correlate(User)
             )
         )
 
@@ -1054,18 +1064,20 @@ def _users_list_conditions(
         conditions.append(restricted if has_restrictions else ~restricted)
 
     if has_subscription is not None:
-        any_subscription = exists(select(Subscription.id).where(Subscription.user_id == User.id))
+        any_subscription = exists(select(Subscription.id).where(Subscription.user_id == User.id).correlate(User))
         conditions.append(any_subscription if has_subscription else ~any_subscription)
 
     if purchase_count == 0:
         # Покупка — ровно то, что считает статистика трат: завершённая оплата подписки.
         conditions.append(
             ~exists(
-                select(Transaction.id).where(
+                select(Transaction.id)
+                .where(
                     Transaction.user_id == User.id,
                     Transaction.type == TransactionType.SUBSCRIPTION_PAYMENT.value,
                     Transaction.is_completed.is_(True),
                 )
+                .correlate(User)
             )
         )
 
@@ -1075,7 +1087,8 @@ def _users_list_conditions(
         threshold = traffic_used_percent_min / 100
         conditions.append(
             exists(
-                select(Subscription.id).where(
+                select(Subscription.id)
+                .where(
                     Subscription.user_id == User.id,
                     Subscription.status.in_(
                         (
@@ -1087,6 +1100,7 @@ def _users_list_conditions(
                     Subscription.traffic_limit_gb > 0,
                     Subscription.traffic_used_gb >= Subscription.traffic_limit_gb * threshold,
                 )
+                .correlate(User)
             )
         )
 
@@ -1098,10 +1112,12 @@ def _users_list_conditions(
             keys.append(User.remnawave_id.in_(connected.panel_ids))
             keys.append(
                 exists(
-                    select(Subscription.id).where(
+                    select(Subscription.id)
+                    .where(
                         Subscription.user_id == User.id,
                         Subscription.remnawave_id.in_(connected.panel_ids),
                     )
+                    .correlate(User)
                 )
             )
         if connected.telegram_ids:
@@ -1189,9 +1205,18 @@ async def get_users_list(
         query = query.outerjoin(transactions_stats, transactions_stats.c.user_id == User.id)
 
     if order_by_traffic:
-        traffic_sort = func.coalesce(Subscription.traffic_used_gb, 0.0)
-        query = query.outerjoin(Subscription, Subscription.user_id == User.id)
-        query = query.order_by(traffic_sort.desc(), User.created_at.desc())
+        # Подзапросом, а не JOIN подписок: JOIN давал по строке на каждую подписку
+        # мультитарифа (страница короче запрошенной, «показано N из M» врало) и
+        # ломал выборки — их условия «есть такая подписка у этого человека»
+        # SQLAlchemy считала целиком связанными с внешним запросом и выкидывала
+        # из подзапроса все таблицы (см. tests/crud/test_users_list_filter_sort_matrix.py).
+        most_traffic = (
+            select(func.max(Subscription.traffic_used_gb))
+            .where(Subscription.user_id == User.id)
+            .correlate(User)
+            .scalar_subquery()
+        )
+        query = query.order_by(func.coalesce(most_traffic, 0.0).desc(), User.created_at.desc())
     elif order_by_total_spent:
         order_column = func.coalesce(transactions_stats.c.total_spent, 0)
         query = query.order_by(order_column.desc(), User.created_at.desc())
@@ -1230,6 +1255,7 @@ async def get_users_list(
             .select_from(Subscription)
             .outerjoin(Tariff, Subscription.tariff_id == Tariff.id)
             .where(*soonest_end_conditions)
+            .correlate(User)
             .scalar_subquery()
         )
         query = query.order_by(nullslast(soonest_end.asc()), User.created_at.desc())
