@@ -498,16 +498,19 @@ async def list_users(
             tariff_ids = None
 
     # «Онлайн» — подключение к VPN по панели, а не кнопки в боте (см. app/services/panel_online.py).
-    # Отметка «в сети» нужна каждой строке, поэтому список подключённых берём всегда;
-    # он кэшируется на 20 секунд. Без ответа панели фильтр «онлайн» не угадывает, а честно отказывает.
-    from app.services.panel_online import get_connected_accounts
+    # Отметка «в сети» нужна каждой строке, поэтому снимок отметок берём всегда; он
+    # кэшируется на 20 секунд, а «кто онлайн» пересчитывается здесь, на момент ответа, —
+    # иначе кэш ещё двадцать секунд называл бы онлайн тех, кого панель уже погасила.
+    # Без ответа панели фильтр «онлайн» не угадывает, а честно отказывает.
+    from app.services.panel_online import get_online_snapshot
 
-    connected = await get_connected_accounts()
-    if online and connected is None:
+    snapshot = await get_online_snapshot()
+    if online and snapshot is None:
         raise HTTPException(
             status_code=503,
             detail='Панель не ответила — не удалось узнать, кто сейчас подключён. Попробуйте ещё раз.',
         )
+    connected = snapshot.connected_now() if snapshot is not None else None
     online_filter = connected if online else None
 
     users = await get_users_list(
@@ -562,7 +565,10 @@ async def list_users(
 
     items = [
         _build_user_list_item(u, spending_stats).model_copy(
-            update={'is_online': connected.has_user(u) if connected is not None else None}
+            update={
+                'is_online': connected.has_user(u) if connected is not None else None,
+                'online_at': snapshot.online_at_for(u) if snapshot is not None else None,
+            }
         )
         for u in users
     ]

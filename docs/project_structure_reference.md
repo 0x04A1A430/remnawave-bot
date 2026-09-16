@@ -1564,8 +1564,8 @@
   Классы: `Pal24Service` (9 методов)
   Функции: нет
 - `app/services/panel_online.py` — Python-модуль
-  Классы: нет
-  Функции: `fetch_connected_accounts` — Обойти список панели по убыванию ``onlineAt``, пока отметка свежее окна., `get_connected_accounts` — Подключённые сейчас; ``None`` — панель не настроена или не ответила (это «не знаем», не «никого»).
+  Классы: `PanelOnlineSnapshot` (2 методов)
+  Функции: `fetch_online_snapshot` — Обойти список панели по убыванию ``onlineAt``, пока отметка свежее окна., `get_online_snapshot` — Отметки подключений; ``None`` — панель не настроена или не ответила (это «не знаем», не «никого»).
 - `app/services/panel_sync/`
 - `app/services/paritypay_service.py` — Python-модуль
   Классы: `ParityPayAPIError` (1 методов), `ParityPayNetworkError`, `ParityPayService` (18 методов)
@@ -3460,6 +3460,9 @@
 - `tests/crud/test_user_search_conditions.py` — Python-модуль
   Классы: нет
   Функции: `test_in_range_number_matches_telegram_id`, `test_bigint_max_boundary_still_matches_telegram_id`, `test_number_over_bigint_max_falls_back_to_text_only`, `test_very_long_number_falls_back_to_text_only`, `test_text_search_matches_email_column` — Одно поле поиска в кабинете: email ищется тем же `search`, отдельного поля нет., `test_text_search_never_touches_telegram_id`
+- `tests/crud/test_users_list_filter_sort_matrix.py` — Python-модуль
+  Классы: нет
+  Функции: `test_every_filter_works_with_every_sort`, `test_sorting_never_duplicates_a_user_with_several_subscriptions` — Мультитариф: сортировка не должна повторять человека и съедать строки страницы.
 - `tests/crud/test_users_list_subscription_end_sort.py` — Python-модуль
   Классы: нет
   Функции: `test_order_by_subscription_end_soonest_first_then_no_sub`, `test_active_daily_subscriptions_do_not_hog_the_top` — Суточные тарифы обязаны быть исключены — иначе сортировка бесполезна., `test_sort_follows_the_subscription_status_filter` — Связка «покажи истёкших + отсортируй по дате» обязана работать.
@@ -3521,6 +3524,9 @@
 - `tests/database/test_user_balance_lock_postgres.py` — Python-модуль
   Классы: нет
   Функции: `test_user_lock_blocks_second_session` — Пока одно зачисление держит строку пользователя, второе ждёт., `test_concurrent_topups_do_not_lose_money` — Два одновременных зачисления складываются, а не затирают друг друга., `test_lock_returns_fresh_values_not_the_cached_object` — Блокировка обязана отдавать значения из БД, а не из кеша сессии.
+- `tests/database/test_users_list_filter_sort_matrix_postgres.py` — Python-модуль
+  Классы: нет
+  Функции: `test_every_filter_works_with_every_sort`
 - `tests/database/test_users_statistics_blocked_count.py` — Python-модуль
   Классы: нет
   Функции: `test_blocked_counts_only_the_blocked_status`
@@ -4199,7 +4205,7 @@
   Функции: `test_panel_deletion_is_gated_or_explicitly_deliberate`, `test_deliberate_list_has_no_stale_entries` — Список исключений не должен пережить сами удаления.
 - `tests/services/test_panel_online.py` — Python-модуль
   Классы: нет
-  Функции: `test_api_sorts_users_by_online_at_like_panel_table`, `test_collects_accounts_until_mark_is_older_than_window`, `test_never_connected_account_ends_the_list`, `test_pages_through_while_whole_page_is_online`, `test_page_limit_stops_runaway_listing`, `test_window_matches_panel_green_dot`, `test_user_is_connected_by_any_of_his_panel_keys`, `test_cached_between_calls_and_none_when_panel_fails`, `test_panel_failure_is_remembered_so_list_does_not_wait_again` — Панель лежит — список открывается сразу без отметок, а не ждёт таймаут на каждом открытии.
+  Функции: `test_api_sorts_users_by_online_at_like_panel_table`, `test_collects_accounts_until_mark_is_older_than_window`, `test_never_connected_account_ends_the_list`, `test_pages_through_while_whole_page_is_online`, `test_page_limit_stops_runaway_listing`, `test_window_matches_panel_green_dot`, `test_user_is_connected_by_any_of_his_panel_keys`, `test_cached_between_calls_and_none_when_panel_fails`, `test_panel_failure_is_remembered_so_list_does_not_wait_again` — Панель лежит — список открывается сразу без отметок, а не ждёт таймаут на каждом открытии., `test_who_is_online_is_recounted_at_request_time_not_at_fetch_time` — Ответ панели живёт в кэше 20 секунд — «онлайн» за это время обязан гаснуть сам., `test_snapshot_gives_each_row_its_own_mark` — Строке списка нужна отметка, а не готовое «да/нет»: по ней кабинет сам гасит точку., `test_several_accounts_of_one_person_give_the_freshest_mark` — Мультитариф: у человека несколько аккаунтов панели — считается самый свежий.
 - `tests/services/test_paritypay_client.py` — Python-модуль
   Классы: `RecordingService` (2 методов)
   Функции: `anyio_backend`, `test_create_invoice_sends_rubles_not_kopeks` — 125000 копеек обязаны уйти как 1250.0 — иначе счёт будет на 125 000 ₽., `test_create_invoice_request_shape`, `test_create_invoice_never_sends_subscription_block` — Подписки не оформляем: блок subscription не должен появляться никогда., `test_create_invoice_omits_empty_optionals`, `test_create_invoice_rejects_response_without_link`, `test_create_invoice_rejects_response_without_id`, `test_get_invoice_by_id_and_by_order_id`, `test_get_invoice_prefers_id_over_order_id` — Спека: передаётся ОДИН из параметров, не оба., `test_get_invoice_without_identifiers_raises`, `test_headers_carry_shop_and_secret_key`, `test_base_url_strips_slash_and_falls_back`, `test_error_message_uses_error_field` — Формат ошибки провайдера — объект {"error": "текст"}., `test_request_404_allowed_returns_none`, `test_request_422_raises_business_error`, `test_request_400_raises`, `test_connection_error_and_timeout_become_network_error`

@@ -119,6 +119,9 @@ class UserListItem(BaseModel):
     last_activity: datetime | None = None
     # Подключён к VPN прямо сейчас (по панели); None — панель не ответила, неизвестно.
     is_online: bool | None = None
+    # Отметка последнего подключения из панели — по ней кабинет сам гасит зелёную точку,
+    # не дожидаясь следующего ответа сервера. None — сейчас не подключён либо панель молчит.
+    online_at: datetime | None = None
 
     # Subscription summary
     has_subscription: bool = False

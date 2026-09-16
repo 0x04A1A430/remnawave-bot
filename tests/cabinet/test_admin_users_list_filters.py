@@ -24,7 +24,7 @@ from app.database.models import (
     User,
     UserStatus,
 )
-from app.services.panel_online import ConnectedAccounts
+from app.services.panel_online import ConnectedAccounts, PanelOnlineSnapshot
 from tests.fixtures.sqlite_memory import memory_session
 
 
@@ -215,8 +215,8 @@ async def test_route_marks_connected_rows_and_filters_online(monkeypatch: pytest
 
     async with memory_session(monkeypatch, TABLES) as db:
         await _seed(db)
-        connected = ConnectedAccounts(panel_ids=frozenset(), telegram_ids=frozenset({2}))
-        monkeypatch.setattr(panel_online, 'get_connected_accounts', AsyncMock(return_value=connected))
+        snapshot = PanelOnlineSnapshot(by_panel_id={}, by_telegram_id={2: NOW})
+        monkeypatch.setattr(panel_online, 'get_online_snapshot', AsyncMock(return_value=snapshot))
 
         everyone = await _list(db)
         assert {row.username: row.is_online for row in everyone.users} == {
@@ -224,6 +224,13 @@ async def test_route_marks_connected_rows_and_filters_online(monkeypatch: pytest
             'later': True,
             'nobody': False,
             'lapsed': False,
+        }
+        # Строка несёт и саму отметку: кабинет гасит точку по ней, не дожидаясь сервера.
+        assert {row.username: row.online_at for row in everyone.users} == {
+            'soon': None,
+            'later': NOW,
+            'nobody': None,
+            'lapsed': None,
         }
 
         only_online = await _list(db, online=True)
@@ -239,7 +246,7 @@ async def test_route_refuses_online_filter_without_panel(monkeypatch: pytest.Mon
 
     async with memory_session(monkeypatch, TABLES) as db:
         await _seed(db)
-        monkeypatch.setattr(panel_online, 'get_connected_accounts', AsyncMock(return_value=None))
+        monkeypatch.setattr(panel_online, 'get_online_snapshot', AsyncMock(return_value=None))
 
         with pytest.raises(HTTPException) as refused:
             await _list(db, online=True)
