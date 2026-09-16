@@ -295,8 +295,6 @@ async def get_subscription_info_text(subscription, texts, db_user, db: AsyncSess
     countries_info = await _get_countries_info(subscription.connected_squads)
     ', '.join([c['name'] for c in countries_info]) if countries_info else 'Нет'
 
-    subscription_url = getattr(subscription, 'subscription_url', None) or 'Генерируется...'
-
     if subscription.is_trial:
         status_text = '🎁 Тестовая'
         type_text = 'Триал'
@@ -399,8 +397,5 @@ async def get_subscription_info_text(subscription, texts, db_user, db: AsyncSess
 
                 info_text += f'\n• {purchase.traffic_gb} ГБ — {time_text}'
                 info_text += f'\n  {bar} {progress_percent:.0f}% | до {expire_date}'
-
-    if subscription_url and subscription_url != 'Генерируется...' and not settings.should_hide_subscription_link():
-        info_text += f'\n\n🔗 <b>Ваша ссылка для импорта в VPN приложениe:</b>\n<code>{subscription_url}</code>'
 
     return info_text

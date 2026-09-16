@@ -240,28 +240,28 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
     if subscription.status == 'limited':
         actual_status = 'limited'
         status_display = texts.t('SUBSCRIPTION_STATUS_LIMITED', 'Трафик исчерпан')
-        status_emoji = '⚠️'
+        status_emoji = ''
     elif subscription.status == 'disabled':
         actual_status = 'disabled'
         status_display = texts.t('SUBSCRIPTION_STATUS_DISABLED', 'Приостановлена')
-        status_emoji = '⏸️'
+        status_emoji = ''
     elif subscription.status == 'expired' or subscription.end_date <= current_time:
         actual_status = 'expired'
         status_display = texts.t('SUBSCRIPTION_STATUS_EXPIRED', 'Истекла')
-        status_emoji = '🔴'
+        status_emoji = ''
     elif subscription.status == 'active' and subscription.end_date > current_time:
         if subscription.is_trial:
             actual_status = 'trial_active'
             status_display = texts.t('SUBSCRIPTION_STATUS_TRIAL', 'Тестовая')
-            status_emoji = '🎯'
+            status_emoji = ''
         else:
             actual_status = 'paid_active'
             status_display = texts.t('SUBSCRIPTION_STATUS_ACTIVE', 'Активна')
-            status_emoji = '💎'
+            status_emoji = ''
     else:
         actual_status = 'unknown'
         status_display = texts.t('SUBSCRIPTION_STATUS_UNKNOWN', 'Неизвестно')
-        status_emoji = '❓'
+        status_emoji = ''
 
     if subscription.end_date <= current_time:
         days_left = 0
@@ -366,13 +366,13 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
 
                 # Формируем блок информации о тарифе
                 is_daily = getattr(tariff, 'is_daily', False)
-                tariff_type_str = '🔄 Суточный' if is_daily else '📅 Периодный'
+                tariff_type_str = 'Суточный' if is_daily else 'Периодный'
 
                 tariff_info_lines = [
-                    f'<b>📦 {html.escape(tariff.name)}</b>',
+                    f'<b>{html.escape(tariff.name)}</b>',
                     f'Тип: {tariff_type_str}',
                     f'Трафик: {tariff.traffic_limit_gb} ГБ' if tariff.traffic_limit_gb > 0 else 'Трафик: ∞ Безлимит',
-                    f'Устройства: {Texts.format_device_limit(tariff.device_limit)}',
+                    f'Устройства: {Texts.format_device_limit(subscription.device_limit)}',
                 ]
 
                 if is_daily:
@@ -453,7 +453,7 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
             'SUBSCRIPTION_DAILY_OVERVIEW_TEMPLATE',
             """{full_name}
 Баланс: {balance}
-Подписка: {status_emoji} {status_display}{warning}{tariff_info_block}
+Подписка: {status_emoji}{status_display}{warning}{tariff_info_block}
 
 <b>Информация о подписке</b>
 <blockquote expandable>Тип: {subscription_type}
@@ -465,7 +465,7 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
             'SUBSCRIPTION_OVERVIEW_TEMPLATE',
             """{full_name}
 Баланс: {balance}
-Подписка: {status_emoji} {status_display}{warning}{tariff_info_block}
+Подписка: {status_emoji}{status_display}{warning}{tariff_info_block}
 
 <b>Информация о подписке</b>
 <blockquote expandable>Тип: {subscription_type}
@@ -585,10 +585,6 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
             'SUBSCRIPTION_CONNECT_LINK_SECTION',
             '🔗 <b>Ссылка для подключения:</b>\n{subscription_url}',
         ).format(subscription_url=subscription_link_display)
-        message += '\n\n' + texts.t(
-            'SUBSCRIPTION_CONNECT_LINK_PROMPT',
-            '📱 Скопируйте ссылку и добавьте в ваше VPN приложение',
-        )
 
     await callback.message.edit_text(
         message,
@@ -1129,11 +1125,6 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
                         'SUBSCRIPTION_HAPP_LINK_PROMPT',
                         '🔒 Ссылка на подписку создана. Нажмите кнопку "Подключиться" ниже, чтобы открыть её в Happ.',
                     )
-                    + '\n\n'
-                    + texts.t(
-                        'SUBSCRIPTION_IMPORT_INSTRUCTION_PROMPT',
-                        '📱 Нажмите кнопку ниже, чтобы получить инструкцию по настройке VPN на вашем устройстве',
-                    )
                 )
             elif hide_subscription_link:
                 trial_success_text = (
@@ -1141,11 +1132,6 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
                     + texts.t(
                         'SUBSCRIPTION_LINK_HIDDEN_NOTICE',
                         'ℹ️ Ссылка подписки доступна по кнопкам ниже или в разделе "Моя подписка".',
-                    )
-                    + '\n\n'
-                    + texts.t(
-                        'SUBSCRIPTION_IMPORT_INSTRUCTION_PROMPT',
-                        '📱 Нажмите кнопку ниже, чтобы получить инструкцию по настройке VPN на вашем устройстве',
                     )
                 )
             else:
@@ -1156,8 +1142,7 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
 
                 trial_success_text = (
                     f'{texts.TRIAL_ACTIVATED}\n\n'
-                    f'{subscription_import_link}\n\n'
-                    f'{texts.t("SUBSCRIPTION_IMPORT_INSTRUCTION_PROMPT", "📱 Нажмите кнопку ниже, чтобы получить инструкцию по настройке VPN на вашем устройстве")}'
+                    f'{subscription_import_link}'
                 )
 
             trial_success_text += payment_note
@@ -2733,11 +2718,6 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
                         'SUBSCRIPTION_HAPP_LINK_PROMPT',
                         '🔒 Ссылка на подписку создана. Нажмите кнопку "Подключиться" ниже, чтобы открыть её в Happ.',
                     )
-                    + '\n\n'
-                    + texts.t(
-                        'SUBSCRIPTION_IMPORT_INSTRUCTION_PROMPT',
-                        '📱 Нажмите кнопку ниже, чтобы получить инструкцию по настройке VPN на вашем устройстве',
-                    )
                 )
             elif hide_subscription_link:
                 success_text = (
@@ -2745,11 +2725,6 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
                     + texts.t(
                         'SUBSCRIPTION_LINK_HIDDEN_NOTICE',
                         'ℹ️ Ссылка подписки доступна по кнопкам ниже или в разделе "Моя подписка".',
-                    )
-                    + '\n\n'
-                    + texts.t(
-                        'SUBSCRIPTION_IMPORT_INSTRUCTION_PROMPT',
-                        '📱 Нажмите кнопку ниже, чтобы получить инструкцию по настройке VPN на вашем устройстве',
                     )
                 )
             else:
@@ -2760,8 +2735,7 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
 
                 success_text = (
                     f'{texts.SUBSCRIPTION_PURCHASED}\n\n'
-                    f'{import_link_section}\n\n'
-                    f'{texts.t("SUBSCRIPTION_IMPORT_INSTRUCTION_PROMPT", "📱 Нажмите кнопку ниже, чтобы получить инструкцию по настройке VPN на вашем устройстве")}'
+                    f'{import_link_section}'
                 )
 
             if discount_note:
@@ -3533,11 +3507,6 @@ async def handle_trial_pay_with_balance(callback: types.CallbackQuery, db_user: 
                         'SUBSCRIPTION_HAPP_LINK_PROMPT',
                         '🔒 Ссылка на подписку создана. Нажмите кнопку "Подключиться" ниже, чтобы открыть её в Happ.',
                     )
-                    + '\n\n'
-                    + texts.t(
-                        'SUBSCRIPTION_IMPORT_INSTRUCTION_PROMPT',
-                        '📱 Нажмите кнопку ниже, чтобы получить инструкцию по настройке VPN на вашем устройстве',
-                    )
                 )
             elif hide_subscription_link:
                 trial_success_text = (
@@ -3545,11 +3514,6 @@ async def handle_trial_pay_with_balance(callback: types.CallbackQuery, db_user: 
                     + texts.t(
                         'SUBSCRIPTION_LINK_HIDDEN_NOTICE',
                         'ℹ️ Ссылка подписки доступна по кнопкам ниже или в разделе "Моя подписка".',
-                    )
-                    + '\n\n'
-                    + texts.t(
-                        'SUBSCRIPTION_IMPORT_INSTRUCTION_PROMPT',
-                        '📱 Нажмите кнопку ниже, чтобы получить инструкцию по настройке VPN на вашем устройстве',
                     )
                 )
             else:
@@ -3560,8 +3524,7 @@ async def handle_trial_pay_with_balance(callback: types.CallbackQuery, db_user: 
 
                 trial_success_text = (
                     f'{texts.TRIAL_ACTIVATED}\n\n'
-                    f'{subscription_import_link}\n\n'
-                    f'{texts.t("SUBSCRIPTION_IMPORT_INSTRUCTION_PROMPT", "📱 Нажмите кнопку ниже, чтобы получить инструкцию по настройке VPN на вашем устройстве")}'
+                    f'{subscription_import_link}'
                 )
 
             trial_success_text += payment_note
