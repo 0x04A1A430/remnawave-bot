@@ -42,14 +42,12 @@ from app.utils.pricing_utils import format_period_description
 from app.utils.promo_offer import (
     build_promo_offer_hint,
     build_test_access_hint,
-    get_user_active_promo_discount_percent,
 )
 from app.utils.rich_menu import try_edit_rich_main_menu
 from app.utils.telegram_html import (
     html_to_telegram,
     info_page_faq_to_telegram,
     split_telegram_text,
-    stored_html_to_telegram_pages,
 )
 from app.utils.timezone import format_local_datetime
 
@@ -133,21 +131,17 @@ def _build_group_discount_lines(group: PromoGroup, texts, language: str) -> list
 
     if getattr(group, 'server_discount_percent', 0) > 0:
         lines.append(
-            texts.t('PROMO_GROUP_DISCOUNT_SERVERS', '🌍 Серверы: {percent}%').format(
-                percent=group.server_discount_percent
-            )
+            texts.t('PROMO_GROUP_DISCOUNT_SERVERS', 'Серверы: {percent}%').format(percent=group.server_discount_percent)
         )
 
     if getattr(group, 'traffic_discount_percent', 0) > 0:
         lines.append(
-            texts.t('PROMO_GROUP_DISCOUNT_TRAFFIC', '📊 Трафик: {percent}%').format(
-                percent=group.traffic_discount_percent
-            )
+            texts.t('PROMO_GROUP_DISCOUNT_TRAFFIC', 'Трафик: {percent}%').format(percent=group.traffic_discount_percent)
         )
 
     if getattr(group, 'device_discount_percent', 0) > 0:
         lines.append(
-            texts.t('PROMO_GROUP_DISCOUNT_DEVICES', '📱 Доп. устройства: {percent}%').format(
+            texts.t('PROMO_GROUP_DISCOUNT_DEVICES', 'Доп. устройства: {percent}%').format(
                 percent=group.device_discount_percent
             )
         )
@@ -158,7 +152,7 @@ def _build_group_discount_lines(group: PromoGroup, texts, language: str) -> list
         lines.append(
             texts.t(
                 'PROMO_GROUP_PERIOD_DISCOUNTS_HEADER',
-                '⏳ Скидки за длительный период:',
+                'Скидки за длительный период:',
             )
         )
 
@@ -206,6 +200,8 @@ async def show_main_menu(
     has_active_subscription = any(sub.is_active or getattr(sub, 'actual_status', None) == 'limited' for sub in _subs)
     subscription_is_active = has_active_subscription
 
+    menu_text = await get_main_menu_text(db_user, texts, db)
+
     draft_exists = await has_subscription_checkout_draft(db_user.id)
     show_resume_checkout = should_offer_checkout_resume(db_user, draft_exists)
 
@@ -213,7 +209,11 @@ async def show_main_menu(
     try:
         has_saved_cart = await user_cart_service.has_user_cart(db_user.id)
     except Exception as e:
-        logger.error('Ошибка проверки сохраненной корзины для пользователя', db_user_id=db_user.id, error=e)
+        logger.error(
+            'Ошибка проверки сохраненной корзины для пользователя',
+            db_user_id=db_user.id,
+            error=e,
+        )
         has_saved_cart = False
 
     is_admin = settings.is_admin(db_user.telegram_id)
@@ -245,7 +245,6 @@ async def show_main_menu(
     )
 
     if not await try_edit_rich_main_menu(callback, db_user, texts, db, keyboard):
-        menu_text = await get_main_menu_text(db_user, texts, db)
         await edit_or_answer_photo(
             callback=callback,
             caption=menu_text,
@@ -266,7 +265,7 @@ async def handle_profile_unavailable(callback: types.CallbackQuery) -> None:
     await callback.answer(
         texts.t(
             'MENU_PROFILE_UNAVAILABLE',
-            '❗️ Личный кабинет пока недоступен. Попробуйте позже.',
+            'Личный кабинет пока недоступен. Попробуйте позже.',
         ),
         show_alert=True,
     )
@@ -296,28 +295,16 @@ async def show_service_rules(callback: types.CallbackQuery, db_user: User, db: A
         )
         return
 
-    raw_page = 1
-    if callback.data and ':' in callback.data:
-        try:
-            raw_page = int(callback.data.split(':', 1)[1])
-        except ValueError:
-            raw_page = 1
-    raw_page = max(raw_page, 1)
-
     rules_text = await get_current_rules_content(db, db_user.language)
 
     if not rules_text:
         rules_text = await get_rules(db_user.language)
 
-    # Правила могут быть длиннее лимита Telegram (4096) — пагинация как у
-    # политики конфиденциальности и оферты
-    pages = stored_html_to_telegram_pages(rules_text, max_length=3500) or ['']
-    total_pages = len(pages)
-    current_page = min(raw_page, total_pages)
+    from app.utils.long_messages import edit_long_text
 
     await edit_long_text(
         callback.message,
-        f'{texts.t("RULES_HEADER", " <b>Правила</b>")}\n\n{pages[current_page - 1]}',
+        f'{texts.t("RULES_HEADER", " <b>Правила</b>")}\n\n{rules_text}',
         reply_markup=types.InlineKeyboardMarkup(
             inline_keyboard=[
                 [types.InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu', style='danger')]
@@ -346,7 +333,7 @@ async def show_info_menu(
 
     texts = get_texts(db_user.language)
 
-    header = texts.t('MENU_INFO_HEADER', 'ℹ️ <b>Инфо</b>')
+    header = texts.t('MENU_INFO_HEADER', '<b>Инфо</b>')
     prompt = texts.t('MENU_INFO_PROMPT', 'Выберите раздел:')
     caption = f'{header}\n\n{prompt}' if prompt else header
 
@@ -412,7 +399,7 @@ async def show_promo_groups_info(
             'PROMO_GROUPS_INFO_EMPTY',
             'Промогруппы с автовыдачей ещё не настроены.',
         )
-        header = texts.t('PROMO_GROUPS_INFO_HEADER', '🎯 <b>Промогруппы</b>')
+        header = texts.t('PROMO_GROUPS_INFO_HEADER', '<b>Промогруппы</b>')
         message = f'{header}\n\n{empty_text}' if empty_text else header
 
         await callback.message.edit_text(
@@ -451,12 +438,12 @@ async def show_promo_groups_info(
         None,
     )
 
-    header = texts.t('PROMO_GROUPS_INFO_HEADER', '🎯 <b>Промогруппы</b>')
+    header = texts.t('PROMO_GROUPS_INFO_HEADER', '<b>Промогруппы</b>')
     lines: list[str] = [header, '']
 
     spent_line = texts.t(
         'PROMO_GROUPS_INFO_TOTAL_SPENT',
-        '💰 Потрачено в боте: {amount}',
+        'Потрачено в боте: {amount}',
     ).format(amount=total_spent_text)
     lines.append(spent_line)
 
@@ -464,14 +451,14 @@ async def show_promo_groups_info(
         lines.append(
             texts.t(
                 'PROMO_GROUPS_INFO_CURRENT_LEVEL',
-                '🏆 Текущий уровень: {name}',
+                'Текущий уровень: {name}',
             ).format(name=html.escape(current_group.name)),
         )
     else:
         lines.append(
             texts.t(
                 'PROMO_GROUPS_INFO_NO_LEVEL',
-                '🏆 Текущий уровень: пока не получен',
+                'Текущий уровень: пока не получен',
             )
         )
 
@@ -480,7 +467,7 @@ async def show_promo_groups_info(
         lines.append(
             texts.t(
                 'PROMO_GROUPS_INFO_NEXT_LEVEL',
-                '📈 До уровня «{name}»: осталось {amount}',
+                'До уровня «{name}»: осталось {amount}',
             ).format(
                 name=html.escape(next_group.name),
                 amount=_format_rubles(max(remaining_kopeks, 0)),
@@ -490,11 +477,11 @@ async def show_promo_groups_info(
         lines.append(
             texts.t(
                 'PROMO_GROUPS_INFO_MAX_LEVEL',
-                '🏆 Вы уже получили максимальный уровень скидок!',
+                'Вы уже получили максимальный уровень скидок!',
             )
         )
 
-    lines.extend(['', texts.t('PROMO_GROUPS_INFO_LEVELS_HEADER', '📋 Уровни с автовыдачей:')])
+    lines.extend(['', texts.t('PROMO_GROUPS_INFO_LEVELS_HEADER', 'Уровни с автовыдачей:')])
 
     for group in sorted_groups:
         threshold = group.auto_assign_total_spent_kopeks or 0
@@ -564,7 +551,7 @@ async def show_faq_pages(
         )
         return
 
-    header = texts.t('FAQ_HEADER', '❓ <b>FAQ</b>')
+    header = texts.t('FAQ_HEADER', '<b>FAQ</b>')
     prompt = texts.t('FAQ_PAGES_PROMPT', 'Выберите вопрос:')
     caption = f'{header}\n\n{prompt}' if prompt else header
 
@@ -651,10 +638,7 @@ async def show_faq_page(
         )
         return
 
-    # Через преобразователь: текст страницы редактируется как произвольный HTML,
-    # а Telegram знает восемь тегов. Один <p> из вставленной вёрстки — и вся
-    # страница перестаёт открываться с «Unsupported start tag».
-    content_pages = stored_html_to_telegram_pages(page.content, max_length=FaqService.MAX_PAGE_LENGTH)
+    content_pages = FaqService.split_content_into_pages(page.content)
 
     if not content_pages:
         await callback.answer(
@@ -666,7 +650,7 @@ async def show_faq_page(
     total_pages = len(content_pages)
     current_page = max(1, min(requested_page, total_pages))
 
-    header = texts.t('FAQ_HEADER', '❓ <b>FAQ</b>')
+    header = texts.t('FAQ_HEADER', '<b>FAQ</b>')
     title_template = texts.t('FAQ_PAGE_TITLE', '<b>{title}</b>')
     page_title = (page.title or '').strip()
     if not page_title:
@@ -728,7 +712,7 @@ async def show_faq_page(
     keyboard_rows.append(
         [
             types.InlineKeyboardButton(
-                text=texts.t('FAQ_BACK_TO_LIST', '⬅️ К списку FAQ'),
+                text=texts.t('FAQ_BACK_TO_LIST', 'К списку FAQ'),
                 callback_data='menu_faq',
                 style='danger',
             )
@@ -791,7 +775,7 @@ async def show_privacy_policy(
         )
         return
 
-    pages = stored_html_to_telegram_pages(policy.content, max_length=PrivacyPolicyService.MAX_PAGE_LENGTH)
+    pages = PrivacyPolicyService.split_content_into_pages(policy.content)
 
     if not pages:
         await callback.answer(
@@ -808,7 +792,7 @@ async def show_privacy_policy(
 
     header = texts.t(
         'PRIVACY_POLICY_HEADER',
-        '🛡️ <b>Политика конфиденциальности</b>',
+        '<b>Политика конфиденциальности</b>',
     )
     body = pages[current_page - 1]
 
@@ -917,7 +901,7 @@ async def show_public_offer(
         )
         return
 
-    pages = stored_html_to_telegram_pages(offer.content, max_length=PublicOfferService.MAX_PAGE_LENGTH)
+    pages = PublicOfferService.split_content_into_pages(offer.content)
 
     if not pages:
         await callback.answer(
@@ -934,7 +918,7 @@ async def show_public_offer(
 
     header = texts.t(
         'PUBLIC_OFFER_HEADER',
-        '📄 <b>Публичная оферта</b>',
+        '<b>Публичная оферта</b>',
     )
     body = pages[current_page - 1]
 
@@ -1118,7 +1102,7 @@ async def show_language_menu(
         await callback.answer(
             texts.t(
                 'LANGUAGE_SELECTION_DISABLED',
-                '⚙️ Выбор языка временно недоступен.',
+                'Выбор языка временно недоступен.',
             ),
             show_alert=True,
         )
@@ -1126,10 +1110,11 @@ async def show_language_menu(
 
     await edit_or_answer_photo(
         callback=callback,
-        caption=texts.t('LANGUAGE_PROMPT', '🌐 Выберите язык интерфейса:'),
+        caption=texts.t('LANGUAGE_PROMPT', 'Выберите язык интерфейса:'),
         keyboard=get_language_selection_keyboard(
             current_language=db_user.language,
             include_back=True,
+            back_callback='menu_info',
             language=db_user.language,
         ),
         parse_mode='HTML',
@@ -1160,7 +1145,7 @@ async def process_language_change(
         await callback.answer(
             texts.t(
                 'LANGUAGE_SELECTION_DISABLED',
-                '⚙️ Выбор языка временно недоступен.',
+                'Выбор языка временно недоступен.',
             ),
             show_alert=True,
         )
@@ -1176,31 +1161,29 @@ async def process_language_change(
     }
 
     if normalized_selected not in available_map:
-        await callback.answer('❌ Unsupported language', show_alert=True)
+        await callback.answer('Unsupported language', show_alert=True)
         return
 
     resolved_language = available_map[normalized_selected].lower()
 
     if db_user.language.lower() == normalized_selected:
-        await show_main_menu(
+        await show_info_menu(
             callback,
             db_user,
             db,
-            skip_callback_answer=True,
         )
-        await callback.answer(texts.t('LANGUAGE_SELECTED', '🌐 Язык интерфейса обновлен.'))
+        await callback.answer(texts.t('LANGUAGE_SELECTED', 'Язык интерфейса обновлен.'))
         return
 
     updated_user = await update_user(db, db_user, language=resolved_language)
     texts = get_texts(updated_user.language)
 
-    await show_main_menu(
+    await show_info_menu(
         callback,
         updated_user,
         db,
-        skip_callback_answer=True,
     )
-    await callback.answer(texts.t('LANGUAGE_SELECTED', '🌐 Язык интерфейса обновлен.'))
+    await callback.answer(texts.t('LANGUAGE_SELECTED', 'Язык интерфейса обновлен.'))
 
 
 async def handle_back_to_menu(callback: types.CallbackQuery, state: FSMContext, db_user: User, db: AsyncSession):
@@ -1226,6 +1209,8 @@ async def handle_back_to_menu(callback: types.CallbackQuery, state: FSMContext, 
     has_active_subscription = any(sub.is_active or getattr(sub, 'actual_status', None) == 'limited' for sub in _subs)
     subscription_is_active = has_active_subscription
 
+    menu_text = await get_main_menu_text(db_user, texts, db)
+
     draft_exists = await has_subscription_checkout_draft(db_user.id)
     show_resume_checkout = should_offer_checkout_resume(db_user, draft_exists)
 
@@ -1233,7 +1218,11 @@ async def handle_back_to_menu(callback: types.CallbackQuery, state: FSMContext, 
     try:
         has_saved_cart = await user_cart_service.has_user_cart(db_user.id)
     except Exception as e:
-        logger.error('Ошибка проверки сохраненной корзины для пользователя', db_user_id=db_user.id, error=e)
+        logger.error(
+            'Ошибка проверки сохраненной корзины для пользователя',
+            db_user_id=db_user.id,
+            error=e,
+        )
         has_saved_cart = False
 
     is_admin = settings.is_admin(db_user.telegram_id)
@@ -1265,7 +1254,6 @@ async def handle_back_to_menu(callback: types.CallbackQuery, state: FSMContext, 
     )
 
     if not await try_edit_rich_main_menu(callback, db_user, texts, db, keyboard):
-        menu_text = await get_main_menu_text(db_user, texts, db)
         await edit_or_answer_photo(
             callback=callback,
             caption=menu_text,
@@ -1278,7 +1266,7 @@ async def handle_back_to_menu(callback: types.CallbackQuery, state: FSMContext, 
 def _get_subscription_status(user: User, texts, is_daily_tariff: bool = False) -> str:
     subscription = getattr(user, 'subscription', None)
     if not subscription:
-        return texts.t('SUB_STATUS_NONE', '❌ Отсутствует')
+        return texts.t('SUB_STATUS_NONE', 'Отсутствует')
 
     current_time = datetime.now(UTC)
     actual_status = (subscription.actual_status or '').lower()
@@ -1290,18 +1278,18 @@ def _get_subscription_status(user: User, texts, is_daily_tariff: bool = False) -
         days_left = (subscription.end_date - current_time).days
 
     if actual_status == 'pending':
-        return texts.t('SUBSCRIPTION_NONE', '❌ Нет активной подписки')
+        return texts.t('SUBSCRIPTION_NONE', 'Нет активной подписки')
 
     if actual_status == 'disabled':
-        return texts.t('SUB_STATUS_DISABLED', '⚫ Отключена')
+        return texts.t('SUB_STATUS_DISABLED', 'Отключена')
 
     if actual_status == 'limited':
-        return texts.t('SUB_STATUS_LIMITED', '⚠️ Трафик исчерпан')
+        return texts.t('SUB_STATUS_LIMITED', 'Трафик исчерпан')
 
     if actual_status == 'expired':
         return texts.t(
             'SUB_STATUS_EXPIRED',
-            '🔴 Истекла\n📅 {end_date}',
+            'Истекла\n {end_date}',
         ).format(end_date=end_date_text or '—')
 
     is_trial_subscription = getattr(subscription, 'is_trial', False)
@@ -1312,7 +1300,7 @@ def _get_subscription_status(user: User, texts, is_daily_tariff: bool = False) -
         if days_left > 1 and end_date_text:
             return texts.t(
                 'SUB_STATUS_TRIAL_ACTIVE',
-                '🎁 Тестовая подписка\n📅 до {end_date} ({days} дн.)',
+                'Тестовая подписка\n до {end_date} ({days} дн.)',
             ).format(
                 end_date=end_date_text,
                 days=days_left,
@@ -1320,17 +1308,17 @@ def _get_subscription_status(user: User, texts, is_daily_tariff: bool = False) -
         if days_left == 1:
             return texts.t(
                 'SUB_STATUS_TRIAL_TOMORROW',
-                '🎁 Тестовая подписка\n⚠️ истекает завтра!',
+                'Тестовая подписка\n истекает завтра!',
             )
         return texts.t(
             'SUB_STATUS_TRIAL_TODAY',
-            '🎁 Тестовая подписка\n⚠️ истекает сегодня!',
+            'Тестовая подписка\n истекает сегодня!',
         )
 
     if actual_status == 'active':
         # Для суточных тарифов не показываем предупреждение об истечении
         if is_daily_tariff:
-            return texts.t('SUB_STATUS_DAILY_ACTIVE', '💎 Активна')
+            return texts.t('SUB_STATUS_DAILY_ACTIVE', 'Активна')
 
         # «Вечная» подписка (выдана, например, до 2099 года) — без дат и дней
         if days_left > INFINITY_DAYS_THRESHOLD:
@@ -1339,7 +1327,7 @@ def _get_subscription_status(user: User, texts, is_daily_tariff: bool = False) -
         if days_left > 7 and end_date_text:
             return texts.t(
                 'SUB_STATUS_ACTIVE_LONG',
-                '💎 Активна\n📅 до {end_date} ({days} дн.)',
+                'Активна\n до {end_date} ({days} дн.)',
             ).format(
                 end_date=end_date_text,
                 days=days_left,
@@ -1347,31 +1335,24 @@ def _get_subscription_status(user: User, texts, is_daily_tariff: bool = False) -
         if days_left > 1:
             return texts.t(
                 'SUB_STATUS_ACTIVE_FEW_DAYS',
-                '💎 Активна\n⚠️ истекает через {days} дн.',
+                'Активна\n истекает через {days} дн.',
             ).format(days=days_left)
         if days_left == 1:
             return texts.t(
                 'SUB_STATUS_ACTIVE_TOMORROW',
-                '💎 Активна\n⚠️ истекает завтра!',
+                'Активна\n истекает завтра!',
             )
         return texts.t(
             'SUB_STATUS_ACTIVE_TODAY',
-            '💎 Активна\n⚠️ истекает сегодня!',
+            'Активна\n истекает сегодня!',
         )
 
-    return texts.t('SUB_STATUS_UNKNOWN', '❓ Неизвестно')
+    return texts.t('SUB_STATUS_UNKNOWN', 'Неизвестно')
 
 
-def _insert_random_message(base_text: str, random_message: str, action_prompt: str) -> str:
+def _insert_random_message(base_text: str, random_message: str) -> str:
     if not random_message:
         return base_text
-
-    prompt = action_prompt or ''
-    if prompt and prompt in base_text:
-        parts = base_text.split(prompt, 1)
-        if len(parts) == 2:
-            return f'{parts[0]}\n{random_message}\n\n{prompt}{parts[1]}'
-        return base_text.replace(prompt, f'\n{random_message}\n\n{prompt}', 1)
 
     return f'{base_text}\n\n{random_message}'
 
@@ -1388,7 +1369,7 @@ async def _get_multi_tariff_status(user, texts, db: AsyncSession) -> tuple[str, 
     subscriptions = [sub for sub in subscriptions if not getattr(sub, 'is_pending_trial', False)]
 
     if not subscriptions:
-        return texts.t('SUB_STATUS_NONE', '❌ Отсутствует'), ''
+        return texts.t('SUB_STATUS_NONE', 'Отсутствует'), ''
 
     current_time = datetime.now(UTC)
     lines: list[str] = []
@@ -1396,12 +1377,10 @@ async def _get_multi_tariff_status(user, texts, db: AsyncSession) -> tuple[str, 
         tariff_name = html.escape(sub.tariff.name) if sub.tariff else 'Подписка'
         actual = sub.actual_status
 
-        if actual in ('active', 'trial'):
-            emoji = '🟢'
-        elif actual == 'limited':
-            emoji = '🟡'
+        if actual in ('active', 'trial') or actual == 'limited':
+            emoji = ''
         else:
-            emoji = '🔴'
+            emoji = ''
 
         if actual == 'expired':
             status_suffix = ' — истекла'
@@ -1438,9 +1417,7 @@ async def get_main_menu_text(user, texts, db: AsyncSession):
         )
 
         if tariff_info_block:
-            action_prompt_text = texts.t('MAIN_MENU_ACTION_PROMPT', 'Выберите действие:')
-            if action_prompt_text in base_text:
-                base_text = base_text.replace(action_prompt_text, f'{tariff_info_block}\n\n{action_prompt_text}')
+            base_text = f'{base_text}\n{tariff_info_block}'
     else:
         # Single-tariff mode: legacy behavior
         tariff = None
@@ -1455,7 +1432,6 @@ async def get_main_menu_text(user, texts, db: AsyncSession):
                 tariff = await get_tariff_by_id(db, subscription.tariff_id)
                 if tariff:
                     is_daily_tariff = getattr(tariff, 'is_daily', False)
-                    tariff_info_block = f'\n📦 Тариф: {html.escape(tariff.name)}'
             except Exception as e:
                 logger.debug('Не удалось загрузить тариф для главного меню', error=e)
 
@@ -1465,11 +1441,7 @@ async def get_main_menu_text(user, texts, db: AsyncSession):
         )
 
         if tariff_info_block:
-            action_prompt_text = texts.t('MAIN_MENU_ACTION_PROMPT', 'Выберите действие:')
-            if action_prompt_text in base_text:
-                base_text = base_text.replace(action_prompt_text, f'{tariff_info_block}\n\n{action_prompt_text}')
-
-    action_prompt = texts.t('MAIN_MENU_ACTION_PROMPT', 'Выберите действие:')
+            base_text = f'{base_text}\n{tariff_info_block}'
 
     info_sections: list[str] = []
 
@@ -1498,12 +1470,12 @@ async def get_main_menu_text(user, texts, db: AsyncSession):
     if info_sections:
         extra_block = '\n\n'.join(section for section in info_sections if section)
         if extra_block:
-            base_text = _insert_random_message(base_text, extra_block, action_prompt)
+            base_text = _insert_random_message(base_text, extra_block)
 
     try:
         random_message = await get_random_active_message(db)
         if random_message:
-            return _insert_random_message(base_text, random_message, action_prompt)
+            return _insert_random_message(base_text, random_message)
 
     except Exception as e:
         logger.error('Ошибка получения случайного сообщения', error=e)
@@ -1522,7 +1494,10 @@ async def handle_activate_button(callback: types.CallbackQuery, db_user: User, d
     texts = get_texts(db_user.language)
 
     from app.database.crud.server_squad import get_available_server_squads
-    from app.database.crud.subscription import create_paid_subscription, get_subscription_by_user_id
+    from app.database.crud.subscription import (
+        create_paid_subscription,
+        get_subscription_by_user_id,
+    )
     from app.database.crud.transaction import create_transaction
     from app.database.crud.user import subtract_user_balance
     from app.database.models import PaymentMethod, TransactionType
@@ -1543,7 +1518,7 @@ async def handle_activate_button(callback: types.CallbackQuery, db_user: User, d
     # Если подписка активна — ничего не делаем
     if subscription and subscription.status == 'ACTIVE' and subscription.end_date > datetime.now(UTC):
         await callback.answer(
-            texts.t('SUBSCRIPTION_ALREADY_ACTIVE', '✅ Подписка уже активна!'),
+            texts.t('SUBSCRIPTION_ALREADY_ACTIVE', 'Подписка уже активна!'),
             show_alert=True,
         )
         return
@@ -1629,13 +1604,16 @@ async def handle_activate_button(callback: types.CallbackQuery, db_user: User, d
             # «не хватает 0.40 ₽» вместо обрезанного «0 ₽» от integer division.
             missing_label = texts.format_price(missing, round_kopeks=False)
             await callback.answer(
-                texts.t('INSUFFICIENT_FUNDS_DETAILED', f'❌ Недостаточно средств. Не хватает {missing_label}'),
+                texts.t(
+                    'INSUFFICIENT_FUNDS_DETAILED',
+                    f'Недостаточно средств. Не хватает {missing_label}',
+                ),
                 show_alert=True,
             )
             return
     except Exception as e:
         logger.error('Ошибка расчёта стоимости при активации', error=e)
-        await callback.answer('❌ Ошибка расчёта стоимости', show_alert=True)
+        await callback.answer('Ошибка расчёта стоимости', show_alert=True)
         return
 
     try:
@@ -1657,7 +1635,7 @@ async def handle_activate_button(callback: types.CallbackQuery, db_user: User, d
             await callback.answer(
                 texts.t(
                     'ACTIVATION_SUCCESS',
-                    f'✅ Подписка продлена на {best_period} дней за {pricing.final_total // 100} ₽!',
+                    f'Подписка продлена на {best_period} дней за {pricing.final_total // 100} ₽!',
                 ),
                 show_alert=True,
             )
@@ -1673,7 +1651,7 @@ async def handle_activate_button(callback: types.CallbackQuery, db_user: User, d
                 consume_promo_offer=consume_promo,
             )
             if not success:
-                await callback.answer('❌ Недостаточно средств', show_alert=True)
+                await callback.answer('Недостаточно средств', show_alert=True)
                 return
 
             # Создание новой подписки
@@ -1702,17 +1680,22 @@ async def handle_activate_button(callback: types.CallbackQuery, db_user: User, d
 
             await callback.answer(
                 texts.t(
-                    'ACTIVATION_SUCCESS', f'✅ Подписка активирована на {best_period} дней за {best_price // 100} ₽!'
+                    'ACTIVATION_SUCCESS',
+                    f'Подписка активирована на {best_period} дней за {best_price // 100} ₽!',
                 ),
                 show_alert=True,
             )
 
     except Exception as e:
         user_id_display = db_user.telegram_id or db_user.email or f'#{db_user.id}'
-        logger.error('Ошибка автоматической активации для', user_id_display=user_id_display, error=e)
+        logger.error(
+            'Ошибка автоматической активации для',
+            user_id_display=user_id_display,
+            error=e,
+        )
         await db.rollback()
         await callback.answer(
-            texts.t('ACTIVATION_ERROR', '❌ Ошибка активации. Попробуйте позже.'),
+            texts.t('ACTIVATION_ERROR', 'Ошибка активации. Попробуйте позже.'),
             show_alert=True,
         )
 
@@ -1726,11 +1709,6 @@ def register_handlers(dp: Dispatcher):
     )
 
     dp.callback_query.register(show_service_rules, F.data == 'menu_rules')
-
-    dp.callback_query.register(
-        show_service_rules,
-        F.data.startswith('menu_rules:'),
-    )
 
     dp.callback_query.register(
         show_info_menu,
@@ -1779,7 +1757,11 @@ def register_handlers(dp: Dispatcher):
 
     dp.callback_query.register(show_language_menu, F.data == 'menu_language')
 
-    dp.callback_query.register(process_language_change, F.data.startswith('language_select:'), StateFilter(None))
+    dp.callback_query.register(
+        process_language_change,
+        F.data.startswith('language_select:'),
+        StateFilter(None),
+    )
 
     dp.callback_query.register(handle_add_traffic, F.data == 'buy_traffic')
 

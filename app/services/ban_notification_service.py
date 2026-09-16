@@ -35,7 +35,7 @@ def _format_notification_template(template: str, fallback: str, **values: object
 def get_delete_keyboard() -> InlineKeyboardMarkup:
     """Клавиатура с кнопкой удаления уведомления"""
     return InlineKeyboardMarkup(
-        inline_keyboard=[[InlineKeyboardButton(text='🗑 Удалить', callback_data='ban_notify:delete')]]
+        inline_keyboard=[[InlineKeyboardButton(text='Удалить', callback_data='ban_notify:delete')]]
     )
 
 
@@ -150,7 +150,10 @@ class BanNotificationService:
         # Отправляем сообщение с кнопкой удаления
         try:
             await self._bot.send_message(
-                chat_id=user.telegram_id, text=message_text, parse_mode='HTML', reply_markup=get_delete_keyboard()
+                chat_id=user.telegram_id,
+                text=message_text,
+                parse_mode='HTML',
+                reply_markup=get_delete_keyboard(),
             )
             logger.info(
                 'Уведомление о бане отправлено пользователю',
@@ -195,14 +198,20 @@ class BanNotificationService:
         if not user.telegram_id:
             success = await notification_delivery_service.notify_unban(user=user)
             if success:
-                logger.info('Email уведомление о разбане отправлено пользователю', user_id=user.id)
+                logger.info(
+                    'Email уведомление о разбане отправлено пользователю',
+                    user_id=user.id,
+                )
                 return True, 'Email уведомление отправлено', None
             return False, 'Не удалось отправить email уведомление', None
 
         # Отправляем сообщение с кнопкой удаления
         try:
             await self._bot.send_message(
-                chat_id=user.telegram_id, text=message_text, parse_mode='HTML', reply_markup=get_delete_keyboard()
+                chat_id=user.telegram_id,
+                text=message_text,
+                parse_mode='HTML',
+                reply_markup=get_delete_keyboard(),
             )
             logger.info(
                 'Уведомление о разбане отправлено пользователю',
@@ -221,7 +230,11 @@ class BanNotificationService:
             return False, f'Ошибка Telegram API: {e!s}', user.telegram_id
 
     async def send_warning_notification(
-        self, db: AsyncSession, user_identifier: str, username: str, warning_message: str
+        self,
+        db: AsyncSession,
+        user_identifier: str,
+        username: str,
+        warning_message: str,
     ) -> tuple[bool, str, int | None]:
         """
         Отправить предупреждение пользователю
@@ -264,7 +277,10 @@ class BanNotificationService:
         # Отправляем сообщение с кнопкой удаления
         try:
             await self._bot.send_message(
-                chat_id=user.telegram_id, text=message_text, parse_mode='HTML', reply_markup=get_delete_keyboard()
+                chat_id=user.telegram_id,
+                text=message_text,
+                parse_mode='HTML',
+                reply_markup=get_delete_keyboard(),
             )
             logger.info(
                 'Предупреждение отправлено пользователю',
@@ -342,7 +358,10 @@ class BanNotificationService:
         # Отправляем сообщение с кнопкой удаления
         try:
             await self._bot.send_message(
-                chat_id=user.telegram_id, text=message_text, parse_mode='HTML', reply_markup=get_delete_keyboard()
+                chat_id=user.telegram_id,
+                text=message_text,
+                parse_mode='HTML',
+                reply_markup=get_delete_keyboard(),
             )
             logger.info(
                 'Уведомление о WiFi бане отправлено пользователю',
@@ -418,7 +437,10 @@ class BanNotificationService:
         # Отправляем сообщение с кнопкой удаления
         try:
             await self._bot.send_message(
-                chat_id=user.telegram_id, text=message_text, parse_mode='HTML', reply_markup=get_delete_keyboard()
+                chat_id=user.telegram_id,
+                text=message_text,
+                parse_mode='HTML',
+                reply_markup=get_delete_keyboard(),
             )
             logger.info(
                 'Уведомление о Mobile бане отправлено пользователю',
