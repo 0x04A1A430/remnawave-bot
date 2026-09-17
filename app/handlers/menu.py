@@ -1641,6 +1641,8 @@ async def handle_activate_button(callback: types.CallbackQuery, db_user: User, d
             )
         else:
             # Списать баланс ДО создания подписки (чтобы не было orphaned subscription при неудаче)
+            from app.utils.promo_offer import get_user_active_promo_discount_percent
+
             consume_promo = get_user_active_promo_discount_percent(db_user) > 0
             success = await subtract_user_balance(
                 db,

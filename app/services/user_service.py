@@ -90,6 +90,7 @@ class UserService:
         texts = get_texts(user.language)
 
         has_active_subscription = subscription is not None and subscription.status in {'active', 'trial'}
+        extend_callback = 'menu_subscription' if settings.is_multi_tariff_enabled() else 'subscription_extend'
 
         if has_active_subscription:
             # У пользователя есть активная подписка - обычное сообщение
@@ -119,7 +120,6 @@ class UserService:
                 f'Пополнение баланса НЕ активирует подписку автоматически!\n\n'
                 f'👇 <b>Выберите действие:</b>'
             )
-            extend_callback = 'menu_subscription' if settings.is_multi_tariff_enabled() else 'subscription_extend'
             keyboard = types.InlineKeyboardMarkup(
                 inline_keyboard=[
                     [types.InlineKeyboardButton(text='🚀 АКТИВИРОВАТЬ ПОДПИСКУ', callback_data='subscription_buy')],

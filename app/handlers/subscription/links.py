@@ -11,6 +11,7 @@ from app.keyboards.inline import (
     get_happ_download_button_row,
 )
 from app.localization.texts import get_texts
+from app.utils.button_emoji import make_button
 from app.utils.subscription_utils import (
     convert_subscription_link_to_happ_scheme,
     get_display_subscription_link,

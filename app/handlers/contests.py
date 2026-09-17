@@ -20,6 +20,7 @@ from app.services.contests import (
     get_game_strategy,
 )
 from app.states import ContestStates
+from app.utils.button_emoji import make_button
 from app.utils.decorators import auth_required, error_handler
 
 
