@@ -1187,7 +1187,15 @@ async def get_users_list(
     order_by_total_spent: bool = False,
     order_by_purchase_count: bool = False,
     order_by_subscription_end: bool = False,
+    sort_descending: bool | None = None,
 ) -> list[User]:
+    """Страница списка пользователей админки.
+
+    ``sort_descending`` — направление выбранной сортировки; ``None`` оставляет
+    привычное: окончание подписки — сначала скорые, остальное — сначала больше/новее.
+    Люди без значения ключа (нет активности, нет подходящей подписки) внизу в обе стороны,
+    при равных ключах — сначала новые.
+    """
     query = select(User).options(
         selectinload(User.subscriptions).selectinload(Subscription.tariff),
         selectinload(User.promo_group),
@@ -1251,17 +1259,15 @@ async def get_users_list(
             .correlate(User)
             .scalar_subquery()
         )
-        query = query.order_by(func.coalesce(most_traffic, 0.0).desc(), User.created_at.desc())
+        sort_key, natural_descending = func.coalesce(most_traffic, 0.0), True
     elif order_by_total_spent:
-        order_column = func.coalesce(transactions_stats.c.total_spent, 0)
-        query = query.order_by(order_column.desc(), User.created_at.desc())
+        sort_key, natural_descending = func.coalesce(transactions_stats.c.total_spent, 0), True
     elif order_by_purchase_count:
-        order_column = func.coalesce(transactions_stats.c.purchase_count, 0)
-        query = query.order_by(order_column.desc(), User.created_at.desc())
+        sort_key, natural_descending = func.coalesce(transactions_stats.c.purchase_count, 0), True
     elif order_by_balance:
-        query = query.order_by(User.balance_kopeks.desc(), User.created_at.desc())
+        sort_key, natural_descending = User.balance_kopeks, True
     elif order_by_last_activity:
-        query = query.order_by(nullslast(User.last_activity.desc()), User.created_at.desc())
+        sort_key, natural_descending = User.last_activity, True
     elif order_by_subscription_end:
         # MIN(end_date) среди подписок пользователя; без outerjoin — иначе дубли
         # строк при нескольких подписках (мультитариф).
@@ -1293,9 +1299,13 @@ async def get_users_list(
             .correlate(User)
             .scalar_subquery()
         )
-        query = query.order_by(nullslast(soonest_end.asc()), User.created_at.desc())
+        sort_key, natural_descending = soonest_end, False
     else:
-        query = query.order_by(User.created_at.desc())
+        sort_key, natural_descending = User.created_at, True
+
+    descending = natural_descending if sort_descending is None else sort_descending
+    ordered_key = nullslast(sort_key.desc() if descending else sort_key.asc())
+    query = query.order_by(ordered_key, User.created_at.desc(), User.id.desc())
 
     query = query.offset(offset).limit(limit)
 

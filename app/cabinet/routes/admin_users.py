@@ -108,6 +108,7 @@ from ..schemas.users import (
     SendUserMessageRequest,
     SendUserMessageResponse,
     SortByEnum,
+    SortOrderEnum,
     SubscriptionListItem,
     SyncFromPanelRequest,
     SyncFromPanelResponse,
@@ -502,6 +503,7 @@ async def list_users(
     traffic_used_percent_min: int | None = Query(None, ge=1, le=100),
     online: bool | None = Query(None),
     sort_by: SortByEnum = Query(SortByEnum.CREATED_AT),
+    sort_order: SortOrderEnum | None = Query(None),
     admin: User = Depends(require_permission('users:read')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
@@ -520,6 +522,7 @@ async def list_users(
     - **purchase_count**: Only 0 is supported — users without a completed subscription payment
     - **traffic_used_percent_min**: Live subscription with at least N % of its traffic limit used (unlimited excluded)
     - **sort_by**: Sort field (created_at, balance, traffic, last_activity, total_spent, purchase_count, subscription_end_date)
+    - **sort_order**: asc / desc; omitted — soonest first for subscription_end_date, largest/newest first otherwise
     """
     # Convert status enum to model enum
     user_status = None
@@ -583,6 +586,7 @@ async def list_users(
         order_by_total_spent=order_by_total_spent,
         order_by_purchase_count=order_by_purchase_count,
         order_by_subscription_end=order_by_subscription_end,
+        sort_descending=None if sort_order is None else sort_order == SortOrderEnum.DESC,
     )
 
     total = await get_users_count(

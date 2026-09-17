@@ -38,6 +38,13 @@ class SortByEnum(StrEnum):
     SUBSCRIPTION_END_DATE = 'subscription_end_date'
 
 
+class SortOrderEnum(StrEnum):
+    """Direction of the users list sort; omitted — the field's usual direction."""
+
+    ASC = 'asc'
+    DESC = 'desc'
+
+
 # === User Subscription Info ===
 
 

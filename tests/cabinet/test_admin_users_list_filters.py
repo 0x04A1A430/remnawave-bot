@@ -206,6 +206,7 @@ async def _list(db, **params):
         'traffic_used_percent_min': None,
         'online': None,
         'sort_by': admin_users.SortByEnum.CREATED_AT,
+        'sort_order': None,
     }
     return await admin_users.list_users(**{**defaults, **params}, admin=None, db=db)
 
@@ -236,6 +237,32 @@ async def test_route_marks_connected_rows_and_filters_online(monkeypatch: pytest
         only_online = await _list(db, online=True)
         assert [row.username for row in only_online.users] == ['later']
         assert only_online.total == 1
+
+
+@pytest.mark.parametrize(
+    ('sort_order', 'expected'),
+    [(None, None), ('asc', False), ('desc', True)],
+)
+async def test_route_passes_sort_direction(monkeypatch: pytest.MonkeyPatch, sort_order, expected) -> None:
+    """Направление сортировки доходит до выборки; без него — привычный порядок ключа."""
+    from app.cabinet.routes import admin_users
+    from app.services import panel_online
+
+    async with memory_session(monkeypatch, TABLES) as db:
+        await _seed(db)
+        monkeypatch.setattr(panel_online, 'get_online_snapshot', AsyncMock(return_value=None))
+        seen: dict = {}
+        real = admin_users.get_users_list
+
+        async def spy(*args, **kwargs):
+            seen.update(kwargs)
+            return await real(*args, **kwargs)
+
+        monkeypatch.setattr(admin_users, 'get_users_list', spy)
+        order = admin_users.SortOrderEnum(sort_order) if sort_order else None
+        await _list(db, sort_by=admin_users.SortByEnum.BALANCE, sort_order=order)
+        assert seen['sort_descending'] is expected
+        assert seen['order_by_balance'] is True
 
 
 async def test_route_refuses_online_filter_without_panel(monkeypatch: pytest.MonkeyPatch) -> None:
