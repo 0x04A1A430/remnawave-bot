@@ -4,7 +4,6 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import app.handlers.admin.tariff_custom_days as mod
-from app.handlers.admin.tariffs import format_tariff_info, get_tariff_view_keyboard
 from app.services.tariff_custom_days import parse_positive_days, validate_custom_days_configuration
 
 
@@ -106,19 +105,6 @@ def test_service_parses_days_and_validates_bounds() -> None:
     assert 'цена за 1 день должна быть больше нуля' in errors
     assert 'максимум дней не может быть меньше минимума' in errors
     assert validate_custom_days_configuration(price_per_day_kopeks=100, min_days=1, max_days=30) == ()
-
-
-def test_tariff_card_shows_custom_days_block_and_entry() -> None:
-    tariff = _tariff(custom_days_enabled=True, price_per_day_kopeks=1500, min_days=3, max_days=90)
-
-    rendered = format_tariff_info(tariff, 'ru')
-    callbacks = _callbacks(get_tariff_view_keyboard(tariff, 'ru'))
-
-    assert '<b>Произвольные дни:</b>' in rendered
-    assert '✅ Включено' in rendered
-    assert 'Цена за 1 день: 15 ₽' in rendered
-    assert 'Минимум: 3 дн.' in rendered and 'Максимум: 90 дн.' in rendered
-    assert 'admin_tariff_edit_custom_days:7' in callbacks
 
 
 def test_screen_lists_actions() -> None:

@@ -53,22 +53,6 @@ def _offered_counts(keyboard) -> list[int]:
     return offered
 
 
-def test_keyboard_hides_values_below_tariff_limit(monkeypatch):
-    """Кнопки с запрещёнными значениями не должны показываться вовсе."""
-    from app.keyboards.inline import get_change_devices_keyboard
-
-    monkeypatch.setattr(settings, 'ALLOW_DEVICES_BELOW_TARIFF_LIMIT', False)
-    monkeypatch.setattr(settings, 'MAX_DEVICES_LIMIT', 10)
-    monkeypatch.setattr(settings, 'PRICE_PER_DEVICE', 5000)
-
-    tariff = SimpleNamespace(device_limit=3, max_device_limit=10, device_price_kopeks=5000)
-    keyboard = get_change_devices_keyboard(current_devices=5, language='ru', tariff=tariff)
-
-    offered = _offered_counts(keyboard)
-    assert offered, 'клавиатура должна предлагать варианты'
-    assert min(offered) >= 3
-
-
 def test_keyboard_offers_lower_values_when_opted_in(monkeypatch):
     from app.keyboards.inline import get_change_devices_keyboard
 

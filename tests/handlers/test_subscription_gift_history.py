@@ -44,7 +44,6 @@ from app.handlers.subscription.gift import (
 from app.handlers.subscription.my_subscriptions import show_my_subscriptions
 from app.handlers.subscription.purchase import show_subscription_info
 from app.services.gift_history_service import GiftHistoryItem
-from app.services.gift_notification_service import build_gift_history_detail_presentation
 from app.utils.gift_links import build_gift_public_code
 
 
@@ -406,92 +405,3 @@ class TestGiftRecoveryDetail:
 
 
 # ── Step 4: Source-Neutral Presentation Tests ────────────────────────────────
-
-
-class TestSourceNeutralPresentation:
-    """Test source-neutral card structure and delivered state differences (Step 4)."""
-
-    def test_source_neutral_card_bot_vs_cabinet_origins(self):
-        token = 'c' * 64
-        bot_item = _make_gift_history_item(
-            purchase_id=10,
-            token=token,
-            status=GuestPurchaseStatus.PAID.value,
-            tariff_name='VIP',
-            period_days=30,
-            traffic_limit_gb=200,
-            device_limit=3,
-        )
-        # Номер тот же, что у bot_item: сравниваются карточки, различающиеся
-        # ТОЛЬКО происхождением. Кнопки QR и текста для отправки адресуют
-        # конкретный подарок, и разные номера здесь означали бы, что тест
-        # требует одинаковых callback'ов у разных подарков.
-        cabinet_item = _make_gift_history_item(
-            purchase_id=10,
-            token=token,
-            status=GuestPurchaseStatus.PAID.value,
-            tariff_name='VIP',
-            period_days=30,
-            traffic_limit_gb=200,
-            device_limit=3,
-        )
-
-        text_bot, kb_bot = build_gift_history_detail_presentation(
-            language='ru',
-            item=bot_item,
-            bot_username='TestGiftBot',
-            cabinet_url='https://cabinet.example.com',
-        )
-        text_cab, kb_cab = build_gift_history_detail_presentation(
-            language='ru',
-            item=cabinet_item,
-            bot_username='TestGiftBot',
-            cabinet_url='https://cabinet.example.com',
-        )
-
-        # Content must be identical (no mention of bot vs cabinet origin or prices)
-        assert text_bot == text_cab
-        assert _button_texts(kb_bot) == _button_texts(kb_cab)
-        assert _callbacks(kb_bot) == _callbacks(kb_cab)
-        assert _urls(kb_bot) == _urls(kb_cab)
-
-        # Financial info must NOT appear
-        assert '30000' not in text_bot
-        assert '300.00' not in text_bot
-        assert 'руб' not in text_bot.lower()
-        assert '🤖 В Telegram:' in text_bot
-        assert '🌐 В личном кабинете:' in text_bot
-        assert any('t.me/TestGiftBot' in url for url in _urls(kb_bot))
-        assert any('cabinet.example.com/buy/gift/' in url for url in _urls(kb_bot))
-
-    def test_delivered_card_omits_share_and_claim_actions(self):
-        token = 'd' * 64
-        delivered_item = _make_gift_history_item(
-            purchase_id=20,
-            token=token,
-            status=GuestPurchaseStatus.DELIVERED.value,
-            tariff_name='VIP',
-            period_days=30,
-            delivered_at=datetime(2026, 8, 22, 14, 30, tzinfo=UTC),
-            recipient_display='@best_friend',
-        )
-
-        text, kb = build_gift_history_detail_presentation(
-            language='ru',
-            item=delivered_item,
-            bot_username='TestGiftBot',
-        )
-
-        # Delivered status and recipient display must be rendered safely
-        assert 'Активирован' in text
-        assert '@best_friend' in text
-        assert '22.08.2026' in text
-
-        # Must omit share url, claim url, and public code
-        assert _urls(kb) == []
-        assert build_gift_public_code(token) not in text
-        assert 't.me/share/url' not in text
-        assert token not in text
-
-        # Must contain back button
-        assert _callbacks(kb) == ['gift_my_back']

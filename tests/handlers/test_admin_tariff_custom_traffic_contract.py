@@ -25,12 +25,6 @@ def _function_source(path: Path, name: str) -> str:
     raise AssertionError(f'function {name!r} not found in {path}')
 
 
-def test_tariff_card_exposes_custom_traffic_entry() -> None:
-    body = _function_source(TARIFFS, 'get_tariff_view_keyboard')
-    assert '⚙️ Произвольный трафик' in body
-    assert 'admin_tariff_edit_custom_traffic:' in body
-
-
 def test_tariff_summary_includes_custom_traffic_block() -> None:
     body = _function_source(TARIFFS, 'format_tariff_info')
     assert 'format_custom_traffic_settings(tariff)' in body

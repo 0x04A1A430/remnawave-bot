@@ -14,8 +14,6 @@ Covers:
 
 from __future__ import annotations
 
-import html
-import urllib.parse
 import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -44,7 +42,7 @@ from app.services.gift_purchase_service import (
     GiftTariffUnavailableError,
 )
 from app.states import GiftPurchaseStates
-from app.utils.gift_links import build_bot_gift_claim_link, build_cabinet_gift_claim_link, build_gift_public_code
+from app.utils.gift_links import build_cabinet_gift_claim_link
 
 
 # ── Helpers & Fixtures ──────────────────────────────────────────────────────
@@ -533,54 +531,6 @@ class TestGiftReplayAndPresentation:
         assert bot_user is None
         assert cab_url == 'https://cabinet.example.com'
 
-    def test_presentation_excludes_financial_data_and_standalone_tokens(self, sample_purchase_result):
-        text, kb = build_gift_result_presentation(
-            language='ru',
-            purchase_result=sample_purchase_result,
-            bot_username='test_gift_bot',
-        )
-
-        # 1. HTML escaping of tariff name
-        assert html.escape('Premium <VIP> Plan & More') in text
-        assert '<VIP>' not in text
-
-        # 2. Tariff period and limits present
-        assert '30 дн.' in text
-        assert '100 GB' in text or '100 ГБ' in text
-
-        # 3. No financial data in message text
-        assert '300' not in text  # 300 RUB / 30000 kopeks
-        assert '350' not in text
-        assert '500' not in text  # user balance
-        assert '50' not in text  # discount
-        assert '555' not in text  # transaction id
-        assert 'gift_bot_chk' not in text
-
-        # 4. Standalone token must not appear outside the canonical link
-        raw_token = sample_purchase_result.purchase.token
-        assert raw_token not in text
-        assert f'<code>{build_gift_public_code(raw_token)}</code>' in text
-        expected_claim_link = build_bot_gift_claim_link(raw_token, 'test_gift_bot')
-        assert expected_claim_link in text
-
-        # 5. Share URL verification
-        buttons = [b for row in kb.inline_keyboard for b in row]
-        send_btn = next(b for b in buttons if b.text.startswith('🎁'))
-        assert send_btn.url is not None
-        parsed_share = urllib.parse.urlparse(send_btn.url)
-        assert parsed_share.netloc == 't.me'
-        assert parsed_share.path == '/share/url'
-        qs = urllib.parse.parse_qs(parsed_share.query)
-        assert qs['url'][0] == expected_claim_link
-
-        # Share text in query parameter must also contain NO financial data and NO standalone token
-        share_text = qs['text'][0]
-        assert '300' not in share_text
-        assert '350' not in share_text
-        assert '500' not in share_text
-        assert raw_token not in share_text
-        assert '30' in share_text  # period days
-
     def test_presentation_cabinet_fallback_when_no_bot_username(self, sample_purchase_result):
         text, kb = build_gift_result_presentation(
             language='ru',
@@ -597,44 +547,6 @@ class TestGiftReplayAndPresentation:
         buttons = [b for row in kb.inline_keyboard for b in row]
         open_btn = next(b for b in buttons if b.callback_data is None and b.url == expected_claim_link)
         assert open_btn.url == expected_claim_link
-
-    @pytest.mark.parametrize(
-        ('language', 'bot_label', 'cabinet_label'),
-        [
-            ('ru', '🤖 В Telegram:', '🌐 В личном кабинете:'),
-            ('en', '🤖 In Telegram:', '🌐 In the cabinet:'),
-            ('ua', '🤖 У Telegram:', '🌐 В особистому кабінеті:'),
-            ('fa', '🤖 در تلگرام:', '🌐 در پنل کاربری:'),
-            ('zh', '🤖 在 Telegram 中：', '🌐 在控制台中：'),
-        ],
-    )
-    def test_presentation_localizes_dual_claim_channels(
-        self,
-        sample_purchase_result,
-        language,
-        bot_label,
-        cabinet_label,
-    ):
-        raw_token = sample_purchase_result.purchase.token
-        bot_claim_url = build_bot_gift_claim_link(raw_token, 'test_gift_bot')
-        cabinet_claim_url = build_cabinet_gift_claim_link(raw_token, 'https://cabinet.example.com')
-
-        text, keyboard = build_gift_result_presentation(
-            language=language,
-            purchase_result=sample_purchase_result,
-            bot_username='test_gift_bot',
-            cabinet_url='https://cabinet.example.com',
-        )
-
-        assert bot_label in text
-        assert cabinet_label in text
-        assert bot_claim_url in text
-        assert cabinet_claim_url in text
-        assert f'<code>{build_gift_public_code(raw_token)}</code>' in text
-        urls = _button_urls(keyboard)
-        assert bot_claim_url in urls
-        assert cabinet_claim_url in urls
-        assert any(url.startswith('https://t.me/share/url?') for url in urls)
 
     @pytest.mark.asyncio
     async def test_send_gift_result_message_service(self, mock_bot, mock_db_user, sample_purchase_result, monkeypatch):

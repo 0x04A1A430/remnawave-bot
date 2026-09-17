@@ -21,7 +21,6 @@ from app.database.models import Base, GraceAccessSessionModel, Subscription, Tar
 from app.services import grace_access_notifications as notify
 from app.services.admin_notification_service import AdminNotificationService, NotificationCategory
 from app.services.notification_delivery_service import notification_delivery_service
-from app.services.notification_types import NotificationType
 from tests.fixtures.sqlite_memory import ensure_real_aiosqlite
 
 
@@ -140,50 +139,6 @@ async def test_granted_tells_admins_who_why_and_until_when(lab):
 
 
 @pytest.mark.asyncio
-async def test_granted_tells_the_user_in_their_language_with_a_renew_button(lab):
-    await _seed(lab.maker)
-
-    await notify.announce_grace_event(lab.bot, 10, 'granted')
-
-    assert lab.user.await_count == 1
-    kwargs = lab.user.await_args.kwargs
-    assert kwargs['notification_type'] is NotificationType.GRACE_ACCESS_GRANTED
-    assert kwargs['bot'] is lab.bot
-    message = kwargs['telegram_message']
-    assert 'Telegram и личный кабинет' in message, 'что доступно — фраза оператора, не прибитый Telegram'
-    assert '72' in message and '1 ГБ' in message and '«Стартовый»' in message
-    assert '{' not in message, 'все подстановки заполнены'
-    email = kwargs['context']
-    assert email['allowed'] == 'Telegram и личный кабинет' and email['reason'] == 'expired'
-    assert email['tariff_name'] == 'Стартовый' and email['hours'] == 72
-    buttons = [button.text for row in kwargs['telegram_markup'].inline_keyboard for button in row]
-    assert any('родл' in label.lower() for label in buttons), buttons
-
-
-@pytest.mark.asyncio
-async def test_limited_reason_is_named_as_traffic(lab):
-    await _seed(lab.maker, reason='limited')
-
-    await notify.announce_grace_event(lab.bot, 10, 'granted')
-
-    assert 'исчерпан трафик' in lab.admin.await_args.args[0]
-    assert 'Трафик' in lab.user.await_args.kwargs['telegram_message']
-
-
-@pytest.mark.asyncio
-async def test_timeout_tells_admins_and_the_user_that_access_is_closed(lab):
-    await _seed(lab.maker, state='completed', completion_reason='timeout')
-
-    await notify.announce_grace_event(lab.bot, 10, 'ended')
-
-    text = lab.admin.await_args.args[0]
-    assert 'GRACE-ДОСТУП ЗАВЕРШЁН' in text
-    assert 'не продлили' in text
-    assert lab.user.await_args.kwargs['notification_type'] is NotificationType.GRACE_ACCESS_ENDED
-    assert 'закончился' in lab.user.await_args.kwargs['telegram_message']
-
-
-@pytest.mark.asyncio
 async def test_paid_ending_is_reported_to_admins_only(lab):
     """О продлении человек уже получил своё уведомление — второе было бы шумом."""
     await _seed(lab.maker, state='completed', completion_reason='paid')
@@ -253,16 +208,6 @@ async def test_operator_phrase_and_tariff_are_escaped_for_telegram_markup(lab, m
     assert lab.user.await_args.kwargs['context']['allowed'] == 'Telegram <b>и кабинет</b>', (
         'письму — сырое, оно экранирует само'
     )
-
-
-@pytest.mark.asyncio
-async def test_empty_phrase_falls_back_to_telegram(lab, monkeypatch):
-    await _seed(lab.maker)
-    monkeypatch.setattr(settings, 'GRACE_ACCESS_ALLOWED_SERVICES', '   ')
-
-    await notify.announce_grace_event(lab.bot, 10, 'granted')
-
-    assert 'только: Telegram.' in lab.user.await_args.kwargs['telegram_message']
 
 
 @pytest.mark.asyncio

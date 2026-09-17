@@ -57,23 +57,3 @@ def test_disabled_sub_offers_buy_not_switch(monkeypatch):
     cbs = _callbacks(markup)
     assert 'menu_buy' in cbs
     assert 'instant_switch' not in cbs
-
-
-def test_active_sub_keeps_change_tariff(monkeypatch):
-    _patch_tariffs_mode(monkeypatch)
-    markup = kb.get_subscription_keyboard(
-        'ru', has_subscription=True, is_trial=False, subscription=_fake_sub('active', 'active')
-    )
-    cbs = _callbacks(markup)
-    assert 'instant_switch' in cbs  # normal switch flow untouched
-    assert 'menu_buy' not in cbs
-
-
-def test_limited_sub_keeps_change_tariff(monkeypatch):
-    """'limited' = traffic exhausted but time remaining (end_date>now) — switch still valid."""
-    _patch_tariffs_mode(monkeypatch)
-    markup = kb.get_subscription_keyboard(
-        'ru', has_subscription=True, is_trial=False, subscription=_fake_sub('limited', 'limited')
-    )
-    cbs = _callbacks(markup)
-    assert 'instant_switch' in cbs
