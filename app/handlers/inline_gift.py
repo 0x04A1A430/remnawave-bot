@@ -234,91 +234,24 @@ async def _apply_gift_panel_update(db, subscription, user) -> None:
     A gift that extends/activates the subscription is a real recovery, so any
     open grace session must be completed as PAID (not left for reconciliation,
     which would otherwise see a mismatched overlay and REVOKE -> disable).
-    ``update_panel_user_grace_safe`` routes through
-    ``apply_recovered_grace_update_locked`` exactly for this case.
+    ``SubscriptionService.update_remnawave_user`` already resolves the panel
+    identity and routes an open grace through the grace-safe path.
     """
-    from app.external.remnawave_api import UserStatus
-    from app.services.grace_access_runtime import (
-        get_open_grace_overlay,
-        update_panel_user_grace_safe,
-    )
-    from app.services.subscription_service import (
-        SubscriptionService as _Svc,
-        get_traffic_reset_strategy,
-    )
-    from app.utils.subscription_utils import resolve_hwid_device_limit_for_payload
-
-    def _as_utc(value):
-        from datetime import UTC as _UTC
-
-        if value is None:
-            return None
-        if value.tzinfo is None:
-            return value.replace(tzinfo=_UTC)
-        return value.astimezone(_UTC)
+    from app.services.subscription_service import SubscriptionService as _Svc
 
     service = _Svc()
-    remnawave_uuid = getattr(subscription, 'remnawave_uuid', None) or getattr(user, 'remnawave_uuid', None)
-    if not remnawave_uuid:
-        # Без панельной привязки (уже удалён/не создан) — только локальная выдача.
-        logger.warning('Gift panel update skipped: no remnawave identity', subscription_id=subscription.id)
-        return
-
-    async with service.get_api_client() as api:
-        use_user_id = settings.REMNAWAVE_USE_USER_ID
-        if settings.is_multi_tariff_enabled():
-            remnawave_id = getattr(subscription, 'remnawave_id', None)
-        else:
-            remnawave_id = getattr(user, 'remnawave_id', None)
-        if use_user_id and remnawave_id is None:
-            remnawave_id = await service._resolve_remnawave_id_by_telegram(db, subscription, user)
-        update_kwargs = dict(
-            uuid=remnawave_uuid,
-            status=UserStatus.ACTIVE,
-            expire_at=_as_utc(subscription.end_date),
-            traffic_limit_bytes=max(0, int(subscription.traffic_limit_gb or 0)) * 1024**3,
-            traffic_limit_strategy=get_traffic_reset_strategy(subscription.tariff),
-            telegram_id=user.telegram_id,
-            email=user.email,
-            description=settings.format_remnawave_user_description(
-                full_name=user.full_name,
-                username=user.username,
-                telegram_id=user.telegram_id,
-                email=user.email,
-                user_id=user.id,
-            ),
+    try:
+        updated = await service.update_remnawave_user(db, subscription)
+    except Exception as exc:
+        logger.warning(
+            'Gift panel update failed (gift already applied locally)',
+            subscription_id=subscription.id,
+            error=str(exc),
         )
-        if subscription.connected_squads:
-            update_kwargs['active_internal_squads'] = subscription.connected_squads
-        hwid_limit = resolve_hwid_device_limit_for_payload(subscription)
-        if hwid_limit is not None:
-            update_kwargs['hwid_device_limit'] = hwid_limit
-        if getattr(subscription.tariff, 'external_squad_uuid', None) is not None:
-            update_kwargs['external_squad_uuid'] = subscription.tariff.external_squad_uuid
-        if remnawave_id is not None:
-            update_kwargs['user_id'] = remnawave_id
-
-        try:
-            if await get_open_grace_overlay(db, subscription.id) is not None:
-                # Открытая grace-сессия: закоммитим локальные изменения (статус
-                # ACTIVE + новый end_date), чтобы отдельная guard-сессия в
-                # update_panel_user_grace_safe увидела восстановленную подписку
-                # и завершила grace как PAID.
-                await db.commit()
-                updated = await update_panel_user_grace_safe(api, subscription.id, **update_kwargs)
-            else:
-                updated = await api.update_user(**update_kwargs)
-                await db.commit()
-        except Exception as exc:
-            logger.warning(
-                'Gift panel update failed (gift already applied locally)',
-                subscription_id=subscription.id,
-                error=str(exc),
-            )
-            updated = None
-        if updated is not None:
-            subscription.subscription_url = updated.subscription_url
-            subscription.subscription_crypto_link = updated.happ_crypto_link
+        return
+    if updated is not None:
+        subscription.subscription_url = updated.subscription_url
+        subscription.subscription_crypto_link = updated.happ_crypto_link
 
 
 def _check_recipient(gift: InlineGiftSubscription, telegram_id: int, username: str) -> bool:
