@@ -9,7 +9,6 @@ from aiogram.fsm.context import FSMContext
 
 from app.config import settings
 from app.localization.texts import get_texts
-from app.utils.admin_context import admin_output_enabled
 
 
 logger = structlog.get_logger(__name__)
@@ -41,11 +40,7 @@ def admin_required(func: Callable) -> Callable:
             logger.warning('Попытка доступа к админской функции', user_id=user.id if user else 'Unknown')
             return None
 
-        token = admin_output_enabled.set(True)
-        try:
-            return await func(event, *args, **kwargs)
-        finally:
-            admin_output_enabled.reset(token)
+        return await func(event, *args, **kwargs)
 
     return wrapper
 

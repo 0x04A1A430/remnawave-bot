@@ -177,7 +177,7 @@ async def show_referral_statistics(callback: types.CallbackQuery, db_user: User,
         keyboard_rows.extend(
             [
                 [types.InlineKeyboardButton(text=' Настройки', callback_data='admin_referrals_settings')],
-                [types.InlineKeyboardButton(text='⬅ Назад', callback_data='admin_panel')],
+                [types.InlineKeyboardButton(text=' Назад', callback_data='admin_panel')],
             ]
         )
 
@@ -214,7 +214,7 @@ async def show_referral_statistics(callback: types.CallbackQuery, db_user: User,
         keyboard = types.InlineKeyboardMarkup(
             inline_keyboard=[
                 [types.InlineKeyboardButton(text=' Повторить', callback_data='admin_referrals')],
-                [types.InlineKeyboardButton(text='⬅ Назад', callback_data='admin_panel')],
+                [types.InlineKeyboardButton(text=' Назад', callback_data='admin_panel')],
             ]
         )
 
@@ -243,7 +243,7 @@ def _get_top_keyboard(period: str, sort_by: str) -> types.InlineKeyboardMarkup:
                 types.InlineKeyboardButton(text=sort_invited, callback_data=f'admin_top_ref:{period}:invited'),
             ],
             [types.InlineKeyboardButton(text=' Обновить', callback_data=f'admin_top_ref:{period}:{sort_by}')],
-            [types.InlineKeyboardButton(text='⬅ К статистике', callback_data='admin_referrals')],
+            [types.InlineKeyboardButton(text=' К статистике', callback_data='admin_referrals')],
         ]
     )
 
@@ -373,7 +373,7 @@ async def show_referral_settings(callback: types.CallbackQuery, db_user: User, d
             reply_markup=types.InlineKeyboardMarkup(
                 inline_keyboard=[
                     [types.InlineKeyboardButton(text=' Уровни наград', callback_data='admin_ref_levels')],
-                    [types.InlineKeyboardButton(text='⬅ К статистике', callback_data='admin_referrals')],
+                    [types.InlineKeyboardButton(text=' К статистике', callback_data='admin_referrals')],
                 ]
             ),
         )
@@ -401,7 +401,7 @@ async def show_referral_settings(callback: types.CallbackQuery, db_user: User, d
     keyboard = types.InlineKeyboardMarkup(
         inline_keyboard=[
             [types.InlineKeyboardButton(text=' Уровни наград', callback_data='admin_ref_levels')],
-            [types.InlineKeyboardButton(text='⬅ К статистике', callback_data='admin_referrals')],
+            [types.InlineKeyboardButton(text=' К статистике', callback_data='admin_referrals')],
         ]
     )
 
@@ -424,7 +424,7 @@ async def show_pending_withdrawal_requests(callback: types.CallbackQuery, db_use
             keyboard_rows.append(
                 [types.InlineKeyboardButton(text=' Тестовое начисление', callback_data='admin_test_referral_earning')]
             )
-        keyboard_rows.append([types.InlineKeyboardButton(text='⬅ Назад', callback_data='admin_referrals')])
+        keyboard_rows.append([types.InlineKeyboardButton(text=' Назад', callback_data='admin_referrals')])
 
         await callback.message.edit_text(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows))
         await callback.answer()
@@ -459,7 +459,7 @@ async def show_pending_withdrawal_requests(callback: types.CallbackQuery, db_use
             [types.InlineKeyboardButton(text=' Тестовое начисление', callback_data='admin_test_referral_earning')]
         )
 
-    keyboard_rows.append([types.InlineKeyboardButton(text='⬅ Назад', callback_data='admin_referrals')])
+    keyboard_rows.append([types.InlineKeyboardButton(text=' Назад', callback_data='admin_referrals')])
 
     await callback.message.edit_text(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows))
     await callback.answer()
@@ -531,7 +531,7 @@ async def view_withdrawal_request(callback: types.CallbackQuery, db_user: User, 
         keyboard.append(
             [types.InlineKeyboardButton(text=' Профиль пользователя', callback_data=f'admin_user_manage_{user.id}')]
         )
-    keyboard.append([types.InlineKeyboardButton(text='⬅ К списку', callback_data='admin_withdrawal_requests')])
+    keyboard.append([types.InlineKeyboardButton(text=' К списку', callback_data='admin_withdrawal_requests')])
 
     await callback.message.edit_text(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
     await callback.answer()
@@ -903,7 +903,7 @@ async def _show_diagnostics_for_period(callback: types.CallbackQuery, db: AsyncS
         keyboard_rows.extend(
             [
                 [types.InlineKeyboardButton(text=' Обновить', callback_data=f'admin_ref_diag:{period}')],
-                [types.InlineKeyboardButton(text='⬅ К статистике', callback_data='admin_referrals')],
+                [types.InlineKeyboardButton(text=' К статистике', callback_data='admin_referrals')],
             ]
         )
 
@@ -1010,7 +1010,7 @@ async def preview_referral_fixes(callback: types.CallbackQuery, db_user: User, d
         text += '\n <b>Внимание!</b> Это только предпросмотр. Нажмите "Применить", чтобы выполнить исправления.'
 
         # Кнопка назад зависит от источника
-        back_button_text = '⬅ К диагностике'
+        back_button_text = ' К диагностике'
         back_button_callback = f'admin_ref_diag:{period}' if period != 'uploaded_file' else 'admin_referral_diagnostics'
 
         keyboard = types.InlineKeyboardMarkup(
@@ -1126,7 +1126,7 @@ async def apply_referral_fixes(callback: types.CallbackQuery, db_user: User, db:
             keyboard_rows.append(
                 [types.InlineKeyboardButton(text=' Обновить диагностику', callback_data=f'admin_ref_diag:{period}')]
             )
-        keyboard_rows.append([types.InlineKeyboardButton(text='⬅ К статистике', callback_data='admin_referrals')])
+        keyboard_rows.append([types.InlineKeyboardButton(text=' К статистике', callback_data='admin_referrals')])
 
         keyboard = types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
 
@@ -1176,11 +1176,7 @@ async def check_missing_bonuses(callback: types.CallbackQuery, db_user: User, db
                 reply_markup=types.InlineKeyboardMarkup(
                     inline_keyboard=[
                         [types.InlineKeyboardButton(text=' Уровни наград', callback_data='admin_ref_levels')],
-                        [
-                            types.InlineKeyboardButton(
-                                text='⬅ К диагностике', callback_data='admin_referral_diagnostics'
-                            )
-                        ],
+                        [types.InlineKeyboardButton(text=' К диагностике', callback_data='admin_referral_diagnostics')],
                     ]
                 ),
             )
@@ -1226,7 +1222,7 @@ async def check_missing_bonuses(callback: types.CallbackQuery, db_user: User, db
                 inline_keyboard=[
                     [types.InlineKeyboardButton(text=' Начислить все бонусы', callback_data='admin_ref_bonus_apply')],
                     [types.InlineKeyboardButton(text=' Обновить', callback_data='admin_ref_check_bonuses')],
-                    [types.InlineKeyboardButton(text='⬅ К диагностике', callback_data='admin_referral_diagnostics')],
+                    [types.InlineKeyboardButton(text=' К диагностике', callback_data='admin_referral_diagnostics')],
                 ]
             )
         else:
@@ -1234,7 +1230,7 @@ async def check_missing_bonuses(callback: types.CallbackQuery, db_user: User, db
             keyboard = types.InlineKeyboardMarkup(
                 inline_keyboard=[
                     [types.InlineKeyboardButton(text=' Обновить', callback_data='admin_ref_check_bonuses')],
-                    [types.InlineKeyboardButton(text='⬅ К диагностике', callback_data='admin_referral_diagnostics')],
+                    [types.InlineKeyboardButton(text=' К диагностике', callback_data='admin_referral_diagnostics')],
                 ]
             )
 
@@ -1293,7 +1289,7 @@ async def apply_missing_bonuses(callback: types.CallbackQuery, db_user: User, db
         keyboard = types.InlineKeyboardMarkup(
             inline_keyboard=[
                 [types.InlineKeyboardButton(text=' Проверить снова', callback_data='admin_ref_check_bonuses')],
-                [types.InlineKeyboardButton(text='⬅ К диагностике', callback_data='admin_referral_diagnostics')],
+                [types.InlineKeyboardButton(text=' К диагностике', callback_data='admin_referral_diagnostics')],
             ]
         )
 
@@ -1329,7 +1325,7 @@ async def sync_referrals_with_contest(
                 ' <b>Нет активных конкурсов рефералов</b>\n\nСоздайте конкурс в разделе "Конкурсы" для синхронизации.',
                 reply_markup=types.InlineKeyboardMarkup(
                     inline_keyboard=[
-                        [types.InlineKeyboardButton(text='⬅ К диагностике', callback_data='admin_referral_diagnostics')]
+                        [types.InlineKeyboardButton(text=' К диагностике', callback_data='admin_referral_diagnostics')]
                     ]
                 ),
             )
@@ -1367,7 +1363,7 @@ async def sync_referrals_with_contest(
         keyboard = types.InlineKeyboardMarkup(
             inline_keyboard=[
                 [types.InlineKeyboardButton(text=' Синхронизировать снова', callback_data='admin_ref_sync_contest')],
-                [types.InlineKeyboardButton(text='⬅ К диагностике', callback_data='admin_referral_diagnostics')],
+                [types.InlineKeyboardButton(text=' К диагностике', callback_data='admin_referral_diagnostics')],
             ]
         )
 
@@ -1547,8 +1543,8 @@ async def receive_log_file(message: types.Message, db_user: User, db: AsyncSessi
 
         keyboard_rows.extend(
             [
-                [types.InlineKeyboardButton(text='⬅ К диагностике', callback_data='admin_referral_diagnostics')],
-                [types.InlineKeyboardButton(text='⬅ К статистике', callback_data='admin_referrals')],
+                [types.InlineKeyboardButton(text=' К диагностике', callback_data='admin_referral_diagnostics')],
+                [types.InlineKeyboardButton(text=' К статистике', callback_data='admin_referrals')],
             ]
         )
 
@@ -1575,11 +1571,7 @@ async def receive_log_file(message: types.Message, db_user: User, db: AsyncSessi
                 reply_markup=types.InlineKeyboardMarkup(
                     inline_keyboard=[
                         [types.InlineKeyboardButton(text=' Попробовать снова', callback_data='admin_ref_diag_upload')],
-                        [
-                            types.InlineKeyboardButton(
-                                text='⬅ К диагностике', callback_data='admin_referral_diagnostics'
-                            )
-                        ],
+                        [types.InlineKeyboardButton(text=' К диагностике', callback_data='admin_referral_diagnostics')],
                     ]
                 ),
             )
@@ -1588,7 +1580,7 @@ async def receive_log_file(message: types.Message, db_user: User, db: AsyncSessi
                 f' Ошибка при анализе файла: {html.escape(str(e))}',
                 reply_markup=types.InlineKeyboardMarkup(
                     inline_keyboard=[
-                        [types.InlineKeyboardButton(text='⬅ Назад', callback_data='admin_referral_diagnostics')]
+                        [types.InlineKeyboardButton(text=' Назад', callback_data='admin_referral_diagnostics')]
                     ]
                 ),
             )

@@ -22,7 +22,7 @@ def get_available_payment_methods() -> list[dict[str, str]]:
             {
                 'id': 'stars',
                 'name': 'Telegram Stars',
-                'icon': '⭐',
+                'icon': "<tg-emoji emoji-id='5958376256788502078'>⭐️</tg-emoji>",
                 'description': 'быстро и удобно',
                 'callback': 'topup_stars',
             }
@@ -94,7 +94,7 @@ def get_available_payment_methods() -> list[dict[str, str]]:
             {
                 'id': 'cryptobot',
                 'name': 'Криптовалюта',
-                'icon': '🪙',
+                'icon': "<tg-emoji emoji-id='5771755323572359189'>💎</tg-emoji>",
                 'description': 'через CryptoBot',
                 'callback': 'topup_cryptobot',
             }

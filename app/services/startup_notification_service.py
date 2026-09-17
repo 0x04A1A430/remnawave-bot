@@ -12,7 +12,7 @@ from typing import Final
 import structlog
 from aiogram import Bot
 from aiogram.enums import ParseMode
-from aiogram.types import BufferedInputFile, InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import BufferedInputFile
 from sqlalchemy import func, select
 
 from app.config import settings
@@ -39,12 +39,6 @@ REPORT_SEPARATOR_WIDTH: Final[int] = 50
 # Лимиты сообщений
 CRASH_ERROR_MESSAGE_MAX_LENGTH: Final[int] = 1000
 CRASH_ERROR_PREVIEW_LENGTH: Final[int] = 200
-
-# URL-ы
-GITHUB_BOT_URL: Final[str] = 'https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot'
-GITHUB_CABINET_URL: Final[str] = 'https://github.com/BEDOLAGA-DEV/bedolaga-cabinet'
-COMMUNITY_URL: Final[str] = 'https://t.me/+wTdMtSWq8YdmZmVi'
-DEVELOPER_CONTACT_URL: Final[str] = 'https://t.me/fringg'
 
 # Ключевые слова для определения типа ошибки
 PERMISSION_ERROR_KEYWORDS: Final[tuple[str, ...]] = ('permission denied', 'errno 13')
@@ -219,9 +213,6 @@ class StartupNotificationService:
             trial_subscriptions_count = await self._get_trial_subscriptions_count()
             remnawave_connected, remnawave_status = await self._check_remnawave_connection()
 
-            # Иконка статуса Remnawave
-            remnawave_icon = '🟢' if remnawave_connected else '🔴'
-
             # Формируем системную информацию для blockquote
             system_info_lines = [
                 f'Версия: {version}',
@@ -230,40 +221,17 @@ class StartupNotificationService:
                 f'Платных подписок: {paid_subscriptions_count:,}'.replace(',', ' '),
                 f'Триальных подписок: {trial_subscriptions_count:,}'.replace(',', ' '),
                 f'Открытых тикетов: {open_tickets_count:,}'.replace(',', ' '),
-                f'{remnawave_icon} Remnawave: {remnawave_status}',
+                f'Remnawave: {remnawave_status}',
             ]
             system_info = '\n'.join(system_info_lines)
 
             timestamp = format_local_datetime(datetime.now(UTC), DATETIME_FORMAT)
 
             message = (
-                f'<b>Remnawave Bedolaga Bot</b>\n\n'
-                f'✅ Бот успешно запущен\n\n'
+                f'<b>Remnawave Bot</b>\n\n'
+                f'Бот успешно запущен\n\n'
                 f'<blockquote expandable>{system_info}</blockquote>\n\n'
                 f'<i>{timestamp}</i>'
-            )
-
-            keyboard = InlineKeyboardMarkup(
-                inline_keyboard=[
-                    [
-                        InlineKeyboardButton(
-                            text='Поставить звезду',
-                            url=GITHUB_BOT_URL,
-                        ),
-                    ],
-                    [
-                        InlineKeyboardButton(
-                            text='Вебкабинет',
-                            url=GITHUB_CABINET_URL,
-                        ),
-                    ],
-                    [
-                        InlineKeyboardButton(
-                            text='Сообщество',
-                            url=COMMUNITY_URL,
-                        ),
-                    ],
-                ]
             )
 
             # Rich-вид (Bot API 10.1): логотип, заголовок, таблица показателей,
@@ -279,7 +247,7 @@ class StartupNotificationService:
                     ('Платных подписок', f'{paid_subscriptions_count:,}'.replace(',', ' ')),
                     ('Триальных подписок', f'{trial_subscriptions_count:,}'.replace(',', ' ')),
                     ('Открытых тикетов', f'{open_tickets_count:,}'.replace(',', ' ')),
-                    ('Remnawave', f'{remnawave_icon} {html.escape(remnawave_status)}'),
+                    ('Remnawave', html.escape(remnawave_status)),
                 ]
                 rich_blocks = []
                 logo_url = _resolve_rich_logo_url()
@@ -287,15 +255,15 @@ class StartupNotificationService:
                     rich_blocks.append(f'<img src="{html.escape(logo_url, quote=True)}"/>')
                 rich_blocks.extend(
                     [
-                        '<h5>🤖 Remnawave Bedolaga Bot</h5>',
-                        '<p>✅ Бот успешно запущен</p>',
+                        '<h5>Remnawave Bot</h5>',
+                        '<p>Бот успешно запущен</p>',
                         rich_kv_table(stats_rows),
                         '<hr/>',
                         rich_footer_now(),
                     ]
                 )
                 if await try_send_rich_admin_message(
-                    self.bot, self.chat_id, ''.join(rich_blocks), thread_id=self.topic_id, reply_markup=keyboard
+                    self.bot, self.chat_id, ''.join(rich_blocks), thread_id=self.topic_id
                 ):
                     logger.info('Rich-стартовое уведомление отправлено в чат', chat_id=self.chat_id)
                     return True
@@ -306,7 +274,6 @@ class StartupNotificationService:
                 'chat_id': self.chat_id,
                 'text': message,
                 'parse_mode': ParseMode.HTML,
-                'reply_markup': keyboard,
                 'disable_web_page_preview': True,
             }
 
@@ -404,7 +371,7 @@ def _get_error_recommendations(error_message: str) -> str | None:
             '• Обычно лечится на хосте: <code>chown -R 1000:1000 logs data locales</code>',
             '• После исправления: docker compose restart bot',
         ]
-        return '<blockquote expandable>💡 <b>Рекомендации:</b>\n' + '\n'.join(tips) + '</blockquote>'
+        return '<blockquote expandable><b>Рекомендации:</b>\n' + '\n'.join(tips) + '</blockquote>'
 
     # Ошибки вебхука
     if any(keyword in error_lower for keyword in WEBHOOK_ERROR_KEYWORDS):
@@ -416,7 +383,7 @@ def _get_error_recommendations(error_message: str) -> str | None:
             '• Проверьте сеть Docker (docker network)',
             '• Попробуйте: docker compose restart',
         ]
-        return '<blockquote expandable>💡 <b>Рекомендации:</b>\n' + '\n'.join(tips) + '</blockquote>'
+        return '<blockquote expandable><b>Рекомендации:</b>\n' + '\n'.join(tips) + '</blockquote>'
 
     # Ошибки подключения к БД
     if any(keyword in error_lower for keyword in DATABASE_ERROR_KEYWORDS):
@@ -426,7 +393,7 @@ def _get_error_recommendations(error_message: str) -> str | None:
             '• Проверьте сеть Docker между контейнерами',
             '• Попробуйте: docker compose restart db',
         ]
-        return '<blockquote expandable>💡 <b>Рекомендации:</b>\n' + '\n'.join(tips) + '</blockquote>'
+        return '<blockquote expandable><b>Рекомендации:</b>\n' + '\n'.join(tips) + '</blockquote>'
 
     # Ошибки Redis
     if REDIS_ERROR_KEYWORD in error_lower:
@@ -435,7 +402,7 @@ def _get_error_recommendations(error_message: str) -> str | None:
             '• Проверьте REDIS_URL в .env',
             '• Попробуйте: docker compose restart redis',
         ]
-        return '<blockquote expandable>💡 <b>Рекомендации:</b>\n' + '\n'.join(tips) + '</blockquote>'
+        return '<blockquote expandable><b>Рекомендации:</b>\n' + '\n'.join(tips) + '</blockquote>'
 
     # Ошибки Remnawave API
     if any(keyword in error_lower for keyword in REMNAWAVE_ERROR_KEYWORDS):
@@ -444,7 +411,7 @@ def _get_error_recommendations(error_message: str) -> str | None:
             '• Проверьте REMNAWAVE_API_KEY',
             '• Убедитесь что панель Remnawave доступна',
         ]
-        return '<blockquote expandable>💡 <b>Рекомендации:</b>\n' + '\n'.join(tips) + '</blockquote>'
+        return '<blockquote expandable><b>Рекомендации:</b>\n' + '\n'.join(tips) + '</blockquote>'
 
     # Ошибки токена бота
     if any(keyword in error_lower for keyword in AUTH_ERROR_KEYWORDS):
@@ -452,7 +419,7 @@ def _get_error_recommendations(error_message: str) -> str | None:
             '• Проверьте BOT_TOKEN в .env',
             '• Убедитесь что токен актуален (@BotFather)',
         ]
-        return '<blockquote expandable>💡 <b>Рекомендации:</b>\n' + '\n'.join(tips) + '</blockquote>'
+        return '<blockquote expandable><b>Рекомендации:</b>\n' + '\n'.join(tips) + '</blockquote>'
 
     # Ошибки inline-кнопок с URL (WebApp, кастомные протоколы)
     if any(keyword in error_lower for keyword in INLINE_BUTTON_URL_ERROR_KEYWORDS):
@@ -462,7 +429,7 @@ def _get_error_recommendations(error_message: str) -> str | None:
             '• Telegram не поддерживает кастомные схемы (happ://, v2ray://, ss://, и т.д.) в inline-кнопках',
             '• Используйте HTTPS редирект для диплинков',
         ]
-        return '<blockquote expandable>💡 <b>Рекомендации:</b>\n' + '\n'.join(tips) + '</blockquote>'
+        return '<blockquote expandable><b>Рекомендации:</b>\n' + '\n'.join(tips) + '</blockquote>'
 
     return None
 
@@ -518,8 +485,8 @@ async def send_crash_notification(bot: Bot, error: Exception, traceback_str: str
 
         # Текст сообщения (escape HTML в error_type/message — они могут содержать <class ...>)
         message_text = (
-            f'<b>Remnawave Bedolaga Bot</b>\n\n'
-            f'❌ Бот упал с ошибкой\n\n'
+            f'<b>Remnawave Bot</b>\n\n'
+            f'Бот упал с ошибкой\n\n'
             f'<b>Тип:</b> <code>{html.escape(error_type)}</code>\n'
             f'<b>Сообщение:</b> <code>{html.escape(error_message[:CRASH_ERROR_PREVIEW_LENGTH])}</code>\n'
         )
@@ -531,24 +498,11 @@ async def send_crash_notification(bot: Bot, error: Exception, traceback_str: str
 
         message_text += f'\n<i>{timestamp}</i>'
 
-        # Кнопка для связи с разработчиком
-        keyboard = InlineKeyboardMarkup(
-            inline_keyboard=[
-                [
-                    InlineKeyboardButton(
-                        text='💬 Сообщить разработчику',
-                        url=DEVELOPER_CONTACT_URL,
-                    ),
-                ],
-            ]
-        )
-
         message_kwargs: dict = {
             'chat_id': chat_id,
             'document': file,
             'caption': message_text,
             'parse_mode': ParseMode.HTML,
-            'reply_markup': keyboard,
         }
 
         if topic_id:

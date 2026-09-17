@@ -77,7 +77,7 @@ def _format_period_prices_display(prices: dict[str, int], highlight: int | None 
     for period_str in sorted(prices.keys(), key=int):
         period = int(period_str)
         price = prices[period_str]
-        mark = ' ⭐' if highlight is not None and int(highlight) == period else ''
+        mark = ' ' if highlight is not None and int(highlight) == period else ''
         lines.append(f'  • {format_period(period)}: {format_price_kopeks(price)}{mark}')
 
     return '\n'.join(lines)
@@ -163,7 +163,7 @@ def get_tariff_view_keyboard(
             buttons.append(
                 [
                     InlineKeyboardButton(
-                        text='⭐ Выгодный период', callback_data=f'admin_tariff_edit_highlight:{tariff.id}'
+                        text=' Выгодный период', callback_data=f'admin_tariff_edit_highlight:{tariff.id}'
                     ),
                 ]
             )
@@ -244,7 +244,7 @@ def get_tariff_view_keyboard(
         )
 
     # Переключение активности
-    highlight_label = '⭐  Снять выделение тарифа' if getattr(tariff, 'is_highlighted', False) else '⭐ Выделить тариф'
+    highlight_label = '  Снять выделение тарифа' if getattr(tariff, 'is_highlighted', False) else ' Выделить тариф'
     buttons.append(
         [InlineKeyboardButton(text=highlight_label, callback_data=f'admin_tariff_toggle_highlight:{tariff.id}')]
     )
@@ -300,7 +300,7 @@ def format_tariff_info(tariff: Tariff, language: str, subs_count: int = 0) -> st
 
     status = ' Активен' if tariff.is_active else ' Неактивен'
     if getattr(tariff, 'is_highlighted', False):
-        status += ' · ⭐ выделен'
+        status += ' ·  выделен'
     traffic = format_traffic(tariff.traffic_limit_gb)
     prices_display = _format_period_prices_display(tariff.period_prices or {}, tariff.highlight_period_days)
 
@@ -1502,7 +1502,7 @@ def _highlight_keyboard(tariff: Tariff, language: str) -> InlineKeyboardMarkup:
 
     for period_str in sorted(prices.keys(), key=int):
         period = int(period_str)
-        mark = '⭐ ' if current is not None and int(current) == period else ''
+        mark = ' ' if current is not None and int(current) == period else ''
         buttons.append(
             [
                 InlineKeyboardButton(
@@ -1540,7 +1540,7 @@ async def start_edit_tariff_highlight(
     current_display = format_period(int(current)) if current is not None else 'не выбран'
 
     await callback.message.edit_text(
-        '⭐ <b>Выгодный период</b>\n\n'
+        ' <b>Выгодный период</b>\n\n'
         f'Сейчас выделен: <b>{current_display}</b>\n\n'
         'Выделенный период показывается клиенту с отметкой при покупке, '
         'продлении и смене тарифа. Выделить можно только один период.',
@@ -2456,7 +2456,7 @@ async def start_edit_tariff_squads(
     buttons = []
     for squad in squads:
         is_selected = squad.squad_uuid in current_squads
-        prefix = '' if is_selected else '⬜'
+        prefix = '' if is_selected else ''
         buttons.append(
             [
                 InlineKeyboardButton(
@@ -2522,7 +2522,7 @@ async def toggle_tariff_squad(
     buttons = []
     for squad in squads:
         is_selected = squad.squad_uuid in current_squads
-        prefix = '' if is_selected else '⬜'
+        prefix = '' if is_selected else ''
         buttons.append(
             [
                 InlineKeyboardButton(
@@ -2593,7 +2593,7 @@ async def clear_tariff_squads(
         buttons.append(
             [
                 InlineKeyboardButton(
-                    text=f'⬜ {squad.display_name}',
+                    text=f' {squad.display_name}',
                     callback_data=f'trf_sq:{tariff_id}:{squad.squad_uuid}',
                 )
             ]
@@ -2727,7 +2727,7 @@ async def start_edit_tariff_promo_groups(
     buttons = []
     for promo_group, _ in promo_groups_data:
         is_selected = promo_group.id in current_groups
-        prefix = '' if is_selected else '⬜'
+        prefix = '' if is_selected else ''
         buttons.append(
             [
                 InlineKeyboardButton(
@@ -2798,7 +2798,7 @@ async def toggle_tariff_promo_group(
     buttons = []
     for promo_group, _ in promo_groups_data:
         is_selected = promo_group.id in current_groups
-        prefix = '' if is_selected else '⬜'
+        prefix = '' if is_selected else ''
         buttons.append(
             [
                 InlineKeyboardButton(
@@ -2861,7 +2861,7 @@ async def clear_tariff_promo_groups(
         buttons.append(
             [
                 InlineKeyboardButton(
-                    text=f'⬜ {promo_group.name}',
+                    text=f' {promo_group.name}',
                     callback_data=f'admin_tariff_toggle_promo:{tariff_id}:{promo_group.id}',
                 )
             ]

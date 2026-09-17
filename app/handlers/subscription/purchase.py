@@ -1148,7 +1148,7 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
                     inline_keyboard=[
                         [
                             InlineKeyboardButton(
-                                text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'),
+                                text=texts.t('CONNECT_BUTTON', "<tg-emoji emoji-id='5879585266426973039'>🌐</tg-emoji> Подключиться"),
                                 web_app=types.WebAppInfo(url=subscription_link),
                             )
                         ],
@@ -1176,7 +1176,7 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
                     inline_keyboard=[
                         [
                             InlineKeyboardButton(
-                                text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'),
+                                text=texts.t('CONNECT_BUTTON', "<tg-emoji emoji-id='5879585266426973039'>🌐</tg-emoji> Подключиться"),
                                 web_app=types.WebAppInfo(url=settings.MINIAPP_CUSTOM_URL),
                             )
                         ],
@@ -1193,7 +1193,7 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
                 rows = [
                     [
                         InlineKeyboardButton(
-                            text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'),
+                            text=texts.t('CONNECT_BUTTON', "<tg-emoji emoji-id='5879585266426973039'>🌐</tg-emoji> Подключиться"),
                             url=subscription_link,
                         )
                     ]
@@ -1215,7 +1215,7 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
                 rows = [
                     [
                         InlineKeyboardButton(
-                            text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'),
+                            text=texts.t('CONNECT_BUTTON', "<tg-emoji emoji-id='5879585266426973039'>🌐</tg-emoji> Подключиться"),
                             callback_data='open_subscription_link',
                         )
                     ]
@@ -1238,7 +1238,7 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
                     inline_keyboard=[
                         [
                             InlineKeyboardButton(
-                                text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'),
+                                text=texts.t('CONNECT_BUTTON', "<tg-emoji emoji-id='5879585266426973039'>🌐</tg-emoji> Подключиться"),
                                 callback_data='subscription_connect',
                             )
                         ],
@@ -2733,7 +2733,7 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
                     inline_keyboard=[
                         [
                             InlineKeyboardButton(
-                                text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'),
+                                text=texts.t('CONNECT_BUTTON', "<tg-emoji emoji-id='5879585266426973039'>🌐</tg-emoji> Подключиться"),
                                 web_app=types.WebAppInfo(url=subscription_link),
                             )
                         ],
@@ -2761,7 +2761,7 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
                     inline_keyboard=[
                         [
                             InlineKeyboardButton(
-                                text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'),
+                                text=texts.t('CONNECT_BUTTON', "<tg-emoji emoji-id='5879585266426973039'>🌐</tg-emoji> Подключиться"),
                                 web_app=types.WebAppInfo(url=settings.MINIAPP_CUSTOM_URL),
                             )
                         ],
@@ -2776,7 +2776,7 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
                 )
             elif connect_mode == 'link':
                 rows = [
-                    [InlineKeyboardButton(text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'), url=subscription_link)]
+                    [InlineKeyboardButton(text=texts.t('CONNECT_BUTTON', "<tg-emoji emoji-id='5879585266426973039'>🌐</tg-emoji> Подключиться"), url=subscription_link)]
                 ]
                 happ_row = get_happ_download_button_row(texts)
                 if happ_row:
@@ -2795,7 +2795,7 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
                 rows = [
                     [
                         InlineKeyboardButton(
-                            text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'),
+                            text=texts.t('CONNECT_BUTTON', "<tg-emoji emoji-id='5879585266426973039'>🌐</tg-emoji> Подключиться"),
                             callback_data='open_subscription_link',
                         )
                     ]
@@ -2818,7 +2818,7 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
                     inline_keyboard=[
                         [
                             InlineKeyboardButton(
-                                text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'), callback_data='subscription_connect'
+                                text=texts.t('CONNECT_BUTTON', "<tg-emoji emoji-id='5879585266426973039'>🌐</tg-emoji> Подключиться"), callback_data='subscription_connect'
                             )
                         ],
                         [
@@ -3570,7 +3570,7 @@ def _build_trial_success_keyboard(texts, subscription_link: str, connect_mode: s
             inline_keyboard=[
                 [
                     InlineKeyboardButton(
-                        text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'),
+                        text=texts.t('CONNECT_BUTTON', "<tg-emoji emoji-id='5879585266426973039'>🌐</tg-emoji> Подключиться"),
                         web_app=types.WebAppInfo(url=subscription_link),
                     )
                 ],
@@ -3591,7 +3591,7 @@ def _build_trial_success_keyboard(texts, subscription_link: str, connect_mode: s
             inline_keyboard=[
                 [
                     InlineKeyboardButton(
-                        text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'),
+                        text=texts.t('CONNECT_BUTTON', "<tg-emoji emoji-id='5879585266426973039'>🌐</tg-emoji> Подключиться"),
                         web_app=types.WebAppInfo(url=settings.MINIAPP_CUSTOM_URL),
                     )
                 ],
@@ -3608,7 +3608,7 @@ def _build_trial_success_keyboard(texts, subscription_link: str, connect_mode: s
         rows = [
             [
                 InlineKeyboardButton(
-                    text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'),
+                    text=texts.t('CONNECT_BUTTON', "<tg-emoji emoji-id='5879585266426973039'>🌐</tg-emoji> Подключиться"),
                     url=subscription_link,
                 )
             ]
@@ -3630,7 +3630,7 @@ def _build_trial_success_keyboard(texts, subscription_link: str, connect_mode: s
         rows = [
             [
                 InlineKeyboardButton(
-                    text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'),
+                    text=texts.t('CONNECT_BUTTON', "<tg-emoji emoji-id='5879585266426973039'>🌐</tg-emoji> Подключиться"),
                     callback_data='open_subscription_link',
                 )
             ]
@@ -3652,7 +3652,7 @@ def _build_trial_success_keyboard(texts, subscription_link: str, connect_mode: s
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'),
+                    text=texts.t('CONNECT_BUTTON', "<tg-emoji emoji-id='5879585266426973039'>🌐</tg-emoji> Подключиться"),
                     callback_data='subscription_connect',
                 )
             ],

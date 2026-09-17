@@ -397,7 +397,7 @@ async def process_privacy_policy_edit(
                 types.InlineKeyboardButton(
                     text=texts.t(
                         'ADMIN_PRIVACY_POLICY_BACK_BUTTON',
-                        '⬅ К настройкам политики',
+                        ' К настройкам политики',
                     ),
                     callback_data='admin_privacy_policy',
                 )
@@ -458,7 +458,7 @@ async def view_privacy_policy(
                 types.InlineKeyboardButton(
                     text=texts.t(
                         'ADMIN_PRIVACY_POLICY_BACK_BUTTON',
-                        '⬅ К настройкам политики',
+                        ' К настройкам политики',
                     ),
                     callback_data='admin_privacy_policy',
                 )
@@ -503,7 +503,7 @@ async def show_privacy_policy_html_help(
                 types.InlineKeyboardButton(
                     text=texts.t(
                         'ADMIN_PRIVACY_POLICY_RETURN_TO_EDIT',
-                        '⬅ Назад к редактированию',
+                        ' Назад к редактированию',
                     ),
                     callback_data='admin_privacy_policy_edit',
                 )
@@ -515,7 +515,7 @@ async def show_privacy_policy_html_help(
             types.InlineKeyboardButton(
                 text=texts.t(
                     'ADMIN_PRIVACY_POLICY_BACK_BUTTON',
-                    '⬅ К настройкам политики',
+                    ' К настройкам политики',
                 ),
                 callback_data='admin_privacy_policy',
             )

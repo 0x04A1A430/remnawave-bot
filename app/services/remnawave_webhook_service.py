@@ -49,6 +49,15 @@ from app.utils.miniapp_buttons import build_miniapp_or_callback_button, build_su
 logger = structlog.get_logger(__name__)
 
 
+_PLATFORM_EMOJI: dict[str, str] = {
+    'Windows': "<tg-emoji emoji-id='5818956713507689486'>🪟</tg-emoji>",
+    'macOS': "<tg-emoji emoji-id='5818956713507689486'>🪟</tg-emoji>",
+    'Linux': "<tg-emoji emoji-id='5818956713507689486'>🪟</tg-emoji>",
+    'iOS': "<tg-emoji emoji-id='5818920837645867167'>🍏</tg-emoji>",
+    'Android': "<tg-emoji emoji-id='5819078828017849357'>🤖</tg-emoji>",
+}
+
+
 # Mapping from locale text_key to NotificationType for unified delivery
 _TEXT_KEY_TO_NOTIFICATION_TYPE: dict[str, NotificationType] = {
     'WEBHOOK_SUB_EXPIRED': NotificationType.WEBHOOK_SUB_EXPIRED,
@@ -1813,6 +1822,38 @@ class RemnaWaveWebhookService:
     # ------------------------------------------------------------------
 
     @staticmethod
+    def _extract_device_info(data: dict) -> tuple[str, str]:
+        """Extract device info from webhook payload.
+
+        Returns (platform_display, tag) where platform_display includes a
+        premium platform emoji (same as the old bot).
+        """
+        device_obj = data.get('hwidUserDevice')
+        if not isinstance(device_obj, dict):
+            raw = data.get('deviceName') or data.get('tag') or data.get('hwid') or ''
+            return '', html.escape(str(raw)) if raw else ''
+
+        platform = (device_obj.get('platform') or '').strip()
+        tag = (
+            device_obj.get('deviceModel')
+            or device_obj.get('tag')
+            or device_obj.get('deviceName')
+            or device_obj.get('name')
+            or ''
+        ).strip()
+        hwid = (device_obj.get('hwid') or device_obj.get('deviceId') or device_obj.get('id') or '').strip()
+
+        emoji = _PLATFORM_EMOJI.get(platform, '')
+        platform_display = f'{emoji} {html.escape(platform)}' if emoji else html.escape(platform)
+
+        if not tag and hwid:
+            tag = html.escape(hwid[:8] if len(hwid) > 8 else hwid)
+        elif tag:
+            tag = html.escape(tag)
+
+        return platform_display, tag
+
+    @staticmethod
     def _extract_device_name(data: dict) -> str:
         """Extract device name from webhook payload.
 
@@ -1857,13 +1898,14 @@ class RemnaWaveWebhookService:
     async def _handle_device_added(
         self, db: AsyncSession, user: User, subscription: Subscription | None, data: dict
     ) -> None:
-        device_name = self._extract_device_name(data)
+        platform_display, tag = self._extract_device_info(data)
+        device_name = f'{platform_display} ({tag})' if platform_display and tag else platform_display or tag
         logger.info('Webhook: device added for user', user_id=user.id, device_name=device_name or '(empty)')
         await self._notify_user(
             user,
             'WEBHOOK_DEVICE_ADDED',
             reply_markup=self._get_subscription_keyboard(user),
-            format_kwargs={'device': device_name or '—'},
+            format_kwargs={'device': tag or '—', 'platform': platform_display or '—'},
             subscription=subscription,
         )
 

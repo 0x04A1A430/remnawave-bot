@@ -7,11 +7,10 @@ from typing import Any
 
 import structlog
 from aiogram.exceptions import TelegramBadRequest
-from aiogram.types import CallbackQuery, FSInputFile, InaccessibleMessage, InputMediaPhoto, Message
+from aiogram.types import FSInputFile, InaccessibleMessage, InputMediaPhoto, Message
 
 from app.config import settings
 from app.localization.texts import get_texts
-from app.utils.admin_context import admin_output_enabled
 
 
 logger = structlog.get_logger(__name__)
@@ -131,37 +130,6 @@ TELEGRAM_CAPTION_LIMIT = 1024
 # [^<>] держит вырезание тегов линейным: [^>] на строке из одних '<'
 # перебирает хвост заново с каждой позиции.
 _HTML_TAG_RE = re.compile(r'<[^<>]+>')
-_ADMIN_TG_EMOJI_RE = re.compile(r"<tg-emoji\s+emoji-id=['\"]\d+['\"]>[^<]*</tg-emoji>")
-_ADMIN_UNICODE_EMOJI_RE = re.compile(r'[\U0001F000-\U0001FAFF\u2600-\u27BF\u2300-\u23FF\uFE0F\u200D]+')
-
-
-def _strip_admin_emoji(value: str | None) -> str | None:
-    """Remove visual emoji from content displayed in the admin chat."""
-    if value is None:
-        return None
-    value = _ADMIN_TG_EMOJI_RE.sub('', value)
-    return _ADMIN_UNICODE_EMOJI_RE.sub('', value).strip()
-
-
-def _is_admin_message(message: Message) -> bool:
-    try:
-        return admin_output_enabled.get() or bool(message.from_user and settings.is_admin(message.from_user.id))
-    except AttributeError:
-        return False
-
-
-def _sanitize_admin_kwargs(message: Message, kwargs: dict[str, Any]) -> dict[str, Any]:
-    if not _is_admin_message(message):
-        return kwargs
-
-    kwargs = dict(kwargs)
-    if 'reply_markup' in kwargs and kwargs['reply_markup'] is not None:
-        markup = kwargs['reply_markup']
-        for row in getattr(markup, 'inline_keyboard', []):
-            for button in row:
-                button.text = _strip_admin_emoji(button.text) or '•'
-                button.icon_custom_emoji_id = None
-    return kwargs
 
 
 def caption_exceeds_telegram_limit(text: str | None) -> bool:
@@ -223,30 +191,17 @@ def is_qr_message(message: Message) -> bool:
 
 _original_answer = Message.answer
 _original_edit_text = Message.edit_text
-_original_callback_answer = CallbackQuery.answer
-
-
-async def _callback_answer_without_admin_emoji(self: CallbackQuery, text: str = None, **kwargs):
-    if admin_output_enabled.get():
-        text = _strip_admin_emoji(text)
-    return await _original_callback_answer(self, text, **kwargs)
 
 
 async def _text_answer(self: Message, text: str = None, **kwargs):
     """Обёртка над оригинальным Message.answer с подавлением web page preview."""
     kwargs.setdefault('disable_web_page_preview', True)
-    if _is_admin_message(self):
-        text = _strip_admin_emoji(text)
-        kwargs = _sanitize_admin_kwargs(self, kwargs)
     return await _original_answer(self, text, **kwargs)
 
 
 async def _text_edit(self: Message, text: str, **kwargs):
     """Обёртка над оригинальным Message.edit_text с подавлением web page preview."""
     kwargs.setdefault('disable_web_page_preview', True)
-    if _is_admin_message(self):
-        text = _strip_admin_emoji(text) or ''
-        kwargs = _sanitize_admin_kwargs(self, kwargs)
     return await _original_edit_text(self, text, **kwargs)
 
 
@@ -374,9 +329,6 @@ async def _answer_with_photo(self: Message, text: str = None, **kwargs):
 
 
 async def _edit_with_photo(self: Message, text: str, **kwargs):
-    if _is_admin_message(self):
-        text = _strip_admin_emoji(text) or ''
-        kwargs = _sanitize_admin_kwargs(self, kwargs)
     # Уважаем флаг в рантайме: если логотип выключен — не подменяем редактирование
     if not settings.ENABLE_LOGO_MODE:
         kwargs.setdefault('disable_web_page_preview', True)
@@ -486,4 +438,3 @@ async def _edit_with_photo(self: Message, text: str, **kwargs):
 def patch_message_methods():
     Message.answer = _answer_with_photo
     Message.edit_text = _edit_with_photo
-    CallbackQuery.answer = _callback_answer_without_admin_emoji

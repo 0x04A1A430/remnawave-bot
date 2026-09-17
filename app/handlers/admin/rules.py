@@ -48,7 +48,7 @@ async def show_rules_management(callback: types.CallbackQuery, db_user: User, db
             )
         ],
         [types.InlineKeyboardButton(text='ℹ Помощь по HTML', callback_data='admin_rules_help')],
-        [types.InlineKeyboardButton(text='⬅ Назад', callback_data='admin_submenu_settings')],
+        [types.InlineKeyboardButton(text=' Назад', callback_data='admin_submenu_settings')],
     ]
 
     await callback.message.edit_text(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
@@ -82,7 +82,7 @@ async def view_current_rules(callback: types.CallbackQuery, db_user: User, db: A
                 inline_keyboard=[
                     [types.InlineKeyboardButton(text=' Редактировать', callback_data='admin_edit_rules')],
                     [types.InlineKeyboardButton(text=' Очистить', callback_data='admin_clear_rules')],
-                    [types.InlineKeyboardButton(text='⬅ Назад', callback_data='admin_rules')],
+                    [types.InlineKeyboardButton(text=' Назад', callback_data='admin_rules')],
                 ]
             ),
         )
@@ -94,7 +94,7 @@ async def view_current_rules(callback: types.CallbackQuery, db_user: User, db: A
             reply_markup=types.InlineKeyboardMarkup(
                 inline_keyboard=[
                     [types.InlineKeyboardButton(text=' Очистить правила', callback_data='admin_clear_rules')],
-                    [types.InlineKeyboardButton(text='⬅ Назад', callback_data='admin_rules')],
+                    [types.InlineKeyboardButton(text=' Назад', callback_data='admin_rules')],
                 ]
             ),
         )
@@ -339,7 +339,7 @@ async def show_html_help(callback: types.CallbackQuery, db_user: User, db: Async
         reply_markup=types.InlineKeyboardMarkup(
             inline_keyboard=[
                 [types.InlineKeyboardButton(text=' Редактировать правила', callback_data='admin_edit_rules')],
-                [types.InlineKeyboardButton(text='⬅ Назад', callback_data='admin_rules')],
+                [types.InlineKeyboardButton(text=' Назад', callback_data='admin_rules')],
             ]
         ),
     )

@@ -1,20 +1,9 @@
-import re
 from typing import Any
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from app.localization.texts import get_texts
-from app.utils.button_emoji import make_button as _make_button
-
-
-def _admin_button(text: str, **kwargs: Any) -> InlineKeyboardButton:
-    """Build an admin button without unicode or premium emoji decoration."""
-    clean = re.sub(r"<tg-emoji\s+emoji-id=['\"]\d+['\"]>[^<]*</tg-emoji>", '', text)
-    clean = re.sub(r'[\U0001F000-\U0001FAFF--\uFE0F\u200D]+', '', clean).strip()
-    return _make_button(clean, **kwargs)
-
-
-make_button = _admin_button
+from app.utils.button_emoji import make_button
 
 
 def _t(texts, key: str, default: str) -> str:
@@ -32,7 +21,7 @@ def get_admin_main_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                     text=_t(
                         texts,
                         'ADMIN_MAIN_USERS_SUBSCRIPTIONS',
-                        ' Юзеры/Подписки',
+                        "<tg-emoji emoji-id='5771887475421090729'>👤</tg-emoji> Юзеры/Подписки",
                     ),
                     callback_data='admin_submenu_users',
                 ),
@@ -40,7 +29,7 @@ def get_admin_main_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                     text=_t(
                         texts,
                         'ADMIN_MAIN_SERVERS',
-                        ' Серверы',
+                        "<tg-emoji emoji-id='5967816500415827773'>💻</tg-emoji> Серверы",
                     ),
                     callback_data='admin_servers',
                 ),
@@ -50,7 +39,7 @@ def get_admin_main_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                     text=_t(
                         texts,
                         'ADMIN_MAIN_TARIFFS',
-                        ' Тарифы',
+                        "<tg-emoji emoji-id='5875033614705495771'>🎛</tg-emoji> Тарифы",
                     ),
                     callback_data='admin_tariffs',
                 ),
@@ -58,7 +47,7 @@ def get_admin_main_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                     text=_t(
                         texts,
                         'ADMIN_MAIN_PRICING',
-                        ' Цены',
+                        "<tg-emoji emoji-id='5875078273775439450'>🔼</tg-emoji> Цены",
                     ),
                     callback_data='admin_pricing',
                 ),
@@ -68,7 +57,7 @@ def get_admin_main_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                     text=_t(
                         texts,
                         'ADMIN_MAIN_PROMO_STATS',
-                        ' Промокоды/Статистика',
+                        "<tg-emoji emoji-id='5877485980901971030'>📊</tg-emoji> Промокоды/Статистика",
                     ),
                     callback_data='admin_submenu_promo',
                 ),
@@ -78,7 +67,7 @@ def get_admin_main_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                     text=_t(
                         texts,
                         'ADMIN_MAIN_SUPPORT',
-                        ' Поддержка',
+                        "<tg-emoji emoji-id='5967280668885913944'>✉️</tg-emoji> Поддержка",
                     ),
                     callback_data='admin_submenu_support',
                 ),
@@ -86,7 +75,7 @@ def get_admin_main_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                     text=_t(
                         texts,
                         'ADMIN_MAIN_MESSAGES',
-                        ' Сообщения',
+                        "<tg-emoji emoji-id='5909201569898827582'>🔔</tg-emoji> Сообщения",
                     ),
                     callback_data='admin_submenu_communications',
                 ),
@@ -96,7 +85,7 @@ def get_admin_main_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                     text=_t(
                         texts,
                         'ADMIN_MAIN_SETTINGS',
-                        ' Настройки',
+                        "<tg-emoji emoji-id='5877260593903177342'>⚙</tg-emoji> Настройки",
                     ),
                     callback_data='admin_submenu_settings',
                 ),
@@ -104,7 +93,7 @@ def get_admin_main_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                     text=_t(
                         texts,
                         'ADMIN_MAIN_SYSTEM',
-                        ' Система',
+                        "<tg-emoji emoji-id='5877410604225924969'>🔄</tg-emoji> Система",
                     ),
                     callback_data='admin_submenu_system',
                 ),
@@ -114,7 +103,7 @@ def get_admin_main_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                     text=_t(
                         texts,
                         'ADMIN_MAIN_TRIALS',
-                        ' Триалы',
+                        "<tg-emoji emoji-id='6032937473162614352'>🎁</tg-emoji> Триалы",
                     ),
                     callback_data='admin_trials',
                 ),
@@ -122,7 +111,7 @@ def get_admin_main_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                     text=_t(
                         texts,
                         'ADMIN_MAIN_PAYMENTS',
-                        ' Пополнения',
+                        "<tg-emoji emoji-id='5877219383691972108'>➕</tg-emoji> Пополнения",
                     ),
                     callback_data='admin_payments',
                 ),
@@ -172,7 +161,7 @@ def get_admin_promo_submenu_keyboard(language: str = 'ru') -> InlineKeyboardMark
                     text=_t(
                         texts,
                         'ADMIN_CONTESTS',
-                        ' Конкурсы',
+                        "<tg-emoji emoji-id='5879585266426973039'>🌐</tg-emoji> Конкурсы",
                     ),
                     callback_data='admin_contests',
                 )
@@ -196,7 +185,7 @@ def get_admin_communications_submenu_keyboard(
                     text=_t(
                         texts,
                         'ADMIN_COMMUNICATIONS_POLLS',
-                        ' Опросы',
+                        "<tg-emoji emoji-id='5875271289605722323'>🍔</tg-emoji> Опросы",
                     ),
                     callback_data='admin_polls',
                 )
@@ -206,7 +195,7 @@ def get_admin_communications_submenu_keyboard(
                     text=_t(
                         texts,
                         'ADMIN_COMMUNICATIONS_PROMO_OFFERS',
-                        ' Промо-предложения',
+                        "<tg-emoji emoji-id='6032937473162614352'>🎁</tg-emoji> Промо-предложения",
                     ),
                     callback_data='admin_promo_offers',
                 )
@@ -216,7 +205,7 @@ def get_admin_communications_submenu_keyboard(
                     text=_t(
                         texts,
                         'ADMIN_COMMUNICATIONS_WELCOME_TEXT',
-                        ' Приветственный текст',
+                        "<tg-emoji emoji-id='5967280668885913944'>✉️</tg-emoji> Приветственный текст",
                     ),
                     callback_data='welcome_text_panel',
                 ),
@@ -224,7 +213,7 @@ def get_admin_communications_submenu_keyboard(
                     text=_t(
                         texts,
                         'ADMIN_COMMUNICATIONS_MENU_MESSAGES',
-                        ' Сообщения в меню',
+                        "<tg-emoji emoji-id='5909201569898827582'>🔔</tg-emoji> Сообщения в меню",
                     ),
                     callback_data='user_messages_panel',
                 ),
@@ -244,7 +233,7 @@ def get_admin_support_submenu_keyboard(language: str = 'ru') -> InlineKeyboardMa
                     text=_t(
                         texts,
                         'ADMIN_SUPPORT_TICKETS',
-                        ' Тикеты поддержки',
+                        "<tg-emoji emoji-id='5936017305585586269'>🪪</tg-emoji> Тикеты поддержки",
                     ),
                     callback_data='admin_tickets',
                 )
@@ -254,7 +243,7 @@ def get_admin_support_submenu_keyboard(language: str = 'ru') -> InlineKeyboardMa
                     text=_t(
                         texts,
                         'ADMIN_SUPPORT_AUDIT',
-                        ' Аудит модераторов',
+                        "<tg-emoji emoji-id='5962916891918864588'>👁</tg-emoji> Аудит модераторов",
                     ),
                     callback_data='admin_support_audit',
                 )
@@ -264,7 +253,7 @@ def get_admin_support_submenu_keyboard(language: str = 'ru') -> InlineKeyboardMa
                     text=_t(
                         texts,
                         'ADMIN_SUPPORT_SETTINGS',
-                        ' Настройки поддержки',
+                        "<tg-emoji emoji-id='5875462364110787088'>🗂</tg-emoji> Настройки поддержки",
                     ),
                     callback_data='admin_support_settings',
                 )
@@ -288,7 +277,7 @@ def get_admin_settings_submenu_keyboard(language: str = 'ru') -> InlineKeyboardM
                     text=_t(
                         texts,
                         'ADMIN_SETTINGS_BOT_CONFIG',
-                        ' Конфигурация бота',
+                        "<tg-emoji emoji-id='5877260593903177342'>⚙</tg-emoji> Конфигурация бота",
                     ),
                     callback_data='admin_bot_config',
                 ),
@@ -297,7 +286,7 @@ def get_admin_settings_submenu_keyboard(language: str = 'ru') -> InlineKeyboardM
                 make_button(
                     text=texts.t(
                         'ADMIN_MONITORING_SETTINGS',
-                        ' Настройки мониторинга',
+                        "<tg-emoji emoji-id='5874986954180791957'>📶</tg-emoji> Настройки мониторинга",
                     ),
                     callback_data='admin_mon_settings',
                 )
@@ -308,7 +297,7 @@ def get_admin_settings_submenu_keyboard(language: str = 'ru') -> InlineKeyboardM
                     text=_t(
                         texts,
                         'ADMIN_SETTINGS_MAINTENANCE',
-                        ' Техработы',
+                        "<tg-emoji emoji-id='5881702736843511327'>⚠️</tg-emoji> Техработы",
                     ),
                     callback_data='maintenance_panel',
                 ),
@@ -318,7 +307,7 @@ def get_admin_settings_submenu_keyboard(language: str = 'ru') -> InlineKeyboardM
                     text=_t(
                         texts,
                         'ADMIN_SETTINGS_PRIVACY_POLICY',
-                        ' Политика конф.',
+                        "<tg-emoji emoji-id='5877301185639091664'>📄</tg-emoji> Политика конф.",
                     ),
                     callback_data='admin_privacy_policy',
                 )
@@ -328,7 +317,7 @@ def get_admin_settings_submenu_keyboard(language: str = 'ru') -> InlineKeyboardM
                     text=_t(
                         texts,
                         'ADMIN_SETTINGS_PUBLIC_OFFER',
-                        ' Публичная оферта',
+                        "<tg-emoji emoji-id='5877465816030515018'>🔗</tg-emoji> Публичная оферта",
                     ),
                     callback_data='admin_public_offer',
                 )
@@ -338,7 +327,7 @@ def get_admin_settings_submenu_keyboard(language: str = 'ru') -> InlineKeyboardM
                     text=_t(
                         texts,
                         'ADMIN_SETTINGS_FAQ',
-                        ' FAQ',
+                        "<tg-emoji emoji-id='5886330010054168711'>📝</tg-emoji> FAQ",
                     ),
                     callback_data='admin_faq',
                 )
@@ -348,7 +337,7 @@ def get_admin_settings_submenu_keyboard(language: str = 'ru') -> InlineKeyboardM
                     text=_t(
                         texts,
                         'ADMIN_SETTINGS_REQUIRED_CHANNELS',
-                        ' Обязательные каналы',
+                        "<tg-emoji emoji-id='5909201569898827582'>🔔</tg-emoji> Обязательные каналы",
                     ),
                     callback_data='reqch:list',
                 )
@@ -386,7 +375,7 @@ def get_admin_system_submenu_keyboard(language: str = 'ru') -> InlineKeyboardMar
                     text=_t(
                         texts,
                         'ADMIN_SYSTEM_UPDATES',
-                        ' Обновления',
+                        "<tg-emoji emoji-id='5875082500023258804'>⬅️</tg-emoji> Обновления",
                     ),
                     callback_data='admin_updates',
                 ),
@@ -394,7 +383,7 @@ def get_admin_system_submenu_keyboard(language: str = 'ru') -> InlineKeyboardMar
                     text=_t(
                         texts,
                         'ADMIN_SYSTEM_BACKUPS',
-                        ' Бекапы',
+                        "<tg-emoji emoji-id='5899757765743615694'>⬇️</tg-emoji> Бекапы",
                     ),
                     callback_data='backup_panel',
                 ),
@@ -404,7 +393,7 @@ def get_admin_system_submenu_keyboard(language: str = 'ru') -> InlineKeyboardMar
                     text=_t(
                         texts,
                         'ADMIN_SYSTEM_LOGS',
-                        ' Логи',
+                        "<tg-emoji emoji-id='5877316724830768997'>🗃</tg-emoji> Логи",
                     ),
                     callback_data='admin_system_logs',
                 )
@@ -413,7 +402,7 @@ def get_admin_system_submenu_keyboard(language: str = 'ru') -> InlineKeyboardMar
                 make_button(
                     text=texts.t(
                         'ADMIN_REPORTS',
-                        ' Отчеты',
+                        "<tg-emoji emoji-id='5877485980901971030'>📊</tg-emoji> Отчеты",
                     ),
                     callback_data='admin_reports',
                 )
@@ -433,7 +422,7 @@ def get_admin_trials_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                     text=_t(
                         texts,
                         'ADMIN_TRIALS_RESET_BUTTON',
-                        ' Сбросить все триалы',
+                        "<tg-emoji emoji-id='5879915802815107172'>🗑</tg-emoji> Сбросить все триалы",
                     ),
                     callback_data='admin_trials_reset',
                 )
@@ -453,7 +442,7 @@ def get_admin_reports_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                     text=_t(
                         texts,
                         'ADMIN_REPORTS_PREVIOUS_DAY',
-                        ' За вчера',
+                        "<tg-emoji emoji-id='5877396173135811032'>⌨</tg-emoji> За вчера",
                     ),
                     callback_data='admin_reports_daily',
                 )
@@ -463,7 +452,7 @@ def get_admin_reports_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                     text=_t(
                         texts,
                         'ADMIN_REPORTS_LAST_WEEK',
-                        ' За неделю',
+                        "<tg-emoji emoji-id='5877396173135811032'>⌨</tg-emoji> За неделю",
                     ),
                     callback_data='admin_reports_weekly',
                 )
@@ -473,7 +462,7 @@ def get_admin_reports_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                     text=_t(
                         texts,
                         'ADMIN_REPORTS_LAST_MONTH',
-                        ' За месяц',
+                        "<tg-emoji emoji-id='5877396173135811032'>⌨</tg-emoji> За месяц",
                     ),
                     callback_data='admin_reports_monthly',
                 )
@@ -508,7 +497,7 @@ def get_admin_users_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                     text=_t(
                         texts,
                         'ADMIN_USERS_ALL',
-                        ' Все пользователи',
+                        "<tg-emoji emoji-id='5814247475141153332'>👤</tg-emoji> Все пользователи",
                     ),
                     callback_data='admin_users_list',
                 ),
@@ -516,7 +505,7 @@ def get_admin_users_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                     text=_t(
                         texts,
                         'ADMIN_USERS_SEARCH',
-                        ' Поиск',
+                        "<tg-emoji emoji-id='5874960879434338403'>🔎</tg-emoji> Поиск",
                     ),
                     callback_data='admin_users_search',
                 ),
@@ -527,7 +516,7 @@ def get_admin_users_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                     text=_t(
                         texts,
                         'ADMIN_USERS_INACTIVE',
-                        ' Неактивные',
+                        "<tg-emoji emoji-id='5909123362839335003'>🔕</tg-emoji> Неактивные",
                     ),
                     callback_data='admin_users_inactive',
                 ),
@@ -537,7 +526,7 @@ def get_admin_users_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                     text=_t(
                         texts,
                         'ADMIN_USERS_FILTERS',
-                        ' Фильтры',
+                        "<tg-emoji emoji-id='5875462364110787088'>🗂</tg-emoji> Фильтры",
                     ),
                     callback_data='admin_users_filters',
                 )
@@ -547,7 +536,7 @@ def get_admin_users_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                     text=_t(
                         texts,
                         'ADMIN_USERS_BLACKLIST',
-                        ' Черный список',
+                        "<tg-emoji emoji-id='5879937509579820068'>🗑</tg-emoji> Черный список",
                     ),
                     callback_data='admin_blacklist_settings',
                 )
@@ -557,7 +546,7 @@ def get_admin_users_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                     text=_t(
                         texts,
                         'ADMIN_USERS_BULK_BAN',
-                        ' Массовый бан',
+                        "<tg-emoji emoji-id='5881702736843511327'>⚠️</tg-emoji> Массовый бан",
                     ),
                     callback_data='admin_bulk_ban_start',
                 ),
@@ -565,7 +554,7 @@ def get_admin_users_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                     text=_t(
                         texts,
                         'ADMIN_USERS_BULK_UNBAN',
-                        ' Массовый разбан',
+                        "<tg-emoji emoji-id='5881702736843511327'>✅</tg-emoji> Массовый разбан",
                     ),
                     callback_data='admin_bulk_unban_start',
                 ),
@@ -575,7 +564,7 @@ def get_admin_users_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                     text=_t(
                         texts,
                         'ADMIN_USERS_BLOCKED_CHECK',
-                        ' Заблокировавшие бота',
+                        "<tg-emoji emoji-id='5909123362839335003'>🔕</tg-emoji> Заблокировавшие бота",
                     ),
                     callback_data='admin_blocked_users',
                 ),
@@ -583,7 +572,7 @@ def get_admin_users_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                     text=_t(
                         texts,
                         'ADMIN_USERS_RESTORE_DELETED',
-                        ' Восстановить удаленных',
+                        "<tg-emoji emoji-id='5881702736843511327'>♻️</tg-emoji> Восстановить удаленных",
                     ),
                     callback_data='admin_restore_deleted',
                 ),
@@ -603,7 +592,7 @@ def get_admin_users_filters_keyboard(language: str = 'ru') -> InlineKeyboardMark
                     text=_t(
                         texts,
                         'ADMIN_USERS_FILTER_BALANCE',
-                        ' По балансу',
+                        "<tg-emoji emoji-id='5875291072225087249'>📊</tg-emoji> По балансу",
                     ),
                     callback_data='admin_users_balance_filter',
                 )
@@ -613,7 +602,7 @@ def get_admin_users_filters_keyboard(language: str = 'ru') -> InlineKeyboardMark
                     text=_t(
                         texts,
                         'ADMIN_USERS_FILTER_RENEW_READY',
-                        ' Готовы к продлению',
+                        "<tg-emoji emoji-id='5877410604225924969'>🔄</tg-emoji> Готовы к продлению",
                     ),
                     callback_data='admin_users_ready_to_renew_filter',
                 )
@@ -623,7 +612,7 @@ def get_admin_users_filters_keyboard(language: str = 'ru') -> InlineKeyboardMark
                     text=_t(
                         texts,
                         'ADMIN_USERS_FILTER_POTENTIAL_CUSTOMERS',
-                        ' Потенциальные клиенты',
+                        "<tg-emoji emoji-id='5879770735999717115'>👤</tg-emoji> Потенциальные клиенты",
                     ),
                     callback_data='admin_users_potential_customers_filter',
                 )
@@ -633,7 +622,7 @@ def get_admin_users_filters_keyboard(language: str = 'ru') -> InlineKeyboardMark
                     text=_t(
                         texts,
                         'ADMIN_USERS_FILTER_CAMPAIGN',
-                        ' По кампании',
+                        "<tg-emoji emoji-id='5875206779196935950'>📁</tg-emoji> По кампании",
                     ),
                     callback_data='admin_users_campaign_filter',
                 )
@@ -653,7 +642,7 @@ def get_admin_subscriptions_keyboard(language: str = 'ru') -> InlineKeyboardMark
                     text=_t(
                         texts,
                         'ADMIN_SUBSCRIPTIONS_ALL',
-                        ' Все подписки',
+                        "<tg-emoji emoji-id='5877443460725739250'>📁</tg-emoji> Все подписки",
                     ),
                     callback_data='admin_subs_list',
                 ),
@@ -661,7 +650,7 @@ def get_admin_subscriptions_keyboard(language: str = 'ru') -> InlineKeyboardMark
                     text=_t(
                         texts,
                         'ADMIN_SUBSCRIPTIONS_EXPIRING',
-                        ' Истекающие',
+                        "<tg-emoji emoji-id='5881702736843511327'>⚠️</tg-emoji> Истекающие",
                     ),
                     callback_data='admin_subs_expiring',
                 ),
@@ -671,7 +660,7 @@ def get_admin_subscriptions_keyboard(language: str = 'ru') -> InlineKeyboardMark
                     text=_t(
                         texts,
                         'ADMIN_SUBSCRIPTIONS_COUNTRIES',
-                        ' Управление странами',
+                        "<tg-emoji emoji-id='5879585266426973039'>🌐</tg-emoji> Управление странами",
                     ),
                     callback_data='admin_subs_countries',
                 )
@@ -692,7 +681,7 @@ def get_admin_promocodes_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                     text=_t(
                         texts,
                         'ADMIN_PROMOCODES_ALL',
-                        ' Все промокоды',
+                        "<tg-emoji emoji-id='5839323457015256759'>📄</tg-emoji> Все промокоды",
                     ),
                     callback_data='admin_promo_list',
                 ),
@@ -700,7 +689,7 @@ def get_admin_promocodes_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                     text=_t(
                         texts,
                         'ADMIN_PROMOCODES_CREATE',
-                        ' Создать',
+                        "<tg-emoji emoji-id='5877219383691972108'>➕</tg-emoji> Создать",
                     ),
                     callback_data='admin_promo_create',
                 ),
@@ -710,7 +699,7 @@ def get_admin_promocodes_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                     text=_t(
                         texts,
                         'ADMIN_PROMOCODES_GENERAL_STATS',
-                        ' Общая статистика',
+                        "<tg-emoji emoji-id='5877485980901971030'>📊</tg-emoji> Общая статистика",
                     ),
                     callback_data='admin_promo_general_stats',
                 )
@@ -730,7 +719,7 @@ def get_admin_campaigns_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                     text=_t(
                         texts,
                         'ADMIN_CAMPAIGNS_LIST',
-                        ' Список кампаний',
+                        "<tg-emoji emoji-id='5877680341057015789'>📁</tg-emoji> Список кампаний",
                     ),
                     callback_data='admin_campaigns_list',
                 ),
@@ -738,7 +727,7 @@ def get_admin_campaigns_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                     text=_t(
                         texts,
                         'ADMIN_CAMPAIGNS_CREATE',
-                        ' Создать',
+                        "<tg-emoji emoji-id='5877219383691972108'>➕</tg-emoji> Создать",
                     ),
                     callback_data='admin_campaigns_create',
                 ),
@@ -748,7 +737,7 @@ def get_admin_campaigns_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                     text=_t(
                         texts,
                         'ADMIN_CAMPAIGNS_GENERAL_STATS',
-                        ' Общая статистика',
+                        "<tg-emoji emoji-id='5877485980901971030'>📊</tg-emoji> Общая статистика",
                     ),
                     callback_data='admin_campaigns_stats',
                 )
@@ -768,7 +757,7 @@ def get_admin_contests_root_keyboard(language: str = 'ru') -> InlineKeyboardMark
                     text=_t(
                         texts,
                         'ADMIN_CONTESTS_REFERRAL',
-                        ' Реферальные конкурсы',
+                        "<tg-emoji emoji-id='5877465816030515018'>🔗</tg-emoji> Реферальные конкурсы",
                     ),
                     callback_data='admin_contests_referral',
                 )
@@ -778,7 +767,7 @@ def get_admin_contests_root_keyboard(language: str = 'ru') -> InlineKeyboardMark
                     text=_t(
                         texts,
                         'ADMIN_CONTESTS_DAILY',
-                        ' Ежедневные конкурсы',
+                        "<tg-emoji emoji-id='5877410604225924969'>🔄</tg-emoji> Ежедневные конкурсы",
                     ),
                     callback_data='admin_contests_daily',
                 )
@@ -800,7 +789,7 @@ def get_admin_contests_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                     text=_t(
                         texts,
                         'ADMIN_CONTESTS_LIST',
-                        ' Текущие конкурсы',
+                        "<tg-emoji emoji-id='5877443460725739250'>📁</tg-emoji> Текущие конкурсы",
                     ),
                     callback_data='admin_contests_list',
                 ),
@@ -808,7 +797,7 @@ def get_admin_contests_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                     text=_t(
                         texts,
                         'ADMIN_CONTESTS_CREATE',
-                        ' Новый конкурс',
+                        "<tg-emoji emoji-id='5877219383691972108'>➕</tg-emoji> Новый конкурс",
                     ),
                     callback_data='admin_contests_create',
                 ),
@@ -1733,7 +1722,7 @@ def get_promocode_list_keyboard(
                     text=_t(
                         texts,
                         'ADMIN_PROMOCODES_CREATE',
-                        ' Создать',
+                        "<tg-emoji emoji-id='5877219383691972108'>➕</tg-emoji> Создать",
                     ),
                     callback_data='admin_promo_create',
                 )
