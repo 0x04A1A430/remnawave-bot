@@ -31,6 +31,7 @@ from app.states import SubscriptionStates
 from app.utils.pricing_utils import (
     calculate_prorated_price,
 )
+from app.utils.subscription_time import local_days_until
 
 from .common import (
     _get_period_hint_from_subscription,
@@ -77,7 +78,7 @@ async def handle_add_traffic(callback: types.CallbackQuery, db_user: User, db: A
                     tariff_name = _t.name if _t else f'#{sub.id}'
                 else:
                     tariff_name = f'Подписка #{sub.id}'
-                days_left = max(0, (sub.end_date - datetime.now(UTC)).days) if sub.end_date else 0
+                days_left = local_days_until(sub.end_date) if sub.end_date else 0
                 keyboard.append(
                     [
                         types.InlineKeyboardButton(

@@ -31,6 +31,7 @@ from app.services.user_cart_service import user_cart_service
 from app.utils.decorators import error_handler
 from app.utils.formatting import format_period, format_price_kopeks, format_traffic
 from app.utils.promo_offer import get_user_active_promo_discount_percent
+from app.utils.subscription_time import local_days_until
 
 
 logger = structlog.get_logger(__name__)
@@ -927,7 +928,7 @@ async def _proceed_with_selected_tariff(
         _active = await get_active_subscriptions_by_user_id(db, db_user.id)
         _existing = next((s for s in _active if s.tariff_id == tariff_id and not s.is_trial), None)
         if _existing:
-            days_left = max(0, (_existing.end_date - datetime.now(UTC)).days) if _existing.end_date else 0
+            days_left = local_days_until(_existing.end_date) if _existing.end_date else 0
             await callback.answer(
                 texts.t(
                     'TARIFF_PURCHASE_ALREADY_ACTIVE',
@@ -2678,7 +2679,7 @@ async def show_tariff_extend(
                         tariff_name = texts.t('TARIFF_PURCHASE_SUBSCRIPTION_FALLBACK', 'Подписка #{id}').format(
                             id=sub.id
                         )
-                    days_left = max(0, (sub.end_date - datetime.now(UTC)).days) if sub.end_date else 0
+                    days_left = local_days_until(sub.end_date) if sub.end_date else 0
                     keyboard.append(
                         [
                             InlineKeyboardButton(

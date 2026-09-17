@@ -68,12 +68,14 @@ from app.services.panel_sync import (
     PanelAccountOwnedByAnotherUser,
     find_foreign_panel_owner,
     is_subscription_live,
+    link_subscription_panel_identity,
     project_onto_subscription,
     read_panel_user,
 )
 from app.services.panel_sync.fields import narrow_push_fields
 from app.services.permission_service import PermissionService
 from app.services.user_action_log_service import CLICK_PREFIX, SCREEN_PREFIX
+from app.utils.subscription_time import local_days_until
 from app.utils.subscription_utils import coerce_panel_device_limit
 from app.utils.timezone import local_day_start, panel_datetime_to_utc
 
@@ -106,6 +108,7 @@ from ..schemas.users import (
     SendUserMessageRequest,
     SendUserMessageResponse,
     SortByEnum,
+    SortOrderEnum,
     SubscriptionListItem,
     SyncFromPanelRequest,
     SyncFromPanelResponse,
@@ -250,8 +253,7 @@ def _build_user_list_item(user: User, spending_stats: dict = None, highlight: st
         traffic_limit_gb = subscription.traffic_limit_gb or 0
         device_limit = subscription.device_limit or 0
         if subscription.end_date:
-            delta = subscription.end_date - datetime.now(UTC)
-            days_remaining = max(0, delta.days)
+            days_remaining = local_days_until(subscription.end_date)
 
     # Build per-subscription list (always — bulk actions need it for any mode)
     sub_list: list[SubscriptionListItem] = []
@@ -317,8 +319,7 @@ def _build_subscription_info(subscription: Subscription, tariff_name: str | None
     is_active = False
 
     if subscription.end_date:
-        delta = subscription.end_date - datetime.now(UTC)
-        days_remaining = max(0, delta.days)
+        days_remaining = local_days_until(subscription.end_date)
         is_active = subscription.status == SubscriptionStatus.ACTIVE.value and subscription.end_date > datetime.now(UTC)
 
     return UserSubscriptionInfo(
@@ -359,8 +360,7 @@ async def _build_subscription_info_async(db: AsyncSession, subscription: Subscri
 
     traffic_purchase_items = []
     for p in purchases:
-        delta = p.expires_at - now
-        days_remaining = max(0, delta.days)
+        days_remaining = local_days_until(p.expires_at, now)
         is_expired = now >= p.expires_at
         traffic_purchase_items.append(
             TrafficPurchaseItem(
@@ -502,7 +502,9 @@ async def list_users(
     purchase_count: int | None = Query(None, ge=0, le=0),
     traffic_used_percent_min: int | None = Query(None, ge=1, le=100),
     online: bool | None = Query(None),
+    in_grace: bool | None = Query(None),
     sort_by: SortByEnum = Query(SortByEnum.CREATED_AT),
+    sort_order: SortOrderEnum | None = Query(None),
     admin: User = Depends(require_permission('users:read')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
@@ -517,10 +519,12 @@ async def list_users(
     - **expires_within_days**: Active subscription ends within N days (daily tariffs excluded)
     - **active_within_minutes**: Last activity in the bot or cabinet within N minutes
     - **online**: Only users connected to the VPN right now (by the panel's onlineAt)
+    - **in_grace**: Only users with temporary access open right now (the «temporary until» mark); false — everyone else
     - **has_restrictions** / **has_subscription**: Restriction flags / any subscription at all
     - **purchase_count**: Only 0 is supported — users without a completed subscription payment
     - **traffic_used_percent_min**: Live subscription with at least N % of its traffic limit used (unlimited excluded)
-    - **sort_by**: Sort field (created_at, balance, traffic, last_activity, total_spent, purchase_count, subscription_end_date)
+    - **sort_by**: Sort field (created_at, balance, traffic, last_activity, total_spent, purchase_count, subscription_end_date, grace_until)
+    - **sort_order**: asc / desc; omitted — soonest first for subscription_end_date and grace_until, largest/newest first otherwise
     """
     # Convert status enum to model enum
     user_status = None
@@ -534,6 +538,7 @@ async def list_users(
     order_by_total_spent = sort_by == SortByEnum.TOTAL_SPENT
     order_by_purchase_count = sort_by == SortByEnum.PURCHASE_COUNT
     order_by_subscription_end = sort_by == SortByEnum.SUBSCRIPTION_END_DATE
+    order_by_grace = sort_by == SortByEnum.GRACE_UNTIL
 
     # Parse comma-separated tariff_ids
     tariff_ids: list[int] | None = None
@@ -578,12 +583,15 @@ async def list_users(
         purchase_count=purchase_count,
         traffic_used_percent_min=traffic_used_percent_min,
         connected=online_filter,
+        in_grace=in_grace,
         order_by_balance=order_by_balance,
         order_by_traffic=order_by_traffic,
         order_by_last_activity=order_by_last_activity,
         order_by_total_spent=order_by_total_spent,
         order_by_purchase_count=order_by_purchase_count,
         order_by_subscription_end=order_by_subscription_end,
+        order_by_grace=order_by_grace,
+        sort_descending=None if sort_order is None else sort_order == SortOrderEnum.DESC,
     )
 
     total = await get_users_count(
@@ -603,6 +611,7 @@ async def list_users(
         purchase_count=purchase_count,
         traffic_used_percent_min=traffic_used_percent_min,
         connected=online_filter,
+        in_grace=in_grace,
     )
 
     # Get spending stats for all users
@@ -4141,6 +4150,12 @@ async def sync_user_from_panel(
                     policy=ADMIN_PULL if request.update_subscription else ROUTINE,
                     trust_status=request.update_subscription,
                 )
+                # Одиночный режим: аккаунт найден по пользователю, строка подписки могла
+                # остаться без id после старого импорта. В мультитарифе привязка выше.
+                if not settings.is_multi_tariff_enabled() and await link_subscription_panel_identity(
+                    db, sync_sub, panel_user.id
+                ):
+                    changes['subscription_remnawave_id'] = {'old': None, 'new': panel_user.id}
                 for field in sorted(changed_fields):
                     old_value = before[field]
                     new_value = getattr(sync_sub, field)

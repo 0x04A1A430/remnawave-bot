@@ -303,10 +303,13 @@ async def patch_panel_account(
     telegram_id: int | None = None,
     email: str | None = None,
     hwid_device_limit: int | None = None,
-    tag: str | None = None,
+    tag: str | type(...) | None = ...,
     update_call=None,
 ) -> RemnaWaveUser:
     """Обновить карточку аккаунта в панели, не трогая состояние подписки.
+
+    ``tag`` не передан — поле не трогается; ``tag=None`` — снять тег: вызывающий
+    посчитал его по правилу ``resolve_panel_user_tag`` и получил «тега нет».
 
     Отдельный вход, потому что это другая задача: описание, телеграм и почта
     описывают человека, а не его подписку. Здесь нет ни статуса, ни даты, ни
@@ -324,7 +327,7 @@ async def patch_panel_account(
         kwargs['email'] = email
     if hwid_device_limit is not None:
         kwargs['hwid_device_limit'] = hwid_device_limit
-    if tag is not None:
+    if tag is not ...:
         kwargs['tag'] = tag
     return await update(**kwargs)
 

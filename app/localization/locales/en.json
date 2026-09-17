@@ -1542,6 +1542,7 @@
   "SUBSCRIPTION_SUMMARY": "\n📋 <b>Final configuration</b>\n\n📅 <b>Period:</b> {period} days\n📈 <b>Traffic:</b> {traffic}\n🌍 <b>Countries:</b> {countries}\n📱 <b>Devices:</b> {devices}\n\n💰 <b>Total:</b> {total_price}\n\nConfirm the purchase?\n",
   "SUBSCRIPTION_SUMMARY_PROMO_DISCOUNT": "- Promo offer: -{amount} ({percent}% extra)",
   "SUBSCRIPTION_TIME_LEFT_DAYS": "{days} days",
+  "SUBSCRIPTION_TIME_LEFT_DAYS_HOURS": "{days} days {hours} hr",
   "SUBSCRIPTION_TIME_LEFT_EXPIRED": "expired",
   "SUBSCRIPTION_TIME_LEFT_HOURS": "{hours} hr",
   "SUBSCRIPTION_TIME_LEFT_MINUTES": "{minutes} min",
