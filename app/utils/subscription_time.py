@@ -29,7 +29,8 @@ _SECONDS_IN_HOUR = 3600
 
 
 class _Texts(Protocol):
-    def t(self, key: str, default: str) -> str: ...
+    def t(self, key: str, default: str) -> str:
+        """Текст по ключу локализации; ``default`` — если ключа нет."""
 
 
 class _DefaultTexts:
