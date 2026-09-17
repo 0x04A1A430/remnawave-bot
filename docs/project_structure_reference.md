@@ -72,6 +72,7 @@
 - `.github/workflows/docker-registry.yml` — файл
 - `.github/workflows/lint.yml` — файл
 - `.github/workflows/release-please.yml` — файл
+- `.github/workflows/release-pr-guard.yml` — файл
 - `.github/workflows/release.yml` — файл
 - `.github/workflows/security-audit.yml` — файл
 - `.github/workflows/tests.yml` — файл
@@ -2905,6 +2906,7 @@
 - `scripts/backfill_remnawave_ids.py` — Python-модуль
   Классы: нет
   Функции: `main`
+- `scripts/check_release_pr_override.mjs` — файл
 - `scripts/generate_structure_reference.py` — Python-модуль
   Классы: нет
   Функции: `tracked_paths` — Файлы проекта: отслеживаемые плюс новые, которые git не игнорирует., `describe_module` — Строки «Классы:» и «Функции:» для модуля., `render_entries`, `render`, `build`, `main`
