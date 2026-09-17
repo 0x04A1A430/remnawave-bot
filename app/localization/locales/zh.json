@@ -2369,5 +2369,6 @@
   "INLINE_GIFT_EMOJI_DEVICES": "<tg-emoji emoji-id='5877318502947229960'>💻</tg-emoji>",
   "INLINE_GIFT_EMOJI_GIFT": "<tg-emoji emoji-id='6032937473162614352'>🎁</tg-emoji>",
   "INLINE_GIFT_EMOJI_TRAFFIC": "<tg-emoji emoji-id='5931472654660800739'>📊</tg-emoji>",
-  "SUBSCRIPTION_TIME_LEFT_FOREVER": "可用"
+  "SUBSCRIPTION_TIME_LEFT_FOREVER": "可用",
+  "CRYPTOBOT_PAY_BUTTON": "使用加密货币支付"
 }
