@@ -17,6 +17,7 @@ from app.services.tariff_custom_traffic import (
     validate_custom_traffic_configuration,
 )
 from app.states import AdminStates
+from app.utils.button_emoji import make_button
 from app.utils.decorators import admin_required, error_handler
 from app.utils.formatting import format_price_kopeks
 
