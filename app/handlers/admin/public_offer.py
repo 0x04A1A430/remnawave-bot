@@ -400,7 +400,7 @@ async def process_public_offer_edit(
                 types.InlineKeyboardButton(
                     text=texts.t(
                         'ADMIN_PUBLIC_OFFER_BACK_BUTTON',
-                        '⬅ К настройкам оферты',
+                        ' К настройкам оферты',
                     ),
                     callback_data='admin_public_offer',
                 )
@@ -470,7 +470,7 @@ async def view_public_offer(
                 types.InlineKeyboardButton(
                     text=texts.t(
                         'ADMIN_PUBLIC_OFFER_BACK_BUTTON',
-                        '⬅ К настройкам оферты',
+                        ' К настройкам оферты',
                     ),
                     callback_data='admin_public_offer',
                 )
@@ -515,7 +515,7 @@ async def show_public_offer_html_help(
                 types.InlineKeyboardButton(
                     text=texts.t(
                         'ADMIN_PUBLIC_OFFER_RETURN_TO_EDIT',
-                        '⬅ Назад к редактированию',
+                        ' Назад к редактированию',
                     ),
                     callback_data='admin_public_offer_edit',
                 )
@@ -527,7 +527,7 @@ async def show_public_offer_html_help(
             types.InlineKeyboardButton(
                 text=texts.t(
                     'ADMIN_PUBLIC_OFFER_BACK_BUTTON',
-                    '⬅ К настройкам оферты',
+                    ' К настройкам оферты',
                 ),
                 callback_data='admin_public_offer',
             )

@@ -246,10 +246,10 @@ async def show_subscription_detail(
 
     text = (
         f'📋 <b>{tariff_name}</b>\n\n'
-        f'<blockquote>Статус: {status}\n'
+        f'Статус: {status}\n'
         f'📊 Трафик: {traffic}\n'
         f'📱 Устройства: {Texts.format_device_limit(subscription.device_limit)}\n'
-        f'📅 До: {end_date}</blockquote>\n'
+        f'📅 До: {end_date}\n'
     )
 
     if subscription.subscription_url and not settings.should_hide_subscription_link():

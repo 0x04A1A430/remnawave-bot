@@ -311,7 +311,7 @@ async def start_create_faq_page(
                     types.InlineKeyboardButton(
                         text=texts.t(
                             'ADMIN_FAQ_CANCEL_BUTTON',
-                            '⬅ Отмена',
+                            ' Отмена',
                         ),
                         callback_data='admin_faq_cancel',
                     )
@@ -439,7 +439,7 @@ async def process_new_faq_content(
                 types.InlineKeyboardButton(
                     text=texts.t(
                         'ADMIN_FAQ_BACK_TO_LIST',
-                        '⬅ К настройкам FAQ',
+                        ' К настройкам FAQ',
                     ),
                     callback_data='admin_faq',
                 )
@@ -571,11 +571,11 @@ async def show_faq_page_details(
     buttons.append(
         [
             types.InlineKeyboardButton(
-                text=texts.t('ADMIN_FAQ_PAGE_MOVE_UP', '⬆ Выше'),
+                text=texts.t('ADMIN_FAQ_PAGE_MOVE_UP', ' Выше'),
                 callback_data=f'admin_faq_move:{page.id}:up',
             ),
             types.InlineKeyboardButton(
-                text=texts.t('ADMIN_FAQ_PAGE_MOVE_DOWN', '⬇ Ниже'),
+                text=texts.t('ADMIN_FAQ_PAGE_MOVE_DOWN', ' Ниже'),
                 callback_data=f'admin_faq_move:{page.id}:down',
             ),
         ]
@@ -593,7 +593,7 @@ async def show_faq_page_details(
     buttons.append(
         [
             types.InlineKeyboardButton(
-                text=texts.t('ADMIN_FAQ_BACK_TO_LIST', '⬅ К настройкам FAQ'),
+                text=texts.t('ADMIN_FAQ_BACK_TO_LIST', ' К настройкам FAQ'),
                 callback_data='admin_faq',
             )
         ]
@@ -655,7 +655,7 @@ async def start_edit_faq_title(
                     types.InlineKeyboardButton(
                         text=texts.t(
                             'ADMIN_FAQ_CANCEL_BUTTON',
-                            '⬅ Отмена',
+                            ' Отмена',
                         ),
                         callback_data=f'admin_faq_page:{page.id}',
                     )
@@ -727,7 +727,7 @@ async def process_edit_faq_title(
             inline_keyboard=[
                 [
                     types.InlineKeyboardButton(
-                        text=texts.t('ADMIN_FAQ_BACK_TO_LIST', '⬅ К настройкам FAQ'),
+                        text=texts.t('ADMIN_FAQ_BACK_TO_LIST', ' К настройкам FAQ'),
                         callback_data='admin_faq',
                     )
                 ]
@@ -782,7 +782,7 @@ async def start_edit_faq_content(
                     types.InlineKeyboardButton(
                         text=texts.t(
                             'ADMIN_FAQ_CANCEL_BUTTON',
-                            '⬅ Отмена',
+                            ' Отмена',
                         ),
                         callback_data=f'admin_faq_page:{page.id}',
                     )
@@ -864,7 +864,7 @@ async def process_edit_faq_content(
             inline_keyboard=[
                 [
                     types.InlineKeyboardButton(
-                        text=texts.t('ADMIN_FAQ_BACK_TO_LIST', '⬅ К настройкам FAQ'),
+                        text=texts.t('ADMIN_FAQ_BACK_TO_LIST', ' К настройкам FAQ'),
                         callback_data='admin_faq',
                     )
                 ]
@@ -1048,7 +1048,7 @@ async def show_faq_html_help(
     buttons = [
         [
             types.InlineKeyboardButton(
-                text=texts.t('ADMIN_FAQ_BACK_TO_LIST', '⬅ К настройкам FAQ'),
+                text=texts.t('ADMIN_FAQ_BACK_TO_LIST', ' К настройкам FAQ'),
                 callback_data='admin_faq',
             )
         ]

@@ -250,7 +250,7 @@ async def _show_users_list_filtered(
                 types.InlineKeyboardButton(text=' Поиск', callback_data='admin_users_search'),
                 types.InlineKeyboardButton(text=' Статистика', callback_data='admin_users_stats'),
             ],
-            [types.InlineKeyboardButton(text='⬅ Назад', callback_data='admin_users')],
+            [types.InlineKeyboardButton(text=' Назад', callback_data='admin_users')],
         ]
     )
 
@@ -363,7 +363,7 @@ async def show_users_list(
                 types.InlineKeyboardButton(text=' Поиск', callback_data='admin_users_search'),
                 types.InlineKeyboardButton(text=' Статистика', callback_data='admin_users_stats'),
             ],
-            [types.InlineKeyboardButton(text='⬅ Назад', callback_data='admin_users')],
+            [types.InlineKeyboardButton(text=' Назад', callback_data='admin_users')],
         ]
     )
 
@@ -494,7 +494,7 @@ async def show_users_ready_to_renew(
             ],
             [
                 types.InlineKeyboardButton(
-                    text='⬅ Назад',
+                    text=' Назад',
                     callback_data='admin_users',
                 )
             ],
@@ -612,7 +612,7 @@ async def show_potential_customers(
             ],
             [
                 types.InlineKeyboardButton(
-                    text='⬅ Назад',
+                    text=' Назад',
                     callback_data='admin_users',
                 )
             ],
@@ -803,7 +803,7 @@ async def show_users_statistics(callback: types.CallbackQuery, db_user: User, db
         reply_markup=types.InlineKeyboardMarkup(
             inline_keyboard=[
                 [types.InlineKeyboardButton(text=' Обновить', callback_data='admin_users_stats')],
-                [types.InlineKeyboardButton(text='⬅ Назад', callback_data='admin_users')],
+                [types.InlineKeyboardButton(text=' Назад', callback_data='admin_users')],
             ]
         ),
     )
@@ -858,7 +858,7 @@ async def _render_user_subscription_overview(
                 )
 
             picker_keyboard.append(
-                [types.InlineKeyboardButton(text='⬅ К пользователю', callback_data=f'admin_user_manage_{user_id}')]
+                [types.InlineKeyboardButton(text=' К пользователю', callback_data=f'admin_user_manage_{user_id}')]
             )
             await callback.message.edit_text(
                 text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=picker_keyboard)
@@ -1004,7 +1004,7 @@ async def _render_user_subscription_overview(
             ]
         ]
 
-    keyboard.append([types.InlineKeyboardButton(text='⬅ К пользователю', callback_data=f'admin_user_manage_{user_id}')])
+    keyboard.append([types.InlineKeyboardButton(text=' К пользователю', callback_data=f'admin_user_manage_{user_id}')])
 
     await callback.message.edit_text(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
     return True
@@ -1083,7 +1083,7 @@ async def show_user_transactions(callback: types.CallbackQuery, db_user: User, d
         text,
         reply_markup=types.InlineKeyboardMarkup(
             inline_keyboard=[
-                [types.InlineKeyboardButton(text='⬅ К пользователю', callback_data=f'admin_user_manage_{user_id}')]
+                [types.InlineKeyboardButton(text=' К пользователю', callback_data=f'admin_user_manage_{user_id}')]
             ]
         ),
     )
@@ -1157,7 +1157,7 @@ async def process_user_search(message: types.Message, db_user: User, state: FSMC
         await message.answer(
             f" По запросу '<b>{html.escape(query)}</b>' ничего не найдено",
             reply_markup=types.InlineKeyboardMarkup(
-                inline_keyboard=[[types.InlineKeyboardButton(text='⬅ Назад', callback_data='admin_users')]]
+                inline_keyboard=[[types.InlineKeyboardButton(text=' Назад', callback_data='admin_users')]]
             ),
         )
         await state.clear()
@@ -1201,7 +1201,7 @@ async def process_user_search(message: types.Message, db_user: User, state: FSMC
 
         keyboard.append([types.InlineKeyboardButton(text=button_text, callback_data=f'admin_user_manage_{user.id}')])
 
-    keyboard.append([types.InlineKeyboardButton(text='⬅ Назад', callback_data='admin_users')])
+    keyboard.append([types.InlineKeyboardButton(text=' Назад', callback_data='admin_users')])
 
     await message.answer(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
     await state.clear()
@@ -1318,7 +1318,7 @@ async def show_user_management(callback: types.CallbackQuery, db_user: User, db:
         sections.append(
             texts.t(
                 'ADMIN_USER_PROMO_GROUPS_PRIMARY',
-                '⭐ Основная: {name} (Priority: {priority})',
+                ' Основная: {name} (Priority: {priority})',
             ).format(name=html.escape(primary_group.name), priority=getattr(primary_group, 'priority', 0))
         )
         sections.append(
@@ -2077,7 +2077,7 @@ async def _render_user_promo_group(message: types.Message, language: str, user: 
     if primary_group:
         current_line = texts.t(
             'ADMIN_USER_PROMO_GROUPS_PRIMARY',
-            '⭐ Основная: {name} (Priority: {priority})',
+            ' Основная: {name} (Priority: {priority})',
         ).format(name=html.escape(primary_group.name), priority=getattr(primary_group, 'priority', 0))
 
         discount_line = texts.ADMIN_USER_PROMO_GROUP_DISCOUNTS.format(
@@ -2679,7 +2679,7 @@ async def show_inactive_users(callback: types.CallbackQuery, db_user: User, db: 
         await callback.message.edit_text(
             f' Неактивных пользователей (более {settings.INACTIVE_USER_DELETE_MONTHS} месяцев) не найдено',
             reply_markup=types.InlineKeyboardMarkup(
-                inline_keyboard=[[types.InlineKeyboardButton(text='⬅ Назад', callback_data='admin_users')]]
+                inline_keyboard=[[types.InlineKeyboardButton(text=' Назад', callback_data='admin_users')]]
             ),
         )
         await callback.answer()
@@ -2714,7 +2714,7 @@ async def show_inactive_users(callback: types.CallbackQuery, db_user: User, db: 
 
     keyboard = [
         [types.InlineKeyboardButton(text=' Очистить всех', callback_data='admin_cleanup_inactive')],
-        [types.InlineKeyboardButton(text='⬅ Назад', callback_data='admin_users')],
+        [types.InlineKeyboardButton(text=' Назад', callback_data='admin_users')],
     ]
 
     await callback.message.edit_text(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
@@ -2881,7 +2881,7 @@ async def show_user_statistics(callback: types.CallbackQuery, db_user: User, db:
         text,
         reply_markup=types.InlineKeyboardMarkup(
             inline_keyboard=[
-                [types.InlineKeyboardButton(text='⬅ К пользователю', callback_data=f'admin_user_manage_{user_id}')]
+                [types.InlineKeyboardButton(text=' К пользователю', callback_data=f'admin_user_manage_{user_id}')]
             ]
         ),
     )
@@ -3691,7 +3691,7 @@ async def _show_servers_for_user(
             await callback.message.edit_text(
                 ' Доступные серверы не найдены',
                 reply_markup=types.InlineKeyboardMarkup(
-                    inline_keyboard=[[types.InlineKeyboardButton(text='⬅ Назад', callback_data=back_cb)]]
+                    inline_keyboard=[[types.InlineKeyboardButton(text=' Назад', callback_data=back_cb)]]
                 ),
             )
             return
@@ -4600,7 +4600,7 @@ async def cleanup_inactive_users(callback: types.CallbackQuery, db_user: User, d
     await callback.message.edit_text(
         text,
         reply_markup=types.InlineKeyboardMarkup(
-            inline_keyboard=[[types.InlineKeyboardButton(text='⬅ Назад', callback_data='admin_users')]]
+            inline_keyboard=[[types.InlineKeyboardButton(text=' Назад', callback_data='admin_users')]]
         ),
     )
     await callback.answer()
@@ -4654,7 +4654,7 @@ async def change_subscription_type(callback: types.CallbackQuery, db_user: User,
             [InlineKeyboardButton(text=' Сделать триальной', callback_data=f'admin_sub_type_trial_{user_id}{_sid}')]
         )
 
-    keyboard.append([InlineKeyboardButton(text='⬅ Назад', callback_data=back_cb)])
+    keyboard.append([InlineKeyboardButton(text=' Назад', callback_data=back_cb)])
 
     await callback.message.edit_text(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard))
     await callback.answer()
@@ -4811,7 +4811,7 @@ async def admin_buy_subscription_confirm(callback: types.CallbackQuery, db_user:
                 inline_keyboard=[
                     [
                         types.InlineKeyboardButton(
-                            text='⬅ Назад к подписке', callback_data=f'admin_user_subscription_{user_id}'
+                            text=' Назад к подписке', callback_data=f'admin_user_subscription_{user_id}'
                         )
                     ]
                 ]
@@ -5032,7 +5032,7 @@ async def admin_buy_subscription_execute(callback: types.CallbackQuery, db_user:
                 inline_keyboard=[
                     [
                         types.InlineKeyboardButton(
-                            text='⬅ Назад к подписке', callback_data=f'admin_user_subscription_{user_id}'
+                            text=' Назад к подписке', callback_data=f'admin_user_subscription_{user_id}'
                         )
                     ]
                 ]
@@ -5100,7 +5100,7 @@ async def admin_buy_tariff(callback: types.CallbackQuery, db_user: User, db: Asy
         await callback.message.edit_text(
             ' <b>Нет доступных тарифов</b>\n\nСоздайте тарифы в разделе управления тарифами.',
             reply_markup=types.InlineKeyboardMarkup(
-                inline_keyboard=[[types.InlineKeyboardButton(text='⬅ Назад', callback_data=back_cb)]]
+                inline_keyboard=[[types.InlineKeyboardButton(text=' Назад', callback_data=back_cb)]]
             ),
         )
         await callback.answer()
@@ -5129,7 +5129,7 @@ async def admin_buy_tariff(callback: types.CallbackQuery, db_user: User, db: Asy
             ]
         )
 
-    keyboard.append([types.InlineKeyboardButton(text='⬅ Назад', callback_data=back_cb)])
+    keyboard.append([types.InlineKeyboardButton(text=' Назад', callback_data=back_cb)])
 
     await callback.message.edit_text(
         text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard), parse_mode='HTML'
@@ -5189,7 +5189,7 @@ async def admin_buy_tariff_period(callback: types.CallbackQuery, db_user: User, 
             ]
         )
 
-    keyboard.append([types.InlineKeyboardButton(text='⬅ К тарифам', callback_data=f'admin_tariff_buy_{user_id}')])
+    keyboard.append([types.InlineKeyboardButton(text=' К тарифам', callback_data=f'admin_tariff_buy_{user_id}')])
 
     await callback.message.edit_text(
         text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard), parse_mode='HTML'
@@ -5237,7 +5237,7 @@ async def admin_buy_tariff_confirm(callback: types.CallbackQuery, db_user: User,
                 inline_keyboard=[
                     [
                         types.InlineKeyboardButton(
-                            text='⬅ Назад', callback_data=f'admin_tariff_buy_select_{user_id}_{tariff_id}'
+                            text=' Назад', callback_data=f'admin_tariff_buy_select_{user_id}_{tariff_id}'
                         )
                     ]
                 ]
@@ -5589,7 +5589,7 @@ async def show_admin_tariff_change(callback: types.CallbackQuery, db_user: User,
         await callback.message.edit_text(
             ' <b>Нет доступных тарифов</b>\n\nСоздайте тарифы в разделе управления тарифами.',
             reply_markup=types.InlineKeyboardMarkup(
-                inline_keyboard=[[types.InlineKeyboardButton(text='⬅ Назад', callback_data=back_cb)]]
+                inline_keyboard=[[types.InlineKeyboardButton(text=' Назад', callback_data=back_cb)]]
             ),
         )
         await callback.answer()
@@ -5633,7 +5633,7 @@ async def show_admin_tariff_change(callback: types.CallbackQuery, db_user: User,
             ]
         )
 
-    keyboard.append([types.InlineKeyboardButton(text='⬅ Назад', callback_data=back_cb)])
+    keyboard.append([types.InlineKeyboardButton(text=' Назад', callback_data=back_cb)])
 
     await callback.message.edit_text(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
     await callback.answer()
@@ -5916,7 +5916,7 @@ async def show_admin_user_autopay(callback: types.CallbackQuery, db_user: User, 
         ],
         [
             types.InlineKeyboardButton(
-                text='⬅ К подписке', callback_data=_admin_autopay_back_cb(user_id, subscription_id)
+                text=' К подписке', callback_data=_admin_autopay_back_cb(user_id, subscription_id)
             )
         ],
     ]
@@ -5961,7 +5961,7 @@ async def show_admin_user_autopay_days(callback: types.CallbackQuery, db_user: U
                 )
             ]
         )
-    keyboard.append([types.InlineKeyboardButton(text='⬅ Назад', callback_data=f'admin_user_autopay_{user_id}{_sid}')])
+    keyboard.append([types.InlineKeyboardButton(text=' Назад', callback_data=f'admin_user_autopay_{user_id}{_sid}')])
 
     await callback.message.edit_text(
         ' <b>За сколько дней до окончания списывать средства?</b>',
@@ -6040,7 +6040,7 @@ async def show_admin_user_autopay_period(callback: types.CallbackQuery, db_user:
                 )
             ]
         )
-    keyboard.append([types.InlineKeyboardButton(text='⬅ Назад', callback_data=f'admin_user_autopay_{user_id}{_sid}')])
+    keyboard.append([types.InlineKeyboardButton(text=' Назад', callback_data=f'admin_user_autopay_{user_id}{_sid}')])
 
     await callback.message.edit_text(
         ' <b>Период автоплатежа</b>\n\n'

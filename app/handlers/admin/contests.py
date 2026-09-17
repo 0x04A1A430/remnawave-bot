@@ -857,7 +857,7 @@ async def sync_contest(
 
     back_keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text='⬅ Назад к конкурсу', callback_data=f'admin_contest_view_{contest_id}')]
+            [InlineKeyboardButton(text=' Назад к конкурсу', callback_data=f'admin_contest_view_{contest_id}')]
         ]
     )
 
@@ -973,7 +973,7 @@ async def debug_contest_transactions(
 
     back_keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text='⬅ Назад к конкурсу', callback_data=f'admin_contest_view_{contest_id}')]
+            [InlineKeyboardButton(text=' Назад к конкурсу', callback_data=f'admin_contest_view_{contest_id}')]
         ]
     )
 
@@ -1038,7 +1038,7 @@ async def show_virtual_participants(
     rows.append(
         [
             types.InlineKeyboardButton(
-                text='⬅ Назад',
+                text=' Назад',
                 callback_data=f'admin_contest_view_{contest_id}',
             ),
         ]
@@ -1117,7 +1117,7 @@ async def process_virtual_participant_count(
         reply_markup=types.InlineKeyboardMarkup(
             inline_keyboard=[
                 [types.InlineKeyboardButton(text=' К списку', callback_data=f'admin_contest_vp_{contest_id}')],
-                [types.InlineKeyboardButton(text='⬅ К конкурсу', callback_data=f'admin_contest_view_{contest_id}')],
+                [types.InlineKeyboardButton(text=' К конкурсу', callback_data=f'admin_contest_view_{contest_id}')],
             ]
         ),
     )
@@ -1179,7 +1179,7 @@ async def delete_virtual_participant_handler(
                     types.InlineKeyboardButton(text='', callback_data=f'admin_contest_vp_del_{v.id}'),
                 ]
             )
-    rows.append([types.InlineKeyboardButton(text='⬅ Назад', callback_data=f'admin_contest_view_{contest_id}')])
+    rows.append([types.InlineKeyboardButton(text=' Назад', callback_data=f'admin_contest_view_{contest_id}')])
 
     await callback.message.edit_text(
         '\n'.join(lines),
@@ -1339,7 +1339,7 @@ async def process_mass_virtual_referrals(
                         text=' К списку призраков', callback_data=f'admin_contest_vp_{contest_id}'
                     )
                 ],
-                [types.InlineKeyboardButton(text='⬅ К конкурсу', callback_data=f'admin_contest_view_{contest_id}')],
+                [types.InlineKeyboardButton(text=' К конкурсу', callback_data=f'admin_contest_view_{contest_id}')],
             ]
         ),
     )

@@ -68,7 +68,7 @@ async def show_users_statistics(callback: types.CallbackQuery, db_user: User, db
     keyboard = types.InlineKeyboardMarkup(
         inline_keyboard=[
             [types.InlineKeyboardButton(text=' Обновить', callback_data='admin_stats_users')],
-            [types.InlineKeyboardButton(text='⬅ Назад', callback_data='admin_statistics')],
+            [types.InlineKeyboardButton(text=' Назад', callback_data='admin_statistics')],
         ]
     )
 
@@ -118,7 +118,7 @@ async def show_subscriptions_statistics(callback: types.CallbackQuery, db_user: 
     keyboard = types.InlineKeyboardMarkup(
         inline_keyboard=[
             [types.InlineKeyboardButton(text=' Обновить', callback_data='admin_stats_subs')],
-            [types.InlineKeyboardButton(text='⬅ Назад', callback_data='admin_statistics')],
+            [types.InlineKeyboardButton(text=' Назад', callback_data='admin_statistics')],
         ]
     )
 
@@ -173,7 +173,7 @@ async def show_revenue_statistics(callback: types.CallbackQuery, db_user: User, 
         inline_keyboard=[
             # [types.InlineKeyboardButton(text=" Период", callback_data="admin_revenue_period")],
             [types.InlineKeyboardButton(text=' Обновить', callback_data='admin_stats_revenue')],
-            [types.InlineKeyboardButton(text='⬅ Назад', callback_data='admin_statistics')],
+            [types.InlineKeyboardButton(text=' Назад', callback_data='admin_statistics')],
         ]
     )
 
@@ -239,7 +239,7 @@ async def show_referral_statistics(callback: types.CallbackQuery, db_user: User,
     keyboard = types.InlineKeyboardMarkup(
         inline_keyboard=[
             [types.InlineKeyboardButton(text=' Обновить', callback_data='admin_stats_referrals')],
-            [types.InlineKeyboardButton(text='⬅ Назад', callback_data='admin_statistics')],
+            [types.InlineKeyboardButton(text=' Назад', callback_data='admin_statistics')],
         ]
     )
 
@@ -302,7 +302,7 @@ async def show_summary_statistics(callback: types.CallbackQuery, db_user: User, 
     keyboard = types.InlineKeyboardMarkup(
         inline_keyboard=[
             [types.InlineKeyboardButton(text=' Обновить', callback_data='admin_stats_summary')],
-            [types.InlineKeyboardButton(text='⬅ Назад', callback_data='admin_statistics')],
+            [types.InlineKeyboardButton(text=' Назад', callback_data='admin_statistics')],
         ]
     )
 
@@ -360,7 +360,7 @@ async def show_revenue_by_period(callback: types.CallbackQuery, db_user: User, d
         reply_markup=types.InlineKeyboardMarkup(
             inline_keyboard=[
                 [types.InlineKeyboardButton(text=' Другой период', callback_data='admin_revenue_period')],
-                [types.InlineKeyboardButton(text='⬅ К доходам', callback_data='admin_stats_revenue')],
+                [types.InlineKeyboardButton(text=' К доходам', callback_data='admin_stats_revenue')],
             ]
         ),
     )

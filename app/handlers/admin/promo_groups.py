@@ -453,7 +453,7 @@ async def show_promo_groups_menu(
 
         keyboard_rows = []
         for group, member_count in groups:
-            icon = '⭐' if group.is_default else ''
+            icon = '' if group.is_default else ''
             default_suffix = texts.t('ADMIN_PROMO_GROUPS_DEFAULT_LABEL', ' (базовая)') if group.is_default else ''
             members_label = texts.t(
                 'ADMIN_PROMO_GROUPS_MEMBERS_COUNT',

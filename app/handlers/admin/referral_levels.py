@@ -385,7 +385,7 @@ async def _render_levels(callback: types.CallbackQuery, db: AsyncSession) -> Non
 
     scheme_toggle = ' Вернуть классическую' if settings.is_referral_levels_scheme() else ' Включить многоуровневую'
     keyboard_rows.append([types.InlineKeyboardButton(text=scheme_toggle, callback_data='admin_ref_lvl_scheme')])
-    keyboard_rows.append([types.InlineKeyboardButton(text='⬅ Назад', callback_data='admin_referrals_settings')])
+    keyboard_rows.append([types.InlineKeyboardButton(text=' Назад', callback_data='admin_referrals_settings')])
 
     await callback.message.edit_text(
         '\n'.join(lines), reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
@@ -766,7 +766,7 @@ async def _render_level(
     rows.append(
         [types.InlineKeyboardButton(text=' Удалить уровень', callback_data=f'admin_ref_lvl_delask:{level.level}')]
     )
-    rows.append([types.InlineKeyboardButton(text='⬅ К уровням', callback_data='admin_ref_levels')])
+    rows.append([types.InlineKeyboardButton(text=' К уровням', callback_data='admin_ref_levels')])
 
     await callback.message.edit_text('\n'.join(lines), reply_markup=types.InlineKeyboardMarkup(inline_keyboard=rows))
     return True
@@ -865,7 +865,7 @@ async def confirm_delete_level(
         reply_markup=types.InlineKeyboardMarkup(
             inline_keyboard=[
                 [types.InlineKeyboardButton(text=' Да, удалить', callback_data=f'admin_ref_lvl_del:{level_number}')],
-                [types.InlineKeyboardButton(text='⬅ Отмена', callback_data=f'admin_ref_lvl:{level_number}')],
+                [types.InlineKeyboardButton(text=' Отмена', callback_data=f'admin_ref_lvl:{level_number}')],
             ]
         ),
     )
@@ -952,7 +952,7 @@ async def choose_level_tariff(
                 )
             ]
         )
-    rows.append([types.InlineKeyboardButton(text='⬅ Назад', callback_data=f'admin_ref_lvl:{level_number}')])
+    rows.append([types.InlineKeyboardButton(text=' Назад', callback_data=f'admin_ref_lvl:{level_number}')])
 
     text = (
         f' <b>Тариф для дней {side_label}</b>\n\n'
@@ -1005,7 +1005,7 @@ async def start_level_value_edit(callback: types.CallbackQuery, db_user: User, d
         f' <b>{label}</b>\nУровень {level_number}\n\n{hint}\n\n0 — не начислять.',
         reply_markup=types.InlineKeyboardMarkup(
             inline_keyboard=[
-                [types.InlineKeyboardButton(text='⬅ Отмена', callback_data=f'admin_ref_lvl:{level_number}')]
+                [types.InlineKeyboardButton(text=' Отмена', callback_data=f'admin_ref_lvl:{level_number}')]
             ]
         ),
     )
@@ -1197,7 +1197,7 @@ async def start_depth_edit(callback: types.CallbackQuery, db_user: User, db: Asy
         f'не начисляют ничего.\n\n'
         f'Введите число от 1 до {MAX_SUPPORTED_LEVEL}.',
         reply_markup=types.InlineKeyboardMarkup(
-            inline_keyboard=[[types.InlineKeyboardButton(text='⬅ Отмена', callback_data='admin_ref_levels')]]
+            inline_keyboard=[[types.InlineKeyboardButton(text=' Отмена', callback_data='admin_ref_levels')]]
         ),
     )
     await callback.answer()

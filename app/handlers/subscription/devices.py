@@ -891,11 +891,21 @@ async def show_devices_page(
         )
         connected_header = '<blockquote>' + connected_header.removeprefix('<blockquote>')
         devices_text += connected_header
+
+        platform_emoji = {
+            'Windows': "<tg-emoji emoji-id='5818956713507689486'>🪟</tg-emoji>",
+            'macOS': "<tg-emoji emoji-id='5818956713507689486'>🪟</tg-emoji>",
+            'Linux': "<tg-emoji emoji-id='5818956713507689486'>🪟</tg-emoji>",
+            'iOS': "<tg-emoji emoji-id='5818920837645867167'>🍏</tg-emoji>",
+            'Android': "<tg-emoji emoji-id='5819078828017849357'>🤖</tg-emoji>",
+        }
+
         for device in pagination.items:
             platform = device.get('platform', 'Unknown')
             device_model = device.get('deviceModel', 'Unknown')
             os_version = device.get('osVersion') or device.get('os_version') or ''
             app_version = device.get('appVersion') or device.get('app_version') or ''
+            emoji_tag = platform_emoji.get(platform, '')
             device_info = html_mod.escape(
                 format_device_label(platform, device_model, os_version=os_version, app_version=app_version)
             )
@@ -906,7 +916,7 @@ async def show_devices_page(
             devices_text += texts.t(
                 'DEVICE_MANAGEMENT_LIST_ITEM',
                 '• {device}\n',
-            ).format(device=html_mod.escape(device_info))
+            ).format(device=f'{emoji_tag} {html_mod.escape(device_info)}' if emoji_tag else html_mod.escape(device_info))
         devices_text += '</blockquote>\n'
 
     await callback.message.edit_text(

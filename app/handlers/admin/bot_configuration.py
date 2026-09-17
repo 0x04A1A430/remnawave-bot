@@ -512,7 +512,7 @@ def _build_search_results_keyboard(results: list[dict[str, object]]) -> types.In
     rows.append(
         [
             types.InlineKeyboardButton(
-                text='⬅ В главное меню',
+                text=' В главное меню',
                 callback_data='admin_bot_config',
             )
         ]
@@ -545,7 +545,7 @@ async def start_settings_search(
     await state.update_data(botcfg_origin='bot_config')
 
     keyboard = types.InlineKeyboardMarkup(
-        inline_keyboard=[[types.InlineKeyboardButton(text='⬅ В главное меню', callback_data='admin_bot_config')]]
+        inline_keyboard=[[types.InlineKeyboardButton(text=' В главное меню', callback_data='admin_bot_config')]]
     )
 
     await callback.message.edit_text(
@@ -591,7 +591,7 @@ async def handle_search_query(
             inline_keyboard=[
                 [
                     types.InlineKeyboardButton(
-                        text='⬅ Попробовать снова',
+                        text=' Попробовать снова',
                         callback_data='botcfg_action:search',
                     )
                 ],
@@ -633,7 +633,7 @@ async def show_presets(
     rows: list[list[types.InlineKeyboardButton]] = []
     for chunk in _chunk(buttons, 2):
         rows.append(list(chunk))
-    rows.append([types.InlineKeyboardButton(text='⬅ Главное меню', callback_data='admin_bot_config')])
+    rows.append([types.InlineKeyboardButton(text=' Главное меню', callback_data='admin_bot_config')])
 
     await callback.message.edit_text(
         text,
@@ -682,7 +682,7 @@ async def preview_preset(
     keyboard = types.InlineKeyboardMarkup(
         inline_keyboard=[
             [types.InlineKeyboardButton(text=' Применить', callback_data=f'botcfg_preset_apply:{preset_key}')],
-            [types.InlineKeyboardButton(text='⬅ Назад', callback_data='botcfg_action:presets')],
+            [types.InlineKeyboardButton(text=' Назад', callback_data='botcfg_action:presets')],
         ]
     )
 
@@ -735,7 +735,7 @@ async def apply_preset(
 
     keyboard = types.InlineKeyboardMarkup(
         inline_keyboard=[
-            [types.InlineKeyboardButton(text='⬅ К пресетам', callback_data='botcfg_action:presets')],
+            [types.InlineKeyboardButton(text=' К пресетам', callback_data='botcfg_action:presets')],
             [types.InlineKeyboardButton(text=' Главное меню', callback_data='admin_bot_config')],
         ]
     )
@@ -799,7 +799,7 @@ async def start_import_settings(
     await state.update_data(botcfg_origin='bot_config')
 
     keyboard = types.InlineKeyboardMarkup(
-        inline_keyboard=[[types.InlineKeyboardButton(text='⬅ Главное меню', callback_data='admin_bot_config')]]
+        inline_keyboard=[[types.InlineKeyboardButton(text=' Главное меню', callback_data='admin_bot_config')]]
     )
 
     await callback.message.edit_text(
@@ -926,7 +926,7 @@ async def show_settings_history(
         lines.append('История изменений пуста.')
 
     keyboard = types.InlineKeyboardMarkup(
-        inline_keyboard=[[types.InlineKeyboardButton(text='⬅ Главное меню', callback_data='admin_bot_config')]]
+        inline_keyboard=[[types.InlineKeyboardButton(text=' Главное меню', callback_data='admin_bot_config')]]
     )
 
     await callback.message.edit_text('\n'.join(lines), parse_mode='HTML', reply_markup=keyboard)
@@ -1126,7 +1126,7 @@ def _build_groups_keyboard() -> types.InlineKeyboardMarkup:
     rows.append(
         [
             types.InlineKeyboardButton(
-                text='⬅ Назад в админку',
+                text=' Назад в админку',
                 callback_data='admin_submenu_settings',
             )
         ]
@@ -1173,7 +1173,7 @@ def _build_categories_keyboard(
         if page > 1:
             nav_row.append(
                 types.InlineKeyboardButton(
-                    text='⬅',
+                    text='',
                     callback_data=f'botcfg_group:{group_key}:{page - 1}',
                 )
             )
@@ -1195,7 +1195,7 @@ def _build_categories_keyboard(
     rows.append(
         [
             types.InlineKeyboardButton(
-                text='⬅ К разделам',
+                text=' К разделам',
                 callback_data='admin_bot_config',
             )
         ]
@@ -1259,7 +1259,7 @@ def _build_settings_keyboard(
         label = texts.t('PAYMENT_CARD_PAL24', ' Банковская карта (PayPalych)')
         test_payment_buttons.append([_test_button(f'{label} · тест', 'pal24')])
     elif category_key == 'TELEGRAM':
-        label = texts.t('PAYMENT_TELEGRAM_STARS', '⭐ Telegram Stars')
+        label = texts.t('PAYMENT_TELEGRAM_STARS', ' Telegram Stars')
         test_payment_buttons.append([_test_button(f'{label} · тест', 'stars')])
     elif category_key == 'CRYPTOBOT':
         label = texts.t('PAYMENT_CRYPTOBOT', ' Криптовалюта (CryptoBot)')
@@ -1317,7 +1317,7 @@ def _build_settings_keyboard(
         if page > 1:
             nav_row.append(
                 types.InlineKeyboardButton(
-                    text='⬅',
+                    text='',
                     callback_data=(f'botcfg_cat:{group_key}:{category_key}:{category_page}:{page - 1}'),
                 )
             )
@@ -1334,7 +1334,7 @@ def _build_settings_keyboard(
     rows.append(
         [
             types.InlineKeyboardButton(
-                text='⬅ К категориям',
+                text=' К категориям',
                 callback_data=f'botcfg_group:{group_key}:{category_page}',
             )
         ]
@@ -1438,7 +1438,7 @@ def _build_setting_keyboard(
     rows.append(
         [
             types.InlineKeyboardButton(
-                text='⬅ Назад',
+                text=' Назад',
                 callback_data=(f'botcfg_cat:{group_key}:{definition.category_key}:{category_page}:{settings_page}'),
             )
         ]
@@ -1735,7 +1735,7 @@ async def show_simple_subscription_squad_selector(
         if page > 1:
             nav_row.append(
                 types.InlineKeyboardButton(
-                    text='⬅',
+                    text='',
                     callback_data=(
                         f'botcfg_simple_squad:{group_key}:{category_page}:{settings_page}:{token}:{page - 1}'
                     ),
@@ -1756,7 +1756,7 @@ async def show_simple_subscription_squad_selector(
     keyboard_rows.append(
         [
             types.InlineKeyboardButton(
-                text='⬅ Назад',
+                text=' Назад',
                 callback_data=(f'botcfg_setting:{group_key}:{category_page}:{settings_page}:{token}'),
             )
         ]
@@ -2202,13 +2202,13 @@ async def test_payment_provider(
         message_text = (
             ' <b>Тестовый платеж Telegram Stars</b>\n\n'
             f' Сумма: {texts.format_price(amount_kopeks)}\n'
-            f'⭐ К оплате: {stars_amount}'
+            f' К оплате: {stars_amount}'
         )
         reply_markup = types.InlineKeyboardMarkup(
             inline_keyboard=[
                 [
                     types.InlineKeyboardButton(
-                        text=texts.t('PAYMENT_TELEGRAM_STARS', '⭐ Открыть счет'),
+                        text=texts.t('PAYMENT_TELEGRAM_STARS', ' Открыть счет'),
                         url=invoice_link,
                     )
                 ]
@@ -2857,7 +2857,7 @@ async def show_remna_config_menu(callback: types.CallbackQuery, db_user: User, d
             ]
         )
 
-    keyboard.append([types.InlineKeyboardButton(text='⬅ Назад', callback_data='admin_submenu_settings')])
+    keyboard.append([types.InlineKeyboardButton(text=' Назад', callback_data='admin_submenu_settings')])
 
     await callback.message.edit_text(
         text,

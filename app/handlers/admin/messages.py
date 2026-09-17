@@ -276,7 +276,7 @@ async def show_pinned_message_menu(
         if pinned_message.media_type:
             media_label = 'Фото' if pinned_message.media_type == 'photo' else 'Видео'
             media_line = f' Медиа: {media_label}\n'
-        position_line = '⬆ Отправлять перед меню' if pinned_message.send_before_menu else '⬇ Отправлять после меню'
+        position_line = ' Отправлять перед меню' if pinned_message.send_before_menu else ' Отправлять после меню'
         start_mode_line = (
             ' При каждом /start' if pinned_message.send_on_every_start else ' Только один раз и при обновлении'
         )
@@ -563,7 +563,7 @@ async def show_tariff_filter(callback: types.CallbackQuery, db_user: User, db: A
         await callback.message.edit_text(
             ' <b>Нет доступных тарифов</b>\n\nСоздайте тарифы в разделе управления тарифами.',
             reply_markup=types.InlineKeyboardMarkup(
-                inline_keyboard=[[types.InlineKeyboardButton(text='⬅ Назад', callback_data='admin_msg_by_sub')]]
+                inline_keyboard=[[types.InlineKeyboardButton(text=' Назад', callback_data='admin_msg_by_sub')]]
             ),
             parse_mode='HTML',
         )
@@ -591,7 +591,7 @@ async def show_tariff_filter(callback: types.CallbackQuery, db_user: User, db: A
             ]
         )
 
-    buttons.append([types.InlineKeyboardButton(text='⬅ Назад', callback_data='admin_msg_by_sub')])
+    buttons.append([types.InlineKeyboardButton(text=' Назад', callback_data='admin_msg_by_sub')])
 
     await callback.message.edit_text(
         ' <b>Рассылка по тарифу</b>\n\nВыберите тариф для рассылки пользователям с активной подпиской на этот тариф:',
@@ -627,7 +627,7 @@ async def show_messages_history(callback: types.CallbackQuery, db_user: User, db
  История рассылок пуста.
 Отправьте первую рассылку, чтобы увидеть её здесь.
 """
-        keyboard = [[types.InlineKeyboardButton(text='⬅ Назад', callback_data='admin_messages')]]
+        keyboard = [[types.InlineKeyboardButton(text=' Назад', callback_data='admin_messages')]]
     else:
         text = f' <b>История рассылок</b> (страница {page}/{total_pages})\n\n'
 

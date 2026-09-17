@@ -100,7 +100,7 @@ def _batch_card_keyboard(batch: CouponBatch, counts: dict[str, int]) -> types.In
     keyboard.append(
         [types.InlineKeyboardButton(text=' Удалить партию', callback_data=f'admin_coupon_delete_{batch.id}')]
     )
-    keyboard.append([types.InlineKeyboardButton(text='⬅ Назад', callback_data='admin_coupons')])
+    keyboard.append([types.InlineKeyboardButton(text=' Назад', callback_data='admin_coupons')])
     return types.InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
@@ -171,7 +171,7 @@ async def _render_coupons_menu(
     keyboard.extend(
         [
             [types.InlineKeyboardButton(text=' Создать партию', callback_data='admin_coupon_create')],
-            [types.InlineKeyboardButton(text='⬅ Назад', callback_data='admin_submenu_promo')],
+            [types.InlineKeyboardButton(text=' Назад', callback_data='admin_submenu_promo')],
         ]
     )
 

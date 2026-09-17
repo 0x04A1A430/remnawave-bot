@@ -189,7 +189,7 @@ async def _render_user_messages_list(message: types.Message, db: AsyncSession, l
 
     nav_buttons = []
     if page > 0:
-        nav_buttons.append(InlineKeyboardButton(text='⬅ Назад', callback_data=f'list_user_messages:{page - 1}'))
+        nav_buttons.append(InlineKeyboardButton(text=' Назад', callback_data=f'list_user_messages:{page - 1}'))
 
     nav_buttons.append(InlineKeyboardButton(text=' Добавить', callback_data='add_user_message'))
 

@@ -8,7 +8,7 @@ import structlog
 from aiogram import BaseMiddleware, Bot
 from aiogram.enums import ParseMode
 from aiogram.exceptions import TelegramBadRequest
-from aiogram.types import BufferedInputFile, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, TelegramObject
+from aiogram.types import BufferedInputFile, CallbackQuery, TelegramObject
 from sqlalchemy.exc import InterfaceError, OperationalError
 
 from app.config import settings
@@ -28,7 +28,6 @@ ERROR_MESSAGE_MAX_LENGTH: Final[int] = 500
 REPORT_SEPARATOR_WIDTH: Final[int] = 50
 DATETIME_FORMAT: Final[str] = '%d.%m.%Y %H:%M:%S'
 DATETIME_FORMAT_FILENAME: Final[str] = '%Y%m%d_%H%M%S'
-DEVELOPER_CONTACT_URL: Final[str] = 'https://t.me/fringg'
 
 # Фразы ошибок Telegram API
 OLD_QUERY_PHRASES: Final[tuple[str, ...]] = STALE_CALLBACK_QUERY_PHRASES
@@ -67,7 +66,7 @@ class GlobalErrorMiddleware(BaseMiddleware):
             return await self._handle_telegram_error(event, e, data)
         except (InterfaceError, OperationalError) as e:
             # Ошибки соединения с БД (таймаут после долгих операций) - логируем, но не спамим админам
-            logger.warning('⚠️ Ошибка соединения с БД в GlobalErrorMiddleware', e=e)
+            logger.warning('Ошибка соединения с БД в GlobalErrorMiddleware', e=e)
             raise
         except Exception as e:
             user_info = self._get_user_info(event)
@@ -210,7 +209,7 @@ def _build_rich_error_report(now: datetime, error_type: str, context: str) -> st
     его .txt-файлом без потерь).
     """
     blocks = [
-        '<h6>⚠️ Ошибка во время работы</h6><hr/>',
+        '<h6>Отчёт об ошибке</h6><hr/>',
         f'<p><b>Тип:</b> <code>{html.escape(error_type)}</code> · <b>Ошибок в отчёте:</b> {len(_error_buffer)}</p>',
     ]
     if context:
@@ -224,7 +223,7 @@ def _build_rich_error_report(now: datetime, error_type: str, context: str) -> st
     # Запись без трейса (ожидаемый отказ доставки, «traceback недоступен») —
     # обычный абзац, а не блок кода с одной строкой.
     for index, (err_type, err_msg, err_tb) in enumerate(reversed(_error_buffer)):
-        summary = f'📋 {err_type}: {err_msg[:80]}' if err_msg else f'📋 {err_type}'
+        summary = f'ⓘ {err_type}: {err_msg[:80]}' if err_msg else f'ⓘ {err_type}'
         if _looks_like_traceback(err_tb):
             blocks.append(rich_traceback_details(summary, err_tb, open_by_default=index == 0))
         else:
@@ -290,26 +289,13 @@ async def send_error_to_admin_chat(
 
     _last_error_notification = now
 
-    keyboard = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text='💬 Сообщить разработчику',
-                    url=DEVELOPER_CONTACT_URL,
-                ),
-            ],
-        ]
-    )
-
     # Rich-вид (Bot API 10.1): трейсбеки инлайн в сворачиваемых блоках с
     # подсветкой — лимит rich-сообщения 32768 символов против 1024 у caption,
     # так что .txt-файл не нужен. При недоступности/переполнении — классический
     # путь с файлом ниже.
     try:
         rich_html = _build_rich_error_report(now, error_type, context)
-        if rich_html and await try_send_rich_admin_message(
-            bot, chat_id, rich_html, thread_id=topic_id, reply_markup=keyboard
-        ):
+        if rich_html and await try_send_rich_admin_message(bot, chat_id, rich_html, thread_id=topic_id):
             _error_buffer.clear()
             logger.info('Rich-уведомление об ошибке отправлено в чат', chat_id=chat_id)
             return 'sent'
@@ -355,8 +341,8 @@ async def send_error_to_admin_chat(
         )
 
         message_text = (
-            f'<b>Remnawave Bedolaga Bot</b>\n\n'
-            f'⚠️ Ошибка во время работы\n\n'
+            f'<b>Remnawave Bot</b>\n\n'
+            f'Ошибка во время работы\n\n'
             f'<b>Тип:</b> <code>{html.escape(error_type)}</code>\n'
             f'<b>Ошибок в отчёте:</b> {errors_count}\n'
         )
@@ -375,7 +361,6 @@ async def send_error_to_admin_chat(
             'document': file,
             'caption': message_text,
             'parse_mode': ParseMode.HTML,
-            'reply_markup': keyboard,
         }
 
         if topic_id:
