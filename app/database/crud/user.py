@@ -997,6 +997,7 @@ def _users_list_conditions(
     purchase_count: int | None = None,
     traffic_used_percent_min: int | None = None,
     connected: 'ConnectedAccounts | None' = None,
+    in_grace: bool | None = None,
 ) -> list:
     """Условия WHERE списка пользователей админки — одни для списка и для счётчика.
 
@@ -1102,6 +1103,17 @@ def _users_list_conditions(
         any_subscription = exists(select(Subscription.id).where(Subscription.user_id == User.id).correlate(User))
         conditions.append(any_subscription if has_subscription else ~any_subscription)
 
+    if in_grace is not None:
+        # «В грейсе» — открытый временный доступ: тот же признак, по которому строка
+        # получает «временно до …». Закрытый грейс держит старую дату оверлея, но
+        # доступа у человека уже нет — он не в сегменте.
+        on_grace = exists(
+            select(Subscription.id)
+            .where(Subscription.user_id == User.id, Subscription.grace_session_open.is_(True))
+            .correlate(User)
+        )
+        conditions.append(on_grace if in_grace else ~on_grace)
+
     if purchase_count == 0:
         # Покупка — ровно то, что считает статистика трат: завершённая оплата подписки.
         conditions.append(
@@ -1181,6 +1193,7 @@ async def get_users_list(
     purchase_count: int | None = None,
     traffic_used_percent_min: int | None = None,
     connected: 'ConnectedAccounts | None' = None,
+    in_grace: bool | None = None,
     order_by_balance: bool = False,
     order_by_traffic: bool = False,
     order_by_last_activity: bool = False,
@@ -1220,6 +1233,7 @@ async def get_users_list(
             purchase_count=purchase_count,
             traffic_used_percent_min=traffic_used_percent_min,
             connected=connected,
+            in_grace=in_grace,
         )
     )
 
@@ -1352,6 +1366,7 @@ async def get_users_count(
     purchase_count: int | None = None,
     traffic_used_percent_min: int | None = None,
     connected: 'ConnectedAccounts | None' = None,
+    in_grace: bool | None = None,
 ) -> int:
     query = select(func.count(User.id)).where(
         *_users_list_conditions(
@@ -1370,6 +1385,7 @@ async def get_users_count(
             purchase_count=purchase_count,
             traffic_used_percent_min=traffic_used_percent_min,
             connected=connected,
+            in_grace=in_grace,
         )
     )
 

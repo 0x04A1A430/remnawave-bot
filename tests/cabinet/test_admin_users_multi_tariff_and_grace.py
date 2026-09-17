@@ -177,6 +177,7 @@ async def _rows(db, monkeypatch: pytest.MonkeyPatch, **params):
         'purchase_count': None,
         'traffic_used_percent_min': None,
         'online': None,
+        'in_grace': None,
         'sort_by': admin_users.SortByEnum.CREATED_AT,
         'sort_order': None,
     }

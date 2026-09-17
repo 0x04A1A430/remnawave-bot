@@ -205,6 +205,7 @@ async def _list(db, **params):
         'purchase_count': None,
         'traffic_used_percent_min': None,
         'online': None,
+        'in_grace': None,
         'sort_by': admin_users.SortByEnum.CREATED_AT,
         'sort_order': None,
     }
@@ -284,6 +285,33 @@ async def test_route_maps_grace_sort_to_the_selection(monkeypatch: pytest.Monkey
         await _list(db, sort_by=admin_users.SortByEnum.GRACE_UNTIL)
         assert seen['order_by_grace'] is True
         assert seen['order_by_subscription_end'] is False
+
+
+async def test_route_passes_grace_filter_to_list_and_count(monkeypatch: pytest.MonkeyPatch) -> None:
+    """«В грейсе» доходит и до списка, и до счётчика — иначе «показано N из M» врёт."""
+    from app.cabinet.routes import admin_users
+    from app.services import panel_online
+
+    async with memory_session(monkeypatch, TABLES) as db:
+        await _seed(db)
+        monkeypatch.setattr(panel_online, 'get_online_snapshot', AsyncMock(return_value=None))
+        seen_list: dict = {}
+        seen_count: dict = {}
+        real_list, real_count = admin_users.get_users_list, admin_users.get_users_count
+
+        async def spy_list(*args, **kwargs):
+            seen_list.update(kwargs)
+            return await real_list(*args, **kwargs)
+
+        async def spy_count(*args, **kwargs):
+            seen_count.update(kwargs)
+            return await real_count(*args, **kwargs)
+
+        monkeypatch.setattr(admin_users, 'get_users_list', spy_list)
+        monkeypatch.setattr(admin_users, 'get_users_count', spy_count)
+        await _list(db, in_grace=True)
+        assert seen_list['in_grace'] is True
+        assert seen_count['in_grace'] is True
 
 
 async def test_route_refuses_online_filter_without_panel(monkeypatch: pytest.MonkeyPatch) -> None:

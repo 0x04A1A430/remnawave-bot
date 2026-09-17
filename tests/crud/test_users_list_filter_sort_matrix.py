@@ -64,6 +64,7 @@ FILTERS: dict[str, dict] = {
     'without_purchases': {'purchase_count': 0},
     'traffic_low': {'traffic_used_percent_min': 80},
     'online': {'connected': ConnectedAccounts(panel_ids=frozenset({7001}), telegram_ids=frozenset({2}))},
+    'in_grace': {'in_grace': True},
 }
 
 #: Все сортировки ручки списка.
