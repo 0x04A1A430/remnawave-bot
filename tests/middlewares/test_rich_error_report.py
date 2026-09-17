@@ -34,12 +34,12 @@ def test_rich_error_report_structure():
 
     report = ge._build_rich_error_report(datetime.now(UTC), 'KeyError', 'Logger: app.x')
 
-    assert report.startswith('<h6>⚠️ Ошибка во время работы</h6>')
+    assert report.startswith('<h6>Отчёт об ошибке</h6>')
     assert '<code>KeyError</code>' in report
     assert 'Ошибок в отчёте:</b> 2' in report
     # Свежая ошибка развёрнута, старая свёрнута; содержимое экранировано
-    assert '<details open><summary>📋 KeyError: свежее</summary>' in report
-    assert '<details><summary>📋 ValueError: старое &lt;сообщение&gt;' in report
+    assert '<details open><summary>ⓘ KeyError: свежее</summary>' in report
+    assert '<details><summary>ⓘ ValueError: старое &lt;сообщение&gt;' in report
     assert 'fresh &lt;tag&gt;' in report
     assert '<footer>' in report
 
@@ -62,7 +62,8 @@ async def test_send_error_uses_rich_and_clears_buffer():
     assert ge._error_buffer == []
     html = bot.send_rich_message.await_args.kwargs['rich_message'].html
     assert '<pre><code class="language-python">' in html
-    assert bot.send_rich_message.await_args.kwargs['reply_markup'] is not None
+    # Кнопка «Сообщить разработчику» убрана — клавиатуры быть не должно
+    assert bot.send_rich_message.await_args.kwargs.get('reply_markup') is None
 
 
 async def test_send_error_falls_back_to_document_when_rich_unavailable(monkeypatch):
@@ -91,5 +92,5 @@ def test_rich_error_report_renders_a_plain_note_without_code_block():
 
     assert '<details' not in report
     assert '<pre><code' not in report
-    assert '📋 TelegramForbiddenError: Ошибка отправки' in report
+    assert 'ⓘ TelegramForbiddenError: Ошибка отправки' in report
     assert 'пользователь &lt;заблокировал&gt; бота' in report
