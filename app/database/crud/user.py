@@ -1187,14 +1187,15 @@ async def get_users_list(
     order_by_total_spent: bool = False,
     order_by_purchase_count: bool = False,
     order_by_subscription_end: bool = False,
+    order_by_grace: bool = False,
     sort_descending: bool | None = None,
 ) -> list[User]:
     """Страница списка пользователей админки.
 
     ``sort_descending`` — направление выбранной сортировки; ``None`` оставляет
-    привычное: окончание подписки — сначала скорые, остальное — сначала больше/новее.
-    Люди без значения ключа (нет активности, нет подходящей подписки) внизу в обе стороны,
-    при равных ключах — сначала новые.
+    привычное: окончание подписки и грейса — сначала скорые, остальное — сначала
+    больше/новее. Люди без значения ключа (нет активности, нет подходящей подписки,
+    нет открытого грейса) внизу в обе стороны, при равных ключах — сначала новые.
     """
     query = select(User).options(
         selectinload(User.subscriptions).selectinload(Subscription.tariff),
@@ -1229,10 +1230,11 @@ async def get_users_list(
         order_by_total_spent,
         order_by_purchase_count,
         order_by_subscription_end,
+        order_by_grace,
     ]
     if sum(int(flag) for flag in sort_flags) > 1:
         logger.debug(
-            'Выбрано несколько сортировок пользователей — применяется приоритет: трафик > траты > покупки > баланс > активность > окончание подписки'
+            'Выбрано несколько сортировок пользователей — применяется приоритет: трафик > траты > покупки > баланс > активность > окончание подписки > грейс'
         )
 
     transactions_stats = None
@@ -1300,6 +1302,18 @@ async def get_users_list(
             .scalar_subquery()
         )
         sort_key, natural_descending = soonest_end, False
+    elif order_by_grace:
+        # MIN(grace_overlay_expire_at) среди подписок с ОТКРЫТЫМ грейсом — та же дата,
+        # что кабинет показывает строкой «временно до …» (``_grace_until`` в admin_users).
+        # У закрытого грейса дата оверлея остаётся в строке, но грейса у человека
+        # нет — ключ пустой, и такие люди внизу в обе стороны.
+        soonest_grace = (
+            select(func.min(Subscription.grace_overlay_expire_at))
+            .where(Subscription.user_id == User.id, Subscription.grace_session_open.is_(True))
+            .correlate(User)
+            .scalar_subquery()
+        )
+        sort_key, natural_descending = soonest_grace, False
     else:
         sort_key, natural_descending = User.created_at, True
 

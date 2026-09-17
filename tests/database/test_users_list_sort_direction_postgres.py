@@ -31,7 +31,7 @@ NOW = datetime.now(UTC)
 ALL_SORTS: tuple[str | None, ...] = (None, *SORTS)
 
 #: Порядок по умолчанию: low → mid → high, если ключ по умолчанию «сначала меньше».
-NATURAL_ASCENDING = {'order_by_subscription_end'}
+NATURAL_ASCENDING = {'order_by_subscription_end', 'order_by_grace'}
 
 
 async def _seed(db) -> None:
@@ -49,6 +49,9 @@ async def _seed(db) -> None:
         sub = _subscription(user, name)
         sub.end_date = NOW + timedelta(days=rank)
         sub.traffic_used_gb = float(rank * 10)
+        # Открытый грейс: ключ «грейс кончается» — дата оверлея; закрытый в ключ не попадает.
+        sub.grace_session_open = True
+        sub.grace_overlay_expire_at = NOW + timedelta(days=rank, hours=6)
         db.add(sub)
         for _ in range(rank):
             db.add(
@@ -83,7 +86,7 @@ async def test_every_sort_goes_both_ways(postgres_database: str, sort: str | Non
         assert [u.username for u in desc] == ascending[::-1]
 
 
-@pytest.mark.parametrize('sort', ['order_by_last_activity', 'order_by_subscription_end'])
+@pytest.mark.parametrize('sort', ['order_by_last_activity', 'order_by_subscription_end', 'order_by_grace'])
 @pytest.mark.parametrize('descending', [False, True])
 async def test_people_without_a_value_stay_at_the_bottom(postgres_database: str, sort: str, descending: bool) -> None:
     async with postgres_session(postgres_database, list(TABLES)) as db:
@@ -94,8 +97,11 @@ async def test_people_without_a_value_stay_at_the_bottom(postgres_database: str,
         # None в конструкторе ORM подменяет умолчанием колонки (now()) — обнуляем запросом.
         await db.execute(update(User).where(User.id == empty.id).values(last_activity=None))
         # Истёкшая подписка не считается «окончанием активной» — ключ пустой.
+        # Дата оверлея при ЗАКРЫТОМ грейсе — тоже не ключ: грейса у человека нет.
         expired = _subscription(empty, 'x')
         expired.status = SubscriptionStatus.EXPIRED.value
+        expired.grace_session_open = False
+        expired.grace_overlay_expire_at = NOW - timedelta(days=1)
         db.add(expired)
         await db.commit()
 

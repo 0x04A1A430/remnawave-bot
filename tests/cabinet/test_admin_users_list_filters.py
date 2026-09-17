@@ -265,6 +265,27 @@ async def test_route_passes_sort_direction(monkeypatch: pytest.MonkeyPatch, sort
         assert seen['order_by_balance'] is True
 
 
+async def test_route_maps_grace_sort_to_the_selection(monkeypatch: pytest.MonkeyPatch) -> None:
+    """«Грейс кончается» — свой ключ выборки, а не подмена окончания подписки."""
+    from app.cabinet.routes import admin_users
+    from app.services import panel_online
+
+    async with memory_session(monkeypatch, TABLES) as db:
+        await _seed(db)
+        monkeypatch.setattr(panel_online, 'get_online_snapshot', AsyncMock(return_value=None))
+        seen: dict = {}
+        real = admin_users.get_users_list
+
+        async def spy(*args, **kwargs):
+            seen.update(kwargs)
+            return await real(*args, **kwargs)
+
+        monkeypatch.setattr(admin_users, 'get_users_list', spy)
+        await _list(db, sort_by=admin_users.SortByEnum.GRACE_UNTIL)
+        assert seen['order_by_grace'] is True
+        assert seen['order_by_subscription_end'] is False
+
+
 async def test_route_refuses_online_filter_without_panel(monkeypatch: pytest.MonkeyPatch) -> None:
     """Панель молчит — «онлайн» не угадываем и не отдаём всех: честная ошибка, а строки без отметки."""
     from fastapi import HTTPException

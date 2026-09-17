@@ -74,6 +74,7 @@ SORTS: tuple[str, ...] = (
     'order_by_total_spent',
     'order_by_purchase_count',
     'order_by_subscription_end',
+    'order_by_grace',
 )
 
 
