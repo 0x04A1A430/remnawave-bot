@@ -916,7 +916,9 @@ async def show_devices_page(
             devices_text += texts.t(
                 'DEVICE_MANAGEMENT_LIST_ITEM',
                 '• {device}\n',
-            ).format(device=f'{emoji_tag} {html_mod.escape(device_info)}' if emoji_tag else html_mod.escape(device_info))
+            ).format(
+                device=f'{emoji_tag} {html_mod.escape(device_info)}' if emoji_tag else html_mod.escape(device_info)
+            )
         devices_text += '</blockquote>\n'
 
     await callback.message.edit_text(
