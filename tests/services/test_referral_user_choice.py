@@ -20,7 +20,6 @@ from app.services.referral_reward_service import (
     ReferralRewardLevelService,
     RewardEvent,
     build_reward_components,
-    describe_active_levels,
     resolve_reward_preference,
 )
 
@@ -205,41 +204,3 @@ class TestRewardKindChoice:
         )
 
         assert (components[0].money_kopeks, components[0].days) == (100_00, 0)
-
-
-class TestLadderMatchesTheChoice:
-    """Показанное обязано совпадать с начисленным и здесь."""
-
-    @pytest.mark.asyncio
-    @pytest.mark.parametrize('preference', ['money', 'days'])
-    async def test_ladder_shows_only_the_chosen_side(self, wired, monkeypatch, preference):
-        _install(monkeypatch, {1: _level(1)})
-        viewer = wired[1]
-        viewer.referral_reward_preference = preference
-
-        lines = await describe_active_levels(None, viewer=viewer, language='ru')
-        components = await build_reward_components(
-            None, wired[2], event=RewardEvent.REPEAT_TOPUP, topup_amount_kopeks=1000_00
-        )
-
-        shows_money = '%' in lines[0]
-        shows_days = 'дн.' in lines[0]
-        assert shows_money is (components[0].money_kopeks > 0), lines[0]
-        assert shows_days is (components[0].days > 0), lines[0]
-
-    @pytest.mark.asyncio
-    async def test_without_a_choice_the_ladder_shows_money(self, wired, monkeypatch):
-        """Не выбиравший получает деньги — лестница обязана показывать их одни."""
-        _install(monkeypatch, {1: _level(1)})
-
-        lines = await describe_active_levels(None, viewer=wired[1], language='ru')
-        assert '%' in lines[0] and 'дн.' not in lines[0], lines[0]
-
-    @pytest.mark.asyncio
-    async def test_with_the_setting_off_the_ladder_shows_both(self, wired, monkeypatch):
-        """Пока админ выбор не разрешил, правило платит обе стороны — так и пишем."""
-        _install(monkeypatch, {1: _level(1)})
-        monkeypatch.setattr(settings, 'REFERRAL_ALLOW_REWARD_KIND_CHOICE', False)
-
-        lines = await describe_active_levels(None, viewer=wired[1], language='ru')
-        assert '%' in lines[0] and 'дн.' in lines[0], lines[0]

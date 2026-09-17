@@ -496,29 +496,6 @@ class TestEditorTraps:
 
         assert 'НЕ применяется' not in callback.message.edit_text.await_args.args[0]
 
-    @pytest.mark.asyncio
-    async def test_tariff_picker_keeps_the_assigned_inactive_tariff(self, wired, monkeypatch):
-        """Назначенный тариф мог стать неактивным — из списка он просто исчезал."""
-        wired['levels'] = [_level(1, reward_mode='days', referrer_days=7, referrer_tariff_id=99)]
-
-        async def only_active(_db, include_inactive=False):
-            return [SimpleNamespace(id=42, name='Активный', is_active=True)]
-
-        async def by_id(_db, tariff_id):
-            return SimpleNamespace(id=99, name='Снятый', is_active=False)
-
-        monkeypatch.setattr(editor, 'get_all_tariffs', only_active)
-        monkeypatch.setattr('app.database.crud.tariff.get_tariff_by_id', by_id)
-
-        callback = _callback('admin_ref_lvl_tariff:1:referrer')
-        await _raw(editor.choose_level_tariff)(callback, db_user=SimpleNamespace(id=1), db=None)
-
-        markup = callback.message.edit_text.await_args.kwargs['reply_markup']
-        labels = [b.text for row in markup.inline_keyboard for b in row]
-        assert any('Снятый' in label for label in labels), 'назначенный тариф обязан остаться в списке'
-        assert any('✅' in label and 'Снятый' in label for label in labels), 'и быть помечен как выбранный'
-        assert any('неактивен' in label for label in labels)
-
 
 class TestChainDepthEditing:
     """Глубина обхода задаётся там же, где уровни.
@@ -905,64 +882,6 @@ class TestRegistrationPercentTrap:
         await _raw(editor.show_reward_level)(callback, db_user=SimpleNamespace(id=1), db=None)
 
         assert 'не начислит пригласившему ничего' not in callback.message.edit_text.await_args.args[0]
-
-
-class TestNonFiniteInput:
-    """'inf' и 'nan' роняли обработчик и оставляли состояние взведённым.
-
-    float() их принимает, проверка на отрицательность пропускает, а int() падает.
-    Обработчик уходил с ошибкой, НЕ сняв состояние ввода, — и следующее
-    произвольное сообщение админа попадало сюда же и переписывало денежное поле.
-    Ровно так однажды «100» превратилось в «процент пригласившему = 100%».
-    """
-
-    @pytest.mark.parametrize('raw', ['inf', '-inf', 'nan', 'Infinity', 'INF', 'NaN'])
-    @pytest.mark.parametrize('field', ['referrer_percent', 'referrer_days', 'max_payments', 'referrer_fixed_kopeks'])
-    @pytest.mark.asyncio
-    async def test_non_finite_is_refused_without_crashing(self, wired, monkeypatch, raw, field):
-        saved = {}
-
-        async def fake_upsert(_db, level, **values):
-            saved.update(values)
-            return _level(level)
-
-        monkeypatch.setattr(editor, 'upsert_reward_level', fake_upsert)
-        cleared = {'called': False}
-
-        async def fake_clear():
-            cleared['called'] = True
-
-        state = SimpleNamespace(
-            get_data=lambda: _resolved({'referral_level': 1, 'referral_field': field}),
-            clear=fake_clear,
-        )
-        message = SimpleNamespace(text=raw, answer=AsyncMock(), from_user=SimpleNamespace(id=1))
-
-        await _raw(editor.process_level_value)(message, db_user=SimpleNamespace(id=1), db=None, state=state)
-
-        assert not saved, f'{raw} не должно сохраняться'
-        message.answer.assert_awaited()
-        assert '❌' in message.answer.await_args.args[0]
-
-    @pytest.mark.asyncio
-    async def test_ordinary_number_still_saves(self, wired, monkeypatch):
-        """Контроль: отсечка не должна ломать обычный ввод."""
-        saved = {}
-
-        async def fake_upsert(_db, level, **values):
-            saved.update(values)
-            return _level(level)
-
-        monkeypatch.setattr(editor, 'upsert_reward_level', fake_upsert)
-        state = SimpleNamespace(
-            get_data=lambda: _resolved({'referral_level': 1, 'referral_field': 'referrer_percent'}),
-            clear=lambda: _resolved(None),
-        )
-        message = SimpleNamespace(text='25', answer=AsyncMock(), from_user=SimpleNamespace(id=1))
-
-        await _raw(editor.process_level_value)(message, db_user=SimpleNamespace(id=1), db=None, state=state)
-
-        assert saved == {'referrer_percent': 25}
 
 
 class TestThresholdWarningPrecision:

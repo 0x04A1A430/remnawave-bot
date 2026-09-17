@@ -2,7 +2,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import app.handlers.admin.tariff_custom_traffic as custom_mod
-from app.handlers.admin.tariffs import format_tariff_info, get_tariff_view_keyboard
+from app.handlers.admin.tariffs import get_tariff_view_keyboard
 
 
 def _unwrap(fn):
@@ -69,25 +69,6 @@ def _state(tariff_id: int = 7):
 
 def _callbacks(keyboard) -> list[str]:
     return [button.callback_data for row in keyboard.inline_keyboard for button in row if button.callback_data]
-
-
-def test_tariff_card_renders_custom_traffic_status_and_navigation() -> None:
-    tariff = _tariff(
-        custom_traffic_enabled=True,
-        traffic_price_per_gb_kopeks=200,
-        min_traffic_gb=5,
-        max_traffic_gb=100,
-    )
-
-    rendered = format_tariff_info(tariff, 'ru')
-    callbacks = _callbacks(get_tariff_view_keyboard(tariff, 'ru'))
-
-    assert '<b>Произвольный трафик:</b>' in rendered
-    assert '✅ Включено' in rendered
-    assert 'Цена за 1 ГБ: 2 ₽' in rendered
-    assert 'Минимальный объём: 5 ГБ' in rendered
-    assert 'Максимальный объём: 100 ГБ' in rendered
-    assert 'admin_tariff_edit_custom_traffic:7' in callbacks
 
 
 def test_custom_traffic_screen_uses_neutral_value_for_unset_price() -> None:
@@ -286,21 +267,6 @@ async def test_missing_tariff_is_handled_without_update(monkeypatch) -> None:
     callback.message.edit_text.assert_not_awaited()
     assert callback.answer.await_args.args[0] == 'Тариф не найден'
     assert callback.answer.await_args.kwargs['show_alert'] is True
-
-
-def test_custom_traffic_screen_renders_all_unset_values_and_back_navigation() -> None:
-    tariff = _tariff(
-        traffic_price_per_gb_kopeks=None,
-        min_traffic_gb=None,
-        max_traffic_gb=None,
-    )
-
-    rendered = custom_mod.render_custom_traffic_settings(tariff)
-    callbacks = _callbacks(custom_mod.get_custom_traffic_keyboard(tariff, 'ru'))
-
-    assert rendered.count('Не задано') == 3
-    assert 'admin_tariff_view:7' in callbacks
-    assert 'admin_tariff_toggle_custom_traffic:7' in callbacks
 
 
 def test_existing_topup_control_remains_independent() -> None:

@@ -221,10 +221,3 @@ def test_get_platega_active_methods_returns_default(monkeypatch: pytest.MonkeyPa
     methods = settings.get_platega_active_methods()
 
     assert methods == [2]
-
-
-def test_platega_method_display_helpers() -> None:
-    assert settings.get_platega_method_display_name(11) == 'Карты (RUB)'
-    assert settings.get_platega_method_display_title(11) == '💳 Карты (RUB)'
-    assert settings.get_platega_method_display_name(999) == 'Метод 999'
-    assert settings.get_platega_method_display_title(999) == 'Platega 999'

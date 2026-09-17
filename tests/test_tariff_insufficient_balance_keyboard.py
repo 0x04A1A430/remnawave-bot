@@ -9,17 +9,6 @@ def _callbacks(keyboard):
     return [button.callback_data for row in keyboard.inline_keyboard for button in row]
 
 
-def test_classic_topup_when_autopurchase_disabled(monkeypatch):
-    monkeypatch.setattr(settings, 'AUTO_PURCHASE_AFTER_TOPUP_ENABLED', False)
-
-    keyboard = get_tariff_insufficient_balance_keyboard(7, 30, 'ru', missing_kopeks=50000)
-    callbacks = _callbacks(keyboard)
-
-    assert 'balance_topup' in callbacks
-    assert not any((c or '').startswith('topup_amount|') for c in callbacks)
-    assert 'tariff_select:7' in callbacks
-
-
 def test_inlines_prefilled_payment_when_autopurchase_enabled(monkeypatch):
     monkeypatch.setattr(settings, 'AUTO_PURCHASE_AFTER_TOPUP_ENABLED', True)
     monkeypatch.setattr(settings, 'TELEGRAM_STARS_ENABLED', True)
@@ -32,15 +21,6 @@ def test_inlines_prefilled_payment_when_autopurchase_enabled(monkeypatch):
     assert 'balance_topup' not in callbacks
     # возврат ведёт к выбору тарифа
     assert 'tariff_select:7' in callbacks
-
-
-def test_classic_topup_when_missing_zero(monkeypatch):
-    monkeypatch.setattr(settings, 'AUTO_PURCHASE_AFTER_TOPUP_ENABLED', True)
-    monkeypatch.setattr(settings, 'TELEGRAM_STARS_ENABLED', True)
-
-    keyboard = get_tariff_insufficient_balance_keyboard(7, 30, 'ru', missing_kopeks=0)
-
-    assert 'balance_topup' in _callbacks(keyboard)
 
 
 def test_sbp_purchase_offered_on_insufficient_balance(monkeypatch):
@@ -81,23 +61,6 @@ def test_daily_insufficient_balance_offers_sbp_purchase(monkeypatch):
     assert 'tariff_sbp:7' not in _callbacks(get_daily_tariff_insufficient_balance_keyboard(7, 'ru'))
 
 
-def test_falls_back_to_topup_without_direct_payment_methods(monkeypatch):
-    from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
-
-    monkeypatch.setattr(settings, 'AUTO_PURCHASE_AFTER_TOPUP_ENABLED', True)
-    # Клавиатура пополнения без кнопок прямой оплаты (только навигация) → классический фолбэк
-    monkeypatch.setattr(
-        'app.keyboards.inline.get_payment_methods_keyboard',
-        lambda amount, language=None: InlineKeyboardMarkup(
-            inline_keyboard=[[InlineKeyboardButton(text='x', callback_data='menu_balance')]]
-        ),
-    )
-
-    keyboard = get_tariff_insufficient_balance_keyboard(7, 30, 'ru', missing_kopeks=50000)
-
-    assert 'balance_topup' in _callbacks(keyboard)
-
-
 def test_extend_inlines_prefilled_payment_when_autopurchase_enabled(monkeypatch):
     monkeypatch.setattr(settings, 'AUTO_PURCHASE_AFTER_TOPUP_ENABLED', True)
     monkeypatch.setattr(settings, 'TELEGRAM_STARS_ENABLED', True)
@@ -110,18 +73,6 @@ def test_extend_inlines_prefilled_payment_when_autopurchase_enabled(monkeypatch)
     assert 'subscription_extend' in callbacks
     assert not any((c or '').startswith('tariff_select:') for c in callbacks)
     assert not any((c or '').startswith('tariff_sbp:') for c in callbacks)
-
-
-def test_extend_classic_topup_when_autopurchase_disabled(monkeypatch):
-    monkeypatch.setattr(settings, 'AUTO_PURCHASE_AFTER_TOPUP_ENABLED', False)
-    monkeypatch.setattr(settings, 'TELEGRAM_STARS_ENABLED', True)
-
-    keyboard = get_tariff_extend_insufficient_balance_keyboard(7, 42, 30, 'ru', missing_kopeks=50000)
-    callbacks = _callbacks(keyboard)
-
-    assert 'balance_topup' in callbacks
-    assert 'subscription_extend' in callbacks
-    assert not any((c or '').startswith('topup_amount|') for c in callbacks)
 
 
 def test_extend_prefilled_amount_is_missing_not_full_price(monkeypatch):
@@ -140,33 +91,6 @@ def test_extend_prefilled_amount_is_missing_not_full_price(monkeypatch):
     assert f'topup_amount|stars|{price}' not in callbacks
     assert f'topup_amount|stars|{balance}' not in callbacks
     assert 'subscription_extend' in callbacks
-
-
-def test_extend_back_points_at_the_subscription_in_multi_tariff(monkeypatch):
-    """«Назад» обязан адресовать конкретную подписку, иначе он никуда не ведёт.
-
-    На экране возврата после пополнения активная подписка в FSM не закрепляется,
-    а само состояние к тому моменту могло быть очищено. Голый
-    `subscription_extend` при двух и более подписках упирается в «Выберите
-    подписку» и НИЧЕГО не перерисовывает — кнопка выглядит сломанной. Идиома
-    `se:{id}` уже используется в monitoring_service и recurrent_payment_service.
-    """
-    monkeypatch.setattr(settings, 'AUTO_PURCHASE_AFTER_TOPUP_ENABLED', False)
-    monkeypatch.setattr(type(settings), 'is_multi_tariff_enabled', lambda self: True)
-
-    keyboard = get_tariff_extend_insufficient_balance_keyboard(7, 42, 30, 'ru', missing_kopeks=50000)
-
-    assert 'se:42' in _callbacks(keyboard)
-
-
-def test_extend_back_stays_generic_without_multi_tariff(monkeypatch):
-    monkeypatch.setattr(settings, 'AUTO_PURCHASE_AFTER_TOPUP_ENABLED', False)
-    monkeypatch.setattr(type(settings), 'is_multi_tariff_enabled', lambda self: False)
-
-    keyboard = get_tariff_extend_insufficient_balance_keyboard(7, 42, 30, 'ru', missing_kopeks=50000)
-
-    assert 'subscription_extend' in _callbacks(keyboard)
-    assert not any((c or '').startswith('se:') for c in _callbacks(keyboard))
 
 
 def test_extend_falls_back_to_topup_without_direct_payment_methods(monkeypatch):

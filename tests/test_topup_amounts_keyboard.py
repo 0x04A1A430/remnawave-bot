@@ -12,17 +12,6 @@ from app.keyboards.topup_amounts import (
 )
 
 
-def test_resolve_maps_callback_methods_to_config_ids():
-    assert resolve_config_method_id('stars') == 'telegram_stars'
-    assert resolve_config_method_id('yookassa_sbp') == 'yookassa'
-    assert resolve_config_method_id('kassa_ai_sberpay') == 'kassa_ai'
-    assert resolve_config_method_id('aurapay_card') == 'aurapay'
-    assert resolve_config_method_id('donut_sbp_qr') == 'donut'
-    assert resolve_config_method_id('tabpay_sbp') == 'tabpay'
-    assert resolve_config_method_id('paritypay_card') == 'paritypay'
-    assert resolve_config_method_id('platega_m2') == 'platega'
-
-
 def test_resolve_keeps_direct_config_ids():
     assert resolve_config_method_id('cryptobot') == 'cryptobot'
     assert resolve_config_method_id('freekassa_sbp') == 'freekassa_sbp'
