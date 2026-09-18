@@ -181,3 +181,34 @@ async def test_legacy_subscription_refuses_tariff_user_already_has(postgres_data
         )
         await db.refresh(user)
         assert user.balance_kopeks == PRICE_KOPEKS, 'при отказе деньги не списываются'
+
+
+@pytest.mark.asyncio
+async def test_legacy_subscription_without_row_panel_id_keeps_the_user_account(postgres_database):
+    """Строка старой подписки без id панели, аккаунт записан у человека: перевод обновляет его, а не создаёт второй."""
+    now = datetime.now(UTC)
+    async with postgres_session(postgres_database, TABLES) as db:
+        user = User(
+            telegram_id=1001,
+            first_name='Старый',
+            language='ru',
+            status='active',
+            balance_kopeks=PRICE_KOPEKS,
+            remnawave_id=PANEL_ID,
+        )
+        tariff = _tariff()
+        db.add_all([user, tariff])
+        await db.flush()
+        legacy = _legacy_subscription(user.id, now)
+        legacy.remnawave_id = None
+        db.add(legacy)
+        await db.commit()
+
+        response = await _purchase(db, user, tariff.id, legacy.id)
+
+        assert response.get('success') is True, response
+        rows = await _user_subscriptions(db, user.id)
+        assert [row.id for row in rows] == [legacy.id]
+        assert rows[0].remnawave_id == PANEL_ID, (
+            'аккаунт человека должен стать аккаунтом подписки, а не создаваться заново'
+        )

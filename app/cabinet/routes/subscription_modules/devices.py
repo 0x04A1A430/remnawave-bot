@@ -35,6 +35,7 @@ from app.database.crud.user_device_alias import (
     set_alias,
 )
 from app.database.models import Subscription, TransactionType, User
+from app.services.panel_sync import should_create_panel_account
 from app.services.subscription_service import SubscriptionService
 from app.services.user_cart_service import user_cart_service
 
@@ -64,7 +65,9 @@ def _resolve_panel_user_id(subscription: Subscription | None, user: User) -> int
     """
     if settings.is_multi_tariff_enabled() and subscription is not None:
         return subscription.remnawave_id
-    return user.remnawave_id
+    # Одиночный режим: аккаунт мог быть создан в мультитарифе и записан только у
+    # подписки — иначе после возврата оператора в одиночный режим «0 устройств».
+    return user.remnawave_id or (subscription.remnawave_id if subscription is not None else None)
 
 
 @router.post('/devices')
@@ -281,10 +284,7 @@ async def purchase_devices_legacy(
     # already committed, defer slow syncs to remnawave_retry_queue).
     try:
         service = SubscriptionService()
-        if settings.is_multi_tariff_enabled():
-            _should_create = not subscription.remnawave_id
-        else:
-            _should_create = not getattr(user, 'remnawave_id', None)
+        _should_create = await should_create_panel_account(db, subscription, user)
 
         async with asyncio.timeout(REMNAWAVE_SYNC_TIMEOUT):
             if _should_create:
@@ -560,10 +560,7 @@ async def purchase_devices(
         # already committed, defer slow syncs to remnawave_retry_queue).
         service = SubscriptionService()
         try:
-            if settings.is_multi_tariff_enabled():
-                _should_create = not subscription.remnawave_id
-            else:
-                _should_create = not getattr(user, 'remnawave_id', None)
+            _should_create = await should_create_panel_account(db, subscription, user)
 
             async with asyncio.timeout(REMNAWAVE_SYNC_TIMEOUT):
                 if _should_create:

@@ -183,7 +183,7 @@ class TestSubscriptionGiftEntryVisibility:
         assert 'subscription_gift' in _callbacks(reply_markup)
 
     def test_multi_mode_build_subscriptions_keyboard_gift_enabled(self):
-        subs = [SimpleNamespace(id=10, tariff=SimpleNamespace(name='Basic'))]
+        subs = [SimpleNamespace(id=10, tariff=SimpleNamespace(name='Basic'), tariff_id=10, is_trial=False)]
         kb = _build_subscriptions_keyboard(subs, language='ru', gift_enabled=True)
         callbacks = _callbacks(kb)
         assert 'subscription_gift' in callbacks
@@ -192,7 +192,7 @@ class TestSubscriptionGiftEntryVisibility:
         assert 'back_to_menu' in callbacks
 
     def test_multi_mode_build_subscriptions_keyboard_gift_disabled(self):
-        subs = [SimpleNamespace(id=10, tariff=SimpleNamespace(name='Basic'))]
+        subs = [SimpleNamespace(id=10, tariff=SimpleNamespace(name='Basic'), tariff_id=10, is_trial=False)]
         kb = _build_subscriptions_keyboard(subs, language='ru', gift_enabled=False)
         callbacks = _callbacks(kb)
         assert 'subscription_gift' not in callbacks

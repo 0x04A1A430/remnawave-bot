@@ -39,6 +39,7 @@ from app.services.notification_delivery_service import (
     NotificationType,
     notification_delivery_service,
 )
+from app.services.panel_sync import should_create_panel_account
 from app.services.pricing_engine import PricingEngine, pricing_engine
 from app.services.subscription_purchase_service import (
     MiniAppSubscriptionPurchaseService,
@@ -1154,10 +1155,7 @@ async def purchase_tariff(
         try:
             # Mirror the bot handler logic: in single-tariff mode, check user.remnawave_id
             # (webhook clears it on panel deletion), not subscription.remnawave_id
-            if settings.is_multi_tariff_enabled():
-                _should_create = not subscription.remnawave_id
-            else:
-                _should_create = not getattr(user, 'remnawave_id', None)
+            _should_create = await should_create_panel_account(db, subscription, user)
 
             # Time-bounded (see REMNAWAVE_SYNC_TIMEOUT): the subscription is already
             # committed, so a slow panel must not keep the cabinet pay button spinning;

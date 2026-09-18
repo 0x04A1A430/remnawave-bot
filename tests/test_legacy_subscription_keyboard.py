@@ -142,3 +142,20 @@ def test_classic_subscription_settings_keep_classic_addons(monkeypatch):
     assert 'subscription_add_countries' in cbs
     assert 'subscription_switch_traffic' in cbs
     assert 'subscription_change_devices' in cbs
+
+
+def _list_callbacks(subs) -> list[str]:
+    from app.handlers.subscription.my_subscriptions import _build_subscriptions_keyboard
+
+    return _callbacks(_build_subscriptions_keyboard(subs, 'ru'))
+
+
+def test_subscriptions_list_hides_buy_another_while_a_legacy_subscription_exists(monkeypatch):
+    """Пока у человека есть старая подписка, «Купить ещё тариф» не предлагаем: сперва переход на тариф."""
+    _patch_mode(monkeypatch, tariffs=True)
+    legacy = SimpleNamespace(id=1, tariff=None, tariff_id=None, is_trial=False)
+    on_tariff = SimpleNamespace(id=2, tariff=SimpleNamespace(name='Базовый'), tariff_id=2, is_trial=False)
+
+    assert 'menu_buy' not in _list_callbacks([legacy])
+    assert 'menu_buy' not in _list_callbacks([legacy, on_tariff])
+    assert 'menu_buy' in _list_callbacks([on_tariff])

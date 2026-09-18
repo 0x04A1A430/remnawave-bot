@@ -25,6 +25,7 @@ from app.database.database import AsyncSessionLocal
 from app.database.models import Tariff, Transaction, TransactionType, User
 from app.localization.texts import Texts, get_texts
 from app.services.admin_notification_service import AdminNotificationService
+from app.services.panel_sync import should_create_panel_account
 from app.services.subscription_service import SubscriptionService
 from app.services.tariff_switch_policy import remaining_days_for_switch, should_reset_used_traffic
 from app.services.user_cart_service import user_cart_service
@@ -1446,10 +1447,7 @@ async def handle_custom_confirm(
     try:
         # Обновляем пользователя в Remnawave
         # При покупке тарифа ВСЕГДА сбрасываем трафик в панели
-        if settings.is_multi_tariff_enabled():
-            _should_create = not subscription.remnawave_id
-        else:
-            _should_create = not getattr(db_user, 'remnawave_id', None)
+        _should_create = await should_create_panel_account(db, subscription, db_user)
         try:
             subscription_service = SubscriptionService()
             if _should_create:
@@ -2124,10 +2122,7 @@ async def confirm_tariff_purchase(
     # In multi-tariff mode, each subscription has its own panel user.
     # A new subscription has no remnawave_id yet, so always CREATE.
     # In single-tariff mode, reuse the user-level panel id if available.
-    if settings.is_multi_tariff_enabled():
-        _should_create = not subscription.remnawave_id
-    else:
-        _should_create = not getattr(db_user, 'remnawave_id', None)
+    _should_create = await should_create_panel_account(db, subscription, db_user)
     try:
         subscription_service = SubscriptionService()
         if _should_create:
@@ -2440,10 +2435,7 @@ async def confirm_daily_tariff_purchase(
     # При покупке тарифа ВСЕГДА сбрасываем трафик в панели
     try:
         subscription_service = SubscriptionService()
-        if settings.is_multi_tariff_enabled():
-            _should_create = not subscription.remnawave_id
-        else:
-            _should_create = not getattr(db_user, 'remnawave_id', None)
+        _should_create = await should_create_panel_account(db, subscription, db_user)
 
         if _should_create:
             await subscription_service.create_remnawave_user(
@@ -3099,10 +3091,7 @@ async def confirm_tariff_extend(
         # Обновляем пользователя в Remnawave
         try:
             subscription_service = SubscriptionService()
-            if settings.is_multi_tariff_enabled():
-                _should_create = not subscription.remnawave_id
-            else:
-                _should_create = not getattr(db_user, 'remnawave_id', None)
+            _should_create = await should_create_panel_account(db, subscription, db_user)
 
             if _should_create:
                 await subscription_service.create_remnawave_user(
@@ -3919,10 +3908,7 @@ async def confirm_tariff_switch(
         # Обновляем пользователя в Remnawave
         try:
             subscription_service = SubscriptionService()
-            if settings.is_multi_tariff_enabled():
-                _should_create = not subscription.remnawave_id
-            else:
-                _should_create = not getattr(db_user, 'remnawave_id', None)
+            _should_create = await should_create_panel_account(db, subscription, db_user)
 
             reset_used_traffic = should_reset_used_traffic(final_price)
             if _should_create:
@@ -4217,10 +4203,7 @@ async def confirm_daily_tariff_switch(
         # Обновляем пользователя в Remnawave (сброс трафика по админ-настройке)
         try:
             subscription_service = SubscriptionService()
-            if settings.is_multi_tariff_enabled():
-                _should_create = not subscription.remnawave_id
-            else:
-                _should_create = not getattr(db_user, 'remnawave_id', None)
+            _should_create = await should_create_panel_account(db, subscription, db_user)
 
             if _should_create:
                 await subscription_service.create_remnawave_user(
@@ -5177,10 +5160,7 @@ async def confirm_instant_switch(
         # Обновляем пользователя в Remnawave (сброс трафика по админ-настройке)
         try:
             subscription_service = SubscriptionService()
-            if settings.is_multi_tariff_enabled():
-                _should_create = not subscription.remnawave_id
-            else:
-                _should_create = not getattr(db_user, 'remnawave_id', None)
+            _should_create = await should_create_panel_account(db, subscription, db_user)
 
             if _should_create:
                 await subscription_service.create_remnawave_user(

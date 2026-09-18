@@ -19,6 +19,7 @@ from app.database.crud.subscription import (
 )
 from app.database.models import Subscription, SubscriptionStatus, User
 from app.localization.texts import Texts, get_texts
+from app.utils.legacy_subscription import is_legacy_subscription
 from app.utils.timezone import format_local_datetime
 
 
@@ -93,14 +94,17 @@ def _build_subscriptions_keyboard(
             ]
         )
 
-    # "Buy another tariff" button
+    # "Buy another tariff" button. Пока у человека есть старая подписка (без
+    # тарифа при включённых тарифах), не предлагаем: сперва переход на тариф —
+    # иначе покупка заведёт вторую подписку рядом с непродлеваемой старой.
     texts = get_texts(language)
-    buy_text = getattr(texts, 'MENU_BUY_SUBSCRIPTION', 'Купить ещё тариф')
-    buttons.append(
-        [
-            types.InlineKeyboardButton(text=f'➕ {buy_text}', callback_data='menu_buy'),
-        ]
-    )
+    if not any(is_legacy_subscription(sub) for sub in subscriptions):
+        buy_text = getattr(texts, 'MENU_BUY_SUBSCRIPTION', 'Купить ещё тариф')
+        buttons.append(
+            [
+                types.InlineKeyboardButton(text=f'➕ {buy_text}', callback_data='menu_buy'),
+            ]
+        )
     if gift_enabled:
         buttons.append(
             [
