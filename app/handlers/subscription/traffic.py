@@ -28,6 +28,7 @@ from app.services.remnawave_service import RemnaWaveService
 from app.services.subscription_service import SubscriptionService
 from app.services.user_cart_service import user_cart_service
 from app.states import SubscriptionStates
+from app.utils.legacy_subscription import is_legacy_subscription
 from app.utils.pricing_utils import (
     calculate_prorated_price,
 )
@@ -102,6 +103,17 @@ async def handle_add_traffic(callback: types.CallbackQuery, db_user: User, db: A
     if not subscription or subscription.is_trial:
         await callback.answer(
             texts.t('PAID_FEATURE_ONLY', '⚠ Эта функция доступна только для платных подписок'),
+            show_alert=True,
+        )
+        return
+
+    if is_legacy_subscription(subscription):
+        # Старая подписка (без тарифа при включённых тарифах): докупок нет, сперва переход на тариф.
+        await callback.answer(
+            texts.t(
+                'LEGACY_ADDONS_UNAVAILABLE',
+                '⚠️ Сначала перейдите на тариф — докупки для этой подписки недоступны',
+            ),
             show_alert=True,
         )
         return

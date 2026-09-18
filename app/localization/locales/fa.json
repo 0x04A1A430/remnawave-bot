@@ -1090,6 +1090,7 @@
   "TARIFF_SWITCH_WILL_SET_LINE": "⏰ تنظیم می‌شود: {days} روز",
   "BUY_TARIFF_BUTTON": "📦 خرید تعرفه",
   "MOVE_TO_TARIFF_BUTTON": "📦 انتقال به تعرفه",
+  "LEGACY_ADDONS_UNAVAILABLE": "⚠️ ابتدا به یک تعرفه بروید — افزودنی‌ها برای این اشتراک در دسترس نیستند",
   "TARIFF_SWITCH_LEGACY_CURRENT": "اشتراک بدون تعرفه",
   "CHANNEL_CHECK_BUTTON": "✅ عضو شدم",
   "CHANNEL_CHECK_NOT_SUBSCRIBED": "شما هنوز در همه کانال‌ها عضو نشده‌اید! لطفاً عضو شوید و دوباره امتحان کنید.",

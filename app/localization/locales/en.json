@@ -2127,6 +2127,7 @@
   "TARIFF_SWITCH_WILL_SET_LINE": "⏰ Will be set to: {days} days",
   "BUY_TARIFF_BUTTON": "📦 Buy a plan",
   "MOVE_TO_TARIFF_BUTTON": "📦 Switch to a plan",
+  "LEGACY_ADDONS_UNAVAILABLE": "⚠️ Switch to a plan first — add-ons are not available for this subscription",
   "TARIFF_SWITCH_LEGACY_CURRENT": "subscription without a plan",
   "ADMIN_PROMOCODE_TYPE_BALANCE_DAYS": "💰📅 Balance + Days",
   "SBP_RECURRING_MENU_BUTTON": "⚡ Auto-renewal via SBP",

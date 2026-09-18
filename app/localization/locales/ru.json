@@ -1090,6 +1090,7 @@
   "TARIFF_SWITCH_WILL_SET_LINE": "⏰ Будет установлено: {days} дней",
   "BUY_TARIFF_BUTTON": "📦 Купить тариф",
   "MOVE_TO_TARIFF_BUTTON": "📦 Перейти на тариф",
+  "LEGACY_ADDONS_UNAVAILABLE": "⚠️ Сначала перейдите на тариф — докупки для этой подписки недоступны",
   "TARIFF_SWITCH_LEGACY_CURRENT": "подписка без тарифа",
   "CHANNEL_CHECK_BUTTON": "✅ Я подписался",
   "CHANNEL_CHECK_NOT_SUBSCRIBED": "Вы ещё не подписались на все каналы! Подпишитесь и попробуйте снова.",

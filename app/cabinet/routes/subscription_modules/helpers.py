@@ -6,6 +6,7 @@ from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 import structlog
+from fastapi import HTTPException, status
 
 from app.config import settings
 from app.utils.legacy_subscription import is_legacy_subscription
@@ -106,6 +107,21 @@ def _apply_addon_discount(
         'discount': discount_value,
         'percent': percent,
     }
+
+
+def ensure_subscription_has_tariff(subscription: Any) -> None:
+    """Докупки старой подписке не продаются — сперва переход на тариф.
+
+    Старая подписка (платная, без тарифа при включённых тарифах) считала бы
+    докупку устройств и трафика по классическим настройкам. Кабинет такие
+    кнопки прячет, а здесь отказ до списания — для старого кабинета и прямых
+    запросов. ``None`` пропускаем: «подписки нет» отвечает сам маршрут.
+    """
+    if is_legacy_subscription(subscription):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={'code': 'tariff_required', 'message': 'Subscription has no tariff. Choose a tariff first.'},
+        )
 
 
 def _subscription_to_response(

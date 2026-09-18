@@ -18,6 +18,7 @@ import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query as QueryParam, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.cabinet.routes.subscription_modules.helpers import ensure_subscription_has_tariff
 from app.config import settings
 from app.database.crud.tariff import get_tariff_by_id
 from app.database.crud.transaction import create_transaction
@@ -28,6 +29,7 @@ from app.services.remnawave_service import RemnaWaveService
 from app.services.subscription_service import SubscriptionService
 from app.services.user_cart_service import user_cart_service
 from app.utils.cache import RateLimitCache, cache, cache_key
+from app.utils.legacy_subscription import is_legacy_subscription
 
 from ...dependencies import get_cabinet_db, get_current_cabinet_user
 from ...schemas.subscription import (
@@ -59,6 +61,9 @@ async def get_traffic_packages(
 
     subscription = await resolve_subscription(db, user, subscription_id)
     if not subscription:
+        return []
+    if is_legacy_subscription(subscription):
+        # Старая подписка: пакетов по классическим ценам не предлагаем — сперва переход на тариф.
         return []
 
     # The displayed discount must match exactly what POST /subscription/traffic
@@ -164,6 +169,8 @@ async def purchase_traffic(
     from app.utils.pricing_utils import calculate_prorated_price
 
     subscription = await resolve_subscription(db, user, subscription_id)
+
+    ensure_subscription_has_tariff(subscription)
 
     if not subscription:
         raise HTTPException(
@@ -458,6 +465,8 @@ async def save_traffic_cart(
 
     subscription = await resolve_subscription(db, user, subscription_id)
 
+    ensure_subscription_has_tariff(subscription)
+
     if not subscription:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -571,6 +580,8 @@ async def switch_traffic_package(
     from app.utils.pricing_utils import calculate_prorated_price
 
     subscription = await resolve_subscription(db, user, subscription_id)
+
+    ensure_subscription_has_tariff(subscription)
 
     if not subscription:
         raise HTTPException(

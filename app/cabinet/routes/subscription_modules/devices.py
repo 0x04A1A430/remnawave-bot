@@ -24,6 +24,7 @@ from pydantic import BaseModel
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.cabinet.routes.subscription_modules.helpers import ensure_subscription_has_tariff
 from app.cabinet.utils.device_ownership import verify_hwid_belongs_to_user
 from app.config import settings
 from app.database.crud.tariff import get_tariff_by_id
@@ -86,6 +87,7 @@ async def purchase_devices_legacy(
 
     # Resolve subscription (ownership validated), then lock the row for concurrent safety
     resolved = await resolve_subscription(db, user, subscription_id)
+    ensure_subscription_has_tariff(resolved)
     if not resolved:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No subscription found')
 
@@ -354,6 +356,7 @@ async def purchase_devices(
     try:
         # Resolve subscription (ownership validated), then lock the row for concurrent safety
         resolved = await resolve_subscription(db, user, subscription_id)
+        ensure_subscription_has_tariff(resolved)
         if not resolved:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='У вас нет активной подписки')
 
@@ -666,6 +669,7 @@ async def save_devices_cart(
 ) -> dict[str, bool]:
     """Save cart for device purchase (for insufficient balance flow)."""
     subscription = await resolve_subscription(db, user, subscription_id)
+    ensure_subscription_has_tariff(subscription)
 
     if not subscription:
         raise HTTPException(
@@ -780,6 +784,7 @@ async def get_device_price(
 ):
     """Get price for additional devices."""
     subscription = await resolve_subscription(db, user, subscription_id)
+    ensure_subscription_has_tariff(subscription)
 
     if not subscription or subscription.status not in ['active', 'trial']:
         return {

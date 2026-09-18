@@ -2124,6 +2124,7 @@
   "TARIFF_SWITCH_WILL_SET_LINE": "⏰ Буде встановлено: {days} днів",
   "BUY_TARIFF_BUTTON": "📦 Купити тариф",
   "MOVE_TO_TARIFF_BUTTON": "📦 Перейти на тариф",
+  "LEGACY_ADDONS_UNAVAILABLE": "⚠️ Спочатку перейдіть на тариф — докупівлі для цієї підписки недоступні",
   "TARIFF_SWITCH_LEGACY_CURRENT": "підписка без тарифу",
   "CONTEST_UNKNOWN": "Тип конкурсу не підтримується.",
   "PERIOD": "Період",

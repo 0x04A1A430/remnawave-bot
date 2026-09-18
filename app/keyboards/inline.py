@@ -1297,6 +1297,9 @@ def get_subscription_keyboard(
             if subscription and (subscription.traffic_limit_gb or 0) > 0:
                 if settings.is_tariffs_mode() and tariff:
                     show_traffic_topup = tariff.can_topup_traffic()
+                elif is_legacy_subscription:
+                    # Старая подписка: классические пакеты трафика ей не продаём — сперва переход на тариф.
+                    show_traffic_topup = False
                 elif settings.is_traffic_topup_enabled() and not settings.is_traffic_topup_blocked():
                     show_traffic_topup = True
 
@@ -3450,6 +3453,7 @@ def get_updated_subscription_settings_keyboard(
     show_countries_management: bool = True,
     tariff=None,  # Тариф подписки (если есть - ограничиваем настройки)
     subscription=None,  # Подписка (для проверки суточной паузы)
+    is_legacy_subscription: bool = False,  # Старая подписка: без тарифа при включённых тарифах
 ) -> InlineKeyboardMarkup:
     from app.config import settings
 
@@ -3458,10 +3462,15 @@ def get_updated_subscription_settings_keyboard(
 
     # Если подписка на тарифе - отключаем страны, модем, трафик
     has_tariff = tariff is not None
+    # Классические докупки (страны, пакеты трафика, устройства по PRICE_PER_DEVICE)
+    # доступны только настоящей классической подписке. У старой подписки при
+    # включённых тарифах тарифа нет, но и классических цен для неё нет —
+    # единственный путь: перейти на тариф.
+    classic_addons_allowed = not has_tariff and not is_legacy_subscription
 
     # Для суточных тарифов кнопка паузы теперь в главном меню подписки
 
-    if show_countries_management and not has_tariff:
+    if show_countries_management and classic_addons_allowed:
         keyboard.append(
             [
                 InlineKeyboardButton(
@@ -3471,7 +3480,7 @@ def get_updated_subscription_settings_keyboard(
             ]
         )
 
-    if settings.is_traffic_selectable() and not has_tariff:
+    if settings.is_traffic_selectable() and classic_addons_allowed:
         keyboard.append(
             [
                 InlineKeyboardButton(
@@ -3501,7 +3510,7 @@ def get_updated_subscription_settings_keyboard(
                     )
                 ]
             )
-    elif settings.is_devices_selection_enabled():
+    elif classic_addons_allowed and settings.is_devices_selection_enabled():
         keyboard.append(
             [
                 InlineKeyboardButton(

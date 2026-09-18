@@ -34,6 +34,13 @@ def _sub(*, tariff_id: int | None, actual_status: str = 'active') -> SimpleNames
     )
 
 
+def _patch_setting(monkeypatch, name: str, value: bool) -> None:
+    """Настройки — методы pydantic-класса Settings; на экземпляр их не повесить."""
+    from app.config import Settings
+
+    monkeypatch.setattr(Settings, name, lambda self: value)
+
+
 def _patch_mode(monkeypatch, *, tariffs: bool) -> None:
     from app.config import Settings
 
@@ -86,3 +93,52 @@ def test_classic_mode_subscription_keeps_renew(monkeypatch):
 
     assert 'subscription_extend' in cbs
     assert 'tariff_switch' not in cbs
+
+
+def test_legacy_subscription_has_no_traffic_topup_even_if_classic_topup_is_on(monkeypatch):
+    """Классические настройки докупки трафика к старой подписке не применяются."""
+    _patch_mode(monkeypatch, tariffs=True)
+    _patch_setting(monkeypatch, 'is_traffic_topup_enabled', True)
+    _patch_setting(monkeypatch, 'is_traffic_topup_blocked', False)
+    sub = _sub(tariff_id=None)
+    sub.traffic_limit_gb = 100
+
+    cbs = _keyboard(sub)
+
+    assert 'buy_traffic' not in cbs
+    assert cbs.count('tariff_switch') == 1
+
+
+def _settings_callbacks(sub, *, is_legacy: bool) -> list[str]:
+    markup = kb.get_updated_subscription_settings_keyboard(
+        'ru', show_countries_management=True, tariff=None, subscription=sub, is_legacy_subscription=is_legacy
+    )
+    return _callbacks(markup)
+
+
+def test_legacy_subscription_settings_offer_no_classic_addons(monkeypatch):
+    """В «Настройках» старой подписки нет стран, трафика и устройств по классическим ценам."""
+    _patch_mode(monkeypatch, tariffs=True)
+    _patch_setting(monkeypatch, 'is_traffic_selectable', True)
+    _patch_setting(monkeypatch, 'is_devices_selection_enabled', True)
+
+    cbs = _settings_callbacks(_sub(tariff_id=None), is_legacy=True)
+
+    assert 'subscription_add_countries' not in cbs
+    assert 'subscription_switch_traffic' not in cbs
+    assert 'subscription_reset_traffic' not in cbs
+    assert 'subscription_change_devices' not in cbs
+    assert 'subscription_manage_devices' in cbs, 'управление устройствами — не докупка, остаётся'
+
+
+def test_classic_subscription_settings_keep_classic_addons(monkeypatch):
+    """В классическом режиме подписка без тарифа — обычная, её настройки не трогаем."""
+    _patch_mode(monkeypatch, tariffs=False)
+    _patch_setting(monkeypatch, 'is_traffic_selectable', True)
+    _patch_setting(monkeypatch, 'is_devices_selection_enabled', True)
+
+    cbs = _settings_callbacks(_sub(tariff_id=None), is_legacy=False)
+
+    assert 'subscription_add_countries' in cbs
+    assert 'subscription_switch_traffic' in cbs
+    assert 'subscription_change_devices' in cbs
