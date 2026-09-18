@@ -31,6 +31,7 @@ import traceback
 from typing import Any, Final
 
 from aiogram import Bot
+from aiogram.exceptions import TelegramNetworkError, TelegramRetryAfter, TelegramServerError
 
 
 # Constants
@@ -154,6 +155,42 @@ def _is_transient_remnawave_error(event_dict: dict[str, Any]) -> bool:
     return False
 
 
+_TRANSIENT_TELEGRAM_EVENT_MARKERS: Final[tuple[str, ...]] = (
+    'failed to fetch updates',
+    'bad gateway',
+    'gateway timeout',
+    'telegram server says',
+)
+
+_TRANSIENT_TELEGRAM_EXC_NAMES: Final[frozenset[str]] = frozenset(
+    {'TelegramServerError', 'TelegramNetworkError', 'TelegramRetryAfter'}
+)
+
+
+def _is_transient_telegram_error(event_dict: dict[str, Any]) -> bool:
+    """True when the event is a transient Telegram API failure (5xx / network).
+
+    Telegram's own "Bad Gateway" / polling fetch errors are not bot bugs: aiogram
+    retries polling itself, and forwarding them to the admin chat would both spam
+    and fail again (the very request that failed is the delivery channel).
+    Matches by exception class name via the cause chain, and by event text for
+    the dispatcher's "Failed to fetch updates" wording when the exception object
+    isn't attached to the structlog event.
+    """
+    exc = _event_exception(event_dict)
+    seen = 0
+    while exc is not None and seen < 6:
+        if isinstance(exc, (TelegramServerError, TelegramNetworkError, TelegramRetryAfter)):
+            return True
+        if type(exc).__name__ in _TRANSIENT_TELEGRAM_EXC_NAMES:
+            return True
+        exc = exc.__cause__ or exc.__context__
+        seen += 1
+
+    event = str(event_dict.get('event', '')).lower()
+    return any(marker in event for marker in _TRANSIENT_TELEGRAM_EVENT_MARKERS)
+
+
 class TelegramNotifierProcessor:
     """Structlog processor that sends ERROR/CRITICAL events to the admin Telegram chat.
 
@@ -246,6 +283,13 @@ class TelegramNotifierProcessor:
         # 4b. Skip transient RemnaWave panel failures (slow / briefly unreachable)
         # — forwarding them would spam the admin chat on every slow-panel request.
         if _is_transient_remnawave_error(event_dict):
+            _mark_error_event(event_uid, STATUS_SUPPRESSED)
+            return event_dict
+
+        # 4c. Skip transient Telegram API failures (5xx / network / "Bad Gateway").
+        # aiogram retries polling on its own; forwarding these to the admin chat
+        # both spams and cannot succeed — the failed channel is the delivery one.
+        if _is_transient_telegram_error(event_dict):
             _mark_error_event(event_uid, STATUS_SUPPRESSED)
             return event_dict
 

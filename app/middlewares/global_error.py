@@ -271,6 +271,13 @@ async def send_error_to_admin_chat(
         return 'skipped'
 
     error_type = type(error).__name__
+    # Транзиентный сбой самого Telegram (5xx / Bad Gateway / сеть): не пытаемся
+    # уведомлять через тот же канал — он сейчас недоступен, а повторы порождают
+    # шум. aiogram сам ретраит polling. Никогда не логируем здесь error-уровнем.
+    if error_type in ('TelegramServerError', 'TelegramNetworkError', 'TelegramRetryAfter'):
+        logger.warning('Пропуск уведомления: транзиентная ошибка Telegram', error_type=error_type)
+        return 'skipped'
+
     error_message = str(error)[:ERROR_MESSAGE_MAX_LENGTH]
     tb_str = tb_override or traceback.format_exc()
     if tb_str == 'NoneType: None\n' or tb_str == 'NoneType: None':
