@@ -44,7 +44,12 @@ def upgrade() -> None:
             "inline_gift_subscriptions",
             sa.Column("balance_amount_kopeks", sa.Integer(), nullable=True),
         )
-    # days was previously NOT NULL without default — add server_default for safety
+    # days was previously NOT NULL without default — add server_default for safety.
+    # Legacy rows may carry NULL (the column was created nullable on some installs),
+    # and PostgreSQL refuses SET NOT NULL while any NULL remains, so backfill first.
+    op.execute(
+        "UPDATE inline_gift_subscriptions SET days = 0 WHERE days IS NULL"
+    )
     op.alter_column(
         "inline_gift_subscriptions",
         "days",
