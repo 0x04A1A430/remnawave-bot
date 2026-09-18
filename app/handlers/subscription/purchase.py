@@ -1709,7 +1709,12 @@ async def handle_extend_subscription(
             '⚠️ Ваша текущая подписка продолжит действовать до окончания срока.',
             reply_markup=types.InlineKeyboardMarkup(
                 inline_keyboard=[
-                    [types.InlineKeyboardButton(text='📦 Выбрать тариф', callback_data='tariff_switch')],
+                    [
+                        types.InlineKeyboardButton(
+                            text=texts.t('MOVE_TO_TARIFF_BUTTON', '📦 Перейти на тариф'),
+                            callback_data='tariff_switch',
+                        )
+                    ],
                     [types.InlineKeyboardButton(text=texts.BACK, callback_data='menu_subscription')],
                 ]
             ),

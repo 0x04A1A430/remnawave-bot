@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 import structlog
 
 from app.config import settings
+from app.utils.legacy_subscription import is_legacy_subscription
 
 
 if TYPE_CHECKING:
@@ -200,10 +201,15 @@ def _subscription_to_response(
     # Проверяем настройку скрытия ссылки (скрывается только текст, кнопки работают)
     hide_link = settings.should_hide_subscription_link()
 
+    is_trial_subscription = bool(subscription.is_trial or actual_status == 'trial')
+    # Старая подписка: продлить нельзя — кабинет ведёт на выбор тарифа и не
+    # показывает автоплатёж (правило одно на бота и кабинет).
+    requires_tariff_selection = is_legacy_subscription(subscription)
+
     return SubscriptionResponse(
         id=subscription.id,
         status=actual_status,  # Use actual_status instead of raw status
-        is_trial=subscription.is_trial or actual_status == 'trial',
+        is_trial=is_trial_subscription,
         start_date=subscription.start_date,
         end_date=subscription.end_date,
         days_left=days_left,
@@ -231,4 +237,5 @@ def _subscription_to_response(
         tariff_id=tariff_id,
         tariff_name=tariff_name,
         traffic_reset_mode=traffic_reset_mode,
+        requires_tariff_selection=requires_tariff_selection,
     )

@@ -10,6 +10,7 @@ from app.config import PERIOD_PRICES, settings
 from app.database.models import User
 from app.localization.loader import DEFAULT_LANGUAGE
 from app.localization.texts import get_texts
+from app.utils.legacy_subscription import is_legacy_subscription as _legacy_subscription
 from app.utils.miniapp_buttons import build_miniapp_or_callback_button
 from app.utils.price_display import PriceInfo, format_price_button
 from app.utils.pricing_utils import (
@@ -1209,6 +1210,9 @@ def get_subscription_keyboard(
             # Проверяем, является ли тариф суточным
             tariff = getattr(subscription, 'tariff', None) if subscription else None
             is_daily_tariff = tariff and getattr(tariff, 'is_daily', False)
+            # Куплена в классике, потом включили тарифы: продлить нельзя,
+            # автоплатёж не работает — в меню один путь, «Перейти на тариф».
+            is_legacy_subscription = _legacy_subscription(subscription)
 
             if is_daily_tariff:
                 # Для суточного тарифа: проверяем статус подписки
@@ -1230,6 +1234,18 @@ def get_subscription_keyboard(
                 keyboard.append(
                     [InlineKeyboardButton(text=pause_text, callback_data='toggle_daily_subscription_pause')]
                 )
+            elif is_legacy_subscription:
+                # Старая подписка (куплена в классике, тарифа нет, а оператор на
+                # тарифах): продления и автоплатежа у неё нет, единственный путь —
+                # выбрать тариф, он надевается на эту же подписку.
+                keyboard.append(
+                    [
+                        InlineKeyboardButton(
+                            text=texts.t('MOVE_TO_TARIFF_BUTTON', '📦 Перейти на тариф'),
+                            callback_data='tariff_switch',
+                        )
+                    ]
+                )
             else:
                 # Для обычного тарифа: [Продлить] [Автоплатеж]
                 keyboard.append(
@@ -1249,7 +1265,7 @@ def get_subscription_keyboard(
                     callback_data='subscription_settings',
                 )
             ]
-            if settings.is_tariffs_mode() and subscription:
+            if settings.is_tariffs_mode() and subscription and not is_legacy_subscription:
                 # На истёкшей/отключённой подписке смена тарифа недоступна (хендлер её
                 # блокирует) — раньше кнопка «Тариф» всё равно показывалась и вела в тупик.
                 # Теперь для таких подписок показываем «Купить тариф» (покупку с нуля).

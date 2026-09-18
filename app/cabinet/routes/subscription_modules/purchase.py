@@ -113,6 +113,22 @@ async def _persist_failed_refund(user_id: int, amount_kopeks: int, reason: str, 
 purchase_service = MiniAppSubscriptionPurchaseService()
 
 
+async def _ensure_tariff_not_already_active(db: AsyncSession, user_id: int, tariff_id: int) -> None:
+    """Отказ, если у человека уже есть живая подписка этого тарифа.
+
+    Нужен там, где покупка переводит на тариф другую строку (старую подписку без
+    тарифа): частичный уникальный индекс «одна живая подписка на тариф» иначе
+    сработал бы уже после списания денег.
+    """
+    from app.database.crud.subscription import get_subscription_by_user_and_tariff
+
+    if await get_subscription_by_user_and_tariff(db, user_id, tariff_id) is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail='You already have an active subscription for this tariff',
+        )
+
+
 async def _build_tariff_response(
     db: AsyncSession,
     tariff: Tariff,
@@ -753,11 +769,18 @@ async def purchase_tariff(
         if settings.is_multi_tariff_enabled():
             if request.subscription_id is not None:
                 existing_subscription = await get_subscription_by_id_for_user(db, request.subscription_id, user.id)
+                if existing_subscription is not None and existing_subscription.tariff_id is None:
+                    # Старая подписка (куплена в классике, тариф не задан): тариф
+                    # надевается на неё же — та же строка и тот же аккаунт панели,
+                    # у человека остаётся прежняя ссылка. Живая подписка этого
+                    # тарифа уже есть → отказ до списания, а не падение на
+                    # частичном уникальном индексе после.
+                    await _ensure_tariff_not_already_active(db, user.id, tariff.id)
                 # If the pinned sub points to a different tariff than
                 # the request carries (admin swap, stale client state),
                 # ignore it and fall back to tariff-level lookup so the
                 # purchase doesn't extend a sub of the wrong tariff.
-                if existing_subscription and existing_subscription.tariff_id != tariff.id:
+                elif existing_subscription and existing_subscription.tariff_id != tariff.id:
                     logger.warning(
                         'Cabinet purchase: explicit subscription_id has divergent tariff_id; falling back',
                         request_subscription_id=request.subscription_id,

@@ -30,6 +30,7 @@ from app.services.tariff_switch_policy import remaining_days_for_switch, should_
 from app.services.user_cart_service import user_cart_service
 from app.utils.decorators import error_handler
 from app.utils.formatting import format_period, format_price_kopeks, format_traffic
+from app.utils.legacy_subscription import is_legacy_subscription as _legacy_subscription
 from app.utils.promo_offer import get_user_active_promo_discount_percent
 from app.utils.subscription_time import local_days_until
 
@@ -3370,6 +3371,13 @@ def get_tariff_switch_insufficient_balance_keyboard(
     )
 
 
+def _switch_current_tariff_name(texts, is_legacy_subscription: bool) -> str:
+    """Подпись «Текущий: …» в списке тарифов, пока сам тариф не найден."""
+    if is_legacy_subscription:
+        return texts.t('TARIFF_SWITCH_LEGACY_CURRENT', 'подписка без тарифа')
+    return texts.t('SUBSCRIPTION_STATUS_UNKNOWN', 'Неизвестно')
+
+
 @error_handler
 async def show_tariff_switch_list(
     callback: types.CallbackQuery,
@@ -3386,9 +3394,15 @@ async def show_tariff_switch_list(
     if not subscription:
         return
 
+    # Старая подписка (куплена в классике, тарифа нет): это не смена тарифа, а
+    # первый выбор. Ограничения смены и запрет для истёкших к ней не относятся —
+    # тариф надевается на неё же (confirm_tariff_switch → extend_subscription).
+    is_legacy_subscription = _legacy_subscription(subscription)
+
     # Истёкшая подписка: смены тарифа нет, предлагаем купить новый тариф с нуля
     # (раньше кнопка «Тариф» вела сюда в тупик на истёкшей подписке).
-    if not subscription.end_date or subscription.end_date <= datetime.now(UTC):
+    subscription_expired = not subscription.end_date or subscription.end_date <= datetime.now(UTC)
+    if subscription_expired and not is_legacy_subscription:
         await callback.message.edit_text(
             texts.t(
                 'TARIFF_SWITCH_EXPIRED',
@@ -3414,7 +3428,8 @@ async def show_tariff_switch_list(
     current_tariff_id = subscription.tariff_id
 
     # Проверяем, разрешена ли смена тарифа хотя бы в одном направлении
-    if not settings.TARIFF_SWITCH_UPGRADE_ENABLED and not settings.TARIFF_SWITCH_DOWNGRADE_ENABLED:
+    switch_disabled = not settings.TARIFF_SWITCH_UPGRADE_ENABLED and not settings.TARIFF_SWITCH_DOWNGRADE_ENABLED
+    if switch_disabled and not is_legacy_subscription:
         await callback.message.edit_text(
             texts.t(
                 'TARIFF_SWITCH_DISABLED',
@@ -3463,7 +3478,7 @@ async def show_tariff_switch_list(
         return
 
     # Получаем текущий тариф для отображения
-    current_tariff_name = texts.t('SUBSCRIPTION_STATUS_UNKNOWN', 'Неизвестно')
+    current_tariff_name = _switch_current_tariff_name(texts, is_legacy_subscription)
     if current_tariff_id:
         current_tariff = await get_tariff_by_id(db, current_tariff_id)
         if current_tariff:
@@ -3696,17 +3711,17 @@ async def select_tariff_switch_period(
 
     traffic = format_traffic(tariff.traffic_limit_gb)
 
+    # Текущая подписка (с которой переходят): у старой подписки тарифа нет,
+    # и в подтверждении так и пишем, а не «Неизвестно».
+    subscription, _sw_period_sub_id = await _resolve_switch_subscription(callback, db_user, db, state)
+    is_legacy_subscription = _legacy_subscription(subscription)
+
     # Получаем текущий тариф для отображения
-    current_tariff_name = texts.t('SUBSCRIPTION_STATUS_UNKNOWN', 'Неизвестно')
+    current_tariff_name = _switch_current_tariff_name(texts, is_legacy_subscription)
     if current_tariff_id:
         current_tariff = await get_tariff_by_id(db, current_tariff_id)
         if current_tariff:
             current_tariff_name = html.escape(current_tariff.name)
-
-    # Получаем текущую подписку (switched FROM, not TO) для расчёта оставшегося времени
-    subscription, _sw_period_sub_id = await _resolve_switch_subscription(callback, db_user, db, state)
-    if subscription and subscription.end_date:
-        max(0, (subscription.end_date - datetime.now(UTC)).days)
 
     # При смене тарифа устанавливается ровно оплаченный период
     time_info = texts.t('TARIFF_SWITCH_WILL_SET_LINE', '⏰ Будет установлено: {days} дней').format(days=period)

@@ -2123,6 +2123,8 @@
   "TARIFF_SWITCH_UPGRADE_PREVIEW": "⬆️ <b>升级套餐</b>\n\n📌 当前：<b>{current}</b>\n   • 流量：{current_traffic}\n   • 设备：{current_devices}\n\n📦 新套餐：<b>{name}</b>\n   • 流量：{traffic}\n   • 设备：{devices}\n\n⏰ 剩余天数：<b>{days}</b>\n💰 <b>补差价：{cost}</b>\n\n💳 您的余额：{balance}\n支付后：{after}",
   "TARIFF_SWITCH_WILL_SET_LINE": "⏰ 将设为：{days} 天",
   "BUY_TARIFF_BUTTON": "📦 购买套餐",
+  "MOVE_TO_TARIFF_BUTTON": "📦 切换到套餐",
+  "TARIFF_SWITCH_LEGACY_CURRENT": "无套餐订阅",
   "CONTEST_UNKNOWN": "不支持此竞赛类型。",
   "PERIOD": "周期",
   "ADMIN_CONTESTS_LIST": "📋 当前竞赛",

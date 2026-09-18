@@ -2113,6 +2113,9 @@
 - `app/utils/incy_crypt1.py` — Python-модуль
   Классы: нет
   Функции: `encrypt_incy_link` — Шифрует ссылку подписки в ``incy://crypt1/...``., `wrap_incy_deep_link` — Подменяет ``incy://import|add/<url>`` на ``incy://crypt1/<зашифрованное>``.
+- `app/utils/legacy_subscription.py` — Python-модуль
+  Классы: нет
+  Функции: `is_legacy_subscription` — Платная подписка без тарифа при включённом режиме тарифов.
 - `app/utils/log_handlers.py` — Python-модуль
   Классы: `LevelFilterHandler` (5 методов), `PaymentLogFilter` (1 методов), `ExcludePaymentFilter` (1 методов)
   Функции: нет
@@ -2958,6 +2961,9 @@
 - `tests/test_lazy_package_exports.py` — Python-модуль
   Классы: нет
   Функции: `test_package_declares_exports`, `test_every_exported_name_resolves`, `test_unknown_name_still_raises` — __getattr__ не должен выдавать что попало вместо AttributeError.
+- `tests/test_legacy_subscription_keyboard.py` — Python-модуль
+  Классы: нет
+  Функции: `test_legacy_subscription_offers_only_move_to_tariff`, `test_expired_legacy_subscription_still_moves_to_tariff` — Истёкшая старая подписка тоже переводится на тариф той же строкой, а не покупкой с нуля., `test_subscription_with_tariff_keeps_renew_and_autopay`, `test_classic_mode_subscription_keeps_renew` — В классическом режиме подписка без тарифа — обычная, продление на месте.
 - `tests/test_locale_integrity.py` — Python-модуль
   Классы: нет
   Функции: `locales`, `test_all_locales_have_identical_keys`, `test_placeholders_consistent_across_locales` — Every {placeholder} must be identical across languages — the code calls, `test_t_calls_without_default_exist_in_ru` — texts.t('KEY') with NO fallback raises KeyError if the key is absent from ru., `test_t_calls_with_static_default_exist_in_ru` — texts.t('KEY', 'статический дефолт') с ключом вне ru.json отдаёт русский, `test_invite_only_keys_exist_in_every_locale`
@@ -3339,6 +3345,9 @@
 - `tests/cabinet/test_squad_name_validation.py` — Python-модуль
   Классы: нет
   Функции: `test_limits_match_panel_contract`, `test_helper_rejects_names_the_panel_rejects`, `test_helper_accepts_panel_valid_names`, `test_create_schemas_reject_invalid_names`, `test_update_schemas_reject_invalid_names`, `test_rename_action_rejects_invalid_names`, `test_schemas_accept_panel_valid_names`, `test_update_and_action_still_allow_omitting_name`
+- `tests/cabinet/test_subscription_requires_tariff_flag.py` — Python-модуль
+  Классы: нет
+  Функции: `tariffs_mode`, `classic_mode`, `test_paid_subscription_without_tariff_requires_tariff`, `test_subscription_with_tariff_does_not_require_tariff`, `test_trial_without_tariff_does_not_require_tariff` — Пробная подписка идёт своим путём (покупка тарифа), признак — только для платных., `test_classic_mode_never_requires_tariff`, `test_list_item_carries_the_flag_for_paid_subscription_without_tariff` — Список подписок (мультитариф) тоже говорит кабинету, что подписке нужен тариф.
 - `tests/cabinet/test_support_config_external_url.py` — Python-модуль
   Классы: нет
   Функции: `test_contact_mode_with_telegram_username`, `test_contact_mode_with_external_url`, `test_both_mode_exposes_external_url`, `test_both_mode_with_telegram_username`, `test_tickets_mode_ignores_contact`, `test_empty_contact_yields_no_url`
@@ -3514,6 +3523,9 @@
 - `tests/database/test_info_page_display_mode.py` — Python-модуль
   Классы: нет
   Функции: `test_model_has_display_mode_column_with_both_default`, `test_crud_update_whitelist_includes_display_mode`, `test_create_request_accepts_valid_display_mode`, `test_create_request_defaults_to_both`, `test_update_request_rejects_invalid_display_mode`, `test_response_schemas_expose_display_mode`
+- `tests/database/test_legacy_subscription_moves_to_tariff_postgres.py` — Python-модуль
+  Классы: нет
+  Функции: `multi_tariff_mode`, `panel`, `test_legacy_subscription_gets_the_tariff_in_place` — Тариф надевается на старую подписку: одна строка, тот же аккаунт панели, остаток + период., `test_legacy_subscription_refuses_tariff_user_already_has` — Тариф уже есть живой подпиской — отказ до списания, старая подписка не тронута.
 - `tests/database/test_local_date_expr_postgres.py` — Python-модуль
   Классы: нет
   Функции: `test_day_buckets_ignore_session_timezone`, `test_local_date_expr_respects_dst_transitions`, `test_separate_expressions_group_together` — Прод 2026-09-12: имя зоны уходило bind-параметром, каждое вхождение — своим ($1, $4, $5),
@@ -3819,6 +3831,9 @@
 - `tests/handlers/test_info_menu_keyboard.py` — Python-модуль
   Классы: нет
   Функции: `test_rules_button_shown_by_default`, `test_rules_button_hidden_when_disabled`, `test_custom_page_buttons_added`, `test_no_custom_buttons_without_pages`
+- `tests/handlers/test_legacy_subscription_switch_list.py` — Python-модуль
+  Классы: нет
+  Функции: `test_legacy_subscription_sees_tariffs_when_switching_is_disabled`, `test_expired_legacy_subscription_sees_tariffs` — Истёкшая старая подписка переводится на тариф той же строкой, а не покупкой с нуля., `test_legacy_subscription_list_does_not_say_unknown_tariff` — Человеку не пишем «Текущий: Неизвестно» — у старой подписки тарифа просто нет., `test_legacy_subscription_period_confirmation_does_not_say_unknown_tariff` — Экран подтверждения после выбора тарифа тоже без «Текущий тариф: Неизвестно».
 - `tests/handlers/test_my_subscriptions_delete_uses_shared_service.py` — Python-модуль
   Классы: нет
   Функции: `handler_env`, `test_delete_delegates_to_shared_service`, `test_open_grace_is_reported_not_swallowed`
@@ -4709,6 +4724,9 @@
 - `tests/utils/test_lava_display_names.py` — Python-модуль
   Классы: нет
   Функции: `test_lava_sbp_and_card_describe_provider_not_themselves`, `test_lava_generic_method_keeps_provider_description`
+- `tests/utils/test_legacy_subscription.py` — Python-модуль
+  Классы: нет
+  Функции: `tariffs_mode`, `test_paid_without_tariff_in_tariffs_mode_is_legacy`, `test_subscription_with_tariff_is_not_legacy`, `test_trial_without_tariff_is_not_legacy` — Пробная идёт своим путём (покупка тарифа), это не старая подписка., `test_classic_mode_has_no_legacy_subscriptions`, `test_missing_subscription_is_not_legacy`
 - `tests/utils/test_local_day.py` — Python-модуль
   Классы: нет
   Функции: `test_bounds_of_moscow_day_are_utc_instants`, `test_moment_before_moscow_midnight_belongs_to_previous_day`, `test_local_date_follows_the_zone_not_utc`, `test_naive_moment_is_treated_as_utc`, `test_spring_forward_day_is_23_hours_long` — Границы считаются через ZoneInfo, а не через фиксированное смещение., `test_fall_back_day_is_25_hours_long`, `test_days_back_counts_calendar_days_across_dst`, `test_default_zone_comes_from_settings`, `test_utc_zone_keeps_utc_midnight`, `test_month_start_is_local_first_day_midnight_in_utc`, `test_month_start_before_local_midnight_is_previous_month`, `test_next_wall_clock_picks_the_next_local_time_today`, `test_next_wall_clock_rolls_over_to_the_earliest_time_tomorrow`, `test_next_wall_clock_keeps_the_local_hour_across_dst`

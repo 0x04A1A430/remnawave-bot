@@ -2126,6 +2126,8 @@
   "TARIFF_SWITCH_UPGRADE_PREVIEW": "⬆️ <b>Plan upgrade</b>\n\n📌 Current: <b>{current}</b>\n   • Traffic: {current_traffic}\n   • Devices: {current_devices}\n\n📦 New: <b>{name}</b>\n   • Traffic: {traffic}\n   • Devices: {devices}\n\n⏰ Days remaining: <b>{days}</b>\n💰 <b>Surcharge: {cost}</b>\n\n💳 Your balance: {balance}\nAfter payment: {after}",
   "TARIFF_SWITCH_WILL_SET_LINE": "⏰ Will be set to: {days} days",
   "BUY_TARIFF_BUTTON": "📦 Buy a plan",
+  "MOVE_TO_TARIFF_BUTTON": "📦 Switch to a plan",
+  "TARIFF_SWITCH_LEGACY_CURRENT": "subscription without a plan",
   "ADMIN_PROMOCODE_TYPE_BALANCE_DAYS": "💰📅 Balance + Days",
   "SBP_RECURRING_MENU_BUTTON": "⚡ Auto-renewal via SBP",
   "SBP_RECURRING_STATUS_NONE": "not connected",
