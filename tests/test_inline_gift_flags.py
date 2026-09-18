@@ -419,6 +419,7 @@ async def test_gift_panel_update_delegates_to_subscription_service():
         await _apply_gift_panel_update(db, sub, user)
 
     svc.update_remnawave_user.assert_awaited_once_with(db, sub)
+    db.commit.assert_awaited()
     assert sub.subscription_url == 'https://g'
     assert sub.subscription_crypto_link == 'gc'
 
