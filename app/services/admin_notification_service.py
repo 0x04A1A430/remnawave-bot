@@ -341,9 +341,9 @@ class AdminNotificationService:
         }
 
         if not promo_type:
-            return 'ℹ Не указан'
+            return 'Не указан'
 
-        return mapping.get(promo_type, f'ℹ {promo_type}')
+        return mapping.get(promo_type, f'{promo_type}')
 
     def _format_campaign_bonus(self, campaign: AdvertisingCampaign, *, tariff_name: str | None = None) -> list[str]:
         if campaign.is_balance_bonus:
@@ -374,7 +374,7 @@ class AdminNotificationService:
         if campaign.is_none_bonus:
             return [' Только отслеживание']
 
-        return ['ℹ Бонусы не предусмотрены']
+        return ['Бонусы не предусмотрены']
 
     async def send_trial_activation_notification(
         self,
@@ -665,7 +665,7 @@ class AdminNotificationService:
             prefix_lines = [
                 header,
                 '',
-                f'<code>{current_version}</code>  →  <b><a href="{release_url}">{latest_version.tag_name}</a></b>',
+                f'<code>{current_version}</code>   <b><a href="{release_url}">{latest_version.tag_name}</a></b>',
                 f' {latest_version.formatted_date}',
                 '',
             ]
@@ -768,7 +768,7 @@ class AdminNotificationService:
                 f' <b>{settings.format_price(transaction.amount_kopeks)}</b> | {payment_method}',
                 '',
                 (
-                    f' {settings.format_price(old_balance)} →  {settings.format_price(user.balance_kopeks)}'
+                    f' {settings.format_price(old_balance)}  {settings.format_price(user.balance_kopeks)}'
                     f' (<b>+{settings.format_price(balance_change)}</b>)'
                 ),
             ]
@@ -1139,9 +1139,9 @@ class AdminNotificationService:
                     '',
                     ' <b>Баланс:</b>',
                     (
-                        f'{settings.format_price(balance_before_kopeks)} → {settings.format_price(balance_after_kopeks)}'
+                        f'{settings.format_price(balance_before_kopeks)} {settings.format_price(balance_after_kopeks)}'
                         if balance_before_kopeks is not None and balance_after_kopeks is not None
-                        else 'ℹ Баланс не изменился'
+                        else 'Баланс не изменился'
                     ),
                     '',
                     ' <b>Эффект:</b>',
@@ -1478,7 +1478,7 @@ class AdminNotificationService:
             return 'none'  # строка @username или None — тип чата не определить
         if chat_id < 0:
             # супергруппа / канал / старая группа — доверенный админ-чат оператора,
-            # но конкретного получателя не определить → только надёжные кнопки.
+            # но конкретного получателя не определить только надёжные кнопки.
             return 'group'
         if chat_id == 0:
             return 'none'  # невалидный chat_id
@@ -1558,7 +1558,7 @@ class AdminNotificationService:
             except TelegramRetryAfter as e:
                 # Flood control: ждём столько, сколько сказал Telegram (cap 30s),
                 # потом ретраим. До фикса исключение проваливалось в bare
-                # except → logger.error → петля через TelegramNotifierProcessor.
+                # except logger.error петля через TelegramNotifierProcessor.
                 requested_retry_after = max(1, int(getattr(e, 'retry_after', 1)))
                 retry_after = min(requested_retry_after, 30)
                 log_kwargs: dict[str, Any] = {
@@ -1893,7 +1893,7 @@ class AdminNotificationService:
                     icon = ''
                     title = 'МОНИТОРИНГ ОСТАНОВЛЕН'
             else:
-                icon = 'ℹ'
+                icon = ''
                 title = 'СИСТЕМА ТЕХРАБОТ'
 
             message_parts = [f'{icon} <b>{title}</b>', '']
@@ -2128,15 +2128,15 @@ class AdminNotificationService:
             if update_type == 'servers':
                 old_servers_info = await self._format_servers_detailed(old_value)
                 new_servers_info = await self._format_servers_detailed(new_value)
-                message_lines.append(f' {old_servers_info} → {new_servers_info}')
+                message_lines.append(f' {old_servers_info} {new_servers_info}')
             elif update_type == 'traffic':
                 old_formatted = self._format_update_value(old_value, update_type)
                 new_formatted = self._format_update_value(new_value, update_type)
-                message_lines.append(f' {old_formatted} → {new_formatted}')
+                message_lines.append(f' {old_formatted} {new_formatted}')
             elif update_type == 'devices':
-                message_lines.append(f' {old_value} → {new_value} устр.')
+                message_lines.append(f' {old_value} {new_value} устр.')
             else:
-                message_lines.append(f' {old_value} → {new_value}')
+                message_lines.append(f' {old_value} {new_value}')
 
             # Стоимость операции
             if price_paid > 0:

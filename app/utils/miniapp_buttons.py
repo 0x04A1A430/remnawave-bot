@@ -288,7 +288,7 @@ def build_subscription_extend_button(
 
 
 # Префикс startapp/маршрута для диплинка на конкретный тикет в админ-кабинете.
-# Должен совпадать с разбором на стороне фронта (bedolaga-cabinet): start_param
+# Должен совпадать с разбором на стороне фронта (cabinet): start_param
 # 'admin_ticket_<id>' и маршрут '/admin/tickets/<id>'.
 ADMIN_TICKET_DEEPLINK_PREFIX = 'admin_ticket_'
 

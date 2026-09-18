@@ -148,7 +148,7 @@ async def main():
     # handled inside setup_logging() / logging_config.py.
 
     logger = structlog.get_logger(__name__)
-    timeline = StartupTimeline(logger, 'Bedolaga Remnawave Bot')
+    timeline = StartupTimeline(logger, '@xilarobot')
     timeline.log_banner(
         [
             ('Уровень логирования', settings.LOG_LEVEL),

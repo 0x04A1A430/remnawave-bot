@@ -809,6 +809,13 @@ async def handle_device_management(
     if subscription is None:
         return
 
+    # Если пользователь открыл экран устройств из главного меню, «Назад» должен
+    # вести туда же, а не в настройки подписки.
+    is_from_main_menu = callback.data == 'subscription_manage_devices_menu'
+    back_callback = 'back_to_menu' if is_from_main_menu else _default_devices_back_callback(sub_id)
+    if state is not None:
+        await state.update_data(devices_back_callback=back_callback)
+
     if not subscription or subscription.is_trial:
         await callback.answer(
             texts.t('PAID_FEATURE_ONLY', '⚠️ Эта функция доступна только для платных подписок'),
@@ -844,7 +851,9 @@ async def handle_device_management(
                     await callback.answer()
                     return
 
-                await show_devices_page(callback, db_user, devices_list, page=1, sub_id=sub_id)
+                await show_devices_page(
+                    callback, db_user, devices_list, page=1, sub_id=sub_id, back_callback=back_callback
+                )
             else:
                 await callback.answer(
                     texts.t(
@@ -867,11 +876,37 @@ async def handle_device_management(
     await callback.answer()
 
 
+def _default_devices_back_callback(sub_id: int | None) -> str:
+    if settings.is_multi_tariff_enabled() and sub_id:
+        return f'sm:{sub_id}'
+    return 'subscription_settings'
+
+
+async def _devices_back_callback_from_state(state: FSMContext | None, sub_id: int | None) -> str:
+    if state is not None:
+        try:
+            data = await state.get_data()
+        except Exception:
+            data = {}
+        stored = data.get('devices_back_callback')
+        if stored:
+            return stored
+    return _default_devices_back_callback(sub_id)
+
+
 async def show_devices_page(
-    callback: types.CallbackQuery, db_user: User, devices_list: list[dict], page: int = 1, sub_id: int | None = None
+    callback: types.CallbackQuery,
+    db_user: User,
+    devices_list: list[dict],
+    page: int = 1,
+    sub_id: int | None = None,
+    back_callback: str | None = None,
 ):
     texts = get_texts(db_user.language)
     devices_per_page = 5
+
+    if back_callback is None:
+        back_callback = _default_devices_back_callback(sub_id)
 
     pagination = paginate_list(devices_list, page=page, per_page=devices_per_page)
 
@@ -927,7 +962,7 @@ async def show_devices_page(
             pagination.items,
             pagination,
             db_user.language,
-            back_callback=f'sm:{sub_id}' if settings.is_multi_tariff_enabled() and sub_id else 'subscription_settings',
+            back_callback=back_callback,
         ),
     )
 
@@ -937,6 +972,7 @@ async def handle_devices_page(callback: types.CallbackQuery, db_user: User, db: 
     texts = get_texts(db_user.language)
     subscription, sub_id = await _resolve_subscription(callback, db_user, db, state)
     panel_user_id = _get_panel_user_id(subscription, db_user) if subscription else db_user.remnawave_id
+    back_callback = await _devices_back_callback_from_state(state, sub_id)
 
     try:
         from app.services.remnawave_service import RemnaWaveService
@@ -948,7 +984,9 @@ async def handle_devices_page(callback: types.CallbackQuery, db_user: User, db: 
 
             if isinstance(devices_info, dict):
                 devices_list = devices_info.get('devices', [])
-                await show_devices_page(callback, db_user, devices_list, page=page, sub_id=sub_id)
+                await show_devices_page(
+                    callback, db_user, devices_list, page=page, sub_id=sub_id, back_callback=back_callback
+                )
             else:
                 await callback.answer(
                     texts.t('DEVICE_FETCH_ERROR', '❌ Ошибка получения устройств'),
@@ -969,6 +1007,7 @@ async def handle_single_device_reset(
     texts = get_texts(db_user.language)
     subscription, sub_id = await _resolve_subscription(callback, db_user, db, state)
     panel_user_id = _get_panel_user_id(subscription, db_user) if subscription else db_user.remnawave_id
+    back_callback = await _devices_back_callback_from_state(state, sub_id)
     try:
         callback_parts = callback.data.split('_')
         if len(callback_parts) < 4:
@@ -1042,7 +1081,14 @@ async def handle_single_device_reset(
                                 if not updated_pagination.items and page > 1:
                                     page = page - 1
 
-                                await show_devices_page(callback, db_user, updated_devices, page=page, sub_id=sub_id)
+                                await show_devices_page(
+                                    callback,
+                                    db_user,
+                                    updated_devices,
+                                    page=page,
+                                    sub_id=sub_id,
+                                    back_callback=back_callback,
+                                )
                             else:
                                 await callback.message.edit_text(
                                     texts.t(

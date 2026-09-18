@@ -715,7 +715,7 @@ def get_main_menu_keyboard(
         paired_buttons.append(
             make_button(
                 text=texts.t('MANAGE_DEVICES_BUTTON', 'Устройства'),
-                callback_data='subscription_manage_devices',
+                callback_data='subscription_manage_devices_menu',
                 style='primary',
             )
         )

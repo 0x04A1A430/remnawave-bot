@@ -164,7 +164,7 @@ async def _terminate_competing_backends(conn) -> int:
         )
         terminated = len(result.fetchall())
         if terminated:
-            logger.info('🔌 Завершены конкурирующие сессии БД перед TRUNCATE', terminated=terminated)
+            logger.info('Завершены конкурирующие сессии БД перед TRUNCATE', terminated=terminated)
         return terminated
     except Exception as e:
         logger.warning('Не удалось завершить конкурирующие сессии БД перед TRUNCATE (best-effort)', error=e)
@@ -432,7 +432,7 @@ class BackupService:
             return ZoneInfo('UTC')
 
     def _format_local(self, dt: datetime) -> str:
-        """UTC-aware datetime → строка в settings.TIMEZONE с меткой зоны для логов.
+        """UTC-aware datetime строка в settings.TIMEZONE с меткой зоны для логов.
 
         Все лог-строки о времени запуска идут через этот хелпер, чтобы оператор
         везде видел время, совпадающее с его BACKUP_TIME, а не UTC (#3030).
@@ -449,7 +449,7 @@ class BackupService:
         aware-datetime в UTC — сам цикл продолжает жить в UTC.
         """
         reference = reference or datetime.now(UTC)
-        # Naive reference → трактуем как UTC (конвенция кодбазы). Иначе astimezone
+        # Naive reference трактуем как UTC (конвенция кодбазы). Иначе astimezone
         # ниже интерпретировал бы его в системной зоне хоста и сдвинул расчёт —
         # тот же класс бага, что #3030.
         if reference.tzinfo is None:
@@ -520,7 +520,7 @@ class BackupService:
         self, created_by: int | None = None, compress: bool = True, include_logs: bool = None
     ) -> tuple[bool, str, str | None]:
         try:
-            logger.info('📄 Начинаем создание бекапа...')
+            logger.info('Начинаем создание бекапа...')
 
             if include_logs is None:
                 include_logs = self._settings.include_logs
@@ -579,11 +579,11 @@ class BackupService:
 
             size_mb = file_size / 1024 / 1024
             message = (
-                f'✅ Бекап успешно создан!\n'
-                f'📁 Файл: {filename}\n'
-                f'📊 Таблиц: {overview.get("tables_count", 0)}\n'
-                f'📈 Записей: {overview.get("total_records", 0):,}\n'
-                f'💾 Размер: {size_mb:.2f} MB'
+                f'Бекап успешно создан!\n'
+                f'Файл: {filename}\n'
+                f'Таблиц: {overview.get("tables_count", 0)}\n'
+                f'Записей: {overview.get("total_records", 0):,}\n'
+                f'Размер: {size_mb:.2f} MB'
             )
 
             logger.info(message)
@@ -596,7 +596,7 @@ class BackupService:
             return True, message, str(backup_path)
 
         except Exception as e:
-            error_msg = f'❌ Ошибка создания бекапа: {e!s}'
+            error_msg = f'Ошибка создания бекапа: {e!s}'
             logger.error(error_msg, exc_info=True)
 
             if self.bot:
@@ -619,11 +619,11 @@ class BackupService:
 
     async def restore_backup(self, backup_file_path: str, clear_existing: bool = False) -> tuple[bool, str]:
         try:
-            logger.info('📄 Начинаем восстановление из файла', backup_file_path=backup_file_path)
+            logger.info('Начинаем восстановление из файла', backup_file_path=backup_file_path)
 
             backup_path = Path(backup_file_path)
             if not await asyncio.to_thread(backup_path.exists):
-                return False, f'❌ Файл бекапа не найден: {backup_file_path}'
+                return False, f'Файл бекапа не найден: {backup_file_path}'
 
             if self._is_archive_backup(backup_path):
                 success, message = await self._restore_from_archive(backup_path, clear_existing)
@@ -638,7 +638,7 @@ class BackupService:
             return success, message
 
         except Exception as e:
-            error_msg = f'❌ Ошибка восстановления: {e!s}'
+            error_msg = f'Ошибка восстановления: {e!s}'
             logger.error(error_msg, exc_info=True)
 
             if self.bot:
@@ -726,7 +726,7 @@ class BackupService:
             settings.POSTGRES_DB,
         ]
 
-        logger.info('📦 Экспорт PostgreSQL через pg_dump ...', pg_dump_path=pg_dump_path)
+        logger.info('Экспорт PostgreSQL через pg_dump ...', pg_dump_path=pg_dump_path)
         await asyncio.to_thread(lambda: dump_path.parent.mkdir(parents=True, exist_ok=True))
 
         with open(dump_path, 'wb') as dump_file:
@@ -742,7 +742,7 @@ class BackupService:
             error_text = stderr.decode() if stderr else 'pg_dump error'
             raise RuntimeError(f'pg_dump завершился с ошибкой: {error_text}')
 
-        logger.info('✅ PostgreSQL dump создан', dump_path=dump_path)
+        logger.info('PostgreSQL dump создан', dump_path=dump_path)
 
     async def _dump_postgres_json(self, staging_dir: Path, include_logs: bool) -> dict[str, Any]:
         models_to_backup = self._get_models_for_backup(include_logs)
@@ -771,7 +771,7 @@ class BackupService:
 
         size = (await asyncio.to_thread(dump_path.stat)).st_size if await asyncio.to_thread(dump_path.exists) else 0
 
-        logger.info('✅ PostgreSQL экспортирован через ORM в JSON', dump_path=dump_path)
+        logger.info('PostgreSQL экспортирован через ORM в JSON', dump_path=dump_path)
 
         return {
             'type': 'postgresql',
@@ -791,7 +791,7 @@ class BackupService:
 
         await asyncio.to_thread(lambda: dump_path.parent.mkdir(parents=True, exist_ok=True))
         await asyncio.to_thread(shutil.copy2, sqlite_path, dump_path)
-        logger.info('✅ SQLite база данных скопирована', dump_path=dump_path)
+        logger.info('SQLite база данных скопирована', dump_path=dump_path)
 
     async def _export_database_via_orm(
         self,
@@ -804,7 +804,7 @@ class BackupService:
             try:
                 for model in models_to_backup:
                     table_name = model.__tablename__
-                    logger.info('📊 Экспортируем таблицу', table_name=table_name)
+                    logger.info('Экспортируем таблицу', table_name=table_name)
 
                     try:
                         query = select(model)
@@ -820,7 +820,7 @@ class BackupService:
                         records = result.scalars().all()
                     except Exception as table_exc:
                         logger.warning(
-                            '⚠️ Ошибка экспорта таблицы, пропускаем',
+                            'Ошибка экспорта таблицы, пропускаем',
                             table_name=table_name,
                             error=str(table_exc),
                         )
@@ -858,7 +858,7 @@ class BackupService:
                     total_records += len(table_data)
 
                     logger.info(
-                        '✅ Экспортировано записей из таблицы', table_data_count=len(table_data), table_name=table_name
+                        'Экспортировано записей из таблицы', table_data_count=len(table_data), table_name=table_name
                     )
 
                 association_data = await self._export_association_tables(db)
@@ -951,12 +951,12 @@ class BackupService:
 
             metadata_path = temp_path / 'metadata.json'
             if not await asyncio.to_thread(metadata_path.exists):
-                return False, '❌ Метаданные бекапа отсутствуют'
+                return False, 'Метаданные бекапа отсутствуют'
 
             async with aiofiles.open(metadata_path, encoding='utf-8') as meta_file:
                 metadata = json_lib.loads(await meta_file.read())
 
-            logger.info('📊 Загружен бекап формата', metadata=metadata.get('format_version', 'unknown'))
+            logger.info('Загружен бекап формата', metadata=metadata.get('format_version', 'unknown'))
 
             database_info = metadata.get('database', {})
             metadata.get('data_snapshot', {})
@@ -985,10 +985,10 @@ class BackupService:
             self._invalidate_restored_caches()
 
             message = (
-                f'✅ Восстановление завершено!\n'
-                f'📊 Таблиц: {metadata.get("tables_count", 0)}\n'
-                f'📈 Записей: {metadata.get("total_records", 0):,}\n'
-                f'📅 Дата бекапа: {metadata.get("timestamp", "неизвестно")}'
+                f'Восстановление завершено!\n'
+                f'Таблиц: {metadata.get("tables_count", 0)}\n'
+                f'Записей: {metadata.get("total_records", 0):,}\n'
+                f'Дата бекапа: {metadata.get("timestamp", "неизвестно")}'
             )
 
             logger.info(message)
@@ -1015,7 +1015,7 @@ class BackupService:
         )
 
         if clear_existing:
-            logger.info('🗑️ Полная очистка схемы PostgreSQL перед восстановлением')
+            logger.info('Полная очистка схемы PostgreSQL перед восстановлением')
             drop_command = [
                 psql_path,
                 settings.POSTGRES_DB,
@@ -1032,7 +1032,7 @@ class BackupService:
             if proc.returncode != 0:
                 raise RuntimeError(f'Не удалось очистить схему: {stderr.decode()}')
 
-        logger.info('📥 Восстановление PostgreSQL через psql ...', psql_path=psql_path)
+        logger.info('Восстановление PostgreSQL через psql ...', psql_path=psql_path)
         restore_command = [
             psql_path,
             settings.POSTGRES_DB,
@@ -1050,7 +1050,7 @@ class BackupService:
         if proc.returncode != 0:
             raise RuntimeError(f'Ошибка psql: {stderr.decode()}')
 
-        logger.info('✅ PostgreSQL восстановлен', dump_path=dump_path)
+        logger.info('PostgreSQL восстановлен', dump_path=dump_path)
 
     async def _restore_postgres_json(self, dump_path: Path, clear_existing: bool):
         if not await asyncio.to_thread(dump_path.exists):
@@ -1070,7 +1070,7 @@ class BackupService:
             clear_existing,
         )
 
-        logger.info('✅ PostgreSQL восстановлен из ORM JSON', dump_path=dump_path)
+        logger.info('PostgreSQL восстановлен из ORM JSON', dump_path=dump_path)
 
     async def _restore_sqlite(self, dump_path: Path, clear_existing: bool):
         if not await asyncio.to_thread(dump_path.exists):
@@ -1083,7 +1083,7 @@ class BackupService:
             await asyncio.to_thread(target_path.unlink)
 
         await asyncio.to_thread(shutil.copy2, dump_path, target_path)
-        logger.info('✅ SQLite база восстановлена', target_path=target_path)
+        logger.info('SQLite база восстановлена', target_path=target_path)
 
     async def _restore_data_snapshot(self, source_dir: Path, clear_existing: bool):
         if not await asyncio.to_thread(source_dir.exists):
@@ -1108,7 +1108,7 @@ class BackupService:
                     shutil.copy2(item, destination)
 
         await asyncio.to_thread(_restore)
-        logger.info('📁 Снимок директории data восстановлен')
+        logger.info('Снимок директории data восстановлен')
 
     async def _restore_files(self, files_info: list[dict[str, Any]], temp_path: Path):
         allowed_base = await asyncio.to_thread(self.data_dir.resolve)
@@ -1136,7 +1136,7 @@ class BackupService:
 
             await asyncio.to_thread(lambda: target_resolved.parent.mkdir(parents=True, exist_ok=True))
             await asyncio.to_thread(shutil.copy2, source_file, target_resolved)
-            logger.info('📁 Файл восстановлен', target_resolved=target_resolved)
+            logger.info('Файл восстановлен', target_resolved=target_resolved)
 
     async def _restore_database_payload(
         self,
@@ -1146,16 +1146,16 @@ class BackupService:
         clear_existing: bool,
     ) -> tuple[int, int]:
         if not backup_data:
-            raise ValueError('❌ Файл бекапа не содержит данных')
+            raise ValueError('Файл бекапа не содержит данных')
 
-        logger.info('📊 Загружен дамп', metadata=metadata.get('timestamp', 'неизвестная дата'))
+        logger.info('Загружен дамп', metadata=metadata.get('timestamp', 'неизвестная дата'))
 
         estimated_records = metadata.get('total_records')
         if estimated_records is None:
             estimated_records = sum(len(records) for records in backup_data.values())
             estimated_records += sum(len(records) for records in association_data.values())
 
-        logger.info('📈 Содержит записей', estimated_records=estimated_records)
+        logger.info('Содержит записей', estimated_records=estimated_records)
 
         restored_records = 0
         restored_tables = 0
@@ -1163,7 +1163,7 @@ class BackupService:
         async with AsyncSessionLocal() as db:
             try:
                 if clear_existing:
-                    logger.warning('🗑️ Очищаем существующие данные...')
+                    logger.warning('Очищаем существующие данные...')
                     await self._clear_database_tables(db, backup_data)
 
                 models_for_restore = self._get_models_for_backup(True)
@@ -1179,9 +1179,7 @@ class BackupService:
                     if not records:
                         continue
 
-                    logger.info(
-                        '🔥 Восстанавливаем таблицу (записей)', table_name=table_name, records_count=len(records)
-                    )
+                    logger.info('Восстанавливаем таблицу (записей)', table_name=table_name, records_count=len(records))
                     restored = await self._restore_table_records(
                         db,
                         model,
@@ -1193,7 +1191,7 @@ class BackupService:
 
                     if restored:
                         restored_tables += 1
-                        logger.info('✅ Таблица восстановлена', table_name=table_name)
+                        logger.info('Таблица восстановлена', table_name=table_name)
 
                 await self._restore_users_without_referrals(
                     db,
@@ -1211,9 +1209,7 @@ class BackupService:
                     if not records:
                         continue
 
-                    logger.info(
-                        '🔥 Восстанавливаем таблицу (записей)', table_name=table_name, records_count=len(records)
-                    )
+                    logger.info('Восстанавливаем таблицу (записей)', table_name=table_name, records_count=len(records))
                     restored = await self._restore_table_records(
                         db,
                         model,
@@ -1225,7 +1221,7 @@ class BackupService:
 
                     if restored:
                         restored_tables += 1
-                        logger.info('✅ Таблица восстановлена', table_name=table_name)
+                        logger.info('Таблица восстановлена', table_name=table_name)
 
                 # Flush все изменения перед обновлением реферальных связей
                 await db.flush()
@@ -1246,9 +1242,9 @@ class BackupService:
                 # чтобы auto-increment ID не конфликтовали с восстановленными данными
                 try:
                     await sync_postgres_sequences()
-                    logger.info('🔢 Последовательности PostgreSQL синхронизированы')
+                    logger.info('Последовательности PostgreSQL синхронизированы')
                 except Exception as seq_err:
-                    logger.warning('⚠️ Не удалось синхронизировать sequences', error=seq_err)
+                    logger.warning('Не удалось синхронизировать sequences', error=seq_err)
 
             except Exception as exc:
                 await db.rollback()
@@ -1290,15 +1286,15 @@ class BackupService:
         if file_snapshots:
             restored_files = await self._restore_file_snapshots(file_snapshots)
             if restored_files:
-                logger.info('📁 Восстановлено файлов конфигурации', restored_files=restored_files)
+                logger.info('Восстановлено файлов конфигурации', restored_files=restored_files)
 
         self._invalidate_restored_caches()
 
         message = (
-            f'✅ Восстановление завершено!\n'
-            f'📊 Таблиц: {restored_tables}\n'
-            f'📈 Записей: {restored_records:,}\n'
-            f'📅 Дата бекапа: {metadata.get("timestamp", "неизвестно")}'
+            f'Восстановление завершено!\n'
+            f'Таблиц: {restored_tables}\n'
+            f'Записей: {restored_records:,}\n'
+            f'Дата бекапа: {metadata.get("timestamp", "неизвестно")}'
         )
 
         logger.info(message)
@@ -1309,7 +1305,7 @@ class BackupService:
         if not users_data:
             return
 
-        logger.info('👥 Восстанавливаем пользователей без реферальных связей', users_data_count=len(users_data))
+        logger.info('Восстанавливаем пользователей без реферальных связей', users_data_count=len(users_data))
 
         User = models_by_table['users']
 
@@ -1372,14 +1368,14 @@ class BackupService:
                 await db.flush()
         except IntegrityError as e:
             logger.warning('IntegrityError при flush пользователей, savepoint откачен', e=e)
-        logger.info('✅ Пользователи без реферальных связей восстановлены')
+        logger.info('Пользователи без реферальных связей восстановлены')
 
     async def _update_user_referrals(self, db: AsyncSession, backup_data: dict):
         users_data = backup_data.get('users', [])
         if not users_data:
             return
 
-        logger.info('🔗 Обновляем реферальные связи пользователей')
+        logger.info('Обновляем реферальные связи пользователей')
 
         for user_data in users_data:
             try:
@@ -1408,7 +1404,7 @@ class BackupService:
                 continue
 
         await db.flush()
-        logger.info('✅ Реферальные связи обновлены')
+        logger.info('Реферальные связи обновлены')
 
     def _process_record_data(self, record_data: dict, model, table_name: str) -> dict:
         processed_data = {}
@@ -1485,11 +1481,11 @@ class BackupService:
 
         for table_name, table_obj in self.association_tables.items():
             try:
-                logger.info('📊 Экспортируем таблицу связей', table_name=table_name)
+                logger.info('Экспортируем таблицу связей', table_name=table_name)
                 result = await db.execute(select(table_obj))
                 rows = result.mappings().all()
                 association_data[table_name] = [dict(row) for row in rows]
-                logger.info('✅ Экспортировано связей из таблицы', rows_count=len(rows), table_name=table_name)
+                logger.info('Экспортировано связей из таблицы', rows_count=len(rows), table_name=table_name)
             except Exception as e:
                 logger.error('Ошибка экспорта таблицы связей', table_name=table_name, error=e)
 
@@ -1578,11 +1574,11 @@ class BackupService:
                 result = await db.execute(select(Tariff.id))
                 existing_tariff_ids = {row[0] for row in result.fetchall()}
                 logger.info(
-                    '📋 Найдено существующих тарифов для валидации FK',
+                    'Найдено существующих тарифов для валидации FK',
                     existing_tariff_ids_count=len(existing_tariff_ids),
                 )
             except Exception as e:
-                logger.warning('⚠️ Не удалось получить список тарифов', error=e)
+                logger.warning('Не удалось получить список тарифов', error=e)
 
         for record_data in records:
             try:
@@ -1593,7 +1589,7 @@ class BackupService:
                     tariff_id = processed_data.get('tariff_id')
                     if tariff_id is not None and tariff_id not in existing_tariff_ids:
                         logger.warning(
-                            '⚠️ Тариф не найден, устанавливаем tariff_id=NULL для подписки', tariff_id=tariff_id
+                            'Тариф не найден, устанавливаем tariff_id=NULL для подписки', tariff_id=tariff_id
                         )
                         processed_data['tariff_id'] = None
 
@@ -1760,7 +1756,7 @@ class BackupService:
             'welcome_texts',
             'subscriptions',
             'promocodes',
-            # --- RBAC / Admin (FK → users, must be before users) ---
+            # --- RBAC / Admin (FK users, must be before users) ---
             'access_policies',
             'user_roles',
             'admin_audit_log',
@@ -1790,7 +1786,7 @@ class BackupService:
         for table_name in all_tables:
             if backup_data and table_name in preserve_if_no_backup:
                 if not backup_data.get(table_name):
-                    logger.info('⏭️ Пропускаем очистку (нет данных в бекапе)', table_name=table_name)
+                    logger.info('Пропускаем очистку (нет данных в бекапе)', table_name=table_name)
                     continue
             tables_to_truncate.append(table_name)
 
@@ -1820,9 +1816,9 @@ class BackupService:
                 # lock_timeout and fail with LockNotAvailableError (#649289).
                 await _terminate_competing_backends(conn)
                 await conn.execute(text(f'TRUNCATE {tables_str} RESTART IDENTITY CASCADE'))
-            logger.info('🗑️ Очищены все таблицы', tables_count=len(tables_to_truncate))
+            logger.info('Очищены все таблицы', tables_count=len(tables_to_truncate))
         except Exception as e:
-            logger.error('❌ Ошибка TRUNCATE CASCADE, пробуем поштучно', error=e)
+            logger.error('Ошибка TRUNCATE CASCADE, пробуем поштучно', error=e)
             # The most common cause is lock contention with the live app. Free the locks
             # once before the per-table retries (no point repeating it per table — killed
             # sessions reconnect, and re-killing 80× just thrashes).
@@ -1838,13 +1834,13 @@ class BackupService:
                 try:
                     async with truncate_engine.begin() as conn:
                         await conn.execute(text(f'TRUNCATE {table_name} CASCADE'))
-                    logger.info('🗑️ Очищена таблица', table_name=table_name)
+                    logger.info('Очищена таблица', table_name=table_name)
                 except Exception as table_err:
-                    logger.warning('⚠️ Не удалось очистить таблицу', table_name=table_name, error=table_err)
+                    logger.warning('Не удалось очистить таблицу', table_name=table_name, error=table_err)
                     failed_tables.append(table_name)
             if failed_tables:
                 logger.warning(
-                    '⚠️ Не удалось очистить таблицы',
+                    'Не удалось очистить таблицы',
                     failed_tables=failed_tables,
                     count=len(failed_tables),
                 )
@@ -1984,19 +1980,19 @@ class BackupService:
             backup_path = await asyncio.to_thread((self.backup_dir / backup_filename).resolve)
             backup_dir_resolved = await asyncio.to_thread(self.backup_dir.resolve)
             if not str(backup_path).startswith(str(backup_dir_resolved) + os.sep):
-                return False, '❌ Недопустимое имя файла бекапа'
+                return False, 'Недопустимое имя файла бекапа'
 
             if not await asyncio.to_thread(backup_path.is_file):
-                return False, f'❌ Файл бекапа не найден: {backup_filename}'
+                return False, f'Файл бекапа не найден: {backup_filename}'
 
             await asyncio.to_thread(backup_path.unlink)
-            message = f'✅ Бекап {backup_filename} удален'
+            message = f'Бекап {backup_filename} удален'
             logger.info(message)
 
             return True, message
 
         except Exception as e:
-            error_msg = f'❌ Ошибка удаления бекапа: {e!s}'
+            error_msg = f'Ошибка удаления бекапа: {e!s}'
             logger.error(error_msg)
             return False, error_msg
 
@@ -2010,7 +2006,7 @@ class BackupService:
                 for backup in backups[self._settings.max_backups_keep :]:
                     try:
                         await self.delete_backup(backup['filename'])
-                        logger.info('🗑️ Удален старый бекап', backup=backup['filename'])
+                        logger.info('Удален старый бекап', backup=backup['filename'])
                     except Exception as e:
                         logger.error('Ошибка удаления старого бекапа', backup=backup['filename'], error=e)
 
@@ -2057,7 +2053,7 @@ class BackupService:
                 interval = self._get_backup_interval()
                 self._auto_backup_task = asyncio.create_task(self._auto_backup_loop(next_run))
                 logger.info(
-                    '📄 Автобекапы включены, интервал: ч, ближайший запуск',
+                    'Автобекапы включены, интервал: ч, ближайший запуск',
                     total_seconds=interval.total_seconds() / 3600,
                     next_run=self._format_local(next_run),
                 )
@@ -2070,7 +2066,7 @@ class BackupService:
 
                 with contextlib.suppress(asyncio.CancelledError):
                     await self._auto_backup_task
-                logger.info('ℹ️ Автобекапы остановлены')
+                logger.info('Автобекапы остановлены')
 
     async def _auto_backup_loop(self, next_run: datetime | None = None):
         # Перечитываем настройки в начале цикла — на случай если admin изменил
@@ -2085,24 +2081,24 @@ class BackupService:
 
                 if delay > 0:
                     logger.info(
-                        '⏰ Запланирован следующий автоматический бекап',
+                        'Запланирован следующий автоматический бекап',
                         next_run=self._format_local(next_run),
                         delay=delay / 3600,
                     )
                     await asyncio.sleep(delay)
                 else:
                     logger.info(
-                        '⏰ Время автоматического бекапа уже наступило, запускаем немедленно',
+                        'Время автоматического бекапа уже наступило, запускаем немедленно',
                         next_run=self._format_local(next_run),
                     )
 
-                logger.info('📄 Запуск автоматического бекапа...')
+                logger.info('Запуск автоматического бекапа...')
                 success, message, _ = await self.create_backup()
 
                 if success:
-                    logger.info('✅ Автобекап завершен', message=message)
+                    logger.info('Автобекап завершен', message=message)
                 else:
-                    logger.error('❌ Ошибка автобекапа', message=message)
+                    logger.error('Ошибка автобекапа', message=message)
 
                 # Перед расчётом следующего запуска перечитываем настройки —
                 # admin мог изменить BACKUP_TIME / BACKUP_INTERVAL_HOURS из кабинета,
@@ -2110,7 +2106,7 @@ class BackupService:
                 # после рестарта бота.
                 self.reload_settings_from_db()
                 if not self._settings.auto_backup_enabled:
-                    logger.info('ℹ️ Автобекапы отключены через настройки, останавливаем цикл')
+                    logger.info('Автобекапы отключены через настройки, останавливаем цикл')
                     break
                 interval = self._get_backup_interval()
                 # Skip missed slots so a stale/past next_run doesn't trigger a burst of
@@ -2130,16 +2126,16 @@ class BackupService:
             if not settings.is_admin_notifications_enabled():
                 return
 
-            icons = {'success': '✅', 'error': '❌', 'restore_success': '🔥', 'restore_error': '❌'}
+            icons = {'success': '', 'error': '', 'restore_success': '', 'restore_error': ''}
 
-            icon = icons.get(event_type, 'ℹ️')
+            icon = icons.get(event_type, '')
             safe_message = html_lib.escape(message) if 'error' in event_type else message
             notification_text = f'{icon} <b>СИСТЕМА БЕКАПОВ</b>\n\n{safe_message}'
 
             if file_path:
-                notification_text += f'\n📁 <code>{Path(file_path).name}</code>'
+                notification_text += f'\n<code>{Path(file_path).name}</code>'
 
-            notification_text += f'\n\n⏰ <i>{datetime.now(UTC).strftime("%d.%m.%Y %H:%M:%S")}</i>'
+            notification_text += f'\n\n<i>{datetime.now(UTC).strftime("%d.%m.%Y %H:%M:%S")}</i>'
 
             try:
                 from app.services.admin_notification_service import AdminNotificationService, NotificationCategory
@@ -2172,10 +2168,10 @@ class BackupService:
                 if temp_zip_path:
                     file_to_send = temp_zip_path
 
-            caption = '📦 <b>Резервная копия</b>\n\n'
+            caption = '<b>Резервная копия</b>\n\n'
             if temp_zip_path:
-                caption += '🔐 <b>Архив защищён паролем</b>\n\n'
-            caption += f'⏰ <i>{datetime.now(UTC).strftime("%d.%m.%Y %H:%M:%S")}</i>'
+                caption += '<b>Архив защищён паролем</b>\n\n'
+            caption += f'<i>{datetime.now(UTC).strftime("%d.%m.%Y %H:%M:%S")}</i>'
 
             send_kwargs = {
                 'chat_id': chat_id,

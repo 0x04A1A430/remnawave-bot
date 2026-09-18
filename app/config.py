@@ -1216,8 +1216,8 @@ class Settings(BaseSettings):
     MEDIA_IMAGE_MAX_DIMENSION: int = 2048
     MEDIA_JPEG_QUALITY: int = 85
     MINIAPP_PURCHASE_URL: str = ''
-    MINIAPP_SERVICE_NAME_EN: str = 'Bedolaga VPN'
-    MINIAPP_SERVICE_NAME_RU: str = 'Bedolaga VPN'
+    MINIAPP_SERVICE_NAME_EN: str = '@xilarobot'
+    MINIAPP_SERVICE_NAME_RU: str = '@xilarobot'
     MINIAPP_SERVICE_DESCRIPTION_EN: str = 'Secure & Fast Connection'
     MINIAPP_SERVICE_DESCRIPTION_RU: str = 'Безопасное и быстрое подключение'
     CONNECT_BUTTON_HAPP_DOWNLOAD_ENABLED: bool = False
@@ -1513,7 +1513,7 @@ class Settings(BaseSettings):
     # Необязательный mailto-вариант в List-Unsubscribe для клиентов без HTTP one-click.
     EMAIL_UNSUBSCRIBE_MAILTO: str = ''
 
-    # Ban System Integration (BedolagaBan monitoring)
+    # Ban System Integration (@xilarobot monitoring)
     BAN_SYSTEM_ENABLED: bool = False
     BAN_SYSTEM_API_URL: str | None = None  # e.g., http://ban-server:8000
     BAN_SYSTEM_API_TOKEN: str | None = None

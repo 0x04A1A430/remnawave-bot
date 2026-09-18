@@ -107,27 +107,35 @@ USER_FILTER_CONFIGS: dict[UserFilterType, UserFilterConfig] = {
 
 
 def _get_user_status_emoji(user: User) -> str:
-    """Возвращает эмодзи статуса пользователя."""
+    """Возвращает символ статуса пользователя (стиль старого бота)."""
     if user.status == UserStatus.ACTIVE.value:
         return ''
     if user.status == UserStatus.BLOCKED.value:
-        return ''
-    return ''
+        return '×'
+    return '\ufe0f'
 
 
 def _get_subscription_emoji(user: User) -> str:
-    """Возвращает эмодзи подписки пользователя."""
+    """Возвращает символ подписки пользователя (стиль старого бота)."""
     subscriptions = getattr(user, 'subscriptions', None) or []
     if not subscriptions:
         return ''
-    # Check if any subscription is active
     active = [s for s in subscriptions if s.is_active]
     if not active:
         return ''
-    # Check if any is trial
     if any(s.is_trial for s in active):
         return ''
-    return ''
+    return '$'
+
+
+def _get_user_button_style(user: User) -> str | None:
+    """Цвет кнопки пользователя: красный для забаненных, зелёный при подписке."""
+    if user.status == UserStatus.BLOCKED.value:
+        return 'danger'
+    subscriptions = getattr(user, 'subscriptions', None) or []
+    if any(s.is_active for s in subscriptions):
+        return 'success'
+    return None
 
 
 def _build_user_button_text(
@@ -230,7 +238,14 @@ async def _show_users_list_filtered(
     keyboard = []
     for user in users:
         button_text = _build_user_button_text(user, filter_type, extra_data, db_user.language)
-        keyboard.append([types.InlineKeyboardButton(text=button_text, callback_data=f'admin_user_manage_{user.id}')])
+        button_kwargs: dict[str, Any] = {
+            'text': button_text,
+            'callback_data': f'admin_user_manage_{user.id}',
+        }
+        button_style = _get_user_button_style(user)
+        if button_style:
+            button_kwargs['style'] = button_style
+        keyboard.append([types.InlineKeyboardButton(**button_kwargs)])
 
     # Пагинация
     if users_data['total_pages'] > 1:
@@ -317,21 +332,9 @@ async def show_users_list(
     keyboard = []
 
     for user in users_data['users']:
-        if user.status == UserStatus.ACTIVE.value or user.status == UserStatus.BLOCKED.value:
-            status_emoji = ''
-        else:
-            status_emoji = ''
-
-        subscription_emoji = ''
-        subs = getattr(user, 'subscriptions', None) or []
-        subscription = next((s for s in subs if s.is_active), subs[0] if subs else None)
-        if subscription:
-            if subscription.is_trial or subscription.is_active:
-                subscription_emoji = ''
-            else:
-                subscription_emoji = ''
-        else:
-            subscription_emoji = ''
+        status_emoji = _get_user_status_emoji(user)
+        subscription_emoji = _get_subscription_emoji(user)
+        button_style = _get_user_button_style(user)
 
         button_text = f'{status_emoji} {subscription_emoji} {user.full_name}'
 
@@ -349,7 +352,13 @@ async def show_users_list(
             if user.balance_kopeks > 0:
                 button_text += f' |  {settings.format_price(user.balance_kopeks)}'
 
-        keyboard.append([types.InlineKeyboardButton(text=button_text, callback_data=f'admin_user_manage_{user.id}')])
+        button_kwargs: dict[str, Any] = {
+            'text': button_text,
+            'callback_data': f'admin_user_manage_{user.id}',
+        }
+        if button_style:
+            button_kwargs['style'] = button_style
+        keyboard.append([types.InlineKeyboardButton(**button_kwargs)])
 
     if users_data['total_pages'] > 1:
         pagination_row = get_admin_pagination_keyboard(
@@ -433,19 +442,14 @@ async def show_users_ready_to_renew(
 
     for user in users_data['users']:
         subscription = user.subscription  # Uses primary subscription (multi-tariff compatible via property)
-        status_emoji = '' if user.status == UserStatus.ACTIVE.value else ''
-        subscription_emoji = ''
+        status_emoji = _get_user_status_emoji(user)
+        subscription_emoji = _get_subscription_emoji(user)
+        button_style = _get_user_button_style(user)
         expired_days = '?'
 
-        if subscription:
-            if subscription.is_trial or subscription.is_active:
-                subscription_emoji = ''
-            else:
-                subscription_emoji = ''
-
-            if subscription.end_date:
-                delta = current_time - subscription.end_date
-                expired_days = delta.days
+        if subscription and subscription.end_date:
+            delta = current_time - subscription.end_date
+            expired_days = delta.days
 
         button_text = (
             f'{status_emoji} {subscription_emoji} {user.full_name}'
@@ -461,14 +465,13 @@ async def show_users_ready_to_renew(
                 f'{status_emoji} {subscription_emoji} {short_name} |  {settings.format_price(user.balance_kopeks)}'
             )
 
-        keyboard.append(
-            [
-                types.InlineKeyboardButton(
-                    text=button_text,
-                    callback_data=f'admin_user_manage_{user.id}',
-                )
-            ]
-        )
+        button_kwargs: dict[str, Any] = {
+            'text': button_text,
+            'callback_data': f'admin_user_manage_{user.id}',
+        }
+        if button_style:
+            button_kwargs['style'] = button_style
+        keyboard.append([types.InlineKeyboardButton(**button_kwargs)])
 
     if users_data['total_pages'] > 1:
         pagination_row = get_admin_pagination_keyboard(
@@ -557,15 +560,9 @@ async def show_potential_customers(
     keyboard = []
 
     for user in users_data['users']:
-        subscription = user.subscription  # Uses primary subscription (multi-tariff compatible via property)
-        status_emoji = '' if user.status == UserStatus.ACTIVE.value else ''
-        subscription_emoji = ''
-
-        if subscription:
-            if subscription.is_trial or subscription.is_active:
-                subscription_emoji = ''
-            else:
-                subscription_emoji = ''
+        status_emoji = _get_user_status_emoji(user)
+        subscription_emoji = _get_subscription_emoji(user)
+        button_style = _get_user_button_style(user)
 
         button_text = (
             f'{status_emoji} {subscription_emoji} {user.full_name} |  {settings.format_price(user.balance_kopeks)}'
@@ -579,14 +576,13 @@ async def show_potential_customers(
                 f'{status_emoji} {subscription_emoji} {short_name} |  {settings.format_price(user.balance_kopeks)}'
             )
 
-        keyboard.append(
-            [
-                types.InlineKeyboardButton(
-                    text=button_text,
-                    callback_data=f'admin_user_manage_{user.id}',
-                )
-            ]
-        )
+        button_kwargs: dict[str, Any] = {
+            'text': button_text,
+            'callback_data': f'admin_user_manage_{user.id}',
+        }
+        if button_style:
+            button_kwargs['style'] = button_style
+        keyboard.append([types.InlineKeyboardButton(**button_kwargs)])
 
     if users_data['total_pages'] > 1:
         pagination_row = get_admin_pagination_keyboard(
@@ -1169,21 +1165,9 @@ async def process_user_search(message: types.Message, db_user: User, state: FSMC
     keyboard = []
 
     for user in search_results['users']:
-        if user.status == UserStatus.ACTIVE.value or user.status == UserStatus.BLOCKED.value:
-            status_emoji = ''
-        else:
-            status_emoji = ''
-
-        subscription_emoji = ''
-        subs = getattr(user, 'subscriptions', None) or []
-        subscription = next((s for s in subs if s.is_active), subs[0] if subs else None)
-        if subscription:
-            if subscription.is_trial or subscription.is_active:
-                subscription_emoji = ''
-            else:
-                subscription_emoji = ''
-        else:
-            subscription_emoji = ''
+        status_emoji = _get_user_status_emoji(user)
+        subscription_emoji = _get_subscription_emoji(user)
+        button_style = _get_user_button_style(user)
 
         button_text = f'{status_emoji} {subscription_emoji} {user.full_name}'
 
@@ -1199,7 +1183,13 @@ async def process_user_search(message: types.Message, db_user: User, state: FSMC
                 short_name = short_name[:12] + '...'
             button_text = f'{status_emoji} {subscription_emoji} {short_name} |  {user_id_display}'
 
-        keyboard.append([types.InlineKeyboardButton(text=button_text, callback_data=f'admin_user_manage_{user.id}')])
+        button_kwargs: dict[str, Any] = {
+            'text': button_text,
+            'callback_data': f'admin_user_manage_{user.id}',
+        }
+        if button_style:
+            button_kwargs['style'] = button_style
+        keyboard.append([types.InlineKeyboardButton(**button_kwargs)])
 
     keyboard.append([types.InlineKeyboardButton(text=' Назад', callback_data='admin_users')])
 

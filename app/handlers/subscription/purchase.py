@@ -4361,7 +4361,10 @@ def register_handlers(dp: Dispatcher):
 
     dp.callback_query.register(handle_no_traffic_packages, F.data == 'no_traffic_packages')
 
-    dp.callback_query.register(handle_device_management, F.data == 'subscription_manage_devices')
+    dp.callback_query.register(
+        handle_device_management,
+        F.data.in_(['subscription_manage_devices', 'subscription_manage_devices_menu']),
+    )
 
     dp.callback_query.register(handle_devices_page, F.data.startswith('devices_page_'))
 
