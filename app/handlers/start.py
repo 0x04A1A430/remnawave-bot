@@ -505,7 +505,7 @@ async def _activate_pending_inline_gift_after_registration(
     message: types.Message,
     from_user: types.User | None = None,
 ) -> bool:
-    """Show pending inline gift preview after registration if user arrived via bs_ link.
+    """Show pending inline gift preview after registration if user arrived via a gift link.
 
     Must be called BEFORE state.clear() to preserve the gift code.
     Returns True if a gift was shown.
@@ -1365,7 +1365,7 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
                 await state.update_data(pending_coupon_token=coupon_token)
                 start_parameter = None  # Don't treat as campaign or referral
 
-    # Handle admin inline gift deep links: /start bs_<gift_code>
+    # Handle legacy admin inline gift deep links: /start bs_<gift_code>
     if start_parameter and start_parameter.startswith('bs_'):
         gift_code = start_parameter[3:]
         if gift_code:
@@ -1498,8 +1498,29 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
                     campaign_name=campaign.name,
                 )
         else:
-            referral_code = start_parameter
-            logger.info('🔎 Найден реферальный код', referral_code=referral_code)
+            # New gift links omit the legacy `bs_` prefix, so probe for a matching
+            # inline gift row before falling back to referral handling.
+            from app.handlers.inline_gift import handle_gift_deeplink
+
+            pending_before = (await state.get_data()).get('pending_inline_gift_code')
+            try:
+                gift_handled = await handle_gift_deeplink(message, start_parameter, state)
+            except Exception as exc:
+                logger.warning(
+                    'Failed to handle bare inline gift deeplink',
+                    start_parameter=start_parameter,
+                    error=exc,
+                )
+                gift_handled = False
+            if gift_handled:
+                return
+            pending_after = (await state.get_data()).get('pending_inline_gift_code')
+            if pending_after and pending_after != pending_before:
+                # Unregistered recipient: the preview is shown after registration.
+                start_parameter = None
+            else:
+                referral_code = start_parameter
+                logger.info('🔎 Найден реферальный код', referral_code=referral_code)
 
     if referral_code:
         await state.update_data(referral_code=referral_code)
