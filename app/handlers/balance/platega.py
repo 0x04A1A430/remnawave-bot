@@ -368,11 +368,9 @@ async def process_platega_payment_amount(
     instructions_template = texts.t(
         'PLATEGA_PAYMENT_INSTRUCTIONS',
         (
-            '<b>Пополнение баланса</b>\n\n'
-            '<blockquote>'
-            '<b>Сумма:</b> {amount}\n'
-            '<b>ID транзакции:</b> <code>{transaction}</code>\n'
-            '</blockquote>'
+            '<b>Оплата через Platega {method}</b>\n\n'
+            'Сумма: <code>{amount}</code>\n'
+            'ID транзакции: <tg-spoiler>{transaction}</tg-spoiler>'
         ),
     )
 
