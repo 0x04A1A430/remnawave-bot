@@ -100,7 +100,7 @@ async def _create_riopay_payment_and_respond(
             ],
             [
                 InlineKeyboardButton(
-                    text=texts.t('BACK_BUTTON', '◀️ Назад'),
+                    text=texts.t('BACK_BUTTON', '← Назад'),
                     callback_data='menu_balance',
                     style='danger',
                 )

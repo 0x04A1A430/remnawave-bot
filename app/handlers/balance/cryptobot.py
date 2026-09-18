@@ -175,7 +175,9 @@ async def process_cryptobot_payment_amount(
 
         from app.utils.button_emoji import parse_button_label
 
-        _pay_raw = texts.t('CRYPTOBOT_PAY_BUTTON', 'Оплатить криптовалютой')
+        _pay_raw = texts.t('CRYPTOBOT_PAY_BUTTON', 'Оплатить {amount}').format(
+            amount=settings.format_price(amount_kopeks)
+        )
         _pay_parsed = parse_button_label(_pay_raw)
 
         keyboard = types.InlineKeyboardMarkup(

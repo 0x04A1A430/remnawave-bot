@@ -103,7 +103,9 @@ async def process_stars_payment_amount(message: types.Message, db_user: User, am
             inline_keyboard=[
                 [
                     make_button(
-                        text="<tg-emoji emoji-id='5958376256788502078'>⭐️</tg-emoji> Оплатить",
+                        text=texts.t('PAY_BUTTON', 'Оплатить {amount}').format(
+                            amount=texts.format_price(amount_kopeks)
+                        ),
                         url=invoice_link,
                     )
                 ],

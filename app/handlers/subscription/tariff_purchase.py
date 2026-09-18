@@ -2708,7 +2708,7 @@ async def show_tariff_extend(
                         ]
                     )
                 keyboard.append(
-                    [InlineKeyboardButton(text=texts.t('BACK_BUTTON', '◀️ Назад'), callback_data='back_to_menu')]
+                    [InlineKeyboardButton(text=texts.t('BACK_BUTTON', '← Назад'), callback_data='back_to_menu')]
                 )
                 await callback.message.edit_text(
                     texts.t(
@@ -2748,7 +2748,7 @@ async def show_tariff_extend(
                 texts.t('TARIFF_RENEW_NO_TARIFFS', 'Нет доступных тарифов для продления'), show_alert=True
             )
             return
-        keyboard.append([InlineKeyboardButton(text=texts.t('BACK_BUTTON', '◀️ Назад'), callback_data='back_to_menu')])
+        keyboard.append([InlineKeyboardButton(text=texts.t('BACK_BUTTON', '← Назад'), callback_data='back_to_menu')])
 
         await callback.message.edit_text(
             texts.t(
@@ -2783,7 +2783,7 @@ async def show_tariff_extend(
         keyboard = []
         for t in active_tariffs:
             keyboard.append([InlineKeyboardButton(text=f'📦 {t.name}', callback_data=f'tariff_select:{t.id}')])
-        keyboard.append([InlineKeyboardButton(text=texts.t('BACK_BUTTON', '◀️ Назад'), callback_data='back_to_menu')])
+        keyboard.append([InlineKeyboardButton(text=texts.t('BACK_BUTTON', '← Назад'), callback_data='back_to_menu')])
 
         await callback.message.edit_text(
             texts.t(

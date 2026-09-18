@@ -62,7 +62,7 @@ def _list_keyboard(configs: list, defaults: dict) -> InlineKeyboardMarkup:
                 )
             ]
         )
-    buttons.append([InlineKeyboardButton(text='◀ Назад', callback_data='admin_submenu_settings')])
+    buttons.append([InlineKeyboardButton(text='← Назад', callback_data='admin_submenu_settings')])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
@@ -74,7 +74,7 @@ def _view_keyboard(method_id: str, quick_amounts: list[int] | None) -> InlineKey
         buttons.append(
             [InlineKeyboardButton(text=' Сбросить к умолчанию', callback_data=f'qamounts:reset:{method_id}')]
         )
-    buttons.append([InlineKeyboardButton(text='◀ К списку', callback_data='qamounts:list')])
+    buttons.append([InlineKeyboardButton(text='← К списку', callback_data='qamounts:list')])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
@@ -150,7 +150,7 @@ async def start_edit_quick_amounts(callback: CallbackQuery, state: FSMContext, *
         'Отправьте суммы в рублях через запятую, например: <code>100, 300, 500, 1000</code>\n'
         f'Не более {MAX_QUICK_AMOUNTS} значений. Дробные суммы — через точку.',
         reply_markup=InlineKeyboardMarkup(
-            inline_keyboard=[[InlineKeyboardButton(text='◀ Отмена', callback_data=f'qamounts:view:{method_id}')]]
+            inline_keyboard=[[InlineKeyboardButton(text='← Отмена', callback_data=f'qamounts:view:{method_id}')]]
         ),
     )
     await callback.answer()

@@ -93,7 +93,7 @@ async def _create_cloudpayments_payment_and_respond(
             ],
             [
                 InlineKeyboardButton(
-                    text=texts.t('BACK_BUTTON', '◀️ Назад'),
+                    text=texts.t('BACK_BUTTON', '← Назад'),
                     callback_data='menu_balance',
                     style='danger',
                 )
@@ -361,7 +361,7 @@ async def process_cloudpayments_amount(
             ],
             [
                 InlineKeyboardButton(
-                    text=texts.t('BACK_BUTTON', '◀️ Назад'),
+                    text=texts.t('BACK_BUTTON', '← Назад'),
                     callback_data='menu_balance',
                     style='danger',
                 )

@@ -16,7 +16,7 @@ def get_updates_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text=' Проверить обновления', callback_data='admin_updates_check')],
         [InlineKeyboardButton(text=' Информация о версии', callback_data='admin_updates_info')],
         [InlineKeyboardButton(text=' Открыть репозиторий', url=f'https://github.com/{version_service.repo}/releases')],
-        [InlineKeyboardButton(text='◀ Назад', callback_data='admin_panel')],
+        [InlineKeyboardButton(text='← Назад', callback_data='admin_panel')],
     ]
 
     return InlineKeyboardMarkup(inline_keyboard=buttons)
@@ -25,7 +25,7 @@ def get_updates_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
 def get_version_info_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
     buttons = [
         [InlineKeyboardButton(text=' Обновить', callback_data='admin_updates_info')],
-        [InlineKeyboardButton(text='◀ К обновлениям', callback_data='admin_updates')],
+        [InlineKeyboardButton(text='← К обновлениям', callback_data='admin_updates')],
     ]
 
     return InlineKeyboardMarkup(inline_keyboard=buttons)

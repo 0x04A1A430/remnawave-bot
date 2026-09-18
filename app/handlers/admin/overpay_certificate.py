@@ -30,12 +30,12 @@ class OverpayCertStates(StatesGroup):
 
 
 def _cancel_keyboard() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text='◀ Отмена', callback_data='overpay_cert')]])
+    return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text='← Отмена', callback_data='overpay_cert')]])
 
 
 def _back_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
-        inline_keyboard=[[InlineKeyboardButton(text='◀ К сертификату', callback_data='overpay_cert')]]
+        inline_keyboard=[[InlineKeyboardButton(text='← К сертификату', callback_data='overpay_cert')]]
     )
 
 
@@ -62,7 +62,7 @@ def _status_view() -> tuple[str, InlineKeyboardMarkup]:
     buttons = [[InlineKeyboardButton(text=' Загрузить', callback_data='overpay_cert:upload')]]
     if status['uploaded']:
         buttons.append([InlineKeyboardButton(text=' Удалить', callback_data='overpay_cert:delete')])
-    buttons.append([InlineKeyboardButton(text='◀ Назад', callback_data='admin_submenu_settings')])
+    buttons.append([InlineKeyboardButton(text='← Назад', callback_data='admin_submenu_settings')])
 
     return '\n'.join(lines), InlineKeyboardMarkup(inline_keyboard=buttons)
 
@@ -100,7 +100,7 @@ async def confirm_certificate_delete(callback: CallbackQuery, **kwargs) -> None:
             inline_keyboard=[
                 [
                     InlineKeyboardButton(text=' Удалить', callback_data='overpay_cert:delete_confirm'),
-                    InlineKeyboardButton(text='◀ Отмена', callback_data='overpay_cert'),
+                    InlineKeyboardButton(text='← Отмена', callback_data='overpay_cert'),
                 ]
             ]
         ),
