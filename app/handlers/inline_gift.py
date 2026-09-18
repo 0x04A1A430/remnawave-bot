@@ -892,6 +892,9 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
             gift_days = gift.days  # None = no change
             gift_traffic = gift.traffic_limit_gb  # None = no change, -1 = unlimited, N = set N
             gift_devices = gift.device_limit  # None = no change
+            # Read now: the panel sync below may roll the session back on a 404,
+            # which expires the gift row and turns a later read into a lazy load.
+            inline_msg_id = gift.inline_message_id
 
             if existing_sub:
                 # traffic
@@ -980,7 +983,6 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
             gift.activated_at = datetime.now(UTC)
             gift.activated_by_user_id = user.id
             gift.subscription_id = subscription.id
-            inline_msg_id = gift.inline_message_id
             await db.commit()
 
         except Exception as exc:
