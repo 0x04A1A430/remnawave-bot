@@ -27,8 +27,6 @@ These tests pin both layers.
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, patch
-
 import pytest
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
@@ -211,7 +209,7 @@ def test_topup_success_keyboard_main_menu_button_is_callback() -> None:
     source = common_path.read_text(encoding='utf-8')
 
     # The corrected form must be present.
-    assert 'build_main_menu_button(texts.MAIN_MENU_BUTTON)' in source, (
+    assert 'build_main_menu_button(texts.MAIN_MENU_BUTTON' in source, (
         'build_topup_success_keyboard must call build_main_menu_button() for '
         'the Главное меню row to guarantee bot-callback semantics regardless '
         'of MAIN_MENU_MODE. AST scan below catches the buggy pattern.'
@@ -362,35 +360,22 @@ async def test_topup_success_keyboard_renders_callback_main_menu_button_in_cabin
 
     from app.services.payment.common import PaymentCommonMixin
 
-    # Minimal user stub. No active subscription = simplest branch
-    # (no subscription-extend row), no saved cart, no checkout draft.
+    # Minimal user stub. The success keyboard now contains only the Main Menu row.
     user = SimpleNamespace(
         id=42,
         language='ru',
         subscription=None,
     )
 
-    # Mock cart-helpers so the test does not hit Redis / DB. These are
-    # decorations on the keyboard, not the Main Menu row we care about.
     mixin_instance = type('_TestMixin', (PaymentCommonMixin,), {})()
 
-    with (
-        patch(
-            'app.services.payment.common.user_cart_service.has_user_cart',
-            AsyncMock(return_value=False),
-        ),
-        patch(
-            'app.services.payment.common.has_subscription_checkout_draft',
-            AsyncMock(return_value=False),
-        ),
-    ):
-        keyboard = await mixin_instance.build_topup_success_keyboard(user)
+    keyboard = await mixin_instance.build_topup_success_keyboard(user)
 
     assert isinstance(keyboard, InlineKeyboardMarkup)
     assert keyboard.inline_keyboard, 'Keyboard must contain at least one row'
 
-    # The Main Menu button is the LAST row of the keyboard
-    # (after first_button, optional cart-restore row, and balance row).
+    # Only the Main Menu button is rendered now.
+    assert len(keyboard.inline_keyboard) == 1, 'Success keyboard must be only the Main Menu row'
     last_row = keyboard.inline_keyboard[-1]
     assert len(last_row) == 1, f'Main Menu row should contain exactly one button, got {last_row}'
 
@@ -406,3 +391,4 @@ async def test_topup_success_keyboard_renders_callback_main_menu_button_in_cabin
         'In MAIN_MENU_MODE=cabinet with MINIAPP_CUSTOM_URL configured, the previous '
         'buggy code produced a WebApp launcher here — the user-visible regression.'
     )
+    assert main_menu_button.style == 'danger', 'Main Menu button must be coloured (danger)'

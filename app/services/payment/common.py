@@ -11,22 +11,17 @@ from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import Any
 
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import InlineKeyboardMarkup
 from sqlalchemy import select
 from sqlalchemy.exc import MissingGreenlet
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.crud.user import get_user_by_telegram_id
-from app.database.database import AsyncSessionLocal, get_db
-from app.database.models import Subscription
+from app.database.database import get_db
 from app.localization.texts import get_texts
-from app.services.subscription_checkout_service import (
-    has_subscription_checkout_draft,
-    should_offer_checkout_resume,
-)
 from app.services.user_cart_service import user_cart_service
-from app.utils.miniapp_buttons import build_main_menu_button, build_miniapp_or_callback_button
+from app.utils.miniapp_buttons import build_main_menu_button
 from app.utils.payment_logger import payment_logger as logger
 
 
@@ -34,133 +29,9 @@ class PaymentCommonMixin:
     """Mixin с базовой логикой, которую используют остальные платёжные блоки."""
 
     async def build_topup_success_keyboard(self, user: Any) -> InlineKeyboardMarkup:
-        """Формирует клавиатуру по завершении платежа, подстраиваясь под пользователя."""
-        # Загружаем нужные тексты с учётом выбранного языка пользователя.
+        """Клавиатура после успешного пополнения: только «Главное меню»."""
         texts = get_texts(user.language if user else 'ru')
-
-        # Определяем статус подписки, чтобы показать подходящую кнопку.
-        has_active_subscription = False
-        subscription = None
-        if user:
-            try:
-                subs = getattr(user, 'subscriptions', None) or []
-                subscription = next(
-                    (s for s in subs if getattr(s, 'is_active', False)),
-                    None,
-                )
-                has_active_subscription = bool(
-                    subscription
-                    and not getattr(subscription, 'is_trial', False)
-                    and getattr(subscription, 'is_active', False)
-                )
-            except MissingGreenlet:
-                # user вне сессии — загружаем подписку отдельным запросом
-                try:
-                    async with AsyncSessionLocal() as session:
-                        result = await session.execute(
-                            select(Subscription.status, Subscription.is_trial, Subscription.end_date)
-                            .where(Subscription.user_id == user.id)
-                            .where(Subscription.status.in_(['active', 'trial']))
-                            .order_by(Subscription.created_at.desc())
-                        )
-                        rows = result.all()
-                        for row in rows:
-                            end_date = row.end_date
-                            if end_date is not None and end_date.tzinfo is None:
-                                end_date = end_date.replace(tzinfo=UTC)
-                            is_active = row.status == 'active' and end_date is not None and end_date > datetime.now(UTC)
-                            if is_active and not row.is_trial:
-                                has_active_subscription = True
-                                break
-                except Exception as db_error:
-                    logger.warning(
-                        'Не удалось загрузить подписку пользователя из БД',
-                        getattr=getattr(user, 'id', None),
-                        db_error=db_error,
-                    )
-            except Exception as error:  # pragma: no cover - защитный код
-                logger.error(
-                    'Ошибка загрузки подписки пользователя при построении клавиатуры после пополнения',
-                    getattr=getattr(user, 'id', None),
-                    error=error,
-                )
-
-        # Создаем основную кнопку: если есть активная подписка - продлить, иначе купить
-        first_button = build_miniapp_or_callback_button(
-            text=(texts.MENU_EXTEND_SUBSCRIPTION if has_active_subscription else texts.MENU_BUY_SUBSCRIPTION),
-            callback_data=('subscription_extend' if has_active_subscription else 'menu_buy'),
-        )
-
-        keyboard_rows: list[list[InlineKeyboardButton]] = [
-            [first_button],
-        ]
-
-        # Если для пользователя есть незавершённый checkout, предлагаем вернуться к нему.
-        if user:
-            cart_data = None
-            try:
-                cart_data = await user_cart_service.get_user_cart(user.id)
-            except Exception as cart_error:
-                logger.warning(
-                    'Не удалось проверить наличие сохраненной корзины у пользователя',
-                    user_id=user.id,
-                    cart_error=cart_error,
-                )
-
-            if cart_data:
-                cart_mode = cart_data.get('cart_mode')
-                if cart_mode == 'gift_purchase':
-                    keyboard_rows.append(
-                        [
-                            build_miniapp_or_callback_button(
-                                text=texts.t('GIFT_RETURN_TO_CART_BUTTON', '🎁 Вернуться к подарку'),
-                                callback_data='return_to_gift_cart',
-                            )
-                        ]
-                    )
-                else:
-                    keyboard_rows.append(
-                        [
-                            build_miniapp_or_callback_button(
-                                text=texts.RETURN_TO_SUBSCRIPTION_CHECKOUT,
-                                callback_data='return_to_saved_cart',
-                            )
-                        ]
-                    )
-            else:
-                draft_exists = await has_subscription_checkout_draft(user.id)
-                if should_offer_checkout_resume(user, draft_exists, subscription=subscription):
-                    keyboard_rows.append(
-                        [
-                            build_miniapp_or_callback_button(
-                                text=texts.RETURN_TO_SUBSCRIPTION_CHECKOUT,
-                                callback_data='subscription_resume_checkout',
-                            )
-                        ]
-                    )
-
-        # «Мой баланс» направляется в соответствующий раздел кабинета
-        # в MAIN_MENU_MODE=cabinet (через build_miniapp_or_callback_button),
-        # потому что баланс — это контентная страница, и юзер ожидает
-        # увидеть детали в том же режиме интерфейса, в котором он
-        # запустил пополнение.
-        keyboard_rows.append(
-            [
-                build_miniapp_or_callback_button(
-                    text=texts.MY_BALANCE_BUTTON,
-                    callback_data='menu_balance',
-                )
-            ]
-        )
-        # «Главное меню» — ВСЕГДА callback на bot-handler back_to_menu,
-        # независимо от MAIN_MENU_MODE. Если эта кнопка будет открывать
-        # кабинет (через build_miniapp_or_callback_button), юзер окажется
-        # в бесконечном цикле «хочу в бот → попадаю в кабинет → тапаю
-        # главное меню → снова кабинет». build_main_menu_button фиксирует
-        # это инвариантом на уровне типа.
-        keyboard_rows.append([build_main_menu_button(texts.MAIN_MENU_BUTTON)])
-
-        return InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
+        return InlineKeyboardMarkup(inline_keyboard=[[build_main_menu_button(texts.MAIN_MENU_BUTTON, style='danger')]])
 
     async def _send_payment_success_notification(
         self,
@@ -217,10 +88,10 @@ class PaymentCommonMixin:
             # Стандартное сообщение с полной клавиатурой
             keyboard = await self.build_topup_success_keyboard(user_snapshot)
             message = (
-                '✅ <b>Платеж успешно завершен!</b>\n\n'
-                f'💰 Сумма: {settings.format_price(amount_kopeks)}\n'
-                f'💳 Способ: {payment_method}\n\n'
-                'Средства зачислены на ваш баланс!'
+                '<b>Платеж успешно завершен</b>\n\n'
+                f'Сумма: <code>{settings.format_price(amount_kopeks)}</code>\n'
+                f'Способ: {payment_method}\n\n'
+                'Средства зачислены на ваш баланс'
             )
 
             await self.bot.send_message(

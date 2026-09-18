@@ -431,20 +431,18 @@ class HeleketPaymentMixin:
 
                     exchange_rate_value = updated_payment.exchange_rate or 0
                     rate_text = (
-                        f'💱 Курс: 1 RUB = {1 / exchange_rate_value:.4f} {updated_payment.payer_currency}'
+                        f'Курс: 1 RUB = {1 / exchange_rate_value:.4f} {updated_payment.payer_currency}'
                         if exchange_rate_value and updated_payment.payer_currency
                         else None
                     )
 
                     message_lines = [
-                        '✅ <b>Пополнение успешно!</b>',
-                        f'💰 Сумма: {settings.format_price(amount_kopeks)}',
-                        '💳 Способ: Heleket',
+                        '<b>Пополнение успешно</b>',
+                        f'Сумма: <code>{settings.format_price(amount_kopeks)}</code>',
+                        'Способ: Heleket',
                     ]
                     if updated_payment.payer_amount and updated_payment.payer_currency:
-                        message_lines.append(
-                            f'🪙 Оплата: {updated_payment.payer_amount} {updated_payment.payer_currency}'
-                        )
+                        message_lines.append(f'Оплата: {updated_payment.payer_amount} {updated_payment.payer_currency}')
                     if rate_text:
                         message_lines.append(rate_text)
 

@@ -1063,11 +1063,11 @@ class PlategaPaymentMixin:
                 await self.bot.send_message(
                     user.telegram_id,
                     (
-                        '✅ <b>Пополнение успешно!</b>\n\n'
-                        f'💰 Сумма: {settings.format_price(payment.amount_kopeks)}\n'
-                        f'🦊 Способ: {method_title}\n'
-                        f'🆔 Транзакция: {transaction.id}\n\n'
-                        'Баланс пополнен автоматически!'
+                        '<b>Пополнение успешно</b>\n\n'
+                        f'Сумма: <code>{settings.format_price(payment.amount_kopeks)}</code>\n'
+                        f'Способ: {method_title}\n'
+                        f'Транзакция: <tg-spoiler>{transaction.id}</tg-spoiler>\n\n'
+                        'Баланс пополнен автоматически'
                     ),
                     parse_mode='HTML',
                     reply_markup=keyboard,

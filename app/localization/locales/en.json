@@ -1955,7 +1955,7 @@
   "AUTO_PURCHASE_TRAFFIC_SUCCESS": "<b>Traffic added automatically!</b>\n\nAdded: {traffic_gb} GB\nNew limit: {new_limit} GB\nCharged: {price}",
   "BTN_RENEW_SUBSCRIPTION": "⏰ Renew subscription",
   "BTN_TOPUP_BALANCE": "Top up balance",
-  "PAYMENT_SUCCESS_CLOUDPAYMENTS": "<b>Payment received!</b>\n\nAmount: {amount}₽\nMethod: CloudPayments\nBalance: {balance}₽\n\nThank you for the top-up!",
+  "PAYMENT_SUCCESS_CLOUDPAYMENTS": "<b>Payment received</b>\n\nAmount: <code>{amount}₽</code>\nMethod: CloudPayments\nBalance: <code>{balance}₽</code>\n\nThank you for the top-up!",
   "CONTEST_BALANCE_GRANTED": "Bonus {amount} credited!",
   "REFERRAL_WITHDRAWAL_APPROVED": "<b>Withdrawal request #{id} approved!</b>\n\nAmount: <b>{amount}</b>\nThe funds have been deducted from your balance.\n\nPlease wait for the transfer to the specified details.",
   "REFERRAL_WITHDRAWAL_REJECTED": "<b>Withdrawal request #{id} rejected</b>\n\nAmount: <b>{amount}</b>\n\nIf you have any questions, please contact support.",

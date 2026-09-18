@@ -95,16 +95,18 @@ class UserService:
         if has_active_subscription:
             # У пользователя есть активная подписка - обычное сообщение
             message = (
-                f'✅ <b>Баланс пополнен на {settings.format_price(amount_kopeks)}!</b>\n\n'
-                f'💳 Текущий баланс: {settings.format_price(user.balance_kopeks)}\n\n'
-                f'Спасибо за использование нашего сервиса! 🎉'
+                '<b>Баланс пополнен</b>\n\n'
+                f'Сумма: <code>{settings.format_price(amount_kopeks)}</code>\n'
+                f'Текущий баланс: <code>{settings.format_price(user.balance_kopeks)}</code>\n\n'
+                'Спасибо за использование нашего сервиса!'
             )
             keyboard = types.InlineKeyboardMarkup(
                 inline_keyboard=[
                     [
                         types.InlineKeyboardButton(
-                            text=texts.t('SUBSCRIPTION_EXTEND', '💎 Продлить подписку'),
+                            text=texts.t('SUBSCRIPTION_EXTEND', 'Продлить подписку'),
                             callback_data=extend_callback,
+                            style='success',
                         )
                     ]
                 ]
@@ -112,21 +114,36 @@ class UserService:
         else:
             # НЕТ активной подписки - БОЛЬШОЕ ПРЕДУПРЕЖДЕНИЕ
             message = (
-                f'✅ <b>Баланс пополнен на {settings.format_price(amount_kopeks)}!</b>\n\n'
-                f'💳 Текущий баланс: {settings.format_price(user.balance_kopeks)}\n\n'
+                '<b>Баланс пополнен</b>\n\n'
+                f'Сумма: <code>{settings.format_price(amount_kopeks)}</code>\n'
+                f'Текущий баланс: <code>{settings.format_price(user.balance_kopeks)}</code>\n\n'
                 f'{"─" * 25}\n\n'
-                f'⚠️ <b>ВАЖНО!</b> ⚠️\n\n'
-                f'🔴 <b>ПОДПИСКА НЕ АКТИВНА!</b>\n\n'
-                f'Пополнение баланса НЕ активирует подписку автоматически!\n\n'
-                f'👇 <b>Выберите действие:</b>'
+                '<b>ВАЖНО!</b>\n\n'
+                '<b>ПОДПИСКА НЕ АКТИВНА!</b>\n\n'
+                'Пополнение баланса НЕ активирует подписку автоматически!\n\n'
+                '<b>Выберите действие:</b>'
             )
             keyboard = types.InlineKeyboardMarkup(
                 inline_keyboard=[
-                    [types.InlineKeyboardButton(text='🚀 АКТИВИРОВАТЬ ПОДПИСКУ', callback_data='subscription_buy')],
-                    [types.InlineKeyboardButton(text='💎 ПРОДЛИТЬ ПОДПИСКУ', callback_data=extend_callback)],
                     [
                         types.InlineKeyboardButton(
-                            text='📱 ДОБАВИТЬ УСТРОЙСТВА', callback_data='subscription_add_devices'
+                            text='Активировать подписку',
+                            callback_data='subscription_buy',
+                            style='success',
+                        )
+                    ],
+                    [
+                        types.InlineKeyboardButton(
+                            text='Продлить подписку',
+                            callback_data=extend_callback,
+                            style='primary',
+                        )
+                    ],
+                    [
+                        types.InlineKeyboardButton(
+                            text='Добавить устройства',
+                            callback_data='subscription_add_devices',
+                            style='primary',
                         )
                     ],
                 ]
@@ -176,8 +193,9 @@ class UserService:
             keyboard_rows.append(
                 [
                     types.InlineKeyboardButton(
-                        text=get_texts(user.language).t('SUBSCRIPTION_EXTEND', '💎 Продлить подписку'),
+                        text=get_texts(user.language).t('SUBSCRIPTION_EXTEND', 'Продлить подписку'),
                         callback_data=extend_callback,
+                        style='success',
                     )
                 ]
             )

@@ -1425,7 +1425,7 @@
   "SKIP_BUTTON": "⏭️ رد کردن",
   "STARS_PAYMENT_ENROLLMENT_ERROR": "خطا در واریز. با پشتیبانی تماس بگیرید، پرداخت دستی بررسی می‌شود.",
   "STARS_PAYMENT_PROCESSING_ERROR": "خطای فنی در پردازش. با پشتیبانی تماس بگیرید.",
-  "STARS_PAYMENT_SUCCESS": "پرداخت Stars موفق!",
+  "STARS_PAYMENT_SUCCESS": "<b>پرداخت Stars با موفقیت انجام شد</b>\n\nستاره‌های خرج‌شده: <code>{stars_spent}</code>\nافزوده شد به موجودی: <code>{amount} ₽</code>\nشناسه تراکنش: <tg-spoiler>{transaction_id}</tg-spoiler>\n\nاز شارژ شما متشکریم!",
   "STARS_PAYMENT_USER_NOT_FOUND": "کاربر یافت نشد. با پشتیبانی تماس بگیرید.",
   "STARS_PRECHECK_INVALID_PAYLOAD": "خطای اعتبارسنجی. دوباره تلاش کنید.",
   "STARS_PRECHECK_TECHNICAL_ERROR": "خطای فنی. بعداً تلاش کنید.",

@@ -35,7 +35,7 @@ def _format_notification_template(template: str, fallback: str, **values: object
 def get_delete_keyboard() -> InlineKeyboardMarkup:
     """Клавиатура с кнопкой удаления уведомления"""
     return InlineKeyboardMarkup(
-        inline_keyboard=[[InlineKeyboardButton(text='Удалить', callback_data='ban_notify:delete')]]
+        inline_keyboard=[[InlineKeyboardButton(text='Удалить', callback_data='ban_notify:delete', style='danger')]]
     )
 
 

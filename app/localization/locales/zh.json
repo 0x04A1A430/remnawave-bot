@@ -1955,7 +1955,7 @@
   "AUTO_PURCHASE_TRAFFIC_SUCCESS": "<b>已自动添加流量！</b>\n\n新增：{traffic_gb} GB\n新上限：{new_limit} GB\n已扣款：{price}",
   "BTN_RENEW_SUBSCRIPTION": "⏰ 续订订阅",
   "BTN_TOPUP_BALANCE": "充值余额",
-  "PAYMENT_SUCCESS_CLOUDPAYMENTS": "<b>已收到付款！</b>\n\n金额：{amount}₽\n方式：CloudPayments\n余额：{balance}₽\n\n感谢您的充值！",
+  "PAYMENT_SUCCESS_CLOUDPAYMENTS": "<b>已收到付款</b>\n\n金额：<code>{amount}₽</code>\n方式：CloudPayments\n余额：<code>{balance}₽</code>\n\n感谢您的充值！",
   "CONTEST_BALANCE_GRANTED": "奖励 {amount} 已到账！",
   "REFERRAL_WITHDRAWAL_APPROVED": "<b>提现申请 #{id} 已批准！</b>\n\n金额：<b>{amount}</b>\n款项已从您的余额中扣除。\n\n请等待转账到指定收款信息。",
   "REFERRAL_WITHDRAWAL_REJECTED": "<b>提现申请 #{id} 已拒绝</b>\n\n金额：<b>{amount}</b>\n\n如有疑问，请联系客服。",

@@ -2320,7 +2320,13 @@ class MonitoringService:
                             callback_data='balance_topup',
                         )
                     ],
-                    [InlineKeyboardButton(text=texts.t('SUPPORT_BUTTON', 'Поддержка'), callback_data='menu_support')],
+                    [
+                        InlineKeyboardButton(
+                            text=texts.t('SUPPORT_BUTTON', 'Поддержка'),
+                            callback_data='menu_support',
+                            style='primary',
+                        )
+                    ],
                 ]
             )
 
@@ -2426,7 +2432,13 @@ class MonitoringService:
                             callback_data='balance_topup',
                         )
                     ],
-                    [InlineKeyboardButton(text=texts.t('SUPPORT_BUTTON', 'Поддержка'), callback_data='menu_support')],
+                    [
+                        InlineKeyboardButton(
+                            text=texts.t('SUPPORT_BUTTON', 'Поддержка'),
+                            callback_data='menu_support',
+                            style='primary',
+                        )
+                    ],
                 ]
             )
 

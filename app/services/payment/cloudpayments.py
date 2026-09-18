@@ -482,10 +482,10 @@ class CloudPaymentsPaymentMixin:
 
         message = texts.t(
             'PAYMENT_SUCCESS_CLOUDPAYMENTS',
-            '✅ <b>Оплата получена!</b>\n\n'
-            '💰 Сумма: {amount}₽\n'
-            '💳 Способ: CloudPayments\n'
-            '💵 Баланс: {balance}₽\n\n'
+            '<b>Оплата получена</b>\n\n'
+            'Сумма: <code>{amount}₽</code>\n'
+            'Способ: CloudPayments\n'
+            'Баланс: <code>{balance}₽</code>\n\n'
             'Спасибо за пополнение!',
         ).format(
             amount=f'{amount_rub:.2f}',

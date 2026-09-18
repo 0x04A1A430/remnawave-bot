@@ -2057,7 +2057,7 @@
   "AUTO_PURCHASE_TRAFFIC_SUCCESS": "<b>Трафик добавлен автоматически!</b>\n\nДобавлено: {traffic_gb} ГБ\nНовый лимит: {new_limit} ГБ\nСписано: {price}",
   "BTN_RENEW_SUBSCRIPTION": "⏰ Продлить подписку",
   "BTN_TOPUP_BALANCE": "Пополнить баланс",
-  "PAYMENT_SUCCESS_CLOUDPAYMENTS": "<b>Оплата получена!</b>\n\nСумма: {amount}₽\nСпособ: CloudPayments\nБаланс: {balance}₽\n\nСпасибо за пополнение!",
+  "PAYMENT_SUCCESS_CLOUDPAYMENTS": "<b>Оплата получена</b>\n\nСумма: <code>{amount}₽</code>\nСпособ: CloudPayments\nБаланс: <code>{balance}₽</code>\n\nСпасибо за пополнение!",
   "CONTEST_BALANCE_GRANTED": "Бонус {amount} зачислен!",
   "REFERRAL_WITHDRAWAL_APPROVED": "<b>Заявка на вывод #{id} одобрена!</b>\n\nСумма: <b>{amount}</b>\nСредства списаны с баланса.\n\nОжидайте перевод на указанные реквизиты.",
   "REFERRAL_WITHDRAWAL_REJECTED": "<b>Заявка на вывод #{id} отклонена</b>\n\nСумма: <b>{amount}</b>\n\nЕсли у вас есть вопросы, обратитесь в поддержку.",

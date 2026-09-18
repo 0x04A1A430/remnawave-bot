@@ -474,11 +474,11 @@ class EtoplatezhiPaymentMixin:
                 await self.bot.send_message(
                     user.telegram_id,
                     (
-                        '\u2705 <b>Пополнение успешно!</b>\n\n'
-                        f'\U0001f4b0 Сумма: {settings.format_price(payment.amount_kopeks)}\n'
-                        f'\U0001f4b3 Способ: {display_name}\n'
-                        f'\U0001f194 Транзакция: {transaction.id}\n\n'
-                        'Баланс пополнен автоматически!'
+                        '<b>Пополнение успешно</b>\n\n'
+                        f'Сумма: <code>{settings.format_price(payment.amount_kopeks)}</code>\n'
+                        f'Способ: {display_name}\n'
+                        f'Транзакция: <tg-spoiler>{transaction.id}</tg-spoiler>\n\n'
+                        'Баланс пополнен автоматически'
                     ),
                     parse_mode='HTML',
                     reply_markup=keyboard,

@@ -244,10 +244,12 @@ def build_gift_result_presentation(
             InlineKeyboardButton(
                 text=texts.t('GIFT_BACK_TO_SUBSCRIPTION_BUTTON', '← К подписке'),
                 callback_data='menu_subscription',
+                style='success',
             ),
             InlineKeyboardButton(
                 text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '⬅️ В главное меню'),
                 callback_data='back_to_menu',
+                style='danger',
             ),
         ],
     ]
@@ -347,10 +349,12 @@ def build_gift_history_detail_presentation(
                 InlineKeyboardButton(
                     text=texts.t('GIFT_QR_BUTTON', '📱 QR-код подарка'),
                     callback_data=f'gift_my_qr:{item.purchase_id}',
+                    style='primary',
                 ),
                 InlineKeyboardButton(
                     text=texts.t('GIFT_COPY_TEXT_BUTTON', '📋 Текст для отправки'),
                     callback_data=f'gift_my_text:{item.purchase_id}',
+                    style='primary',
                 ),
             ],
             [
@@ -406,6 +410,7 @@ def build_gift_history_detail_presentation(
             InlineKeyboardButton(
                 text=texts.t('GIFT_MY_BACK_BUTTON', '← К списку подарков'),
                 callback_data='gift_my_back',
+                style='danger',
             )
         ]
     ]
