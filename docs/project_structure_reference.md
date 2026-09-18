@@ -789,6 +789,9 @@
 - `app/database/crud/subscription_event.py` — Python-модуль
   Классы: нет
   Функции: `create_subscription_event`, `list_subscription_events`
+- `app/database/crud/subscription_segments.py` — Python-модуль
+  Классы: нет
+  Функции: `segment_condition` — SQL-условие «подписка относится к сегменту» (по строке ``subscriptions``)., `subscription_segment` — Python-зеркало ``segment_condition`` для одной подписки (строка списка, чип).
 - `app/database/crud/system_errors.py` — Python-модуль
   Классы: нет
   Функции: `list_error_events` — Постранично отдать события с фильтрами. Возвращает (записи, всего)., `get_error_event`, `get_error_summary` — Сводка для бейджа и шапки страницы., `mark_delivery_result` — Записать исход ручной повторной доставки.
@@ -3595,6 +3598,9 @@
 - `tests/database/test_users_list_grace_filter_postgres.py` — Python-модуль
   Классы: нет
   Функции: `test_segment_lists_only_people_with_open_grace_soonest_first`, `test_segment_can_be_inverted_and_leaves_everyone_alone_when_unset`
+- `tests/database/test_users_list_segments_postgres.py` — Python-модуль
+  Классы: нет
+  Функции: `test_segment_returns_exactly_its_people`, `test_expiring_segment_is_paid_only` — «Истекают за 7 дней» — платные, у которых срок скоро; триалы и просроченные не сюда., `test_no_subscription_segment`, `test_sorting_by_end_date_keeps_every_person_of_the_segment`, `test_route_rows_carry_the_segment_for_the_chip` — Чип строки читает subscription_status: у классического триала он «trial», у просроченного — «expired»., `test_stat_cards_count_the_same_segments` — Плитки над списком считают по тем же правилам, что и выборки.
 - `tests/database/test_users_list_sort_direction_postgres.py` — Python-модуль
   Классы: нет
   Функции: `test_every_sort_goes_both_ways`, `test_people_without_a_value_stay_at_the_bottom`
