@@ -2,7 +2,7 @@
 
 Flow:
 1. Admin sends gift via inline query.
-2. Recipient clicks "Активировать" → /start bs_<gift_code>
+2. Recipient clicks "Активировать" → /start <gift_code>
 3. Bot shows preview of what changes.
 4. On confirm: applies gift, decrements counter, updates button text.
    When activated_count >= max_activations → mark is_activated=True, button → ✓.
@@ -1049,7 +1049,7 @@ async def _update_inline_button(
     try:
         if remaining > 0 and gift_code:
             bot_username = settings.BOT_USERNAME or ''
-            deep_link = f'https://t.me/{bot_username}?start=bs_{gift_code}'
+            deep_link = f'https://t.me/{bot_username}?start={gift_code}'
             kb = types.InlineKeyboardMarkup(inline_keyboard=[[make_button(text=text, url=deep_link)]])
         else:
             kb = types.InlineKeyboardMarkup(inline_keyboard=[[make_button(text=text, callback_data='igift_noop')]])
@@ -1097,7 +1097,7 @@ async def show_pending_inline_gift(
     telegram_id: int | None = None,
     username: str | None = None,
 ) -> None:
-    """Called after new user registration when they arrived via bs_ link."""
+    """Called after new user registration when they arrived via a gift link."""
     if telegram_id is None:
         telegram_id = message.from_user.id
         username = (message.from_user.username or '').lower()

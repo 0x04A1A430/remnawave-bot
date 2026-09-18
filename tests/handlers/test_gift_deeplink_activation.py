@@ -897,15 +897,15 @@ class TestGiftProvisioningInvariants:
                 mock_prov.assert_awaited_once()
 
 
-# ── Admin inline gift (bs_) deep-link routing ────────────────────────────────
+# ── Admin inline gift deep-link routing ──────────────────────────────────────
 
 
 class TestAdminInlineGiftDeeplink:
-    """Pins /start bs_<gift_code> routing to the admin inline gift handler."""
+    """Pins /start <gift_code> routing to the admin inline gift handler."""
 
     @pytest.mark.asyncio
     async def test_existing_user_bs_deeplink_routes_to_inline_gift_handler(self, monkeypatch):
-        """An existing user opening bs_ code reaches handle_gift_deeplink, not referral handling."""
+        """An existing user opening a legacy bs_ code reaches handle_gift_deeplink, not referral handling."""
         async with memory_session(monkeypatch, _TABLES) as db:
             recipient = User(telegram_id=22222, username='recipient', balance_kopeks=0)
             db.add(recipient)
@@ -926,6 +926,33 @@ class TestAdminInlineGiftDeeplink:
             await cmd_start(msg, state, db, db_user=recipient)
 
             assert calls.get('gift_code') == 'ABC123code'
+
+    @pytest.mark.asyncio
+    async def test_bare_gift_code_deeplink_routes_to_inline_gift_handler(self, monkeypatch):
+        """An existing user opening a bare gift code reaches handle_gift_deeplink, not referral handling."""
+        async with memory_session(monkeypatch, _TABLES) as db:
+            recipient = User(telegram_id=22222, username='recipient', balance_kopeks=0)
+            db.add(recipient)
+            await db.commit()
+            await db.refresh(recipient)
+
+            calls: dict[str, object] = {}
+
+            async def _fake_handle_gift_deeplink(message, gift_code, state=None):
+                calls['gift_code'] = gift_code
+                return True
+
+            referral_mock = AsyncMock(return_value=None)
+            monkeypatch.setattr('app.handlers.inline_gift.handle_gift_deeplink', _fake_handle_gift_deeplink)
+            monkeypatch.setattr('app.handlers.start.get_user_by_referral_code', referral_mock)
+
+            msg = _make_message('/start ABC123code', user_id=recipient.telegram_id, username='recipient')
+            state = _make_fsm_context(recipient.telegram_id)
+
+            await cmd_start(msg, state, db, db_user=recipient)
+
+            assert calls.get('gift_code') == 'ABC123code'
+            referral_mock.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_pending_inline_gift_shown_after_registration(self, monkeypatch):

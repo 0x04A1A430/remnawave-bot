@@ -56,8 +56,6 @@ from app.localization.texts import get_texts
 
 logger = structlog.get_logger(__name__)
 
-_GIFT_PREFIX = 'bs_'
-
 _FOREVER_DAYS = (2099 - 2025) * 365
 _MAX_DEVICES = 999
 
@@ -491,7 +489,7 @@ async def handle_admin_inline_query(inline_query: types.InlineQuery) -> None:
         )
         gift_code = secrets.token_urlsafe(32)
         bot_username = settings.BOT_USERNAME or ''
-        deep_link = f'https://t.me/{bot_username}?start={_GIFT_PREFIX}{gift_code}'
+        deep_link = f'https://t.me/{bot_username}?start={gift_code}'
         caption = _build_subscription_caption(
             '',
             parsed.days,
@@ -607,7 +605,7 @@ async def handle_admin_inline_query(inline_query: types.InlineQuery) -> None:
 
     gift_code = secrets.token_urlsafe(32)
     bot_username = settings.BOT_USERNAME or ''
-    deep_link = f'https://t.me/{bot_username}?start={_GIFT_PREFIX}{gift_code}'
+    deep_link = f'https://t.me/{bot_username}?start={gift_code}'
     keyboard = types.InlineKeyboardMarkup(
         inline_keyboard=[
             [
