@@ -576,6 +576,7 @@ def get_payment_methods_text(language: str) -> str:
         + '\n\n'
     )
 
+    method_lines: list[str] = []
     for method in methods:
         method_id = method['id'].upper()
         name = texts.t(
@@ -597,7 +598,9 @@ def get_payment_methods_text(language: str) -> str:
             name = name.format(platega_name=platega_name_html)
             description = description.format(platega_name=platega_name)
 
-        text += f'{name} - {description}\n'
+        method_lines.append(f'{name} - {description}')
+
+    text += '<blockquote>' + '\n'.join(method_lines) + '</blockquote>\n'
 
     text += '\n' + texts.t(
         'PAYMENT_METHODS_FOOTER',
