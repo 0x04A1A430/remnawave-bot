@@ -243,13 +243,18 @@ async def _apply_gift_panel_update(db, subscription, user) -> None:
     """
     from app.services.subscription_service import SubscriptionService as _Svc
 
+    subscription_id = subscription.id
     service = _Svc()
     try:
+        # The gift is already applied locally; persist it before the panel call so
+        # a panel-side failure (e.g. the account was deleted in RemnaWave) cannot
+        # roll the local grant back.
+        await db.commit()
         updated = await service.update_remnawave_user(db, subscription)
     except Exception as exc:
         logger.warning(
             'Gift panel update failed (gift already applied locally)',
-            subscription_id=subscription.id,
+            subscription_id=subscription_id,
             error=str(exc),
         )
         return

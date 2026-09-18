@@ -737,6 +737,13 @@ class SubscriptionService:
         Только для действующих подписок: пересоздавать DISABLED-юзера ради
         истёкшей подписки не нужно — админ удалил его намеренно.
         """
+        # Вызывающий мог откатить транзакцию после 404, что истекает атрибуты
+        # ORM. Перечитываем строки до синхронной проверки liveness, иначе ленивая
+        # загрузка упадёт с MissingGreenlet.
+        if user is not None:
+            await db.refresh(user)
+        await db.refresh(subscription)
+
         is_actually_active = is_subscription_live(user, subscription)
         if not is_actually_active:
             logger.info(
