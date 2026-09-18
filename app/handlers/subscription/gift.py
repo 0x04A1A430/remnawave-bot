@@ -126,7 +126,7 @@ def _render_history_list(
             ],
             [
                 InlineKeyboardButton(
-                    text=texts.t('GIFT_MY_BACK_TO_CATALOG_BUTTON', '◀️ Назад'),
+                    text=texts.t('GIFT_MY_BACK_TO_CATALOG_BUTTON', '← Назад'),
                     callback_data='gift_back_tariffs',
                 )
             ],
@@ -180,7 +180,7 @@ def _render_history_list(
     buttons.append(
         [
             InlineKeyboardButton(
-                text=texts.t('GIFT_MY_BACK_TO_CATALOG_BUTTON', '◀️ Назад'),
+                text=texts.t('GIFT_MY_BACK_TO_CATALOG_BUTTON', '← Назад'),
                 callback_data='gift_back_tariffs',
             )
         ]
@@ -229,7 +229,7 @@ def _render_period_selection(db_user: User, offer: GiftTariffOffer) -> tuple[str
 
     nav_row = [
         InlineKeyboardButton(
-            text=texts.t('GIFT_BACK_TO_TARIFFS_BUTTON', '◀️ К тарифам'),
+            text=texts.t('GIFT_BACK_TO_TARIFFS_BUTTON', '← К тарифам'),
             callback_data='gift_back_tariffs',
         ),
         InlineKeyboardButton(
@@ -288,7 +288,7 @@ def _render_confirmation_summary(db_user: User, quote: GiftQuote) -> tuple[str, 
         ],
         [
             InlineKeyboardButton(
-                text=texts.t('GIFT_BACK_TO_PERIODS_BUTTON', '◀️ К периодам'),
+                text=texts.t('GIFT_BACK_TO_PERIODS_BUTTON', '← К периодам'),
                 callback_data='gift_back_periods',
             ),
             InlineKeyboardButton(
@@ -451,7 +451,7 @@ async def _render_and_show_periods(
             inline_keyboard=[
                 [
                     InlineKeyboardButton(
-                        text=texts.t('GIFT_BACK_TO_TARIFFS_BUTTON', '◀️ К тарифам'),
+                        text=texts.t('GIFT_BACK_TO_TARIFFS_BUTTON', '← К тарифам'),
                         callback_data='gift_back_tariffs',
                     )
                 ]
@@ -547,7 +547,7 @@ async def handle_gift_period_select(
             inline_keyboard=[
                 [
                     InlineKeyboardButton(
-                        text=texts.t('GIFT_BACK_TO_TARIFFS_BUTTON', '◀️ К тарифам'),
+                        text=texts.t('GIFT_BACK_TO_TARIFFS_BUTTON', '← К тарифам'),
                         callback_data='gift_back_tariffs',
                     )
                 ]
@@ -564,7 +564,7 @@ async def handle_gift_period_select(
             inline_keyboard=[
                 [
                     InlineKeyboardButton(
-                        text=texts.t('GIFT_BACK_TO_PERIODS_BUTTON', '◀️ К периодам'),
+                        text=texts.t('GIFT_BACK_TO_PERIODS_BUTTON', '← К периодам'),
                         callback_data='gift_back_periods',
                     )
                 ]
@@ -810,7 +810,7 @@ async def handle_gift_confirm(
             inline_keyboard=[
                 [
                     InlineKeyboardButton(
-                        text=texts.t('GIFT_BACK_TO_TARIFFS_BUTTON', '◀️ К тарифам'),
+                        text=texts.t('GIFT_BACK_TO_TARIFFS_BUTTON', '← К тарифам'),
                         callback_data='gift_back_tariffs',
                     )
                 ]
@@ -971,7 +971,7 @@ async def handle_return_to_gift_cart(
             inline_keyboard=[
                 [
                     InlineKeyboardButton(
-                        text=texts.t('GIFT_BACK_TO_TARIFFS_BUTTON', '◀️ К тарифам'),
+                        text=texts.t('GIFT_BACK_TO_TARIFFS_BUTTON', '← К тарифам'),
                         callback_data='gift_back_tariffs',
                     )
                 ]
@@ -1242,7 +1242,7 @@ async def handle_gift_code_input(
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text=texts.t('GIFT_BACK_TO_SUBSCRIPTION_BUTTON', '◀️ К подписке'),
+                    text=texts.t('GIFT_BACK_TO_SUBSCRIPTION_BUTTON', '← К подписке'),
                     callback_data='menu_subscription',
                 ),
                 InlineKeyboardButton(
@@ -1441,7 +1441,7 @@ def _gift_back_keyboard(texts, purchase_id: int) -> InlineKeyboardMarkup:
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text=texts.t('GIFT_MY_BACK_TO_CARD', '◀️ К подарку'),
+                    text=texts.t('GIFT_MY_BACK_TO_CARD', '← К подарку'),
                     callback_data=f'gift_my_open:{purchase_id}',
                 )
             ]

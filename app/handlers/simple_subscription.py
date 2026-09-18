@@ -1386,7 +1386,9 @@ async def handle_simple_subscription_payment_method(
                 inline_keyboard=[
                     [
                         types.InlineKeyboardButton(
-                            text=texts.t('MULENPAY_PAY_BUTTON', '💳 Оплатить через Mulen Pay'),
+                            text=texts.t('MULENPAY_PAY_BUTTON', 'Оплатить {amount}').format(
+                                amount=settings.format_price(price_kopeks)
+                            ),
                             url=payment_url,
                         )
                     ],
@@ -1489,9 +1491,11 @@ async def handle_simple_subscription_payment_method(
 
             default_sbp_text = texts.t(
                 'PAL24_SBP_PAY_BUTTON',
-                '🏦 Оплатить через PayPalych (СБП)',
+                'Оплатить {amount}',
             )
-            sbp_button_text = settings.get_pal24_sbp_button_text(default_sbp_text)
+            sbp_button_text = settings.get_pal24_sbp_button_text(default_sbp_text).format(
+                amount=settings.format_price(price_kopeks)
+            )
 
             if sbp_url and settings.is_pal24_sbp_button_visible():
                 pay_buttons.append(
@@ -1512,9 +1516,11 @@ async def handle_simple_subscription_payment_method(
 
             default_card_text = texts.t(
                 'PAL24_CARD_PAY_BUTTON',
-                '💳 Оплатить банковской картой (PayPalych)',
+                'Оплатить {amount}',
             )
-            card_button_text = settings.get_pal24_card_button_text(default_card_text)
+            card_button_text = settings.get_pal24_card_button_text(default_card_text).format(
+                amount=settings.format_price(price_kopeks)
+            )
 
             if card_url and card_url != sbp_url and settings.is_pal24_card_button_visible():
                 pay_buttons.append(
@@ -1656,7 +1662,9 @@ async def handle_simple_subscription_payment_method(
                 inline_keyboard=[
                     [
                         types.InlineKeyboardButton(
-                            text=texts.t('WATA_PAY_BUTTON', '💳 Оплатить через WATA'),
+                            text=texts.t('WATA_PAY_BUTTON', 'Оплатить {amount}').format(
+                                amount=settings.format_price(price_kopeks)
+                            ),
                             url=payment_url,
                         )
                     ],
@@ -1786,9 +1794,11 @@ async def check_simple_pal24_payment_status(
         if not payment.is_paid and payment.status in {'NEW', 'PROCESS'}:
             default_sbp_text = texts.t(
                 'PAL24_SBP_PAY_BUTTON',
-                '🏦 Оплатить через PayPalych (СБП)',
+                'Оплатить {amount}',
             )
-            sbp_button_text = settings.get_pal24_sbp_button_text(default_sbp_text)
+            sbp_button_text = settings.get_pal24_sbp_button_text(default_sbp_text).format(
+                amount=settings.format_price(payment.amount_kopeks)
+            )
 
             if sbp_link and settings.is_pal24_sbp_button_visible():
                 pay_rows.append(
@@ -1802,9 +1812,11 @@ async def check_simple_pal24_payment_status(
 
             default_card_text = texts.t(
                 'PAL24_CARD_PAY_BUTTON',
-                '💳 Оплатить банковской картой (PayPalych)',
+                'Оплатить {amount}',
             )
-            card_button_text = settings.get_pal24_card_button_text(default_card_text)
+            card_button_text = settings.get_pal24_card_button_text(default_card_text).format(
+                amount=settings.format_price(payment.amount_kopeks)
+            )
 
             if card_link and settings.is_pal24_card_button_visible():
                 if not pay_rows or pay_rows[-1][0].url != card_link:

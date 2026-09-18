@@ -2115,15 +2115,19 @@ async def test_payment_provider(
 
         default_sbp_text = texts.t(
             'PAL24_SBP_PAY_BUTTON',
-            ' Оплатить через PayPalych (СБП)',
+            'Оплатить {amount}',
         )
-        sbp_button_text = settings.get_pal24_sbp_button_text(default_sbp_text)
+        sbp_button_text = settings.get_pal24_sbp_button_text(default_sbp_text).format(
+            amount=settings.format_price(amount_kopeks)
+        )
 
         default_card_text = texts.t(
             'PAL24_CARD_PAY_BUTTON',
-            ' Оплатить банковской картой (PayPalych)',
+            'Оплатить {amount}',
         )
-        card_button_text = settings.get_pal24_card_button_text(default_card_text)
+        card_button_text = settings.get_pal24_card_button_text(default_card_text).format(
+            amount=settings.format_price(amount_kopeks)
+        )
 
         pay_rows: list[list[types.InlineKeyboardButton]] = []
         if sbp_url:

@@ -32,7 +32,7 @@ def get_backup_main_keyboard(language: str = 'ru'):
                 InlineKeyboardButton(text=' Список бекапов', callback_data='backup_list'),
                 InlineKeyboardButton(text=' Настройки', callback_data='backup_settings'),
             ],
-            [InlineKeyboardButton(text='◀ Назад', callback_data='admin_panel')],
+            [InlineKeyboardButton(text='← Назад', callback_data='admin_panel')],
         ]
     )
 
@@ -76,7 +76,7 @@ def get_backup_list_keyboard(backups: list, page: int = 1, per_page: int = 5):
 
         keyboard.append(nav_row)
 
-    keyboard.extend([[InlineKeyboardButton(text='◀ Назад', callback_data='backup_panel')]])
+    keyboard.extend([[InlineKeyboardButton(text='← Назад', callback_data='backup_panel')]])
 
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
@@ -86,7 +86,7 @@ def get_backup_manage_keyboard(backup_filename: str):
         inline_keyboard=[
             [InlineKeyboardButton(text=' Восстановить', callback_data=f'backup_restore_file_{backup_filename}')],
             [InlineKeyboardButton(text=' Удалить', callback_data=f'backup_delete_{backup_filename}')],
-            [InlineKeyboardButton(text='◀ К списку', callback_data='backup_list')],
+            [InlineKeyboardButton(text='← К списку', callback_data='backup_list')],
         ]
     )
 
@@ -101,7 +101,7 @@ def get_backup_settings_keyboard(settings_obj):
             [InlineKeyboardButton(text=f' Автобекапы: {auto_status}', callback_data='backup_toggle_auto')],
             [InlineKeyboardButton(text=f' Сжатие: {compression_status}', callback_data='backup_toggle_compression')],
             [InlineKeyboardButton(text=f' Логи в бекапе: {logs_status}', callback_data='backup_toggle_logs')],
-            [InlineKeyboardButton(text='◀ Назад', callback_data='backup_panel')],
+            [InlineKeyboardButton(text='← Назад', callback_data='backup_panel')],
         ]
     )
 
@@ -178,7 +178,7 @@ async def show_backup_list(callback: types.CallbackQuery, db_user: User, db: Asy
         keyboard = InlineKeyboardMarkup(
             inline_keyboard=[
                 [InlineKeyboardButton(text=' Создать первый бекап', callback_data='backup_create')],
-                [InlineKeyboardButton(text='◀ Назад', callback_data='backup_panel')],
+                [InlineKeyboardButton(text='← Назад', callback_data='backup_panel')],
             ]
         )
     else:
@@ -383,7 +383,7 @@ async def handle_backup_file_upload(message: types.Message, db_user: User, db: A
         await message.answer(
             ' Пожалуйста, отправьте файл бекапа (.json, .json.gz или .tar.gz)',
             reply_markup=InlineKeyboardMarkup(
-                inline_keyboard=[[InlineKeyboardButton(text='◀ Отмена', callback_data='backup_panel')]]
+                inline_keyboard=[[InlineKeyboardButton(text='← Отмена', callback_data='backup_panel')]]
             ),
         )
         return
@@ -395,7 +395,7 @@ async def handle_backup_file_upload(message: types.Message, db_user: User, db: A
         await message.answer(
             ' Неподдерживаемый формат файла. Загрузите .json, .json.gz или .tar.gz файл',
             reply_markup=InlineKeyboardMarkup(
-                inline_keyboard=[[InlineKeyboardButton(text='◀ Отмена', callback_data='backup_panel')]]
+                inline_keyboard=[[InlineKeyboardButton(text='← Отмена', callback_data='backup_panel')]]
             ),
         )
         return
@@ -404,7 +404,7 @@ async def handle_backup_file_upload(message: types.Message, db_user: User, db: A
         await message.answer(
             ' Файл слишком большой (максимум 50MB)',
             reply_markup=InlineKeyboardMarkup(
-                inline_keyboard=[[InlineKeyboardButton(text='◀ Отмена', callback_data='backup_panel')]]
+                inline_keyboard=[[InlineKeyboardButton(text='← Отмена', callback_data='backup_panel')]]
             ),
         )
         return
@@ -450,7 +450,7 @@ async def handle_backup_file_upload(message: types.Message, db_user: User, db: A
         await message.answer(
             f' Ошибка загрузки файла: {e!s}',
             reply_markup=InlineKeyboardMarkup(
-                inline_keyboard=[[InlineKeyboardButton(text='◀ Отмена', callback_data='backup_panel')]]
+                inline_keyboard=[[InlineKeyboardButton(text='← Отмена', callback_data='backup_panel')]]
             ),
         )
 

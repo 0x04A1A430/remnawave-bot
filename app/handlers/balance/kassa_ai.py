@@ -137,7 +137,7 @@ async def _create_kassa_ai_payment_and_respond(
             ],
             [
                 InlineKeyboardButton(
-                    text=texts.t('BACK_BUTTON', '◀️ Назад'),
+                    text=texts.t('BACK_BUTTON', '← Назад'),
                     callback_data='menu_balance',
                     style='danger',
                 )

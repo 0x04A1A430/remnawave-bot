@@ -242,7 +242,7 @@ def build_gift_result_presentation(
         *action_buttons,
         [
             InlineKeyboardButton(
-                text=texts.t('GIFT_BACK_TO_SUBSCRIPTION_BUTTON', '◀️ К подписке'),
+                text=texts.t('GIFT_BACK_TO_SUBSCRIPTION_BUTTON', '← К подписке'),
                 callback_data='menu_subscription',
             ),
             InlineKeyboardButton(
@@ -355,7 +355,7 @@ def build_gift_history_detail_presentation(
             ],
             [
                 InlineKeyboardButton(
-                    text=texts.t('GIFT_MY_BACK_BUTTON', '◀️ К списку подарков'),
+                    text=texts.t('GIFT_MY_BACK_BUTTON', '← К списку подарков'),
                     callback_data='gift_my_back',
                 )
             ],
@@ -404,7 +404,7 @@ def build_gift_history_detail_presentation(
     buttons = [
         [
             InlineKeyboardButton(
-                text=texts.t('GIFT_MY_BACK_BUTTON', '◀️ К списку подарков'),
+                text=texts.t('GIFT_MY_BACK_BUTTON', '← К списку подарков'),
                 callback_data='gift_my_back',
             )
         ]

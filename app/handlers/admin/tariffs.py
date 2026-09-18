@@ -113,7 +113,7 @@ def get_tariffs_list_keyboard(
     # Пагинация
     nav_buttons = []
     if page > 0:
-        nav_buttons.append(InlineKeyboardButton(text='◀', callback_data=f'admin_tariffs_page:{page - 1}'))
+        nav_buttons.append(InlineKeyboardButton(text='←', callback_data=f'admin_tariffs_page:{page - 1}'))
     if page < total_pages - 1:
         nav_buttons.append(InlineKeyboardButton(text='▶', callback_data=f'admin_tariffs_page:{page + 1}'))
     if nav_buttons:
@@ -2338,7 +2338,7 @@ async def confirm_delete_tariff(
             f'либо переведите подписки на другой тариф.',
             reply_markup=InlineKeyboardMarkup(
                 inline_keyboard=[
-                    [InlineKeyboardButton(text='◀ Назад к тарифу', callback_data=f'admin_tariff_view:{tariff_id}')],
+                    [InlineKeyboardButton(text='← Назад к тарифу', callback_data=f'admin_tariff_view:{tariff_id}')],
                 ]
             ),
             parse_mode='HTML',

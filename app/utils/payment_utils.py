@@ -33,7 +33,7 @@ def get_available_payment_methods() -> list[dict[str, str]]:
             methods.append(
                 {
                     'id': 'yookassa_sbp',
-                    'name': 'СБП (YooKassa)',
+                    'name': 'СБП YooKassa',
                     'icon': '🏦',
                     'description': 'моментальная оплата по QR',
                     'callback': 'topup_yookassa_sbp',
@@ -177,7 +177,7 @@ def get_available_payment_methods() -> list[dict[str, str]]:
         methods.append(
             {
                 'id': 'riopay',
-                'name': f'Банковская карта ({riopay_name})',
+                'name': f'Банковская карта {riopay_name}',
                 'icon': '💳',
                 'description': f'через {riopay_name}',
                 'callback': 'topup_riopay',
@@ -189,7 +189,7 @@ def get_available_payment_methods() -> list[dict[str, str]]:
         methods.append(
             {
                 'id': 'severpay',
-                'name': f'Банковская карта ({severpay_name})',
+                'name': f'Банковская карта {severpay_name}',
                 'icon': '💳',
                 'description': f'через {severpay_name}',
                 'callback': 'topup_severpay',

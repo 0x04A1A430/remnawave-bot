@@ -116,7 +116,7 @@ class TestGiftButtonFallbacks:
         assert '-11%' in p90_btn.text
 
         back_btn = next(b for b in buttons if b.callback_data == 'gift_back_tariffs')
-        assert back_btn.text == '◀️ К тарифам'
+        assert back_btn.text == '← К тарифам'
 
         cancel_btn = next(b for b in buttons if b.callback_data == 'gift_cancel')
         assert cancel_btn.text == '❌ Отмена'
@@ -131,7 +131,7 @@ class TestGiftButtonFallbacks:
         assert confirm_btn.text == '✅ Подтвердить покупку'
 
         back_btn = next(b for b in buttons if b.callback_data == 'gift_back_periods')
-        assert back_btn.text == '◀️ К периодам'
+        assert back_btn.text == '← К периодам'
 
         cancel_btn = next(b for b in buttons if b.callback_data == 'gift_cancel')
         assert cancel_btn.text == '❌ Отмена'
@@ -169,7 +169,7 @@ class TestGiftButtonFallbacks:
         assert next_btn.text == 'Следующая ➡️'
 
         back_btn = next(b for b in buttons if b.callback_data == 'gift_back_tariffs')
-        assert back_btn.text == '◀️ Назад'
+        assert back_btn.text == '← Назад'
 
     def test_reusable_button_keys_fallback_defaults(self):
         """Verify fallback strings for shared result, cart, and activation buttons."""
@@ -177,11 +177,11 @@ class TestGiftButtonFallbacks:
         assert texts.t('GIFT_MY_BUTTON', '🎁 Мои подарки') == '🎁 Мои подарки'
         assert texts.t('GIFT_MY_PREV_PAGE_BUTTON', '⬅️ Предыдущая') == '⬅️ Предыдущая'
         assert texts.t('GIFT_MY_NEXT_PAGE_BUTTON', 'Следующая ➡️') == 'Следующая ➡️'
-        assert texts.t('GIFT_MY_BACK_BUTTON', '◀️ К списку подарков') == '◀️ К списку подарков'
-        assert texts.t('GIFT_MY_BACK_TO_CATALOG_BUTTON', '◀️ Назад') == '◀️ Назад'
+        assert texts.t('GIFT_MY_BACK_BUTTON', '← К списку подарков') == '← К списку подарков'
+        assert texts.t('GIFT_MY_BACK_TO_CATALOG_BUTTON', '← Назад') == '← Назад'
         assert texts.t('GIFT_SEND_BUTTON', '🎁 Отправить подарок') == '🎁 Отправить подарок'
         assert texts.t('GIFT_OPEN_BUTTON', '🔗 Открыть подарок') == '🔗 Открыть подарок'
-        assert texts.t('GIFT_BACK_TO_SUBSCRIPTION_BUTTON', '◀️ К подписке') == '◀️ К подписке'
+        assert texts.t('GIFT_BACK_TO_SUBSCRIPTION_BUTTON', '← К подписке') == '← К подписке'
         assert texts.t('GIFT_RETURN_TO_CART_BUTTON', '🎁 Вернуться к подарку') == '🎁 Вернуться к подарку'
         assert texts.t('GIFT_ENTER_CODE_BUTTON', '🎁 Активировать код') == '🎁 Активировать код'
         assert texts.t('GIFT_ACTIVATION_CANCEL_BUTTON', '❌ Отмена') == '❌ Отмена'

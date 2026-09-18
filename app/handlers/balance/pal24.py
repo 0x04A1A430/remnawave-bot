@@ -91,9 +91,11 @@ async def _send_pal24_payment_message(
 
         default_sbp_text = texts.t(
             'PAL24_SBP_PAY_BUTTON',
-            '🏦 Оплатить через PayPalych (СБП)',
+            'Оплатить {amount}',
         )
-        sbp_button_text = settings.get_pal24_sbp_button_text(default_sbp_text)
+        sbp_button_text = settings.get_pal24_sbp_button_text(default_sbp_text).format(
+            amount=settings.format_price(amount_kopeks)
+        )
 
         if sbp_url and settings.is_pal24_sbp_button_visible():
             pay_buttons.append(
@@ -114,9 +116,11 @@ async def _send_pal24_payment_message(
 
         default_card_text = texts.t(
             'PAL24_CARD_PAY_BUTTON',
-            '💳 Оплатить банковской картой (PayPalych)',
+            'Оплатить {amount}',
         )
-        card_button_text = settings.get_pal24_card_button_text(default_card_text)
+        card_button_text = settings.get_pal24_card_button_text(default_card_text).format(
+            amount=settings.format_price(amount_kopeks)
+        )
 
         if card_url and card_url != sbp_url and settings.is_pal24_card_button_visible():
             pay_buttons.append(
@@ -404,9 +408,7 @@ async def process_pal24_payment_amount(
         method_buttons.append(
             [
                 types.InlineKeyboardButton(
-                    text=settings.get_pal24_sbp_button_text(
-                        texts.t('PAL24_SBP_PAY_BUTTON', '🏦 Оплатить через PayPalych (СБП)')
-                    ),
+                    text=texts.t('PAL24_SBP_METHOD', 'СБП (PayPalych)'),
                     callback_data='pal24_method_sbp',
                     style='success',
                 )
@@ -416,9 +418,7 @@ async def process_pal24_payment_amount(
         method_buttons.append(
             [
                 types.InlineKeyboardButton(
-                    text=settings.get_pal24_card_button_text(
-                        texts.t('PAL24_CARD_PAY_BUTTON', '💳 Оплатить банковской картой (PayPalych)')
-                    ),
+                    text=texts.t('PAL24_CARD_METHOD', 'Банковская карта (PayPalych)'),
                     callback_data='pal24_method_card',
                     style='success',
                 )
@@ -601,9 +601,11 @@ async def check_pal24_payment_status(
         if not payment.is_paid and payment.status in {'NEW', 'PROCESS'}:
             default_sbp_text = texts.t(
                 'PAL24_SBP_PAY_BUTTON',
-                '🏦 Оплатить через PayPalych (СБП)',
+                'Оплатить {amount}',
             )
-            sbp_button_text = settings.get_pal24_sbp_button_text(default_sbp_text)
+            sbp_button_text = settings.get_pal24_sbp_button_text(default_sbp_text).format(
+                amount=settings.format_price(payment.amount_kopeks)
+            )
 
             if sbp_link and settings.is_pal24_sbp_button_visible():
                 pay_rows.append(
@@ -617,9 +619,11 @@ async def check_pal24_payment_status(
 
             default_card_text = texts.t(
                 'PAL24_CARD_PAY_BUTTON',
-                '💳 Оплатить банковской картой (PayPalych)',
+                'Оплатить {amount}',
             )
-            card_button_text = settings.get_pal24_card_button_text(default_card_text)
+            card_button_text = settings.get_pal24_card_button_text(default_card_text).format(
+                amount=settings.format_price(payment.amount_kopeks)
+            )
 
             if card_link and settings.is_pal24_card_button_visible():
                 if not pay_rows or pay_rows[-1][0].url != card_link:
