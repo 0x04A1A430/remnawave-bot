@@ -227,4 +227,8 @@ async def test_stat_cards_count_the_same_segments(postgres_database):
 
         stats = await admin_users.get_users_stats(admin=None, db=db)
 
-        assert (stats.users_with_trial, stats.users_with_active_subscription, stats.users_with_expired_subscription) == (2, 2, 3)
+        assert (
+            stats.users_with_trial,
+            stats.users_with_active_subscription,
+            stats.users_with_expired_subscription,
+        ) == (2, 2, 3)
