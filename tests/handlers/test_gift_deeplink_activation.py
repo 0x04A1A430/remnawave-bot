@@ -53,6 +53,7 @@ from app.database.models import (
 )
 from app.handlers.start import (
     _activate_pending_gift_after_registration,
+    _activate_pending_inline_gift_after_registration,
     cmd_start,
 )
 from app.services.gift_purchase_service import (
@@ -894,3 +895,68 @@ class TestGiftProvisioningInvariants:
 
                 # Invariant: exactly one provisioning call at claim time
                 mock_prov.assert_awaited_once()
+
+
+# ── Admin inline gift (bs_) deep-link routing ────────────────────────────────
+
+
+class TestAdminInlineGiftDeeplink:
+    """Pins /start bs_<gift_code> routing to the admin inline gift handler."""
+
+    @pytest.mark.asyncio
+    async def test_existing_user_bs_deeplink_routes_to_inline_gift_handler(self, monkeypatch):
+        """An existing user opening bs_ code reaches handle_gift_deeplink, not referral handling."""
+        async with memory_session(monkeypatch, _TABLES) as db:
+            recipient = User(telegram_id=22222, username='recipient', balance_kopeks=0)
+            db.add(recipient)
+            await db.commit()
+            await db.refresh(recipient)
+
+            calls: dict[str, object] = {}
+
+            async def _fake_handle_gift_deeplink(message, gift_code, state=None):
+                calls['gift_code'] = gift_code
+                return True
+
+            monkeypatch.setattr('app.handlers.inline_gift.handle_gift_deeplink', _fake_handle_gift_deeplink)
+
+            msg = _make_message('/start bs_ABC123code', user_id=recipient.telegram_id, username='recipient')
+            state = _make_fsm_context(recipient.telegram_id)
+
+            await cmd_start(msg, state, db, db_user=recipient)
+
+            assert calls.get('gift_code') == 'ABC123code'
+
+    @pytest.mark.asyncio
+    async def test_pending_inline_gift_shown_after_registration(self, monkeypatch):
+        """Registration completion shows the stored inline gift preview and clears the pending code."""
+        recipient = User(telegram_id=22222, username='recipient', balance_kopeks=0)
+        msg = _make_message('/start', user_id=recipient.telegram_id, username='recipient')
+        state = _make_fsm_context(recipient.telegram_id)
+        await state.update_data(pending_inline_gift_code='ABC123code')
+
+        show_mock = AsyncMock()
+        monkeypatch.setattr('app.handlers.inline_gift.show_pending_inline_gift', show_mock)
+
+        shown = await _activate_pending_inline_gift_after_registration(state, msg)
+
+        assert shown is True
+        show_mock.assert_awaited_once()
+        assert show_mock.call_args[0][1] == 'ABC123code'
+        assert show_mock.call_args[1]['telegram_id'] == recipient.telegram_id
+        assert (await state.get_data()).get('pending_inline_gift_code') is None
+
+    @pytest.mark.asyncio
+    async def test_no_pending_inline_gift_returns_false(self, monkeypatch):
+        """Without a stored inline gift the helper is a no-op and reports no gift shown."""
+        recipient = User(telegram_id=22222, username='recipient', balance_kopeks=0)
+        msg = _make_message('/start', user_id=recipient.telegram_id, username='recipient')
+        state = _make_fsm_context(recipient.telegram_id)
+
+        show_mock = AsyncMock()
+        monkeypatch.setattr('app.handlers.inline_gift.show_pending_inline_gift', show_mock)
+
+        shown = await _activate_pending_inline_gift_after_registration(state, msg)
+
+        assert shown is False
+        show_mock.assert_not_awaited()

@@ -500,6 +500,40 @@ async def _activate_pending_gift_after_registration(
             pass
 
 
+async def _activate_pending_inline_gift_after_registration(
+    state: FSMContext,
+    message: types.Message,
+    from_user: types.User | None = None,
+) -> bool:
+    """Show pending inline gift preview after registration if user arrived via bs_ link.
+
+    Must be called BEFORE state.clear() to preserve the gift code.
+    Returns True if a gift was shown.
+    """
+    data = await state.get_data()
+    gift_code = data.get('pending_inline_gift_code')
+    if not gift_code:
+        return False
+    try:
+        from app.handlers.inline_gift import show_pending_inline_gift
+
+        effective_user = from_user or message.from_user
+        await show_pending_inline_gift(
+            message,
+            gift_code,
+            telegram_id=effective_user.id,
+            username=effective_user.username,
+        )
+    except Exception:
+        logger.exception(
+            'Failed to show pending inline gift after registration',
+            gift_code_prefix=(gift_code or '')[:8],
+        )
+    finally:
+        await state.update_data(pending_inline_gift_code=None)
+    return True  # gift code existed, skip main menu
+
+
 _COUPON_ERROR_TEXTS = {
     'invalid': '❌ Купон не найден или уже использован.',
     'expired': '⌛ Срок действия купона истёк.',
@@ -1331,6 +1365,22 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
                 await state.update_data(pending_coupon_token=coupon_token)
                 start_parameter = None  # Don't treat as campaign or referral
 
+    # Handle admin inline gift deep links: /start bs_<gift_code>
+    if start_parameter and start_parameter.startswith('bs_'):
+        gift_code = start_parameter[3:]
+        if gift_code:
+            logger.info(
+                'Inline gift deep link detected',
+                gift_code_prefix=gift_code[:8],
+                telegram_id=message.from_user.id,
+            )
+            from app.handlers.inline_gift import handle_gift_deeplink
+
+            handled = await handle_gift_deeplink(message, gift_code, state)
+            if handled:
+                return
+            start_parameter = None  # Don't treat as campaign or referral
+
     # Handle web auth deep links: /start webauth_{token}
     if start_parameter and start_parameter.startswith('webauth_'):
         web_auth_token = start_parameter.removeprefix('webauth_')
@@ -1594,6 +1644,7 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
         # Auto-activate pending gift/coupon/trial if deep link contained GIFT_/coupon_/trial
         if user:
             await _activate_pending_gift_after_registration(db, state, user, message.answer)
+            showed_gift = await _activate_pending_inline_gift_after_registration(state, message)
             await _redeem_pending_coupon(db, state, user, message.answer)
             await _activate_pending_trial(db, state, user, message.answer, message.bot)
             await _persist_pending_subid_after_registration(db, state, user)
@@ -1602,6 +1653,10 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
             )
             # Refresh user to pick up newly created subscriptions
             await db.refresh(user, attribute_names=['subscriptions'])
+
+            if showed_gift:
+                await state.clear()
+                return
 
         user_subs_for_flags = getattr(user, 'subscriptions', None) or []
         first_sub_for_flags = next(
@@ -2493,6 +2548,9 @@ async def complete_registration_from_callback(callback: types.CallbackQuery, sta
 
     # Auto-activate pending gift/coupon for newly registered user (before state.clear() wipes the tokens)
     await _activate_pending_gift_after_registration(db, state, user, callback.message.answer)
+    showed_gift = await _activate_pending_inline_gift_after_registration(
+        state, callback.message, from_user=callback.from_user
+    )
     await _redeem_pending_coupon(db, state, user, callback.message.answer)
     await _persist_pending_subid_after_registration(db, state, user)
     # Gift/coupon may have just created a subscription — reload it, otherwise the
@@ -2507,6 +2565,10 @@ async def complete_registration_from_callback(callback: types.CallbackQuery, sta
         )
 
     await state.clear()
+
+    if showed_gift:
+        logger.info('Регистрация завершена для пользователя', telegram_id=user.telegram_id)
+        return
 
     if campaign_message:
         try:
@@ -2880,6 +2942,7 @@ async def complete_registration(message: types.Message, state: FSMContext, db: A
 
     # Auto-activate pending gift/coupon for newly registered user (before state.clear() wipes the tokens)
     await _activate_pending_gift_after_registration(db, state, user, message.answer)
+    showed_gift = await _activate_pending_inline_gift_after_registration(state, message)
     await _redeem_pending_coupon(db, state, user, message.answer)
     await _persist_pending_subid_after_registration(db, state, user)
     # Gift/coupon may have just created a subscription — reload it, otherwise the
@@ -2894,6 +2957,10 @@ async def complete_registration(message: types.Message, state: FSMContext, db: A
         )
 
     await state.clear()
+
+    if showed_gift:
+        logger.info('Регистрация завершена для пользователя', telegram_id=user.telegram_id)
+        return
 
     if campaign_message:
         try:
