@@ -1425,7 +1425,7 @@
   "SKIP_BUTTON": "⏭ Пропустить",
   "STARS_PAYMENT_ENROLLMENT_ERROR": "Произошла ошибка при зачислении средств. Обратитесь в поддержку, платеж будет проверен вручную.",
   "STARS_PAYMENT_PROCESSING_ERROR": "Техническая ошибка при обработке платежа. Обратитесь в поддержку для решения проблемы.",
-  "STARS_PAYMENT_SUCCESS": "<b>Платеж успешно обработан!</b>\n\n Потрачено звезд: {stars_spent}\nЗачислено на баланс: {amount} ₽\nID транзакции: {transaction_id}...\n\nСпасибо за пополнение!",
+  "STARS_PAYMENT_SUCCESS": "<b>Платеж успешно обработан</b>\n\nПотрачено звезд: <code>{stars_spent}</code>\nЗачислено на баланс: <code>{amount} ₽</code>\nID транзакции: <tg-spoiler>{transaction_id}</tg-spoiler>\n\nСпасибо за пополнение!",
   "STARS_PAYMENT_USER_NOT_FOUND": "Ошибка: пользователь не найден. Обратитесь в поддержку.",
   "STARS_PRECHECK_INVALID_PAYLOAD": "Ошибка валидации платежа. Попробуйте еще раз.",
   "STARS_PRECHECK_TECHNICAL_ERROR": "Техническая ошибка. Попробуйте позже.",

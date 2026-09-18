@@ -320,14 +320,14 @@ class TributeService:
                 keyboard = await payment_service.build_topup_success_keyboard(user)
 
                 text = (
-                    f'✅ **Платеж успешно получен!**\n\n'
-                    f'💰 Сумма: {int(amount_rubles)} ₽\n'
-                    f'💳 Способ оплаты: Tribute\n'
-                    f'🎉 Средства зачислены на баланс!\n\n'
-                    f'Спасибо за оплату! 🙏'
+                    '<b>Платеж успешно получен</b>\n\n'
+                    f'Сумма: <code>{int(amount_rubles)} ₽</code>\n'
+                    'Способ оплаты: Tribute\n'
+                    'Средства зачислены на баланс\n\n'
+                    'Спасибо за оплату!'
                 )
 
-                await self.bot.send_message(user_id, text, reply_markup=keyboard, parse_mode='Markdown')
+                await self.bot.send_message(user_id, text, reply_markup=keyboard, parse_mode='HTML')
 
                 # Проверяем наличие сохраненной корзины для возврата к оформлению подписки
                 from app.services.payment.common import send_cart_notification_after_topup
@@ -349,7 +349,7 @@ class TributeService:
 
         try:
             text = (
-                '⌘ **Платеж не прошел**\n\n'
+                '<b>Платеж не прошел</b>\n\n'
                 'К сожалению, ваш платеж через Tribute был отклонен.\n\n'
                 'Возможные причины:\n'
                 '• Недостаточно средств на карте\n'
@@ -360,12 +360,12 @@ class TributeService:
 
             keyboard = InlineKeyboardMarkup(
                 inline_keyboard=[
-                    [InlineKeyboardButton(text='🔄 Попробовать снова', callback_data='menu_balance')],
-                    [InlineKeyboardButton(text='💬 Поддержка', callback_data='menu_support')],
+                    [InlineKeyboardButton(text='Попробовать снова', callback_data='menu_balance', style='primary')],
+                    [InlineKeyboardButton(text='Поддержка', callback_data='menu_support', style='primary')],
                 ]
             )
 
-            await self.bot.send_message(user_id, text, reply_markup=keyboard, parse_mode='Markdown')
+            await self.bot.send_message(user_id, text, reply_markup=keyboard, parse_mode='HTML')
 
         except Exception as e:
             logger.error('Ошибка отправки уведомления о неудачном платеже', error=e)
@@ -383,21 +383,21 @@ class TributeService:
             amount_rubles = amount_kopeks / 100
 
             text = (
-                f'🔄 **Возврат средств**\n\n'
-                f'💰 Сумма возврата: {int(amount_rubles)} ₽\n'
-                f'💳 Способ: Tribute\n\n'
-                f'Средства будут возвращены на вашу карту в течение 3-5 рабочих дней.\n\n'
-                f'Если у вас есть вопросы, обратитесь в поддержку.'
+                '<b>Возврат средств</b>\n\n'
+                f'Сумма возврата: <code>{int(amount_rubles)} ₽</code>\n'
+                'Способ: Tribute\n\n'
+                'Средства будут возвращены на вашу карту в течение 3-5 рабочих дней.\n\n'
+                'Если у вас есть вопросы, обратитесь в поддержку.'
             )
 
             keyboard = InlineKeyboardMarkup(
                 inline_keyboard=[
-                    [InlineKeyboardButton(text='💬 Поддержка', callback_data='menu_support')],
-                    [InlineKeyboardButton(text='🏠 Главное меню', callback_data='back_to_menu')],
+                    [InlineKeyboardButton(text='Поддержка', callback_data='menu_support', style='primary')],
+                    [InlineKeyboardButton(text='Главное меню', callback_data='back_to_menu', style='danger')],
                 ]
             )
 
-            await self.bot.send_message(user_id, text, reply_markup=keyboard, parse_mode='Markdown')
+            await self.bot.send_message(user_id, text, reply_markup=keyboard, parse_mode='HTML')
 
         except Exception as e:
             logger.error('Ошибка отправки уведомления о возврате', error=e)

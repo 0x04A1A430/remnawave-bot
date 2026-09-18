@@ -384,11 +384,11 @@ class MulenPayPaymentMixin:
                         await self.bot.send_message(
                             user.telegram_id,
                             (
-                                '✅ <b>Пополнение успешно!</b>\n\n'
-                                f'💰 Сумма: {settings.format_price(payment.amount_kopeks)}\n'
-                                f'🦊 Способ: {display_name_html}\n'
-                                f'🆔 Транзакция: {transaction.id}\n\n'
-                                'Баланс пополнен автоматически!'
+                                '<b>Пополнение успешно</b>\n\n'
+                                f'Сумма: <code>{settings.format_price(payment.amount_kopeks)}</code>\n'
+                                f'Способ: {display_name_html}\n'
+                                f'Транзакция: <tg-spoiler>{transaction.id}</tg-spoiler>\n\n'
+                                'Баланс пополнен автоматически'
                             ),
                             parse_mode='HTML',
                             reply_markup=keyboard,

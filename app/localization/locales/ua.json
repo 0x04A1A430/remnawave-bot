@@ -1955,7 +1955,7 @@
   "AUTO_PURCHASE_TRAFFIC_SUCCESS": "<b>Трафік додано автоматично!</b>\n\nДодано: {traffic_gb} ГБ\nНовий ліміт: {new_limit} ГБ\nСписано: {price}",
   "BTN_RENEW_SUBSCRIPTION": "⏰ Продовжити підписку",
   "BTN_TOPUP_BALANCE": "Поповнити баланс",
-  "PAYMENT_SUCCESS_CLOUDPAYMENTS": "<b>Оплату отримано!</b>\n\nСума: {amount}₽\nСпосіб: CloudPayments\nБаланс: {balance}₽\n\nДякуємо за поповнення!",
+  "PAYMENT_SUCCESS_CLOUDPAYMENTS": "<b>Оплату отримано</b>\n\nСума: <code>{amount}₽</code>\nСпосіб: CloudPayments\nБаланс: <code>{balance}₽</code>\n\nДякуємо за поповнення!",
   "CONTEST_BALANCE_GRANTED": "Бонус {amount} зараховано!",
   "REFERRAL_WITHDRAWAL_APPROVED": "<b>Заявку на виведення #{id} схвалено!</b>\n\nСума: <b>{amount}</b>\nКошти списано з балансу.\n\nОчікуйте переказ на вказані реквізити.",
   "REFERRAL_WITHDRAWAL_REJECTED": "<b>Заявку на виведення #{id} відхилено</b>\n\nСума: <b>{amount}</b>\n\nЯкщо у вас є питання, зверніться до підтримки.",

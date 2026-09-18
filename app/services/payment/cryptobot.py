@@ -364,12 +364,12 @@ class CryptoBotPaymentMixin:
                     try:
                         keyboard = await self.build_topup_success_keyboard(user)
                         message_text = (
-                            '✅ <b>Пополнение успешно!</b>\n\n'
-                            f'💰 Сумма: {settings.format_price(amount_kopeks)}\n'
-                            f'🪙 Платеж: {updated_payment.amount} {updated_payment.asset}\n'
-                            f'💱 Курс: 1 USD = {conversion_rate:.2f}₽\n'
-                            f'🆔 Транзакция: {invoice_id[:8]}...\n\n'
-                            'Баланс пополнен автоматически!'
+                            '<b>Пополнение успешно</b>\n\n'
+                            f'Сумма: <code>{settings.format_price(amount_kopeks)}</code>\n'
+                            f'Платеж: {updated_payment.amount} {updated_payment.asset}\n'
+                            f'Курс: 1 USD = {conversion_rate:.2f}₽\n'
+                            f'Транзакция: <tg-spoiler>{invoice_id[:8]}...</tg-spoiler>\n\n'
+                            'Баланс пополнен автоматически'
                         )
                         if settings.is_notifications_enabled():
                             user_notification = _UserNotificationPayload(

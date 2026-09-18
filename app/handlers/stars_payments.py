@@ -621,11 +621,11 @@ async def handle_successful_payment(message: types.Message, db: AsyncSession, st
             await message.answer(
                 texts.t(
                     'STARS_PAYMENT_SUCCESS',
-                    '🎉 <b>Платеж успешно обработан!</b>\n\n'
-                    '⭐ Потрачено звезд: {stars_spent}\n'
-                    '💰 Зачислено на баланс: {amount} ₽\n'
-                    '🆔 ID транзакции: {transaction_id}...\n\n'
-                    'Спасибо за пополнение! 🚀',
+                    '<b>Платеж успешно обработан</b>\n\n'
+                    'Потрачено звезд: <code>{stars_spent}</code>\n'
+                    'Зачислено на баланс: <code>{amount} ₽</code>\n'
+                    'ID транзакции: <tg-spoiler>{transaction_id}</tg-spoiler>\n\n'
+                    'Спасибо за пополнение!',
                 ).format(
                     stars_spent=payment.total_amount,
                     amount=amount_text,

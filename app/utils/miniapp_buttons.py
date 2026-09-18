@@ -120,7 +120,7 @@ BUTTON_KEY_TO_CABINET_PATH: dict[str, str] = {
 _VALID_STYLES = frozenset({'primary', 'success', 'danger'})
 
 
-def build_main_menu_button(text: str) -> InlineKeyboardButton:
+def build_main_menu_button(text: str, *, style: str | None = None) -> InlineKeyboardButton:
     """Always-callback button for "Main Menu" / "Главное меню" navigation.
 
     Exists as a typed alternative to ``build_miniapp_or_callback_button``
@@ -139,7 +139,7 @@ def build_main_menu_button(text: str) -> InlineKeyboardButton:
     callback even if called wrongly, AND this dedicated factory is
     what callers should reach for to express intent.
     """
-    return InlineKeyboardButton(text=text, callback_data='back_to_menu')
+    return InlineKeyboardButton(text=text, callback_data='back_to_menu', style=_resolve_style(style))
 
 
 def _resolve_style(style: str | None) -> str | None:
@@ -243,7 +243,10 @@ def build_miniapp_or_callback_button(
                     icon_custom_emoji_id=resolved_emoji or None,
                 )
 
-    return InlineKeyboardButton(text=text, callback_data=callback_data)
+    # Bot-режим (без URL кабинета): кнопка остаётся callback, но цвет
+    # применяем — иначе пользовательские уведомления в боте остаются серыми.
+    resolved_style = _resolve_style(style) or _resolve_style(CALLBACK_TO_CABINET_STYLE.get(callback_data))
+    return InlineKeyboardButton(text=text, callback_data=callback_data, style=resolved_style)
 
 
 SUBSCRIPTION_EXTEND_CALLBACK = 'subscription_extend'
