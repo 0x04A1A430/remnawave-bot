@@ -357,11 +357,11 @@ class MonitoringService:
 
     async def _handle_unreachable_user(self, user: User, error: Exception, context: str) -> bool:
         if isinstance(error, TelegramForbiddenError):
-            logger.warning('⚠️ Пользователь недоступен: бот заблокирован', telegram_id=user.telegram_id, context=context)
+            logger.warning('Пользователь недоступен: бот заблокирован', telegram_id=user.telegram_id, context=context)
             return True
 
         if isinstance(error, TelegramBadRequest) and self._is_unreachable_error(error):
-            logger.warning('⚠️ Пользователь недоступен', telegram_id=user.telegram_id, context=context, error=error)
+            logger.warning('Пользователь недоступен', telegram_id=user.telegram_id, context=context, error=error)
             return True
 
         return False
@@ -372,7 +372,7 @@ class MonitoringService:
             return
 
         self.is_running = True
-        logger.info('🔄 Запуск службы мониторинга')
+        logger.info('Запуск службы мониторинга')
         # Start dedicated SLA loop with its own interval for timely 5-min checks
         try:
             if not self._sla_task or self._sla_task.done():
@@ -391,7 +391,7 @@ class MonitoringService:
 
     def stop_monitoring(self):
         self.is_running = False
-        logger.info('ℹ️ Мониторинг остановлен')
+        logger.info('Мониторинг остановлен')
         try:
             if self._sla_task and not self._sla_task.done():
                 self._sla_task.cancel()
@@ -405,19 +405,19 @@ class MonitoringService:
 
                 expired_offers = await deactivate_expired_offers(db)
                 if expired_offers:
-                    logger.info('🧹 Деактивировано просроченных скидочных предложений', expired_offers=expired_offers)
+                    logger.info('Деактивировано просроченных скидочных предложений', expired_offers=expired_offers)
 
                 expired_active_discounts = await cleanup_expired_promo_offer_discounts(db)
                 if expired_active_discounts:
                     logger.info(
-                        '🧹 Сброшено активных скидок промо-предложений с истекшим сроком',
+                        'Сброшено активных скидок промо-предложений с истекшим сроком',
                         expired_active_discounts=expired_active_discounts,
                     )
 
                 cleaned_test_access = await promo_offer_service.cleanup_expired_test_access(db)
                 if cleaned_test_access:
                     logger.info(
-                        '🧹 Отозвано истекших тестовых доступов к сквадам', cleaned_test_access=cleaned_test_access
+                        'Отозвано истекших тестовых доступов к сквадам', cleaned_test_access=cleaned_test_access
                     )
 
                 # ВАЖНО: autopay ПЕРЕД check_expired — иначе подписки с автоплатой
@@ -493,7 +493,7 @@ class MonitoringService:
 
             self._last_cleanup = current_time
             logger.info(
-                '🧹 Очищен кеш уведомлений',
+                'Очищен кеш уведомлений',
                 old_count=old_count,
                 autopay_state_evicted=len(expired_keys),
                 autopay_state_remaining=len(self._autopay_fail_state),
@@ -669,7 +669,7 @@ class MonitoringService:
             if not skip_notify:
                 await self._send_subscription_expired_notification(user, subscription, tariff_name=_tariff_name)
 
-        logger.info("🔴 Подписка пользователя истекла и статус изменен на 'expired'", user_id=subscription.user_id)
+        logger.info("Подписка пользователя истекла и статус изменен на 'expired'", user_id=subscription.user_id)
 
     async def _panel_keeps_alive(self, db: AsyncSession, subscription: Subscription) -> bool:
         """Спросить панель перед гашением по своей дате.
@@ -810,7 +810,7 @@ class MonitoringService:
                     subscription.status = SubscriptionStatus.EXPIRED.value
                     await db.commit()
                     is_active = False
-                    logger.info("📝 Статус подписки обновлен на 'expired'", subscription_id=subscription.id)
+                    logger.info("Статус подписки обновлен на 'expired'", subscription_id=subscription.id)
 
             if not self.subscription_service.is_configured:
                 logger.warning(
@@ -849,7 +849,7 @@ class MonitoringService:
 
                 status_text = 'активным' if is_active else 'истёкшим'
                 logger.info(
-                    '✅ Обновлен RemnaWave пользователь со статусом',
+                    'Обновлен RemnaWave пользователь со статусом',
                     remnawave_id=panel_user_id,
                     status_text=status_text,
                 )
@@ -943,7 +943,7 @@ class MonitoringService:
                             if any(s.id == subscription.id for s in other_subs):
                                 should_send = False
                                 logger.debug(
-                                    '🎯 Пропускаем уведомление на дней для пользователя есть более срочное на дней',
+                                    'Пропускаем уведомление на дней для пользователя есть более срочное на дней',
                                     days=days,
                                     user_identifier=user_identifier,
                                     other_days=other_days,
@@ -965,7 +965,7 @@ class MonitoringService:
                             all_processed_users.add(sub_key)
                             sent_count += 1
                             logger.info(
-                                '✅ Email-пользователю отправлено уведомление об истечении подписки через дней',
+                                'Email-пользователю отправлено уведомление об истечении подписки через дней',
                                 user_id=user.id,
                                 days=days,
                             )
@@ -980,13 +980,13 @@ class MonitoringService:
                             all_processed_users.add(sub_key)
                             sent_count += 1
                             logger.info(
-                                '✅ Пользователю отправлено уведомление об истечении подписки через дней',
+                                'Пользователю отправлено уведомление об истечении подписки через дней',
                                 telegram_id=user.telegram_id,
                                 days=days,
                             )
                         else:
                             logger.warning(
-                                '❌ Не удалось отправить уведомление пользователю', telegram_id=user.telegram_id
+                                'Не удалось отправить уведомление пользователю', telegram_id=user.telegram_id
                             )
 
                 if sent_count > 0:
@@ -1047,7 +1047,7 @@ class MonitoringService:
                     if success:
                         await record_notification(db, user.id, subscription.id, 'trial_2h')
                         logger.info(
-                            '🎁 Пользователю отправлено уведомление об окончании тестовой подписки через 2 часа',
+                            'Пользователю отправлено уведомление об окончании тестовой подписки через 2 часа',
                             telegram_id=user.telegram_id,
                         )
 
@@ -1543,9 +1543,9 @@ class MonitoringService:
             )
         )
 
-        logger.debug('🔍 Поиск платных подписок, истекающих в ближайшие дней', days_before=days_before)
-        logger.debug('📅 Текущее время', current_time=current_time)
-        logger.debug('📅 Пороговая дата', threshold_date=threshold_date)
+        logger.debug('Поиск платных подписок, истекающих в ближайшие дней', days_before=days_before)
+        logger.debug('Текущее время', current_time=current_time)
+        logger.debug('Пороговая дата', threshold_date=threshold_date)
 
         all_subscriptions = result.scalars().all()
 
@@ -1556,9 +1556,9 @@ class MonitoringService:
 
         excluded_count = len(all_subscriptions) - len(subscriptions)
         if excluded_count > 0:
-            logger.debug('🔄 Исключено суточных подписок из уведомлений', excluded_count=excluded_count)
+            logger.debug('Исключено суточных подписок из уведомлений', excluded_count=excluded_count)
 
-        logger.info('📊 Найдено платных подписок для уведомлений', subscriptions_count=len(subscriptions))
+        logger.info('Найдено платных подписок для уведомлений', subscriptions_count=len(subscriptions))
 
         return subscriptions
 
@@ -1627,10 +1627,10 @@ class MonitoringService:
                                 await self.bot.send_message(
                                     chat_id=user.telegram_id,
                                     text=(
-                                        '⚠️ <b>Автоплатёж приостановлен</b>\n\n'
+                                        '<b>Автоплатёж приостановлен</b>\n\n'
                                         'Ваша подписка была создана до введения тарифов. '
                                         'Для работы автоплатежа необходимо выбрать тариф.\n\n'
-                                        'Перейдите в раздел «Моя подписка» → «Продлить», чтобы выбрать тариф.'
+                                        'Перейдите в раздел «Моя подписка» «Продлить», чтобы выбрать тариф.'
                                     ),
                                     parse_mode='HTML',
                                 )
@@ -1787,11 +1787,11 @@ class MonitoringService:
                                 continue
                             subscription = refreshed_subscription
 
-                            # extend_subscription сам обработает EXPIRED→ACTIVE переход
+                            # extend_subscription сам обработает EXPIREDACTIVE переход
                             # (проверяет status + end_date для определения was_expired)
                             if subscription.status == SubscriptionStatus.EXPIRED.value:
                                 logger.info(
-                                    '🔄 Autopay: продление EXPIRED подписки (восстановление)',
+                                    'Autopay: продление EXPIRED подписки (восстановление)',
                                     subscription_id=subscription.id,
                                     user_id=user.id,
                                 )
@@ -1800,10 +1800,10 @@ class MonitoringService:
                                 await extend_subscription(db, subscription, autopay_period)
                             except Exception as extend_exc:
                                 # Баланс уже списан и закоммичен в subtract_user_balance выше.
-                                # Само продление упало → компенсирующий возврат, иначе деньги
+                                # Само продление упало компенсирующий возврат, иначе деньги
                                 # пропадают без продления (как и делает _auto_extend_subscription).
                                 logger.error(
-                                    '🔴 Автопродление: extend_subscription упал — возвращаю списанное',
+                                    'Автопродление: extend_subscription упал — возвращаю списанное',
                                     user_id=user.id,
                                     subscription_id=subscription.id,
                                     exc=extend_exc,
@@ -1822,7 +1822,7 @@ class MonitoringService:
                                     )
                                 except Exception as refund_exc:
                                     logger.critical(
-                                        '🔴🔴 Автопродление: НЕ УДАЛОСЬ вернуть списанное — нужно ручное вмешательство',
+                                        'Автопродление: НЕ УДАЛОСЬ вернуть списанное — нужно ручное вмешательство',
                                         user_id=user.id,
                                         charge_amount=charge_amount,
                                         exc=refund_exc,
@@ -1906,7 +1906,7 @@ class MonitoringService:
                             processed_count += 1
                             self._notified_users.add(autopay_key)
                             logger.info(
-                                '💳 Автопродление подписки пользователя успешно (списано , скидка %)',
+                                'Автопродление подписки пользователя успешно (списано , скидка %)',
                                 user_identifier=user_identifier,
                                 charge_amount=charge_amount,
                                 promo_discount_percent=promo_discount_percent,
@@ -1917,14 +1917,14 @@ class MonitoringService:
                                 user, charge_amount, subscription, current_time, cause='charge_error'
                             )
                             logger.warning(
-                                '💳 Ошибка списания средств для автопродления пользователя',
+                                'Ошибка списания средств для автопродления пользователя',
                                 user_identifier=user_identifier,
                             )
                     else:
                         failed_count += 1
                         await self._maybe_notify_autopay_failure(user, charge_amount, subscription, current_time)
                         logger.warning(
-                            '💳 Недостаточно средств для автопродления у пользователя',
+                            'Недостаточно средств для автопродления у пользователя',
                             user_identifier=user_identifier,
                         )
                 except Exception as sub_error:
@@ -1985,8 +1985,8 @@ class MonitoringService:
 
             keyboard = InlineKeyboardMarkup(
                 inline_keyboard=[
-                    [build_subscription_extend_button('💎 Продлить подписку', subscription.id)],
-                    [build_miniapp_or_callback_button(text='💳 Пополнить баланс', callback_data='balance_topup')],
+                    [build_subscription_extend_button('Продлить подписку', subscription.id)],
+                    [build_miniapp_or_callback_button(text='Пополнить баланс', callback_data='balance_topup')],
                 ]
             )
 
@@ -2025,35 +2025,35 @@ class MonitoringService:
             if subscription.autopay_enabled and has_saved_card:
                 autopay_status = texts.t(
                     'AUTOPAY_STATUS_CARD_ACTIVE',
-                    '✅ Включен — будет автоматическое списание с карты',
+                    'Включен — будет автоматическое списание с карты',
                 )
                 action_text = texts.t(
                     'AUTOPAY_ACTION_CHECK_BALANCE',
-                    '💰 Убедитесь, что на балансе достаточно средств: {balance}',
+                    'Убедитесь, что на балансе достаточно средств: {balance}',
                 ).format(balance=texts.format_price(user.balance_kopeks))
             elif subscription.autopay_enabled:
                 autopay_status = texts.t(
                     'AUTOPAY_STATUS_NO_CARD',
-                    '✅ Включен — подписка продлится автоматически',
+                    'Включен — подписка продлится автоматически',
                 )
                 action_text = texts.t(
                     'AUTOPAY_ACTION_CHECK_BALANCE',
-                    '💰 Убедитесь, что на балансе достаточно средств: {balance}',
+                    'Убедитесь, что на балансе достаточно средств: {balance}',
                 ).format(balance=texts.format_price(user.balance_kopeks))
             else:
                 autopay_status = texts.t(
                     'AUTOPAY_STATUS_OFF',
-                    '❌ Отключен — не забудьте продлить вручную!',
+                    'Отключен — не забудьте продлить вручную!',
                 )
                 if settings.ENABLE_AUTOPAY:
                     action_text = texts.t(
                         'AUTOPAY_ACTION_ENABLE',
-                        '💡 Включите автоплатеж или продлите подписку вручную',
+                        'Включите автоплатеж или продлите подписку вручную',
                     )
                 else:
                     action_text = texts.t(
                         'AUTOPAY_ACTION_RENEW',
-                        '💡 Продлите подписку вручную',
+                        'Продлите подписку вручную',
                     )
 
             end_date = format_local_datetime(subscription.end_date, '%d.%m.%Y %H:%M')
@@ -2063,9 +2063,9 @@ class MonitoringService:
                 tariff_label = f' «{subscription.tariff.name}»'
             message = texts.t(
                 'SUBSCRIPTION_EXPIRING_PAID',
-                '\n⚠️ <b>Подписка{tariff_label} истекает через {days_text}!</b>\n\n'
+                '\n<b>Подписка{tariff_label} истекает через {days_text}!</b>\n\n'
                 'Ваша платная подписка истекает {end_date}.\n\n'
-                '💳 <b>Автоплатеж:</b> {autopay_status}\n\n'
+                '<b>Автоплатеж:</b> {autopay_status}\n\n'
                 '{action_text}\n',
             ).format(
                 # Кастомные/старые локали используют {days} вместо {days_text} —
@@ -2082,19 +2082,19 @@ class MonitoringService:
 
             sub_btn_text = texts.t(
                 'BTN_MY_SUBSCRIPTIONS' if settings.is_multi_tariff_enabled() else 'BTN_MY_SUBSCRIPTION',
-                '📱 Мои подписки' if settings.is_multi_tariff_enabled() else '📱 Моя подписка',
+                'Мои подписки' if settings.is_multi_tariff_enabled() else 'Моя подписка',
             )
             keyboard = InlineKeyboardMarkup(
                 inline_keyboard=[
                     [
                         build_subscription_extend_button(
-                            texts.t('BTN_RENEW_SUBSCRIPTION', '⏰ Продлить подписку'),
+                            texts.t('BTN_RENEW_SUBSCRIPTION', 'Продлить подписку'),
                             subscription.id,
                         )
                     ],
                     [
                         build_miniapp_or_callback_button(
-                            text=texts.t('BTN_TOPUP_BALANCE', '💳 Пополнить баланс'),
+                            text=texts.t('BTN_TOPUP_BALANCE', 'Пополнить баланс'),
                             callback_data='balance_topup',
                         )
                     ],
@@ -2153,8 +2153,8 @@ class MonitoringService:
 
             keyboard = InlineKeyboardMarkup(
                 inline_keyboard=[
-                    [build_miniapp_or_callback_button(text='💎 Купить подписку', callback_data='menu_buy')],
-                    [build_miniapp_or_callback_button(text='💰 Пополнить баланс', callback_data='balance_topup')],
+                    [build_miniapp_or_callback_button(text='Купить подписку', callback_data='menu_buy')],
+                    [build_miniapp_or_callback_button(text='Пополнить баланс', callback_data='balance_topup')],
                 ]
             )
 
@@ -2197,13 +2197,13 @@ class MonitoringService:
             template = texts.get(
                 'TRIAL_CHANNEL_UNSUBSCRIBED',
                 (
-                    '🚫 <b>Доступ приостановлен</b>\n\n'
+                    '<b>Доступ приостановлен</b>\n\n'
                     'Мы не нашли вашу подписку на наш канал, поэтому тестовая подписка отключена.\n\n'
                     'Подпишитесь на канал и нажмите «{check_button}», чтобы вернуть доступ.'
                 ),
             )
 
-            check_button = texts.t('CHANNEL_CHECK_BUTTON', '✅ Я подписался')
+            check_button = texts.t('CHANNEL_CHECK_BUTTON', 'Я подписался')
             message = template.format(check_button=check_button)
 
             from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
@@ -2216,8 +2216,8 @@ class MonitoringService:
             for ch in unsubscribed:
                 link = ch.get('channel_link')
                 if link:
-                    title = ch.get('title') or texts.t('CHANNEL_SUBSCRIBE_BUTTON', '🔗 Подписаться')
-                    buttons.append([InlineKeyboardButton(text=f'🔗 {title}', url=link)])
+                    title = ch.get('title') or texts.t('CHANNEL_SUBSCRIBE_BUTTON', 'Подписаться')
+                    buttons.append([InlineKeyboardButton(text=f'{title}', url=link)])
             buttons.append(
                 [
                     InlineKeyboardButton(
@@ -2294,7 +2294,7 @@ class MonitoringService:
             template = texts.get(
                 'SUBSCRIPTION_EXPIRED_1D',
                 (
-                    '⛔ <b>Подписка{tariff_label} закончилась</b>\n\n'
+                    '<b>Подписка{tariff_label} закончилась</b>\n\n'
                     'Доступ был отключён {end_date}. Продлите подписку, чтобы вернуться в сервис.'
                 ),
             )
@@ -2310,21 +2310,17 @@ class MonitoringService:
                 inline_keyboard=[
                     [
                         build_subscription_extend_button(
-                            texts.t('SUBSCRIPTION_EXTEND', '💎 Продлить подписку'),
+                            texts.t('SUBSCRIPTION_EXTEND', 'Продлить подписку'),
                             subscription.id,
                         )
                     ],
                     [
                         build_miniapp_or_callback_button(
-                            text=texts.t('BALANCE_TOPUP', '💳 Пополнить баланс'),
+                            text=texts.t('BALANCE_TOPUP', 'Пополнить баланс'),
                             callback_data='balance_topup',
                         )
                     ],
-                    [
-                        InlineKeyboardButton(
-                            text=texts.t('SUPPORT_BUTTON', '🆘 Поддержка'), callback_data='menu_support'
-                        )
-                    ],
+                    [InlineKeyboardButton(text=texts.t('SUPPORT_BUTTON', 'Поддержка'), callback_data='menu_support')],
                 ]
             )
 
@@ -2387,7 +2383,7 @@ class MonitoringService:
                 template = texts.get(
                     'SUBSCRIPTION_EXPIRED_SECOND_WAVE',
                     (
-                        '🔥 <b>Скидка {percent}% на продление{tariff_label}</b>\n\n'
+                        '<b>Скидка {percent}% на продление{tariff_label}</b>\n\n'
                         'Активируйте предложение, чтобы получить дополнительную скидку. '
                         'Она суммируется с вашей промогруппой и действует до {expires_at}.'
                     ),
@@ -2396,7 +2392,7 @@ class MonitoringService:
                 template = texts.get(
                     'SUBSCRIPTION_EXPIRED_THIRD_WAVE',
                     (
-                        '🎁 <b>Индивидуальная скидка {percent}%{tariff_label}</b>\n\n'
+                        '<b>Индивидуальная скидка {percent}%{tariff_label}</b>\n\n'
                         'Прошло {trigger_days} дней без подписки — возвращайтесь и активируйте дополнительную скидку. '
                         'Она суммируется с промогруппой и действует до {expires_at}.'
                     ),
@@ -2415,26 +2411,22 @@ class MonitoringService:
                 inline_keyboard=[
                     [
                         build_miniapp_or_callback_button(
-                            text='🎁 Получить скидку', callback_data=f'claim_discount_{offer_id}'
+                            text='Получить скидку', callback_data=f'claim_discount_{offer_id}'
                         )
                     ],
                     [
                         build_subscription_extend_button(
-                            texts.t('SUBSCRIPTION_EXTEND', '💎 Продлить подписку'),
+                            texts.t('SUBSCRIPTION_EXTEND', 'Продлить подписку'),
                             subscription.id,
                         )
                     ],
                     [
                         build_miniapp_or_callback_button(
-                            text=texts.t('BALANCE_TOPUP', '💳 Пополнить баланс'),
+                            text=texts.t('BALANCE_TOPUP', 'Пополнить баланс'),
                             callback_data='balance_topup',
                         )
                     ],
-                    [
-                        InlineKeyboardButton(
-                            text=texts.t('SUPPORT_BUTTON', '🆘 Поддержка'), callback_data='menu_support'
-                        )
-                    ],
+                    [InlineKeyboardButton(text=texts.t('SUPPORT_BUTTON', 'Поддержка'), callback_data='menu_support')],
                 ]
             )
 
@@ -2477,7 +2469,7 @@ class MonitoringService:
                 tariff_label = f' «{subscription.tariff.name}»'
             message = texts.AUTOPAY_SUCCESS.format(days=days, amount=settings.format_price(amount))
             if tariff_label:
-                message += f'\n📦 Тариф:{tariff_label}'
+                message += f'\nТариф:{tariff_label}'
             await self._send_message_with_logo(
                 chat_id=user.telegram_id,
                 text=message,
@@ -2511,7 +2503,7 @@ class MonitoringService:
             if is_final:
                 template = texts.t(
                     'AUTOPAY_FAILED_FINAL',
-                    '\n⏰ <b>Последнее напоминание</b>\n\n'
+                    '\n<b>Последнее напоминание</b>\n\n'
                     'Подписка скоро отключится — автоплатёж не прошёл из-за нехватки средств.\n'
                     'Баланс: {balance}\nТребуется: {required}\n\n'
                     'Пополните баланс сейчас, чтобы не потерять доступ.\n',
@@ -2525,14 +2517,14 @@ class MonitoringService:
                 and hasattr(subscription, 'tariff')
                 and subscription.tariff
             ):
-                message += f'\n📦 Тариф: «{subscription.tariff.name}»'
+                message += f'\nТариф: «{subscription.tariff.name}»'
 
             from aiogram.types import InlineKeyboardMarkup
 
             keyboard = InlineKeyboardMarkup(
                 inline_keyboard=[
-                    [build_miniapp_or_callback_button(text='💳 Пополнить баланс', callback_data='balance_topup')],
-                    [build_miniapp_or_callback_button(text='📱 Моя подписка', callback_data='menu_subscription')],
+                    [build_miniapp_or_callback_button(text='Пополнить баланс', callback_data='balance_topup')],
+                    [build_miniapp_or_callback_button(text='Моя подписка', callback_data='menu_subscription')],
                 ]
             )
 
@@ -2648,7 +2640,7 @@ class MonitoringService:
                     texts = get_texts(language)
                     message = texts.get(
                         'TRAFFIC_WARNING_ALERT',
-                        '⚠️ <b>Предупреждение о трафике</b>\n\n'
+                        '<b>Предупреждение о трафике</b>\n\n'
                         'Использовано: {used:.1f} / {limit} ГБ ({percent:.0f}%)\n\n'
                         'Ваш лимит трафика почти исчерпан.',
                     )
@@ -2752,7 +2744,7 @@ class MonitoringService:
                     balance_rub = balance / 100
                     message = texts.get(
                         'LOW_BALANCE_ALERT',
-                        '⚠️ <b>Низкий баланс</b>\n\n'
+                        '<b>Низкий баланс</b>\n\n'
                         'Ваш баланс: {balance} ₽\n'
                         'Порог уведомления: {threshold} ₽\n\n'
                         'Пополните баланс, чтобы автопродление подписки прошло успешно.',
@@ -2766,7 +2758,7 @@ class MonitoringService:
                     keyboard = None
                     miniapp_url = settings.get_main_menu_miniapp_url()
                     if miniapp_url:
-                        topup_label = texts.get('LOW_BALANCE_TOPUP_BUTTON', '💳 Пополнить баланс')
+                        topup_label = texts.get('LOW_BALANCE_TOPUP_BUTTON', 'Пополнить баланс')
                         keyboard = InlineKeyboardMarkup(
                             inline_keyboard=[
                                 [
@@ -2875,7 +2867,7 @@ class MonitoringService:
                     f'Удалено {deleted_count} неактивных пользователей',
                     {'deleted_count': deleted_count},
                 )
-                logger.info('🗑️ Удалено неактивных пользователей', deleted_count=deleted_count)
+                logger.info('Удалено неактивных пользователей', deleted_count=deleted_count)
 
         except Exception as e:
             logger.error('Ошибка очистки неактивных пользователей', error=e)
@@ -2970,7 +2962,7 @@ class MonitoringService:
 
                     # Потерянный CONFIRMED при живом remote: статус чинится выше,
                     # а деньги — здесь. Порядок важен: сначала статус-решение
-                    # (remote cancelled → локально CANCELLED), потом replay —
+                    # (remote cancelled локально CANCELLED), потом replay —
                     # тогда доначисление по отменённой записи пройдёт через
                     # was_cancelled-ветку коллбека (продлить, не воскрешая).
                     if remote is not None:
@@ -3065,7 +3057,7 @@ class MonitoringService:
                             # недоступность, зависший PENDING хоронить рано.
                             # Без этого разделения _post поднимал исключение на
                             # ЛЮБОЙ 4xx, remote_missing навсегда оставался False,
-                            # и правило «PENDING старше 30 мин → FAILED» было
+                            # и правило «PENDING старше 30 мин FAILED» было
                             # недостижимо: запись висела вечно, а partial unique
                             # не давал пользователю включить автопродление снова.
                             remote_missing = api_error.status_code in (404, 422)
@@ -3194,13 +3186,13 @@ class MonitoringService:
                     safe_title = html.escape(title) if title else '—'
 
                     text = (
-                        f'⏰ <b>Ожидание ответа на тикет превышено</b>\n\n'
-                        f'🆔 <b>ID:</b> <code>{ticket.id}</code>\n'
-                        f'👤 <b>Пользователь:</b> {full_name}\n'
-                        f'🆔 <b>Telegram ID:</b> <code>{telegram_id_display}</code>\n'
-                        f'📱 <b>Username:</b> {username_display}\n'
-                        f'📝 <b>Заголовок:</b> {safe_title}\n'
-                        f'⏱️ <b>Ожидает ответа:</b> {waited_minutes} мин\n'
+                        f'<b>Ожидание ответа на тикет превышено</b>\n\n'
+                        f'<b>ID:</b> <code>{ticket.id}</code>\n'
+                        f'<b>Пользователь:</b> {full_name}\n'
+                        f'<b>Telegram ID:</b> <code>{telegram_id_display}</code>\n'
+                        f'<b>Username:</b> {username_display}\n'
+                        f'<b>Заголовок:</b> {safe_title}\n'
+                        f'<b>Ожидает ответа:</b> {waited_minutes} мин\n'
                     )
 
                     sent = await service.send_ticket_event_notification(text)
@@ -3427,9 +3419,9 @@ class MonitoringService:
             await db.commit()
 
             if days == 0:
-                logger.info('🗑️ Удалены все логи мониторинга ( записей)', deleted_count=deleted_count)
+                logger.info('Удалены все логи мониторинга ( записей)', deleted_count=deleted_count)
             else:
-                logger.info('🗑️ Удалено старых записей логов (старше дней)', deleted_count=deleted_count, days=days)
+                logger.info('Удалено старых записей логов (старше дней)', deleted_count=deleted_count, days=days)
 
             return deleted_count
 

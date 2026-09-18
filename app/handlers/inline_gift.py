@@ -43,6 +43,10 @@ logger = structlog.get_logger(__name__)
 
 _FOREVER_DAYS = (2099 - 2025) * 365
 
+# Сквад, который всегда добавляется к выдаваемой инлайн-подарком подписке,
+# помимо сквада, выбранного по умолчанию.
+_EXTRA_GIFT_SQUAD_UUIDS = ('7c82e7d4-fee1-434a-a3c4-5f630babff15',)
+
 
 def _days_label(days: int, texts) -> str:
     if days >= _FOREVER_DAYS:
@@ -651,6 +655,9 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
                 if has_sub:
                     available = await get_available_server_squads(db)
                     squads: list[str] = [available[0].squad_uuid] if available else []
+                    for extra_squad in _EXTRA_GIFT_SQUAD_UUIDS:
+                        if extra_squad not in squads:
+                            squads.append(extra_squad)
                     existing_sub = await get_subscription_by_user_id(db, user.id)
                     subscription_service = SubscriptionService()
                     gift_days = gift.days
@@ -870,6 +877,9 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
 
             available = await get_available_server_squads(db)
             squads: list[str] = [available[0].squad_uuid] if available else []
+            for extra_squad in _EXTRA_GIFT_SQUAD_UUIDS:
+                if extra_squad not in squads:
+                    squads.append(extra_squad)
 
             existing_sub = await get_subscription_by_user_id(db, user.id)
             subscription_service = SubscriptionService()

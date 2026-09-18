@@ -524,7 +524,7 @@ AVAILABLE_CALLBACKS: list[dict[str, Any]] = [
         'requires_subscription': True,
     },
     {
-        'callback_data': 'subscription_manage_devices',
+        'callback_data': 'subscription_manage_devices_menu',
         'name': 'Управление устройствами',
         'category': 'subscription',
         'icon': '📲',

@@ -267,7 +267,7 @@ class NotificationDeliveryService:
 
         # Retry transient Telegram-side ошибки (network/5xx/flood) с экспоненциальным
         # бэк-оффом. До этого ConnectionReset уходил в `except Exception` и логировался
-        # как ERROR → летел в админ-чат через TelegramNotifierProcessor каждый раз,
+        # как ERROR летел в админ-чат через TelegramNotifierProcessor каждый раз,
         # хотя это ожидаемая сетевая транзиент-ошибка.
         max_attempts = 3
         last_transient_error: Exception | None = None
@@ -295,7 +295,7 @@ class NotificationDeliveryService:
                 if attempt < max_attempts:
                     await asyncio.sleep(min(2 ** (attempt - 1), 4))
                     continue
-                break  # exhausted retries → summary log ниже
+                break  # exhausted retries summary log ниже
 
             except TelegramForbiddenError:
                 logger.warning('Telegram user заблокировал бота', telegram_id=user.telegram_id)
