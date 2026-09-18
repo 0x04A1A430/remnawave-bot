@@ -72,6 +72,7 @@
 - `.github/workflows/docker-registry.yml` — файл
 - `.github/workflows/lint.yml` — файл
 - `.github/workflows/release-please.yml` — файл
+- `.github/workflows/release-pr-guard.yml` — файл
 - `.github/workflows/release.yml` — файл
 - `.github/workflows/security-audit.yml` — файл
 - `.github/workflows/tests.yml` — файл
@@ -411,7 +412,7 @@
   Функции: `purchase_devices_legacy` — Purchase additional device slots (legacy endpoint)., `purchase_devices` — Purchase additional device slots for subscription., `save_devices_cart` — Save cart for device purchase (for insufficient balance flow)., `get_device_price` — Get price for additional devices., `get_devices` — Get list of connected devices., `rename_device` — Set/clear a local alias for the user's HWID device., `delete_device` — Delete a specific device by HWID., `delete_all_devices` — Delete all connected devices., `get_device_reduction_info` — Get info about device limit reduction availability., `reduce_devices` — Reduce device limit (no refund).
 - `app/cabinet/routes/subscription_modules/helpers.py` — Python-модуль
   Классы: нет
-  Функции: `resolve_subscription` — Resolve target subscription: by ID in multi-tariff mode, or legacy fallback.
+  Функции: `resolve_subscription` — Resolve target subscription: by ID in multi-tariff mode, or legacy fallback., `ensure_subscription_has_tariff` — Докупки старой подписке не продаются — сперва переход на тариф.
 - `app/cabinet/routes/subscription_modules/lava_recurrent.py` — Python-модуль
   Классы: нет
   Функции: `enable_lava_recurrent` — Включает автопродление Lava для выбранной подписки., `purchase_with_lava_recurrent` — Оформление подписки на тариф оплатой привязкой Lava., `get_lava_recurrent` — Текущее состояние автопродления Lava для подписки., `cancel_lava_recurrent` — Отменяет автопродление Lava (best-effort).
@@ -788,6 +789,9 @@
 - `app/database/crud/subscription_event.py` — Python-модуль
   Классы: нет
   Функции: `create_subscription_event`, `list_subscription_events`
+- `app/database/crud/subscription_segments.py` — Python-модуль
+  Классы: нет
+  Функции: `segment_condition` — SQL-условие «подписка относится к сегменту» (по строке ``subscriptions``)., `subscription_segment` — Python-зеркало ``segment_condition`` для одной подписки (строка списка, чип).
 - `app/database/crud/system_errors.py` — Python-модуль
   Классы: нет
   Функции: `list_error_events` — Постранично отдать события с фильтрами. Возвращает (записи, всего)., `get_error_event`, `get_error_summary` — Сводка для бейджа и шапки страницы., `mark_delivery_result` — Записать исход ручной повторной доставки.
@@ -1862,7 +1866,7 @@
   Функции: `narrow_push_fields` — Поля для ``push_subscription(only_fields=...)`` по флагам админа.
 - `app/services/panel_sync/identity.py` — Python-модуль
   Классы: `PanelOwner`, `PanelAccountOwnedByAnotherUser` (1 методов), `PanelIdentity` (3 методов)
-  Функции: `find_foreign_panel_owner` — Чей это аккаунт панели, если не этой подписки; ``None`` — наш или ничей., `resolve_panel_identity` — Найти в панели аккаунт этой подписки., `panel_id_is_free_for` — Не держит ли этот панельный id уже ДРУГАЯ строка подписок., `link_subscription_panel_identity` — Проставить строке id панельного аккаунта, который только что обновили.
+  Функции: `find_foreign_panel_owner` — Чей это аккаунт панели, если не этой подписки; ``None`` — наш или ничей., `resolve_panel_identity` — Найти в панели аккаунт этой подписки., `panel_id_is_free_for` — Не держит ли этот панельный id уже ДРУГАЯ строка подписок., `user_panel_id_is_free_for` — Не записан ли этот панельный id уже ДРУГОМУ человеку (``users.remnawave_id`` уникальна)., `link_subscription_panel_identity` — Проставить строке id панельного аккаунта, который только что обновили., `should_create_panel_account` — Перед синхронизацией после покупки/перевода: заводить аккаунт панели или обновлять свой.
 - `app/services/panel_sync/liveness.py` — Python-модуль
   Классы: нет
   Функции: `is_subscription_live` — Включать ли пользователя в панели ради этой подписки., `is_subscription_expired` — Истекла ли подписка по дате — состояние, которое панель выводит сама.
@@ -2112,6 +2116,9 @@
 - `app/utils/incy_crypt1.py` — Python-модуль
   Классы: нет
   Функции: `encrypt_incy_link` — Шифрует ссылку подписки в ``incy://crypt1/...``., `wrap_incy_deep_link` — Подменяет ``incy://import|add/<url>`` на ``incy://crypt1/<зашифрованное>``.
+- `app/utils/legacy_subscription.py` — Python-модуль
+  Классы: нет
+  Функции: `is_legacy_subscription` — Платная подписка без тарифа при включённом режиме тарифов.
 - `app/utils/log_handlers.py` — Python-модуль
   Классы: `LevelFilterHandler` (5 методов), `PaymentLogFilter` (1 методов), `ExcludePaymentFilter` (1 методов)
   Функции: нет
@@ -2896,6 +2903,9 @@
 - `migrations/alembic/versions/0124_subscription_panel_identity_backfill.py` — Python-модуль
   Классы: нет
   Функции: `upgrade`, `downgrade`
+- `migrations/alembic/versions/0125_user_panel_identity_backfill.py` — Python-модуль
+  Классы: нет
+  Функции: `upgrade`, `downgrade`
 
 ## scripts
 
@@ -2905,6 +2915,7 @@
 - `scripts/backfill_remnawave_ids.py` — Python-модуль
   Классы: нет
   Функции: `main`
+- `scripts/check_release_pr_override.mjs` — файл
 - `scripts/generate_structure_reference.py` — Python-модуль
   Классы: нет
   Функции: `tracked_paths` — Файлы проекта: отслеживаемые плюс новые, которые git не игнорирует., `describe_module` — Строки «Классы:» и «Функции:» для модуля., `render_entries`, `render`, `build`, `main`
@@ -2956,6 +2967,9 @@
 - `tests/test_lazy_package_exports.py` — Python-модуль
   Классы: нет
   Функции: `test_package_declares_exports`, `test_every_exported_name_resolves`, `test_unknown_name_still_raises` — __getattr__ не должен выдавать что попало вместо AttributeError.
+- `tests/test_legacy_subscription_keyboard.py` — Python-модуль
+  Классы: нет
+  Функции: `test_legacy_subscription_offers_only_move_to_tariff`, `test_expired_legacy_subscription_still_moves_to_tariff` — Истёкшая старая подписка тоже переводится на тариф той же строкой, а не покупкой с нуля., `test_subscription_with_tariff_keeps_renew_and_autopay`, `test_classic_mode_subscription_keeps_renew` — В классическом режиме подписка без тарифа — обычная, продление на месте., `test_legacy_subscription_has_no_traffic_topup_even_if_classic_topup_is_on` — Классические настройки докупки трафика к старой подписке не применяются., `test_legacy_subscription_settings_offer_no_classic_addons` — В «Настройках» старой подписки нет стран, трафика и устройств по классическим ценам., `test_classic_subscription_settings_keep_classic_addons` — В классическом режиме подписка без тарифа — обычная, её настройки не трогаем., `test_subscriptions_list_hides_buy_another_while_a_legacy_subscription_exists` — Пока у человека есть старая подписка, «Купить ещё тариф» не предлагаем: сперва переход на тариф.
 - `tests/test_locale_integrity.py` — Python-модуль
   Классы: нет
   Функции: `locales`, `test_all_locales_have_identical_keys`, `test_placeholders_consistent_across_locales` — Every {placeholder} must be identical across languages — the code calls, `test_t_calls_without_default_exist_in_ru` — texts.t('KEY') with NO fallback raises KeyError if the key is absent from ru., `test_t_calls_with_static_default_exist_in_ru` — texts.t('KEY', 'статический дефолт') с ключом вне ru.json отдаёт русский, `test_invite_only_keys_exist_in_every_locale`
@@ -3274,6 +3288,9 @@
 - `tests/cabinet/test_panel_sync_status_grace.py` — Python-модуль
   Классы: нет
   Функции: `test_open_grace_is_not_a_difference` — Дата, статус, лимит и сквад грейса — так и задумано, а не расхождение., `test_without_grace_the_same_panel_data_is_a_difference` — Те же данные панели без грейса обязаны остаться расхождением., `test_traffic_used_is_still_compared_during_grace` — Расход трафика панель ведёт и в грейсе — его сверять надо по-прежнему.
+- `tests/cabinet/test_panel_user_id_single_mode_fallback.py` — Python-модуль
+  Классы: нет
+  Функции: `test_single_mode_falls_back_to_subscription_account`, `test_single_mode_prefers_user_account_when_present`, `test_multi_mode_never_falls_back_to_user_account`
 - `tests/cabinet/test_platega_recurrent_admin.py` — Python-модуль
   Классы: нет
   Функции: `test_async_builder_populates_sbp_status_when_gate_on`, `test_async_builder_leaves_sbp_status_none_without_active_record` — Gate on, but no active Platega subscription for this subscription_id., `test_async_builder_skips_query_when_gate_off`, `test_sync_builder_never_sets_sbp_fields` — The sync builder has no DB access and must leave both fields at their, `test_route_registered`, `test_cancel_sbp_recurring_owned_subscription_cancels_and_awaits_helper`, `test_cancel_sbp_recurring_wrong_owner_404_and_helper_not_called`, `test_cancel_sbp_recurring_missing_subscription_404` — Same 404 path for a subscription_id that doesn't exist at all.
@@ -3337,6 +3354,9 @@
 - `tests/cabinet/test_squad_name_validation.py` — Python-модуль
   Классы: нет
   Функции: `test_limits_match_panel_contract`, `test_helper_rejects_names_the_panel_rejects`, `test_helper_accepts_panel_valid_names`, `test_create_schemas_reject_invalid_names`, `test_update_schemas_reject_invalid_names`, `test_rename_action_rejects_invalid_names`, `test_schemas_accept_panel_valid_names`, `test_update_and_action_still_allow_omitting_name`
+- `tests/cabinet/test_subscription_requires_tariff_flag.py` — Python-модуль
+  Классы: нет
+  Функции: `tariffs_mode`, `classic_mode`, `test_paid_subscription_without_tariff_requires_tariff`, `test_subscription_with_tariff_does_not_require_tariff`, `test_trial_without_tariff_does_not_require_tariff` — Пробная подписка идёт своим путём (покупка тарифа), признак — только для платных., `test_classic_mode_never_requires_tariff`, `test_list_item_carries_the_flag_for_paid_subscription_without_tariff` — Список подписок (мультитариф) тоже говорит кабинету, что подписке нужен тариф.
 - `tests/cabinet/test_support_config_external_url.py` — Python-модуль
   Классы: нет
   Функции: `test_contact_mode_with_telegram_username`, `test_contact_mode_with_external_url`, `test_both_mode_exposes_external_url`, `test_both_mode_with_telegram_username`, `test_tickets_mode_ignores_contact`, `test_empty_contact_yields_no_url`
@@ -3512,6 +3532,12 @@
 - `tests/database/test_info_page_display_mode.py` — Python-модуль
   Классы: нет
   Функции: `test_model_has_display_mode_column_with_both_default`, `test_crud_update_whitelist_includes_display_mode`, `test_create_request_accepts_valid_display_mode`, `test_create_request_defaults_to_both`, `test_update_request_rejects_invalid_display_mode`, `test_response_schemas_expose_display_mode`
+- `tests/database/test_legacy_subscription_addons_refused_postgres.py` — Python-модуль
+  Классы: нет
+  Функции: `tariffs_mode_with_classic_prices` — Режим тарифов без мультитарифа; классические цены заданы — без сторожа продажа бы состоялась., `test_device_purchase_is_refused_for_legacy_subscription`, `test_legacy_device_endpoint_is_refused_for_legacy_subscription`, `test_device_price_is_refused_for_legacy_subscription`, `test_traffic_purchase_is_refused_for_legacy_subscription`, `test_traffic_packages_are_empty_for_legacy_subscription`
+- `tests/database/test_legacy_subscription_moves_to_tariff_postgres.py` — Python-модуль
+  Классы: нет
+  Функции: `multi_tariff_mode`, `panel`, `test_legacy_subscription_gets_the_tariff_in_place` — Тариф надевается на старую подписку: одна строка, тот же аккаунт панели, остаток + период., `test_legacy_subscription_refuses_tariff_user_already_has` — Тариф уже есть живой подпиской — отказ до списания, старая подписка не тронута., `test_legacy_subscription_without_row_panel_id_keeps_the_user_account` — Строка старой подписки без id панели, аккаунт записан у человека: перевод обновляет его, а не создаёт второй.
 - `tests/database/test_local_date_expr_postgres.py` — Python-модуль
   Классы: нет
   Функции: `test_day_buckets_ignore_session_timezone`, `test_local_date_expr_respects_dst_transitions`, `test_separate_expressions_group_together` — Прод 2026-09-12: имя зоны уходило bind-параметром, каждое вхождение — своим ($1, $4, $5),
@@ -3521,6 +3547,12 @@
 - `tests/database/test_migration_chain.py` — Python-модуль
   Классы: нет
   Функции: `test_single_head`, `test_revision_ids_are_unique`, `test_every_revision_reaches_base` — Разрыв в down_revision оставил бы часть миграций неприменёнными.
+- `tests/database/test_mode_switch_keeps_panel_account_postgres.py` — Python-модуль
+  Классы: нет
+  Функции: `panel`, `test_account_created_in_single_mode_survives_switch_to_multi`, `test_account_created_in_multi_mode_survives_switch_to_single`, `test_old_multi_rows_without_user_account_still_resolve_in_single_mode` — Строки, созданные ДО правки: аккаунт только у подписки. Одиночный режим всё равно находит его.
+- `tests/database/test_panel_account_reuse_postgres.py` — Python-модуль
+  Классы: нет
+  Функции: `multi_tariff`, `single_tariff`, `test_multi_tariff_row_with_panel_id_is_updated`, `test_multi_tariff_row_without_id_adopts_free_user_account` — Старая подписка без id, аккаунт у человека есть и свободен — привязать и обновить, не создавать., `test_multi_tariff_row_without_id_creates_when_user_account_is_taken` — Аккаунт человека уже у другой подписки — новой строке нужен свой аккаунт., `test_multi_tariff_row_without_any_account_creates`, `test_single_tariff_follows_user_account_only`, `test_single_tariff_adopts_subscription_account_when_user_has_none` — Аккаунт создан в мультитарифе (записан у подписки), оператор вернулся в одиночный режим:, `test_single_tariff_does_not_steal_account_held_by_another_user`
 - `tests/database/test_panel_import_subscription_identity_postgres.py` — Python-модуль
   Классы: нет
   Функции: `single_tariff`, `test_created_from_panel_carries_panel_id`, `test_update_from_panel_binds_row_left_empty_by_old_import`, `test_migration_binds_only_unambiguous_rows`
@@ -3557,12 +3589,18 @@
 - `tests/database/test_user_balance_lock_postgres.py` — Python-модуль
   Классы: нет
   Функции: `test_user_lock_blocks_second_session` — Пока одно зачисление держит строку пользователя, второе ждёт., `test_concurrent_topups_do_not_lose_money` — Два одновременных зачисления складываются, а не затирают друг друга., `test_lock_returns_fresh_values_not_the_cached_object` — Блокировка обязана отдавать значения из БД, а не из кеша сессии.
+- `tests/database/test_user_panel_identity_backfill_postgres.py` — Python-модуль
+  Классы: нет
+  Функции: `test_migration_fills_user_account_only_when_unambiguous`
 - `tests/database/test_users_list_filter_sort_matrix_postgres.py` — Python-модуль
   Классы: нет
   Функции: `test_every_filter_works_with_every_sort`
 - `tests/database/test_users_list_grace_filter_postgres.py` — Python-модуль
   Классы: нет
   Функции: `test_segment_lists_only_people_with_open_grace_soonest_first`, `test_segment_can_be_inverted_and_leaves_everyone_alone_when_unset`
+- `tests/database/test_users_list_segments_postgres.py` — Python-модуль
+  Классы: нет
+  Функции: `test_segment_returns_exactly_its_people`, `test_expiring_segment_is_paid_only` — «Истекают за 7 дней» — платные, у которых срок скоро; триалы и просроченные не сюда., `test_no_subscription_segment`, `test_sorting_by_end_date_keeps_every_person_of_the_segment`, `test_route_rows_carry_the_segment_for_the_chip` — Чип строки читает subscription_status: у классического триала он «trial», у просроченного — «expired»., `test_stat_cards_count_the_same_segments` — Плитки над списком считают по тем же правилам, что и выборки.
 - `tests/database/test_users_list_sort_direction_postgres.py` — Python-модуль
   Классы: нет
   Функции: `test_every_sort_goes_both_ways`, `test_people_without_a_value_stay_at_the_bottom`
@@ -3817,6 +3855,12 @@
 - `tests/handlers/test_info_menu_keyboard.py` — Python-модуль
   Классы: нет
   Функции: `test_rules_button_shown_by_default`, `test_rules_button_hidden_when_disabled`, `test_custom_page_buttons_added`, `test_no_custom_buttons_without_pages`
+- `tests/handlers/test_legacy_subscription_addons.py` — Python-модуль
+  Классы: нет
+  Функции: `tariffs_mode`, `test_traffic_topup_is_refused_for_legacy_subscription`, `test_device_change_is_refused_for_legacy_subscription`
+- `tests/handlers/test_legacy_subscription_switch_list.py` — Python-модуль
+  Классы: нет
+  Функции: `test_legacy_subscription_sees_tariffs_when_switching_is_disabled`, `test_expired_legacy_subscription_sees_tariffs` — Истёкшая старая подписка переводится на тариф той же строкой, а не покупкой с нуля., `test_legacy_subscription_list_does_not_say_unknown_tariff` — Человеку не пишем «Текущий: Неизвестно» — у старой подписки тарифа просто нет., `test_legacy_subscription_period_confirmation_does_not_say_unknown_tariff` — Экран подтверждения после выбора тарифа тоже без «Текущий тариф: Неизвестно».
 - `tests/handlers/test_my_subscriptions_delete_uses_shared_service.py` — Python-модуль
   Классы: нет
   Функции: `handler_env`, `test_delete_delegates_to_shared_service`, `test_open_grace_is_reported_not_swallowed`
@@ -4581,6 +4625,9 @@
 - `tests/services/panel_sync/test_projection.py` — Python-модуль
   Классы: нет
   Функции: `test_reads_the_dictionary_shape_of_the_panel`, `test_reads_the_parsed_object_shape_of_the_client`, `test_reads_the_status_enum_of_the_client` — Клиент отдаёт статус перечислением, панель — строкой., `test_unparsable_date_does_not_explode`, `test_active_panel_moves_the_end_date_in_both_directions`, `test_disabled_panel_date_is_taken_too` — Панель — истина при любом статусе: у отключённого дата тоже переносится., `test_panel_active_resurrects_an_expired_row_with_the_panel_date` — Продлили руками в панели — бот берёт дату и снова считает подписку живой., `test_trial_stays_trial_when_the_panel_says_active` — Панель не различает триал и оплату — триал в боте остаётся триалом., `test_expired_in_the_panel_takes_the_panel_date_and_expires`, `test_a_few_seconds_of_difference_are_ignored`, `test_limited_in_the_panel_becomes_limited_in_the_bot`, `test_expired_by_date_marks_a_grace_candidate`, `test_silent_panel_does_not_expire_a_subscription_that_is_active_in_the_bot` — Панель не сказала статус — не гадаем; истечение по своей дате доводит мониторинг., `test_expired_trial_becomes_expired`, `test_traffic_is_carried_over`, `test_traffic_jitter_is_ignored`, `test_limits_are_read_from_the_panel` — Панель — истина и по лимитам: правка в панели приезжает в бота., `test_missing_limits_in_the_answer_keep_the_bot_values`, `test_squads_come_from_the_panel`, `test_empty_squad_list_means_the_panel_does_not_know`, `test_links_are_refreshed`, `test_open_grace_freezes_the_billing_state_but_keeps_links`, `test_status_can_be_frozen_for_a_subscription_just_touched_by_a_webhook` — Свежая оплата важнее любого снимка панели., `test_stale_snapshot_still_takes_the_date_of_a_live_account` — Продление, сделанное руками в панели, бот обязан увидеть., `test_snapshot_limited_is_limited_whatever_the_bot_counted` — Панель — истина: «исчерпана» переносится, даже если счётчик бота отстал., `test_snapshot_limited_overrides_a_locally_disabled_row`, `test_snapshot_expired_is_expired_whatever_the_bot_date_says` — Панель гасит аккаунт сама и знает об этом лучше бота., `test_stale_disabled_is_applied` — DISABLED — решение админа в панели, и донести его больше некому., `test_a_snapshot_older_than_the_row_does_not_touch_billing_fields`, `test_a_snapshot_newer_than_the_row_is_applied`, `test_a_webhook_stamp_also_counts_as_a_fresh_change`, `test_stale_snapshot_still_carries_traffic_and_links`, `test_admin_pull_takes_the_date_even_from_a_disabled_account` — Отключённый в панели остаётся отключённым, даже если дата прошла: так решила панель., `test_admin_pull_takes_the_limits_from_the_panel`, `test_all_policies_but_webhook_are_the_same_panel_truth` — Кнопка «из панели в бота», полный проход и фоновое чтение верят панели одинаково., `test_panel_active_without_a_date_keeps_the_status` — Дату не разобрали — статус не трогаем, а не гасим наугад., `test_reads_limits_from_both_shapes_of_the_answer`, `test_open_grace_marked_on_the_subscription_is_never_imported` — Баг 2026-09-15: мониторинг, гася истёкшую подписку, спросил панель «может,, `test_grace_tail_date_is_not_imported_after_grace_ended`, `test_grace_tail_masks_the_status_while_the_panel_is_still_closing` — Погашенная дата стоит на несколько минут вперёд: панель ещё ACTIVE., `test_a_real_panel_renewal_after_grace_is_still_imported`, `test_grace_tail_tolerates_the_panel_millisecond_rounding`, `test_trial_that_ended_in_grace_is_expired_by_the_panel_status_in_the_tail` — Стенд 2026-09-15: у триалов и суточных после грейса статус оставался «trial»/«active»., `test_grace_tail_never_expires_a_subscription_whose_own_term_is_still_running` — Продлили в боте, а в панели ещё хвост с EXPIRED (запись в панель не прошла) — не гасим., `test_webhook_in_the_grace_tail_still_does_not_declare_expiry` — Вебхук истечение не объявляет (это работа мониторинга) — и в хвосте тоже., `test_overlay_snapshot_processed_after_an_early_grace_close_is_not_imported` — Ревью 2026-09-15: снимок сняли при открытом грейсе, обработали после досрочного закрытия., `test_stale_bulk_snapshot_does_not_roll_back_squads_either` — Полный проход: подписку изменили после снимка — сквады снимка тоже устарели.
+- `tests/services/panel_sync/test_record_identity_user_level.py` — Python-модуль
+  Классы: нет
+  Функции: `test_multi_tariff_records_account_for_user_without_one`, `test_multi_tariff_keeps_existing_user_account`
 - `tests/services/panel_sync/test_runner_leaves_expired_status_to_the_panel.py` — Python-модуль
   Классы: нет
   Функции: `test_bulk_pass_does_not_disable_an_expired_subscription`
@@ -4707,6 +4754,9 @@
 - `tests/utils/test_lava_display_names.py` — Python-модуль
   Классы: нет
   Функции: `test_lava_sbp_and_card_describe_provider_not_themselves`, `test_lava_generic_method_keeps_provider_description`
+- `tests/utils/test_legacy_subscription.py` — Python-модуль
+  Классы: нет
+  Функции: `tariffs_mode`, `test_paid_without_tariff_in_tariffs_mode_is_legacy`, `test_subscription_with_tariff_is_not_legacy`, `test_trial_without_tariff_is_not_legacy` — Пробная идёт своим путём (покупка тарифа), это не старая подписка., `test_classic_mode_has_no_legacy_subscriptions`, `test_missing_subscription_is_not_legacy`, `test_classic_mode_addon_guard_does_not_fire` — В классическом режиме сторож докупок молчит: подписка без тарифа там — обычная.
 - `tests/utils/test_local_day.py` — Python-модуль
   Классы: нет
   Функции: `test_bounds_of_moscow_day_are_utc_instants`, `test_moment_before_moscow_midnight_belongs_to_previous_day`, `test_local_date_follows_the_zone_not_utc`, `test_naive_moment_is_treated_as_utc`, `test_spring_forward_day_is_23_hours_long` — Границы считаются через ZoneInfo, а не через фиксированное смещение., `test_fall_back_day_is_25_hours_long`, `test_days_back_counts_calendar_days_across_dst`, `test_default_zone_comes_from_settings`, `test_utc_zone_keeps_utc_midnight`, `test_month_start_is_local_first_day_midnight_in_utc`, `test_month_start_before_local_midnight_is_previous_month`, `test_next_wall_clock_picks_the_next_local_time_today`, `test_next_wall_clock_rolls_over_to_the_earliest_time_tomorrow`, `test_next_wall_clock_keeps_the_local_hour_across_dst`

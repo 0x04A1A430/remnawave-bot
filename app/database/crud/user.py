@@ -15,6 +15,7 @@ from app.database.constants import POSTGRES_INT4_MAX, POSTGRES_INT4_MIN
 from app.database.crud.discount_offer import get_latest_claimed_offer_for_user
 from app.database.crud.promo_group import get_default_promo_group
 from app.database.crud.promo_offer_log import log_promo_offer_action
+from app.database.crud.subscription_segments import segment_condition
 from app.database.models import (
     AdvertisingCampaign,
     AdvertisingCampaignRegistration,
@@ -1013,7 +1014,8 @@ def _users_list_conditions(
     if subscription_status or tariff_ids:
         sub_conditions = []
         if subscription_status:
-            sub_conditions.append(Subscription.status == subscription_status)
+            # Сегмент, а не сырой статус: триалы лежат со статусом active и is_trial.
+            sub_conditions.append(segment_condition(subscription_status, now))
         if tariff_ids:
             sub_conditions.append(Subscription.tariff_id.in_(tariff_ids))
         sub_query = (
@@ -1084,6 +1086,7 @@ def _users_list_conditions(
                 .where(
                     Subscription.user_id == User.id,
                     Subscription.status == SubscriptionStatus.ACTIVE.value,
+                    Subscription.is_trial.is_not(True),  # «истекают» — про платных; триал — свой сегмент
                     Subscription.end_date >= now,
                     Subscription.end_date <= now + timedelta(days=expires_within_days),
                     ~and_(Tariff.is_daily.is_(True), Subscription.is_daily_paused.is_(False)),
@@ -1291,11 +1294,16 @@ async def get_users_list(
         # Статус берём тот же, по которому фильтруется список: иначе связка
         # «покажи истёкших, отсортируй по дате окончания» давала бы у ВСЕХ строк
         # пустой ключ и молча схлопывалась в сортировку по дате регистрации.
+        # Без выборки ключ — ближайшее окончание среди живых по статусу строк
+        # (и триал, и платные: строка списка показывает ту же подписку). С выборкой —
+        # ровно тот сегмент, по которому человек в неё попал.
         _sort_status = subscription_status or SubscriptionStatus.ACTIVE.value
-        soonest_end_conditions = [
-            Subscription.user_id == User.id,
-            Subscription.status == _sort_status,
-        ]
+        sort_condition = (
+            segment_condition(subscription_status, datetime.now(UTC))
+            if subscription_status
+            else Subscription.status.in_(LIVE_SUBSCRIPTION_STATUSES)
+        )
+        soonest_end_conditions = [Subscription.user_id == User.id, sort_condition]
         if _sort_status == SubscriptionStatus.ACTIVE.value:
             # Суточные тарифы исключаем ровно как `get_expiring_subscriptions`:
             # у активной суточной подписки end_date всегда +24ч, поэтому иначе

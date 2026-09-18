@@ -58,6 +58,7 @@ from app.services.trial_activation_service import (
 )
 from app.services.user_cart_service import user_cart_service
 from app.utils.decorators import error_handler
+from app.utils.legacy_subscription import is_legacy_subscription as _legacy_subscription
 
 
 logger = structlog.get_logger(__name__)
@@ -1709,7 +1710,12 @@ async def handle_extend_subscription(
             '⚠️ Ваша текущая подписка продолжит действовать до окончания срока.',
             reply_markup=types.InlineKeyboardMarkup(
                 inline_keyboard=[
-                    [types.InlineKeyboardButton(text='📦 Выбрать тариф', callback_data='tariff_switch')],
+                    [
+                        types.InlineKeyboardButton(
+                            text=texts.t('MOVE_TO_TARIFF_BUTTON', '📦 Перейти на тариф'),
+                            callback_data='tariff_switch',
+                        )
+                    ],
                     [types.InlineKeyboardButton(text=texts.BACK, callback_data='menu_subscription')],
                 ]
             ),
@@ -2996,7 +3002,11 @@ async def handle_subscription_settings(callback: types.CallbackQuery, db_user: U
     await callback.message.edit_text(
         settings_text,
         reply_markup=get_updated_subscription_settings_keyboard(
-            db_user.language, show_countries, tariff=tariff, subscription=subscription
+            db_user.language,
+            show_countries,
+            tariff=tariff,
+            subscription=subscription,
+            is_legacy_subscription=_legacy_subscription(subscription),
         ),
         parse_mode='HTML',
     )

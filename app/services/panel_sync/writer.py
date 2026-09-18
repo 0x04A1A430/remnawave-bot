@@ -30,6 +30,7 @@ from app.services.panel_sync.identity import (
     find_foreign_panel_owner,
     link_subscription_panel_identity,
     resolve_panel_identity,
+    user_panel_id_is_free_for,
 )
 from app.services.panel_sync.payload import PanelPayload, build_panel_payload
 
@@ -282,7 +283,13 @@ async def _record_identity(
     if crypto_link is not None:
         subscription.subscription_crypto_link = crypto_link
 
-    if not multi_tariff and not getattr(user, 'remnawave_id', None):
+    # Одиночный режим адресует панель через человека. В мультитарифе аккаунты у
+    # подписок, но первый из них записываем и человеку: иначе после возврата
+    # оператора в одиночный режим у него «нет аккаунта» — 0 устройств, второй
+    # аккаунт при покупке. Записанный аккаунт не перезаписываем.
+    if not getattr(user, 'remnawave_id', None) and (
+        db is None or await user_panel_id_is_free_for(db, user, panel_user_id)
+    ):
         user.remnawave_id = panel_user_id
 
     if db is None:
