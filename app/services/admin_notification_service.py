@@ -32,6 +32,7 @@ from app.database.models import (
     Subscription,
     Transaction,
     User,
+    WithdrawalRequestStatus,
 )
 from app.utils.formatters import format_username_link
 from app.utils.message_patch import caption_exceeds_telegram_limit
@@ -2264,8 +2265,14 @@ class AdminNotificationService:
         user: User,
         amount_kopeks: int,
         payment_details: str | None = None,
+        *,
+        request_id: int | None = None,
     ) -> bool:
-        """Уведомление о запросе на вывод средств."""
+        """Уведомление о запросе на вывод средств.
+
+        С ``request_id`` к уведомлению прикладываются кнопки «Одобрить»/«Отклонить»
+        по роли получателя — как у заявки, поданной из бота.
+        """
         if not self._is_enabled():
             return False
 
@@ -2304,7 +2311,20 @@ class AdminNotificationService:
                 ]
             )
 
-            return await self._send_message('\n'.join(message_lines), category=NotificationCategory.PARTNERS)
+            reply_markup = None
+            if request_id is not None:
+                from app.keyboards.withdrawal import get_withdrawal_request_keyboard
+
+                reply_markup = get_withdrawal_request_keyboard(
+                    request_id,
+                    WithdrawalRequestStatus.PENDING.value,
+                    user_db_id=getattr(user, 'id', None),
+                    role=self.resolve_recipient_role(),
+                )
+
+            return await self._send_message(
+                '\n'.join(message_lines), reply_markup=reply_markup, category=NotificationCategory.PARTNERS
+            )
 
         except Exception as e:
             logger.error('Ошибка отправки уведомления о запросе на вывод', error=e)

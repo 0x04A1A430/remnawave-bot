@@ -1257,6 +1257,9 @@
 - `app/keyboards/topup_amounts.py` — Python-модуль
   Классы: нет
   Функции: `resolve_config_method_id`, `format_quick_amount`, `get_topup_amount_keyboard`
+- `app/keyboards/withdrawal.py` — Python-модуль
+  Классы: нет
+  Функции: `get_withdrawal_request_keyboard` — Клавиатура заявки по её статусу и роли получателя; ``None`` — кнопок нет.
 
 ### app/lib
 
@@ -2095,6 +2098,9 @@
 - `app/utils/chat_menu_button.py` — Python-модуль
   Классы: нет
   Функции: `configure_chat_menu_button` — Выставляет кнопку меню на открытие веб-кабинета. Возвращает True, если выставлена.
+- `app/utils/chat_scope.py` — Python-модуль
+  Классы: нет
+  Функции: `callback_from_group` — Сообщение с кнопкой лежит не в личке (группа, супергруппа, канал).
 - `app/utils/check_reg_process.py` — Python-модуль
   Классы: нет
   Функции: `is_registration_process`
@@ -3051,6 +3057,9 @@
 - `tests/test_wheel_fixes.py` — Python-модуль
   Классы: нет
   Функции: `test_spin_rechecks_daily_limit_under_lock` — Even if check_availability passed, spin() must re-count under the lock and, `test_spin_under_limit_proceeds_to_payment` — Sanity: when the re-check is below the limit, spin() proceeds to payment., `test_stars_wheel_spin_idempotent_on_redelivery` — A successful_payment redelivered with the same charge id must NOT grant a
+- `tests/test_withdrawal_request_keyboard.py` — Python-модуль
+  Классы: нет
+  Функции: `test_group_gets_only_actions_and_all_of_them_pass_the_chat_filter`, `test_pending_offers_approve_and_reject_and_approved_offers_complete`, `test_admin_in_private_gets_profile_by_db_id_not_telegram_id`, `test_navigation_only_where_asked`, `test_moderator_and_outsider_get_nothing` — Одобрение — только для админа (@admin_required); модератору кнопки бы отвечали «нет доступа»., `admin_chat`, `test_cabinet_withdrawal_notification_carries_the_same_buttons`, `test_notification_without_request_id_stays_plain`
 - `tests/utils/`
 - `tests/webapi/`
 - `tests/webserver/`
@@ -3972,6 +3981,9 @@
 - `tests/handlers/test_user_messages_list_refresh.py` — Python-модуль
   Классы: нет
   Функции: `test_render_list_edits_message_and_never_answers`, `test_delete_confirm_renders_via_helper_and_answers_once`
+- `tests/handlers/test_withdrawal_group_card.py` — Python-модуль
+  Классы: нет
+  Функции: `approved`, `test_approve_in_group_leaves_only_the_next_action`, `test_approve_in_private_keeps_profile_and_navigation`
 
 ### tests/integration
 

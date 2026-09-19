@@ -5,18 +5,24 @@
 только «надёжные» кнопки — обычный callback без ввода текста: FSM-ввод там
 невозможен из-за privacy mode бота, а меню админки в общем чате не место.
 
-Единственный источник для фильтра: сторож в тестах сверяет с ним каждую кнопку
-групповой карточки (``get_ticket_notification_keyboard(fsm_enabled=False)``),
-чтобы новая кнопка не оказалась нарисованной, но мёртвой.
+Единственный источник для фильтра: сторожа в тестах сверяют с ним каждую кнопку
+групповых карточек (тикет — ``get_ticket_notification_keyboard(fsm_enabled=False)``,
+заявка на вывод — ``get_withdrawal_request_keyboard(role='group')``), чтобы новая
+кнопка не оказалась нарисованной, но мёртвой.
 """
 
 from __future__ import annotations
 
 
 GROUP_SAFE_CALLBACK_PREFIXES: tuple[str, ...] = (
+    # карточка тикета
     'admin_close_ticket_',
     'admin_block_user_perm_ticket_',
     'admin_unblock_user_ticket_',
+    # заявка на вывод реферального баланса
+    'admin_withdrawal_approve_',
+    'admin_withdrawal_reject_',
+    'admin_withdrawal_complete_',
 )
 
 GROUP_SAFE_CALLBACKS: frozenset[str] = frozenset({'admin_support_delete_msg'})

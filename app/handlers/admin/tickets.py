@@ -4,7 +4,6 @@ from datetime import UTC, datetime, timedelta
 
 import structlog
 from aiogram import Bot, Dispatcher, F, types
-from aiogram.enums import ChatType
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -22,6 +21,7 @@ from app.services.notification_delivery_service import notification_delivery_ser
 from app.services.support_settings_service import SupportSettingsService
 from app.states import AdminTicketStates
 from app.utils.cache import RateLimitCache
+from app.utils.chat_scope import callback_from_group
 from app.utils.photo_message import safe_edit_or_resend
 from app.utils.ticket_text import (
     TICKET_MESSAGE_MAX_LENGTH,
@@ -132,8 +132,7 @@ async def show_admin_tickets(callback: types.CallbackQuery, db_user: User, db: A
 
 def _card_in_group(callback: types.CallbackQuery) -> bool:
     """Нажатие пришло из группового админ-чата, а не из лички админа."""
-    chat = getattr(callback.message, 'chat', None)
-    return chat is not None and getattr(chat, 'type', None) != ChatType.PRIVATE
+    return callback_from_group(callback)
 
 
 async def _refresh_group_ticket_card(callback: types.CallbackQuery, db: AsyncSession, ticket_id: int) -> None:

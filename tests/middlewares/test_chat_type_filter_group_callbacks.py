@@ -66,6 +66,9 @@ async def test_group_messages_are_still_dropped():
         'admin_block_user_perm_ticket_5',
         'admin_unblock_user_ticket_5',
         'admin_support_delete_msg',
+        'admin_withdrawal_approve_5',
+        'admin_withdrawal_reject_5',
+        'admin_withdrawal_complete_5',
     ],
 )
 async def test_group_ticket_card_buttons_reach_handlers(data):
