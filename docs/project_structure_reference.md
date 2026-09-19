@@ -2481,7 +2481,7 @@
 
 ## assets
 
-- `assets/bedolaga_app3.svg` — файл
+- `assets/xilarobot_app3.svg` — файл
 - `assets/logo2.svg` — файл
 
 ## docs
