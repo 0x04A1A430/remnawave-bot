@@ -39,7 +39,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import structlog
 
@@ -53,6 +53,8 @@ logger = structlog.get_logger(__name__)
 
 #: Меньшую разницу дат считаем дрожанием часов, а не изменением.
 _DATE_TOLERANCE_SECONDS = 60
+#: Сколько после оплаты панель не может укоротить срок подписки (см. panel_date_behind_paid_renewal).
+PAID_DATE_HOLD = timedelta(hours=48)
 #: Меньшую разницу трафика не переносим — она набегает на каждом запросе.
 _TRAFFIC_TOLERANCE_GB = 0.01
 #: Статусы, из которых подписка ещё может уйти в «исчерпана» или «истекла».
@@ -288,6 +290,31 @@ def _next_status(subscription, snapshot: PanelSnapshot, *, now: datetime) -> str
     return subscription.status
 
 
+def panel_date_behind_paid_renewal(
+    subscription,
+    snapshot: PanelSnapshot,
+    *,
+    paid_at: datetime | None,
+    now: datetime | None = None,
+) -> bool:
+    """Панель показывает срок короче оплаченного, а оплата была недавно.
+
+    Панель — истина, но её снимок устаревает ровно тогда, когда запись нового
+    срока из бота в панель не прошла: панель хранит старую дату, бот —
+    оплаченную. Вебхук или сверка тогда откатывали оплату, а автопродление
+    списывало второй раз (15.09, подписка #3639). Пока с оплаты не прошло
+    ``PAID_DATE_HOLD``, более ранняя дата панели не принимается; более поздняя
+    (продлили ещё и в панели) — принимается как раньше.
+    """
+    if paid_at is None or snapshot.expire_at is None or getattr(subscription, 'end_date', None) is None:
+        return False
+    moment = now or datetime.now(UTC)
+    if moment - panel_datetime_to_utc(paid_at) > PAID_DATE_HOLD:
+        return False
+    end_date = panel_datetime_to_utc(subscription.end_date)
+    return (end_date - snapshot.expire_at).total_seconds() > _DATE_TOLERANCE_SECONDS
+
+
 def project_onto_subscription(
     subscription,
     snapshot: PanelSnapshot,
@@ -297,8 +324,13 @@ def project_onto_subscription(
     grace_open: bool = False,
     trust_status: bool = True,
     snapshot_taken_at: datetime | None = None,
+    paid_at: datetime | None = None,
 ) -> set[str]:
     """Перенести состояние панели в подписку. Возвращает имена изменённых полей.
+
+    ``paid_at`` — когда человек последний раз платил за подписку: пока с оплаты
+    не прошло ``PAID_DATE_HOLD``, более ранняя дата из панели не переносится
+    (см. ``panel_date_behind_paid_renewal``).
 
     ``policy`` — насколько доверять панели (см. ROUTINE / BULK_SNAPSHOT /
     ADMIN_PULL в начале модуля).
@@ -398,7 +430,9 @@ def project_onto_subscription(
         and not (policy.respects_local_disable and locally_disabled)
     ):
         end_date = panel_datetime_to_utc(subscription.end_date)
-        if abs((end_date - snapshot.expire_at).total_seconds()) > _DATE_TOLERANCE_SECONDS:
+        if abs((end_date - snapshot.expire_at).total_seconds()) > _DATE_TOLERANCE_SECONDS and not (
+            panel_date_behind_paid_renewal(subscription, snapshot, paid_at=paid_at, now=moment)
+        ):
             subscription.end_date = snapshot.expire_at
             changed.add('end_date')
 

@@ -42,7 +42,7 @@ from app.services.admin_notification_service import AdminNotificationService
 from app.services.grace_access_runtime import get_open_grace_subscription_ids, grace_access_runtime
 from app.services.grace_access_service import GraceReason
 from app.services.notification_delivery_service import NotificationType, notification_delivery_service
-from app.services.panel_sync import WEBHOOK, project_onto_subscription, read_panel_user
+from app.services.panel_sync import WEBHOOK, panel_date_behind_paid_renewal, project_onto_subscription, read_panel_user
 from app.utils.miniapp_buttons import build_miniapp_or_callback_button, build_subscription_extend_button
 
 
@@ -1318,13 +1318,29 @@ class RemnaWaveWebhookService:
         if snapshot.crypto_link and not self._is_valid_link(snapshot.crypto_link):
             snapshot = replace(snapshot, crypto_link=None)
 
+        from app.database.crud.transaction import get_last_subscription_payment_at
+
+        paid_at = await get_last_subscription_payment_at(db, user.id)
         changed_fields = project_onto_subscription(
             subscription,
             snapshot,
             policy=WEBHOOK,
             grace_open=grace_open,
+            paid_at=paid_at,
         )
         changed = bool(changed_fields)
+        if panel_date_behind_paid_renewal(subscription, snapshot, paid_at=paid_at):
+            # Запись оплаченного срока в панель не дошла: держим срок и досылаем.
+            from app.services.remnawave_retry_queue import remnawave_retry_queue
+
+            logger.warning(
+                'Панель показывает срок короче оплаченного — снимок не принят, срок уедет в панель повтором',
+                subscription_id=subscription.id,
+                user_id=user.id,
+                panel_expire_at=snapshot.expire_at.isoformat() if snapshot.expire_at else None,
+                end_date=subscription.end_date.isoformat() if subscription.end_date else None,
+            )
+            remnawave_retry_queue.enqueue(subscription_id=subscription.id, user_id=user.id, action='update')
 
         # Always stamp to protect from sync overwrite, even if no fields changed
         self._stamp_webhook_update(subscription)

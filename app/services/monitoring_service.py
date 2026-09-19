@@ -716,7 +716,10 @@ class MonitoringService:
             # Хвост грейса (панель ещё несколько минут ACTIVE с погашенной датой) или
             # снимок оверлея, снятый до досрочного закрытия грейса, — не продление.
             return False
-        changed = project_onto_subscription(subscription, snapshot, now=now)
+        from app.database.crud.transaction import get_last_subscription_payment_at
+
+        paid_at = await get_last_subscription_payment_at(db, subscription.user_id)
+        changed = project_onto_subscription(subscription, snapshot, now=now, paid_at=paid_at)
         if changed:
             await db.commit()
         logger.info(
