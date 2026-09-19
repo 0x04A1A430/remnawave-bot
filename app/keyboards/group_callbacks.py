@@ -13,6 +13,8 @@
 
 from __future__ import annotations
 
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+
 
 GROUP_SAFE_CALLBACK_PREFIXES: tuple[str, ...] = (
     # карточка тикета
@@ -33,3 +35,30 @@ def is_group_safe_callback(data: str | None) -> bool:
     if not data:
         return False
     return data in GROUP_SAFE_CALLBACKS or data.startswith(GROUP_SAFE_CALLBACK_PREFIXES)
+
+
+def strip_group_unsafe_buttons(
+    markup: InlineKeyboardMarkup | None,
+) -> tuple[InlineKeyboardMarkup | None, list[str]]:
+    """Оставляет для группы только URL-кнопки и разрешённые callback'и.
+
+    Возвращает новую клавиатуру (``None``, если ничего не осталось) и список
+    выброшенных callback'ов — чтобы точка отправки записала их в лог: кнопка,
+    нарисованная в группе и не доходящая до обработчика, хуже отсутствия кнопки.
+    """
+    if markup is None:
+        return None, []
+
+    dropped: list[str] = []
+    rows: list[list[InlineKeyboardButton]] = []
+    for row in markup.inline_keyboard:
+        kept = []
+        for button in row:
+            if button.callback_data is None or is_group_safe_callback(button.callback_data):
+                kept.append(button)
+            else:
+                dropped.append(button.callback_data)
+        if kept:
+            rows.append(kept)
+
+    return (InlineKeyboardMarkup(inline_keyboard=rows) if rows else None), dropped

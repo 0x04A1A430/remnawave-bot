@@ -34,6 +34,7 @@ from app.database.models import (
     User,
     WithdrawalRequestStatus,
 )
+from app.keyboards.group_callbacks import strip_group_unsafe_buttons
 from app.utils.formatters import format_username_link
 from app.utils.message_patch import caption_exceeds_telegram_limit
 from app.utils.rich_admin import classic_admin_html_to_rich, try_send_rich_admin_message
@@ -1511,6 +1512,18 @@ class AdminNotificationService:
             return False
 
         thread_id = self._resolve_topic_id(category)
+
+        # В групповом админ-чате работают только разрешённые callback-кнопки
+        # (фильтр чатов глушит остальные): такие выкидываем здесь, а не рисуем
+        # мёртвыми. URL-кнопки и разрешённые действия остаются.
+        if reply_markup is not None and self.resolve_recipient_role() == 'group':
+            reply_markup, dropped = strip_group_unsafe_buttons(reply_markup)
+            if dropped:
+                logger.warning(
+                    'Кнопки не работают в групповом админ-чате — убраны из уведомления',
+                    chat_id=self.chat_id,
+                    dropped=dropped,
+                )
 
         # Rich-вид (Bot API 10.1): заголовок, разделители, footer с tg-time.
         # При недоступности/ошибке молча продолжаем классическим путём ниже
