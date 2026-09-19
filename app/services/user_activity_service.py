@@ -343,6 +343,7 @@ def activity_sources(user_id: int) -> dict[str, tuple]:
         ),
     }
 
+
 async def collect_user_activity(
     db: AsyncSession,
     user_id: int,

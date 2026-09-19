@@ -5,6 +5,7 @@ from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel, Field
+
 from app.services.user_activity_service import (  # noqa: F401  реэкспорт: схемы переехали в сервис
     UserActivityItem,
     UserActivityResponse,

@@ -6,7 +6,7 @@ from datetime import UTC, datetime, timedelta
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import Integer, and_, delete as sa_delete, func, literal, or_, select
+from sqlalchemy import Integer, delete as sa_delete, func, literal, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -38,29 +38,19 @@ from app.database.crud.user_device_alias import (
 )
 from app.database.crud.user_promo_group import sync_user_primary_promo_group
 from app.database.models import (
-    ButtonClickLog,
-    CabinetRefreshToken,
-    Coupon,
     GuestPurchase,
     PaymentMethod,
-    PollResponse,
-    PromoCode,
-    PromoCodeUse,
     PromoGroup,
     ReferralEarning,
     Subscription,
-    SubscriptionEvent,
     SubscriptionServer,
     SubscriptionStatus,
-    Ticket,
     TrafficPurchase,
     Transaction,
     TransactionType,
     User,
     UserPromoGroup,
     UserStatus,
-    WheelSpin,
-    WithdrawalRequest,
 )
 from app.services.panel_sync import (
     ADMIN_PULL,
@@ -75,7 +65,6 @@ from app.services.panel_sync import (
 )
 from app.services.panel_sync.fields import narrow_push_fields
 from app.services.permission_service import PermissionService
-from app.services.user_action_log_service import CLICK_PREFIX, SCREEN_PREFIX
 from app.services.user_activity_service import UnknownActivityTypes, collect_user_activity
 from app.utils.subscription_time import local_days_until
 from app.utils.subscription_utils import coerce_panel_device_limit
@@ -129,7 +118,6 @@ from ..schemas.users import (
     UpdateSubscriptionResponse,
     UpdateUserStatusRequest,
     UpdateUserStatusResponse,
-    UserActivityItem,
     UserActivityResponse,
     UserAvailableTariffItem,
     UserAvailableTariffsResponse,

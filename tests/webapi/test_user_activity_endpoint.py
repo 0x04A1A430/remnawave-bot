@@ -35,25 +35,27 @@ async def _seed(db) -> User:
     await db.flush()
 
     now = datetime.now(UTC)
-    db.add_all([
-        Transaction(
-            user_id=user.id,
-            type=TransactionType.DEPOSIT.value,
-            amount_kopeks=45000,
-            description='Пополнение баланса',
-            payment_method='yookassa',
-            is_completed=True,
-            created_at=now - timedelta(minutes=5),
-        ),
-        Transaction(
-            user_id=user.id,
-            type=TransactionType.SUBSCRIPTION_PAYMENT.value,
-            amount_kopeks=45000,
-            description='Продление подписки',
-            is_completed=True,
-            created_at=now - timedelta(minutes=4),
-        ),
-    ])
+    db.add_all(
+        [
+            Transaction(
+                user_id=user.id,
+                type=TransactionType.DEPOSIT.value,
+                amount_kopeks=45000,
+                description='Пополнение баланса',
+                payment_method='yookassa',
+                is_completed=True,
+                created_at=now - timedelta(minutes=5),
+            ),
+            Transaction(
+                user_id=user.id,
+                type=TransactionType.SUBSCRIPTION_PAYMENT.value,
+                amount_kopeks=45000,
+                description='Продление подписки',
+                is_completed=True,
+                created_at=now - timedelta(minutes=4),
+            ),
+        ]
+    )
     await db.commit()
     return user
 
@@ -76,9 +78,7 @@ async def test_activity_accepts_telegram_id(monkeypatch):
     async with memory_session(monkeypatch, list(TABLES)) as db:
         user = await _seed(db)
 
-        response = await get_user_activity(
-            user_id=user.telegram_id, _=None, db=db, offset=0, limit=50, types=None
-        )
+        response = await get_user_activity(user_id=user.telegram_id, _=None, db=db, offset=0, limit=50, types=None)
 
         assert response.total == 2
 
@@ -88,9 +88,7 @@ async def test_activity_filters_by_type(monkeypatch):
     async with memory_session(monkeypatch, list(TABLES)) as db:
         user = await _seed(db)
 
-        response = await get_user_activity(
-            user_id=user.id, _=None, db=db, offset=0, limit=50, types='transaction'
-        )
+        response = await get_user_activity(user_id=user.id, _=None, db=db, offset=0, limit=50, types='transaction')
 
         assert response.total == 2
         assert all(item.type == 'transaction' for item in response.items)
