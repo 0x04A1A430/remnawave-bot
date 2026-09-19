@@ -260,8 +260,8 @@
   Классы: `PromoOfferUserInfo`, `PromoOfferResponse`, `PromoOfferListResponse`, `PromoOfferTemplateResponse`, `PromoOfferTemplateListResponse`, `PromoOfferTemplateUpdateRequest`, `PromoOfferBroadcastRequest` (1 методов), `PromoOfferBroadcastResponse`, `PromoOfferSegment`, `PromoOfferSegmentListResponse`, `PromoOfferLogOfferInfo`, `PromoOfferLogResponse`, `PromoOfferLogListResponse`
   Функции: `list_segments` — Число пользователей в каждом сегменте — чтобы админ видел охват до отправки., `list_templates` — Get list of promo offer templates., `get_template` — Get a promo offer template., `update_template` — Update a promo offer template., `list_offers` — Get list of promo offers., `broadcast_offer` — Broadcast promo offer to users with optional Telegram notification., `get_logs` — Get promo offer logs.
 - `app/cabinet/routes/admin_promocodes.py` — Python-модуль
-  Классы: `PromoCodeResponse`, `PromoCodeListResponse`, `PromoCodeRecentUse`, `PromoCodeDetailResponse`, `PromoCodeCreateRequest`, `PromoCodeUpdateRequest`, `PromoGroupResponse`, `PromoGroupListResponse`, `PromoGroupCreateRequest`, `PromoGroupUpdateRequest`, `DeactivateDiscountResponse`
-  Функции: `list_promocodes` — Get list of all promocodes., `get_promocode` — Get promocode details with usage statistics., `create_promocode_endpoint` — Create a new promocode., `update_promocode_endpoint` — Update an existing promocode., `delete_promocode_endpoint` — Delete a promocode., `admin_deactivate_discount_promocode` — Admin: deactivate a user's active discount (promo code or promo offer)., `list_promo_groups` — Get list of all promo groups., `get_promo_group` — Get promo group details., `create_promo_group_endpoint` — Create a new promo group., `update_promo_group_endpoint` — Update a promo group., `delete_promo_group_endpoint` — Delete a promo group.
+  Классы: `PromoCodeResponse`, `PromoCodeListResponse`, `PromoCodeRecentUse`, `PromoCodeDetailResponse`, `PromoCodeCreateRequest`, `PromoCodeUpdateRequest`, `PromoGroupResponse`, `PromoGroupListResponse`, `PromoGroupCreateRequest`, `PromoGroupUpdateRequest`, `PromoGroupRecalculationLast`, `PromoGroupRecalculationStatus`, `DeactivateDiscountResponse`
+  Функции: `list_promocodes` — Get list of all promocodes., `get_promocode` — Get promocode details with usage statistics., `create_promocode_endpoint` — Create a new promocode., `update_promocode_endpoint` — Update an existing promocode., `delete_promocode_endpoint` — Delete a promocode., `admin_deactivate_discount_promocode` — Admin: deactivate a user's active discount (promo code or promo offer)., `list_promo_groups` — Get list of all promo groups., `start_promo_group_recalculation` — Пересчитать промогруппы всех людей по их тратам (в фоне)., `get_promo_group_recalculation_status` — Идёт ли пересчёт и чем кончился последний., `get_promo_group` — Get promo group details., `create_promo_group_endpoint` — Create a new promo group., `update_promo_group_endpoint` — Update a promo group., `delete_promo_group_endpoint` — Delete a promo group.
 - `app/cabinet/routes/admin_reachability.py` — Python-модуль
   Классы: нет
   Функции: `get_status`, `get_units`, `get_hosts`, `get_nodes`, `get_subscription_configs`, `parse_input` — Поле «Конфиг или подписка»: ссылки, URL подписок, base64 → конфиги с готовыми целями., `update_pref`, `preview_job`, `create_job`, `list_jobs`, `get_job`, `cancel_job`, `geo_catalog` — Справочник GEO: округа, регионы, провайдеры; города — по фильтру или поиску., `recheck_geo_city` — Повтор одного проваленного города из отчёта GEO: «тот же IP» или «сменить IP»., `preview_batch`, `create_batch`, `list_batches`, `get_batch`, `cancel_batch`, `get_summary`
@@ -1625,7 +1625,10 @@
   Функции: нет
 - `app/services/promo_group_assignment.py` — Python-модуль
   Классы: нет
-  Функции: `maybe_assign_promo_group_by_total_spent`
+  Функции: `maybe_assign_promo_group_by_total_spent` — Выдаёт человеку промогруппу по сумме трат.
+- `app/services/promo_group_recalculation.py` — Python-модуль
+  Классы: `RecalculationResult` (1 методов), `PromoGroupRecalculation` (8 методов)
+  Функции: `recalculate_promo_groups` — Прогоняет правило автоназначения по всем платившим. Уведомлений на каждого — нет., `build_summary_text` — Одна сводка админам за весь проход., `notify_admins_about_recalculation` — Сводка уходит только когда есть что сказать: изменения или сбой.
 - `app/services/promo_offer_email.py` — Python-модуль
   Классы: нет
   Функции: `send_promo_offer_email` — Шлёт одно промопредложение на почту. True — письмо реально отправлено.
@@ -3297,6 +3300,9 @@
 - `tests/cabinet/test_platega_recurrent_routes.py` — Python-модуль
   Классы: нет
   Функции: `user`, `test_enable_403_when_gate_disabled`, `test_get_403_when_gate_disabled`, `test_cancel_works_even_when_gate_disabled` — Отмена НЕ гейтится: выключение фичи не должно бросать юзеров с живыми, `test_enable_404_when_no_subscription`, `test_enable_400_for_trial_subscription` — Триал — пробник: подключать к нему рекуррентное списание нельзя, `test_enable_400_when_subscription_has_no_tariff`, `test_enable_400_when_tariff_not_found`, `test_enable_happy_path_returns_status_and_redirect` — Gate on, tariff loaded explicitly, helper succeeds -> {status, redirect_url}., `test_enable_value_error_maps_to_400` — No price for the resolved charge period -> 400, not a 500., `test_enable_runtime_error_maps_to_409` — Platega API didn't return a transactionId -> 409, not a 500., `test_get_404_when_no_subscription`, `test_get_returns_none_status_without_active_record`, `test_get_returns_full_shape_for_active_record`, `test_get_next_charge_at_none_serializes_to_none` — A PENDING record has no next_charge_at yet (no callback received)., `test_cancel_404_when_no_subscription`, `test_cancel_returns_cancelled_and_awaits_safe_helper`, `test_purchase_403_when_gate_disabled`, `test_purchase_400_when_tariff_not_found`, `test_purchase_happy_path_returns_redirect_and_subscription_id`, `test_purchase_value_error_maps_to_400` — Отказ сервиса (триал/чужой тариф/disabled) -> 400 с текстом причины.
+- `tests/cabinet/test_promo_group_recalculation_routes.py` — Python-модуль
+  Классы: нет
+  Функции: `test_routes_registered`, `test_status_url_is_not_swallowed_by_the_group_id_route` — ``/{group_id}`` объявлен раньше и принимает любую строку — «recalculate» дал бы 422., `test_permissions_follow_the_action`, `recalculation`, `test_post_starts_a_pass_and_returns_its_state`, `test_post_during_a_pass_reports_it_was_queued`, `test_get_reports_state_without_starting_anything`
 - `tests/cabinet/test_promo_offer_broadcast_notify.py` — Python-модуль
   Классы: нет
   Функции: `test_delivery_runs_off_plain_ids` — В сервис рассылок уходят голые telegram_id, без ORM-объектов сессии запроса., `test_nothing_queued_without_telegram_recipients` — Некому слать в Telegram — запись рассылки не заводится., `test_promo_preferences_filter_telegram_and_email_notifications`
@@ -3571,6 +3577,12 @@
 - `tests/database/test_postgres_fixture_guard.py` — Python-модуль
   Классы: нет
   Функции: `test_missing_url_skips_by_default` — Окружение без PostgreSQL не должно ронять прогон., `test_missing_url_fails_when_postgres_is_required` — С поднятым флагом отсутствие базы — падение, а не пропуск., `test_requirement_flag_accepts_usual_spellings`, `test_requirement_flag_ignores_everything_else`, `test_blank_url_counts_as_absent` — Пустая переменная — это отсутствие базы, а не адрес из пробелов., `test_ci_workflow_runs_postgres_tests_for_real` — CI обязан поднимать базу и требовать, чтобы тесты на ней прошли.
+- `tests/database/test_promo_group_crud_schedules_recalculation_postgres.py` — Python-модуль
+  Классы: нет
+  Функции: `scheduled`, `test_creating_a_group_with_threshold_schedules_recalculation`, `test_only_a_threshold_change_schedules_recalculation_on_update`, `test_deleting_a_group_schedules_recalculation_while_thresholds_remain`, `test_refused_deletion_of_default_group_schedules_nothing`
+- `tests/database/test_promo_group_recalculation_postgres.py` — Python-модуль
+  Классы: нет
+  Функции: `silence_per_user_admin_notifications` — Пересчёт не должен слать админам уведомление на каждого человека., `no_background_recalculation` — CRUD групп ставит пересчёт в фон — здесь пересчёт вызывается руками., `test_recalculation_moves_everyone_to_the_group_their_spending_earned`, `test_raised_threshold_moves_user_down_to_the_group_he_still_earns`, `test_without_auto_groups_nothing_is_checked`
 - `tests/database/test_reachability_batches_schema_parity.py` — Python-модуль
   Классы: нет
   Функции: `both`, `test_columns_match`, `test_indexes_match`, `test_column_types_match`, `test_jobs_reference_batches`, `test_downgrade_removes_batches`
@@ -4376,6 +4388,9 @@
 - `tests/services/test_platega_subscription_service.py` — Python-модуль
   Классы: нет
   Функции: `test_create_subscription_posts_method_6`, `test_create_subscription_uses_v2_endpoint_when_configured`, `test_create_subscription_omits_description_when_not_provided`, `test_create_subscription_truncates_long_cyrillic_description`, `test_get_subscription_is_unversioned`, `test_list_subscriptions_builds_query_params`, `test_list_subscriptions_omits_none_params`, `test_cancel_subscription_posts_cancel`, `test_format_amount_integer_and_decimal`, `test_recurrent_gate`, `test_reconcile_unconfigured_platega_is_noop` — Неконфигурированный Platega (нет мерчанта/секрета) — no-op до БД., `test_reconcile_cancelled_sweep_runs_with_recurrent_flag_off` — Cancelled-свип (ретрай недошедших отмен) обязан работать и при, `test_reconcile_marks_stuck_pending_as_failed` — Safety net: a PENDING record that never got a platega_subscription_id back, `test_reconcile_recancels_remotely_active_cancelled_record` — Контрольный свип отменённых: локальный CANCELLED, но remote-статус, `test_reconcile_skips_cancelled_record_confirmed_remotely` — CANCELLED-запись, у которой remote-статус тоже cancelled, — свип не, `test_create_subscription_raises_actionable_error_on_val0001` — VAL_0001 с key=paymentMethod (формат запроса совпадает с доками) =, `test_create_subscription_transport_failure_returns_none` — Транспортный сбой (status=None) — прежний контракт: None, без исключения., `test_create_subscription_sends_payer_metadata` — СБП-подписка — тот же POST /transaction/process: metadata обязательна и здесь.
+- `tests/services/test_promo_group_recalculation_scheduler.py` — Python-модуль
+  Классы: `Announcer` (2 методов), `GatedRunner` (2 методов)
+  Функции: `test_schedule_runs_one_pass_and_announces_it`, `test_requests_during_a_pass_collapse_into_one_more_pass`, `test_runner_failure_is_recorded_and_still_announced`, `test_schedule_without_event_loop_is_refused_quietly`, `admin_chat`, `test_summary_is_silent_when_nobody_changed`, `test_summary_is_sent_once_when_someone_changed`, `test_summary_is_sent_when_the_pass_failed`, `test_summary_text_lists_failures_only_when_there_are_any`
 - `tests/services/test_promocode_rollback_keeps_user_usable.py` — Python-модуль
   Классы: нет
   Функции: `test_failed_trial_activation_keeps_user_attributes_loaded`

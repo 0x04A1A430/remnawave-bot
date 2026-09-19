@@ -87,7 +87,14 @@ async def _get_best_group_for_spending(
 async def maybe_assign_promo_group_by_total_spent(
     db: AsyncSession,
     user_id: int,
+    *,
+    notify_admins: bool = True,
 ) -> PromoGroup | None:
+    """Выдаёт человеку промогруппу по сумме трат.
+
+    ``notify_admins=False`` — для массового пересчёта: там сводка одна на весь
+    проход, уведомление на каждого человека было бы потоком в админ-чат.
+    """
     from app.database.crud.user_promo_group import (
         add_user_to_promo_group,
         get_user_promo_groups,
@@ -182,7 +189,7 @@ async def maybe_assign_promo_group_by_total_spent(
         await db.commit()
         await db.refresh(user)
 
-        if newly_added:
+        if newly_added and notify_admins:
             await _notify_admins_about_auto_assignment(
                 db,
                 user,
