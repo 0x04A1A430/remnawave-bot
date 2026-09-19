@@ -15,26 +15,26 @@
 - `.gitignore` — файл
 - `.python-version` — файл
 - `.release-please-manifest.json` — файл
+- `CHANGELOG.md` — файл
+- `CONTRIBUTING.md` — файл
+- `Dockerfile` — файл
+- `LICENSE` — файл
+- `Makefile` — файл
+- `README.md` — файл
+- `SECURITY.md` — файл
 - `alembic.ini` — файл
 - `app/`
 - `assets/`
-- `CHANGELOG.md` — файл
-- `CONTRIBUTING.md` — файл
 - `docker-compose.local.yml` — файл
 - `docker-compose.yml` — файл
-- `Dockerfile` — файл
 - `docs/`
-- `LICENSE` — файл
 - `main.py` — Python-модуль
   Классы: `GracefulExit` (2 методов)
   Функции: `main`
-- `Makefile` — файл
 - `migrations/`
 - `pyproject.toml` — файл
-- `README.md` — файл
 - `release-please-config.json` — файл
 - `scripts/`
-- `SECURITY.md` — файл
 - `tests/`
 - `uv.lock` — файл
 - `vpn_logo.png` — файл
@@ -588,8 +588,8 @@
 
 ##### app/cabinet/utils/fonts
 
-- `app/cabinet/utils/fonts/manrope-variable.ttf` — файл
 - `app/cabinet/utils/fonts/OFL.txt` — файл
+- `app/cabinet/utils/fonts/manrope-variable.ttf` — файл
 
 ### app/database
 
@@ -3695,6 +3695,7 @@
 
 #### tests/fixtures/bschek
 
+- `tests/fixtures/bschek/README.md` — файл
 - `tests/fixtures/bschek/account.json` — файл
 - `tests/fixtures/bschek/auth_bad.json` — файл
 - `tests/fixtures/bschek/auth_none.json` — файл
@@ -3716,15 +3717,15 @@
 - `tests/fixtures/bschek/p2_replay.json` — файл
 - `tests/fixtures/bschek/p3_bare_mts.json` — файл
 - `tests/fixtures/bschek/p4_bare_mts_any.json` — файл
+- `tests/fixtures/bschek/pF_fleet.json` — файл
+- `tests/fixtures/bschek/pF_replay_0.json` — файл
+- `tests/fixtures/bschek/pF_replay_late.json` — файл
+- `tests/fixtures/bschek/pF_same_key_while_running.json` — файл
 - `tests/fixtures/bschek/p_blocked.json` — файл
 - `tests/fixtures/bschek/p_dpi_off.json` — файл
 - `tests/fixtures/bschek/p_empty_ops.json` — файл
 - `tests/fixtures/bschek/p_legacy_alias.json` — файл
 - `tests/fixtures/bschek/p_noidem.json` — файл
-- `tests/fixtures/bschek/pF_fleet.json` — файл
-- `tests/fixtures/bschek/pF_replay_0.json` — файл
-- `tests/fixtures/bschek/pF_replay_late.json` — файл
-- `tests/fixtures/bschek/pF_same_key_while_running.json` — файл
 - `tests/fixtures/bschek/pv_11_targets.json` — файл
 - `tests/fixtures/bschek/pv_all_any.json` — файл
 - `tests/fixtures/bschek/pv_all_default.json` — файл
@@ -3752,7 +3753,6 @@
 - `tests/fixtures/bschek/pv_two_targets.json` — файл
 - `tests/fixtures/bschek/pv_unknown_op.json` — файл
 - `tests/fixtures/bschek/pv_url_target.json` — файл
-- `tests/fixtures/bschek/README.md` — файл
 - `tests/fixtures/bschek/rl2_a.json` — файл
 - `tests/fixtures/bschek/rl2_b.json` — файл
 - `tests/fixtures/bschek/s1_poll_00.json` — файл
@@ -3760,8 +3760,6 @@
 - `tests/fixtures/bschek/s1_poll_03.json` — файл
 - `tests/fixtures/bschek/s1_second.json` — файл
 - `tests/fixtures/bschek/s1_submit.json` — файл
-- `tests/fixtures/bschek/s_cancel_done.json` — файл
-- `tests/fixtures/bschek/s_notfound.json` — файл
 - `tests/fixtures/bschek/sB_after_0.json` — файл
 - `tests/fixtures/bschek/sB_cancel.json` — файл
 - `tests/fixtures/bschek/sB_cancel_again.json` — файл
@@ -3772,6 +3770,8 @@
 - `tests/fixtures/bschek/sC_submit.json` — файл
 - `tests/fixtures/bschek/sD_poll_37.json` — файл
 - `tests/fixtures/bschek/sD_submit.json` — файл
+- `tests/fixtures/bschek/s_cancel_done.json` — файл
+- `tests/fixtures/bschek/s_notfound.json` — файл
 - `tests/fixtures/bschek/sv_25.json` — файл
 - `tests/fixtures/bschek/sv_all_any.json` — файл
 - `tests/fixtures/bschek/sv_cfo_any_sni.json` — файл
@@ -3789,12 +3789,6 @@
 - `tests/fixtures/bschek/v2_replay.json` — файл
 - `tests/fixtures/bschek/v2_status.json` — файл
 - `tests/fixtures/bschek/v2_submit.json` — файл
-- `tests/fixtures/bschek/v_cancel_done.json` — файл
-- `tests/fixtures/bschek/v_noconfigs.json` — файл
-- `tests/fixtures/bschek/v_notfound.json` — файл
-- `tests/fixtures/bschek/v_suburl.json` — файл
-- `tests/fixtures/bschek/v_too_large.json` — файл
-- `tests/fixtures/bschek/v_too_many.json` — файл
 - `tests/fixtures/bschek/vA_poll_02.json` — файл
 - `tests/fixtures/bschek/vA_submit.json` — файл
 - `tests/fixtures/bschek/vB_poll_34.json` — файл
@@ -3807,6 +3801,12 @@
 - `tests/fixtures/bschek/vD_submit.json` — файл
 - `tests/fixtures/bschek/vE_poll_01.json` — файл
 - `tests/fixtures/bschek/vE_submit.json` — файл
+- `tests/fixtures/bschek/v_cancel_done.json` — файл
+- `tests/fixtures/bschek/v_noconfigs.json` — файл
+- `tests/fixtures/bschek/v_notfound.json` — файл
+- `tests/fixtures/bschek/v_suburl.json` — файл
+- `tests/fixtures/bschek/v_too_large.json` — файл
+- `tests/fixtures/bschek/v_too_many.json` — файл
 
 ### tests/handlers
 
