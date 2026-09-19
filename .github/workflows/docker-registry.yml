@@ -121,7 +121,7 @@ jobs:
       # где Docker Scout не запускается). Пока non-blocking (exit-code: 0).
       - name: Scan image with Trivy
         if: steps.version.outputs.should_push == 'true'
-        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: ${{ env.REGISTRY }}/${{ steps.image.outputs.name }}@${{ steps.build.outputs.digest }}
           format: sarif
