@@ -28,7 +28,7 @@ os.environ.setdefault('BOT_TOKEN', 'test-token')
 import tempfile as _tempfile
 
 
-os.environ.setdefault('BACKUP_LOCATION', _tempfile.mkdtemp(prefix='bedolaga_test_backups_'))
+os.environ.setdefault('BACKUP_LOCATION', _tempfile.mkdtemp(prefix='xilarobot_test_backups_'))
 
 # Создаём заглушки для драйверов, которых может не быть в окружении тестов.
 sys.modules.setdefault('asyncpg', types.ModuleType('asyncpg'))

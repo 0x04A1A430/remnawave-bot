@@ -30,7 +30,7 @@ logger = structlog.get_logger(__name__)
 CLIENT_USER_AGENT = 'Happ/3.5.0'
 # Заголовки устройства для панелей с HWID-лимитом: без них — заглушки «обновите приложение».
 HWID_HEADERS = {
-    'x-hwid': 'bedolaga-bscheker',
+    'x-hwid': 'xilarobot-bscheker',
     'x-device-os': 'Linux',
     'x-ver-os': '1',
     'x-device-model': 'BSCHEKER (@xilarobot)',

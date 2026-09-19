@@ -57,13 +57,13 @@ ENV PYTHONPATH=/app \
 
 EXPOSE 8080
 
-LABEL org.opencontainers.image.title="Bedolaga RemnaWave Bot" \
+LABEL org.opencontainers.image.title="Xilarobot RemnaWave Bot" \
       org.opencontainers.image.description="Telegram bot for RemnaWave VPN service" \
       org.opencontainers.image.version="${VERSION}" \
       org.opencontainers.image.created="${BUILD_DATE}" \
       org.opencontainers.image.revision="${VCS_REF}" \
-      org.opencontainers.image.source="https://github.com/fr1ngg/remnawave-bedolaga-telegram-bot" \
-      org.opencontainers.image.url="https://github.com/fr1ngg/remnawave-bedolaga-telegram-bot" \
+      org.opencontainers.image.source="https://github.com/fr1ngg/remnawave-xilarobot-telegram-bot" \
+      org.opencontainers.image.url="https://github.com/fr1ngg/remnawave-xilarobot-telegram-bot" \
       org.opencontainers.image.vendor="fr1ngg"
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
