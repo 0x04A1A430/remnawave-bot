@@ -314,13 +314,13 @@ def _external_squad_keyboard(tariff: Tariff, squads: list, language: str) -> Inl
     buttons = [
         [
             InlineKeyboardButton(
-                text=f'{"" if current is None else ""} Без внешнего сквада',
+                text=f'{"*" if current is None else ""} Без внешнего сквада',
                 callback_data=f'admin_tariff_set_ext_squad:{tariff.id}:{_NO_EXTERNAL_SQUAD}',
             )
         ]
     ]
     for squad in squads:
-        prefix = '' if squad.uuid == current else ''
+        prefix = '*' if squad.uuid == current else ''
         buttons.append(
             [
                 InlineKeyboardButton(

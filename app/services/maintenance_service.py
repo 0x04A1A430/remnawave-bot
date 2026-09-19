@@ -425,9 +425,19 @@ API снова отвечает на запросы.""",
             if not status_data:
                 return
 
-            self._status.is_active = status_data.get('is_active', False)
+            cache_is_active = bool(status_data.get('is_active', False))
+            cache_auto_enabled = bool(status_data.get('auto_enabled', False))
+            if cache_is_active and not cache_auto_enabled and not settings.is_maintenance_mode():
+                self._status.is_active = False
+                self._status.enabled_at = None
+                self._status.reason = None
+                self._status.auto_enabled = False
+                logger.info('Ручной режим техработ из кеша не восстановлен: настройка выключена')
+                return
+
+            self._status.is_active = cache_is_active
             self._status.reason = status_data.get('reason')
-            self._status.auto_enabled = status_data.get('auto_enabled', False)
+            self._status.auto_enabled = cache_auto_enabled
             self._status.consecutive_failures = status_data.get('consecutive_failures', 0)
 
             if status_data.get('enabled_at'):

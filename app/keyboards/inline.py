@@ -1123,6 +1123,7 @@ def get_insufficient_balance_keyboard(
     resume_callback: str | None = None,
     amount_kopeks: int | None = None,
     has_saved_cart: bool = False,  # Новый параметр для указания наличия сохраненной корзины
+    resume_text: str | None = None,
 ) -> InlineKeyboardMarkup:
     texts = get_texts(language)
     keyboard = get_payment_methods_keyboard(amount_kopeks or 0, language)
@@ -1142,21 +1143,21 @@ def get_insufficient_balance_keyboard(
             )
             back_row_index = len(keyboard.inline_keyboard) - 1
 
-    # Если есть сохраненная корзина, добавляем кнопку возврата к оформлению
-    if has_saved_cart:
+    if resume_callback:
         return_row = [
             make_button(
-                text=texts.RETURN_TO_SUBSCRIPTION_CHECKOUT,
-                callback_data='return_to_saved_cart',
+                text=resume_text or texts.RETURN_TO_SUBSCRIPTION_CHECKOUT,
+                callback_data=resume_callback,
             )
         ]
         insert_index = back_row_index if back_row_index is not None else len(keyboard.inline_keyboard)
         keyboard.inline_keyboard.insert(insert_index, return_row)
-    elif resume_callback:
+    # Если есть сохраненная корзина, добавляем кнопку возврата к оформлению
+    elif has_saved_cart:
         return_row = [
             make_button(
                 text=texts.RETURN_TO_SUBSCRIPTION_CHECKOUT,
-                callback_data=resume_callback,
+                callback_data='return_to_saved_cart',
             )
         ]
         insert_index = back_row_index if back_row_index is not None else len(keyboard.inline_keyboard)
@@ -1341,6 +1342,15 @@ def get_subscription_keyboard(
                         )
                     ]
                 )
+            else:
+                keyboard.append(
+                    [
+                        make_button(
+                            text=texts.MENU_EXTEND_SUBSCRIPTION,
+                            callback_data='subscription_extend',
+                        )
+                    ]
+                )
 
             # Кнопка докупки трафика для платных подписок
             # В режиме тарифов проверяем can_topup_traffic() у тарифа, в классическом - глобальные настройки
@@ -1360,6 +1370,16 @@ def get_subscription_keyboard(
                         )
                     ]
                 )
+
+    if gift_enabled:
+        keyboard.append(
+            [
+                make_button(
+                    text=texts.t('GIFT_SUBSCRIPTION_BUTTON', 'Подарить подписку'),
+                    callback_data='subscription_gift',
+                )
+            ]
+        )
 
     # Ряд: [Настройки] [+ Купить тариф для истёкших/отключённых]
     settings_row = [

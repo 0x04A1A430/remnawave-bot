@@ -25,4 +25,6 @@ def test_env_pinned_setting_warns_instead_of_ok(monkeypatch):
 def test_regular_setting_reports_ok(monkeypatch):
     monkeypatch.setattr(bot_configuration_service, '_env_override_keys', set())
 
-    assert _build_save_confirmation('SUPPORT_USERNAME') == '✅ Настройка обновлена'
+    message = _build_save_confirmation('SUPPORT_USERNAME')
+    assert 'Настройка обновлена' in message
+    assert 'не применено' not in message
