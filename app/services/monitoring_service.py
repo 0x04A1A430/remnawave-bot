@@ -407,11 +407,8 @@ class MonitoringService:
                 self._sla_task.cancel()
         except Exception:
             pass
-        try:
-            if self._withdrawal_reminder_task and not self._withdrawal_reminder_task.done():
-                self._withdrawal_reminder_task.cancel()
-        except Exception:
-            pass
+        if self._withdrawal_reminder_task and not self._withdrawal_reminder_task.done():
+            self._withdrawal_reminder_task.cancel()
 
     async def _monitoring_cycle(self):
         async with AsyncSessionLocal() as db:
