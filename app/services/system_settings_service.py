@@ -943,7 +943,7 @@ class BotConfigurationService:
         'MAIN_MENU_RICH_LOGO_URL': {
             'description': (
                 'Публичный HTTPS-URL картинки-логотипа в шапке rich-меню. '
-                'Пусто — авто-режим: при заданном WEBHOOK_URL и существующем LOGO_FILE '
+                'Пусто — авто-режим (адрес меняется вместе с файлом, ?v= дописывать не нужно): при заданном WEBHOOK_URL и существующем LOGO_FILE '
                 'логотип отдаётся эндпоинтом /cabinet/branding/bot-logo.'
             ),
             'format': 'HTTPS-URL картинки (png/jpg/webp) или пустая строка.',

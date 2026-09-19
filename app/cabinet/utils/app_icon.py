@@ -21,6 +21,8 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw
 
+from app.utils.logo_fingerprint import logo_fingerprint as _logo_fingerprint
+
 from .brand_monogram import bold_font, monogram_letter
 from .favicon_tile import is_raster_logo
 
@@ -137,12 +139,5 @@ def render_app_icon(
     return _cached_monogram_icon(monogram_letter(letter), size, accent, content_scale)
 
 
-def logo_fingerprint(logo_path: Path | None) -> str:
-    """Отпечаток файла логотипа для версии URL иконок: меняется при каждой загрузке."""
-    if logo_path is None:
-        return 'none'
-    try:
-        stat = logo_path.stat()
-    except OSError:
-        return 'missing'
-    return f'{logo_path.suffix.lower()}:{stat.st_mtime_ns}:{stat.st_size}'
+# Отпечаток общий с логотипом бота (адрес rich-меню и кэш file_id) — одна реализация.
+logo_fingerprint = _logo_fingerprint
