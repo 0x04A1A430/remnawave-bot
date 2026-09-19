@@ -210,6 +210,7 @@ async def _show_users_list_filtered(
 
     # Устанавливаем FSM состояние
     await state.set_state(config.fsm_state)
+    await state.update_data(admin_users_return_callback=f'{config.pagination_prefix}_page_{page}')
 
     user_service = UserService()
     extra_data: dict[str, Any] | None = None
@@ -315,6 +316,7 @@ async def show_users_list(
 ):
     # Сбрасываем состояние, так как мы в обычном списке
     await state.set_state(None)
+    await state.update_data(admin_users_return_callback=f'admin_users_list_page_{page}')
 
     user_service = UserService()
     users_data = await user_service.get_users_page(db, page=page, limit=10)
@@ -396,6 +398,7 @@ async def show_users_ready_to_renew(
 ):
     """Показывает пользователей с истекшей подпиской и балансом >= порога."""
     await state.set_state(AdminStates.viewing_user_from_ready_to_renew_list)
+    await state.update_data(admin_users_return_callback=f'admin_users_ready_to_renew_list_page_{page}')
 
     texts = get_texts(db_user.language)
     threshold = getattr(
@@ -518,6 +521,7 @@ async def show_potential_customers(
 ):
     """Показывает пользователей без активной подписки с балансом >= месячной цены."""
     await state.set_state(AdminStates.viewing_user_from_potential_customers_list)
+    await state.update_data(admin_users_return_callback=f'admin_users_potential_customers_list_page_{page}')
 
     texts = get_texts(db_user.language)
     from app.config import PERIOD_PRICES
@@ -1365,6 +1369,14 @@ async def show_user_management(callback: types.CallbackQuery, db_user: User, db:
         back_callback = 'admin_users_ready_to_renew_filter'
     elif current_state == AdminStates.viewing_user_from_potential_customers_list:
         back_callback = 'admin_users_potential_customers_filter'
+
+    if not origin_ticket_id:
+        try:
+            stored_return = (await state.get_data()).get('admin_users_return_callback')
+            if stored_return:
+                back_callback = stored_return
+        except Exception:
+            pass
 
     # Базовая клавиатура профиля
     kb = get_user_management_keyboard(user.id, user.status, db_user.language, back_callback)

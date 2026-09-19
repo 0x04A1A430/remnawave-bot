@@ -48,6 +48,7 @@ from app.utils.telegram_html import (
     html_to_telegram,
     info_page_faq_to_telegram,
     split_telegram_text,
+    stored_html_to_telegram_pages,
 )
 from app.utils.timezone import format_local_datetime
 
@@ -299,6 +300,8 @@ async def show_service_rules(callback: types.CallbackQuery, db_user: User, db: A
 
     if not rules_text:
         rules_text = await get_rules(db_user.language)
+
+    rules_text = html_to_telegram(rules_text)
 
     from app.utils.long_messages import edit_long_text
 
@@ -638,7 +641,7 @@ async def show_faq_page(
         )
         return
 
-    content_pages = FaqService.split_content_into_pages(page.content)
+    content_pages = stored_html_to_telegram_pages(page.content, max_length=FaqService.MAX_PAGE_LENGTH)
 
     if not content_pages:
         await callback.answer(
@@ -775,7 +778,7 @@ async def show_privacy_policy(
         )
         return
 
-    pages = PrivacyPolicyService.split_content_into_pages(policy.content)
+    pages = stored_html_to_telegram_pages(policy.content, max_length=PrivacyPolicyService.MAX_PAGE_LENGTH)
 
     if not pages:
         await callback.answer(
@@ -901,7 +904,7 @@ async def show_public_offer(
         )
         return
 
-    pages = PublicOfferService.split_content_into_pages(offer.content)
+    pages = stored_html_to_telegram_pages(offer.content, max_length=PublicOfferService.MAX_PAGE_LENGTH)
 
     if not pages:
         await callback.answer(

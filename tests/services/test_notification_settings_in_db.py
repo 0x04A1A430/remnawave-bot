@@ -197,7 +197,7 @@ def test_admin_menu_view_reflects_live_settings(monkeypatch) -> None:
     monkeypatch.setattr(settings, 'NOTIFICATION_EXPIRED_WAVE2_ENABLED', False)
     monkeypatch.setattr(settings, 'NOTIFICATION_EXPIRED_WAVE3_TRIGGER_DAYS', 7)
     text, keyboard = admin_monitoring._build_notification_settings_view('ru')
-    assert '2-3 дня (скидка 10% / 24 ч): 🔴 Выкл' in text
-    assert '7 дней (скидка 20% / 24 ч): 🟢 Вкл' in text
+    assert '2-3 дня (скидка 10% / 24 ч):  Выкл' in text
+    assert '7 дней (скидка 20% / 24 ч):  Вкл' in text
     labels = [button.text for row in keyboard.inline_keyboard for button in row]
-    assert '🔴 Выкл • 2-3 дня со скидкой' in labels and '🟢 Вкл • 7 дней со скидкой' in labels
+    assert ' Выкл • 2-3 дня со скидкой' in labels and ' Вкл • 7 дней со скидкой' in labels

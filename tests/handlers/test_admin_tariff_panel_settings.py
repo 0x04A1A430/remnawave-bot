@@ -256,7 +256,7 @@ async def test_external_squad_list_marks_current_and_offers_none(monkeypatch) ->
     keyboard = callback.message.edit_text.await_args.kwargs['reply_markup']
     labels = [b.text for row in keyboard.inline_keyboard for b in row]
     callbacks = _callbacks(keyboard)
-    assert any('✅' in label and 'Alpha' in label for label in labels)
+    assert any('*' in label and 'Alpha' in label for label in labels)
     assert 'admin_tariff_set_ext_squad:7:ext-2' in callbacks
     assert 'admin_tariff_set_ext_squad:7:-' in callbacks
 

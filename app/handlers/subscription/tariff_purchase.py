@@ -191,7 +191,7 @@ def format_tariffs_list_text(
                 if daily_discount > 0:
                     daily_price = _apply_promo_discount(daily_price, group_pct, offer_pct)
                     discount_icon = '🔥'
-            price_text = texts.t('TARIFF_PURCHASE_PRICE_PER_DAY', '🔄 {price}/день{icon}').format(
+            price_text = texts.t('TARIFF_PURCHASE_PRICE_PER_DAY', '{price}/день{icon}').format(
                 price=format_price_kopeks(daily_price, compact=True), icon=discount_icon
             )
         else:
@@ -210,15 +210,18 @@ def format_tariffs_list_text(
                     price=format_price_kopeks(min_price, compact=True), icon=discount_icon
                 )
 
-        # Компактный формат: Название — 250 ГБ / 10 📱 от 179₽🔥
-        purchased_mark = ' ✅' if tariff.id in purchased_tariff_ids else ''
-        lines.append(
-            f'<b>{html.escape(tariff.name)}</b>{purchased_mark} — {traffic} / {tariff.device_limit} 📱 {price_text}'
-        )
+        block_lines = [
+            texts.t('TARIFF_PURCHASE_TRAFFIC_LINE', 'Трафик: {traffic}\n').format(traffic=traffic).rstrip(),
+            texts.t('TARIFF_PURCHASE_DEVICES_LINE', 'Устройств: {devices}\n')
+            .format(devices=tariff.device_limit)
+            .rstrip(),
+        ]
+        if price_text:
+            block_lines.append(texts.t('TARIFF_PURCHASE_PRICE_LINE', 'Цена: {price}').format(price=price_text))
 
-        # Описание тарифа если есть
-        if tariff.description:
-            lines.append(f'<i>{html.escape(tariff.description)}</i>')
+        purchased_mark = ' *' if tariff.id in purchased_tariff_ids else ''
+        lines.append(f'<b>{html.escape(tariff.name)}</b>{purchased_mark}')
+        lines.append('<blockquote>' + '\n'.join(block_lines) + '</blockquote>')
 
         lines.append('')
 
@@ -512,25 +515,19 @@ def format_tariff_info_for_user(
     """Форматирует информацию о тарифе для пользователя."""
     texts = get_texts(language)
 
-    traffic = format_traffic(tariff.traffic_limit_gb)
-
-    text = texts.t(
-        'TARIFF_PURCHASE_INFO',
-        '📦 <b>{name}</b>\n\n<b>Параметры:</b>\n• Трафик: {traffic}\n• Устройств: {devices}\n',
-    ).format(name=html.escape(tariff.name), traffic=traffic, devices=tariff.device_limit)
-
-    if tariff.description:
-        text += f'\n📝 {html.escape(tariff.description)}\n'
+    text = f'<b>{html.escape(tariff.name)}</b>'
 
     if discount_percent > 0:
-        text += texts.t('TARIFF_PURCHASE_YOUR_DISCOUNT', '\n🎁 <b>Ваша скидка: {percent}%</b>\n').format(
-            percent=discount_percent
+        text += '\n\n' + (
+            texts.t('TARIFF_PURCHASE_YOUR_DISCOUNT', '<b>Ваша скидка: {percent}%</b>')
+            .format(percent=discount_percent)
+            .strip()
         )
 
     # Для суточных тарифов не показываем выбор периода
     is_daily = getattr(tariff, 'is_daily', False)
     if not is_daily:
-        text += texts.t('TARIFF_PURCHASE_CHOOSE_PERIOD', '\nВыберите период подписки:')
+        text += '\n\n' + texts.t('TARIFF_PURCHASE_CHOOSE_PERIOD', 'Выберите период подписки:')
 
     return text
 

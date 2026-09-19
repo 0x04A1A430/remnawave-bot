@@ -216,18 +216,17 @@ def _build_info_text(
 async def _reset_panel_traffic(subscription, user) -> None:
     from app.services.remnawave_service import RemnaWaveService
 
-    remnawave_uuid = getattr(subscription, 'remnawave_uuid', None) or getattr(user, 'remnawave_uuid', None)
-    if not remnawave_uuid:
+    panel_user_id = None
+    if settings.is_multi_tariff_enabled() and subscription and getattr(subscription, 'remnawave_id', None):
+        panel_user_id = subscription.remnawave_id
+    elif user and getattr(user, 'remnawave_id', None):
+        panel_user_id = user.remnawave_id
+    if not panel_user_id:
         return
     try:
         remnawave_service = RemnaWaveService()
         async with remnawave_service.get_api_client() as api:
-            await api.reset_user_traffic(
-                remnawave_uuid,
-                user_id=subscription.remnawave_id
-                if settings.is_multi_tariff_enabled() and subscription
-                else user.remnawave_id,
-            )
+            await api.reset_user_traffic(panel_user_id)
     except Exception as e:
         logger.warning('Не удалось сбросить трафик RemnaWave (подарок)', error=e)
 
