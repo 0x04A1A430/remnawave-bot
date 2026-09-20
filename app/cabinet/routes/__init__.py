@@ -4,8 +4,8 @@ from fastapi import APIRouter
 
 from app.cabinet.apple_iap import apple_iap_only_router, router as apple_iap_router
 
-from .account_linking import merge_router as merge_router, router as account_linking_router
 from .abuse import router as abuse_router
+from .account_linking import merge_router as merge_router, router as account_linking_router
 from .activity import router as activity_router
 from .admin_apps import router as admin_apps_router
 from .admin_audit_log import router as admin_audit_log_router

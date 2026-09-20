@@ -34,9 +34,6 @@ from app.utils.text_search import contains_conditions
 
 from ..dependencies import get_db_session, require_api_token
 from ..schemas.users import (
-    UserNotifyChannelResult,
-    UserNotifyRequest,
-    UserNotifyResponse,
     BalanceDepositRequest,
     BalanceDepositResponse,
     BalanceUpdateRequest,
@@ -44,6 +41,9 @@ from ..schemas.users import (
     SubscriptionSummary,
     UserCreateRequest,
     UserListResponse,
+    UserNotifyChannelResult,
+    UserNotifyRequest,
+    UserNotifyResponse,
     UserResponse,
     UserSubscriptionCreateRequest,
     UserUpdateRequest,
@@ -377,7 +377,7 @@ async def notify_user(
                     error=str(error),
                 )
                 telegram = UserNotifyChannelResult(sent=False, reason='rejected_by_telegram')
-            except Exception as error:  # noqa: BLE001 — доставка не должна ронять запрос
+            except Exception as error:  # доставка не должна ронять запрос
                 logger.error('Web API: notification to Telegram failed', user_id=user_id, error=str(error))
                 telegram = UserNotifyChannelResult(sent=False, reason='send_failed')
             finally:
@@ -398,7 +398,7 @@ async def notify_user(
                     body_text=text,
                 )
                 email = UserNotifyChannelResult(sent=bool(sent), reason=None if sent else 'send_failed')
-            except Exception as error:  # noqa: BLE001
+            except Exception as error:
                 logger.error('Web API: notification by email failed', user_id=user_id, error=str(error))
                 email = UserNotifyChannelResult(sent=False, reason='send_failed')
 
