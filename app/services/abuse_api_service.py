@@ -28,6 +28,7 @@ import structlog
 
 from app.config import settings
 
+
 logger = structlog.get_logger(__name__)
 
 # Долго ждать нельзя: ответ нужен внутри запроса кабинета, а сам вопрос
@@ -68,12 +69,10 @@ async def _get(path: str, params: dict[str, Any]) -> Any | None:
                 if response.status == 404:
                     return None
                 if response.status >= 400:
-                    logger.warning(
-                        'Abuse API ответил ошибкой', path=path, status=response.status
-                    )
+                    logger.warning('Abuse API ответил ошибкой', path=path, status=response.status)
                     return None
                 return await response.json()
-    except Exception as error:  # noqa: BLE001 — недоступность внешнего сервиса не наша беда
+    except Exception as error:
         logger.warning('Abuse API недоступен', path=path, error=str(error))
         return None
 
