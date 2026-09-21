@@ -1146,6 +1146,40 @@ def billing_has_recovered(session: GraceAccessSession, current: GraceBillingStat
     return session.reason is GraceReason.LIMITED and current.used_traffic_bytes < before.used_traffic_bytes
 
 
+def traffic_reset_ended_limited_incident(
+    session: GraceAccessSession,
+    current: GraceBillingState,
+    *,
+    now: datetime,
+) -> bool:
+    """Трафик сбросился, пока шёл грейс по лимиту, — инцидент закончился сам.
+
+    Пока грейс открыт, статус из панели в бота не переносится (он принадлежит
+    грейсу), а ``user.enabled`` гасится как эхо оверлея. Расход при этом
+    синхронизируется. Итог: панель после периодического сброса снова ACTIVE, в
+    боте расход ноль, а статус так и остался LIMITED — ``billing_has_recovered``
+    требует active и не срабатывает никогда, человек сидит в сквад грейса с
+    оплаченной подпиской. Признак сброса — расход упал ниже зафиксированного при
+    выдаче и ниже лимита; сам по себе расход в панели только растёт.
+    """
+    if session.reason is not GraceReason.LIMITED:
+        return False
+    if _normalize_status(current.status) != 'limited':
+        return False
+    if _normalize_status(current.user_status) != 'active':
+        return False
+    if current.end_at is None or _as_utc(current.end_at) <= _as_utc(now):
+        return False
+    if billing_echoes_overlay(session, current):
+        return False
+    before = session.billing_before
+    if current.traffic_limit_bytes != before.traffic_limit_bytes:
+        return False
+    if current.used_traffic_bytes >= before.used_traffic_bytes:
+        return False
+    return current.traffic_limit_bytes == 0 or current.used_traffic_bytes < current.traffic_limit_bytes
+
+
 def panel_matches_overlay(
     snapshot: GracePanelSnapshot,
     overlay: GracePanelOverlay,

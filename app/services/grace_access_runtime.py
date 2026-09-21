@@ -66,6 +66,7 @@ from app.services.grace_access_service import (
     build_incident_key,
     panel_is_safe_pending_source,
     panel_matches_overlay,
+    traffic_reset_ended_limited_incident,
 )
 from app.services.panel_sync import is_subscription_live, panel_date_is_closing, panel_expire_at
 from app.services.panel_sync.payload import resolve_panel_status
@@ -1125,6 +1126,7 @@ class GraceAccessRuntime:
         async with self._locks.hold(subscription_id):
             async with AsyncSessionLocal() as db:
                 await _acquire_database_lock(db, subscription_id)
+                await _reactivate_after_traffic_reset(db, subscription_id)
                 core = _build_core(db, subscription_id=subscription_id)
                 result = (
                     await core.drain(limit=1, force_restore=force_restore) if drain else await core.reconcile(limit=1)
@@ -1134,6 +1136,38 @@ class GraceAccessRuntime:
         # согласователь, ни объявлять состояние, которое не записалось.
         await self._announce_reconcile(subscription_id, result)
         return result
+
+
+async def _reactivate_after_traffic_reset(db: AsyncSession, subscription_id: int) -> bool:
+    """Вернуть подписку в ACTIVE, если трафик сбросился, пока шёл грейс по лимиту.
+
+    Ядро грейса биллинг не меняет, а статус из панели во время грейса в бота не
+    переносится — поэтому без этого шага подписка оставалась LIMITED, и грейс не
+    замечал, что инцидент закончился (см. ``traffic_reset_ended_limited_incident``).
+    После реактивации обычная сверка видит восстановившийся биллинг, возвращает
+    панели канонические настройки и закрывает сессию. Коммитит вызывающий.
+    """
+    session = await SQLAlchemyGraceSessionStore(db, subscription_id=subscription_id).get_open(subscription_id)
+    if session is None:
+        return False
+    billing = await SQLAlchemyGraceBillingGateway(db).get_subscription(subscription_id)
+    if billing is None or not traffic_reset_ended_limited_incident(session, billing, now=datetime.now(UTC)):
+        return False
+
+    subscription = await db.get(Subscription, subscription_id)
+    if subscription is None:
+        return False
+    subscription.status = SubscriptionStatus.ACTIVE.value
+    subscription.updated_at = datetime.now(UTC)
+    await db.flush((subscription,))
+    logger.info(
+        'Трафик сброшен во время грейса по лимиту — подписка снова активна, грейс закрывается',
+        subscription_id=subscription_id,
+        grace_session_id=session.id,
+        used_before=session.billing_before.used_traffic_bytes,
+        used_now=billing.used_traffic_bytes,
+    )
+    return True
 
 
 async def get_open_grace_subscription_ids(db: AsyncSession) -> set[int]:
