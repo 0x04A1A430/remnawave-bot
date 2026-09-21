@@ -282,6 +282,12 @@ async def _process_unsigned_mulenpay_callback(payment_service: PaymentService, p
             if local_payment is None:
                 return _MULENPAY_UNSIGNED_REJECTED
 
+            # Платёж уже зачислен — перепроверять нечего. Id идут подряд, а этот путь
+            # не требует секрета: иначе перебор id гонял бы бота в API провайдера
+            # за каждым давно оплаченным платежом.
+            if getattr(local_payment, 'is_paid', False):
+                return _MULENPAY_UNSIGNED_PROCESSED
+
             provider = getattr(payment_service, 'mulenpay_service', None)
             if provider is None:
                 return _MULENPAY_UNSIGNED_RETRY
@@ -469,7 +475,13 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
                 # A present-but-invalid sign is never downgraded to the unsigned
                 # compatibility path.  Only the observed callback shape without
                 # sign may trigger a provider API re-check.
-                if 'sign' in unsigned_payload or not _looks_like_unsigned_mulenpay_callback(unsigned_payload):
+                # Тело — любой валидный JSON, не обязательно объект: ``'sign' in 5``
+                # роняло бы роут TypeError'ом на запросе без всякой авторизации.
+                if (
+                    not isinstance(unsigned_payload, dict)
+                    or 'sign' in unsigned_payload
+                    or not _looks_like_unsigned_mulenpay_callback(unsigned_payload)
+                ):
                     return JSONResponse(
                         {'status': 'error', 'reason': 'invalid_signature'},
                         status_code=status.HTTP_401_UNAUTHORIZED,

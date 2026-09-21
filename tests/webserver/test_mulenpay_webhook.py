@@ -431,3 +431,48 @@ async def test_route_returns_401_when_sign_missing_from_body(monkeypatch: pytest
     assert mismatch_response.status_code == 401
     assert json.loads(mismatch_response.body.decode('utf-8'))['reason'] == 'verification_failed'
     verified_service.process_mulenpay_callback.assert_not_awaited()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize('body', [b'5', b'null', b'true', b'"sign"', b'[]', b'1.5'])
+async def test_route_returns_401_for_json_that_is_not_an_object(body: bytes) -> None:
+    """Вебхук открыт наружу: тело вида ``5`` или ``null`` роняло роут TypeError'ом
+    (``'sign' in 5``) — 500 и трейсбек в журнал ошибок на каждый такой запрос."""
+    payment_service = SimpleNamespace(process_mulenpay_callback=AsyncMock())
+    route = _get_route(create_payment_router(DummyBot(), payment_service), '/mulen')
+
+    response = await route.endpoint(_build_request(body))
+
+    assert response.status_code == 401
+    assert json.loads(response.body.decode('utf-8'))['reason'] == 'invalid_signature'
+    payment_service.process_mulenpay_callback.assert_not_awaited()
+
+
+@pytest.mark.anyio
+async def test_unsigned_callback_for_a_paid_payment_does_not_call_the_provider(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Id платежей идут подряд, а путь без sign не требует секрета: без этой проверки
+    перебор id заставлял бы бота ходить в API MulenPay за каждым давно оплаченным платежом."""
+    provider = SimpleNamespace(get_payment=AsyncMock())
+    payment_service = SimpleNamespace(
+        mulenpay_service=provider,
+        _map_mulenpay_status=_status_mapper,
+        process_mulenpay_callback=AsyncMock(),
+    )
+    paid_payment = SimpleNamespace(mulen_payment_id=123, amount_kopeks=10_000, currency='RUB', is_paid=True)
+
+    async def fake_get_db():
+        yield SimpleNamespace()
+
+    async def fake_lookup(_db, _provider_id: int):
+        return paid_payment
+
+    monkeypatch.setattr(payments, 'get_db', fake_get_db)
+    monkeypatch.setattr(payments, 'get_mulenpay_payment_by_mulen_id', fake_lookup)
+    route = _get_route(create_payment_router(DummyBot(), payment_service), '/mulen')
+    body = json.dumps({'id': 123, 'amount': '100.00', 'currency': 'rub', 'payment_status': 'success'}).encode('utf-8')
+
+    response = await route.endpoint(_build_request(body))
+
+    assert response.status_code == 200
+    provider.get_payment.assert_not_awaited()
+    payment_service.process_mulenpay_callback.assert_not_awaited()
