@@ -1476,7 +1476,12 @@ class RemnaWaveWebhookService:
                 user.remnawave_id = None
             # И uuid — тот же инвариант, что в `validate_and_clean_subscription`.
             user.remnawave_uuid = None
-        elif subscription is None:
+        elif panel_user_id is not None and user.remnawave_id == panel_user_id:
+            # Мультитариф: первый аккаунт записан и человеку. Мёртвый id там достался
+            # бы следующей покупке (should_create_panel_account привязывает «свободный
+            # аккаунт человека») — и каждый запрос по ней отвечал бы «User not found».
+            user.remnawave_id = None
+        if settings.is_multi_tariff_enabled() and subscription is None:
             # Идентичность обязана быть непустой: сравнение None с None приклеило бы
             # очистку к первой попавшейся непровиженной подписке.
             if panel_user_id is not None or short_uuid:

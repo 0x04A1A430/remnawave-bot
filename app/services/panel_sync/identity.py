@@ -191,6 +191,7 @@ async def resolve_panel_identity(
     multi_tariff: bool,
     pinned: bool = False,
     verify_recorded_id: bool = True,
+    ignore_recorded_ids: bool = False,
     db=None,
 ) -> PanelIdentity:
     """Найти в панели аккаунт этой подписки.
@@ -202,6 +203,10 @@ async def resolve_panel_identity(
     массовый проход: на большой базе лишний GET к панели на каждую подписку
     удваивает нагрузку, а протухший id всё равно обнаружится по ответу на PATCH
     («такого пользователя нет») и приведёт к пересозданию.
+
+    ``ignore_recorded_ids=True`` — записанные id не смотреть вовсе: панель только
+    что ответила на PATCH «такого пользователя нет», и искать остаётся лишь по
+    ``shortUuid``, телеграму и почте.
 
     ``db`` — проверить хозяина найденного аккаунта (см. ``find_foreign_panel_owner``):
     чужие пропускаются, поиск идёт дальше; если нашлись только чужие, в ответе
@@ -231,9 +236,10 @@ async def resolve_panel_identity(
     # подписки свой аккаунт, и пользовательский id там не адрес, а мусор из
     # прошлого: подставив его, мы бы переписали чужую подписку.
     exact_ids: list[tuple[str, int | None]] = []
-    if not pinned and not multi_tariff:
-        exact_ids.append(('user', getattr(user, 'remnawave_id', None)))
-    exact_ids.append(('subscription', getattr(subscription, 'remnawave_id', None)))
+    if not ignore_recorded_ids:
+        if not pinned and not multi_tariff:
+            exact_ids.append(('user', getattr(user, 'remnawave_id', None)))
+        exact_ids.append(('subscription', getattr(subscription, 'remnawave_id', None)))
 
     for source, panel_user_id in exact_ids:
         if not panel_user_id:
