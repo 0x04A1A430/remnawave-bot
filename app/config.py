@@ -473,6 +473,13 @@ class Settings(BaseSettings):
     REFERRAL_WITHDRAWAL_REMINDER_MINUTES: int = 60  # Сколько минут заявка ждёт до первого напоминания
     REFERRAL_WITHDRAWAL_REMINDER_COOLDOWN_MINUTES: int = 30  # Минимальный интервал между повторами
     REFERRAL_WITHDRAWAL_REMINDER_CHECK_INTERVAL_SECONDS: int = 300  # Период опроса заявок
+
+    # Напоминания пользователям (раздел «Напоминания» в админке кабинета)
+    USER_REMINDERS_CHECK_INTERVAL_MINUTES: int = 15  # Как часто бот отправляет напоминания в Telegram
+    USER_REMINDERS_QUIET_HOURS_START: int = 21  # С этого часа (TIMEZONE) бот не пишет
+    USER_REMINDERS_QUIET_HOURS_END: int = 10  # До этого часа (TIMEZONE) бот не пишет
+    USER_REMINDERS_DAILY_LIMIT_ENABLED: bool = True  # Не больше одного напоминания в сутки на человека
+    USER_REMINDERS_MAX_PER_PASS: int = 500  # Потолок сообщений за один проход
     REFERRAL_PARTNER_SECTION_VISIBLE: bool = True  # Показывать раздел партнёрки в кабинете
 
     # Настройки анализа на подозрительность

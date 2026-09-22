@@ -1547,7 +1547,7 @@
   Классы: нет
   Функции: нет
 - `app/services/monitoring_service.py` — Python-модуль
-  Классы: `AutopayFailState` (2 методов), `MonitoringService` (50 методов)
+  Классы: `AutopayFailState` (2 методов), `MonitoringService` (51 методов)
   Функции: `resolve_autopay_period_candidate` — Return ``candidate`` only if it is a valid renewal period for ``tariff``., `decide_autopay_fail_notification` — Decide whether/what to send on a failed-autopay tick., `apply_autopay_fail_notification` — Mutate state to record that a notification with `reason` was just sent.
 - `app/services/mulenpay_service.py` — Python-модуль
   Классы: `MulenPayService` (10 методов)
@@ -2084,6 +2084,9 @@
 - `app/services/user_reminders/conditions.py` — Python-модуль
   Классы: `SubscriptionCondition` (1 методов), `ReminderConditions`
   Функции: `parse_conditions`, `condition_clauses`, `matches`
+- `app/services/user_reminders/dispatcher.py` — Python-модуль
+  Классы: `PassResult`
+  Функции: `is_quiet_time`, `deliver_to_bot`, `run_reminder_pass`
 - `app/services/user_reminders/texts.py` — Python-модуль
   Классы: `ReminderText` (1 методов)
   Функции: `validate_texts`, `validate_button`, `pick_text`, `render_bot_message`, `render_card`
@@ -4847,6 +4850,9 @@
 - `tests/services/user_reminders/test_crud.py` — Python-модуль
   Классы: нет
   Функции: `test_order_is_builtin_first_then_id`, `test_attempts_and_stats`, `test_audience_counts`, `test_concurrent_state_creation_survives_race` — Test that get_or_create_state handles concurrent insert without rolling back outer transaction.
+- `tests/services/user_reminders/test_dispatcher.py` — Python-модуль
+  Классы: `Recorder` (2 методов)
+  Функции: `reminder_settings`, `test_quiet_hours_wrap_midnight`, `test_equal_hours_mean_no_quiet_time`, `test_sends_once_then_waits_for_repeat_window`, `test_quiet_hours_send_nothing`, `test_one_reminder_per_person_per_pass_and_daily_limit`, `test_resolved_condition_stops_reminders`, `test_failed_send_does_not_retry_every_pass`, `test_users_without_telegram_and_cabinet_only_reminders_are_skipped`, `test_marketing_respects_promo_opt_out_without_starving_the_queue`, `test_pass_ceiling`, `test_inactive_reminder_is_silent`, `test_broken_texts_reminder_is_skipped_not_fatal` — texts без 'ru' — render_bot_message кинул бы KeyError на каждом кандидате.
 - `tests/services/user_reminders/test_texts.py` — Python-модуль
   Классы: нет
   Функции: `test_language_falls_back_to_ru_and_button_to_ru_button`, `test_bot_message_is_escaped_with_bold_title`, `test_cabinet_button_is_dropped_without_cabinet_url`, `test_url_button_and_no_button`, `test_card_keeps_plain_text`, `test_invalid_texts`, `test_button_validation`, `test_button_text_required_when_there_is_a_button`

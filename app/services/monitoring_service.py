@@ -238,6 +238,7 @@ class MonitoringService:
         self._last_cleanup = datetime.now(UTC)
         self._sla_task = None
         self._withdrawal_reminder_task = None
+        self._user_reminder_task = None
         # In-memory fallback состояния уведомлений об ошибке автоплатежа (на случай
         # недоступности Redis). Ключ — (subscription_id, cycle_token=int(end_date.timestamp())).
         self._autopay_fail_state: dict[tuple[int, int], dict] = {}
@@ -389,6 +390,12 @@ class MonitoringService:
                 self._withdrawal_reminder_task = asyncio.create_task(self._withdrawal_reminder_loop())
         except Exception as e:
             logger.error('Не удалось запустить напоминания о заявках на вывод', error=e)
+        # Напоминания пользователям (раздел «Напоминания» в кабинете)
+        try:
+            if not self._user_reminder_task or self._user_reminder_task.done():
+                self._user_reminder_task = asyncio.create_task(self._user_reminder_loop())
+        except Exception as e:
+            logger.error('Не удалось запустить напоминания пользователям', error=e)
 
         while self.is_running:
             try:
@@ -409,6 +416,8 @@ class MonitoringService:
             pass
         if self._withdrawal_reminder_task and not self._withdrawal_reminder_task.done():
             self._withdrawal_reminder_task.cancel()
+        if self._user_reminder_task and not self._user_reminder_task.done():
+            self._user_reminder_task.cancel()
 
     async def _monitoring_cycle(self):
         async with AsyncSessionLocal() as db:
@@ -3359,6 +3368,29 @@ class MonitoringService:
                 interval_seconds = max(10, int(settings.REFERRAL_WITHDRAWAL_REMINDER_CHECK_INTERVAL_SECONDS))
             except Exception:
                 interval_seconds = 60
+            await asyncio.sleep(interval_seconds)
+
+    async def _user_reminder_loop(self):
+        from app.services.user_reminders.dispatcher import run_reminder_pass
+
+        while self.is_running:
+            try:
+                if self.bot:
+                    async with AsyncSessionLocal() as db:
+                        try:
+                            await run_reminder_pass(db, self.bot)
+                        except Exception as e:
+                            # warning, не error: сбой одного прохода не повод писать в админ-чат
+                            logger.warning('Сбой прохода напоминаний пользователям', error=str(e))
+                            await db.rollback()
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.warning('Ошибка в цикле напоминаний пользователям', error=str(e))
+            try:
+                interval_seconds = max(1, int(settings.USER_REMINDERS_CHECK_INTERVAL_MINUTES)) * 60
+            except Exception:
+                interval_seconds = 900
             await asyncio.sleep(interval_seconds)
 
     async def _log_monitoring_event(
