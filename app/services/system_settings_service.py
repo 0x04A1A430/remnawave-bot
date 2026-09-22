@@ -347,6 +347,7 @@ class BotConfigurationService:
         'MAX_ACTIVE_SUBSCRIPTIONS': 'SUBSCRIPTIONS_CORE',
         'BASE_PROMO_GROUP_PERIOD_DISCOUNTS_ENABLED': 'SUBSCRIPTIONS_CORE',
         'BASE_PROMO_GROUP_PERIOD_DISCOUNTS': 'SUBSCRIPTIONS_CORE',
+        'PROMO_GROUP_AUTO_ASSIGN_NOTIFY_USER': 'SUBSCRIPTIONS_CORE',
         'DEFAULT_AUTOPAY_ENABLED': 'AUTOPAY',
         'DEFAULT_AUTOPAY_DAYS_BEFORE': 'AUTOPAY',
         'MIN_BALANCE_FOR_AUTOPAY_KOPEKS': 'AUTOPAY',
@@ -1114,6 +1115,18 @@ class BotConfigurationService:
             'format': 'Через запятую пары вида &lt;дней&gt;:&lt;скидка&gt;.',
             'example': '30:10,60:20,90:30,180:50,360:65',
             'warning': 'Некорректные записи будут проигнорированы. Процент ограничен 0-100.',
+        },
+        'PROMO_GROUP_AUTO_ASSIGN_NOTIFY_USER': {
+            'description': (
+                'Сообщать человеку, что ему автоматически назначена промогруппа за траты, и какие скидки '
+                'теперь действуют: в Telegram, а если его нет — на подтверждённую почту.'
+            ),
+            'format': 'Булево значение.',
+            'example': 'true',
+            'warning': (
+                'Массовый пересчёт порогов уведомлений не рассылает. Письмо отдельно выключается в '
+                'редакторе email-шаблонов (тип «Назначена промогруппа»).'
+            ),
         },
         'AUTO_PURCHASE_AFTER_TOPUP_ENABLED': {
             'description': (

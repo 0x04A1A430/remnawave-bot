@@ -125,6 +125,29 @@ class EmailBroadcastConfig:
     category: str = 'system'  # system|news|promo — как у Telegram-рассылки
 
 
+EMAIL_TARGET_PROMO_GROUP_PREFIX = 'promo_group_'
+EMAIL_TARGET_USER_PREFIX = 'user_'
+
+
+def parse_email_scoped_target(target: str) -> tuple[str, int] | None:
+    """Email-таргет с идентификатором: ``promo_group_{id}`` или ``user_{id}``.
+
+    Возвращает ``('promo_group', id)`` / ``('user', id)``, для остальных — None.
+    Промогруппа — основная группа человека (``users.promo_group_id``), как в
+    списке участников группы в админке.
+    """
+    for prefix, kind in (
+        (EMAIL_TARGET_PROMO_GROUP_PREFIX, 'promo_group'),
+        (EMAIL_TARGET_USER_PREFIX, 'user'),
+    ):
+        if target.startswith(prefix):
+            raw = target[len(prefix) :]
+            if raw.isdigit() and int(raw) > 0:
+                return kind, int(raw)
+            return None
+    return None
+
+
 @dataclass(slots=True)
 class _EmailRecipient:
     """Скалярные данные получателя email (без ORM)."""
@@ -915,6 +938,11 @@ class EmailBroadcastService:
                         ),
                     )
                 )
+
+            elif scoped := parse_email_scoped_target(target):
+                kind, target_id = scoped
+                column = User.promo_group_id if kind == 'promo_group' else User.id
+                query = select(User).where(*base_conditions, column == target_id)
 
             else:
                 logger.warning('Unknown email target filter', target=target)

@@ -87,7 +87,7 @@ async def recalculate_promo_groups(db: AsyncSession, *, reason: str = 'вруч�
     for user_id in user_ids:
         try:
             before = await _membership_snapshot(db, user_id)
-            await maybe_assign_promo_group_by_total_spent(db, user_id, notify_admins=False)
+            await maybe_assign_promo_group_by_total_spent(db, user_id, notify_admins=False, notify_user=False)
             after = await _membership_snapshot(db, user_id)
         except Exception as exc:
             failed += 1

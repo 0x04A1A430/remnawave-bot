@@ -388,6 +388,9 @@ class Settings(BaseSettings):
 
     BASE_PROMO_GROUP_PERIOD_DISCOUNTS_ENABLED: bool = False
     BASE_PROMO_GROUP_PERIOD_DISCOUNTS: str = ''
+    # Сообщать человеку (в Telegram или на подтверждённую почту), что ему
+    # автоматически назначена промогруппа за траты. Админ узнаёт об этом отдельно.
+    PROMO_GROUP_AUTO_ASSIGN_NOTIFY_USER: bool = True
 
     # Режим выбора трафика:
     # - selectable: пользователь выбирает трафик при покупке и может докупать

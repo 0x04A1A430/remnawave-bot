@@ -561,7 +561,7 @@
   Классы: нет
   Функции: `apply_legacy_aliases` — Возвращает копию контекста со старыми именами плейсхолдеров, если есть новые., `build_common_context` — Values for the type-independent placeholders., `substitute_context_vars` — Replace {var} placeholders in template text with context values., `get_template_override` — Get custom email template from the database., `get_all_overrides` — Get all custom template overrides from the database., `get_overrides_for_type` — Get all language overrides for a specific notification type., `save_template_override` — Save or update a custom email template in the database., `get_rendered_override` — Get a custom template override rendered with the base email template., `delete_template_override` — Delete a custom template override (revert to default).
 - `app/cabinet/services/email_templates.py` — Python-модуль
-  Классы: `EmailNotificationTemplates` (50 методов)
+  Классы: `EmailNotificationTemplates` (51 методов)
   Функции: нет
 - `app/cabinet/services/email_type_switch.py` — Python-модуль
   Классы: нет
@@ -1444,7 +1444,7 @@
   Функции: нет
 - `app/services/broadcast_service.py` — Python-модуль
   Классы: `BroadcastMediaConfig`, `BroadcastConfig`, `EmailBroadcastConfig`, `BroadcastService` (15 методов), `EmailBroadcastService` (15 методов)
-  Функции: `cleanup_blocked_broadcast_users` — Фоновая очистка пользователей, заблокировавших бота (обнаруженных при рассылке).
+  Функции: `parse_email_scoped_target` — Email-таргет с идентификатором: ``promo_group_{id}`` или ``user_{id}``., `cleanup_blocked_broadcast_users` — Фоновая очистка пользователей, заблокировавших бота (обнаруженных при рассылке).
 - `app/services/bulk_ban_service.py` — Python-модуль
   Классы: `BulkBanService` (3 методов)
   Функции: нет
@@ -1644,6 +1644,9 @@
 - `app/services/promo_group_assignment.py` — Python-модуль
   Классы: нет
   Функции: `maybe_assign_promo_group_by_total_spent` — Выдаёт человеку промогруппу по сумме трат.
+- `app/services/promo_group_notifications.py` — Python-модуль
+  Классы: `PromoGroupDiscounts` (1 методов)
+  Функции: `collect_promo_group_discounts`, `format_discounts_for_telegram`, `format_period_discounts_plain` — «30 дней — 10%, 90 дней — 15%» для письма; пусто, если скидок по периодам нет., `notify_user_about_auto_assignment` — Сообщить человеку о новой промогруппе. Никогда не бросает.
 - `app/services/promo_group_recalculation.py` — Python-модуль
   Классы: `RecalculationResult` (1 методов), `PromoGroupRecalculation` (8 методов)
   Функции: `recalculate_promo_groups` — Прогоняет правило автоназначения по всем платившим. Уведомлений на каждого — нет., `build_summary_text` — Одна сводка админам за весь проход., `notify_admins_about_recalculation` — Сводка уходит только когда есть что сказать: изменения или сбой.
@@ -3245,6 +3248,9 @@
 - `tests/cabinet/test_email_auth_gate_http.py` — Python-модуль
   Классы: нет
   Функции: `test_disabled_in_admin_refuses_register_and_login_over_http` — Админ выключил email-вход в кабинете (строка в БД), окружение говорит «включён»:, `test_enabled_in_admin_lets_request_through_the_gate` — Обратная сторона: строка 'true' в БД при выключенном окружении — запрос проходит гейт
+- `tests/cabinet/test_email_broadcast_scoped_targets.py` — Python-модуль
+  Классы: нет
+  Функции: `test_parse_scoped_targets`, `test_promo_group_target_counts_and_fetches_the_same_people`, `test_single_user_target_reaches_exactly_that_user`, `test_send_rejects_targets_nobody_can_receive`, `test_email_filters_list_promo_groups_with_counts`
 - `tests/cabinet/test_email_change_otp_security.py` — Python-модуль
   Классы: нет
   Функции: `test_verify_blocked_and_code_not_checked_when_ip_rate_limited`, `test_verify_per_account_cap_burns_pending_change`, `test_request_change_rejects_unowned_admin_email`, `test_verify_and_apply_rejects_wrong_code_and_applies_correct`
@@ -4495,6 +4501,9 @@
 - `tests/services/test_platega_subscription_service.py` — Python-модуль
   Классы: нет
   Функции: `test_create_subscription_posts_method_6`, `test_create_subscription_uses_v2_endpoint_when_configured`, `test_create_subscription_omits_description_when_not_provided`, `test_create_subscription_truncates_long_cyrillic_description`, `test_get_subscription_is_unversioned`, `test_list_subscriptions_builds_query_params`, `test_list_subscriptions_omits_none_params`, `test_cancel_subscription_posts_cancel`, `test_format_amount_integer_and_decimal`, `test_recurrent_gate`, `test_reconcile_unconfigured_platega_is_noop` — Неконфигурированный Platega (нет мерчанта/секрета) — no-op до БД., `test_reconcile_cancelled_sweep_runs_with_recurrent_flag_off` — Cancelled-свип (ретрай недошедших отмен) обязан работать и при, `test_reconcile_marks_stuck_pending_as_failed` — Safety net: a PENDING record that never got a platega_subscription_id back, `test_reconcile_recancels_remotely_active_cancelled_record` — Контрольный свип отменённых: локальный CANCELLED, но remote-статус, `test_reconcile_skips_cancelled_record_confirmed_remotely` — CANCELLED-запись, у которой remote-статус тоже cancelled, — свип не, `test_create_subscription_raises_actionable_error_on_val0001` — VAL_0001 с key=paymentMethod (формат запроса совпадает с доками) =, `test_create_subscription_transport_failure_returns_none` — Транспортный сбой (status=None) — прежний контракт: None, без исключения., `test_create_subscription_sends_payer_metadata` — СБП-подписка — тот же POST /transaction/process: metadata обязательна и здесь.
+- `tests/services/test_promo_group_auto_assign_notify_user.py` — Python-модуль
+  Классы: нет
+  Функции: `delivery`, `test_discounts_skip_zero_and_junk_periods_and_sort`, `test_telegram_user_gets_escaped_message_with_discounts`, `test_email_only_user_goes_through_router_without_bot`, `test_group_without_discounts_uses_neutral_text`, `test_switch_off_sends_nothing_and_failures_never_raise`, `test_locale_keys_exist_and_format`, `test_email_template_escapes_and_lists_discounts`, `test_email_type_is_editable_in_cabinet`, `test_assignment_notifies_user_once_and_recalculation_stays_silent`, `test_recalculation_passes_notify_user_false`
 - `tests/services/test_promo_group_recalculation_scheduler.py` — Python-модуль
   Классы: `Announcer` (2 методов), `GatedRunner` (2 методов)
   Функции: `test_schedule_runs_one_pass_and_announces_it`, `test_requests_during_a_pass_collapse_into_one_more_pass`, `test_runner_failure_is_recorded_and_still_announced`, `test_schedule_without_event_loop_is_refused_quietly`, `admin_chat`, `test_summary_is_silent_when_nobody_changed`, `test_summary_is_sent_once_when_someone_changed`, `test_summary_is_sent_when_the_pass_failed`, `test_summary_text_lists_failures_only_when_there_are_any`
