@@ -191,7 +191,6 @@ def format_tariffs_list_text(
                 group_pct, offer_pct, daily_discount = _get_user_period_discount(db_user, 1)
                 if daily_discount > 0:
                     daily_price = _apply_promo_discount(daily_price, group_pct, offer_pct)
-                    discount_icon = '🔥'
             price_text = texts.t('TARIFF_PURCHASE_PRICE_PER_DAY', '{price}/день{icon}').format(
                 price=format_price_kopeks(daily_price, compact=True), icon=discount_icon
             )
@@ -206,7 +205,6 @@ def format_tariffs_list_text(
                     group_pct, offer_pct, discount_percent = _get_user_period_discount(db_user, int(min_period))
                 if discount_percent > 0:
                     min_price = _apply_promo_discount(min_price, group_pct, offer_pct)
-                    discount_icon = '🔥'
                 price_text = texts.t('TARIFF_PURCHASE_PRICE_FROM', 'от {price}{icon}').format(
                     price=format_price_kopeks(min_price, compact=True), icon=discount_icon
                 )
@@ -294,7 +292,7 @@ def get_tariff_periods_keyboard(
 
         if discount_percent > 0:
             price = _apply_promo_discount(price, group_pct, offer_pct)
-            price_text = f'{format_price_kopeks(price)} 🔥−{discount_percent}%'
+            price_text = f'{format_price_kopeks(price)} −{discount_percent}%'
         else:
             price_text = format_price_kopeks(price)
 
@@ -328,7 +326,7 @@ def get_tariff_periods_keyboard_with_traffic(
 
         if discount_percent > 0:
             price = _apply_promo_discount(price, group_pct, offer_pct)
-            price_text = f'{format_price_kopeks(price)} 🔥−{discount_percent}%'
+            price_text = f'{format_price_kopeks(price)} −{discount_percent}%'
         else:
             price_text = format_price_kopeks(price)
 
@@ -2571,7 +2569,7 @@ def get_tariff_extend_keyboard(
         has_discount = price < total_original and total_original > 0
         if has_discount:
             combined_pct = round((1 - price / total_original) * 100)
-            price_text = f'{format_price_kopeks(price)} 🔥−{combined_pct}%'
+            price_text = f'{format_price_kopeks(price)} −{combined_pct}%'
         else:
             price_text = format_price_kopeks(price)
 
@@ -3223,7 +3221,6 @@ def format_tariff_switch_list_text(
                 group_pct, offer_pct, daily_discount = _get_user_period_discount(db_user, 1)
                 if daily_discount > 0:
                     daily_price = _apply_promo_discount(daily_price, group_pct, offer_pct)
-                    discount_icon = '🔥'
             price_text = texts.t('TARIFF_PURCHASE_PRICE_PER_DAY', '🔄 {price}/день{icon}').format(
                 price=format_price_kopeks(daily_price, compact=True), icon=discount_icon
             )
@@ -3237,7 +3234,6 @@ def format_tariff_switch_list_text(
                     group_pct, offer_pct, discount_percent = _get_user_period_discount(db_user, int(min_period))
                 if discount_percent > 0:
                     min_price = _apply_promo_discount(min_price, group_pct, offer_pct)
-                    discount_icon = '🔥'
                 price_text = texts.t('TARIFF_PURCHASE_PRICE_FROM', 'от {price}{icon}').format(
                     price=format_price_kopeks(min_price, compact=True), icon=discount_icon
                 )
@@ -3293,7 +3289,7 @@ def get_tariff_switch_periods_keyboard(
 
         if discount_percent > 0:
             price = _apply_promo_discount(price, group_pct, offer_pct)
-            price_text = f'{format_price_kopeks(price)} 🔥−{discount_percent}%'
+            price_text = f'{format_price_kopeks(price)} −{discount_percent}%'
         else:
             price_text = format_price_kopeks(price)
 

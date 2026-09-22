@@ -14,7 +14,6 @@ from sqlalchemy.orm import selectinload
 from app.config import settings
 from app.database.crud.discount_offer import (
     deactivate_expired_offers,
-    upsert_discount_offer,
 )
 from app.database.crud.notification import (
     clear_notification_by_type,
@@ -1404,8 +1403,6 @@ class MonitoringService:
             ]
 
             sent_day1 = 0
-            sent_wave2 = 0
-            sent_wave3 = 0
 
             for subscription in subscriptions:
                 user = subscription.user
@@ -1449,72 +1446,16 @@ class MonitoringService:
                             await record_notification(db, user.id, subscription.id, 'expired_1d')
                             sent_day1 += 1
 
-                # Second wave (2-3 days) discount
-                if NotificationSettingsService.is_second_wave_enabled() and 2 <= days_since < 4:
-                    if not await notification_sent(db, user.id, subscription.id, 'expired_discount_wave2'):
-                        percent = NotificationSettingsService.get_second_wave_discount_percent()
-                        valid_hours = NotificationSettingsService.get_second_wave_valid_hours()
-                        offer = await upsert_discount_offer(
-                            db,
-                            user_id=user.id,
-                            subscription_id=subscription.id,
-                            notification_type='expired_discount_wave2',
-                            discount_percent=percent,
-                            bonus_amount_kopeks=0,
-                            valid_hours=valid_hours,
-                            effect_type='percent_discount',
-                        )
-                        success = await self._send_expired_discount_notification(
-                            user,
-                            subscription,
-                            percent,
-                            offer.expires_at,
-                            offer.id,
-                            'second',
-                        )
-                        if success:
-                            await record_notification(db, user.id, subscription.id, 'expired_discount_wave2')
-                            sent_wave2 += 1
+                # Winback discount waves (2-3 days and N days) intentionally removed:
+                # expired users must not receive an automatic price reduction.
 
-                # Third wave (N days) discount
-                if NotificationSettingsService.is_third_wave_enabled():
-                    trigger_days = NotificationSettingsService.get_third_wave_trigger_days()
-                    if trigger_days <= days_since < trigger_days + 1:
-                        if not await notification_sent(db, user.id, subscription.id, 'expired_discount_wave3'):
-                            percent = NotificationSettingsService.get_third_wave_discount_percent()
-                            valid_hours = NotificationSettingsService.get_third_wave_valid_hours()
-                            offer = await upsert_discount_offer(
-                                db,
-                                user_id=user.id,
-                                subscription_id=subscription.id,
-                                notification_type='expired_discount_wave3',
-                                discount_percent=percent,
-                                bonus_amount_kopeks=0,
-                                valid_hours=valid_hours,
-                                effect_type='percent_discount',
-                            )
-                            success = await self._send_expired_discount_notification(
-                                user,
-                                subscription,
-                                percent,
-                                offer.expires_at,
-                                offer.id,
-                                'third',
-                                trigger_days=trigger_days,
-                            )
-                            if success:
-                                await record_notification(db, user.id, subscription.id, 'expired_discount_wave3')
-                                sent_wave3 += 1
-
-            if sent_day1 or sent_wave2 or sent_wave3:
+            if sent_day1:
                 await self._log_monitoring_event(
                     db,
                     'expired_followups_sent',
-                    (f'Follow-ups: 1д={sent_day1}, скидка 2-3д={sent_wave2}, скидка N={sent_wave3}'),
+                    f'Follow-ups: 1д={sent_day1}',
                     {
                         'day1': sent_day1,
-                        'wave2': sent_wave2,
-                        'wave3': sent_wave3,
                     },
                 )
 
@@ -2356,114 +2297,6 @@ class MonitoringService:
             logger.error(
                 'Ошибка отправки напоминания об истекшей подписке пользователю', telegram_id=user.telegram_id, e=e
             )
-            return False
-
-    async def _send_expired_discount_notification(
-        self,
-        user: User,
-        subscription: Subscription,
-        percent: int,
-        expires_at: datetime,
-        offer_id: int,
-        wave: str,
-        trigger_days: int = None,
-    ) -> bool:
-        try:
-            if not user.telegram_id:
-                return await notification_delivery_service.send_notification(
-                    user=user,
-                    notification_type=NotificationType.WINBACK_DISCOUNT,
-                    context={
-                        'percent': percent,
-                        'expires_at': format_local_datetime(expires_at, '%d.%m.%Y %H:%M'),
-                        'trigger_days': trigger_days or '',
-                    },
-                )
-            texts = get_texts(user.language)
-
-            tariff_label = ''
-            if settings.is_multi_tariff_enabled() and hasattr(subscription, 'tariff') and subscription.tariff:
-                tariff_label = f' «{subscription.tariff.name}»'
-
-            if wave == 'second':
-                template = texts.get(
-                    'SUBSCRIPTION_EXPIRED_SECOND_WAVE',
-                    (
-                        '<b>Скидка {percent}% на продление{tariff_label}</b>\n\n'
-                        'Активируйте предложение, чтобы получить дополнительную скидку. '
-                        'Она суммируется с вашей промогруппой и действует до {expires_at}.'
-                    ),
-                )
-            else:
-                template = texts.get(
-                    'SUBSCRIPTION_EXPIRED_THIRD_WAVE',
-                    (
-                        '<b>Индивидуальная скидка {percent}%{tariff_label}</b>\n\n'
-                        'Прошло {trigger_days} дней без подписки — возвращайтесь и активируйте дополнительную скидку. '
-                        'Она суммируется с промогруппой и действует до {expires_at}.'
-                    ),
-                )
-
-            message = template.format(
-                percent=percent,
-                expires_at=format_local_datetime(expires_at, '%d.%m.%Y %H:%M'),
-                trigger_days=trigger_days or '',
-                tariff_label=tariff_label,
-            )
-
-            from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
-
-            keyboard = InlineKeyboardMarkup(
-                inline_keyboard=[
-                    [
-                        build_miniapp_or_callback_button(
-                            text='Получить скидку', callback_data=f'claim_discount_{offer_id}'
-                        )
-                    ],
-                    [
-                        build_subscription_extend_button(
-                            texts.t('SUBSCRIPTION_EXTEND', 'Продлить подписку'),
-                            subscription.id,
-                        )
-                    ],
-                    [
-                        build_miniapp_or_callback_button(
-                            text=texts.t('BALANCE_TOPUP', 'Пополнить баланс'),
-                            callback_data='balance_topup',
-                        )
-                    ],
-                    [
-                        InlineKeyboardButton(
-                            text=texts.t('SUPPORT_BUTTON', 'Поддержка'),
-                            callback_data='menu_support',
-                            style='primary',
-                        )
-                    ],
-                ]
-            )
-
-            await self._send_message_with_logo(
-                chat_id=user.telegram_id,
-                text=message,
-                parse_mode='HTML',
-                reply_markup=keyboard,
-            )
-            return True
-
-        except (TelegramForbiddenError, TelegramBadRequest) as exc:
-            if await self._handle_unreachable_user(user, exc, 'скидочное уведомление'):
-                return True
-            logger.error(
-                'Ошибка Telegram API при отправке скидочного уведомления пользователю',
-                telegram_id=user.telegram_id,
-                exc=exc,
-            )
-            return False
-        except TelegramNetworkError as e:
-            logger.warning('Таймаут отправки скидочного уведомления пользователю', telegram_id=user.telegram_id, e=e)
-            return False
-        except Exception as e:
-            logger.error('Ошибка отправки скидочного уведомления пользователю', telegram_id=user.telegram_id, e=e)
             return False
 
     async def _send_autopay_success_notification(

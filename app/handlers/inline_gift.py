@@ -32,7 +32,7 @@ from app.database.crud.subscription import (
 )
 from app.database.crud.user import get_user_by_telegram_id
 from app.database.database import AsyncSessionLocal
-from app.database.models import InlineGiftSubscription, SubscriptionStatus
+from app.database.models import InlineGiftSubscription, SubscriptionStatus, TransactionType
 from app.localization.loader import DEFAULT_LANGUAGE
 from app.localization.texts import get_texts
 from app.services.subscription_service import SubscriptionService
@@ -485,7 +485,13 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
 
                 kopeks = gift.balance_amount_kopeks or 0
                 rub = kopeks // 100
-                await add_user_balance(db, user, kopeks, description='Подарок от администратора')
+                await add_user_balance(
+                    db,
+                    user,
+                    kopeks,
+                    description='Подарок от администратора (inline-подарок)',
+                    transaction_type=TransactionType.INLINE_GIFT,
+                )
                 gift.activated_count = activated + 1
                 gift.is_activated = True
                 gift.activated_at = datetime.now(UTC)
@@ -776,7 +782,13 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
                 # --- balance component ---
                 if gift.balance_amount_kopeks:
                     kopeks = gift.balance_amount_kopeks
-                    await add_user_balance(db, user, kopeks, description='Подарок от администратора')
+                    await add_user_balance(
+                        db,
+                        user,
+                        kopeks,
+                        description='Подарок от администратора (inline-подарок)',
+                        transaction_type=TransactionType.INLINE_GIFT,
+                    )
                     buffer.append(texts.t('INLINE_GIFT_COMBO_BALANCE', '+{rub} ₽ на баланс').format(rub=kopeks // 100))
 
                 # --- temp-traffic component ---

@@ -137,6 +137,7 @@ class TransactionType(Enum):
     REFERRAL_REWARD = 'referral_reward'
     POLL_REWARD = 'poll_reward'
     GIFT_PAYMENT = 'gift_payment'
+    INLINE_GIFT = 'inline_gift'
 
 
 class PromoCodeType(Enum):

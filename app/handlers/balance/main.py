@@ -37,6 +37,8 @@ TRANSACTIONS_PER_PAGE = 10
 # Премиум-эмодзи для типов операций (рендерятся только в HTML-сообщениях)
 CREDIT_EMOJI_HTML = "<tg-emoji emoji-id='5775937998948404844'>💰</tg-emoji>"
 DEBIT_EMOJI_HTML = "<tg-emoji emoji-id='5877413297170419326'>💸</tg-emoji>"
+# Inline-подарки помечаем отдельно, чтобы их не путали с пополнениями/рефералкой.
+GIFT_EMOJI_HTML = "<tg-emoji emoji-id='6032937473162614352'>🎁</tg-emoji>"
 
 # Цвета кнопок транзакций: рандом, кроме красного (danger зарезервирован для «Назад»)
 _TRANSACTION_ITEM_STYLES: tuple[str, ...] = ('primary', 'success')
@@ -47,6 +49,7 @@ CREDIT_TRANSACTION_TYPES: frozenset[str] = frozenset(
         TransactionType.REFERRAL_REWARD.value,
         TransactionType.REFUND.value,
         TransactionType.POLL_REWARD.value,
+        TransactionType.INLINE_GIFT.value,
     }
 )
 
@@ -320,7 +323,10 @@ async def show_balance_history(callback: types.CallbackQuery, db_user: User, db:
 
 
 def _transaction_button_label(transaction, *, is_credit: bool, texts) -> str:
-    emoji_html = CREDIT_EMOJI_HTML if is_credit else DEBIT_EMOJI_HTML
+    if transaction.type == TransactionType.INLINE_GIFT.value:
+        emoji_html = GIFT_EMOJI_HTML
+    else:
+        emoji_html = CREDIT_EMOJI_HTML if is_credit else DEBIT_EMOJI_HTML
     sign = '+' if is_credit else '-'
     amount = texts.format_price(abs(transaction.amount_kopeks))
     date_part = transaction.created_at.strftime('%d.%m %H:%M')
@@ -448,6 +454,9 @@ async def show_transaction_detail(callback: types.CallbackQuery, db_user: User, 
     sign = '+' if is_credit else '-'
     amount_text = f'{sign}{texts.format_price(abs(transaction.amount_kopeks))}'
     op_type = 'Пополнение' if is_credit else 'Списание'
+    if transaction.type == TransactionType.INLINE_GIFT.value:
+        emoji_html = GIFT_EMOJI_HTML
+        op_type = 'Подарок'
 
     details = [f'<b>Сумма:</b> {amount_text}']
     if transaction.description:
