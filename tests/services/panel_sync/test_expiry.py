@@ -142,8 +142,8 @@ def _modules_sending_a_date_to_the_panel() -> list[pathlib.Path]:
     return [
         path
         for path in sorted(pathlib.Path('app').rglob('*.py'))
-        if not any(str(path).startswith(owner) for owner in _RULE_OWNERS)
-        and str(path) not in _SNAPSHOT_STORES
+        if not any(path.as_posix().startswith(owner) for owner in _RULE_OWNERS)
+        and path.as_posix() not in _SNAPSHOT_STORES
         and _sends_a_date_itself(path)
     ]
 
@@ -178,7 +178,7 @@ _STILL_BUILDING_BY_HAND: frozenset[str] = frozenset()
 
 def test_the_debt_list_only_names_modules_that_still_build_the_request():
     """Перевели модуль — убрать его отсюда, иначе список перестанет что-то значить."""
-    building = {str(path) for path in _modules_sending_a_date_to_the_panel()}
+    building = {path.as_posix() for path in _modules_sending_a_date_to_the_panel()}
 
     assert building >= _STILL_BUILDING_BY_HAND, (
         f'в списке долга остались переведённые модули: {sorted(_STILL_BUILDING_BY_HAND - building)}'
@@ -193,7 +193,7 @@ def test_every_module_sending_a_date_uses_the_shared_rule():
     """
     offenders = []
     for path in _modules_sending_a_date_to_the_panel():
-        if str(path) in _STILL_BUILDING_BY_HAND:
+        if path.as_posix() in _STILL_BUILDING_BY_HAND:
             continue
         tree = ast.parse(path.read_text(encoding='utf-8'))
         imported = {
@@ -203,7 +203,7 @@ def test_every_module_sending_a_date_uses_the_shared_rule():
             for alias in node.names
         }
         if not imported & {'panel_expire_at', 'stale_panel_expire_at', 'build_panel_payload', 'push_subscription'}:
-            offenders.append(str(path))
+            offenders.append(path.as_posix())
 
     assert not offenders, f'отправляют дату в панель мимо общего правила: {offenders}'
 

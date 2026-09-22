@@ -52,7 +52,7 @@ def _panel_deleting_files() -> list[tuple[str, str]]:
             continue
         tree = ast.parse(source)
         if _deletes_panel_user(tree):
-            found.append((str(path.relative_to(APP)), source))
+            found.append((path.relative_to(APP).as_posix(), source))
     return found
 
 

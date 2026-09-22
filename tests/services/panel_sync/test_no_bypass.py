@@ -30,7 +30,7 @@ _ALLOWED = {
 
 
 def _python_files() -> list[pathlib.Path]:
-    return [path for path in sorted(pathlib.Path('app').rglob('*.py')) if str(path) not in _ALLOWED]
+    return [path for path in sorted(pathlib.Path('app').rglob('*.py')) if path.as_posix() not in _ALLOWED]
 
 
 def _direct_panel_writes(path: pathlib.Path) -> list[int]:

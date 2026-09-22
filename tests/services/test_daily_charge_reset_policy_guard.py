@@ -62,7 +62,7 @@ def _daily_charge_sites() -> dict[str, ast.AST]:
             if not isinstance(node, ast.AsyncFunctionDef | ast.FunctionDef):
                 continue
             if _is_daily_charge_site(node):
-                sites[f'{path.relative_to(ROOT)}::{node.name}'] = node
+                sites[f'{path.relative_to(ROOT).as_posix()}::{node.name}'] = node
     return sites
 
 
