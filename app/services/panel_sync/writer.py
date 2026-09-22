@@ -234,7 +234,14 @@ async def push_subscription(
             now=moment,
         )
         await _record_identity(
-            db, user, subscription, panel_user, multi_tariff=multi_tariff, panel_user_id=panel_user_id
+            db,
+            user,
+            subscription,
+            panel_user,
+            multi_tariff=multi_tariff,
+            panel_user_id=panel_user_id,
+            replace_stale=bool(identity.dead_recorded_ids),
+            dead_panel_user_id=_dead_user_link(identity, user),
         )
         return PanelWriteResult(
             panel_user=panel_user,
@@ -244,7 +251,19 @@ async def push_subscription(
         )
 
     panel_user = await create(**payload.create_kwargs(now=moment))
-    await _record_identity(db, user, subscription, panel_user, multi_tariff=multi_tariff)
+    # Аккаунт не нашёлся ни одним ключом, и записанные id проверкой признаны
+    # мёртвыми — связь ОБЯЗАНА перезаписаться. Иначе колонка остаётся занятой
+    # адресом удалённой учётки: следующее нажатие снова её не найдёт и заведёт
+    # ещё одну (issue #3277).
+    await _record_identity(
+        db,
+        user,
+        subscription,
+        panel_user,
+        multi_tariff=multi_tariff,
+        replace_stale=bool(identity.dead_recorded_ids),
+        dead_panel_user_id=_dead_user_link(identity, user),
+    )
     return PanelWriteResult(panel_user=panel_user, action='created', panel_user_id=getattr(panel_user, 'id', None))
 
 
@@ -292,6 +311,19 @@ async def _extinguish_stale_date(
         )
         await update(user_id=panel_user_id, expire_at=retry_at)
     return True
+
+
+def _dead_user_link(identity, user) -> int | None:
+    """Мёртвый ли адрес записан у человека.
+
+    ``_record_identity`` стирает ``users.remnawave_id`` в мультитарифе только
+    при совпадении с этим значением: там аккаунты принадлежат подпискам, и
+    чужой живой адрес человека трогать нельзя.
+    """
+    recorded = getattr(user, 'remnawave_id', None)
+    if recorded and recorded in identity.dead_recorded_ids:
+        return int(recorded)
+    return None
 
 
 async def _record_identity(
