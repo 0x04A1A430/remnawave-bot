@@ -105,6 +105,9 @@ def render_bot_message(reminder, language: str | None) -> tuple[str, InlineKeybo
 def render_card(reminder, language: str | None) -> dict:
     text = pick_text(reminder.texts, language)
     button = None
-    if reminder.button_kind != 'none' and reminder.button_target and text['button']:
+    # ReminderCardButton.kind — Literal['cabinet', 'url']: неизвестный сохранённый
+    # button_kind (например, отключённый в будущем вид) должен просто не дать кнопку,
+    # а не завалить ответ /cabinet/reminders/active валидацией.
+    if reminder.button_kind in ('cabinet', 'url') and reminder.button_target and text['button']:
         button = {'kind': reminder.button_kind, 'target': reminder.button_target, 'text': text['button']}
     return {'id': reminder.id, 'title': text['title'], 'body': text['body'], 'button': button}

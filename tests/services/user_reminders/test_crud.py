@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from unittest.mock import AsyncMock
 
 import pytest
+from sqlalchemy.exc import IntegrityError
 
 from app.database.crud import user_reminder as crud
 from app.database.models import Base, User, UserReminder, UserReminderState
@@ -134,3 +136,78 @@ async def test_concurrent_state_creation_survives_race(monkeypatch):
         states = (await db.execute(UserReminderState.__table__.select())).fetchall()
         assert len(states) == 1
         assert states[0].sends_count == 5
+
+
+@pytest.mark.asyncio
+async def test_get_or_create_state_returns_none_when_insert_fails_and_reread_finds_nothing(monkeypatch):
+    """FK-гонка: пользователь/напоминание удалены между select-кандидатом и вставкой —
+    savepoint падает IntegrityError, повторный ``_find_state`` тоже не находит строку.
+    """
+    async with memory_session(monkeypatch, TABLES) as db:
+        user = User(id=1, telegram_id=10, first_name='Alice', language='ru', status='active', balance_kopeks=0)
+        reminder = _reminder()
+        db.add_all([user, reminder])
+        await db.commit()
+
+        monkeypatch.setattr(crud, '_find_state', AsyncMock(return_value=None))
+
+        async def failing_flush(*args, **kwargs):
+            raise IntegrityError('insert', {}, Exception('FOREIGN KEY constraint failed'))
+
+        monkeypatch.setattr(db, 'flush', failing_flush)
+
+        state = await crud.get_or_create_state(db, reminder.id, user.id)
+
+        assert state is None
+
+
+@pytest.mark.asyncio
+async def test_record_bot_attempt_does_not_raise_when_state_is_missing(monkeypatch):
+    """dispatcher вызывает record_bot_attempt для каждого кандидата — падение здесь
+    раньше валило весь проход отправки (AttributeError на None.last_sent_at).
+    """
+    async with memory_session(monkeypatch, TABLES) as db:
+        user = User(id=1, telegram_id=10, first_name='Alice', language='ru', status='active', balance_kopeks=0)
+        reminder = _reminder()
+        db.add_all([user, reminder])
+        await db.commit()
+
+        monkeypatch.setattr(crud, 'get_or_create_state', AsyncMock(return_value=None))
+
+        await crud.record_bot_attempt(db, reminder.id, user.id, now=NOW, success=True)
+
+        # Никакая строка состояния не создана.
+        assert (await db.execute(UserReminderState.__table__.select())).fetchall() == []
+
+        # Сессия остаётся рабочей: обычная запись после этого коммитится без ошибок.
+        user.first_name = 'Bob'
+        await db.commit()
+        refreshed = await db.get(User, user.id)
+        assert refreshed.first_name == 'Bob'
+
+
+@pytest.mark.asyncio
+async def test_audience_counts_exclude_promo_opt_out_for_marketing(monkeypatch):
+    async with memory_session(monkeypatch, TABLES) as db:
+        db.add_all(
+            [
+                User(
+                    id=1,
+                    telegram_id=10,
+                    first_name='A',
+                    language='ru',
+                    status='active',
+                    balance_kopeks=0,
+                    notification_settings={'promo_offers_enabled': False},
+                ),
+                User(id=2, telegram_id=20, first_name='B', language='ru', status='active', balance_kopeks=0),
+            ]
+        )
+        await db.commit()
+        conditions = parse_conditions({})
+
+        marketing = await crud.count_audience(db, conditions, now=NOW, telegram_only=True, exclude_promo_opt_out=True)
+        service = await crud.count_audience(db, conditions, now=NOW, telegram_only=True, exclude_promo_opt_out=False)
+
+        assert marketing == 1
+        assert service == 2

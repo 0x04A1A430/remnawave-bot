@@ -91,6 +91,7 @@ class AudienceRequest(BaseModel):
 
     conditions: ReminderConditions = Field(default_factory=ReminderConditions)
     channels: Channels
+    category: Literal['service', 'marketing'] = 'service'
 
 
 class AudienceResponse(BaseModel):

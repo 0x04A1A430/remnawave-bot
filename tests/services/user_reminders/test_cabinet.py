@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from unittest.mock import AsyncMock
 
 import pytest
 
 from app.database.models import Base, User, UserReminder
+from app.services.user_reminders import cabinet as cabinet_service
 from app.services.user_reminders.cabinet import active_cards_for_user, dismiss_reminder
 from tests.fixtures.sqlite_memory import memory_session
 
@@ -106,3 +108,16 @@ async def test_broken_texts_do_not_break_the_page(monkeypatch):
         user = await _seed(db, [_reminder(1, texts=BROKEN_TEXTS), _reminder(2)])
         cards = await active_cards_for_user(db, user, lang='ru', now=NOW)
     assert [card['id'] for card in cards] == [2]
+
+
+@pytest.mark.asyncio
+async def test_dismiss_returns_false_when_state_cannot_be_created(monkeypatch):
+    """get_or_create_state вернёт None при FK-гонке (напоминание/юзер удалены между
+    проверкой и вставкой) — dismiss_reminder не должен падать AttributeError, роут
+    превращает False в 404.
+    """
+    async with memory_session(monkeypatch, TABLES) as db:
+        user = await _seed(db, [_reminder(1)])
+        monkeypatch.setattr(cabinet_service, 'get_or_create_state', AsyncMock(return_value=None))
+
+        assert await dismiss_reminder(db, user, 1, now=NOW) is False

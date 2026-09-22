@@ -133,6 +133,59 @@ async def test_audience_counts_per_channel(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_audience_marketing_excludes_promo_opt_out(monkeypatch):
+    async with memory_session(monkeypatch, TABLES) as db:
+        db.add_all(
+            [
+                User(
+                    id=1,
+                    telegram_id=10,
+                    first_name='A',
+                    language='ru',
+                    status='active',
+                    balance_kopeks=0,
+                    notification_settings={'promo_offers_enabled': False},
+                ),
+                User(id=2, telegram_id=20, first_name='B', language='ru', status='active', balance_kopeks=0),
+            ]
+        )
+        await db.commit()
+
+        marketing = await routes.audience(
+            AudienceRequest(conditions={}, channels='bot', category='marketing'), admin=ADMIN, db=db
+        )
+        service = await routes.audience(
+            AudienceRequest(conditions={}, channels='bot', category='service'), admin=ADMIN, db=db
+        )
+
+        assert marketing.bot == 1
+        assert service.bot == 2
+
+
+@pytest.mark.asyncio
+async def test_response_audience_bot_uses_reminder_category(monkeypatch):
+    async with memory_session(monkeypatch, TABLES) as db:
+        db.add_all(
+            [
+                User(
+                    id=1,
+                    telegram_id=10,
+                    first_name='A',
+                    language='ru',
+                    status='active',
+                    balance_kopeks=0,
+                    notification_settings={'promo_offers_enabled': False},
+                ),
+                User(id=2, telegram_id=20, first_name='B', language='ru', status='active', balance_kopeks=0),
+            ]
+        )
+        await db.commit()
+
+        created = await routes.create_reminder(_payload(channels='bot', category='marketing'), admin=ADMIN, db=db)
+        assert created.stats.audience_bot == 1
+
+
+@pytest.mark.asyncio
 async def test_test_send_goes_to_the_admin(monkeypatch):
     bot = SimpleNamespace(send_message=AsyncMock(), session=SimpleNamespace(close=AsyncMock()))
     monkeypatch.setattr(routes, 'create_bot', lambda: bot)
@@ -176,6 +229,20 @@ async def test_send_test_rejects_malformed_stored_texts(monkeypatch):
             await routes.send_test(broken.id, admin=ADMIN, db=db)
         assert invalid.value.status_code == 422
         create_bot_mock.assert_not_called()
+
+
+def test_uses_non_deprecated_422_constant():
+    """status.HTTP_422_UNPROCESSABLE_ENTITY is deprecated in this Starlette version and
+    emits a DeprecationWarning on every access — HTTP_422_UNPROCESSABLE_CONTENT does not.
+    """
+    import warnings
+
+    from starlette import status as starlette_status
+
+    assert routes.status.HTTP_422_UNPROCESSABLE_CONTENT == 422
+    with warnings.catch_warnings():
+        warnings.simplefilter('error')
+        assert starlette_status.HTTP_422_UNPROCESSABLE_CONTENT == 422
 
 
 @pytest.mark.asyncio

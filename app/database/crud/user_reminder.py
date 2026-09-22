@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -42,7 +42,7 @@ async def _find_state(db: AsyncSession, reminder_id: int, user_id: int) -> UserR
     return (await db.execute(query)).scalar_one_or_none()
 
 
-async def get_or_create_state(db: AsyncSession, reminder_id: int, user_id: int) -> UserReminderState:
+async def get_or_create_state(db: AsyncSession, reminder_id: int, user_id: int) -> UserReminderState | None:
     state = await _find_state(db, reminder_id, user_id)
     if state is not None:
         return state
@@ -53,12 +53,19 @@ async def get_or_create_state(db: AsyncSession, reminder_id: int, user_id: int) 
             await db.flush((state,))
         return state
     except IntegrityError:
-        # Параллельный запрос успел создать строку (пара уникальна) — берём её.
+        # Либо параллельный запрос успел создать строку (пара уникальна) — берём её.
+        # Либо это FOREIGN KEY: user/reminder удалены между select-кандидатом и этой
+        # вставкой — тогда повторный поиск тоже вернёт None, и вызывающий сам решает,
+        # что делать (savepoint уже откатился, внешняя транзакция жива).
         return await _find_state(db, reminder_id, user_id)
 
 
 async def record_bot_attempt(db: AsyncSession, reminder_id: int, user_id: int, *, now: datetime, success: bool) -> None:
     state = await get_or_create_state(db, reminder_id, user_id)
+    if state is None:
+        # Пользователь/напоминание удалены между отбором кандидата и записью попытки —
+        # писать некуда, но проход не должен падать целиком из-за одного кандидата.
+        return
     state.last_sent_at = now
     if success:
         state.sends_count = (state.sends_count or 0) + 1
@@ -79,9 +86,19 @@ async def reminder_stats(db: AsyncSession) -> dict[int, dict]:
 
 
 async def count_audience(
-    db: AsyncSession, conditions: ReminderConditions, *, now: datetime, telegram_only: bool
+    db: AsyncSession,
+    conditions: ReminderConditions,
+    *,
+    now: datetime,
+    telegram_only: bool,
+    exclude_promo_opt_out: bool = False,
 ) -> int:
     clauses = condition_clauses(conditions, now=now)
     if telegram_only:
         clauses.append(User.telegram_id.is_not(None))
+    if exclude_promo_opt_out:
+        # notification_settings — JSONB (JSON на SQLite в тестах); ключа может не быть
+        # вовсе (старые пользователи) или всего поля — тогда считаем «не отписан».
+        promo_flag = User.notification_settings['promo_offers_enabled'].as_boolean()
+        clauses.append(or_(User.notification_settings.is_(None), promo_flag.is_(None), promo_flag.is_(True)))
     return int((await db.execute(select(func.count(User.id)).where(*clauses))).scalar() or 0)

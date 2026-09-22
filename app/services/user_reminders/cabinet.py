@@ -57,6 +57,9 @@ async def dismiss_reminder(db: AsyncSession, user, reminder_id: int, *, now: dat
     if reminder is None or not reminder.is_active or reminder.channels not in CHANNELS_CABINET:
         return False
     state = await get_or_create_state(db, reminder.id, user.id)
+    if state is None:
+        # Пользователь/напоминание удалены между проверкой и вставкой — закрывать нечего.
+        return False
     if state.dismissed_at is None:
         state.dismissed_at = now or datetime.now(UTC)
     await db.commit()

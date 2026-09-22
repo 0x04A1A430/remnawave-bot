@@ -109,3 +109,17 @@ def test_button_validation(kind, target, ok):
 def test_button_text_required_when_there_is_a_button():
     with pytest.raises(ValueError):
         validate_button('url', 'https://x.example', {'ru': {'title': 't', 'body': 'b'}})
+
+
+def test_card_drops_button_for_unknown_stored_kind():
+    """ReminderCardButton.kind — Literal['cabinet', 'url']: неизвестный сохранённый
+    button_kind не должен собирать кнопку и валить /cabinet/reminders/active 500-й.
+    """
+    card = render_card(_reminder(button_kind='weird', button_target='/x'), 'ru')
+    assert card['button'] is None
+
+
+def test_bot_message_has_no_markup_for_unknown_stored_kind(monkeypatch):
+    monkeypatch.setattr(settings, 'MINIAPP_CUSTOM_URL', 'https://cab.example')
+    _, markup = render_bot_message(_reminder(button_kind='weird', button_target='/x'), 'ru')
+    assert markup is None

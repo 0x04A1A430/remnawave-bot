@@ -29,10 +29,19 @@ logger = structlog.get_logger(__name__)
 router = APIRouter(prefix='/admin/reminders', tags=['Cabinet Admin Reminders'])
 
 
-async def _audience(db: AsyncSession, conditions: ReminderConditions, channels: str) -> AudienceResponse:
+async def _audience(
+    db: AsyncSession, conditions: ReminderConditions, channels: str, category: str = 'service'
+) -> AudienceResponse:
     now = datetime.now(UTC)
+    exclude_promo_opt_out = category == 'marketing'
     return AudienceResponse(
-        bot=await count_audience(db, conditions, now=now, telegram_only=True) if channels in ('bot', 'both') else None,
+        bot=(
+            await count_audience(
+                db, conditions, now=now, telegram_only=True, exclude_promo_opt_out=exclude_promo_opt_out
+            )
+            if channels in ('bot', 'both')
+            else None
+        ),
         cabinet=(
             await count_audience(db, conditions, now=now, telegram_only=False)
             if channels in ('cabinet', 'both')
@@ -44,7 +53,7 @@ async def _audience(db: AsyncSession, conditions: ReminderConditions, channels: 
 async def _response(db: AsyncSession, reminder: UserReminder, stats: dict | None = None) -> ReminderResponse:
     counters = (stats or {}).get(reminder.id, {})
     try:
-        audience = await _audience(db, parse_conditions(reminder.conditions), reminder.channels)
+        audience = await _audience(db, parse_conditions(reminder.conditions), reminder.channels, reminder.category)
     except ValueError:
         audience = AudienceResponse()
     return ReminderResponse.model_validate(
@@ -108,7 +117,7 @@ async def audience(
     admin: User = Depends(require_permission('user_reminders:read')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
-    return await _audience(db, request.conditions, request.channels)
+    return await _audience(db, request.conditions, request.channels, request.category)
 
 
 @router.get('/{reminder_id}', response_model=ReminderResponse)
@@ -192,7 +201,7 @@ async def send_test(
         validate_texts(reminder.texts)
     except ValueError as error:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail='Reminder texts are invalid — fix them before testing',
         ) from error
     text, markup = render_bot_message(reminder, getattr(admin, 'language', None))
