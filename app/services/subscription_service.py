@@ -781,6 +781,19 @@ class SubscriptionService:
         if not panel_user_id:
             return
 
+        # Mark before the API call: the panel fires `user.traffic_reset` as a
+        # side effect, and that webhook must not tell the user about a reset
+        # they already saw in the purchase/renewal message.
+        try:
+            from app.services.remnawave_webhook_service import RemnaWaveWebhookService
+
+            RemnaWaveWebhookService.mark_intentional_traffic_reset(
+                panel_user_ids=[panel_user_id],
+                telegram_id=getattr(user, 'telegram_id', None),
+            )
+        except Exception as guard_error:
+            logger.debug('Failed to mark intentional traffic reset', error=guard_error)
+
         try:
             await api.reset_user_traffic(panel_user_id)
             reason_text = f' ({reset_reason})' if reset_reason else ''

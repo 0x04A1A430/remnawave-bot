@@ -167,6 +167,15 @@ class RemnaWaveWebhookService:
     _INTENTIONAL_PANEL_DELETION_GUARD_SECONDS: int = 300
     _MAX_INTENTIONAL_ENTRIES: int = 10_000
 
+    # Bot-initiated panel traffic resets (purchase, renewal, charges, manual
+    # reset) make the panel emit ``user.traffic_reset``. The action was already
+    # reported to the user by the initiating flow, so the standalone
+    # "Трафик сброшен" notification is pure noise. Same single-worker caveat as
+    # the deletion guard above.
+    _intentional_traffic_resets_by_id: dict[int, datetime] = {}
+    _intentional_traffic_resets_by_telegram_id: dict[int, datetime] = {}
+    _INTENTIONAL_TRAFFIC_RESET_GUARD_SECONDS: int = 120
+
     # Buffers bursts of node.connection_* webhooks (RemnaWave фаерит один
     # webhook на ноду при цикле websocket'а панели — раз в 3-4 часа это даёт
     # пик из 7-15 событий за пару секунд и трип flood control в Telegram).
@@ -347,6 +356,100 @@ class RemnaWaveWebhookService:
         return any(pid in cls._intentional_panel_deletions_by_id for pid in candidate_ids) or any(
             tid in cls._intentional_panel_deletions_by_telegram_id for tid in candidate_telegram_ids
         )
+
+    @classmethod
+    def _prune_intentional_traffic_resets(cls) -> None:
+        if not cls._intentional_traffic_resets_by_id and not cls._intentional_traffic_resets_by_telegram_id:
+            return
+
+        now = datetime.now(UTC)
+        panel_keys = [
+            key
+            for key, created_at in cls._intentional_traffic_resets_by_id.items()
+            if (now - created_at).total_seconds() >= cls._INTENTIONAL_TRAFFIC_RESET_GUARD_SECONDS
+        ]
+        for key in panel_keys:
+            del cls._intentional_traffic_resets_by_id[key]
+
+        telegram_keys = [
+            key
+            for key, created_at in cls._intentional_traffic_resets_by_telegram_id.items()
+            if (now - created_at).total_seconds() >= cls._INTENTIONAL_TRAFFIC_RESET_GUARD_SECONDS
+        ]
+        for key in telegram_keys:
+            del cls._intentional_traffic_resets_by_telegram_id[key]
+
+    @classmethod
+    def mark_intentional_traffic_reset(
+        cls,
+        *,
+        panel_user_ids: list[int] | None = None,
+        telegram_id: int | None = None,
+    ) -> None:
+        """Remember that the bot is resetting traffic itself.
+
+        The matching ``user.traffic_reset`` webhook then only updates local
+        state silently instead of telling the user about a reset they already
+        saw in the purchase/renewal success message.
+        """
+        cls._prune_intentional_traffic_resets()
+
+        total = len(cls._intentional_traffic_resets_by_id) + len(cls._intentional_traffic_resets_by_telegram_id)
+        if total >= cls._MAX_INTENTIONAL_ENTRIES:
+            logger.warning('Intentional traffic reset guard at capacity, skipping', total=total)
+            return
+
+        now = datetime.now(UTC)
+
+        for raw_id in panel_user_ids or []:
+            panel_user_id = cls._coerce_panel_user_id(raw_id)
+            if panel_user_id is None:
+                continue
+            if panel_user_id not in cls._intentional_traffic_resets_by_id and total >= cls._MAX_INTENTIONAL_ENTRIES:
+                logger.warning('Intentional traffic reset guard hit capacity mid-batch', total=total)
+                break
+            if panel_user_id not in cls._intentional_traffic_resets_by_id:
+                total += 1
+            cls._intentional_traffic_resets_by_id[panel_user_id] = now
+
+        if telegram_id is not None:
+            try:
+                cls._intentional_traffic_resets_by_telegram_id[int(telegram_id)] = now
+            except (TypeError, ValueError):
+                pass
+
+    @classmethod
+    def _consume_intentional_traffic_reset(cls, data: dict[str, Any]) -> bool:
+        """Return True (and clear the marker) if this reset was bot-initiated."""
+        cls._prune_intentional_traffic_resets()
+
+        panel_ids: list[int] = []
+        telegram_ids: list[int] = []
+        nested_user = data.get('user') if isinstance(data.get('user'), dict) else {}
+
+        for value in (data.get('id'), nested_user.get('id')):
+            panel_user_id = cls._coerce_panel_user_id(value)
+            if panel_user_id is not None:
+                panel_ids.append(panel_user_id)
+
+        for raw_id in (data.get('telegramId'), nested_user.get('telegramId')):
+            if not raw_id:
+                continue
+            try:
+                telegram_ids.append(int(raw_id))
+            except (TypeError, ValueError):
+                pass
+
+        matched = False
+        for panel_user_id in panel_ids:
+            if panel_user_id in cls._intentional_traffic_resets_by_id:
+                del cls._intentional_traffic_resets_by_id[panel_user_id]
+                matched = True
+        for tid in telegram_ids:
+            if tid in cls._intentional_traffic_resets_by_telegram_id:
+                del cls._intentional_traffic_resets_by_telegram_id[tid]
+                matched = True
+        return matched
 
     async def process_event(self, db: AsyncSession | None, event_name: str, data: dict) -> bool:
         """Route event to the appropriate handler.
@@ -1302,6 +1405,16 @@ class RemnaWaveWebhookService:
         if subscription.status in (SubscriptionStatus.DISABLED.value, SubscriptionStatus.LIMITED.value):
             await reactivate_subscription(db, subscription)
         logger.info('Webhook: traffic reset for subscription , user', subscription_id=subscription.id, user_id=user.id)
+
+        # The bot resets traffic itself on purchase/renewal/charge and already
+        # reports the outcome — don't spam a second "Трафик сброшен" message.
+        if self._consume_intentional_traffic_reset(data):
+            logger.info(
+                'Webhook: traffic reset notification suppressed (bot-initiated)',
+                subscription_id=subscription.id,
+                user_id=user.id,
+            )
+            return
 
         await self._notify_user(
             user,

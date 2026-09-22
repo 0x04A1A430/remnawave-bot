@@ -230,6 +230,12 @@ async def _reset_panel_traffic(subscription, user) -> None:
     if not panel_user_id:
         return
     try:
+        from app.services.remnawave_webhook_service import RemnaWaveWebhookService
+
+        RemnaWaveWebhookService.mark_intentional_traffic_reset(
+            panel_user_ids=[panel_user_id],
+            telegram_id=getattr(user, 'telegram_id', None),
+        )
         remnawave_service = RemnaWaveService()
         async with remnawave_service.get_api_client() as api:
             await api.reset_user_traffic(panel_user_id)

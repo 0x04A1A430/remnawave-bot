@@ -398,6 +398,12 @@ async def confirm_reset_traffic(
                             user.remnawave_id = _adopted.id
                         await db.commit()
             if panel_user_id:
+                from app.services.remnawave_webhook_service import RemnaWaveWebhookService
+
+                RemnaWaveWebhookService.mark_intentional_traffic_reset(
+                    panel_user_ids=[panel_user_id],
+                    telegram_id=db_user.telegram_id,
+                )
                 await api.reset_user_traffic(panel_user_id)
             else:
                 logger.error(
