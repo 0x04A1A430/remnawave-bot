@@ -68,6 +68,7 @@ from .polls import router as polls_router
 from .promo import router as promo_router
 from .promocode import router as promocode_router
 from .referral import router as referral_router
+from .reminders import router as reminders_router
 from .site_verification import router as site_verification_router
 from .subscription import router as subscription_router
 from .subscription_modules.multi_tariff import router as multi_tariff_subscription_router
@@ -123,6 +124,7 @@ router.include_router(branding_router)
 router.include_router(landing_router)
 router.include_router(media_router)
 router.include_router(news_router)
+router.include_router(reminders_router)
 router.include_router(info_pages_router)
 
 # Wheel routes

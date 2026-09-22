@@ -364,6 +364,9 @@
 - `app/cabinet/routes/referral.py` — Python-модуль
   Классы: нет
   Функции: `get_referral_info` — Get referral program info for current user., `get_referral_list` — Get list of invited users., `get_referral_earnings` — Get referral earnings history., `update_reward_choice` — Сохранить, что получать и куда класть дни., `get_referral_terms` — Get referral program terms.
+- `app/cabinet/routes/reminders.py` — Python-модуль
+  Классы: нет
+  Функции: `get_active_reminders`, `dismiss`
 - `app/cabinet/routes/settings_form.py` — Python-модуль
   Классы: нет
   Функции: `save_settings_form` — Записать значения по ключам Settings; ``set_value`` сам применяет их в памяти., `env_locked_fields` — Имена полей формы, чьи ключи закреплены в .env (порядок — как в форме)., `form_updates` — Переданные (не None) поля формы → ключи Settings.
@@ -526,6 +529,9 @@
   Функции: нет
 - `app/cabinet/schemas/traffic.py` — Python-модуль
   Классы: `TrafficNodeInfo`, `SubscriptionTrafficInfo`, `UserTrafficItem`, `TrafficUsageResponse`, `SubscriptionEnrichmentInfo`, `UserTrafficEnrichment`, `TrafficEnrichmentResponse`, `ExportCsvRequest`, `ExportCsvResponse`
+  Функции: нет
+- `app/cabinet/schemas/user_reminders.py` — Python-модуль
+  Классы: `ReminderCardButton`, `ReminderCard`
   Функции: нет
 - `app/cabinet/schemas/users.py` — Python-модуль
   Классы: `UserStatusEnum`, `SubscriptionStatusEnum`, `SortByEnum`, `SortOrderEnum`, `TrafficPurchaseItem`, `UserSubscriptionInfo`, `UserPromoGroupInfo`, `SubscriptionListItem`, `UserListItem`, `UsersListResponse`, `UserByRemnawaveResponse`, `UserTransactionItem`, `UserActivityItem`, `UserActivityResponse`, `UserReferralInfo`, `UserDetailResponse`, `UserPanelInfoResponse`, `UserNodeUsageItem`, `UserNodeUsageResponse`, `UpdateBalanceRequest`, `UpdateBalanceResponse`, `UpdateSubscriptionRequest`, `UpdateSubscriptionResponse`, `UpdateUserStatusRequest`, `UpdateUserStatusResponse`, `SendUserMessageRequest`, `SendUserMessageResponse`, `UpdateRestrictionsRequest`, `UpdateRestrictionsResponse`, `UpdatePromoGroupRequest`, `UpdatePromoGroupResponse`, `UpdateReferralCommissionRequest`, `UpdateReferralCommissionResponse`, `AssignReferrerRequest`, `AssignReferrerResponse`, `RemoveReferrerResponse`, `RemoveReferralResponse`, `DeviceInfo`, `UserDevicesResponse`, `DeleteDeviceResponse`, `RenameDeviceRequest`, `RenameDeviceResponse`, `ResetDevicesResponse`, `DeleteUserRequest`, `DeleteUserResponse`, `UsersStatsResponse`, `UserSearchRequest`, `PeriodPriceInfo`, `UserAvailableTariffItem`, `UserAvailableTariffsResponse`, `PanelUserInfo`, `SyncFromPanelRequest`, `SyncFromPanelResponse`, `SyncToPanelRequest`, `SyncToPanelResponse`, `PanelSyncStatusResponse`, `FullDeleteUserRequest`, `FullDeleteUserResponse`, `ResetTrialRequest`, `ResetTrialResponse`, `ResetSubscriptionRequest`, `ResetSubscriptionResponse`, `DisableUserRequest`, `DisableUserResponse`, `AdminUserGiftItem`, `AdminUserGiftsResponse`
@@ -2081,6 +2087,9 @@
 - `app/services/user_reminders/__init__.py` — Python-модуль
   Классы: нет
   Функции: нет
+- `app/services/user_reminders/cabinet.py` — Python-модуль
+  Классы: нет
+  Функции: `active_cards_for_user`, `dismiss_reminder`
 - `app/services/user_reminders/conditions.py` — Python-модуль
   Классы: `SubscriptionCondition` (1 методов), `ReminderConditions`
   Функции: `parse_conditions`, `condition_clauses`, `matches`
@@ -4844,6 +4853,9 @@
 - `tests/services/user_reminders/__init__.py` — Python-модуль
   Классы: нет
   Функции: нет
+- `tests/services/user_reminders/test_cabinet.py` — Python-модуль
+  Классы: нет
+  Функции: `test_cards_follow_conditions_channels_and_order`, `test_dismissed_card_is_gone_and_dismiss_is_idempotent`, `test_dismiss_unknown_or_not_for_cabinet_is_false`, `test_broken_conditions_do_not_break_the_page`, `test_broken_texts_do_not_break_the_page`
 - `tests/services/user_reminders/test_conditions.py` — Python-модуль
   Классы: нет
   Функции: `test_sql_and_python_agree`, `test_python_auth_matches_compute_auth_methods`, `test_low_balance_threshold_is_the_broadcast_one`, `test_invalid_conditions_are_rejected`
