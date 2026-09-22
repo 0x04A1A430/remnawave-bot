@@ -109,6 +109,18 @@ class PricingEngine:
         return amount_kopeks - discount
 
     @staticmethod
+    def round_to_ruble(amount_kopeks: int) -> int:
+        """Round kopeks to a whole ruble (nearest, .50 rounds down — same rule as
+        ``settings.format_price``). Used so discounted prices never show or charge
+        kopecks."""
+        if amount_kopeks <= 0:
+            return amount_kopeks
+        rubles, remainder = divmod(amount_kopeks, 100)
+        if remainder > 50:
+            rubles += 1
+        return rubles * 100
+
+    @staticmethod
     def apply_stacked_discounts(
         amount: int,
         group_percent: int,
@@ -323,6 +335,7 @@ class PricingEngine:
         # Применяем stacked скидки к итоговой сумме напрямую (без float round-trip)
         if group_pct > 0 or offer_pct > 0:
             upgrade_cost, _, _ = self.apply_stacked_discounts(raw_cost, group_pct, offer_pct)
+            upgrade_cost = self.round_to_ruble(upgrade_cost)
         else:
             upgrade_cost = raw_cost
 
@@ -365,6 +378,7 @@ class PricingEngine:
 
         if group_pct > 0 or offer_pct > 0:
             upgrade_cost, _, _ = self.apply_stacked_discounts(daily_price, group_pct, offer_pct)
+            upgrade_cost = self.round_to_ruble(upgrade_cost)
         else:
             upgrade_cost = daily_price
 
@@ -411,6 +425,7 @@ class PricingEngine:
 
         if group_pct > 0 or offer_pct > 0:
             upgrade_cost, _, _ = self.apply_stacked_discounts(min_period_price, group_pct, offer_pct)
+            upgrade_cost = self.round_to_ruble(upgrade_cost)
         else:
             upgrade_cost = min_period_price
 
@@ -646,6 +661,15 @@ class PricingEngine:
         offer_discount = subtotal - after_offer
         final_total = after_offer
 
+        # Any discount present -> charge a whole ruble (no kopecks).
+        if period_pct or devices_pct or offer_pct or total_group_discount > 0:
+            rounded_total = self.round_to_ruble(final_total)
+            if offer_pct > 0:
+                offer_discount = subtotal - rounded_total
+            else:
+                total_group_discount += final_total - rounded_total
+            final_total = rounded_total
+
         breakdown = asdict(
             TariffBreakdown(
                 tariff_id=tariff.id,
@@ -799,6 +823,17 @@ class PricingEngine:
         total_group_discount = (
             base_group_discount + servers_group_discount + traffic_group_discount + devices_group_discount
         )
+
+        # Any discount present -> charge a whole ruble (no kopecks). The delta is
+        # absorbed by the offer discount (if any) or the group discount, keeping
+        # original_total = final_total + group_discount + offer_discount intact.
+        if period_pct or servers_pct or traffic_pct or devices_pct or offer_pct:
+            rounded_total = self.round_to_ruble(final_total)
+            if offer_pct > 0:
+                promo_offer_discount = subtotal - rounded_total
+            else:
+                total_group_discount += final_total - rounded_total
+            final_total = rounded_total
 
         valid_servers = [d for d in server_details if d.get('id') is not None]
         breakdown = asdict(

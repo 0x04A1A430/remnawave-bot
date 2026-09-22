@@ -81,6 +81,10 @@ def calculate_user_price(user: User | None, base_price: int, period_days: int, c
 
     final_price, _, _ = PricingEngine.apply_stacked_discounts(base_price, group_discount, promo_offer_discount)
 
+    # Any discount present -> show a whole ruble (matches PricingEngine rounding).
+    if group_discount > 0 or promo_offer_discount > 0:
+        final_price = PricingEngine.round_to_ruble(final_price)
+
     # Effective combined discount percent
     if final_price < base_price:
         discount_percent = round((base_price - final_price) * 100 / base_price)
