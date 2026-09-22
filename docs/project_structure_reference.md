@@ -1792,6 +1792,7 @@
 - `app/services/user_cart_service.py` — Python-модуль
   Классы: `UserCartService` (15 методов)
   Функции: нет
+- `app/services/user_reminders/`
 - `app/services/user_revival_service.py` — Python-модуль
   Классы: `NotDeletedError`
   Функции: `revive_deleted_user` — Flip ``user.status`` from DELETED back to ACTIVE.
@@ -2071,6 +2072,15 @@
 - `app/services/reachability/xray_json.py` — Python-модуль
   Классы: нет
   Функции: `links_from_xray_json` — Ссылки из JSON-подписки; не JSON или без прокси-outbound — пусто.
+
+#### app/services/user_reminders
+
+- `app/services/user_reminders/__init__.py` — Python-модуль
+  Классы: нет
+  Функции: нет
+- `app/services/user_reminders/conditions.py` — Python-модуль
+  Классы: `SubscriptionCondition` (1 методов), `ReminderConditions`
+  Функции: `parse_conditions`, `condition_clauses`, `matches`
 
 ### app/tools
 
@@ -4680,6 +4690,7 @@
 - `tests/services/test_yookassa_timeout_hardening.py` — Python-модуль
   Классы: нет
   Функции: `test_apiclient_patch_helper_exists_and_runs_at_import` — Source-level pin: ``_patch_yookassa_timeout`` must be DEFINED, `test_patched_execute_passes_timeout_to_session_request` — Negative-control against upstream regression: the patched, `test_patch_idempotency_guard_exists` — The patch helper must check ``ApiClient._timeout_patched`` to, `test_patch_respects_settings_overrides` — An operator who sets YOOKASSA_HTTP_CONNECT_TIMEOUT or, `test_dedicated_executor_exists_with_bounded_max_workers` — The bug-report's "обязательное" fix #2: dedicated executor with, `test_max_workers_resolver_respects_setting` — REGRESSION: ``YOOKASSA_MAX_CONCURRENT_REQUESTS`` env var must flow, `test_max_workers_resolver_floors_at_one` — A misconfigured ``YOOKASSA_MAX_CONCURRENT_REQUESTS=0`` must NOT, `test_dedicated_executor_thread_name_prefix` — Threads in the YK executor must be identifiable in py-spy /, `test_all_run_in_executor_callsites_use_dedicated_pool` — Source-level pin: every ``run_in_executor`` in, `test_webhook_uses_wait_for_with_tight_budget` — ``process_yookassa_webhook`` confirmation of payment status must, `test_webhook_timeout_is_caught_and_refuses_without_confirmation` — When the API confirmation times out, the handler must NOT raise
+- `tests/services/user_reminders/`
 
 #### tests/services/panel_sync
 
@@ -4818,6 +4829,15 @@
 - `tests/services/reachability/test_xray_json.py` — Python-модуль
   Классы: нет
   Функции: `test_balancer_config_expands_into_one_link_per_outbound_with_tag_labels`, `test_trojan_and_shadowsocks_outbounds_and_ws_transport`, `test_not_json_or_no_proxies_gives_empty`
+
+#### tests/services/user_reminders
+
+- `tests/services/user_reminders/__init__.py` — Python-модуль
+  Классы: нет
+  Функции: нет
+- `tests/services/user_reminders/test_conditions.py` — Python-модуль
+  Классы: нет
+  Функции: `test_sql_and_python_agree`, `test_python_auth_matches_compute_auth_methods`, `test_low_balance_threshold_is_the_broadcast_one`, `test_invalid_conditions_are_rejected`
 
 ### tests/utils
 
