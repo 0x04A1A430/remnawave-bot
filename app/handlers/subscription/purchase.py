@@ -262,6 +262,7 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
         status_display = texts.t('SUBSCRIPTION_STATUS_UNKNOWN', 'Неизвестно')
         status_emoji = ''
 
+    is_forever = False
     if subscription.end_date <= current_time:
         days_left = 0
         time_left_text = texts.t('SUBSCRIPTION_TIME_LEFT_EXPIRED', 'истёк')
@@ -272,6 +273,7 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
         hours_left = delta.seconds // 3600
 
         if subscription.end_date.year > 2050:
+            is_forever = True
             time_left_text = texts.t('SUBSCRIPTION_TIME_LEFT_FOREVER', 'доступно')
             warning_text = ''
         elif days_left > 1:
@@ -476,6 +478,11 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
 Трафик: {traffic}
 Устройства: {devices_used} / {device_limit}</blockquote>""",
         )
+
+        if is_forever:
+            message_template = '\n'.join(
+                line for line in message_template.splitlines() if '{time_left}' not in line
+            )
 
     if not show_devices:
         message_template = message_template.replace(
