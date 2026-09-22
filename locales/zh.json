@@ -1399,7 +1399,7 @@
 "SUBSCRIPTION_DAILY_OVERVIEW_TEMPLATE": "{full_name}\n余额：{balance}\n订阅：{status_emoji}{status_display}{warning}{tariff_info_block}\n\n订阅信息\n类型：{subscription_type}\n流量：{traffic}\n服务器：{servers}\n设备：{devices_used}/{device_limit}",
 "SUBSCRIPTION_DEACTIVATED_CHANNEL_UNSUBSCRIBE": "由于您退出了必需频道，您的订阅已暂停。\n\n请订阅所有频道以恢复VPN访问。",
 "SUBSCRIPTION_DEACTIVATED_CHANNEL_UNSUBSCRIBE_MULTI": "由于您退出了必需频道，您的所有订阅已暂停。\n\n请订阅所有频道以恢复VPN访问。",
-"SUBSCRIPTION_PROMO_DISCOUNT_HINT": "已激活额外{percent}%折扣。\n\n可与其他折扣叠加！",
+"SUBSCRIPTION_PROMO_DISCOUNT_HINT": "<code>已激活额外{percent}%折扣。</code>",
 "SUBSCRIPTION_PROMO_DISCOUNT_NOTE": "额外{percent}%折扣：-{amount}",
 "SUBSCRIPTION_PROMO_DISCOUNT_TIMER": "⏳折扣剩余时间：{time_left}\n<code>{bar}</code>",
 "SUBSCRIPTION_PURCHASED": "订阅已成功购买！",

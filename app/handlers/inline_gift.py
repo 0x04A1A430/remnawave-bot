@@ -111,6 +111,12 @@ def _build_info_text(
             f'{texts.t("INLINE_GIFT_CONFIRM_PROMPT", "Хотите активировать?")}'
         )
 
+    if gift_type == 'discount' and discount_percent:
+        lines.append(
+            f'{texts.t("INLINE_GIFT_EMOJI_GIFT", "<tg-emoji emoji-id='6032937473162614352'>🎁</tg-emoji>")} '
+            f'{texts.t("INLINE_GIFT_LABEL_DISCOUNT", "Скидка")}: <b>{discount_percent}%</b>'
+        )
+
     if gift_days is not None or gift_traffic_gb is not None or gift_devices is not None:
         if existing_sub is None:
             if gift_days is not None:
@@ -430,21 +436,26 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
 
         try:
             if gift_type == 'discount':
-                import secrets as _secrets
-
-                from app.database.crud.promocode import create_promocode
-                from app.database.models import PromoCodeType
+                from app.database.crud.promo_offer_log import log_promo_offer_action
 
                 pct = gift.discount_percent or 0
-                promo_code_str = _secrets.token_hex(4).upper()
-                await create_promocode(
-                    db,
-                    code=promo_code_str,
-                    type=PromoCodeType.DISCOUNT,
-                    balance_bonus_kopeks=pct,
-                    max_uses=1,
-                    created_by=gift.sender_user_id,
-                )
+                user.promo_offer_discount_percent = pct
+                user.promo_offer_discount_source = 'inline_gift'
+                user.promo_offer_discount_expires_at = None
+                user.updated_at = datetime.now(UTC)
+                try:
+                    await log_promo_offer_action(
+                        db,
+                        user_id=user.id,
+                        offer_id=None,
+                        action='claimed',
+                        source='inline_gift',
+                        percent=pct,
+                        details={'context': 'inline_gift_discount'},
+                        commit=False,
+                    )
+                except Exception as log_error:
+                    logger.warning('Failed to log inline gift discount', error=log_error)
                 gift.activated_count = activated + 1
                 gift.is_activated = True
                 gift.activated_at = datetime.now(UTC)
@@ -454,8 +465,8 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
 
                 success_text = texts.t(
                     'INLINE_GIFT_DISCOUNT_SUCCESS',
-                    '<b>Скидка активирована!</b>\n\n<blockquote>Скидка {pct}% — промокод: <code>{code}</code></blockquote>',
-                ).format(pct=pct, code=promo_code_str)
+                    '<b>Скидка активирована!</b>\n\n<blockquote><code>Активирована доп. скидка {pct}%.</code></blockquote>',
+                ).format(pct=pct)
                 back_kb = types.InlineKeyboardMarkup(
                     inline_keyboard=[
                         [
@@ -648,13 +659,10 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
                 return
 
             if gift_type == 'combo':
-                import secrets as _secrets
-
-                from app.database.crud.promocode import create_promocode
                 from app.database.crud.server_squad import get_available_server_squads
                 from app.database.crud.subscription import _lock_subscription_row
                 from app.database.crud.user import add_user_balance
-                from app.database.models import PromoCodeType, TrafficPurchase
+                from app.database.models import TrafficPurchase
 
                 buffer: list[str] = []
                 inline_msg_id = gift.inline_message_id
@@ -762,21 +770,31 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
 
                 # --- discount component ---
                 if gift.discount_percent:
+                    from app.database.crud.promo_offer_log import log_promo_offer_action
+
                     pct = gift.discount_percent
-                    promo_code_str = _secrets.token_hex(4).upper()
-                    await create_promocode(
-                        db,
-                        code=promo_code_str,
-                        type=PromoCodeType.DISCOUNT,
-                        balance_bonus_kopeks=pct,
-                        max_uses=1,
-                        created_by=gift.sender_user_id,
-                    )
+                    user.promo_offer_discount_percent = pct
+                    user.promo_offer_discount_source = 'inline_gift'
+                    user.promo_offer_discount_expires_at = None
+                    user.updated_at = datetime.now(UTC)
+                    try:
+                        await log_promo_offer_action(
+                            db,
+                            user_id=user.id,
+                            offer_id=None,
+                            action='claimed',
+                            source='inline_gift',
+                            percent=pct,
+                            details={'context': 'inline_gift_discount_combo'},
+                            commit=False,
+                        )
+                    except Exception as log_error:
+                        logger.warning('Failed to log inline gift combo discount', error=log_error)
                     buffer.append(
                         texts.t(
                             'INLINE_GIFT_COMBO_DISCOUNT',
-                            'скидка {pct}% — промокод <code>{code}</code>',
-                        ).format(pct=pct, code=promo_code_str)
+                            'скидка {pct}%',
+                        ).format(pct=pct)
                     )
 
                 # --- balance component ---
