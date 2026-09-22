@@ -1403,7 +1403,7 @@
   "SUBSCRIPTION_DAILY_OVERVIEW_TEMPLATE": "{full_name}\nБаланс: {balance}\nПідписка: {status_emoji} {status_display}{warning}{tariff_info_block}\n\nІнформація про підписку\nТип: {subscription_type}\nТрафік: {traffic}\nСервери: {servers}\nПристрої: {devices_used} / {device_limit}",
   "SUBSCRIPTION_DEACTIVATED_CHANNEL_UNSUBSCRIBE": "Вашу підписку призупинено, оскільки ви відписались від обов'язкового каналу.\n\nПідпишіться на всі канали для відновлення доступу до VPN.",
   "SUBSCRIPTION_DEACTIVATED_CHANNEL_UNSUBSCRIBE_MULTI": "Ваші підписки призупинено, оскільки ви відписались від обов'язкового каналу.\n\nПідпишіться на всі канали для відновлення доступу до VPN.",
-  "SUBSCRIPTION_PROMO_DISCOUNT_HINT": "Активовано дод. знижку {percent}%. \n\nСумується з іншими знижками!",
+  "SUBSCRIPTION_PROMO_DISCOUNT_HINT": "<code>Активовано дод. знижку {percent}%.</code>",
   "SUBSCRIPTION_PROMO_DISCOUNT_NOTE": "Дод. знижка {percent}%: -{amount}",
   "SUBSCRIPTION_PROMO_DISCOUNT_TIMER": "⏳ Знижка діє ще: {time_left}\n<code>{bar}</code>",
   "SUBSCRIPTION_PURCHASED": "Підписку успішно придбано!",

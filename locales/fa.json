@@ -1493,7 +1493,7 @@
   "SUBSCRIPTION_DAILY_OVERVIEW_TEMPLATE": "{full_name}\nموجودی: {balance}\nاشتراک: {status_emoji} {status_display}{warning}{tariff_info_block}\n\nاطلاعات اشتراک\nنوع: {subscription_type}\nترافیک: {traffic}\nسرورها: {servers}\nدستگاه‌ها: {devices}\nکشورها: {countries}",
   "SUBSCRIPTION_DEACTIVATED_CHANNEL_UNSUBSCRIBE": "اشتراک شما متوقف شده است زیرا از کانال اجباری خارج شدید.\n\nبرای بازیابی دسترسی VPN در همه کانال‌ها عضو شوید.",
   "SUBSCRIPTION_DEACTIVATED_CHANNEL_UNSUBSCRIBE_MULTI": "اشتراک‌های شما متوقف شده‌اند زیرا از کانال اجباری خارج شدید.\n\nبرای بازیابی دسترسی VPN در همه کانال‌ها عضو شوید.",
-  "SUBSCRIPTION_PROMO_DISCOUNT_HINT": "تخفیف اضافی {percent}% فعال شد.\n\nبا سایر تخفیف‌ها جمع می‌شود!",
+  "SUBSCRIPTION_PROMO_DISCOUNT_HINT": "<code>تخفیف اضافی {percent}% فعال شد.</code>",
   "SUBSCRIPTION_PROMO_DISCOUNT_NOTE": "تخفیف اضافی {percent}%: -{amount}",
   "SUBSCRIPTION_PROMO_DISCOUNT_TIMER": "\n⏳ اعتبار تخفیف: {time_left} <code>{bar}</code>",
   "SUBSCRIPTION_PURCHASED": "اشتراک خریداری شد!",

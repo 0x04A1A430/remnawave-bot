@@ -1472,7 +1472,7 @@
   "SUBSCRIPTION_DAILY_OVERVIEW_TEMPLATE": "{full_name}\nBalance: {balance}\nSubscription: {status_emoji} {status_display}{warning}{tariff_info_block}\n\nSubscription details\nType: {subscription_type}\nTraffic: {traffic}\nServers: {servers}\nDevices: {devices_used} / {device_limit}",
   "SUBSCRIPTION_DEACTIVATED_CHANNEL_UNSUBSCRIBE": "Your subscription has been paused because you left a required channel.\n\nSubscribe to all channels to restore VPN access.",
   "SUBSCRIPTION_DEACTIVATED_CHANNEL_UNSUBSCRIBE_MULTI": "Your subscriptions have been paused because you left a required channel.\n\nSubscribe to all channels to restore VPN access.",
-  "SUBSCRIPTION_PROMO_DISCOUNT_HINT": "Extra {percent}% discount is active and will apply automatically. It stacks with other discounts.",
+  "SUBSCRIPTION_PROMO_DISCOUNT_HINT": "<code>Extra discount {percent}% activated.</code>",
   "SUBSCRIPTION_PROMO_DISCOUNT_NOTE": "Extra discount {percent}%: -{amount}",
   "SUBSCRIPTION_PROMO_DISCOUNT_TIMER": "⏳ Discount active for {time_left}\n<code>{bar}</code>",
   "SUBSCRIPTION_PURCHASED": "Subscription purchased successfully!",
