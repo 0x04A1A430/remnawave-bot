@@ -825,6 +825,9 @@
 - `app/database/crud/user_promo_group.py` — Python-модуль
   Классы: нет
   Функции: `sync_user_primary_promo_group` — Публичная обертка для синхронизации primary промогруппы пользователя., `add_user_to_promo_group` — Добавляет пользователю промогруппу., `remove_user_from_promo_group` — Удаляет промогруппу у пользователя., `get_user_promo_groups` — Получает все промогруппы пользователя, отсортированные по приоритету., `get_primary_user_promo_group` — Получает промогруппу пользователя с максимальным приоритетом., `has_user_promo_group` — Проверяет наличие промогруппы у пользователя., `count_user_promo_groups` — Подсчитывает количество промогрупп у пользователя., `replace_user_promo_groups` — Заменяет все промогруппы пользователя на новый список.
+- `app/database/crud/user_reminder.py` — Python-модуль
+  Классы: нет
+  Функции: `list_reminders`, `list_active_reminders`, `get_reminder`, `get_or_create_state`, `record_bot_attempt`, `reminder_stats`, `count_audience`
 - `app/database/crud/wata.py` — Python-модуль
   Классы: нет
   Функции: `create_wata_payment`, `get_wata_payment_by_id`, `get_wata_payment_by_id_for_update`, `get_wata_payment_by_link_id`, `get_wata_payment_by_order_id`, `update_wata_payment_status`, `link_wata_payment_to_transaction`
@@ -4841,6 +4844,9 @@
 - `tests/services/user_reminders/test_conditions.py` — Python-модуль
   Классы: нет
   Функции: `test_sql_and_python_agree`, `test_python_auth_matches_compute_auth_methods`, `test_low_balance_threshold_is_the_broadcast_one`, `test_invalid_conditions_are_rejected`
+- `tests/services/user_reminders/test_crud.py` — Python-модуль
+  Классы: нет
+  Функции: `test_order_is_builtin_first_then_id`, `test_attempts_and_stats`, `test_audience_counts`
 - `tests/services/user_reminders/test_texts.py` — Python-модуль
   Классы: нет
   Функции: `test_language_falls_back_to_ru_and_button_to_ru_button`, `test_bot_message_is_escaped_with_bold_title`, `test_cabinet_button_is_dropped_without_cabinet_url`, `test_url_button_and_no_button`, `test_card_keeps_plain_text`, `test_invalid_texts`, `test_button_validation`, `test_button_text_required_when_there_is_a_button`
