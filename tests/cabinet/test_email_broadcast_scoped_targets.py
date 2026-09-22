@@ -13,7 +13,16 @@ import pytest
 from fastapi import HTTPException
 
 from app.cabinet.routes import admin_broadcasts
-from app.database.models import PromoGroup, ServerSquad, User, UserStatus, server_squad_promo_groups
+from app.database.models import (
+    PromoGroup,
+    ServerSquad,
+    Subscription,
+    SubscriptionStatus,
+    Tariff,
+    User,
+    UserStatus,
+    server_squad_promo_groups,
+)
 from app.services import broadcast_service
 from app.services.broadcast_service import email_broadcast_service, parse_email_scoped_target
 from tests.fixtures.sqlite_memory import memory_session
@@ -146,3 +155,49 @@ async def test_email_filters_list_promo_groups_with_counts(monkeypatch: pytest.M
     assert by_key[f'promo_group_{ids["vip"]}'].count == 2
     assert by_key[f'promo_group_{ids["base"]}'].count == 1
     assert all(item.group == 'promo_group' for item in response.promo_group_filters)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ('target', 'statuses'),
+    [
+        ('active_email', (SubscriptionStatus.ACTIVE.value, SubscriptionStatus.ACTIVE.value)),
+        ('expired_email', (SubscriptionStatus.EXPIRED.value, SubscriptionStatus.DISABLED.value)),
+    ],
+)
+async def test_multi_tariff_user_gets_one_email_not_one_per_subscription(
+    monkeypatch: pytest.MonkeyPatch, target: str, statuses: tuple[str, str]
+) -> None:
+    """Мультитариф: JOIN по подпискам размножал человека — письмо уходило по разу на подписку."""
+    from datetime import UTC, datetime, timedelta
+
+    async with memory_session(monkeypatch, (*TABLES, Tariff.__table__, Subscription.__table__)) as db:
+        bind = db.bind
+
+        @asynccontextmanager
+        async def session_factory():
+            from sqlalchemy.ext.asyncio import AsyncSession
+
+            async with AsyncSession(bind, expire_on_commit=False) as session:
+                yield session
+
+        monkeypatch.setattr(broadcast_service, 'AsyncSessionLocal', session_factory)
+        ids = await _seed(db)
+        now = datetime.now(UTC)
+        for index, status in enumerate(statuses):
+            db.add(
+                Subscription(
+                    user_id=ids['vip_email'],
+                    remnawave_short_id=f'multi-{index}',
+                    status=status,
+                    start_date=now - timedelta(days=10),
+                    end_date=now + timedelta(days=10),
+                )
+            )
+        await db.commit()
+
+        count = await admin_broadcasts._get_email_filter_count(db, target)
+        recipients = await email_broadcast_service._fetch_email_recipients(target)
+
+    assert [r.email for r in recipients] == ['vip@example.com']
+    assert count == len(recipients)

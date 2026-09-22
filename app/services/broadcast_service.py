@@ -914,29 +914,31 @@ class EmailBroadcastService:
                     User.telegram_id.isnot(None),
                 )
 
+            # Подписки — подзапросом, а не JOIN: в мультитарифе JOIN давал строку
+            # человека на каждую подходящую подписку, и одно письмо уходило
+            # столько раз, сколько у него подписок. DISTINCT по User на Postgres
+            # не сработает — у пользователя есть JSON-колонки без оператора равенства.
             elif target == 'active_email':
-                query = (
-                    select(User)
-                    .join(Subscription, User.id == Subscription.user_id)
-                    .where(
-                        *base_conditions,
-                        Subscription.status == SubscriptionStatus.ACTIVE.value,
-                    )
+                query = select(User).where(
+                    *base_conditions,
+                    User.id.in_(
+                        select(Subscription.user_id).where(Subscription.status == SubscriptionStatus.ACTIVE.value)
+                    ),
                 )
 
             elif target == 'expired_email':
-                query = (
-                    select(User)
-                    .join(Subscription, User.id == Subscription.user_id)
-                    .where(
-                        *base_conditions,
-                        Subscription.status.in_(
-                            [
-                                SubscriptionStatus.EXPIRED.value,
-                                SubscriptionStatus.DISABLED.value,
-                            ]
-                        ),
-                    )
+                query = select(User).where(
+                    *base_conditions,
+                    User.id.in_(
+                        select(Subscription.user_id).where(
+                            Subscription.status.in_(
+                                [
+                                    SubscriptionStatus.EXPIRED.value,
+                                    SubscriptionStatus.DISABLED.value,
+                                ]
+                            )
+                        )
+                    ),
                 )
 
             elif scoped := parse_email_scoped_target(target):
@@ -947,6 +949,10 @@ class EmailBroadcastService:
             else:
                 logger.warning('Unknown email target filter', target=target)
                 return []
+
+            # Батчи по OFFSET без сортировки нестабильны: строка могла попасть в
+            # два батча или ни в один.
+            query = query.order_by(User.id)
 
             # Загружаем батчами и извлекаем скаляры сразу
             recipients: list[_EmailRecipient] = []
