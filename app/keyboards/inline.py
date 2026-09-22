@@ -1806,7 +1806,13 @@ def _apply_payment_name_overrides(keyboard: list[list[InlineKeyboardButton]]) ->
                 row[idx] = button.model_copy(update={'text': override})
 
 
-def get_payment_methods_keyboard(amount_kopeks: int, language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
+def get_payment_methods_keyboard(
+    amount_kopeks: int,
+    language: str = DEFAULT_LANGUAGE,
+    *,
+    back_callback: str = 'menu_balance',
+    back_text: str | None = None,
+) -> InlineKeyboardMarkup:
     texts = get_texts(language)
     keyboard = []
     has_direct_payment_methods = False
@@ -2433,7 +2439,7 @@ def get_payment_methods_keyboard(amount_kopeks: int, language: str = DEFAULT_LAN
             ],
         )
 
-    keyboard.append([make_button(text=texts.BACK, style='danger', callback_data='menu_balance')])
+    keyboard.append([make_button(text=back_text or texts.BACK, style='danger', callback_data=back_callback)])
 
     _apply_payment_name_overrides(keyboard)
 
