@@ -63,6 +63,18 @@ def _redact_telegram_secrets(text: str) -> str:
     return _BOT_TOKEN_RE.sub('bot[REDACTED]', text)
 
 
+def _format_waiting(waited_minutes: int) -> str:
+    """Сколько заявка ждёт решения: «3 д 4 ч», «2 ч 5 мин», «15 мин»."""
+    total = max(0, int(waited_minutes))
+    days, rest = divmod(total, 24 * 60)
+    hours, minutes = divmod(rest, 60)
+    if days:
+        return f'{days} д {hours} ч' if hours else f'{days} д'
+    if hours:
+        return f'{hours} ч {minutes} мин' if minutes else f'{hours} ч'
+    return f'{minutes} мин'
+
+
 class NotificationCategory(StrEnum):
     """Категории уведомлений для маршрутизации по топикам."""
 
@@ -2353,20 +2365,19 @@ class AdminNotificationService:
         Аналог SLA-напоминания по тикетам. Уходит в топик заявок на вывод
         (REFERRAL_WITHDRAWAL_NOTIFICATIONS_TOPIC_ID), а без него — по категории
         PARTNERS, то есть туда же, куда пришло исходное уведомление о заявке.
-        Кнопки те же, что у исходного уведомления: решить заявку можно прямо отсюда.
+        Кнопки — та же клавиатура, что у исходного уведомления, по роли получателя:
+        решить заявку можно прямо отсюда.
         """
         if not self._is_enabled():
             return False
 
         try:
+            from app.keyboards.withdrawal import get_withdrawal_request_keyboard
+
             user = getattr(request, 'user', None)
             user_display = self._get_user_display(user) if user else 'Unknown'
             user_id_display = self._get_user_identifier_display(user) if user else '—'
             username = getattr(user, 'username', None) if user else None
-            telegram_id = getattr(user, 'telegram_id', None) if user else None
-
-            hours, minutes = divmod(max(0, int(waited_minutes)), 60)
-            waited_display = f'{hours} ч {minutes} мин' if hours else f'{minutes} мин'
 
             message_lines = [
                 '⏰ <b>Заявка на вывод ждёт решения</b>',
@@ -2379,29 +2390,20 @@ class AdminNotificationService:
             message_lines.extend(
                 [
                     f'💵 <b>Сумма:</b> {settings.format_price(request.amount_kopeks)}',
-                    f'⏱️ <b>Ожидает решения:</b> {waited_display}',
+                    f'⏱️ <b>Ожидает решения:</b> {_format_waiting(waited_minutes)}',
                 ]
             )
 
-            keyboard_rows = [
-                [
-                    types.InlineKeyboardButton(
-                        text='✅ Одобрить', callback_data=f'admin_withdrawal_approve_{request.id}'
-                    ),
-                    types.InlineKeyboardButton(
-                        text='❌ Отклонить', callback_data=f'admin_withdrawal_reject_{request.id}'
-                    ),
-                ]
-            ]
-            if telegram_id:
-                keyboard_rows.append(
-                    [
-                        types.InlineKeyboardButton(
-                            text='👤 Профиль пользователя', callback_data=f'admin_user_{telegram_id}'
-                        )
-                    ]
-                )
-            keyboard = types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
+            # Та же клавиатура, что у исходного уведомления. Собранная вручную вела на
+            # admin_user_<telegram_id> — у такого callback обработчика нет, — рисовала
+            # профиль в групповом чате и давала модератору кнопки, которые ответят
+            # «нет доступа».
+            keyboard = get_withdrawal_request_keyboard(
+                request.id,
+                WithdrawalRequestStatus.PENDING.value,
+                user_db_id=getattr(request, 'user_id', None) or getattr(user, 'id', None),
+                role=self.resolve_recipient_role(),
+            )
 
             topic_id = getattr(settings, 'REFERRAL_WITHDRAWAL_NOTIFICATIONS_TOPIC_ID', None) or None
             return await self._send_message(

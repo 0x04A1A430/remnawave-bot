@@ -154,8 +154,9 @@ async def test_failed_send_keeps_request_for_next_round(monkeypatch, sent):
 def _request(telegram_id: int | None = 777) -> SimpleNamespace:
     return SimpleNamespace(
         id=5,
+        user_id=42,
         amount_kopeks=150000,
-        user=SimpleNamespace(first_name='Ann', username='ann', telegram_id=telegram_id, email=None),
+        user=SimpleNamespace(id=42, first_name='Ann', username='ann', telegram_id=telegram_id, email=None),
     )
 
 
@@ -181,8 +182,9 @@ async def test_reminder_goes_to_withdrawal_topic_when_configured(monkeypatch, pl
     assert kwargs['message_thread_id'] == 22, 'топик заявок на вывод важнее топика категории'
     assert 'Заявка на вывод ждёт решения' in kwargs['text']
     assert '2 ч 5 мин' in kwargs['text']
+    # Групповой админ-чат: только действия — профиль там не открыть.
     callbacks = [b.callback_data for row in kwargs['reply_markup'].inline_keyboard for b in row]
-    assert callbacks == ['admin_withdrawal_approve_5', 'admin_withdrawal_reject_5', 'admin_user_777']
+    assert callbacks == ['admin_withdrawal_approve_5', 'admin_withdrawal_reject_5']
 
 
 @pytest.mark.asyncio
@@ -196,3 +198,35 @@ async def test_reminder_falls_back_to_partners_topic(monkeypatch, plain_sender):
     assert kwargs['message_thread_id'] == 11
     callbacks = [b.callback_data for row in kwargs['reply_markup'].inline_keyboard for b in row]
     assert callbacks == ['admin_withdrawal_approve_5', 'admin_withdrawal_reject_5'], 'без telegram_id нет профиля'
+
+
+@pytest.mark.parametrize(
+    ('role', 'expected'),
+    [
+        # Профиль — по id из базы: у admin_user_<telegram_id> обработчика нет.
+        ('admin', ['admin_withdrawal_approve_5', 'admin_withdrawal_reject_5', 'admin_user_manage_42']),
+        ('group', ['admin_withdrawal_approve_5', 'admin_withdrawal_reject_5']),
+        # Одобрение только для админа: модератору кнопки ответили бы «нет доступа».
+        ('moderator', []),
+    ],
+)
+@pytest.mark.asyncio
+async def test_reminder_buttons_match_the_original_notification(monkeypatch, plain_sender, role, expected):
+    monkeypatch.setattr(settings, 'REFERRAL_WITHDRAWAL_NOTIFICATIONS_TOPIC_ID', None)
+    monkeypatch.setattr(ans.AdminNotificationService, 'resolve_recipient_role', lambda self: role)
+    bot = SimpleNamespace(send_message=AsyncMock())
+
+    assert await ans.AdminNotificationService(bot).send_withdrawal_pending_reminder(_request(), 30) is True
+
+    markup = bot.send_message.await_args.kwargs.get('reply_markup')
+    callbacks = [b.callback_data for row in markup.inline_keyboard for b in row] if markup else []
+    assert callbacks == expected
+
+
+@pytest.mark.parametrize(
+    ('minutes', 'expected'),
+    [(15, '15 мин'), (60, '1 ч'), (125, '2 ч 5 мин'), (1440, '1 д'), (2940, '2 д 1 ч')],
+)
+def test_waiting_time_reads_naturally(minutes, expected):
+    """Двое суток ожидания — «2 д 1 ч», а не «49 ч 0 мин»."""
+    assert ans._format_waiting(minutes) == expected
