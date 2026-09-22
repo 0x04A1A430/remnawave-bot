@@ -84,3 +84,53 @@ async def test_audience_counts(monkeypatch):
 
         assert await crud.count_audience(db, conditions, now=NOW, telegram_only=False) == 2
         assert await crud.count_audience(db, conditions, now=NOW, telegram_only=True) == 1
+
+
+@pytest.mark.asyncio
+async def test_concurrent_state_creation_survives_race(monkeypatch):
+    """Test that get_or_create_state handles concurrent insert without rolling back outer transaction."""
+    async with memory_session(monkeypatch, TABLES) as db:
+        user = User(id=1, telegram_id=10, first_name='Alice', language='ru', status='active', balance_kopeks=0)
+        reminder = _reminder()
+        db.add_all([user, reminder])
+        await db.commit()
+
+        # Simulate concurrent writer: directly insert a state row before get_or_create_state sees it.
+        await db.execute(
+            UserReminderState.__table__.insert().values(reminder_id=reminder.id, user_id=user.id, sends_count=5)
+        )
+        await db.commit()
+
+        # Monkeypatch _find_state: first call returns None (racing reader misses row), later calls use real function.
+        original_find_state = crud._find_state
+        call_count = 0
+
+        async def mocked_find_state(db, reminder_id, user_id):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return None  # First call: simulate race condition
+            return await original_find_state(db, reminder_id, user_id)
+
+        monkeypatch.setattr(crud, '_find_state', mocked_find_state)
+
+        # Make an unrelated pending change to ensure outer transaction is not rolled back.
+        user.first_name = 'Bob'
+
+        # Call get_or_create_state (will hit IntegrityError, then retry with real _find_state).
+        state = await crud.get_or_create_state(db, reminder.id, user.id)
+
+        # Verify it returned the pre-existing row.
+        assert state.sends_count == 5
+
+        # Commit and verify outer transaction was not rolled back.
+        await db.commit()
+
+        # Verify the unrelated change persisted.
+        user_row = await db.get(User, user.id)
+        assert user_row.first_name == 'Bob'
+
+        # Verify exactly one state row exists for this pair.
+        states = (await db.execute(UserReminderState.__table__.select())).fetchall()
+        assert len(states) == 1
+        assert states[0].sends_count == 5
