@@ -522,7 +522,8 @@ async def show_payment_methods(callback: types.CallbackQuery, db_user: User, db:
     # Сумма, переданная кнопкой «Пополнить на …» с экрана нехватки средств.
     amount_kopeks = 0
     callback_data = callback.data or ''
-    if callback_data.startswith('balance_topup_amount|'):
+    from_insufficient_screen = callback_data.startswith('balance_topup_amount|')
+    if from_insufficient_screen:
         try:
             amount_kopeks = max(0, int(callback_data.split('|', 1)[1]))
         except (IndexError, ValueError):
@@ -543,7 +544,13 @@ async def show_payment_methods(callback: types.CallbackQuery, db_user: User, db:
 
     full_text = payment_text
 
-    keyboard = get_payment_methods_keyboard(amount_kopeks, db_user.language)
+    # Пришли с экрана «Недостаточно средств» — возврат в главное меню, а не в баланс.
+    keyboard = get_payment_methods_keyboard(
+        amount_kopeks,
+        db_user.language,
+        back_callback='back_to_menu' if from_insufficient_screen else 'menu_balance',
+        back_text=(texts.t('BACK_TO_MAIN_MENU_BUTTON', '← В главное меню') if from_insufficient_screen else None),
+    )
 
     # Если сообщение недоступно, отправляем новое
     if isinstance(callback.message, InaccessibleMessage):
