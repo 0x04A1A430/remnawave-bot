@@ -32,6 +32,7 @@ from app.database.models import (
     Subscription,
     Transaction,
     User,
+    WithdrawalRequest,
     WithdrawalRequestStatus,
 )
 from app.keyboards.group_callbacks import strip_group_unsafe_buttons
@@ -1502,6 +1503,7 @@ class AdminNotificationService:
         reply_markup: types.InlineKeyboardMarkup | None = None,
         *,
         category: NotificationCategory | None = None,
+        thread_id: int | None = None,
     ) -> bool:
         if not self._is_enabled():
             return False
@@ -1511,7 +1513,9 @@ class AdminNotificationService:
             logger.debug('Уведомление подавлено (категория отключена)', category=category.value)
             return False
 
-        thread_id = self._resolve_topic_id(category)
+        # Явный thread_id (например, топик заявок на вывод) важнее топика категории
+        if thread_id is None:
+            thread_id = self._resolve_topic_id(category)
 
         # В групповом админ-чате работают только разрешённые callback-кнопки
         # (фильтр чатов глушит остальные): такие выкидываем здесь, а не рисуем
@@ -2341,6 +2345,77 @@ class AdminNotificationService:
 
         except Exception as e:
             logger.error('Ошибка отправки уведомления о запросе на вывод', error=e)
+            return False
+
+    async def send_withdrawal_pending_reminder(self, request: WithdrawalRequest, waited_minutes: int) -> bool:
+        """Напоминание о заявке на вывод, которая ждёт решения дольше лимита.
+
+        Аналог SLA-напоминания по тикетам. Уходит в топик заявок на вывод
+        (REFERRAL_WITHDRAWAL_NOTIFICATIONS_TOPIC_ID), а без него — по категории
+        PARTNERS, то есть туда же, куда пришло исходное уведомление о заявке.
+        Кнопки те же, что у исходного уведомления: решить заявку можно прямо отсюда.
+        """
+        if not self._is_enabled():
+            return False
+
+        try:
+            user = getattr(request, 'user', None)
+            user_display = self._get_user_display(user) if user else 'Unknown'
+            user_id_display = self._get_user_identifier_display(user) if user else '—'
+            username = getattr(user, 'username', None) if user else None
+            telegram_id = getattr(user, 'telegram_id', None) if user else None
+
+            hours, minutes = divmod(max(0, int(waited_minutes)), 60)
+            waited_display = f'{hours} ч {minutes} мин' if hours else f'{minutes} мин'
+
+            message_lines = [
+                '⏰ <b>Заявка на вывод ждёт решения</b>',
+                '',
+                f'🆔 <b>Заявка:</b> #{request.id}',
+                f'👤 <b>Пользователь:</b> {user_display} ({user_id_display})',
+            ]
+            if username:
+                message_lines.append(f'📱 <b>Username:</b> {format_username_link(username)}')
+            message_lines.extend(
+                [
+                    f'💵 <b>Сумма:</b> {settings.format_price(request.amount_kopeks)}',
+                    f'⏱️ <b>Ожидает решения:</b> {waited_display}',
+                ]
+            )
+
+            keyboard_rows = [
+                [
+                    types.InlineKeyboardButton(
+                        text='✅ Одобрить', callback_data=f'admin_withdrawal_approve_{request.id}'
+                    ),
+                    types.InlineKeyboardButton(
+                        text='❌ Отклонить', callback_data=f'admin_withdrawal_reject_{request.id}'
+                    ),
+                ]
+            ]
+            if telegram_id:
+                keyboard_rows.append(
+                    [
+                        types.InlineKeyboardButton(
+                            text='👤 Профиль пользователя', callback_data=f'admin_user_{telegram_id}'
+                        )
+                    ]
+                )
+            keyboard = types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
+
+            topic_id = getattr(settings, 'REFERRAL_WITHDRAWAL_NOTIFICATIONS_TOPIC_ID', None) or None
+            return await self._send_message(
+                '\n'.join(message_lines),
+                reply_markup=keyboard,
+                category=NotificationCategory.PARTNERS,
+                thread_id=topic_id,
+            )
+        except Exception as e:
+            logger.error(
+                'Ошибка отправки напоминания о заявке на вывод',
+                request_id=getattr(request, 'id', None),
+                error=e,
+            )
             return False
 
     async def send_bulk_ban_notification(
