@@ -3250,7 +3250,7 @@
   Функции: `test_disabled_in_admin_refuses_register_and_login_over_http` — Админ выключил email-вход в кабинете (строка в БД), окружение говорит «включён»:, `test_enabled_in_admin_lets_request_through_the_gate` — Обратная сторона: строка 'true' в БД при выключенном окружении — запрос проходит гейт
 - `tests/cabinet/test_email_broadcast_scoped_targets.py` — Python-модуль
   Классы: нет
-  Функции: `test_parse_scoped_targets`, `test_promo_group_target_counts_and_fetches_the_same_people`, `test_single_user_target_reaches_exactly_that_user`, `test_send_rejects_targets_nobody_can_receive`, `test_email_filters_list_promo_groups_with_counts`
+  Функции: `test_parse_scoped_targets`, `test_promo_group_target_counts_and_fetches_the_same_people`, `test_single_user_target_reaches_exactly_that_user`, `test_send_rejects_targets_nobody_can_receive`, `test_email_filters_list_promo_groups_with_counts`, `test_multi_tariff_user_gets_one_email_not_one_per_subscription` — Мультитариф: JOIN по подпискам размножал человека — письмо уходило по разу на подписку.
 - `tests/cabinet/test_email_change_otp_security.py` — Python-модуль
   Классы: нет
   Функции: `test_verify_blocked_and_code_not_checked_when_ip_rate_limited`, `test_verify_per_account_cap_burns_pending_change`, `test_request_change_rejects_unowned_admin_email`, `test_verify_and_apply_rejects_wrong_code_and_applies_correct`
@@ -3344,15 +3344,15 @@
 - `tests/cabinet/test_oauth_email_merge_revival.py` — Python-модуль
   Классы: нет
   Функции: `db`, `test_email_merge_revives_deleted_user_when_both_verified` — REGRESSION: with BOTH IdP and local row email_verified, a DELETED row gets revived., `test_email_merge_blocks_409_when_local_email_unverified` — SECURITY: local row with email_verified=False must NOT be merged., `test_email_merge_active_user_links_without_revive` — An ACTIVE local user found by email gets the provider linked, NOT revived.
+- `tests/cabinet/test_oauth_link_conflict.py` — Python-модуль
+  Классы: нет
+  Функции: `test_identity_on_another_account_offers_merge_instead_of_dead_end` — Соцсеть на аккаунте #2 -> токен слияния #1 <- #2; сама привязка не делается., `test_relinking_over_occupied_slot_is_refused_not_overwritten` — User already has a *different* Google linked -> 409, old one preserved., `test_same_identity_is_idempotent_no_op` — Re-linking the identity already on this account is a harmless no-op.
 - `tests/cabinet/test_oauth_link_email_backfill.py` — Python-модуль
   Классы: нет
   Функции: `test_backfills_verified_email_when_user_has_none`, `test_does_not_overwrite_existing_email`, `test_skips_backfill_when_email_owned_by_another_account_but_still_links`, `test_does_not_backfill_unverified_provider_email`
 - `tests/cabinet/test_oauth_redirect_uri_per_origin.py` — Python-модуль
   Классы: нет
   Функции: `origins`, `test_allowed_mirror_returns_to_itself` — Разрешённое зеркало завершает OAuth на своём же домене., `test_trailing_slash_matches_on_both_sides` — Слэш в конце — у заголовка или в настройке — не должен ломать совпадение., `test_unknown_origin_falls_back_to_canonical` — Чужой Origin не должен получать authorization code., `test_lookalike_origin_is_not_accepted` — Совпадение точное: домен-двойник с суффиксом не проходит., `test_missing_origin_falls_back_to_canonical` — Запрос без Origin — прежнее поведение канонического домена., `test_canonical_origin_allowed_even_without_the_list` — Свой домен работает, даже если список разрешённых пуст., `test_wildcard_in_the_list_does_not_open_everything` — CABINET_ALLOWED_ORIGINS='*' не должен пускать произвольный домен., `test_authorize_stores_redirect_uri_in_state_and_keeps_it_out_of_the_url` — Выбранный адрес возврата уезжает в state, но не в ссылку авторизации., `test_authorize_from_unknown_origin_stores_canonical` — С чужого домена в state попадает канонический адрес, а не присланный., `test_linking_init_uses_the_request_origin` — Привязка провайдера с зеркала тоже возвращается на зеркало., `test_linking_exchange_reuses_the_redirect_uri_from_state` — Обмен кода при привязке идёт с тем же адресом, что и на init.
-- `tests/cabinet/test_oauth_relink_forbidden.py` — Python-модуль
-  Классы: нет
-  Функции: `test_relink_to_another_account_is_refused_not_merged` — Provider identity already on account #2 -> 409, no link, no merge token., `test_relinking_over_occupied_slot_is_refused_not_overwritten` — User already has a *different* Google linked -> 409, old one preserved., `test_same_identity_is_idempotent_no_op` — Re-linking the identity already on this account is a harmless no-op.
 - `tests/cabinet/test_oauth_revival_security.py` — Python-модуль
   Классы: нет
   Функции: `test_email_merge_requires_local_user_email_verified` — Source-level guard: the email-merge branch checks user.email_verified., `test_revived_log_field_uses_pre_revival_snapshot` — `revived=<bool>` in the logger.info call must come from a snapshot, `test_revive_called_without_commit_kwarg` — Architect's call: revive_deleted_user no longer accepts `commit=`., `test_revive_service_does_not_commit` — Hard pin: revive_deleted_user implementation does not commit.
