@@ -158,6 +158,12 @@ class PaymentMethod(Enum):
     PAL24 = 'pal24'
     WATA = 'wata'
     PLATEGA = 'platega'
+    # СБП-автопродление Platega. В базу НЕ пишется: сами списания хранятся
+    # обычными транзакциями с методом `platega`, а это значение служит ключом
+    # отображения и маршрутизации в админке платежей. Без отдельного ключа
+    # детали открывались бы роутом /platega/{id} и грузили бы строку
+    # platega_payments с тем же номером — чужой платёж.
+    PLATEGA_RECURRENT = 'platega_recurrent'
     CLOUDPAYMENTS = 'cloudpayments'
     FREEKASSA = 'freekassa'
     KASSA_AI = 'kassa_ai'
