@@ -870,6 +870,7 @@
   "BALANCE_INFO": "\n<b>Баланс: {balance}</b>\n\nОберіть дію:\n",
   "BALANCE_SUPPORT_REQUEST": "️ Запит через підтримку",
   "BALANCE_TOPUP": "Поповнити баланс",
+  "INSUFFICIENT_TOPUP_BUTTON": "Поповнити на {amount}",
   "AUTO_PURCHASE_SUBSCRIPTION_SUCCESS": "Підписку на {period} автоматично оформлено після поповнення балансу.",
   "AUTO_PURCHASE_SUBSCRIPTION_EXTENDED": "Підписку автоматично продовжено на {period}.",
   "AUTO_PURCHASE_SUBSCRIPTION_EXTENDED_DETAILS": "Нова дата закінчення: {date}.",

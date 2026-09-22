@@ -49,20 +49,18 @@ def simulate_missing_gift_keys(monkeypatch):
 class TestGiftButtonFallbacks:
     """Test that all gift buttons have non-empty default fallbacks."""
 
-    def test_gift_subscription_button_fallback_in_single_keyboard(self):
-        """Test GIFT_SUBSCRIPTION_BUTTON fallback in get_subscription_keyboard."""
+    def test_gift_subscription_button_removed_from_single_keyboard(self):
+        """Кнопка «Подарить подписку» убрана из get_subscription_keyboard."""
         kb = get_subscription_keyboard(language='ru', has_subscription=False, gift_enabled=True)
         gift_buttons = [b for row in kb.inline_keyboard for b in row if b.callback_data == 'subscription_gift']
-        assert len(gift_buttons) == 1
-        assert gift_buttons[0].text == 'Подарить подписку'
+        assert gift_buttons == []
 
-    def test_gift_subscription_button_fallback_in_multi_keyboard(self):
-        """Test GIFT_SUBSCRIPTION_BUTTON fallback in _build_subscriptions_keyboard."""
+    def test_gift_subscription_button_removed_from_multi_keyboard(self):
+        """Кнопка «Подарить подписку» убрана из _build_subscriptions_keyboard."""
         subs = [SimpleNamespace(id=1, tariff=SimpleNamespace(name='Pro'))]
         kb = _build_subscriptions_keyboard(subs, language='ru', gift_enabled=True)
         gift_buttons = [b for row in kb.inline_keyboard for b in row if b.callback_data == 'subscription_gift']
-        assert len(gift_buttons) == 1
-        assert gift_buttons[0].text == '🎁 Подарить подписку'
+        assert gift_buttons == []
 
     def test_gift_catalog_buttons_fallback(self, mock_user):
         """Test tariff choice and cancel button fallbacks in _render_tariff_catalog."""

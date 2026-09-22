@@ -868,6 +868,7 @@
   "BALANCE_INFO": "\n<b><tg-emoji emoji-id='5769403330761593044'>👛</tg-emoji> 余额：{balance}</b>\n\n请选择操作：\n",
   "BALANCE_SUPPORT_REQUEST": "️通过支持请求",
   "BALANCE_TOPUP": "充值余额",
+  "INSUFFICIENT_TOPUP_BUTTON": "充值 {amount}",
   "AUTO_PURCHASE_SUBSCRIPTION_SUCCESS": "充值余额后，已自动购买{period}的订阅。",
   "AUTO_PURCHASE_SUBSCRIPTION_EXTENDED": "订阅已自动延长{period}。",
   "AUTO_PURCHASE_SUBSCRIPTION_EXTENDED_DETAILS": "新到期日期：{date}。",

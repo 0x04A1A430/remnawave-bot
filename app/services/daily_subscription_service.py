@@ -389,17 +389,22 @@ class DailySubscriptionService:
         if settings.is_multi_tariff_enabled() and hasattr(subscription, 'tariff') and subscription.tariff:
             tariff_label = f' «{subscription.tariff.name}»'
         message = (
-            f'⚠️ <b>Подписка{tariff_label} приостановлена</b>\n\n'
+            f'<b>Подписка{tariff_label} приостановлена</b>\n\n'
             f'Недостаточно средств для суточной оплаты.\n\n'
-            f'Требуется: {required_rubles:.2f} ₽\n'
-            f'Баланс: {balance_rubles:.2f} ₽\n\n'
+            f'Требуется: <code>{required_rubles:.2f} ₽</code>\n'
+            f'Баланс: <code>{balance_rubles:.2f} ₽</code>\n\n'
             f'Пополните баланс, чтобы возобновить подписку.'
         )
 
         keyboard = InlineKeyboardMarkup(
             inline_keyboard=[
-                [InlineKeyboardButton(text='💳 Пополнить баланс', callback_data='menu_balance')],
-                [InlineKeyboardButton(text='📱 Моя подписка', callback_data='menu_subscription')],
+                [
+                    InlineKeyboardButton(
+                        text=f'Пополнить на {required_rubles:.2f} ₽',
+                        callback_data=f'balance_topup_amount|{required_amount}',
+                    )
+                ],
+                [InlineKeyboardButton(text='Моя подписка', callback_data='menu_subscription')],
             ]
         )
 

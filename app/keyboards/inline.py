@@ -772,6 +772,10 @@ def get_main_menu_keyboard(
         row = paired_buttons[i : i + 2]
         keyboard.append(row)
 
+    # Неактивным пользователям баланс тоже нужен — иначе негде пополнить счёт.
+    if not (has_active_subscription and subscription_is_active):
+        keyboard.append([make_button(text=balance_button_text, callback_data='menu_balance', style='success')])
+
     # ---- Нижние кнопки: Промокод / Рефералы / Инфо — по 3 в строку ----
     bottom_buttons: list[InlineKeyboardButton] = []
 
@@ -1118,52 +1122,63 @@ def get_server_status_keyboard(
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
+def build_insufficient_topup_keyboard(
+    language: str = DEFAULT_LANGUAGE,
+    amount_kopeks: int | None = None,
+    *,
+    back_callback: str = 'back_to_menu',
+    back_text: str | None = None,
+) -> InlineKeyboardMarkup:
+    """Клавиатура «Недостаточно средств»: одна кнопка пополнения и «Назад».
+
+    Кнопка ведёт на выбор способа пополнения с уже подставленной недостающей
+    суммой (``balance_topup_amount``). Никаких «Подтвердить покупку», СБП-оформления
+    и кнопок корзины здесь нет — после пополнения корзина завершается автоматически.
+    """
+    texts = get_texts(language)
+    safe_amount = max(0, int(amount_kopeks or 0))
+    if safe_amount > 0:
+        topup_text = texts.t('INSUFFICIENT_TOPUP_BUTTON', 'Пополнить на {amount}').format(
+            amount=texts.format_price(safe_amount, round_kopeks=False),
+        )
+    else:
+        topup_text = texts.t('BALANCE_TOPUP', 'Пополнить баланс')
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                make_button(
+                    text=topup_text,
+                    callback_data=f'balance_topup_amount|{safe_amount}',
+                    style='success',
+                )
+            ],
+            [
+                make_button(
+                    text=back_text or texts.BACK,
+                    callback_data=back_callback,
+                    style='danger',
+                )
+            ],
+        ]
+    )
+
+
 def get_insufficient_balance_keyboard(
     language: str = DEFAULT_LANGUAGE,
     resume_callback: str | None = None,
     amount_kopeks: int | None = None,
-    has_saved_cart: bool = False,  # Новый параметр для указания наличия сохраненной корзины
+    has_saved_cart: bool = False,  # сохранён для обратной совместимости вызовов
     resume_text: str | None = None,
+    back_callback: str = 'back_to_menu',
+    back_text: str | None = None,
 ) -> InlineKeyboardMarkup:
-    texts = get_texts(language)
-    keyboard = get_payment_methods_keyboard(amount_kopeks or 0, language)
-
-    back_row_index: int | None = None
-
-    if keyboard.inline_keyboard:
-        last_row = keyboard.inline_keyboard[-1]
-        if (
-            len(last_row) == 1
-            and isinstance(last_row[0], InlineKeyboardButton)
-            and last_row[0].callback_data in {'menu_balance', 'back_to_menu'}
-        ):
-            keyboard.inline_keyboard[-1][0] = make_button(
-                text=texts.t('PAYMENT_RETURN_HOME_BUTTON', 'На главную'),
-                callback_data='back_to_menu',
-            )
-            back_row_index = len(keyboard.inline_keyboard) - 1
-
-    if resume_callback:
-        return_row = [
-            make_button(
-                text=resume_text or texts.RETURN_TO_SUBSCRIPTION_CHECKOUT,
-                callback_data=resume_callback,
-            )
-        ]
-        insert_index = back_row_index if back_row_index is not None else len(keyboard.inline_keyboard)
-        keyboard.inline_keyboard.insert(insert_index, return_row)
-    # Если есть сохраненная корзина, добавляем кнопку возврата к оформлению
-    elif has_saved_cart:
-        return_row = [
-            make_button(
-                text=texts.RETURN_TO_SUBSCRIPTION_CHECKOUT,
-                callback_data='return_to_saved_cart',
-            )
-        ]
-        insert_index = back_row_index if back_row_index is not None else len(keyboard.inline_keyboard)
-        keyboard.inline_keyboard.insert(insert_index, return_row)
-
-    return keyboard
+    """Единый экран «Недостаточно средств» для докупок и подписок."""
+    return build_insufficient_topup_keyboard(
+        language,
+        amount_kopeks,
+        back_callback=back_callback,
+        back_text=back_text,
+    )
 
 
 def get_subscription_keyboard(
@@ -1371,15 +1386,7 @@ def get_subscription_keyboard(
                     ]
                 )
 
-    if gift_enabled:
-        keyboard.append(
-            [
-                make_button(
-                    text=texts.t('GIFT_SUBSCRIPTION_BUTTON', 'Подарить подписку'),
-                    callback_data='subscription_gift',
-                )
-            ]
-        )
+    # Кнопка «Подарить подписку» из меню подписки убрана по запросу.
 
     # Ряд: [Настройки] [+ Купить тариф для истёкших/отключённых]
     settings_row = [
@@ -1457,25 +1464,10 @@ def get_insufficient_balance_keyboard_with_cart(
     language: str = 'ru',
     amount_kopeks: int = 0,
 ) -> InlineKeyboardMarkup:
-    # Используем обновленную версию с флагом has_saved_cart=True
-    keyboard = get_insufficient_balance_keyboard(
+    return get_insufficient_balance_keyboard(
         language,
         amount_kopeks=amount_kopeks,
-        has_saved_cart=True,
     )
-
-    # Добавляем кнопку очистки корзины в начало
-    keyboard.inline_keyboard.insert(
-        0,
-        [
-            make_button(
-                text='Очистить корзину и вернуться',
-                callback_data='clear_saved_cart',
-            )
-        ],
-    )
-
-    return keyboard
 
 
 def get_trial_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:

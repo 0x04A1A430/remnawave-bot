@@ -117,15 +117,15 @@ def memory_state() -> FSMContext:
 
 
 class TestSubscriptionGiftEntryVisibility:
-    """Test gift entry button visibility in single and multi-tariff layouts."""
+    """Кнопка «Подарить подписку» убрана из меню подписки во всех режимах."""
 
-    def test_single_mode_active_sub_with_gift_enabled(self):
+    def test_single_mode_active_sub_has_no_gift_entry(self):
         sub = SimpleNamespace(id=1, is_trial=False, actual_status='paid_active', traffic_limit_gb=100)
         kb = get_subscription_keyboard(
             language='ru', has_subscription=True, is_trial=False, subscription=sub, gift_enabled=True
         )
         callbacks = _callbacks(kb)
-        assert 'subscription_gift' in callbacks
+        assert 'subscription_gift' not in callbacks
         assert 'subscription_extend' in callbacks
         assert 'back_to_menu' in callbacks
 
@@ -138,28 +138,28 @@ class TestSubscriptionGiftEntryVisibility:
         assert 'subscription_gift' not in callbacks
         assert 'subscription_extend' in callbacks
 
-    def test_single_mode_trial_sub_with_gift_enabled(self):
+    def test_single_mode_trial_sub_has_no_gift_entry(self):
         sub = SimpleNamespace(id=2, is_trial=True, actual_status='trial_active', traffic_limit_gb=10)
         kb = get_subscription_keyboard(
             language='ru', has_subscription=True, is_trial=True, subscription=sub, gift_enabled=True
         )
         callbacks = _callbacks(kb)
-        assert 'subscription_gift' in callbacks
+        assert 'subscription_gift' not in callbacks
         assert 'subscription_upgrade' in callbacks
 
-    def test_single_mode_expired_sub_with_gift_enabled(self):
+    def test_single_mode_expired_sub_has_no_gift_entry(self):
         sub = SimpleNamespace(id=3, is_trial=False, actual_status='expired', traffic_limit_gb=50)
         kb = get_subscription_keyboard(
             language='ru', has_subscription=True, is_trial=False, subscription=sub, gift_enabled=True
         )
         callbacks = _callbacks(kb)
-        assert 'subscription_gift' in callbacks
+        assert 'subscription_gift' not in callbacks
         assert 'subscription_extend' in callbacks
 
-    def test_single_mode_no_sub_keyboard_with_gift_enabled(self):
+    def test_single_mode_no_sub_keyboard_has_no_gift_entry(self):
         kb = get_subscription_keyboard(language='ru', has_subscription=False, gift_enabled=True)
         callbacks = _callbacks(kb)
-        assert 'subscription_gift' in callbacks
+        assert 'subscription_gift' not in callbacks
         assert 'back_to_menu' in callbacks
 
     def test_single_mode_no_sub_keyboard_with_gift_disabled(self):
@@ -169,7 +169,7 @@ class TestSubscriptionGiftEntryVisibility:
         assert 'back_to_menu' in callbacks
 
     @pytest.mark.asyncio
-    async def test_show_subscription_info_no_sub_keeps_gift_entry_reachable(
+    async def test_show_subscription_info_no_sub_has_no_gift_entry(
         self, mock_callback, mock_db_user, mock_db, monkeypatch
     ):
         mock_db_user.subscription = None
@@ -180,13 +180,13 @@ class TestSubscriptionGiftEntryVisibility:
         _, kwargs = mock_callback.message.edit_text.call_args
         reply_markup = kwargs.get('reply_markup')
         assert reply_markup is not None
-        assert 'subscription_gift' in _callbacks(reply_markup)
+        assert 'subscription_gift' not in _callbacks(reply_markup)
 
-    def test_multi_mode_build_subscriptions_keyboard_gift_enabled(self):
+    def test_multi_mode_build_subscriptions_keyboard_has_no_gift_entry(self):
         subs = [SimpleNamespace(id=10, tariff=SimpleNamespace(name='Basic'))]
         kb = _build_subscriptions_keyboard(subs, language='ru', gift_enabled=True)
         callbacks = _callbacks(kb)
-        assert 'subscription_gift' in callbacks
+        assert 'subscription_gift' not in callbacks
         assert 'sm:10' in callbacks
         assert 'menu_buy' in callbacks
         assert 'back_to_menu' in callbacks
@@ -200,7 +200,7 @@ class TestSubscriptionGiftEntryVisibility:
         assert 'menu_buy' in callbacks
 
     @pytest.mark.asyncio
-    async def test_show_my_subscriptions_empty_keeps_gift_entry_reachable(
+    async def test_show_my_subscriptions_empty_has_no_gift_entry(
         self, mock_callback, mock_db_user, mock_db, monkeypatch
     ):
         monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: True)
@@ -214,7 +214,7 @@ class TestSubscriptionGiftEntryVisibility:
             _, kwargs = mock_callback.message.edit_text.call_args
             reply_markup = kwargs.get('reply_markup')
             assert reply_markup is not None
-            assert 'subscription_gift' in _callbacks(reply_markup)
+            assert 'subscription_gift' not in _callbacks(reply_markup)
             assert 'menu_buy' in _callbacks(reply_markup)
 
 

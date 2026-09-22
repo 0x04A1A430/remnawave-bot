@@ -156,20 +156,20 @@ def _make_gift_history_item(
 
 
 class TestGiftMenuVisibilityAndEmptyHistory:
-    """Test persistent subscription-menu entry and in-section sales gating (Step 1)."""
+    """Кнопка подарка убрана из меню; секция подарков доступна только по ссылке/коду."""
 
     @pytest.mark.asyncio
-    async def test_single_tariff_menu_always_shows_gift_entry(self, mock_callback, mock_db_user, mock_db, monkeypatch):
+    async def test_single_tariff_menu_has_no_gift_entry(self, mock_callback, mock_db_user, mock_db, monkeypatch):
         mock_db_user.subscription = None
         monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: False)
         await show_subscription_info(mock_callback, mock_db_user, mock_db)
         assert mock_callback.message.edit_text.called
         _, kwargs = mock_callback.message.edit_text.call_args
         reply_markup = kwargs.get('reply_markup')
-        assert 'subscription_gift' in _callbacks(reply_markup)
+        assert 'subscription_gift' not in _callbacks(reply_markup)
 
     @pytest.mark.asyncio
-    async def test_multi_tariff_menu_always_shows_gift_entry(self, mock_callback, mock_db_user, mock_db, monkeypatch):
+    async def test_multi_tariff_menu_has_no_gift_entry(self, mock_callback, mock_db_user, mock_db, monkeypatch):
         monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: True)
         with patch(
             'app.handlers.subscription.my_subscriptions.get_all_subscriptions_by_user_id',
@@ -179,7 +179,7 @@ class TestGiftMenuVisibilityAndEmptyHistory:
             assert mock_callback.message.edit_text.called
             _, kwargs = mock_callback.message.edit_text.call_args
             reply_markup = kwargs.get('reply_markup')
-            assert 'subscription_gift' in _callbacks(reply_markup)
+            assert 'subscription_gift' not in _callbacks(reply_markup)
 
     @pytest.mark.asyncio
     async def test_gift_catalog_disabled_sales_with_history_renders_history_only_view(
