@@ -3,7 +3,8 @@
 The billing database remains canonical.  This module persists versioned
 snapshots, applies a temporary Remnawave overlay, discovers recent incidents,
 and reconciles open sessions.  It deliberately never changes a subscription's
-billing dates/status and never resets used traffic.
+billing dates/status and resets used traffic only when
+GRACE_ACCESS_RESET_TRAFFIC_ON_START allows it (see should_reset_used_traffic).
 """
 
 from __future__ import annotations
@@ -423,12 +424,19 @@ class RemnawaveGracePanelGateway:
                 traffic_limit_bytes=overlay.traffic_limit_bytes,
                 active_internal_squads=list(overlay.squad_uuids),
             )
-        if updated is None or not panel_matches_overlay(
-            _panel_user_to_snapshot(updated),
-            overlay,
-            now=datetime.now(UTC),
-        ):
-            raise GracePanelError('Remnawave did not confirm the grace overlay')
+            if updated is None or not panel_matches_overlay(
+                _panel_user_to_snapshot(updated),
+                overlay,
+                now=datetime.now(UTC),
+            ):
+                raise GracePanelError('Remnawave did not confirm the grace overlay')
+            if overlay.reset_used_traffic:
+                # Строго после PATCH: к этому моменту остались только сквад grace
+                # и лимит в квоту. Сброс до него снял бы у LIMITED-пользователя
+                # статус при старых сквадах и открыл бы полный доступ.
+                reset = await api.reset_user_traffic(remnawave_id)
+                if reset is None or int(reset.used_traffic_bytes or 0) >= overlay.traffic_limit_bytes:
+                    raise GracePanelError('Remnawave did not reset used traffic for the grace overlay')
 
     async def restore_snapshot(
         self,
@@ -1776,6 +1784,7 @@ def _build_policy() -> GraceAccessPolicy:
         free_enabled=settings.GRACE_ACCESS_FREE_ENABLED,
         reconcile_batch_size=settings.GRACE_ACCESS_RECONCILE_BATCH_SIZE,
         external_squad_uuid=settings.GRACE_ACCESS_EXTERNAL_SQUAD_UUID.strip() or None,
+        reset_traffic_on_start=settings.GRACE_ACCESS_RESET_TRAFFIC_ON_START,
     )
 
 

@@ -1294,6 +1294,14 @@ class RemnaWaveWebhookService:
             await reactivate_subscription(db, subscription)
         logger.info('Webhook: traffic reset for subscription', subscription_id=subscription.id, user_id=user.id)
 
+        # Истёкшей подписке счётчик обнуляет сам grace при выдаче
+        # (GRACE_ACCESS_RESET_TRAFFIC_ON_START): «трафик сброшен» рядом с
+        # сообщением о grace читалось бы как продление.
+        if subscription.status == SubscriptionStatus.EXPIRED.value and subscription.id in (
+            await get_open_grace_subscription_ids(db)
+        ):
+            return
+
         await self._notify_user(
             user,
             'WEBHOOK_SUB_TRAFFIC_RESET',

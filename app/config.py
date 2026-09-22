@@ -267,6 +267,10 @@ class Settings(BaseSettings):
     # Внешний сквад для grace-доступа: пусто = сброс в None, 'keep' = сохранять текущий, либо UUID аварийного внешнего сквада
     GRACE_ACCESS_EXTERNAL_SQUAD_UUID: str = ''
     GRACE_ACCESS_TRAFFIC_GB: int = 1
+    # Обнулять счётчик трафика при выдаче grace, чтобы панель и клиент показывали
+    # «0 из N ГБ», а не «64.76 из 65.76 GiB». Только истёкшие подписки с безлимитом:
+    # там счётчик чисто информационный. Расход до grace при этом теряется.
+    GRACE_ACCESS_RESET_TRAFFIC_ON_START: bool = False
     GRACE_ACCESS_TRIAL_ENABLED: bool = False
     GRACE_ACCESS_DAILY_ENABLED: bool = False
     GRACE_ACCESS_FREE_ENABLED: bool = False
