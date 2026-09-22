@@ -14,8 +14,8 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy import ColumnElement, and_, case, exists, func, literal, not_, or_
 
-from app.database.crud.subscription import ALIVE_SUBSCRIPTION_STATUSES
-from app.database.crud.user import OAUTH_PROVIDER_COLUMNS
+from app.database.auth_methods import OAUTH_PROVIDER_COLUMNS, compute_auth_methods
+from app.database.constants import ALIVE_SUBSCRIPTION_STATUSES
 from app.database.models import Subscription, SubscriptionStatus, User, UserStatus
 
 
@@ -141,8 +141,6 @@ def _is_alive(subscription, now: datetime) -> bool:
 
 
 def _auth_matches(user, auth: AuthCondition) -> bool:
-    from app.services.account_merge_service import compute_auth_methods
-
     methods = compute_auth_methods(user)
     if len(methods) != 1:
         return False

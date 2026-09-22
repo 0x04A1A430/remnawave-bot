@@ -9,8 +9,10 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import structlog
 from pydantic import ValidationError
@@ -20,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database.crud.user_reminder import CHANNELS_BOT, list_active_reminders, record_bot_attempt
 from app.database.models import User, UserReminderState
+from app.services.notification_types import NotificationType
 from app.services.user_reminders.conditions import condition_clauses, parse_conditions
 from app.services.user_reminders.texts import render_bot_message, validate_texts
 from app.utils.notification_prefs import is_promo_offers_enabled
@@ -49,23 +52,35 @@ def is_quiet_time(now: datetime, *, start_hour: int, end_hour: int, tz) -> bool:
     return start_hour <= hour < end_hour
 
 
-async def deliver_to_bot(user, reminder, bot) -> bool:
-    from app.services.notification_delivery_service import notification_delivery_service
-    from app.services.notification_types import NotificationType
-
-    text, markup = render_bot_message(reminder, user.language)
-    return await notification_delivery_service.send_notification(
-        user,
-        NotificationType.USER_REMINDER,
-        {'reminder_id': reminder.id},
-        bot=bot,
-        telegram_message=text,
-        telegram_markup=markup,
-        use_websocket=False,
-    )
+Deliver = Callable[[Any, Any, Any], Awaitable[bool]]
 
 
-def _candidates_query(reminder, conditions, *, now: datetime, exclude: set[int], limit: int):
+def bot_delivery(delivery_service) -> Deliver:
+    """Отправка напоминания через общий сток уведомлений.
+
+    Сток передаёт вызывающий (мониторинг): импорт отсюда замыкал кольцо
+    «мониторинг → напоминания → сток уведомлений → … → мониторинг» (CodeQL
+    py/cyclic-import).
+    """
+
+    async def deliver(user, reminder, bot) -> bool:
+        text, markup = render_bot_message(reminder, user.language)
+        return await delivery_service.send_notification(
+            user,
+            NotificationType.USER_REMINDER,
+            {'reminder_id': reminder.id},
+            bot=bot,
+            telegram_message=text,
+            telegram_markup=markup,
+            use_websocket=False,
+        )
+
+    return deliver
+
+
+def _candidates_query(
+    reminder, conditions, *, now: datetime, exclude: set[int], limit: int, after_id: int | None = None
+):
     repeat_cutoff = now - timedelta(days=reminder.repeat_every_days)
     blocked_by_own_state = exists().where(
         UserReminderState.reminder_id == reminder.id,
@@ -84,14 +99,15 @@ def _candidates_query(reminder, conditions, *, now: datetime, exclude: set[int],
         )
     if exclude:
         clauses.append(User.id.not_in(exclude))
+    if after_id is not None:
+        clauses.append(User.id > after_id)
     return select(User).where(*clauses).order_by(User.id).limit(limit)
 
 
 async def run_reminder_pass(
-    db: AsyncSession, bot, *, now: datetime | None = None, deliver=None, sleep=asyncio.sleep
+    db: AsyncSession, bot, *, deliver: Deliver, now: datetime | None = None, sleep=asyncio.sleep
 ) -> PassResult:
     now = now or datetime.now(UTC)
-    deliver = deliver or deliver_to_bot
     if is_quiet_time(
         now,
         start_hour=settings.USER_REMINDERS_QUIET_HOURS_START,
@@ -120,31 +136,46 @@ async def run_reminder_pass(
             logger.warning('Напоминание с битыми текстами пропущено', reminder_id=reminder.id, error=str(error))
             continue
 
-        users = list(
-            (
-                await db.execute(_candidates_query(reminder, conditions, now=now, exclude=touched, limit=budget))
-            ).scalars()
-        )
-        for user in users:
-            touched.add(user.id)
-            if reminder.category == 'marketing' and not is_promo_offers_enabled(user):
-                # Отписан от промо: отмечаем попыткой, чтобы он не занимал голову очереди каждый проход.
-                await record_bot_attempt(db, reminder.id, user.id, now=now, success=False)
-                skipped += 1
-                continue
-            try:
-                ok = await deliver(user, reminder, bot)
-            except Exception as error:
-                logger.warning('Сбой отправки напоминания', reminder_id=reminder.id, user_id=user.id, error=str(error))
-                ok = False
-            await record_bot_attempt(db, reminder.id, user.id, now=now, success=ok)
-            sent, failed = (sent + 1, failed) if ok else (sent, failed + 1)
-            budget -= 1
-            attempts += 1
-            if attempts % SEND_BATCH == 0:
-                await sleep(SEND_BATCH_PAUSE_SECONDS)
-            if budget <= 0:
+        # Порциями по курсору, пока не кончится бюджет или кандидаты: отписанные от
+        # промо бюджет не тратят, и одна порция размером в бюджет могла целиком из
+        # них состоять — дальше по списку в этот проход не доходил никто, а после
+        # окна повтора та же голова очереди снова всё закрывала (ревью PR #3280).
+        after_id: int | None = None
+        while budget > 0:
+            users = list(
+                (
+                    await db.execute(
+                        _candidates_query(
+                            reminder, conditions, now=now, exclude=touched, limit=budget, after_id=after_id
+                        )
+                    )
+                ).scalars()
+            )
+            if not users:
                 break
+            after_id = users[-1].id
+            for user in users:
+                touched.add(user.id)
+                if reminder.category == 'marketing' and not is_promo_offers_enabled(user):
+                    # Отписан от промо: отмечаем попыткой, чтобы он не занимал голову очереди каждый проход.
+                    await record_bot_attempt(db, reminder.id, user.id, now=now, success=False)
+                    skipped += 1
+                    continue
+                try:
+                    ok = await deliver(user, reminder, bot)
+                except Exception as error:
+                    logger.warning(
+                        'Сбой отправки напоминания', reminder_id=reminder.id, user_id=user.id, error=str(error)
+                    )
+                    ok = False
+                await record_bot_attempt(db, reminder.id, user.id, now=now, success=ok)
+                sent, failed = (sent + 1, failed) if ok else (sent, failed + 1)
+                budget -= 1
+                attempts += 1
+                if attempts % SEND_BATCH == 0:
+                    await sleep(SEND_BATCH_PAUSE_SECONDS)
+                if budget <= 0:
+                    break
 
     if sent or failed:
         logger.info('Проход напоминаний', sent=sent, failed=failed, skipped=skipped)

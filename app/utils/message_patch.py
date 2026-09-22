@@ -152,12 +152,13 @@ _logo_file_id_fingerprint: str | None = None
 
 
 def _drop_logo_cache_if_file_changed() -> None:
-    global _logo_file_id, _logo_file_id_fingerprint, _logo_send_path
+    # Отпечаток не обнуляем: его читают только при непустом file_id, а новый
+    # записывается вместе с новым file_id в _cache_logo_file_id.
+    global _logo_file_id, _logo_send_path
     current = logo_fingerprint(LOGO_PATH)
     if _logo_file_id is not None and _logo_file_id_fingerprint != current:
         logger.info('Файл логотипа заменён — file_id и уменьшенная копия забыты', logo_path=str(LOGO_PATH))
         _logo_file_id = None
-        _logo_file_id_fingerprint = None
         _logo_send_path = None
 
 
@@ -304,7 +305,7 @@ async def _answer_with_photo(self: Message, text: str = None, **kwargs):
         pass
     language = _get_language(self)
 
-    if LOGO_PATH.exists():  # noqa: ASYNC240 — stat локального файла, один системный вызов
+    if LOGO_PATH.exists():
         try:
             result = await self.answer_photo(get_logo_media(), caption=text, **kwargs)
             _cache_logo_file_id(result)
@@ -383,7 +384,7 @@ async def _edit_with_photo(self: Message, text: str, **kwargs):
                 return await _text_answer(self, text, **kwargs)
         except Exception:
             pass
-        if LOGO_PATH.exists():  # noqa: ASYNC240 — stat локального файла, один системный вызов
+        if LOGO_PATH.exists():
             media = get_logo_media()
         else:
             media = self.photo[-1].file_id

@@ -3371,14 +3371,15 @@ class MonitoringService:
             await asyncio.sleep(interval_seconds)
 
     async def _user_reminder_loop(self):
-        from app.services.user_reminders.dispatcher import run_reminder_pass
+        from app.services.user_reminders.dispatcher import bot_delivery, run_reminder_pass
 
+        deliver = bot_delivery(notification_delivery_service)
         while self.is_running:
             try:
                 if self.bot:
                     async with AsyncSessionLocal() as db:
                         try:
-                            await run_reminder_pass(db, self.bot)
+                            await run_reminder_pass(db, self.bot, deliver=deliver)
                         except Exception as e:
                             # warning, не error: сбой одного прохода не повод писать в админ-чат
                             logger.warning('Сбой прохода напоминаний пользователям', error=str(e))

@@ -152,5 +152,6 @@ async def _deliver(user: User, group: PromoGroup, total_spent_kopeks: int) -> No
         if bot is not None:
             try:
                 await bot.session.close()
-            except Exception:
-                pass
+            except Exception as error:
+                # Сообщение уже ушло (или нет) — незакрытая HTTP-сессия бота на это не влияет.
+                logger.debug('Не удалось закрыть сессию бота после уведомления', error=str(error))

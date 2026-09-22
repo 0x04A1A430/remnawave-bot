@@ -25,7 +25,7 @@ import structlog
 from aiogram.exceptions import TelegramNetworkError
 from aiohttp import ClientOSError
 
-from app.logging_handler import TelegramNotifierProcessor, _is_transient_telegram_error
+from app.logging_handler import STATUS_SUPPRESSED, TelegramNotifierProcessor, _is_transient_telegram_error
 
 
 def _aiogram_record(error: BaseException, *, logger: str = 'aiogram.dispatcher') -> dict:
@@ -88,11 +88,9 @@ def test_unrelated_error_is_not_suppressed():
 )
 def test_processor_suppresses_only_the_transport_noise(monkeypatch, error, expected_sends):
     """Сквозной путь: событие пишется в базу, но в чат уходит только настоящая ошибка."""
-    import app.logging_handler as handler
-
     statuses: list[str] = []
-    monkeypatch.setattr(handler, '_record_error_event', lambda *_: 'uid')
-    monkeypatch.setattr(handler, '_mark_error_event', lambda _uid, status: statuses.append(status))
+    monkeypatch.setattr('app.logging_handler._record_error_event', lambda *_: 'uid')
+    monkeypatch.setattr('app.logging_handler._mark_error_event', lambda _uid, status: statuses.append(status))
     sends: list[dict] = []
     monkeypatch.setattr(TelegramNotifierProcessor, '_schedule_send', lambda self, bot, ev, uid: sends.append(ev))
 
@@ -102,4 +100,4 @@ def test_processor_suppresses_only_the_transport_noise(monkeypatch, error, expec
 
     assert len(sends) == expected_sends
     if not expected_sends:
-        assert statuses == [handler.STATUS_SUPPRESSED]
+        assert statuses == [STATUS_SUPPRESSED]

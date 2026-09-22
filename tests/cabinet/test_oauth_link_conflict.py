@@ -57,20 +57,20 @@ async def _run(
         s.enter_context(patch('app.cabinet.routes.account_linking.create_merge_token', create_token))
         set_id = AsyncMock()
         s.enter_context(patch('app.cabinet.routes.account_linking.set_user_oauth_provider_id', set_id))
-        call = _exchange_and_link_oauth(
-            db=db,
-            user=user,
-            provider='google',
-            code='code',
-            state='state',
-            state_data={},
-            device_id=None,
-            log_context='test',
-        )
+        kwargs = {
+            'db': db,
+            'user': user,
+            'provider': 'google',
+            'code': 'code',
+            'state': 'state',
+            'state_data': {},
+            'device_id': None,
+            'log_context': 'test',
+        }
         if not expect_error:
-            return await call, set_id, db, create_token
+            return await _exchange_and_link_oauth(**kwargs), set_id, db, create_token
         with pytest.raises(HTTPException) as exc:
-            await call
+            await _exchange_and_link_oauth(**kwargs)
         return exc.value, set_id, db, create_token
 
 

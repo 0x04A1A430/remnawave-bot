@@ -191,6 +191,30 @@ async def test_marketing_respects_promo_opt_out_without_starving_the_queue(monke
 
 
 @pytest.mark.asyncio
+async def test_opted_out_prefix_larger_than_budget_does_not_block_later_people(monkeypatch):
+    """Ревью PR #3280: голова очереди из отписанных закрывала весь проход.
+
+    Выборка берёт столько кандидатов, сколько осталось бюджета; отписанные его не
+    тратят. Без дочитывания следующей порции люди дальше по списку не получали
+    ничего, а после окна повтора та же голова снова всё закрывала.
+    """
+    monkeypatch.setattr(settings, 'USER_REMINDERS_MAX_PER_PASS', 2)
+    opted_out = {'promo_offers_enabled': False}
+    async with memory_session(monkeypatch, TABLES) as db:
+        await _seed(
+            db,
+            [_user(i, notification_settings=opted_out) for i in (1, 2, 3)] + [_user(i) for i in (4, 5, 6)],
+            [_reminder(1, category='marketing')],
+        )
+        deliver = Recorder()
+        result = await _pass(db, deliver)
+
+        assert deliver.calls == [(1, 4), (1, 5)]
+        assert result.sent == 2
+        assert result.skipped == 3
+
+
+@pytest.mark.asyncio
 async def test_pass_ceiling(monkeypatch):
     monkeypatch.setattr(settings, 'USER_REMINDERS_MAX_PER_PASS', 2)
     async with memory_session(monkeypatch, TABLES) as db:
