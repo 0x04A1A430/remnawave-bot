@@ -480,9 +480,7 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
         )
 
         if is_forever:
-            message_template = '\n'.join(
-                line for line in message_template.splitlines() if '{time_left}' not in line
-            )
+            message_template = '\n'.join(line for line in message_template.splitlines() if '{time_left}' not in line)
 
     if not show_devices:
         message_template = message_template.replace(
