@@ -751,12 +751,10 @@ async def handle_gift_confirm(
 
         text = texts.t(
             'GIFT_INSUFFICIENT_BALANCE_TITLE',
-            '💰 <b>Недостаточно средств для оформления подарка</b>\n\n'
-            'Требуется: <b>{required}</b>\n'
-            'У вас: <b>{balance}</b>\n'
-            'Не хватает: <b>{missing}</b>\n\n'
-            '🛒 <i>Ваша корзина сохранена! После пополнения баланса вы сможете вернуться к оформлению подарка.</i>\n\n'
-            'Выберите способ пополнения:',
+            '<b>Недостаточно средств для оформления подарка</b>\n\n'
+            'Требуется: <code>{required}</code>\n'
+            'У вас: <code>{balance}</code>\n'
+            'Не хватает: <code>{missing}</code>',
         ).format(
             required=req_str,
             balance=avail_str,
@@ -765,9 +763,6 @@ async def handle_gift_confirm(
         reply_markup = get_insufficient_balance_keyboard(
             language=db_user.language,
             amount_kopeks=missing_amount,
-            resume_callback='return_to_gift_cart',
-            has_saved_cart=True,
-            resume_text=texts.t('GIFT_RETURN_TO_CART_BUTTON', '🎁 Вернуться к подарку'),
         )
         await callback.message.edit_text(text, reply_markup=reply_markup, parse_mode='HTML')
         await callback.answer()
@@ -1021,12 +1016,10 @@ async def handle_return_to_gift_cart(
 
         text = texts.t(
             'GIFT_INSUFFICIENT_BALANCE_TITLE',
-            '💰 <b>Недостаточно средств для оформления подарка</b>\n\n'
-            'Требуется: <b>{required}</b>\n'
-            'У вас: <b>{balance}</b>\n'
-            'Не хватает: <b>{missing}</b>\n\n'
-            '🛒 <i>Ваша корзина сохранена! После пополнения баланса вы сможете вернуться к оформлению подарка.</i>\n\n'
-            'Выберите способ пополнения:',
+            '<b>Недостаточно средств для оформления подарка</b>\n\n'
+            'Требуется: <code>{required}</code>\n'
+            'У вас: <code>{balance}</code>\n'
+            'Не хватает: <code>{missing}</code>',
         ).format(
             required=req_str,
             balance=bal_str,
@@ -1035,9 +1028,6 @@ async def handle_return_to_gift_cart(
         reply_markup = get_insufficient_balance_keyboard(
             language=db_user.language,
             amount_kopeks=new_missing,
-            resume_callback='return_to_gift_cart',
-            has_saved_cart=True,
-            resume_text=texts.t('GIFT_RETURN_TO_CART_BUTTON', '🎁 Вернуться к подарку'),
         )
         await callback.message.edit_text(text, reply_markup=reply_markup, parse_mode='HTML')
         await callback.answer()

@@ -67,7 +67,7 @@ async def test_save_cart_and_redirect_to_topup(mock_callback_query, mock_state, 
     # Мокаем все зависимости
     with (
         patch('app.handlers.subscription.purchase.user_cart_service') as mock_cart_service,
-        patch('app.handlers.subscription.purchase.get_payment_methods_keyboard_with_cart') as mock_keyboard_func,
+        patch('app.handlers.subscription.purchase.get_insufficient_balance_keyboard') as mock_keyboard_func,
         patch('app.localization.texts.get_texts') as mock_get_texts,
     ):
         # Подготовим моки

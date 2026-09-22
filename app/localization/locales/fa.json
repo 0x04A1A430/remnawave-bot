@@ -962,6 +962,7 @@
   "BALANCE_INFO": "\n💰 <b>موجودی: {balance}</b>\n\nعملیات:\n",
   "BALANCE_SUPPORT_REQUEST": "🛠️ درخواست از پشتیبانی",
   "BALANCE_TOPUP": "💳 شارژ موجودی",
+  "INSUFFICIENT_TOPUP_BUTTON": "شارژ {amount}",
   "AUTO_PURCHASE_SUBSCRIPTION_SUCCESS": "✅ اشتراک {period} پس از شارژ خودکار فعال شد.",
   "AUTO_PURCHASE_SUBSCRIPTION_EXTENDED": "✅ اشتراک خودکار {period} تمدید شد.",
   "AUTO_PURCHASE_SUBSCRIPTION_EXTENDED_DETAILS": "⏰ انقضای جدید: {date}.",

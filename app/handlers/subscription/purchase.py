@@ -28,7 +28,6 @@ from app.keyboards.inline import (
     get_happ_download_button_row,
     get_insufficient_balance_keyboard,
     get_insufficient_balance_keyboard_with_cart,
-    get_payment_methods_keyboard_with_cart,
     get_subscription_confirm_keyboard,
     get_subscription_confirm_keyboard_with_cart,
     get_subscription_keyboard,
@@ -1433,15 +1432,12 @@ async def save_cart_and_redirect_to_topup(
     await user_cart_service.save_user_cart(db_user.id, cart_data)
 
     await callback.message.edit_text(
-        f'💰 Недостаточно средств для оформления подписки\n\n'
-        f'Требуется: {texts.format_price(missing_amount, round_kopeks=False)}\n'
-        f'У вас: {texts.format_price(db_user.balance_kopeks, round_kopeks=False)}\n\n'
-        f'🛒 Ваша корзина сохранена!\n'
-        f'После пополнения баланса вы сможете вернуться к оформлению подписки.\n\n'
-        f'Выберите способ пополнения:',
-        reply_markup=get_payment_methods_keyboard_with_cart(
+        '<b>Недостаточно средств для оформления подписки</b>\n\n'
+        f'Требуется: <code>{texts.format_price(missing_amount, round_kopeks=False)}</code>\n'
+        f'У вас: <code>{texts.format_price(db_user.balance_kopeks, round_kopeks=False)}</code>',
+        reply_markup=get_insufficient_balance_keyboard(
             db_user.language,
-            missing_amount,
+            amount_kopeks=missing_amount,
         ),
         parse_mode='HTML',
     )
@@ -1556,16 +1552,17 @@ async def return_to_saved_cart(callback: types.CallbackQuery, state: FSMContext,
             missing_amount,
         )
         insufficient_text = (
-            f'❌ Все еще недостаточно средств\n\n'
-            f'Требуется: {texts.format_price(total_price, round_kopeks=False)}\n'
-            f'У вас: {texts.format_price(db_user.balance_kopeks, round_kopeks=False)}\n'
-            f'Не хватает: {texts.format_price(missing_amount, round_kopeks=False)}'
+            '<b>Все еще недостаточно средств</b>\n\n'
+            f'Требуется: <code>{texts.format_price(total_price, round_kopeks=False)}</code>\n'
+            f'У вас: <code>{texts.format_price(db_user.balance_kopeks, round_kopeks=False)}</code>\n'
+            f'Не хватает: <code>{texts.format_price(missing_amount, round_kopeks=False)}</code>'
         )
 
         if _message_needs_update(callback.message, insufficient_text, insufficient_keyboard):
             await callback.message.edit_text(
                 insufficient_text,
                 reply_markup=insufficient_keyboard,
+                parse_mode='HTML',
             )
         else:
             await callback.answer('ℹ️ Пополните баланс, чтобы завершить оформление.')

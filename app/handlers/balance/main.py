@@ -519,18 +519,27 @@ async def show_payment_methods(callback: types.CallbackQuery, db_user: User, db:
 
     payment_text = get_payment_methods_text(db_user.language)
 
-    # Проверяем сохранённую корзину для автоподстановки суммы пополнения
+    # Сумма, переданная кнопкой «Пополнить на …» с экрана нехватки средств.
     amount_kopeks = 0
-    try:
-        from app.services.user_cart_service import user_cart_service
+    callback_data = callback.data or ''
+    if callback_data.startswith('balance_topup_amount|'):
+        try:
+            amount_kopeks = max(0, int(callback_data.split('|', 1)[1]))
+        except (IndexError, ValueError):
+            amount_kopeks = 0
 
-        cart_data = await user_cart_service.get_user_cart(db_user.id)
-        if cart_data and cart_data.get('saved_cart'):
-            missing = cart_data.get('missing_amount', 0)
-            if missing > 0:
-                amount_kopeks = missing
-    except Exception:
-        pass
+    # Иначе проверяем сохранённую корзину для автоподстановки суммы пополнения
+    if amount_kopeks <= 0:
+        try:
+            from app.services.user_cart_service import user_cart_service
+
+            cart_data = await user_cart_service.get_user_cart(db_user.id)
+            if cart_data and cart_data.get('saved_cart'):
+                missing = cart_data.get('missing_amount', 0)
+                if missing > 0:
+                    amount_kopeks = missing
+        except Exception:
+            pass
 
     full_text = payment_text
 
@@ -881,6 +890,7 @@ def register_balance_handlers(dp: Dispatcher):
     dp.callback_query.register(show_transaction_detail, F.data.startswith('bh_view_'))
 
     dp.callback_query.register(show_payment_methods, F.data == 'balance_topup')
+    dp.callback_query.register(show_payment_methods, F.data.startswith('balance_topup_amount|'))
 
     from .stars import start_stars_payment
 

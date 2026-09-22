@@ -215,13 +215,10 @@ class TestGiftInsufficientBalanceAndCart:
         kb = get_insufficient_balance_keyboard(
             language='ru',
             amount_kopeks=missing_amount,
-            resume_callback='return_to_gift_cart',
-            has_saved_cart=True,
-            resume_text='🎁 Вернуться к подарку',
         )
         assert kb is not None
         callbacks = _callbacks(kb)
-        assert 'return_to_gift_cart' in callbacks
+        assert 'balance_topup_amount|20025' in callbacks
 
     @pytest.mark.asyncio
     async def test_gift_cart_exact_keys_survive_redis_serialization(self, test_cart_service):
@@ -310,7 +307,7 @@ class TestGiftInsufficientBalanceAndCart:
             reply_markup = edit_kwargs.get('reply_markup')
             assert reply_markup is not None
             callbacks = _callbacks(reply_markup)
-            assert 'return_to_gift_cart' in callbacks
+            assert 'balance_topup_amount|20025' in callbacks
 
     @pytest.mark.asyncio
     async def test_redis_unavailable_shows_recoverable_warning_and_retains_fsm(
@@ -531,7 +528,7 @@ class TestGiftTopupSuccessKeyboardAndResume:
             text = mock_callback.message.edit_text.call_args[0][0]
             assert '200' in text
             reply_markup = mock_callback.message.edit_text.call_args[1]['reply_markup']
-            assert 'return_to_gift_cart' in _callbacks(reply_markup)
+            assert 'balance_topup_amount|20025' in _callbacks(reply_markup)
 
     @pytest.mark.asyncio
     async def test_return_to_gift_cart_sufficient_balance_renders_confirmation_summary(
