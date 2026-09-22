@@ -571,8 +571,10 @@ class ShutdownReason:
 _SIGNAL_REASONS: Final[dict[int, tuple[str, str]]] = {
     signal.SIGTERM.value: (
         'сигнал SIGTERM',
-        'Так бота останавливает Docker: <code>docker compose stop</code> / <code>restart</code>, '
-        'обновление образа, перезагрузка сервера.',
+        (
+            'Так бота останавливает Docker: <code>docker compose stop</code> / <code>restart</code>, '
+            'обновление образа, перезагрузка сервера.'
+        ),
     ),
     signal.SIGINT.value: ('сигнал SIGINT (Ctrl+C)', 'Бота остановили из консоли.'),
 }
