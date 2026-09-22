@@ -47,6 +47,7 @@ from .admin_tariffs import router as admin_tariffs_router
 from .admin_tickets import router as admin_tickets_router
 from .admin_traffic import router as admin_traffic_router
 from .admin_updates import router as admin_updates_router
+from .admin_user_reminders import router as admin_user_reminders_router
 from .admin_users import router as admin_users_router
 from .admin_wheel import router as admin_wheel_router
 from .admin_withdrawals import router as admin_withdrawals_router
@@ -165,6 +166,7 @@ router.include_router(admin_grace_access_router)
 router.include_router(admin_updates_router)
 router.include_router(admin_traffic_router)
 router.include_router(admin_pinned_messages_router)
+router.include_router(admin_user_reminders_router)
 router.include_router(admin_button_styles_router)
 router.include_router(admin_menu_layout_router)
 router.include_router(admin_channels_router)
