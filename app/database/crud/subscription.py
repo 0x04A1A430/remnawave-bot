@@ -1287,7 +1287,7 @@ async def extend_subscription(
         subscription.status = SubscriptionStatus.ACTIVE.value
         logger.info('🔄 Статус подписки изменён с trial на ACTIVE', subscription_id=subscription.id)
     elif days > 0 and subscription.status == SubscriptionStatus.PENDING.value:
-        logger.warning('⚠️ Попытка продлить PENDING подписку , дни', subscription_id=subscription.id, days=days)
+        logger.warning('⚠️ Попытка продлить PENDING подписку', subscription_id=subscription.id, days=days)
 
     # Обновляем параметры тарифа, если переданы
     if tariff_id is not None:
@@ -2408,7 +2408,7 @@ async def check_and_update_subscription_status(db: AsyncSession, subscription: S
     current_time = datetime.now(UTC)
 
     logger.info(
-        '🔍 Проверка статуса подписки , текущий статус дата окончания текущее время',
+        '🔍 Проверка статуса подписки',
         subscription_id=subscription.id,
         subscription_status=subscription.status,
         format_local_datetime=format_local_datetime(subscription.end_date),
@@ -2633,7 +2633,7 @@ async def create_pending_subscription(
         await db.refresh(existing_subscription)
 
         logger.info(
-            '♻️ Обновлена ожидающая подписка пользователя , ID метод оплаты',
+            '♻️ Обновлена ожидающая подписка',
             trial_label=trial_label,
             user_id=user_id,
             existing_subscription_id=existing_subscription.id,
@@ -2662,7 +2662,7 @@ async def create_pending_subscription(
     await db.refresh(subscription)
 
     logger.info(
-        '💳 Создана ожидающая подписка для пользователя , ID метод оплаты',
+        '💳 Создана ожидающая подписка',
         trial_label=trial_label,
         user_id=user_id,
         subscription_id=subscription.id,

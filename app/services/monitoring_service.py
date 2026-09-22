@@ -1929,7 +1929,7 @@ class MonitoringService:
                             processed_count += 1
                             self._notified_users.add(autopay_key)
                             logger.info(
-                                '💳 Автопродление подписки пользователя успешно (списано , скидка %)',
+                                '💳 Автопродление подписки прошло успешно',
                                 user_identifier=user_identifier,
                                 charge_amount=charge_amount,
                                 promo_discount_percent=promo_discount_percent,

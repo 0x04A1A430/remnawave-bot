@@ -3026,6 +3026,9 @@
 - `tests/test_locale_integrity.py` — Python-модуль
   Классы: нет
   Функции: `locales`, `test_all_locales_have_identical_keys`, `test_placeholders_consistent_across_locales` — Every {placeholder} must be identical across languages — the code calls, `test_t_calls_without_default_exist_in_ru` — texts.t('KEY') with NO fallback raises KeyError if the key is absent from ru., `test_t_calls_with_static_default_exist_in_ru` — texts.t('KEY', 'статический дефолт') с ключом вне ru.json отдаёт русский, `test_invite_only_keys_exist_in_every_locale`
+- `tests/test_log_messages_have_no_empty_placeholders.py` — Python-модуль
+  Классы: нет
+  Функции: `test_scanner_sees_the_codebase` — Страховка от «тест зеленеет, потому что ничего не нашёл»., `test_no_message_carries_an_empty_placeholder`, `test_scanner_catches_known_shapes` — Образцы из issue #3276 — проверка, что сторож ловит именно их.
 - `tests/test_logo_file_id_cache_invalidation.py` — Python-модуль
   Классы: нет
   Функции: `logo`, `test_cached_file_id_is_reused_while_the_file_is_the_same`, `test_replaced_logo_file_drops_the_cached_file_id`

@@ -1115,7 +1115,7 @@ class RemnaWaveWebhookService:
                 telegram_markup=reply_markup,
             )
         except Exception:
-            logger.exception('Notification delivery failed for user , text_key', user_id=user.id, text_key=text_key)
+            logger.exception('Notification delivery failed', user_id=user.id, text_key=text_key)
 
     # ------------------------------------------------------------------
     # Webhook timestamp helper
@@ -1292,7 +1292,7 @@ class RemnaWaveWebhookService:
         # Re-enable if was disabled/limited due to traffic limit
         if subscription.status in (SubscriptionStatus.DISABLED.value, SubscriptionStatus.LIMITED.value):
             await reactivate_subscription(db, subscription)
-        logger.info('Webhook: traffic reset for subscription , user', subscription_id=subscription.id, user_id=user.id)
+        logger.info('Webhook: traffic reset for subscription', subscription_id=subscription.id, user_id=user.id)
 
         await self._notify_user(
             user,
@@ -1420,7 +1420,7 @@ class RemnaWaveWebhookService:
             except Exception:
                 # Subscription was cascade-deleted, re-fetch user and skip subscription updates
                 logger.warning(
-                    'Webhook: subscription already deleted for user , skipping subscription cleanup',
+                    'Webhook: subscription already deleted — skipping cleanup',
                     sub_id=sub_id,
                     user_id=user_id,
                 )
