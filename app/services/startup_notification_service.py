@@ -6,6 +6,7 @@
 
 import asyncio
 import html
+import signal
 import time
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -550,6 +551,156 @@ def _get_error_recommendations(error_message: str) -> str | None:
         return '<blockquote expandable>💡 <b>Рекомендации:</b>\n' + '\n'.join(tips) + '</blockquote>'
 
     return None
+
+
+@dataclass(frozen=True, slots=True)
+class ShutdownReason:
+    """Почему бот останавливается. Сигнал — плановая остановка, ошибка — аварийная."""
+
+    signum: int | None = None
+    error: BaseException | None = None
+    #: Где случилась ошибка: 'polling' | 'main_loop'.
+    source: str | None = None
+
+    @property
+    def is_failure(self) -> bool:
+        return self.error is not None
+
+
+# Что означает сигнал для админа: подпись и подсказка, откуда он обычно приходит.
+_SIGNAL_REASONS: Final[dict[int, tuple[str, str]]] = {
+    signal.SIGTERM.value: (
+        'сигнал SIGTERM',
+        'Так бота останавливает Docker: <code>docker compose stop</code> / <code>restart</code>, '
+        'обновление образа, перезагрузка сервера.',
+    ),
+    signal.SIGINT.value: ('сигнал SIGINT (Ctrl+C)', 'Бота остановили из консоли.'),
+}
+_FAILURE_SOURCES: Final[dict[str, str]] = {
+    'polling': 'Telegram polling',
+    'main_loop': 'основной цикл',
+}
+SHUTDOWN_ERROR_PREVIEW_LENGTH: Final[int] = 300
+
+
+def _signal_label(signum: int | None) -> tuple[str, str | None]:
+    if signum is None:
+        return 'без сигнала', None
+    if signum in _SIGNAL_REASONS:
+        return _SIGNAL_REASONS[signum]
+    try:
+        return f'сигнал {signal.Signals(signum).name}', None
+    except ValueError:
+        return f'сигнал {signum}', None
+
+
+def format_uptime(delta: timedelta) -> str:
+    """«3 д 4 ч 12 мин»; нули в начале опускаются, меньше минуты — словами."""
+    total_minutes = int(delta.total_seconds() // 60)
+    if total_minutes < 1:
+        return 'меньше минуты'
+    days, rest = divmod(total_minutes, 24 * 60)
+    hours, minutes = divmod(rest, 60)
+    parts = [f'{days} д' if days else '', f'{hours} ч' if hours else '', f'{minutes} мин' if minutes else '']
+    return ' '.join(part for part in parts if part)
+
+
+def render_shutdown_message(
+    reason: ShutdownReason,
+    *,
+    version: str,
+    started_at: datetime | None,
+    now: datetime,
+) -> str:
+    """Классический HTML: причина, аптайм, что делать дальше."""
+    header_icon, header_text = ('🔴', 'Бот остановился из-за ошибки') if reason.is_failure else ('🛑', 'Бот остановлен')
+    lines = [
+        f'{header_icon} <b>Remnawave Bedolaga Bot</b> · <code>v{html.escape(version)}</code>',
+        f'<i>{header_text}</i>',
+        '',
+    ]
+
+    hint: str | None
+    if reason.is_failure:
+        error = reason.error
+        source = _FAILURE_SOURCES.get(reason.source or '', reason.source or 'неизвестно')
+        error_text = f'{type(error).__name__}: {error}'[:SHUTDOWN_ERROR_PREVIEW_LENGTH]
+        lines += [
+            f'<b>Причина:</b> ошибка — {html.escape(source)}',
+            f'<code>{html.escape(error_text)}</code>',
+        ]
+        hint = _get_error_recommendations(str(error))
+    else:
+        label, hint_text = _signal_label(reason.signum)
+        lines.append(f'<b>Причина:</b> плановая остановка, {html.escape(label)}')
+        hint = f'<i>{hint_text}</i>' if hint_text else None
+
+    lines.append('')
+    if started_at is not None:
+        lines.append(f'⏱ Проработал: <b>{format_uptime(now - started_at)}</b>')
+        lines.append(f'🕐 Запущен: {html.escape(format_local_datetime(started_at, DATETIME_FORMAT))}')
+    lines.append(f'🕓 Остановлен: {html.escape(format_local_datetime(now, DATETIME_FORMAT))}')
+
+    if hint:
+        lines += ['', hint]
+
+    next_step = (
+        'Docker с политикой <code>restart</code> поднимет бота заново — дождитесь сообщения о запуске.'
+        if reason.is_failure
+        else 'Если это перезапуск — дождитесь сообщения о запуске.'
+    )
+    lines += [
+        '',
+        f'<blockquote>{next_step} Не пришло за пару минут — бот не поднялся, проверьте логи контейнера.</blockquote>',
+    ]
+    return '\n'.join(lines)
+
+
+async def send_shutdown_notification(
+    bot: Bot,
+    reason: ShutdownReason,
+    *,
+    started_at: datetime | None,
+) -> bool:
+    """Сообщить в админ-чат, что бот останавливается и почему.
+
+    Шлётся в начале завершения, пока сессия бота жива: Docker даёт на остановку
+    около 10 секунд, поэтому вызывающий ограничивает её по времени.
+    """
+    chat_id = getattr(settings, 'ADMIN_NOTIFICATIONS_CHAT_ID', None)
+    if not getattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False) or not chat_id:
+        return False
+    # Плановая остановка — в топик инфраструктуры, как сообщение о запуске; авария — в ошибки.
+    topic_key = (
+        'ADMIN_NOTIFICATIONS_ERRORS_TOPIC_ID' if reason.is_failure else 'ADMIN_NOTIFICATIONS_INFRASTRUCTURE_TOPIC_ID'
+    )
+    topic_id = getattr(settings, topic_key, None) or getattr(settings, 'ADMIN_NOTIFICATIONS_TOPIC_ID', None)
+
+    message_kwargs: dict = {
+        'chat_id': chat_id,
+        'text': render_shutdown_message(
+            reason,
+            version=StartupNotificationService(bot)._get_version(),
+            started_at=started_at,
+            now=datetime.now(UTC),
+        ),
+        'parse_mode': ParseMode.HTML,
+        'disable_web_page_preview': True,
+    }
+    if reason.is_failure:
+        message_kwargs['reply_markup'] = InlineKeyboardMarkup(
+            inline_keyboard=[[InlineKeyboardButton(text='💬 Сообщить разработчику', url=DEVELOPER_CONTACT_URL)]]
+        )
+    if topic_id:
+        message_kwargs['message_thread_id'] = topic_id
+
+    try:
+        await bot.send_message(**message_kwargs)
+    except Exception as e:
+        logger.error('Ошибка отправки уведомления об остановке', e=e)
+        return False
+    logger.info('Уведомление об остановке отправлено в чат', chat_id=chat_id, failure=reason.is_failure)
+    return True
 
 
 async def send_crash_notification(bot: Bot, error: Exception, traceback_str: str) -> bool:
