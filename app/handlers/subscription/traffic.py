@@ -717,19 +717,26 @@ async def add_traffic(callback: types.CallbackQuery, db_user: User, db: AsyncSes
         except Exception as e:
             logger.error('Ошибка отправки уведомления о докупке трафика', error=e)
 
-        success_text = '✅ Трафик успешно добавлен!\n\n'
+        success_text = '<b>Трафик добавлен</b>\n\n<blockquote expandable>'
         if traffic_gb == 0:
-            success_text += '🎉 Теперь у вас безлимитный трафик!'
+            success_text += 'Тип: безлимит\n🎉 Теперь у вас безлимитный трафик!'
         else:
-            success_text += f'📈 Добавлено: {traffic_gb} ГБ\n'
-            success_text += f'Новый лимит: {texts.format_traffic(subscription.traffic_limit_gb)}'
+            success_text += 'Добавлено: {} ГБ\nНовый лимит: {}'.format(
+                traffic_gb,
+                texts.format_traffic(subscription.traffic_limit_gb),
+            )
 
         if price > 0:
-            success_text += f'\n💰 Списано: {texts.format_price(price)}'
+            success_text += '\nСписано: {}'.format(texts.format_price(price))
             if total_discount_value > 0:
-                success_text += f' (скидка {traffic_discount_pct}%: -{texts.format_price(total_discount_value)})'
+                success_text += ' (скидка {}%: -{})'.format(
+                    traffic_discount_pct,
+                    texts.format_price(total_discount_value),
+                )
 
-        await callback.message.edit_text(success_text, reply_markup=get_back_keyboard(db_user.language))
+        success_text += '</blockquote>'
+
+        await callback.message.edit_text(success_text, reply_markup=get_back_keyboard(db_user.language), parse_mode='HTML')
 
         logger.info('✅ Пользователь добавил ГБ трафика', telegram_id=db_user.telegram_id, traffic_gb=traffic_gb)
 
