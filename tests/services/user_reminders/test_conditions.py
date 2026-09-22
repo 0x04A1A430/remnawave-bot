@@ -192,13 +192,31 @@ CASES = {
 @pytest.mark.asyncio
 @pytest.mark.parametrize('name', sorted(CASES))
 async def test_sql_and_python_agree(monkeypatch, name):
+    from sqlalchemy import update
+
     raw, users, subs, expected = CASES[name]
     conditions = parse_conditions(raw)
     async with memory_session(monkeypatch, TABLES) as db:
+        # Capture scenario values before insertion (Column defaults will overwrite them in DB).
+        user_timestamps = {u.id: (u.last_activity, u.cabinet_last_login) for u in users}
+
         db.add_all(users)
         await db.flush()
         db.add_all(subs)
         await db.commit()
+
+        # Force the DB rows to match scenario values (override Column defaults that fired on insert).
+        for user_id, (last_activity, cabinet_last_login) in user_timestamps.items():
+            await db.execute(
+                update(User)
+                .where(User.id == user_id)
+                .values(last_activity=last_activity, cabinet_last_login=cabinet_last_login)
+            )
+        await db.commit()
+
+        # Reload users and subs from DB so both SQL and Python see identical data.
+        users = (await db.execute(select(User).execution_options(populate_existing=True))).scalars().all()
+        subs = (await db.execute(select(Subscription).execution_options(populate_existing=True))).scalars().all()
 
         sql_ids = set((await db.execute(select(User.id).where(*condition_clauses(conditions, now=NOW)))).scalars())
         py_ids = {
