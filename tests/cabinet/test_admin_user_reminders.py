@@ -11,6 +11,7 @@ from app.cabinet.routes import admin_user_reminders as routes
 from app.cabinet.schemas.user_reminders import AudienceRequest, ReminderPayload
 from app.database.models import Base, User, UserReminder
 from app.services.permission_service import PERMISSION_REGISTRY
+from app.services.rbac_bootstrap_service import _PRESET_ROLES
 from tests.fixtures.sqlite_memory import memory_session
 
 
@@ -36,6 +37,16 @@ def _payload(**kw) -> ReminderPayload:
 
 def test_permissions_are_registered():
     assert PERMISSION_REGISTRY['user_reminders'] == ['read', 'create', 'edit', 'delete']
+
+
+@pytest.mark.parametrize('role_name', ['Admin', 'Marketer'])
+def test_preset_roles_grant_the_section(role_name):
+    """Без этого записи есть только у Суперадмина — как у любого другого раздела
+    из PERMISSION_REGISTRY (pinned_messages, wheel, landings…), которого нет в
+    пресетах Admin/Marketer, тут быть не должно.
+    """
+    role = next(role for role in _PRESET_ROLES if role['name'] == role_name)
+    assert 'user_reminders:*' in role['permissions']
 
 
 @pytest.mark.parametrize(
@@ -134,6 +145,37 @@ async def test_test_send_goes_to_the_admin(monkeypatch):
         with pytest.raises(HTTPException) as no_tg:
             await routes.send_test(created.id, admin=SimpleNamespace(id=1, telegram_id=None, language='ru'), db=db)
         assert no_tg.value.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_send_test_rejects_malformed_stored_texts(monkeypatch):
+    """Битые тексты у уже сохранённого напоминания — 422, не 500, и бот не создаётся.
+
+    ``render_bot_message`` ожидает ``texts['ru']`` (см. ``pick_text``) и падает
+    ``KeyError`` без него — тест себе обязан ловить это раньше, валидацией.
+    """
+    create_bot_mock = AsyncMock()
+    monkeypatch.setattr(routes, 'create_bot', create_bot_mock)
+    async with memory_session(monkeypatch, TABLES) as db:
+        db.add(
+            UserReminder(
+                name='broken',
+                channels='both',
+                category='service',
+                conditions={},
+                repeat_every_days=7,
+                max_sends=1,
+                texts={'en': {'title': 't', 'body': 'b'}},
+                button_kind='none',
+            )
+        )
+        await db.commit()
+        broken = (await routes.list_reminders_route(admin=ADMIN, db=db))[0]
+
+        with pytest.raises(HTTPException) as invalid:
+            await routes.send_test(broken.id, admin=ADMIN, db=db)
+        assert invalid.value.status_code == 422
+        create_bot_mock.assert_not_called()
 
 
 @pytest.mark.asyncio

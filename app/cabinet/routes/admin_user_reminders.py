@@ -13,7 +13,7 @@ from app.bot_factory import create_bot
 from app.database.crud.user_reminder import count_audience, get_reminder, list_reminders, reminder_stats
 from app.database.models import User, UserReminder
 from app.services.user_reminders.conditions import ReminderConditions, parse_conditions
-from app.services.user_reminders.texts import render_bot_message
+from app.services.user_reminders.texts import render_bot_message, validate_texts
 
 from ..dependencies import get_cabinet_db, require_permission
 from ..schemas.user_reminders import (
@@ -188,6 +188,13 @@ async def send_test(
     reminder = await _require(db, reminder_id)
     if not getattr(admin, 'telegram_id', None):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Admin has no Telegram account')
+    try:
+        validate_texts(reminder.texts)
+    except ValueError as error:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail='Reminder texts are invalid — fix them before testing',
+        ) from error
     text, markup = render_bot_message(reminder, getattr(admin, 'language', None))
     bot = create_bot()
     try:
