@@ -1851,6 +1851,18 @@ async def handle_extend_subscription(
     if settings.is_devices_selection_enabled():
         renewal_lines.append(f'📱 Устройств: {Texts.format_device_limit(subscription.device_limit)}')
 
+    from app.utils.subscription_deviation import (
+        build_deviation_button_row,
+        build_deviation_text,
+        compute_classic_deviation,
+    )
+
+    deviation = compute_classic_deviation(subscription)
+    deviation_text = build_deviation_text(deviation, texts)
+    if deviation_text:
+        renewal_lines.append('')
+        renewal_lines.append(deviation_text)
+
     renewal_lines.extend(
         [
             '',
@@ -1876,9 +1888,13 @@ async def handle_extend_subscription(
 
     message_text += '💡 <i>Цена включает все ваши текущие серверы и настройки</i>'
 
+    extend_markup = get_extend_subscription_keyboard_with_prices(db_user.language, renewal_prices)
+    if deviation.has():
+        extend_markup = build_deviation_button_row(extend_markup, texts)
+
     await callback.message.edit_text(
         message_text,
-        reply_markup=get_extend_subscription_keyboard_with_prices(db_user.language, renewal_prices),
+        reply_markup=extend_markup,
         parse_mode='HTML',
     )
 
