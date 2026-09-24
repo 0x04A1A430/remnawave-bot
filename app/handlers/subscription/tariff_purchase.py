@@ -1659,6 +1659,21 @@ async def select_tariff_period(
     )
     shown_device_limit = device_limit if device_limit is not None else tariff.device_limit
 
+    from app.utils.subscription_deviation import (
+        build_deviation_button_row,
+        build_deviation_text,
+        compute_params_deviation,
+    )
+
+    deviation = compute_params_deviation(
+        tariff,
+        device_limit=shown_device_limit,
+        traffic_limit_gb=tariff.traffic_limit_gb,
+        subscription=_existing_sub if _existing_sub and _existing_sub.tariff_id == tariff.id else None,
+        extra_cost_kopeks=result.devices_price,
+    )
+    deviation_text = build_deviation_text(deviation, texts)
+
     # Проверяем баланс
     user_balance = db_user.balance_kopeks or 0
 
@@ -1693,7 +1708,8 @@ async def select_tariff_period(
                 total=format_price_kopeks(final_price),
                 balance=format_price_kopeks(user_balance),
                 after=format_price_kopeks(user_balance - final_price),
-            ),
+            )
+            + (f'\n\n{deviation_text}' if deviation_text else ''),
             reply_markup=get_tariff_confirm_keyboard(tariff_id, period, db_user.language),
             parse_mode='HTML',
         )
@@ -1720,6 +1736,12 @@ async def select_tariff_period(
         }
         await user_cart_service.save_user_cart(db_user.id, cart_data)
 
+        insufficient_keyboard = get_tariff_insufficient_balance_keyboard(
+            tariff_id, period, db_user.language, missing_kopeks=missing
+        )
+        if deviation.has():
+            insufficient_keyboard = build_deviation_button_row(insufficient_keyboard, texts)
+
         await callback.message.edit_text(
             texts.t(
                 'TARIFF_PURCHASE_INSUFFICIENT',
@@ -1735,10 +1757,9 @@ async def select_tariff_period(
                 price=format_price_kopeks(final_price),
                 balance=format_price_kopeks(user_balance),
                 missing=format_price_kopeks(missing),
-            ),
-            reply_markup=get_tariff_insufficient_balance_keyboard(
-                tariff_id, period, db_user.language, missing_kopeks=missing
-            ),
+            )
+            + (f'\n\n{deviation_text}' if deviation_text else ''),
+            reply_markup=insufficient_keyboard,
             parse_mode='HTML',
         )
 
@@ -5360,6 +5381,12 @@ async def return_to_saved_tariff_cart(
     cart_mode = cart_data.get('cart_mode')
     tariff_id = cart_data.get('tariff_id')
 
+    from app.utils.subscription_deviation import (
+        build_deviation_button_row,
+        build_deviation_text,
+        compute_params_deviation,
+    )
+
     if not tariff_id:
         await callback.answer(
             texts.t('TARIFF_PURCHASE_CART_CORRUPTED', '❌ Данные корзины повреждены'), show_alert=True
@@ -5416,6 +5443,28 @@ async def return_to_saved_tariff_cart(
             # сколько нужно, уже после её истечения — и автопродление молча не
             # срабатывало. Пересохранение обновляет оба срока.
             await user_cart_service.save_user_cart(db_user.id, cart_data)
+            _cart_sub = None
+            _cart_sub_id = cart_data.get('subscription_id')
+            if _cart_sub_id:
+                from app.database.crud.subscription import get_subscription_by_id_for_user
+
+                _cart_sub = await get_subscription_by_id_for_user(db, int(_cart_sub_id), db_user.id)
+            _cart_deviation = compute_params_deviation(
+                tariff,
+                device_limit=cart_data.get('device_limit'),
+                traffic_limit_gb=cart_data.get('traffic_limit_gb'),
+                subscription=_cart_sub,
+            )
+            _cart_deviation_text = build_deviation_text(_cart_deviation, texts)
+            _cart_kb = get_tariff_extend_insufficient_balance_keyboard(
+                tariff_id,
+                _cart_sub_id,
+                period,
+                db_user.language,
+                missing_kopeks=missing,
+            )
+            if _cart_deviation.has():
+                _cart_kb = build_deviation_button_row(_cart_kb, texts)
             await callback.message.edit_text(
                 texts.t(
                     'TARIFF_PURCHASE_STILL_INSUFFICIENT',
@@ -5431,18 +5480,24 @@ async def return_to_saved_tariff_cart(
                     price=format_price_kopeks(total_price),
                     balance=format_price_kopeks(user_balance),
                     missing=format_price_kopeks(missing),
-                ),
-                reply_markup=get_tariff_extend_insufficient_balance_keyboard(
-                    tariff_id,
-                    cart_data.get('subscription_id'),
-                    period,
-                    db_user.language,
-                    missing_kopeks=missing,
-                ),
+                )
+                + (f'\n\n{_cart_deviation_text}' if _cart_deviation_text else ''),
+                reply_markup=_cart_kb,
                 parse_mode='HTML',
             )
         else:  # tariff_purchase
             period = cart_data.get('period_days', 30)
+            _cart_deviation = compute_params_deviation(
+                tariff,
+                device_limit=cart_data.get('device_limit'),
+                traffic_limit_gb=cart_data.get('traffic_limit_gb'),
+            )
+            _cart_deviation_text = build_deviation_text(_cart_deviation, texts)
+            _cart_kb = get_tariff_insufficient_balance_keyboard(
+                tariff_id, period, db_user.language, missing_kopeks=missing
+            )
+            if _cart_deviation.has():
+                _cart_kb = build_deviation_button_row(_cart_kb, texts)
             await callback.message.edit_text(
                 texts.t(
                     'TARIFF_PURCHASE_STILL_INSUFFICIENT',
@@ -5458,10 +5513,9 @@ async def return_to_saved_tariff_cart(
                     price=format_price_kopeks(total_price),
                     balance=format_price_kopeks(user_balance),
                     missing=format_price_kopeks(missing),
-                ),
-                reply_markup=get_tariff_insufficient_balance_keyboard(
-                    tariff_id, period, db_user.language, missing_kopeks=missing
-                ),
+                )
+                + (f'\n\n{_cart_deviation_text}' if _cart_deviation_text else ''),
+                reply_markup=_cart_kb,
                 parse_mode='HTML',
             )
         await callback.answer()
