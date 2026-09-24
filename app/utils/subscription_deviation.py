@@ -45,8 +45,30 @@ def compute_tariff_deviation(
     if tariff_traffic and (subscription.traffic_limit_gb or 0) > tariff_traffic:
         deviation.extra_traffic_gb = (subscription.traffic_limit_gb or 0) - tariff_traffic
 
-    extra_devices = max(0, (subscription.device_limit or 0) - (tariff.device_limit or 0))
-    deviation.extra_devices = extra_devices
+    deviation.extra_devices = max(0, (subscription.device_limit or 0) - (tariff.device_limit or 0))
+    return deviation
+
+
+def compute_params_deviation(
+    tariff: Tariff,
+    *,
+    device_limit: int | None = None,
+    traffic_limit_gb: int | None = None,
+    subscription: Subscription | None = None,
+    extra_cost_kopeks: int = 0,
+) -> SubscriptionDeviation:
+    """Расхождение выбранных параметров (корзина/существующая подписка) с тарифом."""
+    deviation = SubscriptionDeviation(extra_cost_kopeks=max(0, extra_cost_kopeks))
+    if subscription is not None:
+        _sub_dev = compute_tariff_deviation(subscription, tariff)
+        deviation.extra_traffic_gb = _sub_dev.extra_traffic_gb
+        deviation.extra_devices = _sub_dev.extra_devices
+    if device_limit is not None:
+        deviation.extra_devices = max(0, (device_limit or 0) - (tariff.device_limit or 0))
+    if traffic_limit_gb is not None:
+        tariff_traffic = tariff.traffic_limit_gb or 0
+        if tariff_traffic and traffic_limit_gb > tariff_traffic:
+            deviation.extra_traffic_gb = traffic_limit_gb - tariff_traffic
     return deviation
 
 
