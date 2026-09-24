@@ -2773,6 +2773,25 @@ async def show_tariff_extend(
 
     actual_device_limit = subscription.device_limit or tariff.device_limit
 
+    from app.utils.subscription_deviation import (
+        build_deviation_button_row,
+        build_deviation_text,
+        compute_tariff_deviation,
+    )
+
+    deviation = compute_tariff_deviation(subscription, tariff)
+    deviation_text = build_deviation_text(deviation, texts)
+
+    markup = get_tariff_extend_keyboard(
+        tariff,
+        db_user.language,
+        db_user=db_user,
+        subscription_device_limit=actual_device_limit,
+        subscription_id=subscription.id,
+    )
+    if deviation.has():
+        markup = build_deviation_button_row(markup, texts)
+
     await callback.message.edit_text(
         texts.t(
             'TARIFF_RENEW_TITLE',
@@ -2786,14 +2805,9 @@ async def show_tariff_extend(
             name=html.escape(tariff.name),
             traffic=traffic,
             devices=actual_device_limit,
-        ),
-        reply_markup=get_tariff_extend_keyboard(
-            tariff,
-            db_user.language,
-            db_user=db_user,
-            subscription_device_limit=actual_device_limit,
-            subscription_id=subscription.id,
-        ),
+        )
+        + (f'\n\n{deviation_text}' if deviation_text else ''),
+        reply_markup=markup,
         parse_mode='HTML',
     )
     await callback.answer()
@@ -2844,6 +2858,16 @@ async def select_tariff_extend_period(
     )
     final_price = result.final_total
     original_price = result.original_total
+
+    from app.utils.subscription_deviation import (
+        build_deviation_button_row,
+        build_deviation_text,
+        compute_tariff_deviation,
+    )
+
+    deviation = compute_tariff_deviation(subscription, tariff, extra_cost_kopeks=result.devices_price)
+    deviation_text = build_deviation_text(deviation, texts)
+
     total_discount = result.promo_group_discount + result.promo_offer_discount
     discount_percent = (
         round((1 - final_price / original_price) * 100) if original_price > 0 and total_discount > 0 else 0
@@ -2882,7 +2906,8 @@ async def select_tariff_extend_period(
                 total=format_price_kopeks(final_price),
                 balance=format_price_kopeks(user_balance),
                 after=format_price_kopeks(user_balance - final_price),
-            ),
+            )
+            + (f'\n\n{deviation_text}' if deviation_text else ''),
             reply_markup=get_tariff_extend_confirm_keyboard(subscription.id, tariff_id, period, db_user.language),
             parse_mode='HTML',
         )
@@ -2908,6 +2933,18 @@ async def select_tariff_extend_period(
         }
         await user_cart_service.save_user_cart(db_user.id, cart_data)
 
+        insufficient_keyboard = get_tariff_extend_insufficient_balance_keyboard(
+            tariff_id,
+            subscription.id if subscription else None,
+            period,
+            db_user.language,
+            missing_kopeks=missing,
+        )
+        if deviation.has():
+            from app.utils.subscription_deviation import build_deviation_button_row
+
+            insufficient_keyboard = build_deviation_button_row(insufficient_keyboard, texts)
+
         await callback.message.edit_text(
             texts.t(
                 'TARIFF_PURCHASE_INSUFFICIENT',
@@ -2923,14 +2960,9 @@ async def select_tariff_extend_period(
                 price=format_price_kopeks(final_price),
                 balance=format_price_kopeks(user_balance),
                 missing=format_price_kopeks(missing),
-            ),
-            reply_markup=get_tariff_extend_insufficient_balance_keyboard(
-                tariff_id,
-                subscription.id if subscription else None,
-                period,
-                db_user.language,
-                missing_kopeks=missing,
-            ),
+            )
+            + (f'\n\n{deviation_text}' if deviation_text else ''),
+            reply_markup=insufficient_keyboard,
             parse_mode='HTML',
         )
 
