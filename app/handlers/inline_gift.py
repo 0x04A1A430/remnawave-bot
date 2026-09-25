@@ -276,7 +276,7 @@ async def _apply_gift_panel_update(db, subscription, user) -> None:
 
 def _check_recipient(gift: InlineGiftSubscription, telegram_id: int, username: str) -> bool:
     if gift.recipient_telegram_id == 0:
-        raw = gift.inline_message_id or ''
+        raw = gift.intended_recipient or ''
         if not raw.startswith('u:') and not raw.startswith('tid:'):
             return True
         if raw.startswith('tid:'):
@@ -1086,7 +1086,18 @@ async def _update_inline_button(
     gift_code: str = '',
 ) -> None:
     raw = inline_msg_id or ''
-    if not raw or raw.startswith('u:') or raw.startswith('tid:'):
+    if not raw:
+        logger.warning(
+            'Inline gift button not updated: inline_message_id is missing '
+            '(inline feedback may be disabled in @BotFather)',
+            gift_code=gift_code,
+        )
+        return
+    if raw.startswith('u:') or raw.startswith('tid:'):
+        logger.warning(
+            'Inline gift button not updated: legacy recipient sentinel instead of inline_message_id',
+            gift_code=gift_code,
+        )
         return
     try:
         if remaining > 0 and gift_code:
@@ -1097,7 +1108,7 @@ async def _update_inline_button(
             kb = types.InlineKeyboardMarkup(inline_keyboard=[[make_button(text=text, callback_data='igift_noop')]])
         await bot.edit_message_reply_markup(inline_message_id=raw, reply_markup=kb)
     except Exception as e:
-        logger.warning('Could not update inline message button', error=str(e))
+        logger.warning('Could not update inline message button', gift_code=gift_code, error=str(e))
 
 
 async def handle_cancel_callback(callback: types.CallbackQuery) -> None:
