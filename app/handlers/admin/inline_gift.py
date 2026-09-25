@@ -693,6 +693,13 @@ async def handle_chosen_inline_result(chosen: types.ChosenInlineResult) -> None:
         return
 
     inline_message_id = chosen.inline_message_id
+    if not inline_message_id:
+        logger.warning(
+            'Chosen inline result has no inline_message_id; the inline message '
+            'button will not update after activation. Enable inline feedback '
+            'in @BotFather: /setinlinefeedback -> 100%.',
+            result_id=gift_code,
+        )
     query_text = chosen.query or ''
     parsed = _parse_query(query_text)
 
@@ -773,7 +780,8 @@ async def handle_chosen_inline_result(chosen: types.ChosenInlineResult) -> None:
             temp_traffic_gb=parsed.temp_traffic_gb if parsed.has_temp else None,
             temp_traffic_days=(parsed.temp_traffic_days or 30) if parsed.has_temp else None,
             reset_traffic=parsed.reset_traffic if parsed.has_reset else None,
-            inline_message_id=intended_sentinel or inline_message_id,
+            inline_message_id=inline_message_id,
+            intended_recipient=intended_sentinel,
         )
 
         db.add(gift)

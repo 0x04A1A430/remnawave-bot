@@ -366,6 +366,7 @@ class InlineGiftSubscription(Base):
     max_activations = Column(Integer, nullable=False, default=1, server_default='1')
     activated_count = Column(Integer, nullable=False, default=0, server_default='0')
     inline_message_id = Column(String(255), nullable=True)
+    intended_recipient = Column(String(64), nullable=True)
     inline_chat_id = Column(BigInteger, nullable=True)
     inline_msg_id = Column(BigInteger, nullable=True)
     is_activated = Column(Boolean, nullable=False, default=False, server_default='false')
