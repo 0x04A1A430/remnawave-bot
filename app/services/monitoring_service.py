@@ -239,6 +239,7 @@ class MonitoringService:
         self._sla_task = None
         self._withdrawal_reminder_task = None
         self._user_reminder_task = None
+        self._live_menu_task = None
         # In-memory fallback состояния уведомлений об ошибке автоплатежа (на случай
         # недоступности Redis). Ключ — (subscription_id, cycle_token=int(end_date.timestamp())).
         self._autopay_fail_state: dict[tuple[int, int], dict] = {}
@@ -396,6 +397,13 @@ class MonitoringService:
                 self._user_reminder_task = asyncio.create_task(self._user_reminder_loop())
         except Exception as e:
             logger.error('Не удалось запустить напоминания пользователям', error=e)
+        try:
+            if not self._live_menu_task or self._live_menu_task.done():
+                from app.services.live_menu_service import live_menu_loop
+
+                self._live_menu_task = asyncio.create_task(live_menu_loop(self))
+        except Exception as e:
+            logger.error('Не удалось запустить живое меню', error=e)
 
         while self.is_running:
             try:
@@ -418,6 +426,8 @@ class MonitoringService:
             self._withdrawal_reminder_task.cancel()
         if self._user_reminder_task and not self._user_reminder_task.done():
             self._user_reminder_task.cancel()
+        if self._live_menu_task and not self._live_menu_task.done():
+            self._live_menu_task.cancel()
 
     async def _monitoring_cycle(self):
         async with AsyncSessionLocal() as db:

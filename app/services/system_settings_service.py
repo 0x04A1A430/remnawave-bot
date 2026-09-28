@@ -436,6 +436,7 @@ class BotConfigurationService:
         'MAIN_MENU_RICH_LOGO_URL': 'INTERFACE',
         'MAIN_MENU_RICH_SUBSCRIPTIONS_COLLAPSIBLE': 'INTERFACE',
         'MAIN_MENU_RICH_INLINE_BUTTONS': 'INTERFACE',
+        'MAIN_MENU_LIVE_ENABLED': 'INTERFACE',
         'USER_NOTIFICATIONS_RICH_ENABLED': 'INTERFACE',
         'USER_ACTION_LOG_ENABLED': 'MONITORING',
         'USER_ACTION_LOG_RETENTION_DAYS': 'MONITORING',
@@ -1013,6 +1014,19 @@ class BotConfigurationService:
                 'сообщения целиком остаётся под ним: половина кнопок внутри — это потерянные кнопки.'
             ),
             'dependencies': 'MAIN_MENU_RICH_ENABLED, ADMIN_NOTIFICATIONS_RICH_ENABLED',
+        },
+        'MAIN_MENU_LIVE_ENABLED': {
+            'description': (
+                'Живое главное меню: бот сам перерисовывает последнее rich-меню пользователя '
+                'при смене трафика, статуса, лимита устройств или баланса.'
+            ),
+            'format': 'Булево значение.',
+            'example': 'false',
+            'warning': (
+                'Раз в 15 минут; при нагрузке на бот, 429 панели или лимите Telegram реже, до 360 минут. '
+                'Нужны Redis и rich-меню. Переключается без рестарта.'
+            ),
+            'dependencies': 'MAIN_MENU_RICH_ENABLED',
         },
         'USER_NOTIFICATIONS_RICH_ENABLED': {
             'description': (
