@@ -212,6 +212,13 @@ class Settings(BaseSettings):
     DATABASE_POOL_TIMEOUT: int = 30
 
     REDIS_URL: str = 'redis://localhost:6379/0'
+    # Размер пула соединений КАЖДОГО клиента Redis (FSM aiogram, кэш, корзины…).
+    # redis-py 8 по умолчанию даёт 100, и всплеск параллельных апдейтов его выбирал:
+    # «MaxConnectionsError: Too many connections». Держите ниже maxclients Redis.
+    REDIS_MAX_CONNECTIONS: int = 200
+    # Сколько секунд ждать свободное соединение, когда пул занят, прежде чем
+    # вернуть ошибку. Всплеск переживается ожиданием, а не падением апдейта.
+    REDIS_POOL_TIMEOUT: float = 10.0
     CART_TTL_SECONDS: int = 3600  # Время жизни корзины пользователя в Redis (1 час)
     # «Свежее намерение» пополнить ради сохранённой корзины. Тихая авто-покупка из
     # корзины после пополнения срабатывает ТОЛЬКО если в течение этого окна юзер
@@ -1736,6 +1743,26 @@ class Settings(BaseSettings):
             return max(1, value_int)
         except (TypeError, ValueError):
             return 10
+
+    @field_validator('REDIS_MAX_CONNECTIONS', mode='before')
+    @classmethod
+    def ensure_positive_redis_max_connections(cls, value: int | None) -> int:
+        try:
+            if value is None or value == '':
+                return 200
+            return max(1, int(value))
+        except (TypeError, ValueError):
+            return 200
+
+    @field_validator('REDIS_POOL_TIMEOUT', mode='before')
+    @classmethod
+    def ensure_positive_redis_pool_timeout(cls, value: float | None) -> float:
+        try:
+            if value is None or value == '':
+                return 10.0
+            return max(0.1, float(value))
+        except (TypeError, ValueError):
+            return 10.0
 
     @field_validator('DATABASE_POOL_SIZE', mode='before')
     @classmethod

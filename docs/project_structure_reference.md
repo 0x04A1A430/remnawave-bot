@@ -87,7 +87,7 @@
   Функции: `create_bot` — Create a Bot instance with SOCKS5 proxy and/or custom Telegram API server.
 - `app/cabinet/`
 - `app/config.py` — Python-модуль
-  Классы: `Settings` (400 методов)
+  Классы: `Settings` (402 методов)
   Функции: `transliterate_cyrillic` — Заменяет кириллические буквы латинскими, сохраняя регистр («Шмель» → «Shmel»)., `set_period_prices_from_db` — Устанавливает периоды/цены из БД., `get_db_period_prices` — Возвращает периоды/цены из БД если они загружены., `clear_db_period_prices` — Очищает кеш цен из тарифов (при переключении в classic mode)., `refresh_period_prices` — Rebuild cached period price mapping., `refresh_classic_period_prices` — Rebuild CLASSIC_PERIOD_PRICES from current settings., `get_traffic_prices`, `refresh_traffic_prices`
 - `app/database/`
 - `app/external/`
@@ -3139,7 +3139,7 @@
   Функции: `test_every_gateway_is_listed_in_readme`, `test_table_has_no_rows_for_unknown_providers` — Каждая строка таблицы указывает на существующий шлюз., `test_claimed_provider_count_matches_reality` — Число провайдеров в тексте не должно отставать от кода.
 - `tests/test_redis_client_contract.py` — Python-модуль
   Классы: нет
-  Функции: `redis_client_module`, `test_every_injected_kwarg_is_accepted_by_async_connection` — Каждый добавленный аргумент обязан приниматься асинхронным соединением., `test_connection_is_actually_creatable` — Соединение создаётся (не подключается) — ровно там падал TypeError., `test_connect_is_retried` — У подключения есть повторы: разовая заминка на старте не должна быть ошибкой., `test_transient_connect_failure_is_retried` — Первая попытка упала по таймауту — вторая доводит подключение до конца.
+  Функции: `redis_client_module`, `test_every_injected_kwarg_is_accepted_by_async_connection` — Каждый добавленный аргумент обязан приниматься асинхронным соединением., `test_connection_is_actually_creatable` — Соединение создаётся (не подключается) — ровно там падал TypeError., `test_connect_is_retried` — У подключения есть повторы: разовая заминка на старте не должна быть ошибкой., `test_transient_connect_failure_is_retried` — Первая попытка упала по таймауту — вторая доводит подключение до конца., `test_pool_is_blocking_and_sized_from_settings`, `test_busy_pool_waits_for_a_free_connection_instead_of_failing`
 - `tests/test_rich_menu_pins.py` — Python-модуль
   Классы: нет
   Функции: `test_show_main_menu_tries_rich_before_classic`, `test_back_to_menu_tries_rich_before_classic`, `test_start_menu_sites_guarded_by_rich_helpers`, `test_single_subscription_block_reuses_menu_status_builder`, `test_trial_deeplink_wired_in_start` — Диплинк /start trial: ветка сташит pending_trial, drain — рядом с купонным
@@ -5155,7 +5155,7 @@
   Функции: `test_takes_scheme_and_host_from_proxy_headers`, `test_without_proxy_headers_link_is_unchanged`, `test_first_value_of_chained_headers_and_host_fallback`, `test_unknown_scheme_in_header_is_not_trusted`
 - `tests/utils/test_redis_client.py` — Python-модуль
   Классы: нет
-  Функции: `from_url`, `test_factory_disables_maintenance_notifications`, `test_factory_defaults_to_settings_url_and_keeps_explicit_kwargs`, `test_factory_skips_config_on_old_redis_py` — redis-py без модуля maint_notifications: лишний kwarg уронил бы from_url., `test_every_redis_client_in_app_goes_through_factory` — Сторож: прямой ``from_url``/``Redis(`` в app/ вернул бы шум и обошёл общие настройки.
+  Функции: `from_url` — Вызовы ``BlockingConnectionPool.from_url`` — через него фабрика строит пул., `test_factory_disables_maintenance_notifications`, `test_factory_defaults_to_settings_url_and_keeps_explicit_kwargs`, `test_factory_skips_config_on_old_redis_py` — redis-py без модуля maint_notifications: лишний kwarg уронил бы from_url., `test_factory_sizes_pool_from_settings_and_keeps_explicit_override` — «MaxConnectionsError: Too many connections»: у redis-py 8 пул по умолчанию на 100,, `test_every_redis_client_in_app_goes_through_factory` — Сторож: прямой ``from_url``/``Redis(`` в app/ вернул бы шум и обошёл общие настройки.
 - `tests/utils/test_remnawave_auto_sync.py` — Python-модуль
   Классы: нет
   Функции: `test_parse_daily_time_list`, `test_calculate_next_run_same_day_in_configured_timezone` — REMNAWAVE_AUTO_SYNC_TIMES — локальное время оператора (.env.example так и обещает: «по МСК»),, `test_calculate_next_run_rollover_in_configured_timezone`, `test_perform_sync_rebuilds_service_on_each_run`
