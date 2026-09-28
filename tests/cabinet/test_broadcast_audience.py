@@ -261,6 +261,7 @@ async def test_expiring_preserves_daily_tariff_exclusion(monkeypatch) -> None:
 
 @pytest.mark.asyncio
 async def test_preview_matches_telegram_and_email_delivery_after_preferences(monkeypatch) -> None:
+    _grant_users_read(monkeypatch, True)
     async with memory_session(monkeypatch, TABLES) as db:
         allowed = _user(1201, email='allowed@example.com', email_verified=True, notification_settings={})
         opted_out = _user(
@@ -635,3 +636,60 @@ def test_atomic_audience_rejects_invalid_values_and_cross_channel_fields(
 ) -> None:
     with pytest.raises(ValueError):
         validate_audience(BroadcastAudience(conditions=[condition]), channel, set())
+
+
+def _grant_users_read(monkeypatch, allowed: bool) -> None:
+    from app.cabinet.routes import admin_broadcasts
+
+    async def check_permission(db, user, permission, **_kwargs):
+        return (allowed or permission != 'users:read'), None
+
+    monkeypatch.setattr(admin_broadcasts.PermissionService, 'check_permission', check_permission)
+
+
+@pytest.mark.asyncio
+async def test_preview_without_users_read_shows_count_but_no_people(monkeypatch) -> None:
+    """У роли Marketer есть broadcasts:*, но нет users:read: размер аудитории — да,
+    Telegram ID и почта конкретных людей — нет."""
+    _grant_users_read(monkeypatch, False)
+    async with memory_session(monkeypatch, TABLES) as db:
+        db.add_all([_user(1301), _user(1302)])
+        await db.commit()
+
+        response = await preview_audience(
+            BroadcastAudiencePreviewRequest(
+                channel='telegram', audience=BroadcastAudience(conditions=[rule('basic', 'all')])
+            ),
+            admin=_user(1399),
+            db=db,
+        )
+
+    assert response.count == 2
+    assert response.users == []
+
+
+def test_user_search_requires_users_read() -> None:
+    """Поиск по части ника/почты выгружает людей из базы — одного права на рассылки мало."""
+    import inspect
+
+    admin_dependency = inspect.signature(search_audience_users).parameters['admin'].default.dependency
+    permissions = inspect.getclosurevars(admin_dependency).nonlocals['permissions']
+
+    assert set(permissions) == {'broadcasts:read', 'users:read'}
+
+
+def test_unreadable_stored_audience_does_not_break_history() -> None:
+    from types import SimpleNamespace
+
+    from app.cabinet.routes.admin_broadcasts import _stored_audience
+
+    assert _stored_audience(SimpleNamespace(id=1, audience=None)) is None
+    assert _stored_audience(SimpleNamespace(id=2, audience={'conditions': []})) is None
+    stored = _stored_audience(SimpleNamespace(id=3, audience={'conditions': [{'field': 'basic', 'value': 'all'}]}))
+    assert stored is not None and stored.conditions[0].value == 'all'
+
+
+def test_bot_history_names_cabinet_audience() -> None:
+    from app.handlers.admin.messages import get_target_name
+
+    assert get_target_name('audience') == 'По условиям из кабинета'

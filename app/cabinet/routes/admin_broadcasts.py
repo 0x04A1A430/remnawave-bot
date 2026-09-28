@@ -5,6 +5,7 @@ from typing import Literal
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import ValidationError
 from sqlalchemy import String, cast, distinct, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,6 +22,7 @@ from app.services.broadcast_service import (
     email_broadcast_service,
     parse_email_scoped_target,
 )
+from app.services.permission_service import PermissionService
 
 from ..dependencies import get_cabinet_db, require_permission
 from ..schemas.broadcasts import (
@@ -127,6 +129,18 @@ EMAIL_FILTER_GROUPS = {
 # ============ Helper Functions ============
 
 
+def _stored_audience(broadcast: BroadcastHistory) -> BroadcastAudience | None:
+    """Условия из истории; устаревшая под новую схему запись не роняет список рассылок."""
+    raw = getattr(broadcast, 'audience', None)
+    if not raw:
+        return None
+    try:
+        return BroadcastAudience.model_validate(raw)
+    except ValidationError:
+        logger.warning('Сохранённая аудитория рассылки не читается текущей схемой', broadcast_id=broadcast.id)
+        return None
+
+
 def _serialize_broadcast(broadcast: BroadcastHistory) -> BroadcastResponse:
     """Serialize broadcast to response model."""
     blocked = broadcast.blocked_count or 0
@@ -156,7 +170,7 @@ def _serialize_broadcast(broadcast: BroadcastHistory) -> BroadcastResponse:
         channel=getattr(broadcast, 'channel', 'telegram') or 'telegram',
         email_subject=getattr(broadcast, 'email_subject', None),
         email_html_content=getattr(broadcast, 'email_html_content', None),
-        audience=BroadcastAudience.model_validate(broadcast.audience) if broadcast.audience else None,
+        audience=_stored_audience(broadcast),
     )
 
 
@@ -453,6 +467,12 @@ async def preview_audience(
     count, page = await preview_audience_users(
         db, request.audience, request.channel, request.category, request.offset, request.limit
     )
+    # Число получателей нужно любому, кто готовит рассылку, а список людей с их
+    # Telegram ID и почтой — только тем, кому открыты карточки пользователей
+    # (у роли Marketer есть broadcasts:*, но нет users:read).
+    can_see_users, _reason = await PermissionService.check_permission(db, admin, 'users:read')
+    if not can_see_users:
+        page = []
     return BroadcastAudiencePreviewResponse(
         count=count,
         offset=request.offset,
@@ -477,7 +497,9 @@ async def search_audience_users(
     q: str = Query(..., min_length=1, max_length=100),
     offset: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
-    admin: User = Depends(require_permission('broadcasts:read')),
+    # Поиск по части ника/почты/ID выгружает людей из базы — это право на
+    # карточки пользователей, а не только на рассылки.
+    admin: User = Depends(require_permission('broadcasts:read', 'users:read')),
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> BroadcastAudienceUserSearchResponse:
     """Find a person by any part of Telegram ID, username, or email."""
