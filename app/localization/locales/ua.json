@@ -2302,5 +2302,16 @@
   "CASHERA_STATUS_FAILED": "❌ Оплата не пройшла",
   "CASHERA_STATUS_EXPIRED": "⌛ Термін оплати минув",
   "CASHERA_STATUS_REFUNDED": "↩️ Повернення",
-  "CASHERA_H2H_HINT": "Відскануйте QR-код у застосунку банку або натисніть «Оплатити»."
+  "CASHERA_H2H_HINT": "Відскануйте QR-код у застосунку банку або натисніть «Оплатити».",
+  "CASHERA_RECURRING_NOTIFY_ACTIVATED": "✅ Автопродовження через Cashera підключено.",
+  "CASHERA_RECURRING_NOTIFY_CONFIRMED": "✅ Підписку продовжено автосписанням Cashera.",
+  "CASHERA_RECURRING_NOTIFY_FAILED": "⚠️ Не вдалося списати оплату за автопродовженням Cashera.",
+  "CASHERA_RECURRING_NOTIFY_CANCELLED": "ℹ️ Автопродовження Cashera скасовано.",
+  "CASHERA_PURCHASE_BUTTON": "⚡ Оформити з автооплатою Cashera",
+  "CASHERA_RECURRING_ENABLE_ERROR": "❌ Не вдалося підключити автопродовження Cashera. Спробуйте пізніше.",
+  "CASHERA_RECURRING_ENABLE_SUCCESS": "⚡ <b>Автопродовження Cashera</b>\n\nПідтвердьте автосписання кнопкою нижче.\nПісля підтвердження та першого списання підписка продовжиться автоматично.",
+  "CASHERA_RECURRING_PAY_BUTTON": "💳 Підтвердити",
+  "CASHERA_RECURRING_CANCEL_BUTTON": "🛑 Вимкнути автопродовження Cashera",
+  "CASHERA_RECURRING_MENU_BUTTON": "⚡ Автопродовження через Cashera",
+  "CASHERA_RECURRING_CANCELLED": "✅ Автопродовження Cashera вимкнено"
 }

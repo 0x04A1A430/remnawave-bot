@@ -474,6 +474,9 @@ class MonitoringService:
                 # Реконсилиация рекуррентных подписок Lava: та же страховка на
                 # случай потерянных вебхуков / недошедших отмен.
                 await self._reconcile_lava_subscriptions(db)
+
+                # Реконсилиация подписок Cashera + доначисление пропущенных списаний.
+                await self._reconcile_cashera_subscriptions(db)
                 await self._check_expired_subscriptions(db)
                 await self._check_expiring_subscriptions(db)
                 await self._check_trial_expiring_soon(db)
@@ -3168,6 +3171,107 @@ class MonitoringService:
                     )
         except Exception as e:
             logger.warning('Ошибка реконсиляции Lava-подписок', error=e)
+
+    async def _reconcile_cashera_subscriptions(self, db: AsyncSession):
+        """Safety net для подписок Cashera — зеркало Platega/Lava-реконсиляции.
+
+        Сверяет локальный статус со статусом Cashera (потерянные вебхуки, зависший
+        PENDING), доначисляет оплаченные списания, чей вебхук не дошёл (у Cashera
+        есть история /charges — в отличие от Lava), и добивает недошедшие отмены.
+
+        НЕ гейтится CASHERA_RECURRENT_ENABLED намеренно: выключение фичи не
+        останавливает существующие привязки.
+        """
+        try:
+            if not settings.is_cashera_enabled():
+                return
+
+            from app.database.crud import cashera_subscription as sub_crud
+            from app.services.cashera_recurrent import cashera_reconcile_decision, normalize_remote_status
+            from app.services.cashera_service import CasheraAPIError, cashera_service
+            from app.services.payment.cashera import _CasheraRecurrentAgent
+
+            agent = _CasheraRecurrentAgent(self.bot)
+            records = await sub_crud.list_cashera_subscriptions_by_statuses(db, ['PENDING', 'ACTIVE', 'PAST_DUE'])
+
+            for record in records:
+                try:
+                    remote_missing = True
+                    remote_status = None
+                    if record.cashera_subscription_uuid:
+                        try:
+                            payload = await cashera_service.get_subscription(record.cashera_subscription_uuid)
+                            remote_status = normalize_remote_status(payload.get('status'))
+                            remote_missing = remote_status is None
+                        except CasheraAPIError as api_error:
+                            # 404 = провайдер достоверно не знает подписку; прочее — временно.
+                            remote_missing = api_error.status_code == 404
+                        except Exception:
+                            remote_missing = False
+
+                    if record.status in ('ACTIVE', 'PAST_DUE'):
+                        await agent.replay_missed_cashera_charges(db, record.id)
+                        await db.refresh(record)
+
+                    age_minutes = (
+                        (datetime.now(UTC) - record.created_at).total_seconds() / 60
+                        if record.created_at is not None
+                        else 0.0
+                    )
+                    new_status = cashera_reconcile_decision(
+                        record.status, remote_status, age_minutes, remote_missing=remote_missing
+                    )
+                    if new_status and new_status != record.status:
+                        previous_status = record.status
+                        await sub_crud.update_cashera_subscription(
+                            db, record, status=new_status, remote_status=remote_status
+                        )
+                        logger.info(
+                            'Подписка Cashera реконсилирована',
+                            local_id=record.id,
+                            cashera_uuid=record.cashera_subscription_uuid,
+                            old_status=previous_status,
+                            new_status=new_status,
+                            remote_status=remote_status,
+                        )
+                        if new_status == 'FAILED' and record.cashera_subscription_uuid:
+                            # Не дождались подтверждения — гасим и у провайдера, чтобы
+                            # поздно подтверждённая ссылка не начала списывать.
+                            try:
+                                await cashera_service.cancel_subscription(record.cashera_subscription_uuid)
+                            except Exception:
+                                pass
+                except Exception as record_error:
+                    logger.warning(
+                        'Не удалось реконсилировать подписку Cashera',
+                        local_id=getattr(record, 'id', None),
+                        error=record_error,
+                    )
+
+            # Свип недавних отмен: локальный CANCELLED мог не дойти до Cashera.
+            cancelled_records = await sub_crud.list_recently_cancelled_cashera_subscriptions(
+                db, datetime.now(UTC) - timedelta(days=30)
+            )
+            for record in cancelled_records:
+                try:
+                    payload = await cashera_service.get_subscription(record.cashera_subscription_uuid)
+                    remote_status = normalize_remote_status(payload.get('status'))
+                    if remote_status in (None, 'cancelled', 'failed'):
+                        continue
+                    await cashera_service.cancel_subscription(record.cashera_subscription_uuid)
+                    logger.warning(
+                        'Подписка Cashera осталась активной после локальной отмены — повторил отмену',
+                        local_id=record.id,
+                        remote_status=remote_status,
+                    )
+                except Exception as record_error:
+                    logger.warning(
+                        'Не удалось досверить отменённую подписку Cashera',
+                        local_id=getattr(record, 'id', None),
+                        error=record_error,
+                    )
+        except Exception as e:
+            logger.warning('Ошибка реконсиляции подписок Cashera', error=e)
 
     async def _check_ticket_sla(self, db: AsyncSession):
         try:

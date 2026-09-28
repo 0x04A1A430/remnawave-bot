@@ -1128,6 +1128,10 @@ class Settings(BaseSettings):
     # Свой экран оплаты (H2H): QR СБП / реквизиты прямо в боте и кабинете вместо перехода
     # на страницу Cashera. Только для sbp, card и crypto; остальные методы — всегда ссылкой.
     CASHERA_H2H_ENABLED: bool = False
+    # Автопродление подписки через подписки Cashera (sbp_recurring: клиент один раз
+    # подтверждает, дальше Cashera списывает сама). Метод sbp_recurring должен быть
+    # подключён к мерчанту в кабинете Cashera.
+    CASHERA_RECURRENT_ENABLED: bool = False
     CASHERA_MIN_AMOUNT_KOPEKS: int = 10000  # 100₽ — минимум Cashera для карт
     CASHERA_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000₽
     CASHERA_WEBHOOK_PATH: str = '/cashera-webhook'
@@ -3316,6 +3320,9 @@ class Settings(BaseSettings):
 
     def get_cashera_display_name_html(self) -> str:
         return html.escape(self.get_cashera_display_name())
+
+    def is_cashera_recurrent_enabled(self) -> bool:
+        return self.is_cashera_enabled() and self.CASHERA_RECURRENT_ENABLED
 
     @staticmethod
     def get_cashera_method_definitions() -> dict[str, dict[str, str]]:

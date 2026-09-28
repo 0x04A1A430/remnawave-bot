@@ -2302,5 +2302,16 @@
   "CASHERA_STATUS_FAILED": "❌ 支付失败",
   "CASHERA_STATUS_EXPIRED": "⌛ 支付已过期",
   "CASHERA_STATUS_REFUNDED": "↩️ 已退款",
-  "CASHERA_H2H_HINT": "请在银行应用中扫描二维码，或点击“支付”。"
+  "CASHERA_H2H_HINT": "请在银行应用中扫描二维码，或点击“支付”。",
+  "CASHERA_RECURRING_NOTIFY_ACTIVATED": "✅ 已开通 Cashera 自动续费。",
+  "CASHERA_RECURRING_NOTIFY_CONFIRMED": "✅ 已通过 Cashera 自动扣款续订。",
+  "CASHERA_RECURRING_NOTIFY_FAILED": "⚠️ Cashera 自动续费扣款失败。",
+  "CASHERA_RECURRING_NOTIFY_CANCELLED": "ℹ️ Cashera 自动续费已取消。",
+  "CASHERA_PURCHASE_BUTTON": "⚡ 使用 Cashera 自动付款订阅",
+  "CASHERA_RECURRING_ENABLE_ERROR": "❌ 无法开通 Cashera 自动续费，请稍后重试。",
+  "CASHERA_RECURRING_ENABLE_SUCCESS": "⚡ <b>Cashera 自动续费</b>\n\n请点击下方按钮确认自动扣款。\n确认并完成首次扣款后，订阅将自动续费。",
+  "CASHERA_RECURRING_PAY_BUTTON": "💳 确认",
+  "CASHERA_RECURRING_CANCEL_BUTTON": "🛑 关闭 Cashera 自动续费",
+  "CASHERA_RECURRING_MENU_BUTTON": "⚡ 通过 Cashera 自动续费",
+  "CASHERA_RECURRING_CANCELLED": "✅ 已关闭 Cashera 自动续费"
 }

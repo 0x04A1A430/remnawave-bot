@@ -228,6 +228,67 @@ class CasheraService:
         """
         return await self._request('GET', f'/integration/transactions/{quote(str(transaction_uuid), safe="")}/h2h')
 
+    # --- подписки (автопродление, sbp_recurring) ---------------------------------
+
+    async def create_subscription(
+        self,
+        *,
+        amount_kopeks: int,
+        external_id: str,
+        interval: str,
+        description: str,
+        callback_url: str | None = None,
+    ) -> dict[str, Any]:
+        """POST /integration/subscriptions — подписка ждёт подтверждения по payment_url.
+
+        Повтор с тем же external_id и теми же параметрами возвращает существующую
+        подписку (200); другие параметры при том же external_id — 409.
+        """
+        payload: dict[str, Any] = {
+            'amount': int(amount_kopeks),
+            'external_id': external_id,
+            'interval': interval,
+            'description': (description or 'Подписка')[:255],
+        }
+        if callback_url:
+            payload['callback_url'] = callback_url
+        logger.info(
+            'Cashera API create_subscription', external_id=external_id, amount_kopeks=amount_kopeks, interval=interval
+        )
+        data = await self._request('POST', '/integration/subscriptions', json_payload=payload)
+        if not data.get('uuid'):
+            logger.error('Cashera create_subscription: в ответе нет uuid', external_id=external_id)
+            raise CasheraAPIError(201, 'Incomplete create subscription response')
+        return data
+
+    async def get_subscription(self, subscription_uuid: str) -> dict[str, Any]:
+        return await self._request('GET', f'/integration/subscriptions/{quote(str(subscription_uuid), safe="")}')
+
+    async def get_subscription_by_external_id(self, external_id: str) -> dict[str, Any]:
+        return await self._request(
+            'GET', f'/integration/subscriptions/by-external-id/{quote(str(external_id), safe="")}'
+        )
+
+    async def list_subscription_charges(
+        self, subscription_uuid: str, *, page: int = 1, per_page: int = 100
+    ) -> list[dict[str, Any]]:
+        """История списаний по подписке (постранично). Возвращает список транзакций."""
+        data = await self._request(
+            'GET',
+            f'/integration/subscriptions/{quote(str(subscription_uuid), safe="")}/charges?page={int(page)}&per_page={int(per_page)}',
+        )
+        for key in ('data', 'items', 'charges', 'transactions'):
+            if isinstance(data.get(key), list):
+                return [item for item in data[key] if isinstance(item, dict)]
+        raw = data.get('_raw')
+        return [item for item in raw if isinstance(item, dict)] if isinstance(raw, list) else []
+
+    async def cancel_subscription(self, subscription_uuid: str) -> dict[str, Any]:
+        """POST /integration/subscriptions/{uuid}/cancel — идемпотентна для уже отменённой."""
+        return await self._request(
+            'POST', f'/integration/subscriptions/{quote(str(subscription_uuid), safe="")}/cancel'
+        )
+
     def verify_webhook(self, api_key_header: str | None, secret_header: str | None) -> bool:
         """Сверяет X-Api-Key и X-Secret вебхука с нашими в постоянном времени.
 

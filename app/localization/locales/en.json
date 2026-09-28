@@ -2302,5 +2302,16 @@
   "CASHERA_STATUS_FAILED": "❌ Payment failed",
   "CASHERA_STATUS_EXPIRED": "⌛ The payment link has expired",
   "CASHERA_STATUS_REFUNDED": "↩️ Refunded",
-  "CASHERA_H2H_HINT": "Scan the QR code in your banking app or tap “Pay”."
+  "CASHERA_H2H_HINT": "Scan the QR code in your banking app or tap “Pay”.",
+  "CASHERA_RECURRING_NOTIFY_ACTIVATED": "✅ Cashera auto-renewal is connected.",
+  "CASHERA_RECURRING_NOTIFY_CONFIRMED": "✅ Your subscription was renewed by a Cashera auto-charge.",
+  "CASHERA_RECURRING_NOTIFY_FAILED": "⚠️ The Cashera auto-renewal charge failed.",
+  "CASHERA_RECURRING_NOTIFY_CANCELLED": "ℹ️ Cashera auto-renewal has been cancelled.",
+  "CASHERA_PURCHASE_BUTTON": "⚡ Subscribe with Cashera auto-pay",
+  "CASHERA_RECURRING_ENABLE_ERROR": "❌ Could not connect Cashera auto-renewal. Please try again later.",
+  "CASHERA_RECURRING_ENABLE_SUCCESS": "⚡ <b>Cashera auto-renewal</b>\n\nConfirm automatic charges with the button below.\nAfter confirmation and the first charge your subscription renews automatically.",
+  "CASHERA_RECURRING_PAY_BUTTON": "💳 Confirm",
+  "CASHERA_RECURRING_CANCEL_BUTTON": "🛑 Turn off Cashera auto-renewal",
+  "CASHERA_RECURRING_MENU_BUTTON": "⚡ Auto-renewal via Cashera",
+  "CASHERA_RECURRING_CANCELLED": "✅ Cashera auto-renewal turned off"
 }

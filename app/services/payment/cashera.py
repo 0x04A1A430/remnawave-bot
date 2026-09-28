@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from importlib import import_module
 from typing import Any
 
 import structlog
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -172,6 +173,24 @@ class CasheraPaymentMixin:
         только там, где повтор может помочь. 4xx Cashera не повторяет вовсе.
         """
         event = payload.get('event')
+
+        # Автопродление: состояние подписки и списания по ней. Обрабатываются и при
+        # выключенном флаге — живые привязки у Cashera продолжают списывать.
+        if event == 'subscription.status_updated' and isinstance(payload.get('subscription'), dict):
+            try:
+                return await self.process_cashera_subscription_status(db, payload['subscription'])
+            except Exception as error:
+                logger.exception('Cashera: ошибка обработки события подписки', error=error)
+                return False
+        from app.services.cashera_recurrent import is_recurring_charge
+
+        if event == 'transaction.status_updated' and is_recurring_charge(payload):
+            try:
+                return await self.process_cashera_recurring_charge(db, payload)
+            except Exception as error:
+                logger.exception('Cashera: ошибка обработки списания по подписке', error=error)
+                return False
+
         if event != 'transaction.status_updated':
             # webhook.test, выплаты, подписки и будущие события — просто подтверждаем.
             logger.info('Cashera webhook: событие не про платёж, подтверждаем', cashera_event=event)
@@ -654,3 +673,622 @@ class CasheraPaymentMixin:
         if not payment:
             return None
         return await self.check_cashera_payment_status(db, payment.order_id)
+
+    # ==================== Автопродление: подписки Cashera ====================
+
+    async def _notify_cashera_recurring(self, db: AsyncSession, record: Any, kind: str) -> None:
+        """Best-effort уведомление о событии автопродления; никогда не бросает.
+
+        kind: activated (подтверждена привязка), confirmed (списание прошло),
+        failed (списание не прошло), cancelled.
+        """
+        if not settings.is_notifications_enabled():
+            return
+        try:
+            from app.cabinet.routes.websocket import cabinet_ws_manager
+
+            await cabinet_ws_manager.send_to_user(
+                record.user_id,
+                {
+                    'type': f'cashera_recurring.{kind}',
+                    'status': record.status,
+                    'amount_kopeks': record.amount_kopeks,
+                    'amount_rubles': record.amount_kopeks / 100,
+                    'next_charge_at': record.next_charge_at.isoformat() if record.next_charge_at else None,
+                    'subscription_id': record.subscription_id,
+                },
+            )
+        except Exception as ws_error:  # pragma: no cover — best-effort
+            logger.warning('Cashera: не удалось отправить WS-событие автопродления', error=str(ws_error), kind=kind)
+
+        bot = getattr(self, 'bot', None)
+        if not bot:
+            return
+        try:
+            from app.database.models import User
+            from app.localization.texts import get_texts
+
+            user = await db.get(User, record.user_id)
+            if not user or not user.telegram_id:
+                return
+            texts = get_texts(user.language)
+            messages = {
+                'activated': texts.t(
+                    'CASHERA_RECURRING_NOTIFY_ACTIVATED', '✅ Автопродление через Cashera подключено.'
+                ),
+                'confirmed': texts.t(
+                    'CASHERA_RECURRING_NOTIFY_CONFIRMED', '✅ Подписка продлена автосписанием Cashera.'
+                ),
+                'failed': texts.t(
+                    'CASHERA_RECURRING_NOTIFY_FAILED', '⚠️ Не удалось списать оплату по автопродлению Cashera.'
+                ),
+                'cancelled': texts.t('CASHERA_RECURRING_NOTIFY_CANCELLED', 'ℹ️ Автопродление Cashera отменено.'),
+            }
+            text = messages.get(kind)
+            if text:
+                await bot.send_message(chat_id=user.telegram_id, text=text)
+        except Exception as error:  # pragma: no cover - best-effort notify
+            logger.warning('Cashera: не удалось отправить уведомление об автопродлении', error=str(error), kind=kind)
+
+    async def create_cashera_recurrent_subscription(
+        self,
+        db: AsyncSession,
+        *,
+        user_id: int,
+        subscription: Any,
+        tariff: Any,
+    ) -> dict[str, Any]:
+        """Оформляет подписку Cashera для подписки бота.
+
+        Каденс — та же иерархия, что у Platega и balance-autopay: выбор
+        пользователя → глобальный дефолт → самый короткий период тарифа → 30 дней.
+        Сумма — полная цена продления без промо (user=None), округлённая вверх до
+        рублей (Cashera принимает только целые рубли). Первое подтверждение по
+        ``redirect_url`` — до него запись PENDING.
+        """
+        from app.database.crud import cashera_subscription as sub_crud
+        from app.services import cashera_recurrent as cr
+        from app.services.monitoring_service import resolve_autopay_period_candidate
+
+        existing = await sub_crud.get_active_cashera_subscription_by_subscription(db, subscription.id)
+        if existing:
+            # Идемпотентный повтор тоже восстанавливает взаимоисключение движков продления.
+            if getattr(subscription, 'autopay_enabled', False):
+                subscription.autopay_enabled = False
+                await db.commit()
+            return {
+                'local_id': existing.id,
+                'cashera_subscription_uuid': existing.cashera_subscription_uuid,
+                'redirect_url': existing.redirect_url,
+                'status': existing.status,
+            }
+
+        period_days = (
+            resolve_autopay_period_candidate(getattr(subscription, 'autopay_period_days', None), tariff)
+            or resolve_autopay_period_candidate(getattr(settings, 'DEFAULT_AUTOPAY_PERIOD_DAYS', 0), tariff)
+            or (tariff.get_shortest_period() if tariff else None)
+            or 30
+        )
+        interval, charge_days = cr.resolve_cashera_interval(period_days, bool(getattr(tariff, 'is_daily', False)))
+
+        amount_kopeks = 0
+        try:
+            from app.services.pricing_engine import pricing_engine
+
+            pricing_result = await pricing_engine.calculate_tariff_purchase_price(
+                tariff,
+                charge_days,
+                device_limit=getattr(subscription, 'device_limit', None),
+            )
+            amount_kopeks = int(pricing_result.final_total or 0)
+        except Exception as pricing_error:  # pragma: no cover - defensive
+            logger.warning('Cashera: не удалось посчитать цену с доп. устройствами', error=str(pricing_error))
+        if amount_kopeks <= 0 and tariff is not None:
+            amount_kopeks = int(tariff.get_purchasable_price_for_period(charge_days) or 0)
+        amount_kopeks = cr.round_up_to_rubles(amount_kopeks)
+        # Вся валидация — ДО обращения к Cashera: подписка там создаётся сразу, и
+        # raise после неё оставил бы привязку, которую нечем отменить.
+        if amount_kopeks < 100:
+            raise ValueError(f'Тариф не имеет цены за период {charge_days} дн. — автопродление Cashera недоступно')
+
+        external_id = cr.build_subscription_external_id(subscription.id, uuid.uuid4().hex[:12])
+        response = await cashera_service.create_subscription(
+            amount_kopeks=amount_kopeks,
+            external_id=external_id,
+            interval=interval,
+            description=getattr(tariff, 'name', None) or 'Подписка',
+            callback_url=settings.get_cashera_callback_url(),
+        )
+        cashera_uuid = str(response.get('uuid'))
+        redirect_url = normalize_payment_url(response.get('payment_url'))
+        remote_status = cr.normalize_remote_status(response.get('status'))
+
+        try:
+            record = await sub_crud.create_cashera_subscription(
+                db,
+                user_id=user_id,
+                subscription_id=subscription.id,
+                tariff_id=getattr(tariff, 'id', None),
+                external_id=external_id,
+                interval=interval,
+                charge_days=charge_days,
+                amount_kopeks=amount_kopeks,
+                redirect_url=redirect_url,
+                cashera_subscription_uuid=cashera_uuid,
+                remote_status=remote_status,
+            )
+        except IntegrityError:
+            # Конкурентный enable занял partial unique — наша удалённая подписка
+            # осталась бы сиротой. Отменяем её и возвращаем победителя.
+            await db.rollback()
+            try:
+                await cashera_service.cancel_subscription(cashera_uuid)
+            except Exception as cancel_error:  # pragma: no cover - network errors
+                logger.error(
+                    'Cashera: не удалось отменить осиротевшую подписку после гонки',
+                    cashera_uuid=cashera_uuid,
+                    error=str(cancel_error),
+                )
+            winner = await sub_crud.get_active_cashera_subscription_by_subscription(db, subscription.id)
+            if not winner:
+                raise
+            return {
+                'local_id': winner.id,
+                'cashera_subscription_uuid': winner.cashera_subscription_uuid,
+                'redirect_url': winner.redirect_url,
+                'status': winner.status,
+            }
+
+        # Взаимоисключение движков продления — после успешного создания записи:
+        # сбой оформления не должен оставлять человека вообще без автопродления.
+        subscription.autopay_enabled = False
+        await db.commit()
+
+        from app.services.payment.lava import cancel_lava_recurring_for_subscription_safe
+        from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
+
+        await cancel_platega_recurring_for_subscription_safe(db, subscription.id)
+        await cancel_lava_recurring_for_subscription_safe(db, subscription.id)
+
+        return {
+            'local_id': record.id,
+            'cashera_subscription_uuid': cashera_uuid,
+            'redirect_url': redirect_url,
+            'status': record.status,
+        }
+
+    async def cancel_cashera_recurrent_subscription(
+        self,
+        db: AsyncSession,
+        *,
+        local_id: int,
+        commit: bool = True,
+    ) -> bool:
+        """Отменяет одну подписку Cashera по локальному id. Идемпотентна.
+
+        Удалённая отмена — best-effort: сбой не мешает пометить запись CANCELLED
+        (иначе недоступность Cashera блокировала бы отмену навсегда); недошедшую
+        отмену добьёт reconciler по свипу CANCELLED-записей.
+        """
+        from app.database.crud import cashera_subscription as sub_crud
+
+        record = await sub_crud.get_cashera_subscription_by_id(db, local_id)
+        if not record:
+            return False
+        if record.status == 'CANCELLED':
+            return True
+
+        if record.cashera_subscription_uuid:
+            try:
+                await cashera_service.cancel_subscription(record.cashera_subscription_uuid)
+            except Exception as error:  # pragma: no cover - network errors
+                logger.warning(
+                    'Cashera: не удалось отменить подписку на стороне провайдера',
+                    cashera_uuid=record.cashera_subscription_uuid,
+                    error=str(error),
+                )
+
+        record.status = 'CANCELLED'
+        if commit:
+            await db.commit()
+        else:
+            # Вызывающий держит свою транзакцию — CANCELLED войдёт в неё.
+            await db.flush()
+        return True
+
+    async def cancel_cashera_recurring_for_subscription(
+        self,
+        db: AsyncSession,
+        subscription_id: int,
+        *,
+        commit: bool = True,
+    ) -> None:
+        """Best-effort отмена живой подписки Cashera по subscription_id; не бросает."""
+        from app.database.crud import cashera_subscription as sub_crud
+
+        try:
+            record = await sub_crud.get_active_cashera_subscription_by_subscription(db, subscription_id)
+            if not record:
+                return
+            await self.cancel_cashera_recurrent_subscription(db, local_id=record.id, commit=commit)
+        except Exception as error:  # pragma: no cover - best-effort cleanup
+            logger.warning(
+                'Cashera: не удалось отменить автопродление по подписке',
+                subscription_id=subscription_id,
+                error=str(error),
+            )
+
+    async def _find_cashera_subscription_record(self, db: AsyncSession, ref: dict[str, Any]) -> Any | None:
+        from app.database.crud import cashera_subscription as sub_crud
+
+        record = None
+        if ref.get('uuid'):
+            record = await sub_crud.get_cashera_subscription_by_uuid(db, str(ref['uuid']))
+        if record is None and ref.get('external_id'):
+            record = await sub_crud.get_cashera_subscription_by_external_id(db, str(ref['external_id']))
+        if record is None:
+            return None
+        return await sub_crud.get_cashera_subscription_by_id_for_update(db, record.id)
+
+    async def process_cashera_subscription_status(self, db: AsyncSession, subscription_payload: dict[str, Any]) -> bool:
+        """Событие subscription.status_updated: состояние привязки, не оплата.
+
+        active подтверждает согласие клиента, но не конкретное списание — продление
+        идёт только по транзакции paid. Локально отменённую запись не воскрешаем:
+        если Cashera считает её активной, повторяем удалённую отмену.
+        """
+        from app.services import cashera_recurrent as cr
+
+        record = await self._find_cashera_subscription_record(db, subscription_payload)
+        if record is None:
+            logger.warning('Cashera subscription event: подписка не найдена', ref=subscription_payload.get('uuid'))
+            return True
+
+        remote_status = cr.normalize_remote_status(subscription_payload.get('status'))
+        new_status = cr.local_status_for(remote_status)
+        record.remote_status = remote_status
+        if subscription_payload.get('uuid') and not record.cashera_subscription_uuid:
+            record.cashera_subscription_uuid = str(subscription_payload['uuid'])
+        next_charge = _parse_datetime(subscription_payload.get('next_charge_at'))
+        if next_charge:
+            record.next_charge_at = next_charge
+
+        if record.status == 'CANCELLED':
+            await db.commit()
+            if remote_status in ('active', 'past_due', 'pending_agreement'):
+                logger.error(
+                    'Cashera: подписка отменена у нас, но жива у провайдера — повторяем отмену',
+                    cashera_uuid=record.cashera_subscription_uuid,
+                )
+                try:
+                    await cashera_service.cancel_subscription(record.cashera_subscription_uuid)
+                except Exception as error:  # pragma: no cover - network errors
+                    logger.warning('Cashera: повторная удалённая отмена не удалась', error=str(error))
+            return True
+
+        previous = record.status
+        if new_status and new_status != previous:
+            record.status = new_status
+        await db.commit()
+
+        if record.status != previous:
+            kind = {'ACTIVE': 'activated', 'CANCELLED': 'cancelled', 'FAILED': 'cancelled'}.get(record.status)
+            # Возврат из PAST_DUE в ACTIVE — не новая привязка, о нём скажет само списание.
+            if kind and not (kind == 'activated' and previous == 'PAST_DUE'):
+                await self._notify_cashera_recurring(db, record, kind)
+        return True
+
+    async def process_cashera_recurring_charge(self, db: AsyncSession, payload: dict[str, Any]) -> bool:
+        """Списание по подписке: transaction.status_updated с объектом subscription.
+
+        Баланс не трогается — подписка продлевается напрямую, как у Platega/Lava.
+        """
+        transaction = payload.get('transaction') if isinstance(payload.get('transaction'), dict) else {}
+        ref = payload.get('subscription') if isinstance(payload.get('subscription'), dict) else {}
+        record = await self._find_cashera_subscription_record(db, ref)
+        if record is None:
+            logger.warning(
+                'Cashera: списание по неизвестной подписке',
+                subscription_uuid=ref.get('uuid'),
+                charge_uuid=transaction.get('uuid'),
+            )
+            return True
+        return await self._apply_cashera_charge(db, record, transaction, source='webhook')
+
+    async def _apply_cashera_charge(
+        self,
+        db: AsyncSession,
+        record: Any,
+        transaction: dict[str, Any],
+        *,
+        source: str,
+    ) -> bool:
+        """Применяет одно списание к подписке (FOR UPDATE по записи уже взят)."""
+        from sqlalchemy import select as sa_select
+
+        from app.database.models import Subscription, Transaction
+        from app.services import cashera_recurrent as cr
+
+        status = str(transaction.get('status') or '').strip().lower()
+        charge_id = transaction.get('uuid')
+
+        if status in cr.CHARGE_SUCCESS:
+            if not charge_id:
+                # Без uuid идемпотентность не сработает — не продлеваем.
+                logger.warning('Cashera: списание paid без uuid', subscription_record=record.id)
+                return True
+            charge_id = str(charge_id)
+            if record.last_charge_external_id == charge_id:
+                return True
+            duplicate = (
+                await db.execute(
+                    sa_select(Transaction.id).where(
+                        Transaction.external_id == charge_id,
+                        Transaction.payment_method == PaymentMethod.CASHERA.value,
+                    )
+                )
+            ).scalar_one_or_none()
+            if duplicate is not None:
+                return True
+
+            if str(transaction.get('currency') or 'RUB').upper() != 'RUB':
+                logger.error('Cashera: списание не в RUB — не продлеваем', charge_id=charge_id)
+                return True
+            try:
+                charged_kopeks = int(transaction.get('amount'))
+            except (TypeError, ValueError):
+                charged_kopeks = 0
+            if charged_kopeks > 0 and charged_kopeks != record.amount_kopeks:
+                logger.warning(
+                    'Cashera: сумма списания отличается от сохранённой — фиксируем фактическую',
+                    stored_kopeks=record.amount_kopeks,
+                    charged_kopeks=charged_kopeks,
+                )
+                record.amount_kopeks = charged_kopeks
+
+            subscription = await db.get(Subscription, record.subscription_id)
+            if subscription is None:
+                # Продлевать нечего, а деньги взяты — единственное полезное: остановить списания.
+                logger.error('Cashera: списание по удалённой подписке — останавливаем', charge_id=charge_id)
+                try:
+                    await cashera_service.cancel_subscription(record.cashera_subscription_uuid)
+                except Exception as cancel_error:  # pragma: no cover - network errors
+                    logger.error('Cashera: не удалось остановить списания', error=str(cancel_error))
+                record.status = 'CANCELLED'
+                await db.commit()
+                return True
+
+            from app.database.crud.subscription import _lock_subscription_row, reconcile_tariff_traffic_limit
+            from app.database.crud.transaction import create_transaction, emit_transaction_side_effects
+            from app.services.grace_access_echo import undo_grace_overlay_echo
+
+            await _lock_subscription_row(db, subscription)
+            await undo_grace_overlay_echo(db, subscription)
+            subscription.extend_subscription(record.charge_days)
+            await reconcile_tariff_traffic_limit(db, subscription)
+
+            # Списание по локально отменённой записи: деньги взяты — продлеваем, но
+            # запись не воскрешаем и повторяем удалённую отмену.
+            was_cancelled = record.status == 'CANCELLED'
+            charged_at = _parse_datetime(transaction.get('paid_at')) or datetime.now(UTC)
+            record.last_charge_external_id = charge_id
+            record.last_charge_at = charged_at
+            record.charges_success += 1
+            if not was_cancelled:
+                record.status = 'ACTIVE'
+                record.next_charge_at = charged_at + timedelta(days=record.charge_days)
+
+            tx = await create_transaction(
+                db,
+                user_id=record.user_id,
+                type=TransactionType.SUBSCRIPTION_PAYMENT,
+                amount_kopeks=record.amount_kopeks,
+                description=f'Автопродление {settings.get_cashera_display_name()}',
+                payment_method=PaymentMethod.CASHERA,
+                external_id=charge_id,
+                commit=False,
+            )
+            await db.commit()
+
+            await emit_transaction_side_effects(
+                db,
+                tx,
+                amount_kopeks=record.amount_kopeks,
+                user_id=record.user_id,
+                type=TransactionType.SUBSCRIPTION_PAYMENT,
+                payment_method=PaymentMethod.CASHERA,
+                external_id=charge_id,
+                description=f'Автопродление {settings.get_cashera_display_name()}',
+            )
+            await self._notify_cashera_recurring(db, record, 'confirmed')
+
+            if was_cancelled and record.cashera_subscription_uuid:
+                try:
+                    await cashera_service.cancel_subscription(record.cashera_subscription_uuid)
+                except Exception as cancel_error:  # pragma: no cover - network errors
+                    logger.warning('Cashera: повторная удалённая отмена не удалась', error=str(cancel_error))
+
+            # Синк панели — последним: при сбое update_remnawave_user делает rollback,
+            # экспайрящий сессию, а продление уже закоммичено.
+            subscription_id_for_log = subscription.id
+            try:
+                from app.services.subscription_service import SubscriptionService
+
+                await SubscriptionService().update_remnawave_user(
+                    db,
+                    subscription,
+                    reset_traffic=settings.RESET_TRAFFIC_ON_PAYMENT,
+                    reset_reason=f'Автопродление {settings.get_cashera_display_name()}',
+                )
+            except Exception as sync_error:  # best-effort: продление уже в БД
+                logger.warning(
+                    'Cashera: синк панели после автопродления не удался',
+                    error=str(sync_error),
+                    subscription_id=subscription_id_for_log,
+                    source=source,
+                )
+            return True
+
+        if status in cr.CHARGE_FAILED:
+            # CANCELLED не трогаем: иначе стирается отмена и выключается повторная
+            # удалённая отмена при следующем успешном списании.
+            record.charges_failed += 1
+            if record.status != 'CANCELLED':
+                record.status = 'PAST_DUE'
+            await db.commit()
+            await self._notify_cashera_recurring(db, record, 'failed')
+            return True
+
+        return True
+
+    async def replay_missed_cashera_charges(self, db: AsyncSession, record_id: int) -> int:
+        """Доначисляет оплаченные списания, чей вебхук не дошёл (по истории /charges).
+
+        Идемпотентно по uuid списания. Возвращает число применённых списаний.
+        """
+        from sqlalchemy import select as sa_select
+
+        from app.database.crud import cashera_subscription as sub_crud
+        from app.database.models import Transaction
+
+        record = await sub_crud.get_cashera_subscription_by_id(db, record_id)
+        if record is None or not record.cashera_subscription_uuid:
+            return 0
+        try:
+            charges = await cashera_service.list_subscription_charges(record.cashera_subscription_uuid)
+        except Exception as error:
+            logger.warning('Cashera: не удалось получить историю списаний', error=str(error), record_id=record_id)
+            return 0
+
+        paid = [c for c in charges if str(c.get('status') or '').lower() == 'paid' and c.get('uuid')]
+        if not paid:
+            return 0
+        known = set(
+            (
+                await db.execute(
+                    sa_select(Transaction.external_id).where(
+                        Transaction.payment_method == PaymentMethod.CASHERA.value,
+                        Transaction.external_id.in_([str(c['uuid']) for c in paid]),
+                    )
+                )
+            ).scalars()
+        )
+        applied = 0
+        for charge in sorted(paid, key=lambda c: str(c.get('paid_at') or c.get('created_at') or '')):
+            if str(charge['uuid']) in known:
+                continue
+            locked = await sub_crud.get_cashera_subscription_by_id_for_update(db, record_id)
+            if locked is None:
+                break
+            await self._apply_cashera_charge(db, locked, charge, source='replay')
+            applied += 1
+        if applied:
+            logger.warning('Cashera: доначислены пропущенные списания', record_id=record_id, applied=applied)
+        return applied
+
+
+class _CasheraRecurrentAgent(CasheraPaymentMixin):
+    """Минимальный носитель миксина для модульных точек входа автопродления."""
+
+    def __init__(self, bot: Any = None) -> None:
+        self.bot = bot
+
+
+async def enable_cashera_recurring(
+    db: AsyncSession,
+    *,
+    user_id: int,
+    subscription: Any,
+    tariff: Any,
+) -> dict[str, Any]:
+    """Включить автопродление Cashera: {local_id, cashera_subscription_uuid, redirect_url, status}.
+
+    Пробрасывает ValueError (нет цены и т. п.), чтобы UI показал причину. Гейт на фичу.
+    """
+    if not settings.is_cashera_recurrent_enabled():
+        raise RuntimeError('Cashera recurrent is disabled')
+    if getattr(subscription, 'is_trial', False):
+        raise ValueError('Автопродление Cashera недоступно для пробной подписки')
+    return await _CasheraRecurrentAgent().create_cashera_recurrent_subscription(
+        db, user_id=user_id, subscription=subscription, tariff=tariff
+    )
+
+
+async def purchase_tariff_with_cashera_recurring(db: AsyncSession, *, user: Any, tariff: Any) -> dict[str, Any]:
+    """Покупка тарифа оплатой через автопродление Cashera.
+
+    Зеркало Platega/Lava: нет подписки на тариф → EXPIRED-заготовка без доступа,
+    первое списание её продлит и создаст panel-юзера. Отказы (ValueError): триал,
+    DISABLED/PENDING, в single-режиме — подписка другого тарифа.
+    """
+    if not settings.is_cashera_recurrent_enabled():
+        raise RuntimeError('Cashera recurrent is disabled')
+
+    from app.database.crud.subscription import (
+        create_sbp_pending_subscription,
+        get_subscription_by_user_and_tariff,
+        get_subscription_by_user_id,
+    )
+
+    if settings.is_multi_tariff_enabled():
+        subscription = await get_subscription_by_user_and_tariff(db, user.id, tariff.id, include_inactive=True)
+    else:
+        subscription = await get_subscription_by_user_id(db, user.id)
+        if subscription is not None and subscription.tariff_id != tariff.id:
+            raise ValueError('Оформление через Cashera недоступно при подписке другого тарифа — оплатите с баланса')
+
+    if subscription is not None:
+        if getattr(subscription, 'is_trial', False):
+            raise ValueError('Оформление через Cashera недоступно для триальной подписки — оплатите с баланса')
+        if subscription.status in ('disabled', 'pending'):
+            raise ValueError('Оформление через Cashera недоступно для этой подписки — оплатите с баланса')
+
+    if subscription is None:
+        subscription = await create_sbp_pending_subscription(db, user.id, tariff)
+
+    result = await enable_cashera_recurring(db, user_id=user.id, subscription=subscription, tariff=tariff)
+    return {**result, 'subscription_id': subscription.id}
+
+
+async def cancel_cashera_recurring_for_subscription_safe(
+    db: AsyncSession,
+    subscription_id: int,
+    *,
+    commit: bool = True,
+) -> None:
+    """Отмена автопродления Cashera на путях удаления/замены подписки. Никогда не бросает.
+
+    НЕ гейтится флагом рекуррента намеренно: отмена — операция безопасности.
+    Выключение CASHERA_RECURRENT_ENABLED не останавливает списания у Cashera.
+    """
+    try:
+        await _CasheraRecurrentAgent().cancel_cashera_recurring_for_subscription(db, subscription_id, commit=commit)
+    except Exception as error:  # pragma: no cover - defensive
+        logger.warning('Cashera: не удалось отменить автопродление', error=str(error), subscription_id=subscription_id)
+
+
+async def get_cashera_recurring_status(db: AsyncSession, subscription_id: int) -> dict[str, Any] | None:
+    """Состояние живой привязки для UI (бот/кабинет) либо None."""
+    from app.database.crud import cashera_subscription as sub_crud
+
+    record = await sub_crud.get_active_cashera_subscription_by_subscription(db, subscription_id)
+    if not record:
+        return None
+    return {
+        'local_id': record.id,
+        'cashera_subscription_uuid': record.cashera_subscription_uuid,
+        'status': record.status,
+        'amount_kopeks': record.amount_kopeks,
+        'charge_days': record.charge_days,
+        'interval': record.interval,
+        'redirect_url': record.redirect_url,
+        'next_charge_at': record.next_charge_at,
+        'last_charge_at': record.last_charge_at,
+        'charges_success': record.charges_success,
+        'charges_failed': record.charges_failed,
+    }
+
+
+async def cancel_cashera_recurring_by_local_id(db: AsyncSession, local_id: int) -> bool:
+    """Отмена привязки по локальному id (кабинет/бот). Идемпотентна."""
+    return await _CasheraRecurrentAgent().cancel_cashera_recurrent_subscription(db, local_id=local_id)

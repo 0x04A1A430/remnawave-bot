@@ -2302,5 +2302,16 @@
   "CASHERA_STATUS_FAILED": "❌ پرداخت ناموفق بود",
   "CASHERA_STATUS_EXPIRED": "⌛ مهلت پرداخت به پایان رسید",
   "CASHERA_STATUS_REFUNDED": "↩️ بازگشت وجه",
-  "CASHERA_H2H_HINT": "کد QR را در برنامه بانک اسکن کنید یا روی «پرداخت» بزنید."
+  "CASHERA_H2H_HINT": "کد QR را در برنامه بانک اسکن کنید یا روی «پرداخت» بزنید.",
+  "CASHERA_RECURRING_NOTIFY_ACTIVATED": "✅ تمدید خودکار از طریق Cashera فعال شد.",
+  "CASHERA_RECURRING_NOTIFY_CONFIRMED": "✅ اشتراک با برداشت خودکار Cashera تمدید شد.",
+  "CASHERA_RECURRING_NOTIFY_FAILED": "⚠️ برداشت تمدید خودکار Cashera ناموفق بود.",
+  "CASHERA_RECURRING_NOTIFY_CANCELLED": "ℹ️ تمدید خودکار Cashera لغو شد.",
+  "CASHERA_PURCHASE_BUTTON": "⚡ خرید با پرداخت خودکار Cashera",
+  "CASHERA_RECURRING_ENABLE_ERROR": "❌ فعال‌سازی تمدید خودکار Cashera ممکن نشد. بعداً تلاش کنید.",
+  "CASHERA_RECURRING_ENABLE_SUCCESS": "⚡ <b>تمدید خودکار Cashera</b>\n\nبرداشت‌های خودکار را با دکمه زیر تأیید کنید.\nپس از تأیید و اولین برداشت، اشتراک به‌طور خودکار تمدید می‌شود.",
+  "CASHERA_RECURRING_PAY_BUTTON": "💳 تأیید",
+  "CASHERA_RECURRING_CANCEL_BUTTON": "🛑 غیرفعال کردن تمدید خودکار Cashera",
+  "CASHERA_RECURRING_MENU_BUTTON": "⚡ تمدید خودکار از طریق Cashera",
+  "CASHERA_RECURRING_CANCELLED": "✅ تمدید خودکار Cashera غیرفعال شد"
 }

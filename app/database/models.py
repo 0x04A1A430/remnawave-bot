@@ -798,6 +798,62 @@ class LavaSubscription(Base):
         return self.amount_kopeks / 100
 
 
+class CasheraSubscription(Base):
+    """Подписка Cashera (sbp_recurring), привязанная к подписке бота.
+
+    Push-модель, как у :class:`PlategaSubscription`: клиент один раз подтверждает
+    подписку по ``redirect_url``, дальше Cashera списывает сама по интервалу, а
+    каждое списание приходит вебхуком ``transaction.status_updated`` с объектом
+    ``subscription``. Сумма и интервал задаются нами при оформлении.
+    """
+
+    __tablename__ = 'cashera_subscriptions'
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
+    subscription_id = Column(Integer, ForeignKey('subscriptions.id', ondelete='CASCADE'), nullable=False, index=True)
+    tariff_id = Column(Integer, ForeignKey('tariffs.id'), nullable=True)
+
+    cashera_subscription_uuid = Column(String(64), unique=True, nullable=True, index=True)
+    # Наш external_id подписки (ключ идемпотентности создания у Cashera)
+    external_id = Column(String(255), unique=True, nullable=False, index=True)
+    interval = Column(String(16), nullable=False)  # daily / weekly / monthly / yearly
+    charge_days = Column(Integer, nullable=False)  # шаг продления за одно списание
+    amount_kopeks = Column(Integer, nullable=False)
+    currency = Column(String(10), nullable=False, default='RUB')
+
+    status = Column(String(20), nullable=False, default='PENDING')  # PENDING/ACTIVE/PAST_DUE/CANCELLED/FAILED
+    remote_status = Column(String(32), nullable=True)  # последний статус подписки у Cashera
+    redirect_url = Column(Text, nullable=True)
+    next_charge_at = Column(AwareDateTime(), nullable=True)
+    last_charge_at = Column(AwareDateTime(), nullable=True)
+    last_charge_external_id = Column(String(255), nullable=True)  # uuid последнего списания
+    charges_success = Column(Integer, nullable=False, default=0)
+    charges_failed = Column(Integer, nullable=False, default=0)
+
+    created_at = Column(AwareDateTime(), default=func.now())
+    updated_at = Column(AwareDateTime(), default=func.now(), onupdate=func.now())
+
+    user = relationship('User', backref='cashera_subscriptions')
+    subscription = relationship('Subscription', backref='cashera_subscriptions')
+
+    __table_args__ = (
+        Index('ix_cashera_subscriptions_user_active', 'user_id', 'status'),
+        # Одна живая привязка на подписку: проигравший гонку enable ловит IntegrityError.
+        Index(
+            'uq_cashera_subscriptions_alive',
+            'subscription_id',
+            unique=True,
+            postgresql_where=text("status IN ('PENDING', 'ACTIVE', 'PAST_DUE')"),
+            sqlite_where=text("status IN ('PENDING', 'ACTIVE', 'PAST_DUE')"),
+        ),
+    )
+
+    @property
+    def amount_rubles(self) -> float:
+        return self.amount_kopeks / 100
+
+
 class CloudPaymentsPayment(Base):
     __tablename__ = 'cloudpayments_payments'
 
