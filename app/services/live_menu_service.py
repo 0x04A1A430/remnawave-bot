@@ -107,9 +107,21 @@ def _pressure() -> str | None:
     return None
 
 
+async def _tracked_keys() -> list[str]:
+    """Ключи живых меню через SCAN: KEYS блокирует Redis на обход всего пространства ключей,
+    а в нём FSM-состояния, кэши и очереди всего бота."""
+    if not cache._connected or cache.redis_client is None:
+        return []
+    keys = [
+        key.decode() if isinstance(key, bytes) else key
+        async for key in cache.redis_client.scan_iter(match='live_menu:*', count=500)
+    ]
+    return list(dict.fromkeys(keys))  # SCAN может вернуть ключ дважды
+
+
 async def refresh_live_menus(bot, subscription_service) -> bool:
     """Один проход. True — бот/панель/Telegram заняты или была ошибка: следующий проход реже."""
-    keys = await cache.get_keys('live_menu:*')  # ponytail: KEYS; SCAN, если ключей станут тысячи
+    keys = await _tracked_keys()
     if not keys:
         return False
     random.shuffle(keys)  # проход, прерванный нагрузкой, не должен всякий раз обходить один и тот же хвост

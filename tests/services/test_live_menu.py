@@ -49,8 +49,11 @@ class FakeRedis:
     async def delete(self, key):
         return int(self.data.pop(key, None) is not None)
 
-    async def keys(self, pattern):
-        return [key.encode() for key in self.data if fnmatch(key, pattern)]
+    # KEYS нет намеренно: он блокирует Redis на обход всех ключей бота, живое меню ходит SCAN'ом.
+    async def scan_iter(self, match, count=None):
+        for key in list(self.data):
+            if fnmatch(key, match):
+                yield key.encode()
 
     async def eval(self, script, numkeys, key, expected, new):
         assert script is live._CAS, 'фейк эмулирует только CAS живого меню'
