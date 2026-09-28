@@ -193,6 +193,8 @@ async def get_payment_methods(
                     definitions = settings.get_platega_method_definitions()
                     info = definitions.get(int(opt_id), {}) if opt_id.isdigit() else {}
                     description = info.get('description') or info.get('name') or ''
+                elif method_id == 'cashera':
+                    description = settings.get_cashera_method_display_name(opt_id)
 
                 formatted_options.append(
                     {
@@ -1053,6 +1055,45 @@ async def create_topup(
                     detail='Failed to create CisPay payment',
                 )
 
+        elif request.payment_method == 'cashera':
+            if not settings.is_cashera_enabled():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail='Cashera payment method is unavailable',
+                )
+
+            # Как у Platega: payment_option — код метода Cashera, по умолчанию первый активный.
+            active_methods = settings.get_cashera_active_methods()
+            method_code = (request.payment_option or active_methods[0]).strip().lower()
+            if method_code not in active_methods:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail='Selected Cashera method is unavailable',
+                )
+
+            payment_service = PaymentService()
+            result = await payment_service.create_cashera_payment(
+                db=db,
+                user_id=user.id,
+                amount_kopeks=request.amount_kopeks,
+                description=settings.get_balance_payment_description(
+                    request.amount_kopeks, telegram_user_id=user.telegram_id, user_db_id=user.id
+                ),
+                language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
+                payment_method_code=method_code,
+                return_url=cabinet_success_url,
+                fail_url=cabinet_failed_url,
+            )
+
+            if result and result.get('payment_url'):
+                payment_url = result.get('payment_url')
+                payment_id = str(result.get('local_payment_id') or result.get('order_id') or 'pending')
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail='Failed to create Cashera payment',
+                )
+
         elif request.payment_method == 'tabpay':
             if not settings.is_tabpay_enabled():
                 raise HTTPException(
@@ -1307,6 +1348,19 @@ def _get_status_info(record: PendingPayment) -> tuple[str, str]:
         }
         return mapping.get(status, ('❓', 'Неизвестно'))
 
+    if record.method == PaymentMethod.CASHERA:
+        mapping = {
+            'pending': ('⏳', 'Ожидает оплаты'),
+            'success': ('✅', 'Оплачено'),
+            'failed': ('❌', 'Оплата не прошла'),
+            'expired': ('⌛', 'Истёк'),
+            'refunded': ('↩️', 'Возвращён'),
+            'chargeback': ('↩️', 'Чарджбэк'),
+            'error': ('❌', 'Ошибка'),
+            'amount_mismatch': ('⚠️', 'Несовпадение суммы'),
+        }
+        return mapping.get(status, ('❓', 'Неизвестно'))
+
     if record.method == PaymentMethod.CISPAY:
         mapping = {
             'pending': ('⏳', 'Ожидает оплаты'),
@@ -1378,6 +1432,8 @@ def _is_checkable(record: PendingPayment) -> bool:
     if record.method == PaymentMethod.RIOPAY:
         return status == 'pending'
     if record.method == PaymentMethod.CISPAY:
+        return status == 'pending'
+    if record.method == PaymentMethod.CASHERA:
         return status == 'pending'
     if record.method == PaymentMethod.TABPAY:
         # PENDING держится 20 минут после начала оплаты, поэтому проверяем и его.

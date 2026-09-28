@@ -1114,6 +1114,23 @@ class Settings(BaseSettings):
     CISPAY_SBP_ENABLED: bool = False
     CISPAY_SBP_DISPLAY_NAME: str = 'СБП (CisPay)'
 
+    # Cashera (api.cashera.cash, server-to-server; расчёты мерчанту в USDT, приём — только RUB)
+    CASHERA_ENABLED: bool = False
+    CASHERA_API_KEY: str | None = None  # X-Api-Key — публичный ключ (pk_...)
+    CASHERA_API_SECRET: str | None = None  # секрет (sk_...) — сверяется с X-Secret вебхука
+    CASHERA_BASE_URL: str = 'https://api.cashera.cash/api/v1'
+    CASHERA_DISPLAY_NAME: str = 'Cashera'
+    # Коды методов через запятую: sbp, card, mastercard, crypto, cryptobot. Набор должен
+    # совпадать с «Методами приёма» в кабинете Cashera — выключенный там метод даст 422.
+    CASHERA_ACTIVE_METHODS: str = 'sbp,card'
+    # Методы кнопками прямо на экране способов пополнения (иначе — одна кнопка и выбор внутри)
+    CASHERA_INLINE_METHODS: bool = False
+    CASHERA_MIN_AMOUNT_KOPEKS: int = 10000  # 100₽ — минимум Cashera для карт
+    CASHERA_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000₽
+    CASHERA_WEBHOOK_PATH: str = '/cashera-webhook'
+    CASHERA_RETURN_URL: str | None = None
+    CASHERA_FAILED_URL: str | None = None
+
     # TabPay (tabpay.org, СБП и карты с 3-D Secure)
     TABPAY_ENABLED: bool = False
     # X-Api-Key магазина (tp_...). Показывается в кабинете один раз, перевыпуск отзывает старый.
@@ -3280,6 +3297,78 @@ class Settings(BaseSettings):
 
     def get_cispay_sbp_display_name_html(self) -> str:
         return html.escape(self.get_cispay_sbp_display_name())
+
+    def is_cashera_configured(self) -> bool:
+        """Есть ли учётные данные провайдера — без учёта флага включения."""
+        return bool(self.CASHERA_API_KEY and self.CASHERA_API_SECRET)
+
+    def is_cashera_enabled(self) -> bool:
+        # Секрет обязателен наравне с ключом: вебхук подтверждается сравнением X-Secret,
+        # и с пустым секретом его подделал бы кто угодно.
+        return bool(self.CASHERA_ENABLED and self.CASHERA_API_KEY and self.CASHERA_API_SECRET)
+
+    def get_cashera_display_name(self) -> str:
+        name = (self.CASHERA_DISPLAY_NAME or '').strip()
+        return name or 'Cashera'
+
+    def get_cashera_display_name_html(self) -> str:
+        return html.escape(self.get_cashera_display_name())
+
+    @staticmethod
+    def get_cashera_method_definitions() -> dict[str, dict[str, str]]:
+        return {
+            'sbp': {'name': 'СБП', 'title': '🏦 СБП'},
+            'card': {'name': 'Банковская карта', 'title': '💳 Банковская карта'},
+            'mastercard': {'name': 'Зарубежная карта', 'title': '🌍 Зарубежная карта'},
+            'crypto': {'name': 'Криптовалюта', 'title': '🪙 Криптовалюта'},
+            'cryptobot': {'name': 'CryptoBot', 'title': '🤖 CryptoBot'},
+        }
+
+    def get_cashera_active_methods(self) -> list[str]:
+        known = self.get_cashera_method_definitions()
+        methods: list[str] = []
+        for part in str(self.CASHERA_ACTIVE_METHODS or '').replace(';', ',').split(','):
+            code = part.strip().lower()
+            if not code:
+                continue
+            if code not in known:
+                logger.warning('Некорректный код метода Cashera', part=part)
+                continue
+            if code not in methods:
+                methods.append(code)
+        return methods or ['sbp']
+
+    def get_cashera_method_display_name(self, method_code: str) -> str:
+        info = self.get_cashera_method_definitions().get(method_code)
+        return info['name'] if info else method_code
+
+    def get_cashera_method_display_title(self, method_code: str) -> str:
+        info = self.get_cashera_method_definitions().get(method_code)
+        return info['title'] if info else f'Cashera {method_code}'
+
+    def get_cashera_return_url(self) -> str | None:
+        if self.CASHERA_RETURN_URL:
+            return self.CASHERA_RETURN_URL
+        if self.WEBHOOK_URL:
+            return f'{self.WEBHOOK_URL}/payment-success'
+        return None
+
+    def get_cashera_failed_url(self) -> str | None:
+        if self.CASHERA_FAILED_URL:
+            return self.CASHERA_FAILED_URL
+        if self.WEBHOOK_URL:
+            return f'{self.WEBHOOK_URL}/payment-failed'
+        return None
+
+    def get_cashera_callback_url(self) -> str | None:
+        """Адрес вебхука: Cashera требует HTTPS на публичном хосте, иначе 422.
+
+        Без WEBHOOK_URL не передаём ничего — тогда Cashera берёт адрес из настроек
+        мерчанта (если и там пусто, платёж не создастся: 403).
+        """
+        if not self.WEBHOOK_URL:
+            return None
+        return f'{self.WEBHOOK_URL.rstrip("/")}{self.CASHERA_WEBHOOK_PATH}'
 
     def is_tabpay_configured(self) -> bool:
         """Есть ли учётные данные провайдера — без учёта флага включения."""

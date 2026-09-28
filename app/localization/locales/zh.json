@@ -2289,5 +2289,17 @@
   "GIFT_MY_BACK_TO_CARD": "◀️ 返回礼物",
   "GRACE_ACCESS_GRANTED_EXPIRED": "🛟 <b>订阅{tariff_label}已到期，但未完全断开</b>\n\n在 {hours} 小时内仅可使用：{allowed}。此期间有 {traffic_gb} GB 流量，以便续订。续订前其他一切不可用。\n\n⏳ 有效至 {until}。",
   "GRACE_ACCESS_GRANTED_LIMITED": "🛟 <b>订阅{tariff_label}的流量已用完，但未完全断开</b>\n\n在 {hours} 小时内仅可使用：{allowed}。此期间有 {traffic_gb} GB 流量，以便加购流量或续订。付款前其他一切不可用。\n\n⏳ 有效至 {until}。",
-  "GRACE_ACCESS_ENDED": "⌛ <b>临时访问已结束</b>\n\n订阅{tariff_label}未续订，临时访问已关闭。此前保留的部分现已不可用：{allowed}。请续订以恢复 VPN。"
+  "GRACE_ACCESS_ENDED": "⌛ <b>临时访问已结束</b>\n\n订阅{tariff_label}未续订，临时访问已关闭。此前保留的部分现已不可用：{allowed}。请续订以恢复 VPN。",
+  "CASHERA_ENTER_AMOUNT": "💳 <b>通过 {name} 支付（{method}）</b>\n\n请输入充值金额，范围 {min_amount} 至 {max_amount}。",
+  "CASHERA_SELECT_PAYMENT_METHOD": "请选择 {name} 支付方式：",
+  "CASHERA_TEMPORARILY_UNAVAILABLE": "❌ Cashera 支付暂时不可用",
+  "CASHERA_METHOD_SELECTION_REQUIRED": "⚠️ 请先选择支付方式再输入金额",
+  "CASHERA_PAYMENT_ERROR": "❌ 创建 Cashera 支付失败。请稍后重试或联系客服。",
+  "CASHERA_PAY_BUTTON": "💳 通过 {method} 支付",
+  "CASHERA_PAYMENT_CREATED": "💳 <b>通过 {name} 支付（{method}）</b>\n\n金额：<b>{amount}</b>\n\n点击下方按钮进行支付。\n支付成功后余额将自动充值。",
+  "CASHERA_PAYMENT_ALREADY_CONFIRMED": "✅ 该笔支付已入账",
+  "CASHERA_STATUS_PENDING": "⏳ 等待支付",
+  "CASHERA_STATUS_FAILED": "❌ 支付失败",
+  "CASHERA_STATUS_EXPIRED": "⌛ 支付已过期",
+  "CASHERA_STATUS_REFUNDED": "↩️ 已退款"
 }

@@ -2289,5 +2289,17 @@
   "GIFT_MY_BACK_TO_CARD": "◀️ بازگشت به هدیه",
   "GRACE_ACCESS_GRANTED_EXPIRED": "🛟 <b>اشتراک{tariff_label} تمام شد، اما ارتباط قطع نشد</b>\n\nتا {hours} ساعت فقط این در دسترس می‌ماند: {allowed}. برای این مدت {traffic_gb} گیگابایت ترافیک دارید تا بتوانید اشتراک را تمدید کنید. بقیه تا تمدید کار نمی‌کند.\n\n⏳ تا {until}.",
   "GRACE_ACCESS_GRANTED_LIMITED": "🛟 <b>ترافیک اشتراک{tariff_label} تمام شد، اما ارتباط قطع نشد</b>\n\nتا {hours} ساعت فقط این در دسترس می‌ماند: {allowed}. برای این مدت {traffic_gb} گیگابایت ترافیک دارید تا بتوانید ترافیک بخرید یا اشتراک را تمدید کنید. بقیه تا پرداخت کار نمی‌کند.\n\n⏳ تا {until}.",
-  "GRACE_ACCESS_ENDED": "⌛ <b>دسترسی موقت تمام شد</b>\n\nاشتراک{tariff_label} تمدید نشد و دسترسی موقت بسته شد. آنچه باقی مانده بود هم دیگر کار نمی‌کند: {allowed}. برای بازگشت VPN اشتراک را تمدید کنید."
+  "GRACE_ACCESS_ENDED": "⌛ <b>دسترسی موقت تمام شد</b>\n\nاشتراک{tariff_label} تمدید نشد و دسترسی موقت بسته شد. آنچه باقی مانده بود هم دیگر کار نمی‌کند: {allowed}. برای بازگشت VPN اشتراک را تمدید کنید.",
+  "CASHERA_ENTER_AMOUNT": "💳 <b>پرداخت از طریق {name} ({method})</b>\n\nمبلغ شارژ را بین {min_amount} و {max_amount} وارد کنید.",
+  "CASHERA_SELECT_PAYMENT_METHOD": "روش پرداخت {name} را انتخاب کنید:",
+  "CASHERA_TEMPORARILY_UNAVAILABLE": "❌ پرداخت از طریق Cashera موقتاً در دسترس نیست",
+  "CASHERA_METHOD_SELECTION_REQUIRED": "⚠️ پیش از وارد کردن مبلغ، روش پرداخت را انتخاب کنید",
+  "CASHERA_PAYMENT_ERROR": "❌ ایجاد پرداخت Cashera ناموفق بود. بعداً دوباره تلاش کنید یا با پشتیبانی تماس بگیرید.",
+  "CASHERA_PAY_BUTTON": "💳 پرداخت از طریق {method}",
+  "CASHERA_PAYMENT_CREATED": "💳 <b>پرداخت از طریق {name} ({method})</b>\n\nمبلغ: <b>{amount}</b>\n\nبرای پرداخت روی دکمه زیر بزنید.\nپس از پرداخت موفق، موجودی به‌طور خودکار شارژ می‌شود.",
+  "CASHERA_PAYMENT_ALREADY_CONFIRMED": "✅ پرداخت قبلاً واریز شده است",
+  "CASHERA_STATUS_PENDING": "⏳ در انتظار پرداخت",
+  "CASHERA_STATUS_FAILED": "❌ پرداخت ناموفق بود",
+  "CASHERA_STATUS_EXPIRED": "⌛ مهلت پرداخت به پایان رسید",
+  "CASHERA_STATUS_REFUNDED": "↩️ بازگشت وجه"
 }

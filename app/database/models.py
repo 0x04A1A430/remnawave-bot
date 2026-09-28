@@ -183,6 +183,7 @@ class PaymentMethod(Enum):
     PARITYPAY = 'paritypay'
     DONUT = 'donut'
     LAVA = 'lava'
+    CASHERA = 'cashera'
     MANUAL = 'manual'
     BALANCE = 'balance'
 
@@ -1736,6 +1737,72 @@ class CisPayPayment(Base):
     def __repr__(self) -> str:  # pragma: no cover - debug helper
         return (
             f'<CisPayPayment(id={self.id}, order_id={self.order_id}, '
+            f'amount={self.amount_rubles}₽, status={self.status})>'
+        )
+
+
+class CasheraPayment(Base):
+    """Платежи через Cashera (api.cashera.cash): СБП, карты, крипта, CryptoBot."""
+
+    __tablename__ = 'cashera_payments'
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True, index=True)
+
+    # Идентификаторы: наш external_id (ключ идемпотентности Cashera) и uuid транзакции Cashera
+    order_id = Column(String(64), unique=True, nullable=False, index=True)
+    cashera_uuid = Column(String(64), unique=True, nullable=True, index=True)
+
+    # Суммы — копейки (минорные единицы RUB)
+    amount_kopeks = Column(Integer, nullable=False)
+    currency = Column(String(10), nullable=False, default='RUB')
+    description = Column(Text, nullable=True)
+
+    # Статусы: наш внутренний и последний сырой статус Cashera (идемпотентность вебхуков)
+    status = Column(String(32), nullable=False, default='pending')
+    cashera_status = Column(String(32), nullable=True)
+    is_paid = Column(Boolean, default=False)
+
+    # Данные платежа
+    payment_url = Column(Text, nullable=True)
+    payment_method = Column(String(32), nullable=True)  # sbp / card / mastercard / crypto / cryptobot
+
+    # Метаданные
+    metadata_json = Column(JSON, nullable=True)
+    callback_payload = Column(JSON, nullable=True)
+
+    # Временные метки
+    paid_at = Column(AwareDateTime(), nullable=True)
+    expires_at = Column(AwareDateTime(), nullable=True)
+    created_at = Column(AwareDateTime(), default=func.now())
+    updated_at = Column(AwareDateTime(), default=func.now(), onupdate=func.now())
+
+    # Связь с транзакцией
+    transaction_id = Column(Integer, ForeignKey('transactions.id'), nullable=True)
+
+    # Relationships
+    user = relationship('User', backref='cashera_payments')
+    transaction = relationship('Transaction', backref='cashera_payment')
+
+    @property
+    def amount_rubles(self) -> float:
+        return self.amount_kopeks / 100
+
+    @property
+    def is_pending(self) -> bool:
+        return self.status == 'pending'
+
+    @property
+    def is_success(self) -> bool:
+        return self.status == 'success' and self.is_paid
+
+    @property
+    def is_failed(self) -> bool:
+        return self.status in ['failed', 'expired', 'refunded', 'chargeback', 'amount_mismatch', 'error']
+
+    def __repr__(self) -> str:  # pragma: no cover - debug helper
+        return (
+            f'<CasheraPayment(id={self.id}, order_id={self.order_id}, '
             f'amount={self.amount_rubles}₽, status={self.status})>'
         )
 

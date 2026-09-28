@@ -2289,5 +2289,17 @@
   "GIFT_MY_BACK_TO_CARD": "◀️ К подарку",
   "GRACE_ACCESS_GRANTED_EXPIRED": "🛟 <b>Подписка{tariff_label} закончилась, но связь оставили</b>\n\nНа {hours} ч. доступно только: {allowed}. Трафика на это время — {traffic_gb} ГБ, чтобы вы успели продлить подписку. Остальное не работает до продления.\n\n⏳ До {until}.",
   "GRACE_ACCESS_GRANTED_LIMITED": "🛟 <b>Трафик по подписке{tariff_label} закончился, но связь оставили</b>\n\nНа {hours} ч. доступно только: {allowed}. Трафика на это время — {traffic_gb} ГБ, чтобы вы успели докупить трафик или продлить подписку. Остальное не работает до оплаты.\n\n⏳ До {until}.",
-  "GRACE_ACCESS_ENDED": "⌛ <b>Временный доступ закончился</b>\n\nПодписка{tariff_label} так и не продлена, временный доступ закрыт. Больше не работает и то, что оставалось: {allowed}. Продлите подписку, чтобы вернуть VPN."
+  "GRACE_ACCESS_ENDED": "⌛ <b>Временный доступ закончился</b>\n\nПодписка{tariff_label} так и не продлена, временный доступ закрыт. Больше не работает и то, что оставалось: {allowed}. Продлите подписку, чтобы вернуть VPN.",
+  "CASHERA_ENTER_AMOUNT": "💳 <b>Оплата через {name} ({method})</b>\n\nВведите сумму для пополнения от {min_amount} до {max_amount}.",
+  "CASHERA_SELECT_PAYMENT_METHOD": "Выберите способ оплаты {name}:",
+  "CASHERA_TEMPORARILY_UNAVAILABLE": "❌ Оплата через Cashera временно недоступна",
+  "CASHERA_METHOD_SELECTION_REQUIRED": "⚠️ Выберите способ оплаты перед вводом суммы",
+  "CASHERA_PAYMENT_ERROR": "❌ Ошибка создания платежа Cashera. Попробуйте позже или обратитесь в поддержку.",
+  "CASHERA_PAY_BUTTON": "💳 Оплатить через {method}",
+  "CASHERA_PAYMENT_CREATED": "💳 <b>Оплата через {name} ({method})</b>\n\nСумма: <b>{amount}</b>\n\nНажмите кнопку ниже для оплаты.\nПосле успешной оплаты баланс будет пополнен автоматически.",
+  "CASHERA_PAYMENT_ALREADY_CONFIRMED": "✅ Платёж уже зачислен",
+  "CASHERA_STATUS_PENDING": "⏳ Ожидает оплаты",
+  "CASHERA_STATUS_FAILED": "❌ Оплата не прошла",
+  "CASHERA_STATUS_EXPIRED": "⌛ Срок оплаты истёк",
+  "CASHERA_STATUS_REFUNDED": "↩️ Возврат"
 }
