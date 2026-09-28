@@ -3189,7 +3189,7 @@
   Функции: нет
 - `tests/cabinet/test_abuse_api_service.py` — Python-модуль
   Классы: нет
-  Функции: `test_disabled_service_is_not_configured`, `test_missing_key_is_not_configured`, `test_unconfigured_service_answers_nothing` — Не настроен — вопросов к клиенту нет, а не «неизвестно, подозрительный»., `test_unreachable_service_does_not_block_anyone` — Сеть легла — клиент остаётся чистым, экраны кабинета работают., `test_limited_level_is_recognised`, `test_warned_customer_is_not_limited` — «Замечен» — повод написать человеку, а не отказывать ему в триале., `test_client_response_cannot_carry_detection_details` — Схема клиентского ответа не содержит полей со скорингом и видами.
+  Функции: `test_disabled_service_is_not_configured`, `test_missing_key_is_not_configured`, `test_unconfigured_service_answers_nothing` — Не настроен — вопросов к клиенту нет, а не «неизвестно, подозрительный»., `test_unreachable_service_does_not_block_anyone` — Сеть легла — клиент остаётся чистым, экраны кабинета работают., `test_limited_level_is_recognised`, `test_warned_customer_is_not_limited` — «Замечен» — повод написать человеку, а не отказывать ему в триале., `test_client_response_cannot_carry_detection_details` — Схема клиентского ответа не содержит полей со скорингом и видами., `test_malformed_notice_does_not_break_dashboard` — Поле не того типа от чужого сервиса — молчание, а не 500 на главной., `test_malformed_violations_do_not_break_admin_card`
 - `tests/cabinet/test_admin_create_update_schema_parity.py` — Python-модуль
   Классы: нет
   Функции: `test_schema_pairs_are_discovered` — Пустой список сделал бы сторож ниже бессмысленно зелёным., `test_shared_fields_share_constraints`, `test_create_tariff_accepts_zero_as_no_highlight`, `test_create_tariff_keeps_marked_period`, `test_create_tariff_rejects_negative_highlight`, `test_pinned_message_can_be_media_only`, `test_news_update_enforces_same_lengths_as_create`, `test_update_tariff_zero_clears_highlight`, `test_update_tariff_moves_highlight_to_another_period`, `test_update_tariff_without_the_field_keeps_highlight`
@@ -5197,6 +5197,9 @@
 - `tests/webapi/test_user_activity_endpoint.py` — Python-модуль
   Классы: нет
   Функции: `test_activity_returns_timeline_for_internal_id`, `test_activity_accepts_telegram_id`, `test_activity_filters_by_type`, `test_activity_rejects_unknown_type`, `test_activity_404_for_missing_user`
+- `tests/webapi/test_user_notify_endpoint.py` — Python-модуль
+  Классы: нет
+  Функции: `email_service`, `test_email_goes_to_verified_address`, `test_unverified_email_is_skipped`, `test_plain_text_is_escaped_in_email`, `test_blank_text_is_rejected`
 
 ### tests/webserver
 

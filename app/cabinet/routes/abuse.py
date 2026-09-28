@@ -15,8 +15,9 @@
 
 from __future__ import annotations
 
+import structlog
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.crud.user import get_user_by_id
@@ -25,6 +26,8 @@ from app.services import abuse_api_service
 
 from ..dependencies import get_cabinet_db, get_current_cabinet_user, require_permission
 
+
+logger = structlog.get_logger(__name__)
 
 router = APIRouter(tags=['Cabinet Abuse'])
 
@@ -77,17 +80,23 @@ async def my_abuse_status(user: User = Depends(get_current_cabinet_user)):
 
     summary = await abuse_api_service.get_summary(user.telegram_id)
     notice = (summary or {}).get('notice') or None
-    if not notice or not notice.get('body'):
+    if not isinstance(notice, dict) or not notice.get('body'):
         return AbuseStatusResponse()
 
-    return AbuseStatusResponse(
-        warned=True,
-        notice=AbuseNoticeResponse(
-            subject=notice.get('subject'),
-            body=notice.get('body'),
-            sent_at=notice.get('sent_at'),
-        ),
-    )
+    # Ответ чужого сервиса: поле не того типа — это его сбой, а не повод
+    # ронять главную кабинета. Молчание, как и при недоступности.
+    try:
+        return AbuseStatusResponse(
+            warned=True,
+            notice=AbuseNoticeResponse(
+                subject=notice.get('subject'),
+                body=notice.get('body'),
+                sent_at=notice.get('sent_at'),
+            ),
+        )
+    except ValidationError as error:
+        logger.warning('Abuse API: непонятный notice', user_id=user.id, error=str(error))
+        return AbuseStatusResponse()
 
 
 @router.get('/admin/users/{user_id}/abuse', response_model=AbuseOverviewResponse)
@@ -106,22 +115,27 @@ async def user_abuse_overview(
         return AbuseOverviewResponse()
 
     violations = await abuse_api_service.get_violations(target.telegram_id)
-    return AbuseOverviewResponse(
-        available=True,
-        level=summary.get('level'),
-        violations_count=int(summary.get('violations') or 0),
-        max_score=summary.get('max_score'),
-        last_detected_at=summary.get('last_detected_at'),
-        whitelisted=bool(summary.get('whitelisted')),
-        violations=[
-            AbuseViolationResponse(
-                detected_at=item.get('detected_at'),
-                score=item.get('score'),
-                recommended_action=item.get('recommended_action'),
-                action_taken=item.get('action_taken'),
-                reasons=item.get('reasons'),
-                notified_at=item.get('notified_at'),
-            )
-            for item in violations
-        ],
-    )
+    try:
+        return AbuseOverviewResponse(
+            available=True,
+            level=summary.get('level'),
+            violations_count=int(summary.get('violations') or 0),
+            max_score=summary.get('max_score'),
+            last_detected_at=summary.get('last_detected_at'),
+            whitelisted=bool(summary.get('whitelisted')),
+            violations=[
+                AbuseViolationResponse(
+                    detected_at=item.get('detected_at'),
+                    score=item.get('score'),
+                    recommended_action=item.get('recommended_action'),
+                    action_taken=item.get('action_taken'),
+                    reasons=item.get('reasons'),
+                    notified_at=item.get('notified_at'),
+                )
+                for item in violations
+                if isinstance(item, dict)
+            ],
+        )
+    except (ValidationError, TypeError, ValueError) as error:
+        logger.warning('Abuse API: непонятный ответ', user_id=user_id, error=str(error))
+        return AbuseOverviewResponse()

@@ -98,3 +98,52 @@ def test_client_response_cannot_carry_detection_details():
 
     assert not forbidden & set(AbuseStatusResponse.model_fields)
     assert not forbidden & set(AbuseNoticeResponse.model_fields)
+
+
+@pytest.mark.asyncio
+async def test_malformed_notice_does_not_break_dashboard(monkeypatch):
+    """Поле не того типа от чужого сервиса — молчание, а не 500 на главной."""
+    from types import SimpleNamespace
+
+    from app.cabinet.routes import abuse
+
+    async def summary(telegram_id):
+        return {'notice': {'body': 'нарушение', 'sent_at': 1700000000}}
+
+    monkeypatch.setattr(abuse.abuse_api_service, 'get_summary', summary)
+
+    response = await abuse.my_abuse_status(user=SimpleNamespace(id=1, telegram_id=366945364))
+
+    assert response.warned is False
+    assert response.notice is None
+
+
+@pytest.mark.asyncio
+async def test_malformed_violations_do_not_break_admin_card(monkeypatch):
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+
+    from app.cabinet.routes import abuse
+
+    monkeypatch.setattr(abuse, 'get_user_by_id', AsyncMock(return_value=SimpleNamespace(telegram_id=366945364)))
+    monkeypatch.setattr(abuse.abuse_api_service, 'is_configured', lambda: True)
+    monkeypatch.setattr(abuse.abuse_api_service, 'get_summary', AsyncMock(return_value={'level': 'warned'}))
+
+    # Мусорная строка в списке отбрасывается, остальные доезжают.
+    monkeypatch.setattr(
+        abuse.abuse_api_service,
+        'get_violations',
+        AsyncMock(return_value=['oops', {'score': 74.0, 'reasons': ['shared']}]),
+    )
+    response = await abuse.user_abuse_overview(user_id=1, admin=None, db=None)
+    assert response.available is True
+    assert [item.score for item in response.violations] == [74.0]
+
+    # Поле не того типа — вкладка честно говорит «недоступно», а не падает.
+    monkeypatch.setattr(
+        abuse.abuse_api_service,
+        'get_violations',
+        AsyncMock(return_value=[{'reasons': 'не список'}]),
+    )
+    response = await abuse.user_abuse_overview(user_id=1, admin=None, db=None)
+    assert response.available is False

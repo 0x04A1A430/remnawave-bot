@@ -341,6 +341,7 @@ async def notify_user(
     email instead of the whole request failing.
     """
     import asyncio
+    import html
 
     from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 
@@ -355,11 +356,14 @@ async def notify_user(
     unknown = requested - {'telegram', 'email'}
     if unknown:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f'Unknown channels: {", ".join(sorted(unknown))}',
         )
 
     text = payload.text.strip()
+    if not text:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail='Message text is empty')
+
     telegram = UserNotifyChannelResult(sent=False, reason='not_requested')
     email = UserNotifyChannelResult(sent=False, reason='not_requested')
 
@@ -391,6 +395,10 @@ async def notify_user(
     if 'email' in requested:
         if not user.email:
             email = UserNotifyChannelResult(sent=False, reason='no_email')
+        elif not user.email_verified:
+            # Как и остальные уведомления бота: неподтверждённый адрес мог
+            # оказаться чужим, письмо о нарушении туда уходить не должно.
+            email = UserNotifyChannelResult(sent=False, reason='email_not_verified')
         elif not email_service.is_configured():
             email = UserNotifyChannelResult(sent=False, reason='smtp_not_configured')
         else:
@@ -399,7 +407,7 @@ async def notify_user(
                     email_service.send_email,
                     to_email=user.email,
                     subject=payload.email_subject or 'Уведомление',
-                    body_html=payload.email_html or f'<p>{text}</p>',
+                    body_html=payload.email_html or f'<p>{text if payload.parse_mode else html.escape(text)}</p>',
                     body_text=text,
                 )
                 email = UserNotifyChannelResult(sent=bool(sent), reason=None if sent else 'send_failed')
