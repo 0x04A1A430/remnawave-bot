@@ -9,12 +9,18 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+import structlog
+
 from app.config import settings
 from app.database.models import PaymentMethod, TransactionType
 from app.services.cashera_service import cashera_service, normalize_payment_url
 from app.utils.payment_logger import payment_logger as logger
 from app.utils.user_utils import format_referrer_info
 
+
+# Логгеры платёжных модулей (app.payments) не доходят до админ-чата — возвраты и
+# чарджбэки, требующие внимания человека, сообщаем отдельным логгером вне этих фильтров.
+alert_logger = structlog.get_logger('app.cashera_alert')
 
 # Статус Cashera -> (внутренний статус, оплачен ли)
 CASHERA_STATUS_MAP: dict[str, tuple[str, bool]] = {
@@ -223,18 +229,7 @@ class CasheraPaymentMixin:
 
         if payment.is_paid:
             if incoming_status in {'refunded', 'chargeback'} and payment.cashera_status != incoming_status:
-                # Деньги уже зачислены — автоматически не списываем, но оставляем след и тревогу.
-                logger.error(
-                    'Cashera: возврат/чарджбэк по уже зачисленному платежу — разобрать вручную',
-                    order_id=payment.order_id,
-                    user_id=payment.user_id,
-                    amount_kopeks=payment.amount_kopeks,
-                    cashera_status=incoming_status,
-                )
-                payment.cashera_status = incoming_status
-                payment.callback_payload = callback_payload
-                payment.updated_at = datetime.now(UTC)
-                await db.commit()
+                await self._reverse_cashera_payment(db, payment, incoming_status, callback_payload)
             else:
                 logger.info('Cashera: платеж уже обработан', order_id=payment.order_id, source=source)
             return True
@@ -316,6 +311,94 @@ class CasheraPaymentMixin:
             callback_payload=callback_payload,
         )
         return True
+
+    async def _reverse_cashera_payment(
+        self,
+        db: AsyncSession,
+        payment: Any,
+        incoming_status: str,
+        callback_payload: dict[str, Any],
+    ) -> None:
+        """Возврат или чарджбэк по уже зачисленному платежу: списываем зачисленное.
+
+        Отрицательного баланса в боте нет, поэтому списываем не больше, чем есть:
+        недостающее фиксируется в платеже и уходит тревогой — решать админу.
+        Идемпотентно: повторное событие (и смена refunded → chargeback) второй раз
+        не списывает. FOR UPDATE по платежу уже взят вызывающим.
+        """
+        payment_module = import_module('app.services.payment_service')
+        metadata = dict(getattr(payment, 'metadata_json', {}) or {})
+        payment.cashera_status = incoming_status
+        payment.callback_payload = callback_payload
+        payment.updated_at = datetime.now(UTC)
+
+        if metadata.get('reversal'):
+            payment.metadata_json = metadata
+            await db.commit()
+            return
+
+        kind = 'Чарджбэк' if incoming_status == 'chargeback' else 'Возврат'
+        reversal: dict[str, Any] = {
+            'kind': incoming_status,
+            'amount_kopeks': payment.amount_kopeks,
+            'at': datetime.now(UTC).isoformat(),
+        }
+
+        credited = bool(metadata.get('balance_credited')) and payment.user_id is not None
+        user = await payment_module.get_user_by_id(db, payment.user_id) if credited else None
+        if user is None:
+            # Гостевая покупка или баланс не зачислялся — списывать нечего, только сообщаем.
+            reversal['debited_kopeks'] = 0
+            reversal['shortfall_kopeks'] = payment.amount_kopeks
+            metadata['reversal'] = reversal
+            payment.metadata_json = metadata
+            await db.commit()
+            alert_logger.error(
+                f'Cashera: {kind.lower()} по платежу без зачисления на баланс — разобрать вручную',
+                order_id=payment.order_id,
+                user_id=payment.user_id,
+                amount_kopeks=payment.amount_kopeks,
+            )
+            return
+
+        from app.database.crud.user import lock_user_for_update
+
+        user = await lock_user_for_update(db, user)
+        debit = min(max(user.balance_kopeks, 0), payment.amount_kopeks)
+        shortfall = payment.amount_kopeks - debit
+        old_balance = user.balance_kopeks
+
+        if debit > 0:
+            user.balance_kopeks -= debit
+            user.updated_at = datetime.now(UTC)
+            await payment_module.create_transaction(
+                db,
+                user_id=user.id,
+                type=TransactionType.WITHDRAWAL,
+                amount_kopeks=debit,
+                description=f'{kind} платежа {settings.get_cashera_display_name()}',
+                payment_method=PaymentMethod.CASHERA,
+                external_id=f'{payment.order_id}:reversal',
+                is_completed=True,
+                commit=False,
+            )
+
+        reversal['debited_kopeks'] = debit
+        reversal['shortfall_kopeks'] = shortfall
+        reversal['balance_before'] = old_balance
+        metadata['reversal'] = reversal
+        payment.metadata_json = metadata
+        await db.commit()
+
+        alert_logger.error(
+            f'Cashera: {kind.lower()} по зачисленному платежу — баланс списан',
+            order_id=payment.order_id,
+            user_id=user.id,
+            telegram_id=user.telegram_id,
+            amount_kopeks=payment.amount_kopeks,
+            debited_kopeks=debit,
+            shortfall_kopeks=shortfall,
+        )
 
     async def _finalize_cashera_payment(self, db: AsyncSession, payment: Any, *, trigger: str) -> bool:
         """Создаёт транзакцию, начисляет баланс и отправляет уведомления.

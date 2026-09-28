@@ -234,18 +234,53 @@ async def test_failed_status_is_final(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_refund_after_credit_keeps_balance_and_records_status(monkeypatch):
+async def test_refund_after_credit_debits_balance_once(monkeypatch):
     _enable(monkeypatch)
     async with memory_session(monkeypatch, TABLES) as db:
         user_id, result = await _create(db, monkeypatch, StubCashera())
         service = _service()
         await service.process_cashera_webhook(db, _event(result['order_id']))
+        assert await _balance(db, user_id) == 49900
+
         assert await service.process_cashera_webhook(db, _event(result['order_id'], status='refunded')) is True
+        assert await _balance(db, user_id) == 0
+
+        # Повтор и последующий чарджбэк по тому же платежу второй раз не списывают.
+        await service.process_cashera_webhook(db, _event(result['order_id'], status='refunded'))
+        await service.process_cashera_webhook(db, _event(result['order_id'], status='chargeback'))
+        assert await _balance(db, user_id) == 0
 
         payment = (await db.execute(select(CasheraPayment))).scalar_one()
-        assert payment.cashera_status == 'refunded'
-        assert payment.is_paid is True
-        assert await _balance(db, user_id) == 49900
+        assert payment.cashera_status == 'chargeback'
+        assert payment.metadata_json['reversal']['debited_kopeks'] == 49900
+        withdrawals = (
+            await db.execute(select(func.count()).select_from(Transaction).where(Transaction.type == 'withdrawal'))
+        ).scalar_one()
+        assert withdrawals == 1
+
+
+@pytest.mark.asyncio
+async def test_chargeback_after_balance_was_spent_records_shortfall(monkeypatch):
+    """Отрицательного баланса нет: списываем сколько есть, недостачу — в платёж и тревогу."""
+    _enable(monkeypatch)
+    alerts = []
+    monkeypatch.setattr(cashera_mixin_module.alert_logger, 'error', lambda *a, **kw: alerts.append(kw))
+    async with memory_session(monkeypatch, TABLES) as db:
+        user_id, result = await _create(db, monkeypatch, StubCashera())
+        service = _service()
+        await service.process_cashera_webhook(db, _event(result['order_id']))
+
+        user = await db.get(User, user_id)
+        user.balance_kopeks = 10000  # остальное уже потрачено
+        await db.commit()
+
+        await service.process_cashera_webhook(db, _event(result['order_id'], status='chargeback'))
+
+        assert await _balance(db, user_id) == 0
+        payment = (await db.execute(select(CasheraPayment))).scalar_one()
+        assert payment.metadata_json['reversal']['debited_kopeks'] == 10000
+        assert payment.metadata_json['reversal']['shortfall_kopeks'] == 39900
+    assert alerts and alerts[-1]['shortfall_kopeks'] == 39900
 
 
 @pytest.mark.asyncio
