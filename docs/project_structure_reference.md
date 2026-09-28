@@ -943,7 +943,7 @@
   Функции: `handle_gift_activate` — Handle gift_activate:{purchase_id} callback from Telegram notification., `register_handlers`
 - `app/handlers/menu.py` — Python-модуль
   Классы: нет
-  Функции: `show_main_menu`, `handle_profile_unavailable`, `show_service_rules`, `show_info_menu`, `show_promo_groups_info`, `show_faq_pages`, `show_faq_page`, `show_privacy_policy`, `show_public_offer`, `show_info_page`, `show_language_menu`, `process_language_change`, `handle_back_to_menu`, `get_main_menu_text`, `handle_activate_button` — Умная кнопка активации — система сама решает что делать:, `register_handlers`
+  Функции: `build_main_menu_keyboard` — Клавиатура главного меню: show_main_menu, handle_back_to_menu и живое меню (live_menu_service)., `show_main_menu`, `handle_profile_unavailable`, `show_service_rules`, `show_info_menu`, `show_promo_groups_info`, `show_faq_pages`, `show_faq_page`, `show_privacy_policy`, `show_public_offer`, `show_info_page`, `show_language_menu`, `process_language_change`, `handle_back_to_menu`, `get_main_menu_text`, `handle_activate_button` — Умная кнопка активации — система сама решает что делать:, `register_handlers`
 - `app/handlers/polls.py` — Python-модуль
   Классы: нет
   Функции: `handle_poll_start`, `handle_poll_answer`, `register_handlers`
@@ -1564,6 +1564,9 @@
 - `app/services/legal_consent_service.py` — Python-модуль
   Классы: `LegalConsentRequirement`
   Функции: `get_requirement` — Требование согласия для НОВОГО пользователя кабинета., `missing_documents` — Какие из обязательных документов пользователь не отметил., `record_consent` — Записать факт согласия. Сбой записи не должен ронять регистрацию.
+- `app/services/live_menu_service.py` — Python-модуль
+  Классы: нет
+  Функции: `live_menu_loop`, `refresh_live_menus` — Один проход. True — бот/панель/Telegram заняты или была ошибка: следующий проход реже.
 - `app/services/log_rotation_service.py` — Python-модуль
   Классы: `LogRotationStatus`, `LogRotationService` (16 методов)
   Функции: нет
@@ -2297,7 +2300,7 @@
   Функции: `render_keyboard_as_rich_html` — Клавиатура целиком в виде рядов ``<tg-button-row>``.
 - `app/utils/rich_menu.py` — Python-модуль
   Классы: нет
-  Функции: `is_rich_menu_enabled`, `build_main_menu_rich_html` — Собирает rich-HTML главного меню (контент, без клавиатуры)., `try_send_rich_main_menu` — Отправляет главное меню rich-сообщением. False — показать классическое меню., `try_answer_rich_main_menu` — Rich-аналог message.answer(menu_text) для /start и завершения регистрации., `try_edit_rich_main_menu` — Rich-аналог edit_or_answer_photo для callback-навигации. False — рисовать классику.
+  Функции: `is_rich_menu_enabled`, `live_menu_fingerprint` — Только то, что видно в меню. HTML сравнивать нельзя: случайное сообщение админа и таймеры., `remember_live_menu` — Запоминает последнее rich-меню чата для фоновой перерисовки. Никогда не бросает., `forget_live_menu_on_callback` — Нажали кнопку на живом меню — дальше подменю, фон это сообщение не трогает., `build_main_menu_rich_html` — Собирает rich-HTML главного меню (контент, без клавиатуры)., `try_send_rich_main_menu` — Отправляет главное меню rich-сообщением. False — показать классическое меню., `try_answer_rich_main_menu` — Rich-аналог message.answer(menu_text) для /start и завершения регистрации., `try_edit_rich_main_menu` — Rich-аналог edit_or_answer_photo для callback-навигации. False — рисовать классику.
 - `app/utils/rich_notify.py` — Python-модуль
   Классы: нет
   Функции: `build_notification_rich_html` — Текст уведомления → rich-разметка в стиле главного меню., `try_send_rich_notification` — Шлёт уведомление rich-сообщением. ``False`` — отправить классическое.
@@ -4501,6 +4504,9 @@
 - `tests/services/test_legal_consent.py` — Python-модуль
   Классы: нет
   Функции: `test_both_documents_required_by_default`, `test_setting_disables_the_gate`, `test_prechecked_flag_is_reported`, `test_document_hidden_from_web_is_not_required` — Документ только для бота нельзя прочитать в кабинете — галочки по нему нет., `test_empty_document_is_not_required`, `test_no_documents_at_all_disables_the_gate` — Иначе установка без юр. документов заблокировала бы регистрацию всем., `test_broken_document_read_does_not_block_login`, `test_missing_documents_reports_unchecked_boxes`, `test_record_consent_writes_a_row_per_document`, `test_record_consent_with_no_documents_is_a_noop`, `test_gate_rejects_missing_consent`, `test_gate_passes_with_full_consent`, `test_gate_is_transparent_when_disabled` — Выключенная настройка не должна ломать регистрацию без чекбоксов.
+- `tests/services/test_live_menu.py` — Python-модуль
+  Классы: `FakeRedis` (6 методов)
+  Функции: `env`, `test_live_menu_is_wired` — Пины: при переносе на новый upstream эти строки теряются молча, а остальные тесты зелёные., `test_press_on_live_menu_forgets_it_and_passes_through` — Нажатие на живом меню — дальше подменю: фон это сообщение больше не трогает., `test_try_edit_remembers_live_menu`, `test_try_send_remembers_live_menu_only_when_enabled`, `test_live_menu_fingerprint_tracks_only_visible_changes` — Меню показывает целые ГБ: доли гигабайта не повод править сообщение., `test_sub_gigabyte_change_goes_to_db_without_edit`, `test_subscription_changed_after_snapshot_keeps_db_value` — Сброс трафика коммитит БД до вызова панели: снимок, взятый чуть позже, ещё со старым расходом., `test_visible_change_edits_the_same_message`, `test_multi_tariff_takes_traffic_by_subscription_panel_id`, `test_new_menu_during_build_is_not_overwritten`, `test_press_during_edit_is_not_undone` — Нажали на меню, пока фон ждал ответа Telegram: запись снимка не возвращает ключ., `test_telegram_errors`, `test_flood_limit_aborts_the_pass`, `test_busy_bot_skips_the_pass`, `test_load_or_switch_off_during_pass_stops_it` — Нагрузка или выключение в кабинете посреди прохода: остальные меню не трогаем., `test_panel_down_still_redraws_from_db_but_backs_off`, `test_interval_backs_off_under_load_and_resets_when_idle`
 - `tests/services/test_log_level_resolver.py` — Python-модуль
   Классы: нет
   Функции: `test_resolves_canonical_uppercase_names`, `test_resolves_lowercase_names` — REGRESSION: ``LOG_LEVEL=warning`` from .env must NOT return, `test_resolves_mixed_case_and_whitespace` — Whitespace and mixed-case variants normalize to the canonical level., `test_lowercase_does_not_return_the_logger_function` — The exact failure mode: the ``logging`` module has BOTH, `test_unknown_or_empty_falls_back_to_default`, `test_non_string_input_falls_back_to_default` — The resolver accepts only str input. Anything else → default., `test_default_argument_is_respected` — Custom default values flow through the fallback paths., `test_resolver_output_is_acceptable_to_structlog` — REGRESSION smoke: ``make_filtering_bound_logger`` must accept
