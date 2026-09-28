@@ -274,6 +274,10 @@ class Settings(BaseSettings):
     # Внешний сквад для grace-доступа: пусто = сброс в None, 'keep' = сохранять текущий, либо UUID аварийного внешнего сквада
     GRACE_ACCESS_EXTERNAL_SQUAD_UUID: str = ''
     GRACE_ACCESS_TRAFFIC_GB: int = 1
+    # Обнулять счётчик трафика при выдаче grace, чтобы панель и клиент показывали
+    # «0 из N ГБ», а не «64.76 из 65.76 GiB». Только истёкшие подписки с безлимитом:
+    # там счётчик чисто информационный. Расход до grace при этом теряется.
+    GRACE_ACCESS_RESET_TRAFFIC_ON_START: bool = False
     GRACE_ACCESS_TRIAL_ENABLED: bool = False
     GRACE_ACCESS_DAILY_ENABLED: bool = False
     GRACE_ACCESS_FREE_ENABLED: bool = False
@@ -391,6 +395,9 @@ class Settings(BaseSettings):
 
     BASE_PROMO_GROUP_PERIOD_DISCOUNTS_ENABLED: bool = False
     BASE_PROMO_GROUP_PERIOD_DISCOUNTS: str = ''
+    # Сообщать человеку (в Telegram или на подтверждённую почту), что ему
+    # автоматически назначена промогруппа за траты. Админ узнаёт об этом отдельно.
+    PROMO_GROUP_AUTO_ASSIGN_NOTIFY_USER: bool = True
 
     # Режим выбора трафика:
     # - selectable: пользователь выбирает трафик при покупке и может докупать
@@ -473,6 +480,20 @@ class Settings(BaseSettings):
     REFERRAL_WITHDRAWAL_ONLY_REFERRAL_BALANCE: bool = True  # Только реф. баланс (False = реф + свой)
     REFERRAL_WITHDRAWAL_REQUISITES_TEXT: str = ''  # Текст-подсказка для реквизитов при выводе
     REFERRAL_WITHDRAWAL_NOTIFICATIONS_TOPIC_ID: int | None = None  # Топик для уведомлений
+    # Напоминания о заявках на вывод без решения — аналог SLA тикетов (SUPPORT_TICKET_SLA_*).
+    # Заявка в статусе pending старше REMINDER_MINUTES получает напоминание в админ-чат, повтор по
+    # той же заявке — не чаще REMINDER_COOLDOWN_MINUTES; любое решение по заявке их останавливает.
+    REFERRAL_WITHDRAWAL_REMINDER_ENABLED: bool = False
+    REFERRAL_WITHDRAWAL_REMINDER_MINUTES: int = 60  # Сколько минут заявка ждёт до первого напоминания
+    REFERRAL_WITHDRAWAL_REMINDER_COOLDOWN_MINUTES: int = 30  # Минимальный интервал между повторами
+    REFERRAL_WITHDRAWAL_REMINDER_CHECK_INTERVAL_SECONDS: int = 300  # Период опроса заявок
+
+    # Напоминания пользователям (раздел «Напоминания» в админке кабинета)
+    USER_REMINDERS_CHECK_INTERVAL_MINUTES: int = 15  # Как часто бот отправляет напоминания в Telegram
+    USER_REMINDERS_QUIET_HOURS_START: int = 21  # С этого часа (TIMEZONE) бот не пишет
+    USER_REMINDERS_QUIET_HOURS_END: int = 10  # До этого часа (TIMEZONE) бот не пишет
+    USER_REMINDERS_DAILY_LIMIT_ENABLED: bool = True  # Не больше одного напоминания в сутки на человека
+    USER_REMINDERS_MAX_PER_PASS: int = 500  # Потолок сообщений за один проход
     REFERRAL_PARTNER_SECTION_VISIBLE: bool = True  # Показывать раздел партнёрки в кабинете
 
     # Настройки анализа на подозрительность
@@ -1569,6 +1590,15 @@ class Settings(BaseSettings):
     BSCHEK_REQUEST_TIMEOUT: int = 200  # синхронный probe идёт до нескольких минут
     BSCHEK_REFERENCE_SUBSCRIPTION: str | None = None  # shortUuid эталонной подписки панели
     BSCHEK_JOB_COST_LIMIT_KOPEKS: int = 0  # потолок цены одной задачи, 0 — без потолка
+
+    # DPI//CHECKER (dpichecker.st): проверки VPN/IP/MTProto из сетей РФ, Китая, Ирана, Туркменистана — только кабинет
+    DPICHECKER_ENABLED: bool = False
+    DPICHECKER_API_URL: str = 'https://dpichecker.st/api/v1'
+    DPICHECKER_API_KEY: str | None = (
+        None  # X-API-Key; выпускается в боте DPI//CHECKER (Главное меню → API) или на сайте
+    )
+    DPICHECKER_REQUEST_TIMEOUT: int = 30  # обычный запрос; long-poll ожидания результата — свой, длиннее
+    DPICHECKER_REFERENCE_SUBSCRIPTION: str | None = None  # VPN «из панели»: ссылка подписки или shortUuid панели
 
     # SOCKS5 proxy for routing bot traffic to Telegram API
     # Format: socks5://user:password@host:port or socks5://host:port
@@ -4373,6 +4403,18 @@ class Settings(BaseSettings):
 
     def is_bschek_configured(self) -> bool:
         return bool(self.BSCHEK_API_KEY)
+
+    def is_dpichecker_enabled(self) -> bool:
+        return bool(self.DPICHECKER_ENABLED)
+
+    def is_dpichecker_configured(self) -> bool:
+        return bool(self.DPICHECKER_API_KEY)
+
+    def get_dpichecker_webhook_url(self) -> str | None:
+        """Куда DPI//CHECKER шлёт события; без внешнего адреса бота — никуда."""
+        if not self.WEBHOOK_URL:
+            return None
+        return f'{self.WEBHOOK_URL.rstrip("/")}/dpichecker/webhook'
 
     def get_bschek_api_url(self) -> str:
         return (self.BSCHEK_API_URL or 'https://bsbord.com/v1').rstrip('/')

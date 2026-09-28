@@ -87,7 +87,7 @@ async def recalculate_promo_groups(db: AsyncSession, *, reason: str = 'вруч�
     for user_id in user_ids:
         try:
             before = await _membership_snapshot(db, user_id)
-            await maybe_assign_promo_group_by_total_spent(db, user_id, notify_admins=False)
+            await maybe_assign_promo_group_by_total_spent(db, user_id, notify_admins=False, notify_user=False)
             after = await _membership_snapshot(db, user_id)
         except Exception as exc:
             failed += 1
@@ -159,8 +159,9 @@ async def notify_admins_about_recalculation(result: RecalculationResult) -> None
     finally:
         try:
             await bot.session.close()
-        except Exception:
-            pass
+        except Exception as exc:
+            # Сводка уже отправлена (или нет) — незакрытая HTTP-сессия бота на это не влияет.
+            logger.debug('Не удалось закрыть сессию бота после сводки пересчёта', exc=exc)
 
 
 Runner = Callable[[str], Awaitable[RecalculationResult]]
@@ -206,7 +207,9 @@ class PromoGroupRecalculation:
     async def wait(self) -> None:
         """Дождаться конца текущего прохода (для тестов и корректной остановки)."""
         if self._task is not None:
-            await self._task
+            # gather, а не голый await атрибута: тот же результат и те же исключения,
+            # но CodeQL не принимает его за выражение без эффекта.
+            await asyncio.gather(self._task)
 
     def snapshot(self) -> dict[str, object]:
         return {

@@ -419,6 +419,10 @@ def project_onto_subscription(
         # лимит в снимке — грейса.
         return changed
 
+    # Срок в панели отстаёт от недавно оплаченного: запись нового срока в панель
+    # не прошла. Устаревшую дату не берём — и статус, выведенный из неё, тоже.
+    paid_date_held = panel_date_behind_paid_renewal(subscription, snapshot, paid_at=paid_at, now=moment)
+
     locally_disabled = subscription.status == SubscriptionStatus.DISABLED.value
     if (
         policy.takes_date
@@ -430,9 +434,7 @@ def project_onto_subscription(
         and not (policy.respects_local_disable and locally_disabled)
     ):
         end_date = panel_datetime_to_utc(subscription.end_date)
-        if abs((end_date - snapshot.expire_at).total_seconds()) > _DATE_TOLERANCE_SECONDS and not (
-            panel_date_behind_paid_renewal(subscription, snapshot, paid_at=paid_at, now=moment)
-        ):
+        if abs((end_date - snapshot.expire_at).total_seconds()) > _DATE_TOLERANCE_SECONDS and not paid_date_held:
             subscription.end_date = snapshot.expire_at
             changed.add('end_date')
 
@@ -445,6 +447,13 @@ def project_onto_subscription(
         new_status = subscription.status
     else:
         new_status = status_rules[policy.status_mode](subscription, snapshot, now=moment)
+    if paid_date_held and new_status == SubscriptionStatus.EXPIRED.value and snapshot.status in ('ACTIVE', 'EXPIRED'):
+        # «Истекла» здесь выведено из той же старой даты, которую мы только что
+        # не приняли: ACTIVE с прошедшим сроком или EXPIRED, выставленный панелью
+        # по нему. Иначе оплаченная подписка на всё окно удержания показывалась
+        # истёкшей и попадала в кандидаты грейса. DISABLED и LIMITED — настоящие
+        # действия (админ, трафик) и по-прежнему принимаются.
+        new_status = subscription.status
     if new_status != subscription.status:
         subscription.status = new_status
         if new_status in (SubscriptionStatus.EXPIRED.value, SubscriptionStatus.LIMITED.value):

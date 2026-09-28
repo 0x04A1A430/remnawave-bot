@@ -16,6 +16,7 @@ from .admin_button_styles import router as admin_button_styles_router
 from .admin_campaigns import router as admin_campaigns_router
 from .admin_channels import router as admin_channels_router
 from .admin_coupons import router as admin_coupons_router
+from .admin_dpichecker import download_router as dpichecker_download_router, router as admin_dpichecker_router
 from .admin_email_queue import router as admin_email_queue_router
 from .admin_email_templates import router as admin_email_templates_router
 from .admin_grace_access import router as admin_grace_access_router
@@ -48,6 +49,7 @@ from .admin_tariffs import router as admin_tariffs_router
 from .admin_tickets import router as admin_tickets_router
 from .admin_traffic import router as admin_traffic_router
 from .admin_updates import router as admin_updates_router
+from .admin_user_reminders import router as admin_user_reminders_router
 from .admin_users import router as admin_users_router
 from .admin_wheel import router as admin_wheel_router
 from .admin_withdrawals import router as admin_withdrawals_router
@@ -69,6 +71,7 @@ from .polls import router as polls_router
 from .promo import router as promo_router
 from .promocode import router as promocode_router
 from .referral import router as referral_router
+from .reminders import router as reminders_router
 from .site_verification import router as site_verification_router
 from .subscription import router as subscription_router
 from .subscription_modules.multi_tariff import router as multi_tariff_subscription_router
@@ -125,6 +128,7 @@ router.include_router(branding_router)
 router.include_router(landing_router)
 router.include_router(media_router)
 router.include_router(news_router)
+router.include_router(reminders_router)
 router.include_router(info_pages_router)
 
 # Wheel routes
@@ -145,6 +149,8 @@ router.include_router(admin_referral_network_router)
 router.include_router(admin_sales_stats_router)
 router.include_router(admin_ban_system_router)
 router.include_router(admin_reachability_router)
+router.include_router(admin_dpichecker_router)
+router.include_router(dpichecker_download_router)
 router.include_router(admin_broadcasts_router)
 router.include_router(admin_promocodes_router)
 router.include_router(admin_promo_groups_router)
@@ -165,6 +171,7 @@ router.include_router(admin_grace_access_router)
 router.include_router(admin_updates_router)
 router.include_router(admin_traffic_router)
 router.include_router(admin_pinned_messages_router)
+router.include_router(admin_user_reminders_router)
 router.include_router(admin_button_styles_router)
 router.include_router(admin_menu_layout_router)
 router.include_router(admin_channels_router)
