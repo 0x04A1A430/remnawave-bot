@@ -441,9 +441,10 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
                 )
             except Exception as e:
                 logger.exception('Tribute webhook processing error', e=e)
+                # 5xx — Tribute повторит доставку (~сутки); зачисление идемпотентно по payment_id
                 return JSONResponse(
                     {'status': 'error', 'reason': 'processing_failed'},
-                    status_code=status.HTTP_400_BAD_REQUEST,
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 )
 
         routes_registered = True
