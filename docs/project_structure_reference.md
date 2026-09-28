@@ -3774,6 +3774,9 @@
 - `tests/database/test_user_panel_identity_backfill_postgres.py` — Python-модуль
   Классы: нет
   Функции: `test_migration_fills_user_account_only_when_unambiguous`
+- `tests/database/test_user_reminder_conditions_postgres.py` — Python-модуль
+  Классы: нет
+  Функции: `test_auth_condition_runs_on_postgres`
 - `tests/database/test_users_list_filter_sort_matrix_postgres.py` — Python-модуль
   Классы: нет
   Функции: `test_every_filter_works_with_every_sort`
@@ -5092,7 +5095,7 @@
   Функции: `test_cards_follow_conditions_channels_and_order`, `test_dismissed_card_is_gone_and_dismiss_is_idempotent`, `test_dismiss_unknown_or_not_for_cabinet_is_false`, `test_broken_conditions_do_not_break_the_page`, `test_broken_texts_do_not_break_the_page`, `test_dismiss_returns_false_when_state_cannot_be_created` — get_or_create_state вернёт None при FK-гонке (напоминание/юзер удалены между
 - `tests/services/user_reminders/test_conditions.py` — Python-модуль
   Классы: нет
-  Функции: `test_sql_and_python_agree`, `test_python_auth_matches_compute_auth_methods`, `test_low_balance_threshold_is_the_broadcast_one`, `test_invalid_conditions_are_rejected`
+  Функции: `test_sql_and_python_agree`, `test_python_auth_matches_compute_auth_methods`, `test_low_balance_threshold_is_the_broadcast_one`, `test_invalid_conditions_are_rejected`, `test_auth_condition_does_not_coalesce_numeric_columns_with_text`
 - `tests/services/user_reminders/test_crud.py` — Python-модуль
   Классы: нет
   Функции: `test_order_is_builtin_first_then_id`, `test_attempts_and_stats`, `test_audience_counts`, `test_concurrent_state_creation_survives_race` — Test that get_or_create_state handles concurrent insert without rolling back outer transaction., `test_get_or_create_state_returns_none_when_insert_fails_and_reread_finds_nothing` — FK-гонка: пользователь/напоминание удалены между select-кандидатом и вставкой —, `test_record_bot_attempt_does_not_raise_when_state_is_missing` — dispatcher вызывает record_bot_attempt для каждого кандидата — падение здесь, `test_audience_counts_exclude_promo_opt_out_for_marketing`
