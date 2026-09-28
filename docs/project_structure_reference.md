@@ -172,6 +172,9 @@
 - `app/cabinet/routes/__init__.py` — Python-модуль
   Классы: нет
   Функции: нет
+- `app/cabinet/routes/abuse.py` — Python-модуль
+  Классы: `AbuseNoticeResponse`, `AbuseStatusResponse`, `AbuseViolationResponse`, `AbuseOverviewResponse`
+  Функции: `my_abuse_status` — Предупреждение для самого клиента., `user_abuse_overview` — Вердикт и история нарушений клиента — для оператора.
 - `app/cabinet/routes/account_linking.py` — Python-модуль
   Классы: `OAuthStateData`, `LinkedProvider`, `LinkedProvidersResponse`, `LinkInitResponse`, `LinkCallbackRequest`, `LinkCallbackResponse`, `UnlinkResponse`, `LinkTelegramRequest` (1 методов), `MergePreviewSubscription`, `MergePreviewUser`, `MergePreviewResponse`, `MergeRequest`, `MergeResponse`, `ServerCompleteRequest`, `ServerCompleteResponse`
   Функции: `get_linked_providers` — Return all auth methods with their link status for the current user., `link_provider_init` — Start OAuth flow for linking a new provider to the current account., `link_provider_callback` — Handle OAuth callback for linking a provider to the current account., `unlink_provider` — Unlink an OAuth provider from the current account., `link_telegram` — Link Telegram account via WebApp initData, OIDC id_token, or Login Widget., `link_server_complete` — Complete OAuth account linking without JWT., `get_merge_preview_endpoint` — Preview the result of merging two accounts before confirming., `execute_merge_endpoint` — Execute account merge. Consumes the merge token (one-time use).
@@ -189,7 +192,7 @@
   Функции: `get_ban_system_status` — Get Ban System integration status., `get_stats_raw` — Get raw stats from Ban System API for debugging., `get_stats` — Get overall Ban System statistics., `get_users` — Get list of users from Ban System., `get_users_over_limit` — Get users who exceeded their device limit., `search_users` — Search for users., `get_user_detail` — Get detailed user information., `get_punishments` — Get list of active punishments (bans)., `unban_user` — Unban (enable) a user., `ban_user` — Manually ban a user., `get_punishment_history` — Get punishment history for a user., `get_nodes` — Get list of connected nodes., `get_agents` — Get list of monitoring agents., `get_agents_summary` — Get agents summary statistics., `get_traffic_violations` — Get list of traffic limit violations., `get_traffic` — Get full traffic statistics including top users., `get_traffic_top` — Get top users by traffic., `get_settings` — Get all Ban System settings., `get_setting` — Get a specific setting., `set_setting` — Set a setting value., `toggle_setting` — Toggle a boolean setting., `whitelist_add` — Add user to whitelist., `whitelist_remove` — Remove user from whitelist., `get_report` — Get period report., `get_health` — Get Ban System health status., `get_health_detailed` — Get detailed health information., `get_agent_history` — Get agent statistics history., `get_user_punishment_history` — Get punishment history for a specific user.
 - `app/cabinet/routes/admin_broadcasts.py` — Python-модуль
   Классы: нет
-  Функции: `get_filters` — Get all available filters with user counts., `get_tariffs` — Get tariffs for broadcast filtering., `get_buttons` — Get available buttons for broadcasts., `preview_broadcast` — Preview broadcast recipients count., `create_broadcast` — Create and start a broadcast., `list_broadcasts` — Get list of broadcasts with pagination., `get_email_filters` — Get all available email filters with user counts., `preview_email_broadcast` — Preview email broadcast recipients count., `render_email_broadcast` — Письмо рассылки так, как его получит адресат., `create_combined_broadcast` — Create and start a combined broadcast (telegram/email/both)., `get_broadcast` — Get broadcast details., `stop_broadcast` — Stop a running broadcast (telegram or email).
+  Функции: `get_filters` — Get all available filters with user counts., `get_tariffs` — Get tariffs for broadcast filtering., `get_buttons` — Get available buttons for broadcasts., `preview_broadcast` — Preview broadcast recipients count., `preview_audience` — Count and page through the recipients selected at this moment., `search_audience_users` — Find a person by any part of Telegram ID, username, or email., `create_broadcast` — Create and start a broadcast., `list_broadcasts` — Get list of broadcasts with pagination., `get_email_filters` — Get all available email filters with user counts., `preview_email_broadcast` — Preview email broadcast recipients count., `render_email_broadcast` — Письмо рассылки так, как его получит адресат., `create_combined_broadcast` — Create and start a combined broadcast (telegram/email/both)., `get_broadcast` — Get broadcast details., `stop_broadcast` — Stop a running broadcast (telegram or email).
 - `app/cabinet/routes/admin_bulk_actions.py` — Python-модуль
   Классы: нет
   Функции: `bulk_execute` — Execute a bulk action on multiple users or subscriptions.
@@ -471,7 +474,7 @@
   Классы: `BanSystemStatusResponse`, `BanSystemStatsResponse`, `BanUserIPInfo`, `BanUserRequestLog`, `BanUserListItem`, `BanUsersListResponse`, `BanUserDetailResponse`, `BanPunishmentItem`, `BanPunishmentsListResponse`, `BanHistoryResponse`, `BanUserRequest`, `UnbanResponse`, `BanNodeItem`, `BanNodesListResponse`, `BanAgentItem`, `BanAgentsSummary`, `BanAgentsListResponse`, `BanTrafficStats`, `BanTrafficUserItem`, `BanTrafficViolationItem`, `BanTrafficViolationsResponse`, `BanTrafficTopItem`, `BanTrafficResponse`, `BanSettingDefinition`, `BanSettingsResponse`, `BanSettingUpdateRequest`, `BanWhitelistRequest`, `BanReportTopViolator`, `BanReportResponse`, `BanHealthComponent`, `BanHealthResponse`, `BanHealthDetailedResponse`, `BanAgentHistoryItem`, `BanAgentHistoryResponse`
   Функции: нет
 - `app/cabinet/schemas/broadcasts.py` — Python-модуль
-  Классы: `BroadcastFilter`, `TariffFilter`, `BroadcastFiltersResponse`, `TariffForBroadcast`, `BroadcastTariffsResponse`, `BroadcastButton`, `BroadcastButtonsResponse`, `CustomBroadcastButton` (1 методов), `BroadcastMediaRequest`, `BroadcastCreateRequest`, `BroadcastResponse`, `BroadcastListResponse`, `BroadcastPreviewRequest`, `BroadcastPreviewResponse`, `EmailFilterItem`, `EmailFiltersResponse`, `CombinedBroadcastCreateRequest`, `EmailPreviewRequest`, `EmailPreviewResponse`, `EmailRenderRequest`, `EmailRenderResponse`
+  Классы: `BroadcastFilter`, `TariffFilter`, `BroadcastFiltersResponse`, `BroadcastAudienceCondition`, `BroadcastAudience` (1 методов), `TariffForBroadcast`, `BroadcastTariffsResponse`, `BroadcastButton`, `BroadcastButtonsResponse`, `CustomBroadcastButton` (1 методов), `BroadcastMediaRequest`, `BroadcastCreateRequest`, `BroadcastResponse`, `BroadcastListResponse`, `BroadcastPreviewRequest`, `BroadcastPreviewResponse`, `BroadcastAudiencePreviewRequest`, `BroadcastAudiencePreviewUser`, `BroadcastAudiencePreviewResponse`, `BroadcastAudienceUserSearchResponse`, `EmailFilterItem`, `EmailFiltersResponse`, `CombinedBroadcastCreateRequest`, `EmailPreviewRequest`, `EmailPreviewResponse`, `EmailRenderRequest`, `EmailRenderResponse`
   Функции: нет
 - `app/cabinet/schemas/bulk_actions.py` — Python-модуль
   Классы: `BulkActionType`, `BulkActionParams`, `BulkSubscriptionInfo`, `BulkExecuteRequest` (1 методов), `BulkUserResult`, `BulkExecuteResponse`
@@ -543,7 +546,7 @@
   Классы: `ReminderCardButton`, `ReminderCard`, `ReminderPayload` (2 методов), `ReminderStats`, `ReminderResponse`, `AudienceRequest`, `AudienceResponse`
   Функции: нет
 - `app/cabinet/schemas/users.py` — Python-модуль
-  Классы: `UserStatusEnum`, `SubscriptionStatusEnum`, `SortByEnum`, `SortOrderEnum`, `TrafficPurchaseItem`, `UserSubscriptionInfo`, `UserPromoGroupInfo`, `SubscriptionListItem`, `UserListItem`, `UsersListResponse`, `UserByRemnawaveResponse`, `UserTransactionItem`, `UserActivityItem`, `UserActivityResponse`, `UserReferralInfo`, `UserDetailResponse`, `UserPanelInfoResponse`, `UserNodeUsageItem`, `UserNodeUsageResponse`, `UpdateBalanceRequest`, `UpdateBalanceResponse`, `UpdateSubscriptionRequest`, `UpdateSubscriptionResponse`, `UpdateUserStatusRequest`, `UpdateUserStatusResponse`, `SendUserMessageRequest`, `SendUserMessageResponse`, `UpdateRestrictionsRequest`, `UpdateRestrictionsResponse`, `UpdatePromoGroupRequest`, `UpdatePromoGroupResponse`, `UpdateReferralCommissionRequest`, `UpdateReferralCommissionResponse`, `AssignReferrerRequest`, `AssignReferrerResponse`, `RemoveReferrerResponse`, `RemoveReferralResponse`, `DeviceInfo`, `UserDevicesResponse`, `DeleteDeviceResponse`, `RenameDeviceRequest`, `RenameDeviceResponse`, `ResetDevicesResponse`, `DeleteUserRequest`, `DeleteUserResponse`, `UsersStatsResponse`, `UserSearchRequest`, `PeriodPriceInfo`, `UserAvailableTariffItem`, `UserAvailableTariffsResponse`, `PanelUserInfo`, `SyncFromPanelRequest`, `SyncFromPanelResponse`, `SyncToPanelRequest`, `SyncToPanelResponse`, `PanelSyncStatusResponse`, `FullDeleteUserRequest`, `FullDeleteUserResponse`, `ResetTrialRequest`, `ResetTrialResponse`, `ResetSubscriptionRequest`, `ResetSubscriptionResponse`, `DisableUserRequest`, `DisableUserResponse`, `AdminUserGiftItem`, `AdminUserGiftsResponse`
+  Классы: `UserStatusEnum`, `SubscriptionStatusEnum`, `SortByEnum`, `SortOrderEnum`, `TrafficPurchaseItem`, `UserSubscriptionInfo`, `UserPromoGroupInfo`, `SubscriptionListItem`, `UserListItem`, `UsersListResponse`, `UserByRemnawaveResponse`, `UserTransactionItem`, `UserReferralInfo`, `UserDetailResponse`, `UserPanelInfoResponse`, `UserNodeUsageItem`, `UserNodeUsageResponse`, `UpdateBalanceRequest`, `UpdateBalanceResponse`, `UpdateSubscriptionRequest`, `UpdateSubscriptionResponse`, `UpdateUserStatusRequest`, `UpdateUserStatusResponse`, `SendUserMessageRequest`, `SendUserMessageResponse`, `UpdateRestrictionsRequest`, `UpdateRestrictionsResponse`, `UpdatePromoGroupRequest`, `UpdatePromoGroupResponse`, `UpdateReferralCommissionRequest`, `UpdateReferralCommissionResponse`, `AssignReferrerRequest`, `AssignReferrerResponse`, `RemoveReferrerResponse`, `RemoveReferralResponse`, `DeviceInfo`, `UserDevicesResponse`, `DeleteDeviceResponse`, `RenameDeviceRequest`, `RenameDeviceResponse`, `ResetDevicesResponse`, `DeleteUserRequest`, `DeleteUserResponse`, `UsersStatsResponse`, `UserSearchRequest`, `PeriodPriceInfo`, `UserAvailableTariffItem`, `UserAvailableTariffsResponse`, `PanelUserInfo`, `SyncFromPanelRequest`, `SyncFromPanelResponse`, `SyncToPanelRequest`, `SyncToPanelResponse`, `PanelSyncStatusResponse`, `FullDeleteUserRequest`, `FullDeleteUserResponse`, `ResetTrialRequest`, `ResetTrialResponse`, `ResetSubscriptionRequest`, `ResetSubscriptionResponse`, `DisableUserRequest`, `DisableUserResponse`, `AdminUserGiftItem`, `AdminUserGiftsResponse`
   Функции: нет
 - `app/cabinet/schemas/wheel.py` — Python-модуль
   Классы: `WheelPaymentType`, `WheelPrizeType`, `WheelPrizeDisplay`, `WheelConfigResponse`, `SpinAvailabilityResponse`, `SpinRequest`, `SpinResultResponse`, `SpinHistoryItem`, `SpinHistoryResponse`, `WheelPrizeAdminResponse`, `AdminWheelConfigResponse`, `UpdateWheelConfigRequest`, `CreatePrizeRequest`, `UpdatePrizeRequest`, `ReorderPrizesRequest`, `AdminSpinItem`, `AdminSpinsResponse`, `WheelStatisticsResponse`
@@ -1427,6 +1430,9 @@
 - `app/services/__init__.py` — Python-модуль
   Классы: нет
   Функции: нет
+- `app/services/abuse_api_service.py` — Python-модуль
+  Классы: нет
+  Функции: `is_configured`, `get_summary` — Вердикт по клиенту: уровень доверия и последнее предупреждение., `get_violations` — История нарушений клиента — для операторов., `is_limited` — Ограничен ли клиент по решению антифрода.
 - `app/services/account_merge_service.py` — Python-модуль
   Классы: нет
   Функции: `get_merge_preview` — Возвращает превью данных обоих аккаунтов для подтверждения мержа., `flush_remnawave_deletions` — Удаляет (или деактивирует как fallback) пользователей RemnaWave., `execute_merge` — Выполняет атомарный мерж двух аккаунтов. Caller отвечает за commit/rollback.
@@ -1457,6 +1463,9 @@
 - `app/services/blocked_users_service.py` — Python-модуль
   Классы: `BlockCheckStatus`, `BlockedUserAction`, `BlockCheckResult`, `BlockedUsersScanResult` (1 методов), `CleanupResult`, `BlockedUsersService` (8 методов)
   Функции: нет
+- `app/services/broadcast_audience.py` — Python-модуль
+  Классы: нет
+  Функции: `validate_audience` — Reject forged field/value combinations and unknown tariff or promo group IDs., `audience_predicate` — Combine rows strictly from top to bottom, including mixed AND/OR rows., `audience_user_query` — One user row per recipient, independent of subscription count., `select_audience_users` — Return the same ordered, unique people for preview and delivery., `preview_audience_users` — Count exactly while keeping only one page of users in memory.
 - `app/services/broadcast_service.py` — Python-модуль
   Классы: `BroadcastMediaConfig`, `BroadcastConfig`, `EmailBroadcastConfig`, `BroadcastService` (15 методов), `EmailBroadcastService` (15 методов)
   Функции: `parse_email_scoped_target` — Email-таргет с идентификатором: ``promo_group_{id}`` или ``user_{id}``., `cleanup_blocked_broadcast_users` — Фоновая очистка пользователей, заблокировавших бота (обнаруженных при рассылке).
@@ -1817,6 +1826,9 @@
 - `app/services/user_action_log_service.py` — Python-модуль
   Классы: нет
   Функции: `bind_request_path` — Запомнить путь текущего запроса на время его обработки., `reset_request_path`, `current_request_path`, `normalize_cabinet_path` — Сворачивает числовые сегменты пути в {id} для группировки однотипных действий., `normalize_screen_path` — Путь экрана без секретов: числа → {id}, токены → {token}, хвостовой слэш срезан., `mark_user_seen` — Подвинуть ``last_activity``, если она старше интервала. Возвращает, изменилось ли., `should_log_cabinet_action`, `should_log_miniapp_action`, `schedule_cabinet_action_log` — Fire-and-forget запись действия юзера в кабинете — не задерживает запрос., `schedule_screen_view_log` — Fire-and-forget запись открытия экрана; повтор в окне дедупликации — не пишется., `schedule_click_log` — Fire-and-forget запись нажатия: подпись кнопки + экран, где нажали., `schedule_miniapp_action_log` — Fire-and-forget запись шага юзера в Mini App: действие — как действие, чтение — как экран., `remember_task` — Держать фоновую задачу сильной ссылкой до завершения., `drain_pending_actions` — Дождаться фоновых записей (нужно тестам и корректному завершению).
+- `app/services/user_activity_service.py` — Python-модуль
+  Классы: `UserActivityItem`, `UserActivityResponse`, `UnknownActivityTypes` (1 методов)
+  Функции: `activity_sources` — Источники таймлайна активности: type -> (select, count_select, mapper)., `collect_user_activity` — Собрать страницу таймлайна.
 - `app/services/user_avatar_service.py` — Python-модуль
   Классы: нет
   Функции: `pick_avatar_file_id` — Самый маленький размер, который ещё не мылится в шапке; иначе самый крупный., `get_avatar_file_id` — file_id текущего фото профиля или None. Никогда не бросает: аватар — не повод ронять кабинет.
@@ -2462,7 +2474,7 @@
   Функции: `list_user_messages`, `create_user_message_endpoint`, `update_user_message_endpoint`, `toggle_user_message_endpoint`, `delete_user_message_endpoint`
 - `app/webapi/routes/users.py` — Python-модуль
   Классы: нет
-  Функции: `list_users`, `get_user`, `get_user_by_telegram_id_endpoint` — Get user by Telegram ID, `create_user_endpoint`, `update_user_endpoint`, `update_balance`, `deposit_balance` — Ручное пополнение баланса — как настоящий платёж, но инициированное поддержкой., `create_user_subscription` — Создать или заменить подписку для пользователя., `patch_user_subscription`, `delete_user_subscription` — Деактивировать подписку пользователя.
+  Функции: `list_users`, `get_user`, `get_user_by_telegram_id_endpoint` — Get user by Telegram ID, `create_user_endpoint`, `update_user_endpoint`, `notify_user` — Send a service message to the user over Telegram and email., `update_balance`, `deposit_balance` — Ручное пополнение баланса — как настоящий платёж, но инициированное поддержкой., `create_user_subscription` — Создать или заменить подписку для пользователя., `patch_user_subscription`, `delete_user_subscription` — Деактивировать подписку пользователя., `get_user_activity` — Таймлайн активности пользователя: бот, кабинет и мини-апп одной лентой.
 - `app/webapi/routes/webhooks.py` — Python-модуль
   Классы: нет
   Функции: `list_webhooks_endpoint` — Список webhooks., `get_webhook_stats` — Статистика по webhooks., `get_webhook` — Получить webhook по ID., `create_webhook_endpoint` — Создать новый webhook., `update_webhook_endpoint` — Обновить webhook., `delete_webhook_endpoint` — Удалить webhook., `list_webhook_deliveries` — Список доставок webhook.
@@ -2560,7 +2572,7 @@
   Классы: `UserMessageResponse`, `UserMessageCreateRequest`, `UserMessageUpdateRequest` (1 методов), `UserMessageListResponse`
   Функции: нет
 - `app/webapi/schemas/users.py` — Python-модуль
-  Классы: `PromoGroupSummary`, `SubscriptionSummary`, `UserResponse`, `UserListResponse`, `UserCreateRequest`, `UserUpdateRequest`, `BalanceUpdateRequest`, `BalanceDepositRequest`, `BalanceDepositResponse`, `UserSubscriptionCreateRequest`
+  Классы: `PromoGroupSummary`, `SubscriptionSummary`, `UserResponse`, `UserNotifyRequest`, `UserNotifyChannelResult`, `UserNotifyResponse`, `UserListResponse`, `UserCreateRequest`, `UserUpdateRequest`, `BalanceUpdateRequest`, `BalanceDepositRequest`, `BalanceDepositResponse`, `UserSubscriptionCreateRequest`
   Функции: нет
 - `app/webapi/schemas/webhooks.py` — Python-модуль
   Классы: `WebhookCreateRequest`, `WebhookUpdateRequest`, `WebhookResponse`, `WebhookListResponse`, `WebhookDeliveryResponse`, `WebhookDeliveryListResponse`, `WebhookStatsResponse`
@@ -2600,8 +2612,10 @@
 
 ## docs
 
+- `docs/abuse-api.md` — файл
 - `docs/apple-iap-consumable-topups.md` — файл
 - `docs/apple-iap-ios-requirements.md` — файл
+- `docs/broadcast_audiences.md` — файл
 - `docs/contests-api.md` — файл
 - `docs/grace-access.md` — файл
 - `docs/handoffs/`
@@ -3019,6 +3033,9 @@
 - `migrations/alembic/versions/0128_dpichecker_actions.py` — Python-модуль
   Классы: нет
   Функции: `upgrade`, `downgrade`
+- `migrations/alembic/versions/0129_broadcast_audience.py` — Python-модуль
+  Классы: нет
+  Функции: `upgrade`, `downgrade`
 
 ## scripts
 
@@ -3177,6 +3194,9 @@
 - `tests/cabinet/__init__.py` — Python-модуль
   Классы: нет
   Функции: нет
+- `tests/cabinet/test_abuse_api_service.py` — Python-модуль
+  Классы: нет
+  Функции: `test_disabled_service_is_not_configured`, `test_missing_key_is_not_configured`, `test_unconfigured_service_answers_nothing` — Не настроен — вопросов к клиенту нет, а не «неизвестно, подозрительный»., `test_unreachable_service_does_not_block_anyone` — Сеть легла — клиент остаётся чистым, экраны кабинета работают., `test_limited_level_is_recognised`, `test_warned_customer_is_not_limited` — «Замечен» — повод написать человеку, а не отказывать ему в триале., `test_client_response_cannot_carry_detection_details` — Схема клиентского ответа не содержит полей со скорингом и видами., `test_malformed_notice_does_not_break_dashboard` — Поле не того типа от чужого сервиса — молчание, а не 500 на главной., `test_malformed_violations_do_not_break_admin_card`
 - `tests/cabinet/test_admin_create_update_schema_parity.py` — Python-модуль
   Классы: нет
   Функции: `test_schema_pairs_are_discovered` — Пустой список сделал бы сторож ниже бессмысленно зелёным., `test_shared_fields_share_constraints`, `test_create_tariff_accepts_zero_as_no_highlight`, `test_create_tariff_keeps_marked_period`, `test_create_tariff_rejects_negative_highlight`, `test_pinned_message_can_be_media_only`, `test_news_update_enforces_same_lengths_as_create`, `test_update_tariff_zero_clears_highlight`, `test_update_tariff_moves_highlight_to_another_period`, `test_update_tariff_without_the_field_keeps_highlight`
@@ -3273,6 +3293,9 @@
 - `tests/cabinet/test_branding_manifest.py` — Python-модуль
   Классы: нет
   Функции: `test_manifest_uses_branding_name_and_theme_colors`, `test_manifest_icons_are_fetchable_urls_not_data_uris`, `test_light_background_when_dark_theme_is_disabled`, `test_broken_stored_colors_fall_back_to_defaults`, `test_empty_name_uses_build_default`, `test_start_url_accepts_only_a_same_site_path`, `test_icon_version_changes_with_logo_name_and_colors`, `test_logo_icon_is_an_opaque_square_of_the_exact_size`, `test_full_bleed_logo_fills_the_whole_tile_with_its_own_color` — Логотип — сплошная плитка (красный квадрат). На фоне тёмной темы maskable-вариант, `test_full_bleed_logo_with_baked_rounded_corners_gets_its_color_in_the_corners` — Скругление, запечённое в PNG: углы прозрачные, остальной край — цвет логотипа., `test_logo_with_a_varied_edge_keeps_the_theme_background` — Фото или градиент до краёв: единого цвета нет — угадывать нельзя, остаётся фон темы., `test_without_logo_icon_is_a_monogram_on_the_accent`, `test_svg_logo_falls_back_to_monogram`, `test_unreadable_logo_falls_back_to_monogram_with_a_warning`, `test_unsupported_icon_size_is_404`, `test_readable_text_matches_the_cabinet_choice`
+- `tests/cabinet/test_broadcast_audience.py` — Python-модуль
+  Классы: нет
+  Функции: `test_every_existing_dropdown_option_is_available_as_a_condition`, `rule`, `test_rows_are_evaluated_strictly_from_top_to_bottom`, `test_long_mixed_audience_keeps_top_down_results_and_compiles`, `test_not_equal_activity_includes_users_without_activity`, `test_not_equal_tariff_excludes_every_user_with_any_matching_subscription`, `test_email_promo_group_rule_preserves_existing_group_filter`, `test_expiring_preserves_daily_tariff_exclusion`, `test_preview_matches_telegram_and_email_delivery_after_preferences`, `test_send_stores_rules_and_passes_them_to_delivery`, `test_email_send_uses_its_own_audience`, `test_direct_email_user_rule_rejects_unverified_recipient`, `test_preview_rejects_mismatched_field_and_value`, `test_atomic_subscription_conditions_can_match_different_subscriptions`, `test_expired_status_excludes_any_live_subscription_including_trial`, `test_atomic_expiring_includes_live_trials_and_preserves_daily_exclusions`, `test_traffic_thresholds_treat_null_as_zero_for_preview_and_delivery`, `test_traffic_thresholds_dates_and_zero_are_independent`, `test_user_autocomplete_matches_any_part_and_uses_stable_id`, `test_atomic_audience_rejects_invalid_values_and_cross_channel_fields`, `test_preview_without_users_read_shows_count_but_no_people` — У роли Marketer есть broadcasts:*, но нет users:read: размер аудитории — да,, `test_user_search_requires_users_read` — Поиск по части ника/почты выгружает людей из базы — одного права на рассылки мало., `test_unreadable_stored_audience_does_not_break_history`, `test_bot_history_names_cabinet_audience`
 - `tests/cabinet/test_broadcast_media_validation.py` — Python-модуль
   Классы: нет
   Функции: `test_send_rejects_media_caption_over_1024`, `test_send_checks_the_caption_that_is_actually_sent` — Если у медиа своя подпись, ограничение относится к ней, а не к message_text., `test_media_file_id_must_look_like_a_telegram_file_id`
@@ -3369,6 +3392,9 @@
 - `tests/cabinet/test_info_display_mode_gating.py` — Python-модуль
   Классы: нет
   Функции: `test_visibility_defaults_all_true`, `test_visibility_hides_bot_only_sections`, `test_rules_endpoint_404_when_bot_only`, `test_privacy_endpoint_404_when_bot_only`, `test_offer_endpoint_404_when_bot_only`, `test_recurrent_endpoint_404_when_bot_only`, `test_faq_list_empty_when_bot_only`
+- `tests/cabinet/test_info_documents_language_fallback.py` — Python-модуль
+  Классы: нет
+  Функции: `test_empty_row_falls_back_to_default_language` — Пустая строка на zh (или одни пробелы) не должна подменять собой документ на ru., `test_filled_document_is_returned_as_is` — Заполненный документ на запрошенном языке не трогается., `test_no_text_anywhere_keeps_stub` — Нет текста и на языке по умолчанию — прежнее поведение, встроенная заглушка., `test_rules_without_language_row_use_default_language` — Правил на zh нет — берутся правила ru, а не встроенный текст., `test_rules_with_empty_language_row_use_default_language` — Пустая строка на zh — как и у остальных документов, откат на ru, а не пустой экран., `test_rules_in_requested_language_are_kept`, `test_rules_fall_back_to_built_in_stub_when_nothing_is_filled`
 - `tests/cabinet/test_info_service.py` — Python-модуль
   Классы: нет
   Функции: `branded`, `test_contact_settings_exist` — Поля должны быть в модели, иначе .env их не задаст, а ручка снова врёт., `test_name_and_description_come_from_branding` — Источник тот же, что у мини-аппа — сервис не называется в двух местах по-разному., `test_unknown_and_dirty_language_codes_resolve` — Локали без брендинга берут дефолт, а хвост региона/пробелы не мешают., `test_contacts_are_returned`, `test_blank_contacts_are_null_not_empty_string` — Пустая переменная в .env — это «контакта нет», как и до правки., `test_name_is_never_the_old_hardcoded_stub` — Даже с пустым брендингом имя берётся из фолбэка брендинга, а не из ручки.
@@ -4049,6 +4075,9 @@
 - `tests/handlers/test_balance_quick_topup.py` — Python-модуль
   Классы: нет
   Функции: `test_answers_the_tap_before_calling_the_provider`, `test_stale_query_is_not_reported_as_topup_error` — Устаревший запрос по дороге — предупреждение декоратора, а не отчёт об ошибке., `test_provider_failure_is_reported_once_without_second_answer`, `test_unknown_method_is_reported_with_a_message`, `test_tribute_flow_owns_the_answer` — Сценарии, которым передаётся сам callback, отвечают на нажатие сами — родитель не лезет., `test_invalid_amount_alerts_immediately`
+- `tests/handlers/test_balance_topup_retry_hint.py` — Python-модуль
+  Классы: нет
+  Функции: `payment_environment`, `state`, `user`, `test_rejected_purchase_topup_keeps_input_open_until_user_retries`, `test_minimum_hint_only_suggests_an_accepted_whole_ruble_amount`
 - `tests/handlers/test_broadcast_custom_buttons.py` — Python-модуль
   Классы: нет
   Функции: `test_keyboard_passes_icon_custom_emoji_id`, `test_schema_roundtrips_icon_custom_emoji_id`, `test_schema_defaults_to_none_and_rejects_garbage`
@@ -4199,6 +4228,9 @@
 - `tests/middlewares/__init__.py` — Python-модуль
   Классы: нет
   Функции: нет
+- `tests/middlewares/test_admin_report_stdlib_logger.py` — Python-модуль
+  Классы: нет
+  Функции: `stdlib_logger` — Stdlib-логгер с консольным formatter'ом бота и подключённым процессором., `test_stdlib_error_report_keeps_type_message_logger_and_traceback`
 - `tests/middlewares/test_admin_report_unreachable_user.py` — Python-модуль
   Классы: нет
   Функции: `test_unreachable_user_report_has_reason_and_user_instead_of_traceback`, `test_real_errors_still_carry_the_traceback`
@@ -5181,6 +5213,15 @@
 - `tests/webapi/test_subscription_sync_routes.py` — Python-модуль
   Классы: нет
   Функции: `test_users_subscription_trial_calls_remnawave_sync`, `test_users_subscription_paid_calls_remnawave_sync`, `test_users_search_filter_adds_internal_id_for_int32`, `test_users_search_filter_skips_internal_id_for_out_of_int32`, `test_subscriptions_extend_calls_remnawave_sync`, `test_subscriptions_extend_rolls_back_when_sync_fails`, `test_subscriptions_extend_returns_500_when_rollback_fails`, `test_users_patch_subscription_delegates_to_post` — PATCH /users/{id}/subscription is a documented alias for POST and must route, `test_users_patch_subscription_route_returns_201` — The PATCH-as-upsert alias is intentionally annotated 201 (not the REST-typical 200), `test_users_subscription_replace_existing_restores_on_sync_failure` — When replace_existing=True and Remnawave sync fails, the user's prior subscription
+- `tests/webapi/test_ticket_media_items.py` — Python-модуль
+  Классы: нет
+  Функции: `test_gallery_is_serialized`, `test_single_file_message_has_no_gallery`, `test_gallery_alone_still_counts_as_media` — У пачки может не быть основного file_id — сообщение всё равно с медиа., `test_broken_gallery_does_not_break_the_answer`
+- `tests/webapi/test_user_activity_endpoint.py` — Python-модуль
+  Классы: нет
+  Функции: `test_activity_returns_timeline_for_internal_id`, `test_activity_accepts_telegram_id`, `test_activity_filters_by_type`, `test_activity_rejects_unknown_type`, `test_activity_404_for_missing_user`
+- `tests/webapi/test_user_notify_endpoint.py` — Python-модуль
+  Классы: нет
+  Функции: `email_service`, `test_email_goes_to_verified_address`, `test_unverified_email_is_skipped`, `test_plain_text_is_escaped_in_email`, `test_blank_text_is_rejected`
 
 ### tests/webserver
 
