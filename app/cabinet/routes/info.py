@@ -214,18 +214,19 @@ async def get_rules(
             detail='Rules are not available',
         )
     requested_lang = language.split('-', maxsplit=1)[0].lower()
-    if not await get_rules_by_language(db, requested_lang):
-        # Правил на этом языке нет — отдаём правила языка по умолчанию, а не встроенную заглушку.
-        requested_lang = _default_language_code()
-
-    # Use the same function as bot to ensure consistent content
-    content = await get_current_rules_content(db, requested_lang)
-
-    # Try to get updated_at from DB record
     rules = await get_rules_by_language(db, requested_lang)
-    updated_at = None
-    if rules and rules.updated_at:
-        updated_at = rules.updated_at.isoformat()
+    if not _has_content(rules):
+        # Правил на этом языке нет или строка пустая — отдаём правила языка по
+        # умолчанию, а не встроенную заглушку (как и у остальных документов).
+        rules = await get_rules_by_language(db, _default_language_code()) or rules
+
+    if _has_content(rules):
+        content = rules.content
+        updated_at = rules.updated_at.isoformat() if rules.updated_at else None
+    else:
+        # Та же встроенная заглушка, что показывает бот.
+        content = await get_current_rules_content(db, _default_language_code())
+        updated_at = None
 
     return RulesResponse(content=content, updated_at=updated_at)
 

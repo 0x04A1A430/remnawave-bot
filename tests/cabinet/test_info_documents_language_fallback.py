@@ -84,30 +84,45 @@ async def test_no_text_anywhere_keeps_stub(route, service, method, stub):
     assert response.content.startswith(stub)
 
 
-async def test_rules_without_language_row_use_default_language():
-    """Правил на zh нет — берутся правила ru, а не встроенный текст."""
-    rules = {'ru': SimpleNamespace(updated_at=None)}
-    get_rules = AsyncMock(side_effect=lambda _db, language: rules.get(language))
-    get_content = AsyncMock(return_value='ru rules')
+def _rules(**by_language):
+    rows = {lang: SimpleNamespace(content=content, updated_at=None) for lang, content in by_language.items()}
+    return AsyncMock(side_effect=lambda _db, language: rows.get(language))
+
+
+async def _get_rules(language, get_rules, stub='built-in stub'):
+    get_content = AsyncMock(return_value=stub)
     with (
         patch.object(info, 'get_rules_by_language', get_rules),
         patch.object(info, 'get_current_rules_content', get_content),
     ):
-        response = await info.get_rules(language='zh', db=DB)
+        return await info.get_rules(language=language, db=DB), get_content
+
+
+async def test_rules_without_language_row_use_default_language():
+    """Правил на zh нет — берутся правила ru, а не встроенный текст."""
+    response, get_content = await _get_rules('zh', _rules(ru='ru rules'))
 
     assert response.content == 'ru rules'
-    get_content.assert_awaited_once_with(DB, 'ru')
+    get_content.assert_not_awaited()
+
+
+async def test_rules_with_empty_language_row_use_default_language():
+    """Пустая строка на zh — как и у остальных документов, откат на ru, а не пустой экран."""
+    response, _ = await _get_rules('zh', _rules(zh='  ', ru='ru rules'))
+
+    assert response.content == 'ru rules'
 
 
 async def test_rules_in_requested_language_are_kept():
-    rules = {'en': SimpleNamespace(updated_at=None), 'ru': SimpleNamespace(updated_at=None)}
-    get_rules = AsyncMock(side_effect=lambda _db, language: rules.get(language))
-    get_content = AsyncMock(return_value='en rules')
-    with (
-        patch.object(info, 'get_rules_by_language', get_rules),
-        patch.object(info, 'get_current_rules_content', get_content),
-    ):
-        response = await info.get_rules(language='en', db=DB)
+    response, get_content = await _get_rules('en', _rules(en='en rules', ru='ru rules'))
 
     assert response.content == 'en rules'
-    get_content.assert_awaited_once_with(DB, 'en')
+    get_content.assert_not_awaited()
+
+
+async def test_rules_fall_back_to_built_in_stub_when_nothing_is_filled():
+    response, get_content = await _get_rules('zh', _rules(zh='', ru=''))
+
+    assert response.content == 'built-in stub'
+    assert response.updated_at is None
+    get_content.assert_awaited_once_with(DB, 'ru')
