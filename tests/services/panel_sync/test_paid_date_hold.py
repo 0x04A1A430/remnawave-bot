@@ -13,8 +13,12 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 
+import pytest
+
 from app.services.panel_sync.projection import (
+    BULK_SNAPSHOT,
     PAID_DATE_HOLD,
+    PANEL_TRUTH,
     WEBHOOK,
     PanelSnapshot,
     panel_date_behind_paid_renewal,
@@ -92,3 +96,43 @@ def test_minute_tolerance_is_not_a_hold():
     sub = _subscription(PAID_UNTIL)
 
     assert not panel_date_behind_paid_renewal(sub, _snapshot(PAID_UNTIL - timedelta(seconds=30)), paid_at=NOW, now=NOW)
+
+
+@pytest.mark.parametrize('policy', [PANEL_TRUTH, BULK_SNAPSHOT], ids=['panel_truth', 'bulk_snapshot'])
+@pytest.mark.parametrize('panel_status', ['ACTIVE', 'EXPIRED'])
+def test_stale_panel_does_not_expire_a_just_paid_subscription(policy, panel_status):
+    """Старая дата панели уже прошла: статус «истекла» из неё тоже не берём.
+
+    Иначе дата удерживалась, а подписка всё окно удержания висела истёкшей и
+    становилась кандидатом грейса (ревью PR #3280).
+    """
+    past_old_end = NOW - timedelta(hours=1)
+    sub = _subscription(PAID_UNTIL)
+    stale = PanelSnapshot(status=panel_status, expire_at=past_old_end, squads=('s1',), short_uuid='abc')
+
+    changed = project_onto_subscription(sub, stale, now=NOW, policy=policy, paid_at=NOW - timedelta(hours=1))
+
+    assert sub.end_date == PAID_UNTIL
+    assert sub.status == 'active'
+    assert sub.grace_candidate_reason is None
+    assert 'status' not in changed
+
+
+@pytest.mark.parametrize('panel_status', ['DISABLED', 'LIMITED'])
+def test_real_panel_actions_still_apply_during_the_hold(panel_status):
+    """Отключение админом и лимит трафика — не следствие старой даты."""
+    sub = _subscription(PAID_UNTIL)
+    stale = PanelSnapshot(status=panel_status, expire_at=NOW - timedelta(hours=1), squads=('s1',), short_uuid='abc')
+
+    project_onto_subscription(sub, stale, now=NOW, policy=PANEL_TRUTH, paid_at=NOW - timedelta(hours=1))
+
+    assert sub.status == panel_status.lower()
+
+
+def test_without_a_recent_payment_the_panel_still_expires_it():
+    sub = _subscription(NOW - timedelta(hours=1))
+    stale = PanelSnapshot(status='ACTIVE', expire_at=NOW - timedelta(hours=1), squads=('s1',), short_uuid='abc')
+
+    project_onto_subscription(sub, stale, now=NOW, policy=PANEL_TRUTH, paid_at=None)
+
+    assert sub.status == 'expired'

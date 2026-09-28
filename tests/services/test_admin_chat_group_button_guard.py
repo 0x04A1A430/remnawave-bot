@@ -15,7 +15,6 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
-import app.services.admin_notification_service as module
 from app.config import Settings
 from app.keyboards.group_callbacks import strip_group_unsafe_buttons
 from app.services.admin_notification_service import AdminNotificationService
@@ -64,7 +63,7 @@ def service(monkeypatch):
 async def test_group_chat_gets_only_safe_buttons_on_both_send_paths(service, monkeypatch):
     service.chat_id = -100123
     rich = AsyncMock(return_value=False)
-    monkeypatch.setattr(module, 'try_send_rich_admin_message', rich)
+    monkeypatch.setattr('app.services.admin_notification_service.try_send_rich_admin_message', rich)
 
     assert await service._send_message('текст', reply_markup=_kb([URL], [CLOSE, REPLY])) is True
 
@@ -78,7 +77,9 @@ async def test_group_chat_gets_only_safe_buttons_on_both_send_paths(service, mon
 @pytest.mark.asyncio
 async def test_group_chat_sends_without_keyboard_when_all_buttons_are_dead(service, monkeypatch):
     service.chat_id = -100123
-    monkeypatch.setattr(module, 'try_send_rich_admin_message', AsyncMock(return_value=False))
+    monkeypatch.setattr(
+        'app.services.admin_notification_service.try_send_rich_admin_message', AsyncMock(return_value=False)
+    )
 
     await service._send_message('текст', reply_markup=_kb([REPLY]))
 
@@ -88,7 +89,9 @@ async def test_group_chat_sends_without_keyboard_when_all_buttons_are_dead(servi
 @pytest.mark.asyncio
 async def test_private_admin_chat_keeps_the_keyboard_untouched(service, monkeypatch):
     service.chat_id = 1
-    monkeypatch.setattr(module, 'try_send_rich_admin_message', AsyncMock(return_value=False))
+    monkeypatch.setattr(
+        'app.services.admin_notification_service.try_send_rich_admin_message', AsyncMock(return_value=False)
+    )
 
     await service._send_message('текст', reply_markup=_kb([URL], [CLOSE, REPLY]))
 

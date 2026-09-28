@@ -22,6 +22,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    Numeric,
     String,
     Table,
     Text,
@@ -158,6 +159,12 @@ class PaymentMethod(Enum):
     PAL24 = 'pal24'
     WATA = 'wata'
     PLATEGA = 'platega'
+    # СБП-автопродление Platega. В базу НЕ пишется: сами списания хранятся
+    # обычными транзакциями с методом `platega`, а это значение служит ключом
+    # отображения и маршрутизации в админке платежей. Без отдельного ключа
+    # детали открывались бы роутом /platega/{id} и грузили бы строку
+    # platega_payments с тем же номером — чужой платёж.
+    PLATEGA_RECURRENT = 'platega_recurrent'
     CLOUDPAYMENTS = 'cloudpayments'
     FREEKASSA = 'freekassa'
     KASSA_AI = 'kassa_ai'
@@ -3246,6 +3253,9 @@ class WithdrawalRequest(Base):
     processed_at = Column(AwareDateTime(), nullable=True)
     admin_comment = Column(Text, nullable=True)
 
+    # Последнее напоминание админам о заявке без решения (MonitoringService._check_withdrawal_reminders)
+    last_reminder_at = Column(AwareDateTime(), nullable=True)
+
     created_at = Column(AwareDateTime(), default=func.now())
     updated_at = Column(AwareDateTime(), default=func.now(), onupdate=func.now())
 
@@ -5220,3 +5230,88 @@ class ReachabilityTargetPref(Base):
     note = Column(Text, nullable=True)
     updated_by_user_id = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
     updated_at = Column(AwareDateTime(), default=func.now(), onupdate=func.now())
+
+
+class DpiCheckerAction(Base):
+    """Действие админа в DPI//CHECKER из кабинета: проверка, Зонд, Соседи или монитор.
+
+    Результаты не копируются — они у сервиса по ``remote_id``. Здесь только то, чего у сервиса нет:
+    кто запустил, что проверяли (источник в панели и имена ключей), сколько списано и вернули.
+    """
+
+    __tablename__ = 'dpichecker_actions'
+    __table_args__ = (
+        UniqueConstraint('kind', 'remote_id', name='uq_dpichecker_actions_kind_remote'),
+        Index('ix_dpichecker_actions_kind_created', 'kind', 'created_at'),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    kind = Column(String(16), nullable=False)  # check | probe | noisy | monitor
+    check_type = Column(String(16), nullable=True)  # vpn | ip | mtproto
+    remote_id = Column(Integer, nullable=True)
+    status = Column(String(16), nullable=False, default='submitting')
+    admin_user_id = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True, index=True)
+    location = Column(String(16), nullable=True)
+    pop_count = Column(Integer, nullable=False, default=0)
+    resource_count = Column(Integer, nullable=False, default=0)
+    source = Column(
+        String(24), nullable=False, default='paste'
+    )  # paste | panel_subscription | panel_hosts | panel_nodes | site (монитор взят с сайта)
+    source_ref = Column(String(128), nullable=True)
+    label = Column(String(255), nullable=False, default='')
+    targets = Column(JSON, nullable=False, default=list)  # [{"value": ..., "name": ...}]
+    request = Column(JSON, nullable=False, default=dict)
+    idempotency_key = Column(String(64), nullable=False, unique=True)
+    cost_usd = Column(Numeric(12, 4), nullable=True)
+    refunded_usd = Column(Numeric(12, 4), nullable=True)
+    error_code = Column(String(64), nullable=True)
+    delivery_ids = Column(JSON, nullable=False, default=list)  # последние обработанные X-DPIChecker-Delivery
+    last_run_id = Column(Integer, nullable=True)  # монитор: последний прогон, о котором уже решено, сообщать ли
+    created_at = Column(AwareDateTime(), default=func.now())
+    updated_at = Column(AwareDateTime(), default=func.now(), onupdate=func.now())
+
+
+class UserReminder(Base):
+    """Напоминание пользователям: условия, каналы, частота, тексты. Создаёт админ в кабинете."""
+
+    __tablename__ = 'user_reminders'
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(120), nullable=False)
+    is_active = Column(Boolean, nullable=False, default=False, server_default='false')
+    # Не null — встроенное (нельзя удалить); уникальность не даёт засеять дважды.
+    builtin_key = Column(String(64), nullable=True, unique=True)
+    channels = Column(String(16), nullable=False)  # bot | cabinet | both
+    category = Column(String(16), nullable=False, default='service', server_default='service')
+    conditions = Column(JSON, nullable=False, default=dict)
+    repeat_every_days = Column(Integer, nullable=False, default=7, server_default='7')
+    max_sends = Column(Integer, nullable=False, default=1, server_default='1')
+    texts = Column(JSON, nullable=False, default=dict)  # {lang: {title, body, button}}
+    button_kind = Column(String(16), nullable=False, default='none', server_default='none')
+    button_target = Column(String(500), nullable=True)
+    created_at = Column(AwareDateTime(), default=func.now())
+    updated_at = Column(AwareDateTime(), default=func.now(), onupdate=func.now())
+
+    @property
+    def is_builtin(self) -> bool:
+        return self.builtin_key is not None
+
+
+class UserReminderState(Base):
+    """Что с напоминанием у конкретного человека: отправки в бот и закрытие карточки."""
+
+    __tablename__ = 'user_reminder_states'
+    __table_args__ = (
+        UniqueConstraint('reminder_id', 'user_id', name='uq_user_reminder_states_reminder_user'),
+        Index('ix_user_reminder_states_reminder_last_sent', 'reminder_id', 'last_sent_at'),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    reminder_id = Column(Integer, ForeignKey('user_reminders.id', ondelete='CASCADE'), nullable=False)
+    user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
+    sends_count = Column(Integer, nullable=False, default=0, server_default='0')
+    # Последняя попытка (и успех, и неудача) — по ней окно повтора.
+    last_sent_at = Column(AwareDateTime(), nullable=True)
+    # Последний успех — по нему общий лимит «одно напоминание в сутки».
+    last_success_at = Column(AwareDateTime(), nullable=True)
+    dismissed_at = Column(AwareDateTime(), nullable=True)

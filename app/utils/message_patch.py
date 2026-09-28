@@ -152,12 +152,13 @@ _logo_file_id_fingerprint: str | None = None
 
 
 def _drop_logo_cache_if_file_changed() -> None:
-    global _logo_file_id, _logo_file_id_fingerprint, _logo_send_path
+    # Отпечаток не обнуляем: его читают только при непустом file_id, а новый
+    # записывается вместе с новым file_id в _cache_logo_file_id.
+    global _logo_file_id, _logo_send_path
     current = logo_fingerprint(LOGO_PATH)
     if _logo_file_id is not None and _logo_file_id_fingerprint != current:
         logger.info('Файл логотипа заменён — file_id и уменьшенная копия забыты', logo_path=str(LOGO_PATH))
         _logo_file_id = None
-        _logo_file_id_fingerprint = None
         _logo_send_path = None
 
 
