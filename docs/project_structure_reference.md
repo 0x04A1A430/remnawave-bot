@@ -4860,7 +4860,7 @@
   Функции: `service`, `test_disabled_and_expired_are_filtered_out` — DISABLED/EXPIRED отсекаются, ACTIVE/LIMITED остаются., `test_all_active_pass_through` — Когда все активны — ничего не теряется., `test_all_inactive_returns_empty` — Сплошь DISABLED/EXPIRED → пустой список (никого не проверяем)., `test_filter_applies_across_paginated_batches` — Фильтр работает на каждом батче; пагинация — по сырому размеру страницы.
 - `tests/services/test_tribute_payment_not_lost.py` — Python-модуль
   Классы: нет
-  Функции: `service_on` — TributeService над тестовой сессией; уведомления и рефералка заглушены., `test_failure_before_commit_leaves_nothing_and_retry_credits_once`, `test_unknown_user_raises_alert_and_writes_nothing`, `test_alert_logger_is_not_silenced_as_payment_logger` — Логгеры tribute_service отрезаны от админ-чата, журнала ошибок и файлов — тревога идёт мимо этих фильтров.
+  Функции: `service_on` — TributeService над тестовой сессией; уведомления и рефералка заглушены., `test_failure_before_commit_leaves_nothing_and_retry_credits_once`, `test_unknown_user_raises_alert_and_writes_nothing`, `test_alert_logger_is_not_silenced_as_payment_logger` — Логгеры tribute_service отрезаны от админ-чата, журнала ошибок и файлов — тревога идёт мимо этих фильтров., `test_failure_after_commit_answers_ok_and_is_not_credited_twice` — Деньги уже на балансе — 5xx тут опасен: повтор Tribute с синтетическим ключом, пришедший, `test_event_without_money_does_not_raise_payment_alert`
 - `tests/services/test_update_links_panel_identity.py` — Python-модуль
   Классы: нет
   Функции: `test_update_links_fresh_row_to_the_account_it_updated`, `test_update_leaves_row_unlinked_when_sibling_row_holds_the_account`, `test_link_is_noop_for_already_linked_row`

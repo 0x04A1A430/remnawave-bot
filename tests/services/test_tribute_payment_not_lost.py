@@ -140,3 +140,36 @@ def test_alert_logger_is_not_silenced_as_payment_logger():
     assert f"structlog.get_logger('{name}')" in Path(tribute_module.__file__).read_text(encoding='utf-8')
     assert not name.startswith(IGNORED_LOGGER_PREFIXES)
     assert not name.startswith(ExcludePaymentFilter.PAYMENT_MODULES)
+
+
+def _donation_without_created_at(amount: int = 15000) -> str:
+    """Без created_at ключ синтетический (tribute_<tg>_<amount>) и нарочно неуникальный."""
+    return json.dumps(
+        {'name': 'new_donation', 'payload': {'donation_request_id': 777, 'amount': amount, 'telegram_user_id': TG_ID}}
+    )
+
+
+async def test_failure_after_commit_answers_ok_and_is_not_credited_twice(monkeypatch, service_on):
+    """Деньги уже на балансе — 5xx тут опасен: повтор Tribute с синтетическим ключом, пришедший
+    позже окна дедупа в 24 ч, зачислился бы второй раз. Поэтому 200 и тревога, а не повтор."""
+    async with memory_session(monkeypatch, TABLES) as db:
+        await _seed_user(db)
+        service, side_effects, alert = service_on(db)
+        side_effects.side_effect = RuntimeError('events bus down')
+
+        result = await service.process_webhook(_donation_without_created_at())
+
+        assert result['status'] == 'ok'
+        assert await _state(db) == (15000, 1)
+        assert 'зачислена' in alert.error.call_args.args[0]
+
+
+async def test_event_without_money_does_not_raise_payment_alert(monkeypatch, service_on):
+    async with memory_session(monkeypatch, TABLES) as db:
+        await _seed_user(db)
+        service, _, alert = service_on(db)
+
+        result = await service.process_webhook(json.dumps({'name': 'cancelled_subscription', 'payload': {}}))
+
+    assert result['status'] == 'ignored'
+    alert.error.assert_not_called()

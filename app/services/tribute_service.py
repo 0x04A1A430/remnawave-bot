@@ -85,7 +85,11 @@ class TributeService:
 
         processed_data = await self.tribute_api.process_webhook(webhook_data)
         if not processed_data:
-            # Подпись уже проверена — это событие Tribute (например, анонимный донат без telegram_user_id)
+            # Подпись уже проверена — это событие Tribute (например, анонимный донат без telegram_user_id).
+            # Тревожим только за донаты: отмена подписки и прочие события без денег — не повод.
+            event_name = webhook_data.get('name')
+            if event_name not in (None, 'new_donation', 'recurrent_donation'):
+                return {'status': 'ignored', 'reason': 'invalid_data'}
             alert_logger.error(
                 'Tribute: событие без telegram_user_id, оплата могла не зачислиться — сверить в кабинете Tribute',
                 event_name=webhook_data.get('name'),
@@ -108,6 +112,9 @@ class TributeService:
     async def _handle_successful_payment(self, payment_data: dict[str, Any]):
         # ошибка не глотается — вебхук отвечает 5xx, Tribute повторяет доставку (5 мин … 8 ч,
         # около суток). Повтор безопасен: транзакция и баланс — один коммит, зачисленный payment_id пропускается.
+        # Но только ДО коммита: после него деньги уже на балансе, и 5xx здесь опасен — у синтетического
+        # ключа tribute_<tg>_<amount> повтор старше 24 ч зачисляется заново (см. create_unique_tribute_transaction).
+        credited = False
         try:
             user_telegram_id = payment_data['user_id']
             amount_kopeks = payment_data['amount_kopeks']
@@ -195,6 +202,7 @@ class TributeService:
 
                 # транзакция (flush в create_unique_tribute_transaction) и зачисление — одним коммитом
                 await session.commit()
+                credited = True
                 await emit_transaction_side_effects(
                     session,
                     transaction,
@@ -259,6 +267,13 @@ class TributeService:
                 break
 
         except Exception as e:
+            if credited:
+                # Баланс уже пополнен — сбой в уведомлениях/побочных эффектах. Отвечаем 200: повтор не нужен
+                # и для синтетического ключа привёл бы к двойному зачислению.
+                alert_logger.error(
+                    'Tribute: оплата зачислена, но обработка после зачисления упала', error=e, exc_info=True
+                )
+                return
             alert_logger.error(
                 'Tribute: ошибка зачисления, ответ 5xx — Tribute повторит доставку', error=e, exc_info=True
             )
