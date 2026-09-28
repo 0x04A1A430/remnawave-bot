@@ -2301,5 +2301,6 @@
   "CASHERA_STATUS_PENDING": "⏳ Awaiting payment",
   "CASHERA_STATUS_FAILED": "❌ Payment failed",
   "CASHERA_STATUS_EXPIRED": "⌛ The payment link has expired",
-  "CASHERA_STATUS_REFUNDED": "↩️ Refunded"
+  "CASHERA_STATUS_REFUNDED": "↩️ Refunded",
+  "CASHERA_H2H_HINT": "Scan the QR code in your banking app or tap “Pay”."
 }

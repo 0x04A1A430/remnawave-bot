@@ -1125,6 +1125,9 @@ class Settings(BaseSettings):
     CASHERA_ACTIVE_METHODS: str = 'sbp,card'
     # Методы кнопками прямо на экране способов пополнения (иначе — одна кнопка и выбор внутри)
     CASHERA_INLINE_METHODS: bool = False
+    # Свой экран оплаты (H2H): QR СБП / реквизиты прямо в боте и кабинете вместо перехода
+    # на страницу Cashera. Только для sbp, card и crypto; остальные методы — всегда ссылкой.
+    CASHERA_H2H_ENABLED: bool = False
     CASHERA_MIN_AMOUNT_KOPEKS: int = 10000  # 100₽ — минимум Cashera для карт
     CASHERA_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000₽
     CASHERA_WEBHOOK_PATH: str = '/cashera-webhook'

@@ -7,9 +7,8 @@ from datetime import UTC, datetime
 from importlib import import_module
 from typing import Any
 
-from sqlalchemy.ext.asyncio import AsyncSession
-
 import structlog
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.models import PaymentMethod, TransactionType
@@ -31,6 +30,12 @@ CASHERA_STATUS_MAP: dict[str, tuple[str, bool]] = {
     'refunded': ('refunded', False),
     'chargeback': ('chargeback', False),
 }
+
+# H2H (свой экран оплаты) у Cashera есть только у этих методов; mastercard и
+# cryptobot работают исключительно через страницу провайдера.
+CASHERA_H2H_METHODS = frozenset({'sbp', 'card', 'crypto'})
+_H2H_ATTEMPTS = 3
+_H2H_DELAY_SECONDS = 1.0
 
 # Финальные неуспехи: повторный вебхук не должен «чинить» такой платёж.
 CASHERA_TERMINAL_FAILURES = frozenset({'failed', 'expired', 'refunded', 'chargeback', 'amount_mismatch', 'error'})
@@ -611,6 +616,36 @@ class CasheraPaymentMixin:
         await self._apply_cashera_transaction(db, locked, remote, source='api_check')
         await db.refresh(locked)
         return {'payment': locked, 'status': locked.status or 'pending', 'is_paid': bool(locked.is_paid)}
+
+    async def get_cashera_h2h(self, cashera_uuid: str | None, payment_method: str | None) -> dict[str, Any] | None:
+        """Реквизиты для своего экрана оплаты или None — тогда показываем ссылку.
+
+        Реквизиты появляются не сразу: пока их нет, Cashera отвечает 422 — делаем
+        несколько коротких повторов. Любая другая неудача — молча None: у покупателя
+        всегда остаётся обычная ссылка на оплату.
+        """
+        if not settings.CASHERA_H2H_ENABLED or not cashera_uuid or payment_method not in CASHERA_H2H_METHODS:
+            return None
+
+        import asyncio
+
+        from app.services.cashera_service import CasheraAPIError
+
+        for attempt in range(1, _H2H_ATTEMPTS + 1):
+            try:
+                data = await cashera_service.get_h2h(cashera_uuid)
+            except CasheraAPIError as error:
+                if error.status_code == 422 and attempt < _H2H_ATTEMPTS:
+                    await asyncio.sleep(_H2H_DELAY_SECONDS)
+                    continue
+                logger.info('Cashera H2H: реквизиты недоступны, остаётся ссылка', status=error.status_code)
+                return None
+            except Exception as error:
+                logger.warning('Cashera H2H: ошибка получения реквизитов', error=str(error))
+                return None
+            qr = str(data.get('qr') or '').strip()
+            return {'qr': qr, 'amount': data.get('amount')} if qr else None
+        return None
 
     async def get_cashera_payment_status(self, db: AsyncSession, local_payment_id: int) -> dict[str, Any] | None:
         """Статус по локальному id — для кнопки «Проверить статус» в боте."""

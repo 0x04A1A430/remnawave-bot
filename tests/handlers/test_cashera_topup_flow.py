@@ -107,3 +107,44 @@ async def test_disabled_method_is_refused(monkeypatch):
     await cashera_handlers.handle_cashera_method_selection(callback, _user(), _state())
     callback.answer.assert_awaited_once()
     assert callback.answer.call_args.kwargs.get('show_alert') is True
+
+
+class _FakePaymentService:
+    h2h = None
+
+    def __init__(self, _bot=None):
+        pass
+
+    async def create_cashera_payment(self, **_kwargs):
+        return {'payment_url': 'https://pay.cashera.cash/x', 'payment_id': 'u-1', 'local_payment_id': 5}
+
+    async def get_cashera_h2h(self, _uuid, _method):
+        return self.h2h
+
+
+def _amount_message():
+    message = MagicMock()
+    message.answer = AsyncMock()
+    message.answer_photo = AsyncMock()
+    message.delete = AsyncMock()
+    message.chat = SimpleNamespace(id=7)
+    message.bot = MagicMock()
+    return message
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(('h2h', 'photo'), [({'qr': 'https://qr.nspk.ru/AS1'}, True), (None, False)])
+async def test_invoice_is_a_qr_photo_when_requisites_are_ready(monkeypatch, h2h, photo):
+    _FakePaymentService.h2h = h2h
+    monkeypatch.setattr(cashera_handlers, 'PaymentService', _FakePaymentService)
+    state = _state()
+    await state.update_data(cashera_method='sbp')
+    message = _amount_message()
+
+    await cashera_handlers.process_cashera_payment_amount(message, _user(), object(), 50000, state)
+
+    assert message.answer_photo.await_count == (1 if photo else 0)
+    assert message.answer.await_count == (0 if photo else 1)
+    sent = message.answer_photo if photo else message.answer
+    buttons = sent.call_args.kwargs['reply_markup'].inline_keyboard
+    assert buttons[0][0].url == 'https://pay.cashera.cash/x'  # ссылка остаётся запасным путём

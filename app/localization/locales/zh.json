@@ -2301,5 +2301,6 @@
   "CASHERA_STATUS_PENDING": "⏳ 等待支付",
   "CASHERA_STATUS_FAILED": "❌ 支付失败",
   "CASHERA_STATUS_EXPIRED": "⌛ 支付已过期",
-  "CASHERA_STATUS_REFUNDED": "↩️ 已退款"
+  "CASHERA_STATUS_REFUNDED": "↩️ 已退款",
+  "CASHERA_H2H_HINT": "请在银行应用中扫描二维码，或点击“支付”。"
 }

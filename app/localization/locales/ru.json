@@ -2301,5 +2301,6 @@
   "CASHERA_STATUS_PENDING": "⏳ Ожидает оплаты",
   "CASHERA_STATUS_FAILED": "❌ Оплата не прошла",
   "CASHERA_STATUS_EXPIRED": "⌛ Срок оплаты истёк",
-  "CASHERA_STATUS_REFUNDED": "↩️ Возврат"
+  "CASHERA_STATUS_REFUNDED": "↩️ Возврат",
+  "CASHERA_H2H_HINT": "Отсканируйте QR-код в приложении банка или нажмите «Оплатить»."
 }

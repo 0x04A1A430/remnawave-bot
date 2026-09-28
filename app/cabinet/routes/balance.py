@@ -346,6 +346,7 @@ async def create_topup(
     amount_rubles = request.amount_kopeks / 100
     payment_url = None
     payment_id = None
+    qr_payload: str | None = None
     cabinet_return_url = f'{settings.CABINET_URL.rstrip("/")}/balance/top-up/result?method={request.payment_method}'
     cabinet_success_url = f'{cabinet_return_url}&status=success'
     cabinet_failed_url = f'{cabinet_return_url}&status=failed'
@@ -1088,6 +1089,8 @@ async def create_topup(
             if result and result.get('payment_url'):
                 payment_url = result.get('payment_url')
                 payment_id = str(result.get('local_payment_id') or result.get('order_id') or 'pending')
+                h2h = await payment_service.get_cashera_h2h(result.get('payment_id'), method_code)
+                qr_payload = h2h['qr'] if h2h else None
             else:
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -1187,6 +1190,7 @@ async def create_topup(
         amount_rubles=amount_rubles,
         status='pending',
         expires_at=None,
+        qr_payload=qr_payload,
     )
 
 

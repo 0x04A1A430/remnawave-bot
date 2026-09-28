@@ -220,6 +220,14 @@ class CasheraService:
             'GET', f'/integration/transactions/by-external-id/{quote(str(external_id), safe="")}'
         )
 
+    async def get_h2h(self, transaction_uuid: str) -> dict[str, Any]:
+        """Реквизиты для своего экрана оплаты: GET /integration/transactions/{uuid}/h2h.
+
+        Ответ: ``amount`` и ``qr`` (строка QR СБП или платёжная ссылка). Пока провайдер
+        не присвоил платежу идентификатор, отвечает 422 — вызывающий повторяет.
+        """
+        return await self._request('GET', f'/integration/transactions/{quote(str(transaction_uuid), safe="")}/h2h')
+
     def verify_webhook(self, api_key_header: str | None, secret_header: str | None) -> bool:
         """Сверяет X-Api-Key и X-Secret вебхука с нашими в постоянном времени.
 

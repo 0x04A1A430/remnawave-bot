@@ -2301,5 +2301,6 @@
   "CASHERA_STATUS_PENDING": "⏳ در انتظار پرداخت",
   "CASHERA_STATUS_FAILED": "❌ پرداخت ناموفق بود",
   "CASHERA_STATUS_EXPIRED": "⌛ مهلت پرداخت به پایان رسید",
-  "CASHERA_STATUS_REFUNDED": "↩️ بازگشت وجه"
+  "CASHERA_STATUS_REFUNDED": "↩️ بازگشت وجه",
+  "CASHERA_H2H_HINT": "کد QR را در برنامه بانک اسکن کنید یا روی «پرداخت» بزنید."
 }

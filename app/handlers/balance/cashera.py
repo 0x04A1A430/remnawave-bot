@@ -269,6 +269,33 @@ async def process_cashera_payment_amount(
         except Exception as delete_error:  # pragma: no cover - диагностический лог
             logger.warning('Не удалось удалить сообщение с запросом суммы Cashera', delete_error=delete_error)
 
+    caption = texts.t(
+        'CASHERA_PAYMENT_CREATED',
+        '💳 <b>Оплата через {name} ({method})</b>\n\n'
+        'Сумма: <b>{amount}</b>\n\n'
+        'Нажмите кнопку ниже для оплаты.\n'
+        'После успешной оплаты баланс будет пополнен автоматически.',
+    ).format(
+        name=settings.get_cashera_display_name_html(),
+        method=method_title,
+        amount=settings.format_price(amount_kopeks),
+    )
+
+    # Свой экран оплаты: QR прямо в чате. Без реквизитов — обычная ссылка ниже.
+    h2h = await PaymentService(message.bot).get_cashera_h2h(result.get('payment_id'), method_code)
+    qr_photo = _render_qr(h2h['qr']) if h2h else None
+    if qr_photo is not None:
+        await message.answer_photo(
+            qr_photo,
+            caption=caption
+            + '\n\n'
+            + texts.t('CASHERA_H2H_HINT', 'Отсканируйте QR-код в приложении банка или нажмите «Оплатить».'),
+            reply_markup=keyboard,
+            parse_mode='HTML',
+        )
+        await state.clear()
+        return
+
     await message.answer(
         texts.t(
             'CASHERA_PAYMENT_CREATED',
@@ -285,6 +312,25 @@ async def process_cashera_payment_amount(
         parse_mode='HTML',
     )
     await state.clear()
+
+
+def _render_qr(payload: str):
+    """PNG с QR для строки СБП/ссылки; None — если не вышло (тогда покажем ссылку)."""
+    try:
+        from io import BytesIO
+
+        import qrcode
+        from aiogram.types import BufferedInputFile
+
+        qr = qrcode.QRCode(version=None, box_size=10, border=4)
+        qr.add_data(payload)
+        qr.make(fit=True)
+        buffer = BytesIO()
+        qr.make_image(fill_color='black', back_color='white').save(buffer, format='PNG')
+        return BufferedInputFile(buffer.getvalue(), filename='cashera_qr.png')
+    except Exception as error:  # pragma: no cover - зависит от окружения
+        logger.warning('Не удалось отрисовать QR Cashera', error=str(error))
+        return None
 
 
 @error_handler

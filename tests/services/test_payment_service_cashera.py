@@ -414,3 +414,54 @@ async def test_client_does_not_retry_validation_errors(monkeypatch):
 
 async def _no_sleep(_seconds: float) -> None:
     return None
+
+
+# --- H2H: свой экран оплаты -------------------------------------------------------
+
+
+class _H2HStub:
+    def __init__(self, responses):
+        self.responses = list(responses)
+        self.calls = 0
+
+    async def get_h2h(self, _uuid):
+        self.calls += 1
+        item = self.responses.pop(0)
+        if isinstance(item, Exception):
+            raise item
+        return item
+
+
+@pytest.mark.asyncio
+async def test_h2h_retries_until_requisites_are_ready(monkeypatch):
+    _enable(monkeypatch, CASHERA_H2H_ENABLED=True)
+    stub = _H2HStub([CasheraAPIError(422, 'not ready'), {'qr': 'https://qr.nspk.ru/AS1', 'amount': 499}])
+    monkeypatch.setattr(cashera_mixin_module, 'cashera_service', stub)
+    monkeypatch.setattr('asyncio.sleep', _no_sleep)
+
+    h2h = await _service().get_cashera_h2h('u-1', 'sbp')
+
+    assert h2h == {'qr': 'https://qr.nspk.ru/AS1', 'amount': 499}
+    assert stub.calls == 2
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ('enabled', 'method'),
+    [(False, 'sbp'), (True, 'mastercard'), (True, 'cryptobot')],
+)
+async def test_h2h_not_requested_when_off_or_unsupported(monkeypatch, enabled, method):
+    """mastercard и cryptobot у Cashera только ссылкой; при выключенной настройке — тоже."""
+    _enable(monkeypatch, CASHERA_H2H_ENABLED=enabled)
+    stub = _H2HStub([{'qr': 'x'}])
+    monkeypatch.setattr(cashera_mixin_module, 'cashera_service', stub)
+
+    assert await _service().get_cashera_h2h('u-1', method) is None
+    assert stub.calls == 0
+
+
+@pytest.mark.asyncio
+async def test_h2h_failure_falls_back_to_link(monkeypatch):
+    _enable(monkeypatch, CASHERA_H2H_ENABLED=True)
+    monkeypatch.setattr(cashera_mixin_module, 'cashera_service', _H2HStub([CasheraAPIError(502, 'provider')]))
+    assert await _service().get_cashera_h2h('u-1', 'card') is None

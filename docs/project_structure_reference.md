@@ -1482,7 +1482,7 @@
   Классы: `CampaignBonusResult`, `AdvertisingCampaignService` (8 методов)
   Функции: нет
 - `app/services/cashera_service.py` — Python-модуль
-  Классы: `CasheraAPIError` (1 методов), `CasheraService` (13 методов)
+  Классы: `CasheraAPIError` (1 методов), `CasheraService` (14 методов)
   Функции: `normalize_payment_url` — В примерах Cashera ``payment_url`` приходит без схемы (``pay.cashera.cash/...``).
 - `app/services/channel_subscription_service.py` — Python-модуль
   Классы: `ChannelSubscriptionService` (16 методов)
@@ -1999,7 +1999,7 @@
   Классы: `AuraPayPaymentMixin` (4 методов)
   Функции: нет
 - `app/services/payment/cashera.py` — Python-модуль
-  Классы: `CasheraPaymentMixin` (6 методов)
+  Классы: `CasheraPaymentMixin` (8 методов)
   Функции: нет
 - `app/services/payment/cispay.py` — Python-модуль
   Классы: `CisPayPaymentMixin` (4 методов)
@@ -4104,7 +4104,7 @@
   Функции: `test_keyboard_passes_icon_custom_emoji_id`, `test_schema_roundtrips_icon_custom_emoji_id`, `test_schema_defaults_to_none_and_rejects_garbage`
 - `tests/handlers/test_cashera_topup_flow.py` — Python-модуль
   Классы: нет
-  Функции: `test_single_button_by_default`, `test_inline_methods_show_one_button_per_method`, `test_prefilled_amount_keeps_method_in_callback`, `test_quick_amounts_resolve_to_cashera_config`, `test_hidden_when_disabled`, `test_several_methods_ask_to_choose`, `test_choosing_a_method_asks_for_amount`, `test_disabled_method_is_refused`
+  Функции: `test_single_button_by_default`, `test_inline_methods_show_one_button_per_method`, `test_prefilled_amount_keeps_method_in_callback`, `test_quick_amounts_resolve_to_cashera_config`, `test_hidden_when_disabled`, `test_several_methods_ask_to_choose`, `test_choosing_a_method_asks_for_amount`, `test_disabled_method_is_refused`, `test_invoice_is_a_qr_photo_when_requisites_are_ready`
 - `tests/handlers/test_daily_bot_resume_traffic_reset.py` — Python-модуль
   Классы: нет
   Функции: `test_bot_resume_resets_traffic_when_enabled` — RESET_TRAFFIC_ON_PAYMENT=true — оплата возобновления обнуляет счётчик и в панели, и у себя., `test_bot_resume_keeps_traffic_when_disabled` — Выключатель выключен — счётчик не трогаем (прежнее поведение)., `test_bot_resume_leaves_daily_reset_to_panel` — Панель обнуляет сама раз в сутки — свой сброс не добавляем, иначе две квоты за день., `test_bot_resume_lifts_panel_limit_after_paid_reset` — Подписка была в лимите трафика: после оплаты со сбросом лимит в панели снимается явно., `test_bot_unpause_without_charge_keeps_traffic` — Снятие своей паузы у активной подписки — не оплата: денег не берём и счётчик не трогаем.
@@ -4623,7 +4623,7 @@
   Функции: `test_every_listed_provider_has_both_predicates` — Список ниже — контракт с create_payment_router, а не украшение., `test_enabled_is_flag_and_configured`, `test_enabled_is_flag_when_credentials_are_present` — С заполненными кредами включение решает только флаг., `test_missing_credential_disables_the_provider` — Убрали любую креду — провайдер не настроен и не включён., `test_tribute_has_a_configured_predicate` — У Tribute нет is_*_enabled, но маршруту нужен тот же признак.
 - `tests/services/test_payment_service_cashera.py` — Python-модуль
   Классы: `StubCashera` (4 методов)
-  Функции: `test_create_sends_spec_payload_and_stores_payment`, `test_create_rejects_disabled_method_and_limits`, `test_blank_secret_means_disabled` — С пустым секретом вебхук подделал бы кто угодно — шлюз считается выключенным., `test_unknown_method_codes_are_dropped`, `test_paid_webhook_credits_once_and_replay_is_ignored`, `test_amount_or_currency_mismatch_is_not_credited`, `test_wrong_currency_is_mismatch`, `test_paid_without_amount_asks_for_retry` — Без подтверждённой суммы не зачисляем и отвечаем 5xx — Cashera повторит., `test_failed_status_is_final`, `test_refund_after_credit_keeps_balance_and_records_status`, `test_foreign_and_test_events_are_acknowledged`, `test_api_check_credits_when_webhook_was_lost`, `test_normalize_payment_url`, `test_verify_webhook`, `test_verify_webhook_fails_closed_without_secret`, `test_client_retries_5xx_and_429_then_succeeds`, `test_client_does_not_retry_validation_errors`
+  Функции: `test_create_sends_spec_payload_and_stores_payment`, `test_create_rejects_disabled_method_and_limits`, `test_blank_secret_means_disabled` — С пустым секретом вебхук подделал бы кто угодно — шлюз считается выключенным., `test_unknown_method_codes_are_dropped`, `test_paid_webhook_credits_once_and_replay_is_ignored`, `test_amount_or_currency_mismatch_is_not_credited`, `test_wrong_currency_is_mismatch`, `test_paid_without_amount_asks_for_retry` — Без подтверждённой суммы не зачисляем и отвечаем 5xx — Cashera повторит., `test_failed_status_is_final`, `test_refund_after_credit_debits_balance_once`, `test_chargeback_after_balance_was_spent_records_shortfall` — Отрицательного баланса нет: списываем сколько есть, недостачу — в платёж и тревогу., `test_foreign_and_test_events_are_acknowledged`, `test_api_check_credits_when_webhook_was_lost`, `test_normalize_payment_url`, `test_verify_webhook`, `test_verify_webhook_fails_closed_without_secret`, `test_client_retries_5xx_and_429_then_succeeds`, `test_client_does_not_retry_validation_errors`, `test_h2h_retries_until_requisites_are_ready`, `test_h2h_not_requested_when_off_or_unsupported` — mastercard и cryptobot у Cashera только ссылкой; при выключенной настройке — тоже., `test_h2h_failure_falls_back_to_link`
 - `tests/services/test_payment_service_cispay.py` — Python-модуль
   Классы: `DummySession` (3 методов), `DummyLocalPayment` (1 методов), `FakeCisPayPayment` (1 методов), `StubCisPayService` (2 методов)
   Функции: `anyio_backend`, `test_create_cispay_payment_success`, `test_create_cispay_payment_sbp_sub_method`, `test_create_cispay_payment_respects_amount_limits`, `test_create_cispay_payment_disabled`, `test_process_cispay_callback_paid_finalizes`, `test_process_cispay_callback_amount_mismatch`, `test_process_cispay_callback_already_paid_is_idempotent`, `test_process_cispay_callback_sticky_terminal_status` — Провайдер не может «починить» отклонённый платёж повторным вебхуком., `test_process_cispay_callback_missing_amount_does_not_credit` — PAID без amount: зачислять нечего сверять — платёж остаётся pending под ретрай., `test_process_cispay_callback_unparseable_amount_is_mismatch`, `test_process_cispay_callback_missing_fields`, `test_process_cispay_callback_non_paid_status_updates`, `test_generic_method_falls_back_to_sbp_when_card_disabled` — SBP-only магазин: генерик-метод обязан слать SBP, иначе cisPay отклонит платёж., `test_is_cispay_enabled_rejects_blank_credentials` — Пустая строка ключа не должна включать шлюз — иначе HMAC вебхука подделывается., `test_verify_webhook_signature_blank_key_fails_closed`, `test_verify_webhook_signature_valid`, `test_verify_webhook_signature_invalid`, `test_verify_webhook_signature_tampered_body`
