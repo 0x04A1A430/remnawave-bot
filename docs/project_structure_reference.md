@@ -3392,6 +3392,9 @@
 - `tests/cabinet/test_info_display_mode_gating.py` — Python-модуль
   Классы: нет
   Функции: `test_visibility_defaults_all_true`, `test_visibility_hides_bot_only_sections`, `test_rules_endpoint_404_when_bot_only`, `test_privacy_endpoint_404_when_bot_only`, `test_offer_endpoint_404_when_bot_only`, `test_recurrent_endpoint_404_when_bot_only`, `test_faq_list_empty_when_bot_only`
+- `tests/cabinet/test_info_documents_language_fallback.py` — Python-модуль
+  Классы: нет
+  Функции: `test_empty_row_falls_back_to_default_language` — Пустая строка на zh (или одни пробелы) не должна подменять собой документ на ru., `test_filled_document_is_returned_as_is` — Заполненный документ на запрошенном языке не трогается., `test_no_text_anywhere_keeps_stub` — Нет текста и на языке по умолчанию — прежнее поведение, встроенная заглушка., `test_rules_without_language_row_use_default_language` — Правил на zh нет — берутся правила ru, а не встроенный текст., `test_rules_with_empty_language_row_use_default_language` — Пустая строка на zh — как и у остальных документов, откат на ru, а не пустой экран., `test_rules_in_requested_language_are_kept`, `test_rules_fall_back_to_built_in_stub_when_nothing_is_filled`
 - `tests/cabinet/test_info_service.py` — Python-модуль
   Классы: нет
   Функции: `branded`, `test_contact_settings_exist` — Поля должны быть в модели, иначе .env их не задаст, а ручка снова врёт., `test_name_and_description_come_from_branding` — Источник тот же, что у мини-аппа — сервис не называется в двух местах по-разному., `test_unknown_and_dirty_language_codes_resolve` — Локали без брендинга берут дефолт, а хвост региона/пробелы не мешают., `test_contacts_are_returned`, `test_blank_contacts_are_null_not_empty_string` — Пустая переменная в .env — это «контакта нет», как и до правки., `test_name_is_never_the_old_hardcoded_stub` — Даже с пустым брендингом имя берётся из фолбэка брендинга, а не из ручки.
