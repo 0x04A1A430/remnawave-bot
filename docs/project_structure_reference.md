@@ -630,6 +630,9 @@
 - `app/database/database.py` — Python-модуль
   Классы: `DatabaseManager` (4 методов), `BatchOperations` (2 методов)
   Функции: `with_db_retry` — Декоратор для автоматического retry при сбоях подключения к БД., `execute_with_retry` — Выполнение SQL с retry логикой., `get_db` — Стандартная dependency для FastAPI, `get_db_read_only` — Read-only dependency для тяжелых SELECT запросов, `close_db` — Корректное закрытие всех соединений, `sync_postgres_sequences` — Ensure PostgreSQL sequences match the current max values after restores., `get_pool_metrics` — Детальные метрики пула для Prometheus/Grafana
+- `app/database/errors.py` — Python-модуль
+  Классы: нет
+  Функции: `is_missing_greenlet` — Ленивая подгрузка вне greenlet: обращение к незагруженному атрибуту в async-коде.
 - `app/database/local_date.py` — Python-модуль
   Классы: нет
   Функции: `local_date_expr` — SQL-выражение «дата ``column`` в зоне ``tz``» (по умолчанию settings.TIMEZONE)., `as_date` — Значение ``local_date_expr`` из строки результата как ``date``.
@@ -3346,7 +3349,7 @@
   Функции: `db`, `test_change_tariff_preserves_remaining_period` — A 5-days-left subscription keeps its 5 days — tariff swap must not refill to 30., `test_change_tariff_does_not_extend_almost_expired_sub` — An almost-expired sub stays almost-expired after a tariff change., `test_change_tariff_keeps_trial_a_trial` — Bug #629889: changing a TRIAL's tariff must NOT convert it to paid.
 - `tests/cabinet/test_bulk_delete_subscription_lazy_user.py` — Python-модуль
   Классы: нет
-  Функции: `test_known_subscriptions_falls_back_to_target` — Коллекция недоступна → берём целевую подписку, а не падаем., `test_known_subscriptions_uses_loaded_collection` — Коллекция загружена → отдаём её целиком, запасная не нужна., `test_known_subscriptions_keeps_loaded_empty_list_empty` — Загруженный пустой список — это «подписок нет», а не пробел в данных., `test_active_paid_skip_reports_target_without_collection` — Ветка «активная платная» тоже читает подписки — и тоже не должна падать., `test_execute_for_user_survives_unloaded_collection` — Досборка подписок в _execute_for_user не должна ронять действие., `test_delete_subscription_survives_unloaded_collection` — Удаление истёкшего триала доходит до конца, а не падает на подписках.
+  Функции: `test_known_subscriptions_falls_back_to_target` — Коллекция недоступна → берём целевую подписку, а не падаем., `test_known_subscriptions_uses_loaded_collection` — Коллекция загружена → отдаём её целиком, запасная не нужна., `test_known_subscriptions_keeps_loaded_empty_list_empty` — Загруженный пустой список — это «подписок нет», а не пробел в данных., `test_active_paid_skip_reports_target_without_collection` — Ветка «активная платная» тоже читает подписки — и тоже не должна падать., `test_execute_for_user_survives_unloaded_collection` — Досборка подписок в _execute_for_user не должна ронять действие., `test_delete_subscription_survives_unloaded_collection` — Удаление истёкшего триала доходит до конца, а не падает на подписках., `test_known_subscriptions_falls_back_when_sqlalchemy_21_wraps_missing_greenlet`
 - `tests/cabinet/test_cashera_recurrent_routes.py` — Python-модуль
   Классы: нет
   Функции: `user`, `test_enable_gated_before_touching_db`, `test_get_gated_before_touching_db`, `test_cancel_works_even_when_gate_off` — Отмена — операция безопасности, флагом не гейтится., `test_enable_rejects_trial_subscription`, `test_enable_surfaces_missing_price_reason` — Нет цены за период — причина доходит до пользователя., `test_enable_returns_payment_url`, `test_get_returns_none_status_without_binding`, `test_get_returns_binding_state`, `test_purchase_gated_and_maps_errors` — Покупка привязкой: гейт фичи, отказы доносятся как 400., `test_purchase_returns_payment_url_and_subscription`
@@ -3738,6 +3741,9 @@
 - `tests/database/test_dpichecker_actions_postgres.py` — Python-модуль
   Классы: нет
   Функции: `test_new_action_gets_unique_key_and_submitting`, `test_found_by_kind_and_remote_id`, `test_delivery_is_claimed_once`, `test_counts_per_filter_follow_mine` — Счётчики у фильтров истории — по видам и типам проверок, с учётом «только мои»., `test_admin_names_for_history`, `test_list_filters_by_kind_type_and_admin`, `test_same_remote_id_allowed_across_kinds_but_not_within`
+- `tests/database/test_errors.py` — Python-модуль
+  Классы: нет
+  Функции: `test_bare_missing_greenlet_sqlalchemy_2_0`, `test_missing_greenlet_wrapped_in_statement_error_sqlalchemy_2_1`, `test_other_database_errors_are_not_missing_greenlet`
 - `tests/database/test_guest_purchase_gift_idempotency.py` — Python-модуль
   Классы: нет
   Функции: `test_guest_purchase_model_has_idempotency_key_column` — GuestPurchase model must have idempotency_key column and ux_guest_purchases_idempotency_key index., `test_multiple_null_idempotency_keys_are_allowed` — Multiple legacy guest purchases with NULL idempotency_key must be allowed., `test_duplicate_non_null_idempotency_key_is_rejected` — Duplicate non-null idempotency_key must trigger uniqueness violation., `test_migration_0107_upgrade_downgrade_upgrade_lifecycle` — Verify revision 0107 upgrade, downgrade, and upgrade on a SQLite database with legacy null rows.
@@ -5065,7 +5071,7 @@
   Функции: `test_start_background_is_idempotent_and_stop_cancels`, `test_failed_background_is_restarted_on_next_start`, `test_stop_without_start_is_noop`
 - `tests/services/reachability/test_batches.py` — Python-модуль
   Классы: нет
-  Функции: `test_batch_crud_roundtrip`, `test_jobs_for_batch_are_ordered_and_carry_legs`, `test_chunk_targets_by_ten`, `test_estimate_minutes_grows_with_rounds_and_units`, `test_batch_status_rules`, `test_batch_cost_and_done_targets`, `make_batch`, `test_batch_driver_runs_at_most_three_jobs_at_once`, `test_cancel_batch_stops_pending_jobs_and_finishes_cancelled`, `test_sweep_resumes_unfinished_batch`
+  Функции: `test_batch_crud_roundtrip`, `test_jobs_for_batch_are_ordered_and_carry_legs`, `test_chunk_targets_by_ten`, `test_estimate_minutes_grows_with_rounds_and_units`, `test_batch_status_rules`, `test_batch_cost_and_done_targets`, `make_batch`, `test_batch_driver_runs_at_most_three_jobs_at_once`, `test_cancel_batch_stops_pending_jobs_and_finishes_cancelled`, `test_sweep_resumes_unfinished_batch`, `test_dispatch_does_not_respawn_pending_job_whose_task_is_still_running` — Таск уже запущен, но ещё не успел записать running — второй запуск дал бы двойную платную пробу.
 - `tests/services/reachability/test_batches_service.py` — Python-модуль
   Классы: `ManyHostsPanel` (1 методов)
   Функции: `payload`, `test_preview_batch_sums_chunks_and_estimates_time`, `test_preview_batch_rejects_empty_and_oversized_scope`, `test_create_batch_makes_one_job_per_chunk_and_spawns_driver`, `test_create_batch_refuses_when_balance_is_short`, `test_cancel_batch_before_start_finishes_it_cancelled`
