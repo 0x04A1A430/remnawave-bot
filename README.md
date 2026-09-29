@@ -8,7 +8,7 @@
 
 Принимает оплату, выдаёт подписки, управляет пользователями — пока вы спите.
 
-[![Python 3.13+](https://img.shields.io/badge/Python-3.13+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
+[![Python 3.14+](https://img.shields.io/badge/Python-3.14+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15+-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)](https://postgresql.org)
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://docs.bedolagam.ru/getting-started/docker-deployment)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
@@ -296,15 +296,20 @@ docker compose up -d
 
 📖 Подробнее: **[Развёртывание →](https://docs.bedolagam.ru/getting-started/docker-deployment)** · **[Переменные окружения →](https://docs.bedolagam.ru/getting-started/environment)**
 
+> [!IMPORTANT]
+> **Обновляетесь с версии на PostgreSQL 15?** После `git pull` выполните `make pg-upgrade` —
+> скрипт сделает резервную копию и перенесёт базу на PostgreSQL 18 без потерь.
+> Подробно: [docs/postgresql-18-upgrade.md](docs/postgresql-18-upgrade.md)
+
 ---
 
 ## 🏗 Стек
 
 | | Компонент | Технология |
 |:---:|:---|:---|
-| 🐍 | Язык | Python 3.13, полностью async |
+| 🐍 | Язык | Python 3.14, полностью async |
 | 🤖 | Telegram | aiogram 3.x |
-| 🗄 | База данных | PostgreSQL + SQLAlchemy 2.x + Alembic |
+| 🗄 | База данных | PostgreSQL 18 + SQLAlchemy 2.x + Alembic |
 | 🔴 | Кэш/очереди | Redis |
 | ⚡ | Web-сервер | FastAPI (webhook, платежи, Cabinet API) |
 | 📝 | Логирование | structlog |

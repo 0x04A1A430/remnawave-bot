@@ -25,6 +25,7 @@
 - `alembic.ini` — файл
 - `app/`
 - `assets/`
+- `docker/`
 - `docker-compose.local.yml` — файл
 - `docker-compose.yml` — файл
 - `docs/`
@@ -71,6 +72,7 @@
 - `.github/workflows/docker-hub.yml` — файл
 - `.github/workflows/docker-registry.yml` — файл
 - `.github/workflows/lint.yml` — файл
+- `.github/workflows/pg-upgrade.yml` — файл
 - `.github/workflows/release-please.yml` — файл
 - `.github/workflows/release-pr-guard.yml` — файл
 - `.github/workflows/release.yml` — файл
@@ -630,6 +632,9 @@
 - `app/database/database.py` — Python-модуль
   Классы: `DatabaseManager` (4 методов), `BatchOperations` (2 методов)
   Функции: `with_db_retry` — Декоратор для автоматического retry при сбоях подключения к БД., `execute_with_retry` — Выполнение SQL с retry логикой., `get_db` — Стандартная dependency для FastAPI, `get_db_read_only` — Read-only dependency для тяжелых SELECT запросов, `close_db` — Корректное закрытие всех соединений, `sync_postgres_sequences` — Ensure PostgreSQL sequences match the current max values after restores., `get_pool_metrics` — Детальные метрики пула для Prometheus/Grafana
+- `app/database/errors.py` — Python-модуль
+  Классы: нет
+  Функции: `is_missing_greenlet` — Ленивая подгрузка вне greenlet: обращение к незагруженному атрибуту в async-коде.
 - `app/database/local_date.py` — Python-модуль
   Классы: нет
   Функции: `local_date_expr` — SQL-выражение «дата ``column`` в зоне ``tz``» (по умолчанию settings.TIMEZONE)., `as_date` — Значение ``local_date_expr`` из строки результата как ``date``.
@@ -1380,7 +1385,7 @@
 - `app/localization/locales/`
 - `app/localization/texts.py` — Python-модуль
   Классы: `Texts` (9 методов)
-  Функции: `get_texts`, `get_rules_from_db`, `get_privacy_policy`, `get_rules_sync`, `get_rules`, `refresh_rules_cache`, `clear_rules_cache`, `reload_locales`
+  Функции: `get_texts`, `get_rules_from_db`, `get_privacy_policy`, `get_default_rules` — Правила из локали — когда в базе их нет или они пустые., `get_rules_sync`, `get_rules`, `refresh_rules_cache`, `clear_rules_cache`, `reload_locales`
 
 #### app/localization/default_locales
 
@@ -2643,6 +2648,14 @@
 - `assets/bedolaga_app3.svg` — файл
 - `assets/logo2.svg` — файл
 
+## docker
+
+- `docker/postgres/`
+
+### docker/postgres
+
+- `docker/postgres/pg-upgrade-guard.sh` — файл
+
 ## docs
 
 - `docs/abuse-api.md` — файл
@@ -2657,6 +2670,7 @@
 - `docs/mobile-support-websocket-v1.md` — файл
 - `docs/payments-payer-data.md` — файл
 - `docs/persistent_cart_system.md` — файл
+- `docs/postgresql-18-upgrade.md` — файл
 - `docs/project_structure_reference.md` — файл
 - `docs/referral_program_setting.md` — файл
 - `docs/web-admin-integration-guide.md` — файл
@@ -3088,6 +3102,7 @@
 - `scripts/generate_structure_reference.py` — Python-модуль
   Классы: нет
   Функции: `tracked_paths` — Файлы проекта: отслеживаемые плюс новые, которые git не игнорирует., `describe_module` — Строки «Классы:» и «Функции:» для модуля., `render_entries`, `render`, `build`, `main`
+- `scripts/pg-upgrade.sh` — файл
 
 ## tests
 
@@ -3110,6 +3125,9 @@
 - `tests/middlewares/`
 - `tests/migrations/`
 - `tests/services/`
+- `tests/test_compose_postgres_service.py` — Python-модуль
+  Классы: нет
+  Функции: `test_postgres_18_with_new_volume_at_the_18_mount_point`, `test_guard_is_the_entrypoint_and_sees_the_old_volume_read_only`, `test_compose_files_agree_on_the_postgres_service`, `test_initdb_args_and_healthcheck_preserved`, `guard_env` — Окружение как в контейнере: PGDATA нового кластера, старый том, подставной entrypoint., `test_guard_starts_a_fresh_install`, `test_guard_refuses_empty_18_while_15_data_exists`, `test_guard_starts_after_migration_even_if_old_volume_remains`
 - `tests/test_config_languages.py` — Python-модуль
   Классы: нет
   Функции: `test_available_languages_default_contains_fa`, `test_available_languages_normalizes_and_deduplicates`
@@ -3164,6 +3182,9 @@
 - `tests/test_no_undefined_names.py` — Python-модуль
   Классы: нет
   Функции: `test_no_new_undefined_names`, `test_baseline_does_not_rot` — Исправленное имя обязано выпадать из базы, иначе она копит ложь.
+- `tests/test_pg_upgrade_prompt.py` — Python-модуль
+  Классы: нет
+  Функции: `sandbox`, `test_y_with_crlf_enter_is_accepted`, `test_russian_da_is_accepted`, `test_no_cancels_without_touching_anything`, `test_without_terminal_requires_yes`
 - `tests/test_pricing_engine.py` — Python-модуль
   Классы: `TestApplyDiscount` (6 методов), `TestStackedDiscounts` (5 методов), `TestPeriodDaysValidation` (3 методов), `TestCalculateServersPrice` (8 методов), `TestCalculateTrafficPrice` (5 методов), `TestCalculateRenewalPriceTariffMode` (7 методов), `TestCalculateRenewalPriceClassicMode` (10 методов), `TestServerPromoGroupFiltering` (2 методов), `TestFromPayloadRoundTrip` (1 методов), `TestFromPayloadLegacyRoundTrip` (1 методов), `TestOriginalPriceIdentity` (3 методов)
   Функции: `test_renewal_pricing_is_frozen`
@@ -3346,7 +3367,7 @@
   Функции: `db`, `test_change_tariff_preserves_remaining_period` — A 5-days-left subscription keeps its 5 days — tariff swap must not refill to 30., `test_change_tariff_does_not_extend_almost_expired_sub` — An almost-expired sub stays almost-expired after a tariff change., `test_change_tariff_keeps_trial_a_trial` — Bug #629889: changing a TRIAL's tariff must NOT convert it to paid.
 - `tests/cabinet/test_bulk_delete_subscription_lazy_user.py` — Python-модуль
   Классы: нет
-  Функции: `test_known_subscriptions_falls_back_to_target` — Коллекция недоступна → берём целевую подписку, а не падаем., `test_known_subscriptions_uses_loaded_collection` — Коллекция загружена → отдаём её целиком, запасная не нужна., `test_known_subscriptions_keeps_loaded_empty_list_empty` — Загруженный пустой список — это «подписок нет», а не пробел в данных., `test_active_paid_skip_reports_target_without_collection` — Ветка «активная платная» тоже читает подписки — и тоже не должна падать., `test_execute_for_user_survives_unloaded_collection` — Досборка подписок в _execute_for_user не должна ронять действие., `test_delete_subscription_survives_unloaded_collection` — Удаление истёкшего триала доходит до конца, а не падает на подписках.
+  Функции: `test_known_subscriptions_falls_back_to_target` — Коллекция недоступна → берём целевую подписку, а не падаем., `test_known_subscriptions_uses_loaded_collection` — Коллекция загружена → отдаём её целиком, запасная не нужна., `test_known_subscriptions_keeps_loaded_empty_list_empty` — Загруженный пустой список — это «подписок нет», а не пробел в данных., `test_active_paid_skip_reports_target_without_collection` — Ветка «активная платная» тоже читает подписки — и тоже не должна падать., `test_execute_for_user_survives_unloaded_collection` — Досборка подписок в _execute_for_user не должна ронять действие., `test_delete_subscription_survives_unloaded_collection` — Удаление истёкшего триала доходит до конца, а не падает на подписках., `test_known_subscriptions_falls_back_when_sqlalchemy_21_wraps_missing_greenlet`
 - `tests/cabinet/test_cashera_recurrent_routes.py` — Python-модуль
   Классы: нет
   Функции: `user`, `test_enable_gated_before_touching_db`, `test_get_gated_before_touching_db`, `test_cancel_works_even_when_gate_off` — Отмена — операция безопасности, флагом не гейтится., `test_enable_rejects_trial_subscription`, `test_enable_surfaces_missing_price_reason` — Нет цены за период — причина доходит до пользователя., `test_enable_returns_payment_url`, `test_get_returns_none_status_without_binding`, `test_get_returns_binding_state`, `test_purchase_gated_and_maps_errors` — Покупка привязкой: гейт фичи, отказы доносятся как 400., `test_purchase_returns_payment_url_and_subscription`
@@ -3738,6 +3759,9 @@
 - `tests/database/test_dpichecker_actions_postgres.py` — Python-модуль
   Классы: нет
   Функции: `test_new_action_gets_unique_key_and_submitting`, `test_found_by_kind_and_remote_id`, `test_delivery_is_claimed_once`, `test_counts_per_filter_follow_mine` — Счётчики у фильтров истории — по видам и типам проверок, с учётом «только мои»., `test_admin_names_for_history`, `test_list_filters_by_kind_type_and_admin`, `test_same_remote_id_allowed_across_kinds_but_not_within`
+- `tests/database/test_errors.py` — Python-модуль
+  Классы: нет
+  Функции: `test_bare_missing_greenlet_sqlalchemy_2_0`, `test_missing_greenlet_wrapped_in_statement_error_sqlalchemy_2_1`, `test_other_database_errors_are_not_missing_greenlet`
 - `tests/database/test_guest_purchase_gift_idempotency.py` — Python-модуль
   Классы: нет
   Функции: `test_guest_purchase_model_has_idempotency_key_column` — GuestPurchase model must have idempotency_key column and ux_guest_purchases_idempotency_key index., `test_multiple_null_idempotency_keys_are_allowed` — Multiple legacy guest purchases with NULL idempotency_key must be allowed., `test_duplicate_non_null_idempotency_key_is_rejected` — Duplicate non-null idempotency_key must trigger uniqueness violation., `test_migration_0107_upgrade_downgrade_upgrade_lifecycle` — Verify revision 0107 upgrade, downgrade, and upgrade on a SQLite database with legacy null rows.
@@ -4161,7 +4185,7 @@
   Функции: `test_option_map_covers_all_payment_methods`, `test_available_options_without_int`, `test_available_options_with_int`, `test_int_disabled_mid_flow_rejects_and_clears_state`
 - `tests/handlers/test_page_html_is_telegram_safe.py` — Python-модуль
   Классы: нет
-  Функции: `visible` — Все инфо-разделы показываются в боте., `test_faq_page_drops_unsupported_markup`, `test_privacy_policy_drops_unsupported_markup`, `test_public_offer_drops_unsupported_markup`, `test_service_rules_drop_unsupported_markup`, `test_allowed_formatting_survives` — Преобразование не должно съедать разметку, ради которой её и писали., `test_long_page_is_split_without_breaking_a_tag` — Нарезка идёт по преобразованному тексту, иначе тег рвётся посередине., `test_admin_privacy_preview_drops_unsupported_markup` — Экран «Текущий текст политики» показывает то же, что увидит пользователь., `test_admin_offer_preview_drops_unsupported_markup`
+  Функции: `visible` — Все инфо-разделы показываются в боте., `test_faq_page_drops_unsupported_markup`, `test_privacy_policy_drops_unsupported_markup`, `test_public_offer_drops_unsupported_markup`, `test_service_rules_drop_unsupported_markup`, `test_allowed_formatting_survives` — Преобразование не должно съедать разметку, ради которой её и писали., `test_long_page_is_split_without_breaking_a_tag` — Нарезка идёт по преобразованному тексту, иначе тег рвётся посередине., `test_admin_privacy_preview_drops_unsupported_markup` — Экран «Текущий текст политики» показывает то же, что увидит пользователь., `test_admin_offer_preview_drops_unsupported_markup`, `test_registration_privacy_policy_drops_unsupported_markup`, `test_registration_privacy_policy_of_bare_tags_falls_back_to_default`, `test_registration_rules_drop_unsupported_markup`, `test_registration_rules_of_bare_tags_fall_back_to_default`, `test_registration_sends_rules_only_through_the_converter` — Любая новая отправка правил из start.py обязана идти через _rules_for_telegram.
 - `tests/handlers/test_platega_sbp_status_text.py` — Python-модуль
   Классы: нет
   Функции: `test_none_record_means_not_connected`, `test_pending_status`, `test_active_status_with_next_charge_at`, `test_active_status_without_next_charge_at_shows_placeholder` — ACTIVE достижим и без next_charge_at — например, сразу после коллбека, `test_past_due_status`, `test_cancelled_status`, `test_failed_status`, `test_unknown_status_falls_back_to_raw_value` — Защитная ветка: неизвестный статус не должен молча теряться (как и в
@@ -5065,7 +5089,7 @@
   Функции: `test_start_background_is_idempotent_and_stop_cancels`, `test_failed_background_is_restarted_on_next_start`, `test_stop_without_start_is_noop`
 - `tests/services/reachability/test_batches.py` — Python-модуль
   Классы: нет
-  Функции: `test_batch_crud_roundtrip`, `test_jobs_for_batch_are_ordered_and_carry_legs`, `test_chunk_targets_by_ten`, `test_estimate_minutes_grows_with_rounds_and_units`, `test_batch_status_rules`, `test_batch_cost_and_done_targets`, `make_batch`, `test_batch_driver_runs_at_most_three_jobs_at_once`, `test_cancel_batch_stops_pending_jobs_and_finishes_cancelled`, `test_sweep_resumes_unfinished_batch`
+  Функции: `test_batch_crud_roundtrip`, `test_jobs_for_batch_are_ordered_and_carry_legs`, `test_chunk_targets_by_ten`, `test_estimate_minutes_grows_with_rounds_and_units`, `test_batch_status_rules`, `test_batch_cost_and_done_targets`, `make_batch`, `test_batch_driver_runs_at_most_three_jobs_at_once`, `test_cancel_batch_stops_pending_jobs_and_finishes_cancelled`, `test_sweep_resumes_unfinished_batch`, `test_dispatch_does_not_respawn_pending_job_whose_task_is_still_running` — Таск уже запущен, но ещё не успел записать running — второй запуск дал бы двойную платную пробу.
 - `tests/services/reachability/test_batches_service.py` — Python-модуль
   Классы: `ManyHostsPanel` (1 методов)
   Функции: `payload`, `test_preview_batch_sums_chunks_and_estimates_time`, `test_preview_batch_rejects_empty_and_oversized_scope`, `test_create_batch_makes_one_job_per_chunk_and_spawns_driver`, `test_create_batch_refuses_when_balance_is_short`, `test_cancel_batch_before_start_finishes_it_cancelled`
@@ -5242,7 +5266,7 @@
   Функции: `test_expected_delivery_refusals_are_unreachable`, `test_other_errors_are_not_unreachable`, `test_reason_is_plain_russian`
 - `tests/utils/test_telegram_html.py` — Python-модуль
   Классы: нет
-  Функции: `test_keeps_allowed_inline_tags`, `test_maps_tag_aliases_to_telegram_tags`, `test_strips_unsupported_tags_but_keeps_text`, `test_drops_script_and_iframe_content`, `test_paragraphs_become_blank_lines`, `test_br_becomes_newline`, `test_unordered_list_items_get_bullets`, `test_ordered_list_items_get_numbers`, `test_heading_becomes_bold_block`, `test_link_kept_only_with_http_href`, `test_oversized_href_drops_anchor_but_keeps_text`, `test_misnested_skip_closers_recover`, `test_text_entities_are_escaped`, `test_unclosed_tags_are_closed`, `test_blockquote_and_code_preserved`, `test_split_short_text_single_chunk`, `test_split_empty_returns_empty_list`, `test_split_respects_paragraph_boundaries`, `test_split_hard_splits_oversized_paragraph`, `test_split_closes_open_tags_in_each_chunk`, `test_split_never_exceeds_telegram_hard_limit`, `test_split_link_text_spanning_chunks_stays_within_hard_limit`, `test_hard_split_backs_off_incomplete_entity`, `test_faq_content_rendered_as_question_blocks`, `test_faq_content_invalid_json_returns_empty`
+  Функции: `test_keeps_allowed_inline_tags`, `test_maps_tag_aliases_to_telegram_tags`, `test_strips_unsupported_tags_but_keeps_text`, `test_drops_script_and_iframe_content`, `test_paragraphs_become_blank_lines`, `test_br_becomes_newline`, `test_unordered_list_items_get_bullets`, `test_ordered_list_items_get_numbers`, `test_heading_becomes_bold_block`, `test_link_kept_only_with_http_href`, `test_oversized_href_drops_anchor_but_keeps_text`, `test_misnested_skip_closers_recover`, `test_text_entities_are_escaped`, `test_unclosed_tags_are_closed`, `test_blockquote_and_code_preserved`, `test_split_short_text_single_chunk`, `test_split_empty_returns_empty_list`, `test_split_respects_paragraph_boundaries`, `test_split_hard_splits_oversized_paragraph`, `test_split_closes_open_tags_in_each_chunk`, `test_split_never_exceeds_telegram_hard_limit`, `test_split_link_text_spanning_chunks_stays_within_hard_limit`, `test_hard_split_backs_off_incomplete_entity`, `test_faq_content_rendered_as_question_blocks`, `test_faq_content_invalid_json_returns_empty`, `test_empty_heading_and_paragraphs_leave_no_empty_tags`
 - `tests/utils/test_text_search_case_insensitive.py` — Python-модуль
   Классы: нет
   Функции: `test_sqlite_lower_really_is_ascii_only` — Фиксируем причину бага: без наших вариантов ILIKE по кириллице не сработал бы., `test_ascii_term_stays_a_single_pattern` — Для ASCII ILIKE справляется сам — лишние OR только замедлили бы запрос., `test_cyrillic_term_expands_to_case_variants`, `test_variants_are_deduplicated_for_single_case_terms`, `test_search_finds_capitalized_name_in_any_case` — Ровно репорт: имя записано «Позитив», ищут как угодно — находиться должно всегда., `test_search_finds_any_stored_case`, `test_multiword_name_is_found_in_lowercase`, `test_ascii_search_still_works` — Латиница не должна пострадать от изменения., `test_search_still_filters_out_non_matches` — Регистронезависимость не должна превратить поиск в «находит всё»., `test_telegram_id_search_unaffected`
