@@ -296,6 +296,11 @@ docker compose up -d
 
 📖 Подробнее: **[Развёртывание →](https://docs.bedolagam.ru/getting-started/docker-deployment)** · **[Переменные окружения →](https://docs.bedolagam.ru/getting-started/environment)**
 
+> [!IMPORTANT]
+> **Обновляетесь с версии на PostgreSQL 15?** После `git pull` выполните `make pg-upgrade` —
+> скрипт сделает резервную копию и перенесёт базу на PostgreSQL 18 без потерь.
+> Подробно: [docs/postgresql-18-upgrade.md](docs/postgresql-18-upgrade.md)
+
 ---
 
 ## 🏗 Стек
@@ -304,7 +309,7 @@ docker compose up -d
 |:---:|:---|:---|
 | 🐍 | Язык | Python 3.14, полностью async |
 | 🤖 | Telegram | aiogram 3.x |
-| 🗄 | База данных | PostgreSQL + SQLAlchemy 2.x + Alembic |
+| 🗄 | База данных | PostgreSQL 18 + SQLAlchemy 2.x + Alembic |
 | 🔴 | Кэш/очереди | Redis |
 | ⚡ | Web-сервер | FastAPI (webhook, платежи, Cabinet API) |
 | 📝 | Логирование | structlog |

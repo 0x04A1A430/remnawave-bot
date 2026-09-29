@@ -14,18 +14,17 @@ jobs:
     name: pytest (PostgreSQL ${{ matrix.postgres }})
     runs-on: ubuntu-latest
 
-    # 15 — тот же образ, что и в docker-compose.yml: на нём весь прогон.
-    # 17 и 18 — задел под переход (15 поддерживается до ноября 2027): от версии
-    # сервера зависят только тесты с меткой postgres, их и гоняем.
+    # 18 — тот же образ, что и в docker-compose.yml: на нём весь прогон.
+    # 15 — версия до перехода (make pg-upgrade): пока пользователи могут на неё
+    # откатиться, гоняем на ней тесты с меткой postgres — только они зависят
+    # от версии сервера.
     strategy:
       fail-fast: false
       matrix:
         include:
-          - postgres: '15'
-            full_suite: true
-          - postgres: '17'
-            full_suite: false
           - postgres: '18'
+            full_suite: true
+          - postgres: '15'
             full_suite: false
 
     # Проверки блокировок строк, ограничений VARCHAR и TIMESTAMPTZ имеют смысл

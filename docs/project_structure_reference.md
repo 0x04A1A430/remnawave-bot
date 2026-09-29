@@ -25,6 +25,7 @@
 - `alembic.ini` — файл
 - `app/`
 - `assets/`
+- `docker/`
 - `docker-compose.local.yml` — файл
 - `docker-compose.yml` — файл
 - `docs/`
@@ -71,6 +72,7 @@
 - `.github/workflows/docker-hub.yml` — файл
 - `.github/workflows/docker-registry.yml` — файл
 - `.github/workflows/lint.yml` — файл
+- `.github/workflows/pg-upgrade.yml` — файл
 - `.github/workflows/release-please.yml` — файл
 - `.github/workflows/release-pr-guard.yml` — файл
 - `.github/workflows/release.yml` — файл
@@ -2646,6 +2648,14 @@
 - `assets/bedolaga_app3.svg` — файл
 - `assets/logo2.svg` — файл
 
+## docker
+
+- `docker/postgres/`
+
+### docker/postgres
+
+- `docker/postgres/pg-upgrade-guard.sh` — файл
+
 ## docs
 
 - `docs/abuse-api.md` — файл
@@ -2660,6 +2670,7 @@
 - `docs/mobile-support-websocket-v1.md` — файл
 - `docs/payments-payer-data.md` — файл
 - `docs/persistent_cart_system.md` — файл
+- `docs/postgresql-18-upgrade.md` — файл
 - `docs/project_structure_reference.md` — файл
 - `docs/referral_program_setting.md` — файл
 - `docs/web-admin-integration-guide.md` — файл
@@ -3091,6 +3102,7 @@
 - `scripts/generate_structure_reference.py` — Python-модуль
   Классы: нет
   Функции: `tracked_paths` — Файлы проекта: отслеживаемые плюс новые, которые git не игнорирует., `describe_module` — Строки «Классы:» и «Функции:» для модуля., `render_entries`, `render`, `build`, `main`
+- `scripts/pg-upgrade.sh` — файл
 
 ## tests
 
@@ -3113,6 +3125,9 @@
 - `tests/middlewares/`
 - `tests/migrations/`
 - `tests/services/`
+- `tests/test_compose_postgres_service.py` — Python-модуль
+  Классы: нет
+  Функции: `test_postgres_18_with_new_volume_at_the_18_mount_point`, `test_guard_is_the_entrypoint_and_sees_the_old_volume_read_only`, `test_compose_files_agree_on_the_postgres_service`, `test_initdb_args_and_healthcheck_preserved`, `guard_env` — Окружение как в контейнере: PGDATA нового кластера, старый том, подставной entrypoint., `test_guard_starts_a_fresh_install`, `test_guard_refuses_empty_18_while_15_data_exists`, `test_guard_starts_after_migration_even_if_old_volume_remains`
 - `tests/test_config_languages.py` — Python-модуль
   Классы: нет
   Функции: `test_available_languages_default_contains_fa`, `test_available_languages_normalizes_and_deduplicates`
