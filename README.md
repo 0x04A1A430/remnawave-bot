@@ -8,7 +8,7 @@
 
 Принимает оплату, выдаёт подписки, управляет пользователями — пока вы спите.
 
-[![Python 3.13+](https://img.shields.io/badge/Python-3.13+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
+[![Python 3.14+](https://img.shields.io/badge/Python-3.14+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15+-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)](https://postgresql.org)
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://docs.bedolagam.ru/getting-started/docker-deployment)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
@@ -302,7 +302,7 @@ docker compose up -d
 
 | | Компонент | Технология |
 |:---:|:---|:---|
-| 🐍 | Язык | Python 3.13, полностью async |
+| 🐍 | Язык | Python 3.14, полностью async |
 | 🤖 | Telegram | aiogram 3.x |
 | 🗄 | База данных | PostgreSQL + SQLAlchemy 2.x + Alembic |
 | 🔴 | Кэш/очереди | Redis |
