@@ -389,8 +389,10 @@ server_version="$(docker exec "$db_container" psql -U "$POSTGRES_USER" -d postgr
 info "PostgreSQL ${server_version}, данные совпадают с исходными"
 
 if [ "$START_BOT" -eq 1 ]; then
-	log 'Запускаю бота'
-	docker compose up -d >/dev/null
+	# Скрипт запускают сразу после git pull: без --build бот поднялся бы на образе
+	# со старым кодом.
+	log 'Собираю и запускаю бота'
+	docker compose up -d --build || die 'База перенесена, но бот не запустился — смотрите вывод выше и «docker compose logs bot».'
 fi
 
 cat <<EOF
