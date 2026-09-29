@@ -3182,6 +3182,9 @@
 - `tests/test_no_undefined_names.py` — Python-модуль
   Классы: нет
   Функции: `test_no_new_undefined_names`, `test_baseline_does_not_rot` — Исправленное имя обязано выпадать из базы, иначе она копит ложь.
+- `tests/test_pg_upgrade_prompt.py` — Python-модуль
+  Классы: нет
+  Функции: `sandbox`, `test_y_with_crlf_enter_is_accepted`, `test_russian_da_is_accepted`, `test_no_cancels_without_touching_anything`, `test_without_terminal_requires_yes`
 - `tests/test_pricing_engine.py` — Python-модуль
   Классы: `TestApplyDiscount` (6 методов), `TestStackedDiscounts` (5 методов), `TestPeriodDaysValidation` (3 методов), `TestCalculateServersPrice` (8 методов), `TestCalculateTrafficPrice` (5 методов), `TestCalculateRenewalPriceTariffMode` (7 методов), `TestCalculateRenewalPriceClassicMode` (10 методов), `TestServerPromoGroupFiltering` (2 методов), `TestFromPayloadRoundTrip` (1 методов), `TestFromPayloadLegacyRoundTrip` (1 методов), `TestOriginalPriceIdentity` (3 методов)
   Функции: `test_renewal_pricing_is_frozen`

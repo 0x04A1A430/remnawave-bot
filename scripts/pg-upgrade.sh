@@ -55,6 +55,15 @@ while [ $# -gt 0 ]; do
 	shift
 done
 
+# Ответ на подтверждение читается прямо из терминала, а у самого скрипта stdin
+# отвязан от него: docker compose run и docker exec подключаются к stdin и сбивали
+# ввод — «y» не распознавался. Команды, которым нужен ввод, получают его из файлов.
+if [ "$ASSUME_YES" -ne 1 ] && ! (exec </dev/tty) 2>/dev/null; then
+	echo 'Нет терминала для подтверждения — запустите с --yes.' >&2
+	exit 1
+fi
+exec </dev/null
+
 log() { printf '\n==> %s\n' "$*"; }
 info() { printf '    %s\n' "$*"; }
 warn() { printf '    ⚠️  %s\n' "$*" >&2; }
@@ -100,6 +109,7 @@ DST="${PROJECT}-pg-upgrade-dst"
 NEW_VOLUME=''
 NEW_VOLUME_TOUCHED=0
 MIGRATED=0
+STOPPED=0
 BACKUP_DIR=''
 
 cleanup() {
@@ -112,10 +122,14 @@ cleanup() {
 		printf '\n    Новый том %s удалён: перенос не завершён.\n' "$NEW_VOLUME" >&2
 	fi
 	if [ "$status" -ne 0 ] && [ "$MIGRATED" -ne 1 ]; then
-		printf '\n    Данные в старом томе не тронуты. Бот остановлен.\n' >&2
-		[ -n "$BACKUP_DIR" ] && printf '    Резервная копия (если успела сняться): %s\n' "$BACKUP_DIR" >&2
-		printf '    Вернуться на PostgreSQL 15 без переноса: откатите docker-compose.yml на прошлую\n' >&2
-		printf '    версию бота и выполните «docker compose up -d».\n' >&2
+		if [ "$STOPPED" -ne 1 ]; then
+			printf '\n    Ничего не изменено: бот и база не останавливались.\n' >&2
+		else
+			printf '\n    Данные в старом томе не тронуты. Бот остановлен.\n' >&2
+			[ -n "$BACKUP_DIR" ] && printf '    Резервная копия (если успела сняться): %s\n' "$BACKUP_DIR" >&2
+			printf '    Вернуться на PostgreSQL 15 без переноса: откатите docker-compose.yml на прошлую\n' >&2
+			printf '    версию бота и выполните «docker compose up -d».\n' >&2
+		fi
 	fi
 	exit "$status"
 }
@@ -200,12 +214,14 @@ info "Новый том:   ${NEW_VOLUME}"
 info "База:        ${POSTGRES_DB}, пользователь ${POSTGRES_USER}, данных ~$((kib_used / 1024)) МБ"
 info "На время переноса бот будет остановлен."
 if [ "$ASSUME_YES" -ne 1 ]; then
-	[ -t 0 ] || die 'Нет терминала для подтверждения — запустите с --yes.'
 	printf '\n    Продолжить? [y/N] '
-	read -r answer
+	answer=''
+	read -r answer </dev/tty || true
+	answer="$(printf '%s' "$answer" | tr -d '\r[:space:]')"
 	case "$answer" in
-	y | Y | yes | д | Д | да) ;;
-	*) die 'Отменено.' ;;
+	y | Y | yes | Yes | YES | д | Д | да | Да | ДА) ;;
+	'') die 'Отменено.' ;;
+	*) die "Отменено: ответ «${answer}» не похож на «y»." ;;
 	esac
 fi
 
@@ -254,6 +270,7 @@ safe_name() { printf '%s' "$1" | tr -c 'A-Za-z0-9_.-' '_'; }
 # ---------------------------------------------------------------- 1. остановка
 
 log 'Останавливаю бота и базу'
+STOPPED=1
 docker compose stop "$APP_SERVICE" "$DB_SERVICE" >/dev/null 2>&1 || true
 # Контейнер базы из прошлой версии compose тоже принадлежит проекту, но на случай
 # ручного запуска гасим всё, что смонтировало старый том.
