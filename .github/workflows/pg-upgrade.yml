@@ -110,7 +110,11 @@ jobs:
           fi
 
       - name: make pg-upgrade
-        run: make pg-upgrade ARGS='--yes --no-bot'
+        run: |
+          set -o pipefail
+          make pg-upgrade ARGS='--yes --no-bot' | tee "$RUNNER_TEMP/upgrade.log"
+          # С --no-bot скрипт обязан прямо сказать, что бот не запущен.
+          grep -q 'Бот не запущен (--no-bot)' "$RUNNER_TEMP/upgrade.log"
 
       - name: Данные на месте в PostgreSQL 18
         run: |

@@ -412,10 +412,18 @@ if [ "$START_BOT" -eq 1 ]; then
 	docker compose up -d --build || die 'База перенесена, но бот не запустился — смотрите вывод выше и «docker compose logs bot».'
 fi
 
+if [ "$START_BOT" -eq 1 ]; then
+	bot_line=''
+else
+	bot_line="
+   ⚠️  Бот не запущен (--no-bot). Запустить: docker compose up -d --build
+"
+fi
+
 cat <<EOF
 
 ✅ Готово: база перенесена на PostgreSQL ${TARGET_MAJOR}.
-
+${bot_line}
    Резервная копия:  ${BACKUP_DIR}
    Старый том:       ${OLD_VOLUME} — не тронут
 
