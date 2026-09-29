@@ -7,7 +7,7 @@ import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy import delete as sa_delete, select
-from sqlalchemy.exc import MissingGreenlet
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -22,6 +22,7 @@ from app.database.crud.subscription import (
 from app.database.crud.tariff import get_tariff_by_id
 from app.database.crud.user import add_user_balance, get_user_by_id
 from app.database.crud.user_promo_group import sync_user_primary_promo_group
+from app.database.errors import is_missing_greenlet
 from app.database.models import (
     PaymentMethod,
     PromoGroup,
@@ -118,7 +119,9 @@ def _known_subscriptions(user: User, fallback: Subscription | None = None) -> li
     """
     try:
         subs = getattr(user, 'subscriptions', None)
-    except MissingGreenlet:
+    except SQLAlchemyError as exc:
+        if not is_missing_greenlet(exc):
+            raise
         subs = None
     if subs is None:
         # Коллекция недоступна — отдаём хотя бы целевую подписку.
