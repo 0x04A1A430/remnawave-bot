@@ -86,9 +86,9 @@ async def test_cancel_works_even_when_gate_off(monkeypatch, user):
     async def fake_cancel(db, subscription_id):
         cancelled.append(subscription_id)
 
-    import app.services.payment.cashera as lava_module
+    import app.services.cashera_recurring_cancel as cashera_cancel_module
 
-    monkeypatch.setattr(lava_module, 'cancel_cashera_recurring_for_subscription_safe', fake_cancel)
+    monkeypatch.setattr(cashera_cancel_module, 'cancel_cashera_recurring_for_subscription_safe', fake_cancel)
 
     result = await route.cancel_cashera_recurrent(user=user, db=object(), subscription_id=None)
 
@@ -112,11 +112,11 @@ async def test_enable_surfaces_missing_price_reason(monkeypatch, user):
     monkeypatch.setattr(route, 'resolve_subscription', AsyncMock(return_value=_Subscription()))
 
     import app.database.crud.tariff as tariff_crud
-    import app.services.payment.cashera as lava_module
+    import app.services.payment.cashera as cashera_module
 
     monkeypatch.setattr(tariff_crud, 'get_tariff_by_id', AsyncMock(return_value=SimpleNamespace(id=5)))
     monkeypatch.setattr(
-        lava_module,
+        cashera_module,
         'enable_cashera_recurring',
         AsyncMock(side_effect=ValueError('Тариф не имеет цены за период 30 дн. — автопродление Cashera недоступно')),
     )
@@ -133,11 +133,11 @@ async def test_enable_returns_payment_url(monkeypatch, user):
     monkeypatch.setattr(route, 'resolve_subscription', AsyncMock(return_value=_Subscription()))
 
     import app.database.crud.tariff as tariff_crud
-    import app.services.payment.cashera as lava_module
+    import app.services.payment.cashera as cashera_module
 
     monkeypatch.setattr(tariff_crud, 'get_tariff_by_id', AsyncMock(return_value=SimpleNamespace(id=5)))
     monkeypatch.setattr(
-        lava_module,
+        cashera_module,
         'enable_cashera_recurring',
         AsyncMock(return_value={'status': 'PENDING', 'redirect_url': 'https://pay.lava/x', 'local_id': 3}),
     )
@@ -151,9 +151,9 @@ async def test_get_returns_none_status_without_binding(monkeypatch, user):
     _gate(monkeypatch, True)
     monkeypatch.setattr(route, 'resolve_subscription', AsyncMock(return_value=_Subscription()))
 
-    import app.services.payment.cashera as lava_module
+    import app.services.cashera_recurring_cancel as cashera_cancel_module
 
-    monkeypatch.setattr(lava_module, 'get_cashera_recurring_status', AsyncMock(return_value=None))
+    monkeypatch.setattr(cashera_cancel_module, 'get_cashera_recurring_status', AsyncMock(return_value=None))
 
     assert await route.get_cashera_recurrent(user=user, db=object(), subscription_id=None) == {'status': 'none'}
 
@@ -165,10 +165,10 @@ async def test_get_returns_binding_state(monkeypatch, user):
     monkeypatch.setattr(route, 'resolve_subscription', AsyncMock(return_value=_Subscription()))
 
     next_charge = datetime(2026, 8, 1, tzinfo=UTC)
-    import app.services.payment.cashera as lava_module
+    import app.services.cashera_recurring_cancel as cashera_cancel_module
 
     monkeypatch.setattr(
-        lava_module,
+        cashera_cancel_module,
         'get_cashera_recurring_status',
         AsyncMock(
             return_value={
@@ -200,11 +200,11 @@ async def test_purchase_gated_and_maps_errors(monkeypatch, user):
 
     _gate(monkeypatch, True)
     import app.database.crud.tariff as tariff_crud
-    import app.services.payment.cashera as lava_module
+    import app.services.payment.cashera as cashera_module
 
     monkeypatch.setattr(tariff_crud, 'get_tariff_by_id', AsyncMock(return_value=SimpleNamespace(id=5, is_active=True)))
     monkeypatch.setattr(
-        lava_module,
+        cashera_module,
         'purchase_tariff_with_cashera_recurring',
         AsyncMock(side_effect=ValueError('Оформление через Cashera недоступно для триальной подписки')),
     )
@@ -217,11 +217,11 @@ async def test_purchase_gated_and_maps_errors(monkeypatch, user):
 async def test_purchase_returns_payment_url_and_subscription(monkeypatch, user):
     _gate(monkeypatch, True)
     import app.database.crud.tariff as tariff_crud
-    import app.services.payment.cashera as lava_module
+    import app.services.payment.cashera as cashera_module
 
     monkeypatch.setattr(tariff_crud, 'get_tariff_by_id', AsyncMock(return_value=SimpleNamespace(id=5, is_active=True)))
     monkeypatch.setattr(
-        lava_module,
+        cashera_module,
         'purchase_tariff_with_cashera_recurring',
         AsyncMock(return_value={'status': 'PENDING', 'redirect_url': 'https://pay.lava/y', 'subscription_id': 77}),
     )

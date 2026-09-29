@@ -61,7 +61,7 @@ async def _cashera_recurring_rows(db: AsyncSession, subscription, texts) -> list
     if not settings.is_cashera_configured():
         return []
 
-    from app.services.payment.cashera import get_cashera_recurring_status
+    from app.services.cashera_recurring_cancel import get_cashera_recurring_status
 
     try:
         state = await get_cashera_recurring_status(db, subscription.id)
@@ -102,8 +102,8 @@ async def handle_autopay_menu(callback: types.CallbackQuery, db_user: User, db: 
     # Суточные подписки имеют свой механизм продления, глобальный autopay не применяется
     try:
         await db.refresh(subscription, ['tariff'])
-    except Exception:
-        pass
+    except Exception as refresh_error:
+        logger.warning('Не удалось подгрузить тариф подписки', subscription_id=subscription.id, error=refresh_error)
     if subscription.tariff and getattr(subscription.tariff, 'is_daily', False):
         # Баланс-автоплатёж для суточных тарифов недоступен, но СБП-автопродление
         # Platega суточный интервал поддерживает (`day`) — вход в него должен
@@ -238,7 +238,7 @@ async def toggle_autopay(callback: types.CallbackQuery, db_user: User, db: Async
         # иначе оба движка продления начнут списывать параллельно (двойное
         # списание). Прямое взаимоисключение (СБП -> выключение
         # balance-autopay) уже реализовано в create_platega_sbp_subscription.
-        from app.services.payment.cashera import cancel_cashera_recurring_for_subscription_safe
+        from app.services.cashera_recurring_cancel import cancel_cashera_recurring_for_subscription_safe
         from app.services.payment.lava import cancel_lava_recurring_for_subscription_safe
         from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
 
@@ -305,8 +305,8 @@ async def show_autopay_period(callback: types.CallbackQuery, db_user: User, db: 
 
     try:
         await db.refresh(subscription, ['tariff'])
-    except Exception:
-        pass
+    except Exception as refresh_error:
+        logger.warning('Не удалось подгрузить тариф подписки', subscription_id=subscription.id, error=refresh_error)
 
     periods = _get_subscription_renewal_periods(subscription)
     current = getattr(subscription, 'autopay_period_days', None)
@@ -838,8 +838,8 @@ async def handle_cashera_recurring_enable(
         return
     try:
         await db.refresh(subscription, ['tariff'])
-    except Exception:
-        pass
+    except Exception as refresh_error:
+        logger.warning('Не удалось подгрузить тариф подписки', subscription_id=subscription.id, error=refresh_error)
 
     from app.services.payment.cashera import enable_cashera_recurring
 
@@ -896,11 +896,11 @@ async def handle_cashera_recurring_cancel(
         )
         return
 
-    from app.services.payment.cashera import cancel_cashera_recurring_for_subscription_safe
+    from app.services.cashera_recurring_cancel import cancel_cashera_recurring_for_subscription_safe
 
     await cancel_cashera_recurring_for_subscription_safe(db, subscription.id)
     await callback.answer(texts.t('CASHERA_RECURRING_CANCELLED', '✅ Автопродление Cashera отключено'))
     try:
         await handle_autopay_menu(callback, db_user, db, state)
     except TelegramBadRequest:
-        pass
+        pass  # «message is not modified»: экран уже актуален

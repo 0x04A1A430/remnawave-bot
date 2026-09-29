@@ -648,7 +648,7 @@ async def _handle_subscription_merge(
             primary.remnawave_id = None
         # СБП-автопродление Platega удаляемой подписки отменяем ДО delete: CASCADE
         # снесёт локальную запись, и Platega продолжила бы списывать в никуда.
-        from app.services.payment.cashera import cancel_cashera_recurring_for_subscription_safe
+        from app.services.cashera_recurring_cancel import cancel_cashera_recurring_for_subscription_safe
         from app.services.payment.lava import cancel_lava_recurring_for_subscription_safe
         from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
 
@@ -682,7 +682,7 @@ async def _handle_subscription_merge(
             deferred_remnawave_deletions.append(secondary.remnawave_id)
             secondary.remnawave_id = None
         # СБП-автопродление Platega удаляемой подписки отменяем ДО delete (см. выше).
-        from app.services.payment.cashera import cancel_cashera_recurring_for_subscription_safe
+        from app.services.cashera_recurring_cancel import cancel_cashera_recurring_for_subscription_safe
         from app.services.payment.lava import cancel_lava_recurring_for_subscription_safe
         from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
 

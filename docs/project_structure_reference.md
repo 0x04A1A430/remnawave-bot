@@ -133,6 +133,9 @@
 - `app/cabinet/schemas/`
 - `app/cabinet/services/`
 - `app/cabinet/utils/`
+- `app/cabinet/ws_manager.py` — Python-модуль
+  Классы: `CabinetConnectionManager` (5 методов)
+  Функции: нет
 
 #### app/cabinet/auth
 
@@ -399,7 +402,7 @@
   Классы: нет
   Функции: `unsubscribe_page` — Ничего не меняет — только отдаёт самоотправляющуюся форму., `unsubscribe_one_click` — Единственное место, где отписка применяется.
 - `app/cabinet/routes/websocket.py` — Python-модуль
-  Классы: `CabinetConnectionManager` (5 методов)
+  Классы: нет
   Функции: `verify_cabinet_ws_token` — Проверить JWT токен для WebSocket., `cabinet_websocket_endpoint` — WebSocket endpoint для real-time уведомлений кабинета., `notify_user_ticket_reply` — Уведомить пользователя об ответе в тикете., `notify_admins_new_ticket` — Уведомить админов о новом тикете., `notify_admins_ticket_reply` — Уведомить админов об ответе пользователя., `notify_user_balance_topup` — Уведомить пользователя о пополнении баланса., `notify_user_balance_change` — Уведомить пользователя об изменении баланса., `notify_user_subscription_activated` — Уведомить пользователя об активации подписки., `notify_user_subscription_expiring` — Уведомить пользователя о скором истечении подписки., `notify_user_subscription_expired` — Уведомить пользователя об истечении подписки., `notify_user_subscription_renewed` — Уведомить пользователя о продлении подписки., `notify_user_devices_purchased` — Уведомить пользователя о покупке устройств., `notify_user_traffic_purchased` — Уведомить пользователя о покупке трафика., `notify_user_autopay_success` — Уведомить пользователя об успешном автопродлении., `notify_user_autopay_failed` — Уведомить пользователя о неудачном автопродлении., `notify_user_autopay_insufficient_funds` — Уведомить о недостатке средств для автопродления., `notify_user_ban` — Уведомить пользователя о блокировке., `notify_user_unban` — Уведомить пользователя о разблокировке., `notify_user_warning` — Уведомить пользователя о предупреждении., `notify_user_referral_bonus` — Уведомить пользователя о реферальном бонусе., `notify_user_referral_registered` — Уведомить пользователя о регистрации нового реферала., `notify_user_daily_debit` — Уведомить о ежедневном списании., `notify_user_traffic_reset` — Уведомить о сбросе трафика., `notify_user_payment_received` — Уведомить о полученном платеже.
 - `app/cabinet/routes/wheel.py` — Python-модуль
   Классы: `StarsInvoiceResponse`
@@ -1463,6 +1466,9 @@
 - `app/services/aurapay_service.py` — Python-модуль
   Классы: `AuraPayAPIError` (1 методов), `AuraPayService` (10 методов)
   Функции: нет
+- `app/services/autopay_period.py` — Python-модуль
+  Классы: нет
+  Функции: `resolve_autopay_period_candidate` — Return ``candidate`` only if it is a valid renewal period for ``tariff``.
 - `app/services/backup_service.py` — Python-модуль
   Классы: `BackupMetadata`, `BackupSettings`, `BackupService` (54 методов)
   Функции: нет
@@ -1490,6 +1496,9 @@
 - `app/services/cashera_recurrent.py` — Python-модуль
   Классы: нет
   Функции: `resolve_cashera_interval` — (interval, charge_days) по периоду тарифа — та же иерархия, что у Platega., `round_up_to_rubles` — Cashera принимает итоговую сумму подписки только в целых рублях (иначе 422)., `build_subscription_external_id` — external_id подписки: латиница, цифры, точка, дефис, подчёркивание., `normalize_remote_status`, `local_status_for`, `is_recurring_charge` — Относится ли вебхук transaction.status_updated к списанию по подписке., `cashera_reconcile_decision` — Новый локальный статус по данным Cashera, либо None — не трогать.
+- `app/services/cashera_recurring_cancel.py` — Python-модуль
+  Классы: нет
+  Функции: `cancel_cashera_recurrent_subscription` — Отменяет одну подписку Cashera по локальному id. Идемпотентна., `cancel_cashera_recurring_for_subscription` — Best-effort отмена живой подписки Cashera по subscription_id; не бросает., `cancel_cashera_recurring_for_subscription_safe` — Отмена автопродления Cashera на путях удаления/замены подписки. Никогда не бросает., `cancel_cashera_recurring_by_local_id` — Отмена привязки по локальному id (кабинет/бот). Идемпотентна., `get_cashera_recurring_status` — Состояние живой привязки для UI (бот/кабинет) либо None., `notify_cashera_recurring` — Best-effort уведомление о событии автопродления; никогда не бросает.
 - `app/services/cashera_service.py` — Python-модуль
   Классы: `CasheraAPIError` (1 методов), `CasheraService` (19 методов)
   Функции: `normalize_payment_url` — В примерах Cashera ``payment_url`` приходит без схемы (``pay.cashera.cash/...``).
@@ -1603,7 +1612,7 @@
   Функции: нет
 - `app/services/monitoring_service.py` — Python-модуль
   Классы: `AutopayFailState` (2 методов), `MonitoringService` (52 методов)
-  Функции: `resolve_autopay_period_candidate` — Return ``candidate`` only if it is a valid renewal period for ``tariff``., `decide_autopay_fail_notification` — Decide whether/what to send on a failed-autopay tick., `apply_autopay_fail_notification` — Mutate state to record that a notification with `reason` was just sent.
+  Функции: `decide_autopay_fail_notification` — Decide whether/what to send on a failed-autopay tick., `apply_autopay_fail_notification` — Mutate state to record that a notification with `reason` was just sent.
 - `app/services/mulenpay_service.py` — Python-модуль
   Классы: `MulenPayService` (10 методов)
   Функции: нет
@@ -2009,7 +2018,7 @@
   Функции: нет
 - `app/services/payment/cashera.py` — Python-модуль
   Классы: `CasheraPaymentMixin` (17 методов)
-  Функции: `enable_cashera_recurring` — Включить автопродление Cashera: {local_id, cashera_subscription_uuid, redirect_url, status}., `purchase_tariff_with_cashera_recurring` — Покупка тарифа оплатой через автопродление Cashera., `cancel_cashera_recurring_for_subscription_safe` — Отмена автопродления Cashera на путях удаления/замены подписки. Никогда не бросает., `get_cashera_recurring_status` — Состояние живой привязки для UI (бот/кабинет) либо None., `cancel_cashera_recurring_by_local_id` — Отмена привязки по локальному id (кабинет/бот). Идемпотентна.
+  Функции: `enable_cashera_recurring` — Включить автопродление Cashera: {local_id, cashera_subscription_uuid, redirect_url, status}., `purchase_tariff_with_cashera_recurring` — Покупка тарифа оплатой через автопродление Cashera.
 - `app/services/payment/cispay.py` — Python-модуль
   Классы: `CisPayPaymentMixin` (4 методов)
   Функции: `resolve_cispay_method` — Определяет payment_method для API cisPay.
@@ -4399,6 +4408,9 @@
 - `tests/services/test_campaign_bonus_expired_user.py` — Python-модуль
   Классы: нет
   Функции: `test_apply_campaign_bonus_refreshes_user_before_attribute_access` — Пользователь перечитывается асинхронно на входе — до любых sync-чтений, `test_apply_campaign_bonus_survives_refresh_failure` — Сбой refresh (например, PendingRollbackError) не роняет начисление —
+- `tests/services/test_cashera_import_cycle.py` — Python-модуль
+  Классы: нет
+  Функции: `test_module_is_not_on_import_cycle`
 - `tests/services/test_cashera_recurrent.py` — Python-модуль
   Классы: `StubCashera` (4 методов)
   Функции: `stub`, `test_interval_mapping`, `test_amount_rounds_up_to_whole_rubles`, `test_reconcile_decision`, `test_enable_creates_binding_with_rounded_amount_and_disables_balance_autopay`, `test_enable_is_idempotent_for_live_binding`, `test_enable_refuses_trial_before_calling_cashera`, `test_subscription_activation_event`, `test_locally_cancelled_binding_alive_at_cashera_is_cancelled_again`, `test_paid_charge_extends_once_and_writes_transaction`, `test_failed_charge_marks_past_due_but_keeps_cancelled`, `test_charge_on_locally_cancelled_binding_extends_but_does_not_resurrect` — Деньги взяты — продлеваем; запись не воскрешаем и повторяем удалённую отмену., `test_missed_charges_are_replayed_from_history`, `test_recurring_charge_is_not_treated_as_topup` — Списание приходит с чужим external_id — оно не должно падать в поиск пополнения., `test_purchase_without_subscription_creates_expired_placeholder`

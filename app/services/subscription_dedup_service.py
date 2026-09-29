@@ -75,7 +75,7 @@ async def _run_dedupe() -> dict[str, int]:
                 # commit=False: CANCELLED уходит flush'ем и коммитится вместе с
                 # удалениями одним финальным commit ниже (семантика сервиса —
                 # один атомарный коммит на весь проход).
-                from app.services.payment.cashera import cancel_cashera_recurring_for_subscription_safe
+                from app.services.cashera_recurring_cancel import cancel_cashera_recurring_for_subscription_safe
                 from app.services.payment.lava import cancel_lava_recurring_for_subscription_safe
                 from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
 

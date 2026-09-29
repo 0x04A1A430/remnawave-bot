@@ -130,14 +130,14 @@ async def test_unknown_user_raises_alert_and_writes_nothing(monkeypatch, service
 
 def test_alert_logger_is_not_silenced_as_payment_logger():
     """Логгеры tribute_service отрезаны от админ-чата, журнала ошибок и файлов — тревога идёт мимо этих фильтров."""
+    import inspect
     from pathlib import Path
 
-    import app.services.tribute_service as tribute_module
     from app.logging_handler import IGNORED_LOGGER_PREFIXES
     from app.utils.log_handlers import ExcludePaymentFilter
 
     name = 'app.tribute_alert'
-    assert f"structlog.get_logger('{name}')" in Path(tribute_module.__file__).read_text(encoding='utf-8')
+    assert f"structlog.get_logger('{name}')" in Path(inspect.getfile(TributeService)).read_text(encoding='utf-8')
     assert not name.startswith(IGNORED_LOGGER_PREFIXES)
     assert not name.startswith(ExcludePaymentFilter.PAYMENT_MODULES)
 

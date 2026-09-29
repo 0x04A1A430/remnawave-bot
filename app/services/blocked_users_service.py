@@ -331,7 +331,7 @@ class BlockedUsersService:
             # user keeps getting charged for a deleted account. This path has
             # no grace-access guard (unlike UserService.delete_user_account), so
             # a plain best-effort cancel loop is enough — no lock to re-acquire.
-            from app.services.payment.cashera import cancel_cashera_recurring_for_subscription_safe
+            from app.services.cashera_recurring_cancel import cancel_cashera_recurring_for_subscription_safe
             from app.services.payment.lava import cancel_lava_recurring_for_subscription_safe
             from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
 

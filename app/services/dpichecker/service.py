@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import hashlib
 import time
 from collections.abc import Awaitable, Callable
 from decimal import Decimal
@@ -85,7 +84,7 @@ class DpiCheckerService(AccountMixin):
         self._api_factory = api_factory
         self._panel_client = panel_client or _default_panel_client
         self._sleep = sleep
-        self._secret: tuple[str, str] | None = None  # (отпечаток ключа API, секрет подписи)
+        self._secret: tuple[str, str] | None = None  # (ключ API, секрет подписи)
         self._watch: MonitorWatch | None = None
         self._secret_lock = asyncio.Lock()
         self._secret_refreshed_at = 0.0
@@ -743,22 +742,22 @@ class DpiCheckerService(AccountMixin):
     # ------------------------------------------------------------ вебхук: секрет подписи
 
     async def webhook_secret(self, *, refresh: bool = False) -> str:
-        """Секрет подписи — у сервиса; держим в памяти, ключ кэша — отпечаток ключа API.
+        """Секрет подписи — у сервиса; держим в памяти, ключ кэша — сам ключ API (сменили ключ — перечитали).
 
         Перечитывание по неверной подписи — не чаще раза в минуту и в один поток: вебхук открыт всем,
         и мусорные запросы иначе выедали бы лимит ключа (120 запросов в минуту) и глушили запуски.
         """
-        fingerprint = hashlib.sha256((settings.DPICHECKER_API_KEY or '').encode()).hexdigest()
-        cached = self._secret if self._secret is not None and self._secret[0] == fingerprint else None
+        api_key = settings.DPICHECKER_API_KEY or ''
+        cached = self._secret if self._secret is not None and self._secret[0] == api_key else None
         if cached is not None and not refresh:
             return cached[1]
         async with self._secret_lock:
-            cached = self._secret if self._secret is not None and self._secret[0] == fingerprint else None
+            cached = self._secret if self._secret is not None and self._secret[0] == api_key else None
             recent = time.monotonic() - self._secret_refreshed_at < SECRET_REFRESH_MIN_SEC
             if cached is not None and (not refresh or recent):
                 return cached[1]
             secret = await self._call('webhook_secret')
-            self._secret = (fingerprint, secret)
+            self._secret = (api_key, secret)
             self._secret_refreshed_at = time.monotonic()
             return secret
 

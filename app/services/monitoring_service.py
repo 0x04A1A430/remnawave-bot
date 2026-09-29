@@ -55,6 +55,7 @@ from app.external.remnawave_api import (
     is_user_not_found_error,
 )
 from app.localization.texts import get_texts
+from app.services.autopay_period import resolve_autopay_period_candidate
 from app.services.grace_access_runtime import update_panel_user_grace_safe
 from app.services.notification_delivery_service import (
     NotificationType,
@@ -83,44 +84,6 @@ from app.utils.promo_offer import get_user_active_promo_discount_percent
 from app.utils.rich_notify import try_send_rich_notification
 from app.utils.subscription_time import ends_within_days
 from app.utils.timezone import format_local_datetime
-
-
-def resolve_autopay_period_candidate(candidate, tariff) -> int | None:
-    """Return ``candidate`` only if it is a valid renewal period for ``tariff``.
-
-    Validation is **fail-closed**: we never let an unvalidated period drive
-    autopay extension. Resolution order for the allowlist:
-
-    1. ``tariff.get_available_periods()`` if the tariff exists and has any
-       priced periods.
-    2. ``settings.get_available_renewal_periods()`` as the global allowlist
-       (for tariff-less / classic-mode subscriptions, or tariffs with empty
-       ``period_prices``).
-
-    Returns ``None`` for ``candidate`` that is falsy, non-positive, or not in
-    either allowlist — letting the caller fall through to the next tier
-    (typically ``tariff.get_shortest_period()`` and finally the hard 30-day
-    floor).
-    """
-    if not candidate or candidate <= 0:
-        return None
-
-    available_periods: list[int] = []
-    if tariff is not None:
-        try:
-            available_periods = list(tariff.get_available_periods() or [])
-        except Exception:
-            available_periods = []
-
-    if not available_periods:
-        try:
-            available_periods = list(settings.get_available_renewal_periods() or [])
-        except Exception:
-            available_periods = []
-
-    if not available_periods or candidate not in available_periods:
-        return None
-    return candidate
 
 
 @dataclass
@@ -3239,8 +3202,12 @@ class MonitoringService:
                             # поздно подтверждённая ссылка не начала списывать.
                             try:
                                 await cashera_service.cancel_subscription(record.cashera_subscription_uuid)
-                            except Exception:
-                                pass
+                            except Exception as cancel_error:
+                                logger.warning(
+                                    'Cashera: не удалось отменить неподтверждённую подписку у провайдера',
+                                    record_id=record.id,
+                                    error=cancel_error,
+                                )
                 except Exception as record_error:
                     logger.warning(
                         'Не удалось реконсилировать подписку Cashera',

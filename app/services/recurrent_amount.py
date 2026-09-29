@@ -18,6 +18,8 @@ cancel, обновления суммы нет), Lava вовсе не прини
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -128,13 +130,11 @@ async def sync_recurrent_bindings_after_price_change(db: AsyncSession, subscript
                 await cancel_lava_recurring_for_subscription_safe(db, subscription_id)
                 agent = _LavaRecurrentAgent()
             else:
-                from app.services.payment.cashera import (
-                    _CasheraRecurrentAgent,
-                    cancel_cashera_recurring_for_subscription_safe,
-                )
+                from app.services import cashera_recurring_cancel
 
-                await cancel_cashera_recurring_for_subscription_safe(db, subscription_id)
-                agent = _CasheraRecurrentAgent()
+                await cashera_recurring_cancel.cancel_cashera_recurring_for_subscription_safe(db, subscription_id)
+                # Без бота уйдёт только WS-событие; payment.cashera отсюда не импортируем — кольцо.
+                agent = SimpleNamespace(_notify_cashera_recurring=cashera_recurring_cancel.notify_cashera_recurring)
 
             # Уведомление best-effort: у модульного агента нет бота, поэтому
             # доедет WS-событие в кабинет; бот-сообщение уйдёт там, где агент

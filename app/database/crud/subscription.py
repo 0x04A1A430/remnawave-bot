@@ -1738,7 +1738,7 @@ async def update_subscription_autopay(
         # вызовы на отдельных поверхностях (бот/кабинет) пропускали новые точки
         # включения (миниапп, админ-тоглы) — и юзер платил дважды за цикл.
         try:
-            from app.services.payment.cashera import cancel_cashera_recurring_for_subscription_safe
+            from app.services.cashera_recurring_cancel import cancel_cashera_recurring_for_subscription_safe
             from app.services.payment.lava import cancel_lava_recurring_for_subscription_safe
             from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
 

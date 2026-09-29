@@ -65,7 +65,7 @@ from app.services.panel_sync import (
 )
 from app.services.panel_sync.fields import narrow_push_fields
 from app.services.permission_service import PermissionService
-from app.services.user_activity_service import UnknownActivityTypes, collect_user_activity
+from app.services.user_activity_service import UnknownActivityTypes, UserActivityResponse, collect_user_activity
 from app.utils.subscription_time import local_days_until
 from app.utils.subscription_utils import coerce_panel_device_limit
 from app.utils.timezone import local_day_start, panel_datetime_to_utc
@@ -118,7 +118,6 @@ from ..schemas.users import (
     UpdateSubscriptionResponse,
     UpdateUserStatusRequest,
     UpdateUserStatusResponse,
-    UserActivityResponse,
     UserAvailableTariffItem,
     UserAvailableTariffsResponse,
     UserByRemnawaveResponse,
@@ -1469,7 +1468,7 @@ async def update_user_subscription(
         # переподключит СБП-автопродление под новый тариф (нужна новая
         # банковская авторизация, молча пересоздать нельзя).
         if request.tariff_id != subscription.tariff_id:
-            from app.services.payment.cashera import cancel_cashera_recurring_for_subscription_safe
+            from app.services.cashera_recurring_cancel import cancel_cashera_recurring_for_subscription_safe
             from app.services.payment.lava import cancel_lava_recurring_for_subscription_safe
             from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
 
@@ -1602,7 +1601,7 @@ async def update_user_subscription(
         if request.autopay_enabled:
             # Взаимоисключение движков продления: включение balance-autopay
             # отменяет активное СБП-автопродление Platega (иначе двойное списание).
-            from app.services.payment.cashera import cancel_cashera_recurring_for_subscription_safe
+            from app.services.cashera_recurring_cancel import cancel_cashera_recurring_for_subscription_safe
             from app.services.payment.lava import cancel_lava_recurring_for_subscription_safe
             from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
 
@@ -1623,7 +1622,7 @@ async def update_user_subscription(
         # Подписку убивают — СБП-автопродление Platega обязано умереть вместе с
         # ней, иначе следующий коллбек продлит и воскресит её, а банк продолжит
         # списывать.
-        from app.services.payment.cashera import cancel_cashera_recurring_for_subscription_safe
+        from app.services.cashera_recurring_cancel import cancel_cashera_recurring_for_subscription_safe
         from app.services.payment.lava import cancel_lava_recurring_for_subscription_safe
         from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
 
@@ -1663,7 +1662,7 @@ async def update_user_subscription(
             # legacy user panel id, and preserve the selected row for an exact
             # retry when panel deactivation fails.
             from app.database.crud.subscription import reset_subscription
-            from app.services.payment.cashera import cancel_cashera_recurring_for_subscription_safe
+            from app.services.cashera_recurring_cancel import cancel_cashera_recurring_for_subscription_safe
             from app.services.payment.lava import cancel_lava_recurring_for_subscription_safe
             from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
             from app.services.subscription_service import SubscriptionService
@@ -3114,7 +3113,7 @@ async def reset_user_subscription(
     # It therefore runs BEFORE panel deactivation and the DB deletes, and the
     # guard is re-acquired immediately below — closing that window before
     # anything that can't be undone happens.
-    from app.services.payment.cashera import cancel_cashera_recurring_for_subscription_safe
+    from app.services.cashera_recurring_cancel import cancel_cashera_recurring_for_subscription_safe
     from app.services.payment.lava import cancel_lava_recurring_for_subscription_safe
     from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
 

@@ -445,7 +445,7 @@ async def switch_tariff(
 
     # Reset device limit to new tariff base (extra purchased devices are not carried over)
     from app.database.crud.subscription import calc_device_limit_on_tariff_switch
-    from app.services.payment.cashera import cancel_cashera_recurring_for_subscription_safe
+    from app.services.cashera_recurring_cancel import cancel_cashera_recurring_for_subscription_safe
     from app.services.payment.lava import cancel_lava_recurring_for_subscription_safe
 
     # Смена тарифа делает СБП-привязку Platega несогласованной: она продолжила бы

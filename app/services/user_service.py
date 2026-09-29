@@ -848,7 +848,7 @@ class UserService:
             # this flow), and the guard is re-acquired immediately after —
             # closing that window before anything that can't be undone
             # happens.
-            from app.services.payment.cashera import cancel_cashera_recurring_for_subscription_safe
+            from app.services.cashera_recurring_cancel import cancel_cashera_recurring_for_subscription_safe
             from app.services.payment.lava import cancel_lava_recurring_for_subscription_safe
             from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
 

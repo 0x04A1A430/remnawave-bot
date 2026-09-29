@@ -78,7 +78,7 @@ async def update_autopay(
         # иначе оба движка продления начнут списывать параллельно (двойное
         # списание). Прямое взаимоисключение (СБП -> выключение
         # balance-autopay) уже реализовано в create_platega_sbp_subscription.
-        from app.services.payment.cashera import cancel_cashera_recurring_for_subscription_safe
+        from app.services.cashera_recurring_cancel import cancel_cashera_recurring_for_subscription_safe
         from app.services.payment.lava import cancel_lava_recurring_for_subscription_safe
         from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
 

@@ -1881,7 +1881,7 @@ class AdminNotificationService:
             return '❌ Нет серверов'
 
         try:
-            from app.handlers.subscription import get_servers_display_names
+            from app.handlers.subscription.devices import get_servers_display_names
 
             servers_names = await get_servers_display_names(squad_uuids)
             return f'{len(squad_uuids)} шт. ({servers_names})'
@@ -2211,7 +2211,7 @@ class AdminNotificationService:
             return 'Нет серверов'
 
         try:
-            from app.handlers.subscription import get_servers_display_names
+            from app.handlers.subscription.devices import get_servers_display_names
 
             servers_names = await get_servers_display_names(server_uuids)
 

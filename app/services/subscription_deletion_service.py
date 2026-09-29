@@ -94,7 +94,7 @@ async def delete_subscription_record(
 
     await ensure_no_open_grace_for_subscriptions(db, (subscription.id,))
 
-    from app.services.payment.cashera import cancel_cashera_recurring_for_subscription_safe
+    from app.services.cashera_recurring_cancel import cancel_cashera_recurring_for_subscription_safe
     from app.services.payment.lava import cancel_lava_recurring_for_subscription_safe
     from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
 

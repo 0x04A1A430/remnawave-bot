@@ -143,7 +143,7 @@ async def get_cashera_recurrent(
     if not subscription:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No subscription found')
 
-    from app.services.payment.cashera import get_cashera_recurring_status
+    from app.services.cashera_recurring_cancel import get_cashera_recurring_status
 
     state = await get_cashera_recurring_status(db, subscription.id)
     if not state:
@@ -173,7 +173,7 @@ async def cancel_cashera_recurrent(
     if not subscription:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No subscription found')
 
-    from app.services.payment.cashera import cancel_cashera_recurring_for_subscription_safe
+    from app.services.cashera_recurring_cancel import cancel_cashera_recurring_for_subscription_safe
 
     await cancel_cashera_recurring_for_subscription_safe(db, subscription.id)
 

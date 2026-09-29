@@ -216,7 +216,7 @@ class _PanelSpy:
         )
         monkeypatch.setattr('app.services.payment.lava.cancel_lava_recurring_for_subscription_safe', _record('lava'))
         monkeypatch.setattr(
-            'app.services.payment.cashera.cancel_cashera_recurring_for_subscription_safe', _record('cashera')
+            'app.services.cashera_recurring_cancel.cancel_cashera_recurring_for_subscription_safe', _record('cashera')
         )
         monkeypatch.setattr(deletion, 'decrement_subscription_server_counts', fake_decrement)
 

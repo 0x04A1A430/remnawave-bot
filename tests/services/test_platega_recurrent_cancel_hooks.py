@@ -595,7 +595,7 @@ async def test_delete_user_from_db_cancels_platega_for_each_subscription(monkeyp
         recorded_cashera.append((db, subscription_id))
 
     monkeypatch.setattr(
-        'app.services.payment.cashera.cancel_cashera_recurring_for_subscription_safe', fake_cancel_cashera
+        'app.services.cashera_recurring_cancel.cancel_cashera_recurring_for_subscription_safe', fake_cancel_cashera
     )
 
     subs = [SimpleNamespace(id=21, connected_squads=None), SimpleNamespace(id=22, connected_squads=None)]

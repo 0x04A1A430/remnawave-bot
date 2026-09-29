@@ -27,7 +27,6 @@ from app.database.models import (
     UserStatus,
 )
 from app.services import cashera_recurrent as cr
-from app.services.payment.cashera import _CasheraRecurrentAgent
 from tests.fixtures.sqlite_memory import memory_session
 
 
@@ -69,6 +68,7 @@ def stub(monkeypatch) -> StubCashera:
         monkeypatch.setattr(settings, key, value, raising=False)
     stub = StubCashera()
     monkeypatch.setattr(cashera_module, 'cashera_service', stub)
+    monkeypatch.setattr('app.services.cashera_recurring_cancel.cashera_service', stub)
     # Панель и внешние провайдеры в этих тестах не проверяются.
     monkeypatch.setattr(
         'app.services.subscription_service.SubscriptionService.update_remnawave_user', AsyncMock(return_value=None)
@@ -123,7 +123,7 @@ def _charge_event(uuid: str, **kw: Any) -> dict[str, Any]:
 
 
 async def _enable(db, stub, tariff, subscription, user_id):
-    return await _CasheraRecurrentAgent().create_cashera_recurrent_subscription(
+    return await cashera_module._CasheraRecurrentAgent().create_cashera_recurrent_subscription(
         db, user_id=user_id, subscription=subscription, tariff=tariff
     )
 
@@ -228,7 +228,7 @@ async def test_subscription_activation_event(monkeypatch, stub):
         await _enable(db, stub, tariff, subscription, user_id)
         payload = {'event': 'subscription.status_updated', 'subscription': {'uuid': 'sub-1', 'status': 'active'}}
 
-        assert await _CasheraRecurrentAgent().process_cashera_webhook(db, payload) is True
+        assert await cashera_module._CasheraRecurrentAgent().process_cashera_webhook(db, payload) is True
         record = await _record(db)
 
     assert record.status == 'ACTIVE'
@@ -240,11 +240,13 @@ async def test_locally_cancelled_binding_alive_at_cashera_is_cancelled_again(mon
     async with memory_session(monkeypatch, TABLES) as db:
         user_id, tariff, subscription = await _seed(db)
         result = await _enable(db, stub, tariff, subscription, user_id)
-        await _CasheraRecurrentAgent().cancel_cashera_recurrent_subscription(db, local_id=result['local_id'])
+        await cashera_module._CasheraRecurrentAgent().cancel_cashera_recurrent_subscription(
+            db, local_id=result['local_id']
+        )
         stub.cancelled.clear()
 
         payload = {'event': 'subscription.status_updated', 'subscription': {'uuid': 'sub-1', 'status': 'active'}}
-        await _CasheraRecurrentAgent().process_cashera_webhook(db, payload)
+        await cashera_module._CasheraRecurrentAgent().process_cashera_webhook(db, payload)
         record = await _record(db)
 
     assert record.status == 'CANCELLED'
@@ -261,7 +263,7 @@ async def test_paid_charge_extends_once_and_writes_transaction(monkeypatch, stub
         sub_id = subscription.id  # после rollback объект экспирируется
         await _enable(db, stub, tariff, subscription, user_id)
         before = await _end_date(db, sub_id)
-        agent = _CasheraRecurrentAgent()
+        agent = cashera_module._CasheraRecurrentAgent()
 
         assert await agent.process_cashera_webhook(db, _charge_event('ch-1')) is True
         after = await _end_date(db, sub_id)
@@ -291,7 +293,7 @@ async def test_failed_charge_marks_past_due_but_keeps_cancelled(monkeypatch, stu
     async with memory_session(monkeypatch, TABLES) as db:
         user_id, tariff, subscription = await _seed(db)
         result = await _enable(db, stub, tariff, subscription, user_id)
-        agent = _CasheraRecurrentAgent()
+        agent = cashera_module._CasheraRecurrentAgent()
 
         await agent.process_cashera_webhook(db, _charge_event('ch-f', status='failed'))
         assert (await _record(db)).status == 'PAST_DUE'
@@ -307,7 +309,7 @@ async def test_charge_on_locally_cancelled_binding_extends_but_does_not_resurrec
     async with memory_session(monkeypatch, TABLES) as db:
         user_id, tariff, subscription = await _seed(db)
         result = await _enable(db, stub, tariff, subscription, user_id)
-        agent = _CasheraRecurrentAgent()
+        agent = cashera_module._CasheraRecurrentAgent()
         await agent.cancel_cashera_recurrent_subscription(db, local_id=result['local_id'])
         stub.cancelled.clear()
         before = await _end_date(db, subscription.id)
@@ -324,7 +326,7 @@ async def test_missed_charges_are_replayed_from_history(monkeypatch, stub):
     async with memory_session(monkeypatch, TABLES) as db:
         user_id, tariff, subscription = await _seed(db)
         result = await _enable(db, stub, tariff, subscription, user_id)
-        agent = _CasheraRecurrentAgent()
+        agent = cashera_module._CasheraRecurrentAgent()
         await agent.process_cashera_webhook(db, _charge_event('ch-1'))
         before = await _end_date(db, subscription.id)
 
@@ -343,7 +345,7 @@ async def test_recurring_charge_is_not_treated_as_topup(monkeypatch, stub):
     async with memory_session(monkeypatch, TABLES) as db:
         user_id, tariff, subscription = await _seed(db)
         await _enable(db, stub, tariff, subscription, user_id)
-        await _CasheraRecurrentAgent().process_cashera_webhook(db, _charge_event('ch-1'))
+        await cashera_module._CasheraRecurrentAgent().process_cashera_webhook(db, _charge_event('ch-1'))
         balance = (await db.execute(select(User.balance_kopeks).where(User.id == user_id))).scalar_one()
 
     assert balance == 0  # продление напрямую, без зачисления на баланс

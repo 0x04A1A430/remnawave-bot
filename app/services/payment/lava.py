@@ -859,7 +859,7 @@ class LavaPaymentMixin:
         subscription.autopay_enabled = False
         await db.commit()
 
-        from app.services.payment.cashera import cancel_cashera_recurring_for_subscription_safe
+        from app.services.cashera_recurring_cancel import cancel_cashera_recurring_for_subscription_safe
         from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
 
         await cancel_platega_recurring_for_subscription_safe(db, subscription.id)

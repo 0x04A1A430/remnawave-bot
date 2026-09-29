@@ -302,7 +302,7 @@ def _panel_service(monkeypatch, links: list[str]) -> DpiCheckerService:
     async def panel():
         yield SimpleNamespace()
 
-    return DpiCheckerService(api_factory=lambda: FakeAPI(), panel_client=panel, sleep=_nosleep)
+    return DpiCheckerService(api_factory=FakeAPI, panel_client=panel, sleep=_nosleep)
 
 
 async def test_subscription_without_user_takes_default_from_settings(monkeypatch):

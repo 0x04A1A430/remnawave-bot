@@ -125,7 +125,7 @@ class MonitorWatch:
             try:
                 await asyncio.wait_for(self._wake.wait(), timeout=self._interval)
             except TimeoutError:
-                pass
+                pass  # плановый тик: интервал вышел без внешнего пробуждения
 
     def stop(self) -> None:
         self._running = False
