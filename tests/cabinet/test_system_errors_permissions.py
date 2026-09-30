@@ -42,7 +42,7 @@ def test_every_permission_required_by_cabinet_routes_is_registered():
     """Ратчет: право, проверяемое роутом, но не заведённое в реестре, не выдать никому."""
     used: set[str] = set()
     for path in Path('app/cabinet/routes').rglob('*.py'):
-        used |= set(re.findall(r"require_permission\(\s*'([a-z_]+:[a-z_*]+)'", path.read_text()))
+        used |= set(re.findall(r"require_permission\(\s*'([a-z_]+:[a-z_*]+)'", path.read_text(encoding='utf-8')))
 
     known = set(get_all_permissions()) | {f'{section}:*' for section in PERMISSION_REGISTRY} | {'*:*'}
     assert not (used - known), f'права проверяются, но не заведены в PERMISSION_REGISTRY: {sorted(used - known)}'

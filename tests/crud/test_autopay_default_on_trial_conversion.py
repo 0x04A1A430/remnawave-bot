@@ -154,7 +154,7 @@ def test_classic_purchase_paths_apply_the_default_on_conversion():
         ('app/handlers/subscription/purchase.py', 2),
         ('app/services/subscription_purchase_service.py', 1),
     ):
-        source = pathlib.Path(path).read_text()
+        source = pathlib.Path(path).read_text(encoding='utf-8')
         assert source.count('apply_trial_conversion_defaults(') == expected, (
             f'{path}: конверсия триала должна применять дефолт автоплатежа (ожидалось вызовов: {expected})'
         )
