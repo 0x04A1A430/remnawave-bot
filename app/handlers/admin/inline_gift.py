@@ -28,6 +28,11 @@ Syntax (flags are mixable in any order; each applies its component):
     @botname @user -p 30 500 3 -t 100 60 -b 1500 -d 15
     @botname @user -b 1500 -t 100
 
+  Silent attach (-s; миксируется и работает с -r):
+    @botname @user -s 30            — фото прикреплено вложением, а не превью
+    @botname @user -s -p 30 500 3 -b 1500
+    @botname -r 5 30 -s            — мультиподарок с фото-вложением
+
   Multi-activation (первым N, standalone — не миксируется):
     @botname -r 5 30               — 5 активаций, 30 дней
     @botname -r 5 30 500 3         — 5 активаций, 30 дней, 500 ГБ, 3 уст.
@@ -63,10 +68,11 @@ _MAX_DEVICES = 999
 # `-r` doubles as the standalone multi-activation prefix ("-r N days..."); as a
 # mixable flag it means "reset traffic usage". Both coexist: multi requires a
 # trailing numeric count and a bare "@user -r" target, so they never collide.
-# Mixable flag tokens. A single '-' is the "skip position" sentinel, not a flag.
 # `-g` = reset traffic usage. `-r` is reserved for the standalone multi-activation
 # prefix ("-r N days...") and is NOT mixable.
-_FLAG_TOKENS = {'-d', '-b', '-t', '-p', '-g'}
+# `-s` = silent attach: the picture goes as a real photo attachment instead of
+# a link-preview above the text (caption below the photo by default).
+_FLAG_TOKENS = {'-d', '-b', '-t', '-p', '-g', '-s'}
 
 
 def _is_admin(telegram_id: int) -> bool:
@@ -91,6 +97,9 @@ class ParsedQuery:
     temp_traffic_days: int = 0  # >0 = present; 0 = default 30
     # Reset-traffic component
     reset_traffic: bool = False  # True = reset usage
+    # Presentation flag: attach the picture as a photo message instead of a
+    # link preview. Purely cosmetic — does not count as a gift component.
+    silent: bool = False  # True when -s is present
 
     @property
     def is_multi(self) -> bool:
@@ -188,12 +197,22 @@ def _parse_query(query_text: str) -> ParsedQuery:
     if not tokens:
         return ParsedQuery('', 0)
 
-    # -r N [days [traffic [devices]]] — standalone multi-activation
+    # -r N [days [traffic [devices]]] [-s] — standalone multi-activation
     if tokens[0] == '-r':
-        rest = tokens[1:]
+        # -s may ride along anywhere; it only affects rendering.
+        silent = '-s' in tokens[1:]
+        rest = [t for t in tokens[1:] if t != '-s']
         count = max(1, int(rest[0]) if rest and rest[0].isdigit() else 1)
         days, traffic, devices = _parse_sub_args(rest[1:] if len(rest) > 1 else [])
-        return ParsedQuery('', 0, multi_count=count, days=days, traffic_gb=traffic, devices=devices)
+        return ParsedQuery(
+            '',
+            0,
+            multi_count=count,
+            days=days,
+            traffic_gb=traffic,
+            devices=devices,
+            silent=silent,
+        )
 
     # Extract target
     first = tokens[0]
@@ -213,11 +232,19 @@ def _parse_query(query_text: str) -> ParsedQuery:
 
     # If any mixable flag is present → parse by flags; otherwise legacy positional
     # subscription args (@user [days [traffic [devices]]]) with '-' as skip.
+    # -s is rendering-only, so it must not flip positional parsing into flag
+    # mode: strip it out and remember it, wherever it stands.
+    silent = '-s' in rest
+    if silent:
+        rest = [t for t in rest if t != '-s']
+        if not rest:
+            return ParsedQuery(username, target_id, silent=True)
+
     if not (set(rest) & _FLAG_TOKENS):
         days, traffic, devices = _parse_sub_args(rest)
-        return ParsedQuery(username, target_id, days=days, traffic_gb=traffic, devices=devices)
+        return ParsedQuery(username, target_id, days=days, traffic_gb=traffic, devices=devices, silent=silent)
 
-    parsed = ParsedQuery(username, target_id)
+    parsed = ParsedQuery(username, target_id, silent=silent)
 
     i = 0
     while i < len(rest):
@@ -266,6 +293,11 @@ def _parse_query(query_text: str) -> ParsedQuery:
 
         if tok == '-g':
             parsed.reset_traffic = True
+            i += 1
+            continue
+
+        if tok == '-s':
+            parsed.silent = True
             i += 1
             continue
 
@@ -396,11 +428,53 @@ def _build_combo_caption(
     return f'<b>{header} {_recipient_html(display)}</b>\n\n<blockquote>{body}</blockquote>\n\n<code>{hint}</code>'
 
 
-def _build_syntax_hint(texts) -> list[types.InlineQueryResultArticle]:
-    thumb = texts.t(
+def _gift_syntax_thumb(texts) -> str:
+    return texts.t(
         'INLINE_GIFT_THUMBNAIL_URL',
         'https://raw.githubusercontent.com/0x04A1A430/storage/refs/heads/main/bot/GIFT.png',
     )
+
+
+def _gift_result(
+    result_id: str,
+    title: str,
+    description: str,
+    caption: str,
+    thumb: str,
+    keyboard: types.InlineKeyboardMarkup,
+    *,
+    silent: bool,
+) -> types.InlineQueryResultArticle | types.InlineQueryResultPhoto:
+    """Choosable result: article with link-preview, or attached photo for -s."""
+    if silent:
+        return types.InlineQueryResultPhoto(
+            id=result_id,
+            photo_url=thumb,
+            thumbnail_url=thumb,
+            title=title,
+            description=description,
+            caption=caption,
+            parse_mode='HTML',
+            reply_markup=keyboard,
+        )
+    return types.InlineQueryResultArticle(
+        id=result_id,
+        title=title,
+        description=description,
+        thumbnail_url=thumb,
+        thumbnail_width=512,
+        thumbnail_height=512,
+        input_message_content=types.InputTextMessageContent(
+            message_text=caption,
+            parse_mode='HTML',
+            link_preview_options=types.LinkPreviewOptions(show_above_text=True, url=thumb),
+        ),
+        reply_markup=keyboard,
+    )
+
+
+def _build_syntax_hint(texts) -> list[types.InlineQueryResultArticle]:
+    thumb = _gift_syntax_thumb(texts)
     error_text = texts.t(
         'INLINE_GIFT_HINT_TAP_ERROR',
         'Ошибка: незаполненное поле',
@@ -412,6 +486,7 @@ def _build_syntax_hint(texts) -> list[types.InlineQueryResultArticle]:
         ('hint_bal', '@user -b 1500', 'Пополнить баланс на 1500 ₽'),
         ('hint_t', '@user -t 100 60', 'Временный трафик: 100 ГБ на 60 дней (без дней — 30)'),
         ('hint_g', '@user -g', 'Сброс использованного трафика'),
+        ('hint_s', '@user -s 30', 'Фото вложением, не превью (миксируется)'),
         ('hint_mix', '@user -p 1 500 3 -t 100 -b 1500 -d 15', 'Микс флагов одним подарком'),
     ]
     results = []
@@ -439,7 +514,7 @@ def _build_syntax_hint(texts) -> list[types.InlineQueryResultArticle]:
 def _flag_hint(query_text: str, texts) -> str:
     t = query_text.strip()
     if t.startswith('-r'):
-        return '-r N дни [гб [уст.]]  — первым N  |  - для пропуска'
+        return '-r N дни [гб [уст.]]  — первым N  |  - для пропуска  |  -s фото вложением'
     if '-d' in t:
         return '-d 15  — скидка 15%  (миксируется)'
     if '-b' in t:
@@ -450,7 +525,12 @@ def _flag_hint(query_text: str, texts) -> str:
         return '-p дни [гб [уст.]]  |  - пропуск позиции  (миксируется)'
     if '-g' in t:
         return '-g  — сброс использованного трафика  (миксируется)'
-    return '@user -p дни [гб [уст.]] | -t гб [дней] | -d % | -b ₽ | -g сброс трафика | флаги миксируются | - пропуск'
+    if '-s' in t:
+        return '-s  — фото вложением вместо превью  (миксируется)'
+    return (
+        '@user -p дни [гб [уст.]] | -t гб [дней] | -d % | -b ₽ | -g сброс трафика'
+        ' | -s фото вложением | флаги миксируются | - пропуск'
+    )
 
 
 async def handle_admin_inline_query(inline_query: types.InlineQuery) -> None:
@@ -462,10 +542,7 @@ async def handle_admin_inline_query(inline_query: types.InlineQuery) -> None:
     query_text = (inline_query.query or '').strip()
     parsed = _parse_query(query_text)
 
-    thumb = texts.t(
-        'INLINE_GIFT_THUMBNAIL_URL',
-        'https://raw.githubusercontent.com/0x04A1A430/storage/refs/heads/main/bot/GIFT.png',
-    )
+    thumb = _gift_syntax_thumb(texts)
 
     hint_text = _flag_hint(query_text, texts)
     hint_kwargs = dict(cache_time=1, switch_pm_text=hint_text, switch_pm_parameter='help')
@@ -512,21 +589,14 @@ async def handle_admin_inline_query(inline_query: types.InlineQuery) -> None:
             ]
         )
         results = [
-            types.InlineQueryResultArticle(
-                id=gift_code,
-                title=texts.t('INLINE_GIFT_RANDOM_TITLE', 'Первым {n} — {gift}').format(
-                    n=parsed.multi_count, gift=summary
-                ),
-                description=summary,
-                thumbnail_url=thumb,
-                thumbnail_width=512,
-                thumbnail_height=512,
-                input_message_content=types.InputTextMessageContent(
-                    message_text=caption,
-                    parse_mode='HTML',
-                    link_preview_options=types.LinkPreviewOptions(show_above_text=True, url=thumb),
-                ),
-                reply_markup=keyboard,
+            _gift_result(
+                gift_code,
+                texts.t('INLINE_GIFT_RANDOM_TITLE', 'Первым {n} — {gift}').format(n=parsed.multi_count, gift=summary),
+                summary,
+                caption,
+                thumb,
+                keyboard,
+                silent=parsed.silent,
             )
         ]
         await inline_query.answer(
@@ -658,19 +728,14 @@ async def handle_admin_inline_query(inline_query: types.InlineQuery) -> None:
     title = f'{recipient_display} — ' + ' + '.join(title_parts)
 
     results = [
-        types.InlineQueryResultArticle(
-            id=gift_code,
-            title=title,
-            description=description,
-            thumbnail_url=thumb,
-            thumbnail_width=512,
-            thumbnail_height=512,
-            input_message_content=types.InputTextMessageContent(
-                message_text=caption,
-                parse_mode='HTML',
-                link_preview_options=types.LinkPreviewOptions(show_above_text=True, url=thumb),
-            ),
-            reply_markup=keyboard,
+        _gift_result(
+            gift_code,
+            title,
+            description,
+            caption,
+            thumb,
+            keyboard,
+            silent=parsed.silent,
         )
     ]
     await inline_query.answer(results, cache_time=0, is_personal=True)
@@ -688,6 +753,8 @@ async def handle_chosen_inline_result(chosen: types.ChosenInlineResult) -> None:
         'hint_disc',
         'hint_bal',
         'hint_t',
+        'hint_g',
+        'hint_s',
         'hint_mix',
     ):
         return
