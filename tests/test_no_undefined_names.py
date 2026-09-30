@@ -42,7 +42,7 @@ KNOWN: dict[str, set[str]] = {
 
 
 def _undefined_names() -> dict[str, set[str]]:
-    result = subprocess.run(
+    result = subprocess.run(  # noqa: S603 — запуск собственного ruff, ввод не внешний
         [sys.executable, '-m', 'ruff', 'check', '--select', 'F821', '--no-cache', '--output-format', 'json', 'app'],
         capture_output=True,
         text=True,
@@ -54,7 +54,9 @@ def _undefined_names() -> dict[str, set[str]]:
 
     found: dict[str, set[str]] = {}
     for item in json.loads(result.stdout or '[]'):
-        path = str(pathlib.Path(item['filename']).relative_to(ROOT))
+        # as_posix: на Windows str(Path) даёт обратные слэши, а ключи KNOWN —
+        # в forward-slash, как в отчёте ruff на CI.
+        path = pathlib.Path(item['filename']).relative_to(ROOT).as_posix()
         name = item['message'].removeprefix('Undefined name ').strip('`')
         found.setdefault(path, set()).add(name)
     return found

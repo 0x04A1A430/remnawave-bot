@@ -9,7 +9,7 @@ Covers the chain that keeps the inline message button in sync:
 
 import contextlib
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 from aiogram.types import ChosenInlineResult, User as TgUser
@@ -20,6 +20,7 @@ from app.database.models import Base, InlineGiftSubscription, User
 from app.handlers.admin import inline_gift as admin_mod
 from app.handlers.inline_gift import _check_recipient, _update_inline_button
 from tests.fixtures.sqlite_memory import ensure_real_aiosqlite
+
 
 _TABLES = [InlineGiftSubscription.__table__, User.__table__]
 
@@ -67,9 +68,7 @@ class TestChosenInlineResultStorage:
             async with maker() as db:
                 db.add(User(telegram_id=555, username='bill', balance_kopeks=0))
                 await db.commit()
-            await admin_mod.handle_chosen_inline_result(
-                _make_chosen('code_resolved', '@bill 30', _INLINE_MSG_ID)
-            )
+            await admin_mod.handle_chosen_inline_result(_make_chosen('code_resolved', '@bill 30', _INLINE_MSG_ID))
             async with maker() as db:
                 gift = await _get_gift(db, 'code_resolved')
         assert gift is not None
@@ -93,9 +92,7 @@ class TestChosenInlineResultStorage:
     @pytest.mark.asyncio
     async def test_unresolved_target_id_keeps_real_inline_message_id(self, monkeypatch):
         async with db_maker_with_seed(monkeypatch) as maker:
-            await admin_mod.handle_chosen_inline_result(
-                _make_chosen('code_unresolved_tid', '777 30', _INLINE_MSG_ID)
-            )
+            await admin_mod.handle_chosen_inline_result(_make_chosen('code_unresolved_tid', '777 30', _INLINE_MSG_ID))
             async with maker() as db:
                 gift = await _get_gift(db, 'code_unresolved_tid')
         assert gift is not None
@@ -106,21 +103,21 @@ class TestChosenInlineResultStorage:
     @pytest.mark.asyncio
     async def test_missing_inline_message_id_is_stored_as_none(self, monkeypatch):
         async with db_maker_with_seed(monkeypatch) as maker:
-            await admin_mod.handle_chosen_inline_result(
-                _make_chosen('code_no_feedback', '@bill 30', None)
-            )
+            async with maker() as db:
+                db.add(User(telegram_id=555, username='bill', balance_kopeks=0))
+                await db.commit()
+            await admin_mod.handle_chosen_inline_result(_make_chosen('code_no_feedback', '@bill 30', None))
             async with maker() as db:
                 gift = await _get_gift(db, 'code_no_feedback')
         assert gift is not None
         assert gift.inline_message_id is None
         assert gift.intended_recipient is None
+        assert gift.recipient_telegram_id == 555
 
     @pytest.mark.asyncio
     async def test_multi_activation_keeps_real_inline_message_id(self, monkeypatch):
         async with db_maker_with_seed(monkeypatch) as maker:
-            await admin_mod.handle_chosen_inline_result(
-                _make_chosen('code_multi', '-r 5 30', _INLINE_MSG_ID)
-            )
+            await admin_mod.handle_chosen_inline_result(_make_chosen('code_multi', '-r 5 30', _INLINE_MSG_ID))
             async with maker() as db:
                 gift = await _get_gift(db, 'code_multi')
         assert gift is not None
@@ -169,36 +166,41 @@ class TestCheckRecipient:
 
 
 class TestUpdateInlineButton:
-    def test_missing_inline_message_id_skips_edit(self):
+    @pytest.mark.asyncio
+    async def test_missing_inline_message_id_skips_edit(self):
         bot = AsyncMock()
-        _update_inline_button(bot, None, 'Активировано', 0, 1, gift_code='c1')
+        await _update_inline_button(bot, None, 'Активировано', 0, 1, gift_code='c1')
         bot.edit_message_reply_markup.assert_not_called()
 
-    def test_legacy_sentinel_skips_edit(self):
+    @pytest.mark.asyncio
+    async def test_legacy_sentinel_skips_edit(self):
         bot = AsyncMock()
-        _update_inline_button(bot, 'u:alice', 'Активировано', 0, 1, gift_code='c1')
+        await _update_inline_button(bot, 'u:alice', 'Активировано', 0, 1, gift_code='c1')
         bot.edit_message_reply_markup.assert_not_called()
 
-    def test_fully_used_sets_noop_callback_button(self):
+    @pytest.mark.asyncio
+    async def test_fully_used_sets_noop_callback_button(self):
         bot = AsyncMock()
-        _update_inline_button(bot, _INLINE_MSG_ID, 'Активировано', 0, 2, gift_code='c2')
+        await _update_inline_button(bot, _INLINE_MSG_ID, 'Активировано', 0, 2, gift_code='c2')
         bot.edit_message_reply_markup.assert_awaited_once()
         kwargs = bot.edit_message_reply_markup.await_args.kwargs
         assert kwargs['inline_message_id'] == _INLINE_MSG_ID
         button = kwargs['reply_markup'].inline_keyboard[0][0]
         assert button.callback_data == 'igift_noop'
 
-    def test_remaining_shows_deep_link_button(self):
+    @pytest.mark.asyncio
+    async def test_remaining_shows_deep_link_button(self):
         bot = AsyncMock()
-        _update_inline_button(bot, _INLINE_MSG_ID, 'Активировать (осталось: 1)', 1, 2, gift_code='c3')
+        await _update_inline_button(bot, _INLINE_MSG_ID, 'Активировать (осталось: 1)', 1, 2, gift_code='c3')
         bot.edit_message_reply_markup.assert_awaited_once()
         kwargs = bot.edit_message_reply_markup.await_args.kwargs
         button = kwargs['reply_markup'].inline_keyboard[0][0]
         assert button.url is not None
         assert button.url.endswith('start=c3')
 
-    def test_edit_failure_is_swallowed(self):
+    @pytest.mark.asyncio
+    async def test_edit_failure_is_swallowed(self):
         bot = AsyncMock()
         bot.edit_message_reply_markup.side_effect = RuntimeError('boom')
-        _update_inline_button(bot, _INLINE_MSG_ID, 'Активировано', 0, 1, gift_code='c4')
+        await _update_inline_button(bot, _INLINE_MSG_ID, 'Активировано', 0, 1, gift_code='c4')
         bot.edit_message_reply_markup.assert_awaited_once()

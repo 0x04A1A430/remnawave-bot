@@ -131,7 +131,9 @@ def build_deviation_lines(deviation: SubscriptionDeviation, texts=None) -> list[
         else:
             devices_word = texts.t('DEVIATION_DEVICE_MANY', 'доп. устройств')
         lines.append(
-            texts.t('DEVIATION_EXTRA_DEVICES', f'{DEVICES_EMOJI_HTML} +{{count}} {{word}}').format(count=n, word=devices_word)
+            texts.t('DEVIATION_EXTRA_DEVICES', f'{DEVICES_EMOJI_HTML} +{{count}} {{word}}').format(
+                count=n, word=devices_word
+            )
         )
     if deviation.extra_traffic_gb:
         lines.append(
