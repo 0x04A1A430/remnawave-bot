@@ -146,9 +146,8 @@ class OverpayService:
 
         for path in (self._temp_cert_file, self._temp_key_file):
             if path:
-                # Снос временного файла, один системный вызов.
                 try:
-                    Path(path).unlink()
+                    Path(path).unlink()  # noqa: ASYNC240 — снос временного файла, один системный вызов
                 except OSError:
                     pass
         self._temp_cert_file = None
