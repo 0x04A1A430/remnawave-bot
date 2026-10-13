@@ -235,6 +235,51 @@ async def test_recreated_account_replaces_the_stale_link():
     assert user.remnawave_id == 99
 
 
+@pytest.mark.asyncio
+async def test_dead_id_is_relinked_to_the_account_that_already_exists():
+    """Прошлая попытка завела аккаунт, но связь не записала: имя занято, и создание
+    падало бы на каждом проходе. Аккаунт находится по shortUuid — пишем в него."""
+    calls = []
+
+    async def update_user(**kwargs):
+        calls.append(kwargs['user_id'])
+        if kwargs['user_id'] == 42:
+            raise RemnaWaveAPIError('User not found', 404, {'errorCode': 'A063'})
+        return _panel_user(user_id=99)
+
+    api = _api(get_user_by_short_uuid=_panel_user(user_id=99))
+    api.update_user.side_effect = update_user
+    subscription = _sub(remnawave_id=42)
+    user = _user(remnawave_id=42)
+
+    result = await push_subscription(
+        api, user, subscription, db=_db(), multi_tariff=True, verify_recorded_id=False, now=NOW
+    )
+
+    assert result.action == 'updated'
+    assert calls == [42, 99]
+    api.create_user.assert_not_awaited()
+    assert subscription.remnawave_id == 99
+    assert user.remnawave_id == 99, 'мёртвый id остался человеку и достанется следующей покупке'
+
+
+@pytest.mark.asyncio
+async def test_recreated_account_clears_the_dead_id_from_the_user_in_multi_tariff():
+    api = _api()
+    api.update_user.side_effect = RemnaWaveAPIError('User not found', 404, {'errorCode': 'A063'})
+    api.create_user.return_value = _panel_user(user_id=99)
+    subscription = _sub(remnawave_id=42)
+    user = _user(remnawave_id=42)
+
+    result = await push_subscription(
+        api, user, subscription, db=_db(), multi_tariff=True, verify_recorded_id=False, now=NOW
+    )
+
+    assert result.action == 'created'
+    assert subscription.remnawave_id == 99
+    assert user.remnawave_id == 99
+
+
 # ---------------------------------------------------------------------------
 # Разъезд часов: панель сравнивает дату со своими часами
 # ---------------------------------------------------------------------------
@@ -325,3 +370,37 @@ async def test_other_validation_errors_are_not_mistaken_for_clock_skew():
     with pytest.raises(RemnaWaveAPIError):
         await push_subscription(api, _user(), sub, multi_tariff=True, now=NOW)
     assert api.update_user.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_paid_subscription_without_a_tag_clears_the_trial_tag_left_in_the_panel(monkeypatch):
+    """Жалоба 17.09: общий триальный тег задан, платный — нет, у тарифа тега нет.
+    После покупки аккаунт в панели оставался с TRIAL, потому что поле не отправлялось."""
+    from app.services.panel_sync import tags as tags_module
+
+    monkeypatch.setattr(
+        tags_module,
+        'settings',
+        SimpleNamespace(get_trial_user_tag=lambda: 'TRIAL', get_paid_subscription_user_tag=lambda: None),
+    )
+    api = _api(get_user_by_id=_panel_user())
+
+    await push_subscription(api, _user(), _sub(remnawave_id=42, is_trial=False), multi_tariff=True, now=NOW)
+
+    kwargs = api.update_user.await_args.kwargs
+    assert 'tag' in kwargs
+    assert kwargs['tag'] is None
+
+
+@pytest.mark.asyncio
+async def test_patch_panel_account_clears_the_tag_only_when_told_to():
+    """Карточка аккаунта: без ``tag`` в вызове поле не трогается, ``tag=None`` — снимает."""
+    from app.services.panel_sync.writer import patch_panel_account
+
+    api = _api()
+
+    await patch_panel_account(api, user_id=42, description='d')
+    assert 'tag' not in api.update_user.await_args.kwargs
+
+    await patch_panel_account(api, user_id=42, tag=None)
+    assert api.update_user.await_args.kwargs['tag'] is None

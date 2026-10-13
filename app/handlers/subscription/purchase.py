@@ -57,6 +57,7 @@ from app.services.trial_activation_service import (
 )
 from app.services.user_cart_service import user_cart_service
 from app.utils.decorators import error_handler
+from app.utils.legacy_subscription import is_legacy_subscription as _legacy_subscription
 
 
 logger = structlog.get_logger(__name__)
@@ -112,6 +113,7 @@ from app.utils.pricing_utils import (
     calculate_months_from_days,
     format_period_description,
 )
+from app.utils.subscription_time import format_time_left
 from app.utils.subscription_utils import (
     get_display_subscription_link,
     resolve_simple_subscription_device_limit,
@@ -120,6 +122,8 @@ from app.utils.timezone import format_local_datetime
 
 from .autopay import (
     handle_autopay_menu,
+    handle_cashera_recurring_cancel,
+    handle_cashera_recurring_enable,
     handle_sbp_recurring_cancel,
     handle_sbp_recurring_enable,
     handle_sbp_recurring_menu,
@@ -560,7 +564,7 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
                 bar = '▰' * filled + '▱' * (bar_length - filled)
 
                 # Форматируем дату истечения
-                expire_date = purchase.expires_at.strftime('%d.%m.%Y')
+                expire_date = format_local_datetime(purchase.expires_at, '%d.%m.%Y')
 
                 # Формируем текст о времени
                 if days_remaining == 0:
@@ -1841,7 +1845,7 @@ async def handle_extend_subscription(
     renewal_lines = [
         '⏰ Продление подписки',
         '',
-        f'Осталось дней: {subscription.days_left}',
+        f'Осталось: {format_time_left(texts, subscription.end_date)}',
         '',
         '<b>Ваша текущая конфигурация:</b>',
         f'🌍 Серверов: {len(subscription.connected_squads or [])}',
@@ -3065,7 +3069,11 @@ async def handle_subscription_settings(callback: types.CallbackQuery, db_user: U
     await callback.message.edit_text(
         settings_text,
         reply_markup=get_updated_subscription_settings_keyboard(
-            db_user.language, show_countries, tariff=tariff, subscription=subscription
+            db_user.language,
+            show_countries,
+            tariff=tariff,
+            subscription=subscription,
+            is_legacy_subscription=_legacy_subscription(subscription),
         ),
         parse_mode='HTML',
     )
@@ -4318,6 +4326,10 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(handle_sbp_recurring_enable, F.data == 'sbp_recurring_enable')
 
     dp.callback_query.register(handle_sbp_recurring_cancel, F.data == 'sbp_recurring_cancel')
+
+    dp.callback_query.register(handle_cashera_recurring_enable, F.data == 'cashera_recurring_enable')
+
+    dp.callback_query.register(handle_cashera_recurring_cancel, F.data == 'cashera_recurring_cancel')
 
     dp.callback_query.register(handle_subscription_config_back, F.data == 'subscription_config_back')
 

@@ -13,6 +13,7 @@ from app.localization.texts import get_texts
 from app.services.payment_service import PaymentService
 from app.states import BalanceStates
 from app.utils.decorators import error_handler
+from app.utils.timezone import format_local_datetime
 
 
 logger = structlog.get_logger(__name__)
@@ -113,12 +114,16 @@ async def process_cryptobot_payment_amount(
     amount_rubles = amount_kopeks / 100
 
     if amount_rubles < 100:
-        await message.answer('Минимальная сумма пополнения: 100 ₽', reply_markup=get_back_keyboard(db_user.language))
+        await message.answer(
+            'Минимальная сумма пополнения: 100 ₽\n\nОтправьте новую сумму пополнения числом в сообщении.',
+            reply_markup=get_back_keyboard(db_user.language),
+        )
         return
 
     if amount_rubles > 100000:
         await message.answer(
-            'Максимальная сумма пополнения: 100,000 ₽', reply_markup=get_back_keyboard(db_user.language)
+            'Максимальная сумма пополнения: 100,000 ₽\n\nОтправьте новую сумму пополнения числом в сообщении.',
+            reply_markup=get_back_keyboard(db_user.language),
         )
         return
 
@@ -137,13 +142,17 @@ async def process_cryptobot_payment_amount(
 
         if amount_usd < 1:
             await message.answer(
-                '❌ Минимальная сумма для оплаты в USD: 1.00 USD', reply_markup=get_back_keyboard(db_user.language)
+                '❌ Минимальная сумма для оплаты в USD: 1.00 USD\n\n'
+                'Отправьте новую сумму пополнения в рублях числом в сообщении.',
+                reply_markup=get_back_keyboard(db_user.language),
             )
             return
 
         if amount_usd > 1000:
             await message.answer(
-                '❌ Максимальная сумма для оплаты в USD: 1,000 USD', reply_markup=get_back_keyboard(db_user.language)
+                '❌ Максимальная сумма для оплаты в USD: 1,000 USD\n\n'
+                'Отправьте новую сумму пополнения в рублях числом в сообщении.',
+                reply_markup=get_back_keyboard(db_user.language),
             )
             return
 
@@ -285,7 +294,7 @@ async def check_cryptobot_payment_status(callback: types.CallbackQuery, db: Asyn
             f'🆔 ID: {payment.invoice_id[:8]}...\n'
             f'💰 Сумма: {payment.amount} {payment.asset}\n'
             f'📊 Статус: {emoji} {status}\n'
-            f'📅 Создан: {payment.created_at.strftime("%d.%m.%Y %H:%M")}\n'
+            f'📅 Создан: {format_local_datetime(payment.created_at, "%d.%m.%Y %H:%M")}\n'
         )
 
         if payment.is_paid:

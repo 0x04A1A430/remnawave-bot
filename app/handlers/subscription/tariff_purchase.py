@@ -26,12 +26,15 @@ from app.database.models import Tariff, Transaction, TransactionType, User
 from app.keyboards.inline import build_insufficient_topup_keyboard
 from app.localization.texts import Texts, get_texts
 from app.services.admin_notification_service import AdminNotificationService
+from app.services.panel_sync import should_create_panel_account
 from app.services.subscription_service import SubscriptionService
 from app.services.tariff_switch_policy import remaining_days_for_switch, should_reset_used_traffic
 from app.services.user_cart_service import user_cart_service
 from app.utils.decorators import error_handler
 from app.utils.formatting import format_period, format_price_kopeks, format_traffic
+from app.utils.legacy_subscription import is_legacy_subscription as _legacy_subscription
 from app.utils.promo_offer import get_user_active_promo_discount_percent
+from app.utils.subscription_time import local_days_until
 
 
 logger = structlog.get_logger(__name__)
@@ -377,6 +380,15 @@ def get_tariff_confirm_keyboard(
                 )
             ]
         )
+    if settings.is_cashera_recurrent_enabled():
+        buttons.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t('CASHERA_PURCHASE_BUTTON', '⚡ Оформить с автооплатой Cashera'),
+                    callback_data=f'tariff_cashera:{tariff_id}',
+                )
+            ]
+        )
     buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data=f'tariff_select:{tariff_id}')])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
@@ -467,6 +479,15 @@ def _sbp_purchase_rows(tariff_id: int, texts) -> list[list[InlineKeyboardButton]
                 )
             ]
         )
+    if settings.is_cashera_recurrent_enabled():
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t('CASHERA_PURCHASE_BUTTON', '⚡ Оформить с автооплатой Cashera'),
+                    callback_data=f'tariff_cashera:{tariff_id}',
+                )
+            ]
+        )
     return rows
 
 
@@ -525,6 +546,15 @@ def get_daily_tariff_confirm_keyboard(
                 InlineKeyboardButton(
                     text=texts.t('LAVA_PURCHASE_BUTTON', '⚡ Оформить с автооплатой Lava'),
                     callback_data=f'tariff_lava:{tariff_id}',
+                )
+            ]
+        )
+    if settings.is_cashera_recurrent_enabled():
+        buttons.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t('CASHERA_PURCHASE_BUTTON', '⚡ Оформить с автооплатой Cashera'),
+                    callback_data=f'tariff_cashera:{tariff_id}',
                 )
             ]
         )
@@ -905,7 +935,7 @@ async def _proceed_with_selected_tariff(
         _active = await get_active_subscriptions_by_user_id(db, db_user.id)
         _existing = next((s for s in _active if s.tariff_id == tariff_id and not s.is_trial), None)
         if _existing:
-            days_left = max(0, (_existing.end_date - datetime.now(UTC)).days) if _existing.end_date else 0
+            days_left = local_days_until(_existing.end_date) if _existing.end_date else 0
             await callback.answer(
                 texts.t(
                     'TARIFF_PURCHASE_ALREADY_ACTIVE',
@@ -1421,10 +1451,7 @@ async def handle_custom_confirm(
     try:
         # Обновляем пользователя в Remnawave
         # При покупке тарифа ВСЕГДА сбрасываем трафик в панели
-        if settings.is_multi_tariff_enabled():
-            _should_create = not subscription.remnawave_id
-        else:
-            _should_create = not getattr(db_user, 'remnawave_id', None)
+        _should_create = await should_create_panel_account(db, subscription, db_user)
         try:
             subscription_service = SubscriptionService()
             if _should_create:
@@ -2116,10 +2143,7 @@ async def confirm_tariff_purchase(
     # In multi-tariff mode, each subscription has its own panel user.
     # A new subscription has no remnawave_id yet, so always CREATE.
     # In single-tariff mode, reuse the user-level panel id if available.
-    if settings.is_multi_tariff_enabled():
-        _should_create = not subscription.remnawave_id
-    else:
-        _should_create = not getattr(db_user, 'remnawave_id', None)
+    _should_create = await should_create_panel_account(db, subscription, db_user)
     try:
         subscription_service = SubscriptionService()
         if _should_create:
@@ -2432,10 +2456,7 @@ async def confirm_daily_tariff_purchase(
     # При покупке тарифа ВСЕГДА сбрасываем трафик в панели
     try:
         subscription_service = SubscriptionService()
-        if settings.is_multi_tariff_enabled():
-            _should_create = not subscription.remnawave_id
-        else:
-            _should_create = not getattr(db_user, 'remnawave_id', None)
+        _should_create = await should_create_panel_account(db, subscription, db_user)
 
         if _should_create:
             await subscription_service.create_remnawave_user(
@@ -2672,7 +2693,7 @@ async def show_tariff_extend(
                         tariff_name = texts.t('TARIFF_PURCHASE_SUBSCRIPTION_FALLBACK', 'Подписка #{id}').format(
                             id=sub.id
                         )
-                    days_left = max(0, (sub.end_date - datetime.now(UTC)).days) if sub.end_date else 0
+                    days_left = local_days_until(sub.end_date) if sub.end_date else 0
                     keyboard.append(
                         [
                             InlineKeyboardButton(
@@ -3119,10 +3140,7 @@ async def confirm_tariff_extend(
         # Обновляем пользователя в Remnawave
         try:
             subscription_service = SubscriptionService()
-            if settings.is_multi_tariff_enabled():
-                _should_create = not subscription.remnawave_id
-            else:
-                _should_create = not getattr(db_user, 'remnawave_id', None)
+            _should_create = await should_create_panel_account(db, subscription, db_user)
 
             if _should_create:
                 await subscription_service.create_remnawave_user(
@@ -3390,6 +3408,13 @@ def get_tariff_switch_insufficient_balance_keyboard(
     )
 
 
+def _switch_current_tariff_name(texts, is_legacy_subscription: bool) -> str:
+    """Подпись «Текущий: …» в списке тарифов, пока сам тариф не найден."""
+    if is_legacy_subscription:
+        return texts.t('TARIFF_SWITCH_LEGACY_CURRENT', 'подписка без тарифа')
+    return texts.t('SUBSCRIPTION_STATUS_UNKNOWN', 'Неизвестно')
+
+
 @error_handler
 async def show_tariff_switch_list(
     callback: types.CallbackQuery,
@@ -3406,9 +3431,15 @@ async def show_tariff_switch_list(
     if not subscription:
         return
 
+    # Старая подписка (куплена в классике, тарифа нет): это не смена тарифа, а
+    # первый выбор. Ограничения смены и запрет для истёкших к ней не относятся —
+    # тариф надевается на неё же (confirm_tariff_switch → extend_subscription).
+    is_legacy_subscription = _legacy_subscription(subscription)
+
     # Истёкшая подписка: смены тарифа нет, предлагаем купить новый тариф с нуля
     # (раньше кнопка «Тариф» вела сюда в тупик на истёкшей подписке).
-    if not subscription.end_date or subscription.end_date <= datetime.now(UTC):
+    subscription_expired = not subscription.end_date or subscription.end_date <= datetime.now(UTC)
+    if subscription_expired and not is_legacy_subscription:
         await callback.message.edit_text(
             texts.t(
                 'TARIFF_SWITCH_EXPIRED',
@@ -3434,7 +3465,8 @@ async def show_tariff_switch_list(
     current_tariff_id = subscription.tariff_id
 
     # Проверяем, разрешена ли смена тарифа хотя бы в одном направлении
-    if not settings.TARIFF_SWITCH_UPGRADE_ENABLED and not settings.TARIFF_SWITCH_DOWNGRADE_ENABLED:
+    switch_disabled = not settings.TARIFF_SWITCH_UPGRADE_ENABLED and not settings.TARIFF_SWITCH_DOWNGRADE_ENABLED
+    if switch_disabled and not is_legacy_subscription:
         await callback.message.edit_text(
             texts.t(
                 'TARIFF_SWITCH_DISABLED',
@@ -3487,7 +3519,7 @@ async def show_tariff_switch_list(
         return
 
     # Получаем текущий тариф для отображения
-    current_tariff_name = texts.t('SUBSCRIPTION_STATUS_UNKNOWN', 'Неизвестно')
+    current_tariff_name = _switch_current_tariff_name(texts, is_legacy_subscription)
     if current_tariff_id:
         current_tariff = await get_tariff_by_id(db, current_tariff_id)
         if current_tariff:
@@ -3715,17 +3747,17 @@ async def select_tariff_switch_period(
 
     traffic = format_traffic(tariff.traffic_limit_gb)
 
+    # Текущая подписка (с которой переходят): у старой подписки тарифа нет,
+    # и в подтверждении так и пишем, а не «Неизвестно».
+    subscription, _sw_period_sub_id = await _resolve_switch_subscription(callback, db_user, db, state)
+    is_legacy_subscription = _legacy_subscription(subscription)
+
     # Получаем текущий тариф для отображения
-    current_tariff_name = texts.t('SUBSCRIPTION_STATUS_UNKNOWN', 'Неизвестно')
+    current_tariff_name = _switch_current_tariff_name(texts, is_legacy_subscription)
     if current_tariff_id:
         current_tariff = await get_tariff_by_id(db, current_tariff_id)
         if current_tariff:
             current_tariff_name = html.escape(current_tariff.name)
-
-    # Получаем текущую подписку (switched FROM, not TO) для расчёта оставшегося времени
-    subscription, _sw_period_sub_id = await _resolve_switch_subscription(callback, db_user, db, state)
-    if subscription and subscription.end_date:
-        max(0, (subscription.end_date - datetime.now(UTC)).days)
 
     # При смене тарифа устанавливается ровно оплаченный период
     time_info = texts.t('TARIFF_SWITCH_WILL_SET_LINE', '⏰ Будет установлено: {days} дней').format(days=period)
@@ -3925,10 +3957,7 @@ async def confirm_tariff_switch(
         # Обновляем пользователя в Remnawave
         try:
             subscription_service = SubscriptionService()
-            if settings.is_multi_tariff_enabled():
-                _should_create = not subscription.remnawave_id
-            else:
-                _should_create = not getattr(db_user, 'remnawave_id', None)
+            _should_create = await should_create_panel_account(db, subscription, db_user)
 
             reset_used_traffic = should_reset_used_traffic(final_price)
             if _should_create:
@@ -4223,10 +4252,7 @@ async def confirm_daily_tariff_switch(
         # Обновляем пользователя в Remnawave (сброс трафика по админ-настройке)
         try:
             subscription_service = SubscriptionService()
-            if settings.is_multi_tariff_enabled():
-                _should_create = not subscription.remnawave_id
-            else:
-                _should_create = not getattr(db_user, 'remnawave_id', None)
+            _should_create = await should_create_panel_account(db, subscription, db_user)
 
             if _should_create:
                 await subscription_service.create_remnawave_user(
@@ -4981,6 +5007,59 @@ async def purchase_tariff_with_lava(
 
 
 @error_handler
+async def purchase_tariff_with_cashera(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+):
+    """Оформление подписки на тариф через автопродление Cashera.
+
+    Зеркало ``purchase_tariff_with_lava``: клиент подтверждает подписку по ссылке
+    Cashera, первое списание оживляет подписку (для нового тарифа — заготовка).
+    Каденс — по периоду тарифа, как у Platega.
+    """
+    texts = get_texts(db_user.language)
+    tariff_id = int(callback.data.split(':')[1])
+
+    tariff = await get_tariff_by_id(db, tariff_id)
+    if not tariff or not tariff.is_active:
+        await callback.answer(texts.t('TARIFF_PURCHASE_UNAVAILABLE', 'Тариф недоступен'), show_alert=True)
+        return
+
+    from app.services.payment.cashera import purchase_tariff_with_cashera_recurring
+
+    try:
+        result = await purchase_tariff_with_cashera_recurring(db, user=db_user, tariff=tariff)
+    except ValueError as error:
+        await callback.answer(str(error), show_alert=True)
+        return
+    except Exception:
+        await callback.answer(
+            texts.t(
+                'CASHERA_RECURRING_ENABLE_ERROR', '❌ Не удалось подключить автопродление Cashera. Попробуйте позже.'
+            ),
+            show_alert=True,
+        )
+        return
+
+    redirect_url = result.get('redirect_url')
+    text = texts.t(
+        'CASHERA_RECURRING_ENABLE_SUCCESS',
+        '⚡ <b>Автопродление Cashera</b>\n\nПодтвердите автосписания по кнопке ниже.\n'
+        'После подтверждения и первого списания подписка продлится автоматически.',
+    )
+
+    buttons = []
+    if redirect_url:
+        buttons.append(
+            [InlineKeyboardButton(text=texts.t('CASHERA_RECURRING_PAY_BUTTON', '💳 Подтвердить'), url=redirect_url)]
+        )
+    buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data='tariff_list')])
+
+    await callback.message.edit_text(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
+
+
+@error_handler
 async def confirm_instant_switch(
     callback: types.CallbackQuery,
     db_user: User,
@@ -5192,10 +5271,7 @@ async def confirm_instant_switch(
         # Обновляем пользователя в Remnawave (сброс трафика по админ-настройке)
         try:
             subscription_service = SubscriptionService()
-            if settings.is_multi_tariff_enabled():
-                _should_create = not subscription.remnawave_id
-            else:
-                _should_create = not getattr(db_user, 'remnawave_id', None)
+            _should_create = await should_create_panel_account(db, subscription, db_user)
 
             if _should_create:
                 await subscription_service.create_remnawave_user(
@@ -5788,6 +5864,7 @@ def register_tariff_purchase_handlers(dp: Dispatcher):
     # Оформление через СБП-автопродление Platega (альтернатива балансу)
     dp.callback_query.register(purchase_tariff_with_sbp, F.data.startswith('tariff_sbp:'))
     dp.callback_query.register(purchase_tariff_with_lava, F.data.startswith('tariff_lava:'))
+    dp.callback_query.register(purchase_tariff_with_cashera, F.data.startswith('tariff_cashera:'))
 
     # Подтверждение покупки суточного тарифа
     dp.callback_query.register(confirm_daily_tariff_purchase, F.data.startswith('daily_tariff_confirm:'))

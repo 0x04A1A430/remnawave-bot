@@ -12,6 +12,7 @@ from sqlalchemy.orm import selectinload
 from sqlalchemy.orm.exc import StaleDataError
 
 from app.config import settings
+from app.database.constants import ALIVE_SUBSCRIPTION_STATUSES as _ALIVE_SUBSCRIPTION_STATUSES
 from app.database.crud.notification import clear_notifications
 from app.database.models import (
     Subscription,
@@ -23,20 +24,15 @@ from app.database.models import (
     User,
     UserStatus,
 )
+from app.utils.subscription_time import ends_within_days
 from app.utils.timezone import format_local_datetime, local_day_start
 
 
 logger = structlog.get_logger(__name__)
 
-# Статусы, при которых подписка считается «живой» (индекс uq_subscriptions_user_tariff_active
-# защищает именно эти статусы). Используется в нескольких местах модуля.
-ALIVE_SUBSCRIPTION_STATUSES: frozenset[str] = frozenset(
-    {
-        SubscriptionStatus.ACTIVE.value,
-        SubscriptionStatus.TRIAL.value,
-        SubscriptionStatus.LIMITED.value,
-    }
-)
+# Статусы «живой» подписки — в app.database.constants; имя здесь оставлено для
+# существующих импортов.
+ALIVE_SUBSCRIPTION_STATUSES = _ALIVE_SUBSCRIPTION_STATUSES
 
 # Кортеж для SQLAlchemy .in_() — вычисляется один раз, не аллоцируется при каждом вызове.
 _ALIVE_SUBSCRIPTION_STATUSES_TUPLE: tuple[str, ...] = tuple(ALIVE_SUBSCRIPTION_STATUSES)
@@ -1145,6 +1141,7 @@ async def extend_subscription(
     device_limit: int | None = None,
     connected_squads: list[str] | None = None,
     convert_trial: bool = True,
+    reset_used_traffic: bool | None = None,
     commit: bool = True,
 ) -> Subscription:
     """Продлевает подписку на указанное количество дней.
@@ -1162,6 +1159,11 @@ async def extend_subscription(
             False для бесплатного релейбла/смены тарифа без оплаты, иначе триал
             превратится в фантомную платную подписку и попадёт в авто-продление
             (баг #629889).
+        reset_used_traffic: решение вызывающего, обнулять ли израсходованный
+            трафик при переданном ``traffic_limit_gb``. Вызывающий тем же решением
+            сбрасывает (или нет) счётчик в панели — иначе бот показывает расход 0,
+            а панель настоящий. ``None`` — прежнее правило: при смене тарифа по
+            ``RESET_TRAFFIC_ON_TARIFF_SWITCH``, при продлении всегда.
     """
     current_time = datetime.now(UTC)
 
@@ -1280,7 +1282,7 @@ async def extend_subscription(
         subscription.status = SubscriptionStatus.ACTIVE.value
         logger.info('🔄 Статус подписки изменён с trial на ACTIVE', subscription_id=subscription.id)
     elif days > 0 and subscription.status == SubscriptionStatus.PENDING.value:
-        logger.warning('⚠️ Попытка продлить PENDING подписку , дни', subscription_id=subscription.id, days=days)
+        logger.warning('⚠️ Попытка продлить PENDING подписку', subscription_id=subscription.id, days=days)
 
     # Обновляем параметры тарифа, если переданы
     if tariff_id is not None:
@@ -1302,8 +1304,12 @@ async def extend_subscription(
 
     if traffic_limit_gb is not None:
         old_traffic = subscription.traffic_limit_gb
-        # Сброс использованного трафика: при смене тарифа — по настройке, при продлении — всегда
-        if is_tariff_change:
+        # Сброс использованного трафика: при смене тарифа — по настройке, при продлении — всегда;
+        # вызывающий, который сам решает про панель, передаёт своё решение.
+        if reset_used_traffic is not None:
+            if reset_used_traffic:
+                subscription.traffic_used_gb = 0.0
+        elif is_tariff_change:
             if settings.RESET_TRAFFIC_ON_TARIFF_SWITCH:
                 subscription.traffic_used_gb = 0.0
         else:
@@ -1732,11 +1738,13 @@ async def update_subscription_autopay(
         # вызовы на отдельных поверхностях (бот/кабинет) пропускали новые точки
         # включения (миниапп, админ-тоглы) — и юзер платил дважды за цикл.
         try:
+            from app.services.cashera_recurring_cancel import cancel_cashera_recurring_for_subscription_safe
             from app.services.payment.lava import cancel_lava_recurring_for_subscription_safe
             from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
 
             await cancel_platega_recurring_for_subscription_safe(db, subscription.id)
             await cancel_lava_recurring_for_subscription_safe(db, subscription.id)
+            await cancel_cashera_recurring_for_subscription_safe(db, subscription.id)
         except Exception as platega_error:  # pragma: no cover - хелпер сам best-effort
             logger.warning(
                 'Не удалось отменить СБП-автопродление при включении автоплатежа',
@@ -1907,9 +1915,9 @@ async def get_subscriptions_for_autopay(db: AsyncSession) -> list[Subscription]:
         if subscription.tariff and getattr(subscription.tariff, 'is_daily', False):
             continue
 
-        days_until_expiry = (subscription.end_date - current_time).days
-
-        if days_until_expiry <= subscription.autopay_days_before and subscription.end_date > current_time:
+        if subscription.end_date > current_time and ends_within_days(
+            subscription.end_date, subscription.autopay_days_before, current_time
+        ):
             ready_for_autopay.append(subscription)
 
     return ready_for_autopay
@@ -2063,7 +2071,8 @@ async def wipe_trial_subscriptions(db: AsyncSession, subscriptions) -> int:
     панели идут параллельно с ограничением (Semaphore) на ОДНОМ клиенте API (как массовый
     синк) — операция тяжёлая. Подписку, у которой удаление в панели не удалось (транзиент),
     в БД НЕ трогаем (иначе снова orphan + воскрешение) — её подхватит следующий запуск.
-    Чистит устаревшую single-tariff панельную идентичность на `User`. НЕ коммитит — это делает
+    Чистит ссылку на удалённый аккаунт у `User` (в мультитарифе — только совпадающий
+    id, аккаунт живой соседней подписки остаётся). НЕ коммитит — это делает
     вызывающий; исключение — когда НИ ОДНО панельное удаление не удалось: тогда в БД
     мутировать нечего и транзакция откатывается, чтобы снять grace-локи pre-delete
     guard'а (не вызывайте с несохранёнными изменениями в сессии). Возвращает число
@@ -2089,6 +2098,9 @@ async def wipe_trial_subscriptions(db: AsyncSession, subscriptions) -> int:
     is_multi = settings.is_multi_tariff_enabled()
     delete_panel_user = settings.get_remnawave_user_delete_mode() == 'delete'
     service = SubscriptionService()
+    # subscription.id → id удалённого в панели аккаунта: в мультитарифе по нему
+    # стирается ссылка у человека (см. конец функции).
+    deleted_panel_ids: dict[int, int] = {}
 
     if service.is_configured:
         semaphore = asyncio.Semaphore(5)
@@ -2131,6 +2143,7 @@ async def wipe_trial_subscriptions(db: AsyncSession, subscriptions) -> int:
                     try:
                         if delete_panel_user:
                             await api.delete_user(panel_user_id)
+                            deleted_panel_ids[subscription.id] = panel_user_id
                         else:
                             await api.disable_user(panel_user_id)
                         return True
@@ -2148,6 +2161,8 @@ async def wipe_trial_subscriptions(db: AsyncSession, subscriptions) -> int:
                     except Exception as error:
                         msg = str(error).lower()
                         if 'not found' in msg or 'not exist' in msg or 'already disabled' in msg:
+                            if delete_panel_user:
+                                deleted_panel_ids[subscription.id] = panel_user_id
                             return True  # уже удалён/отключён — считаем успехом
                         logger.error(
                             'Не удалось снять панель-юзера при сбросе триала',
@@ -2183,6 +2198,7 @@ async def wipe_trial_subscriptions(db: AsyncSession, subscriptions) -> int:
             )
 
     subscription_ids = [subscription.id for subscription in to_reset]
+    subscription_users = {subscription.id: subscription.user_id for subscription in to_reset}
 
     try:
         await db.execute(delete(SubscriptionServer).where(SubscriptionServer.subscription_id.in_(subscription_ids)))
@@ -2201,6 +2217,17 @@ async def wipe_trial_subscriptions(db: AsyncSession, subscriptions) -> int:
     if not is_multi and delete_panel_user:
         user_ids = list({subscription.user_id for subscription in to_reset})
         await db.execute(update(User).where(User.id.in_(user_ids)).values(remnawave_id=None, remnawave_uuid=None))
+    elif is_multi:
+        # Мультитариф: первый аккаунт записан и человеку. Оставить там id удалённого
+        # аккаунта — отдать его следующей покупке (should_create_panel_account привяжет
+        # «свободный аккаунт человека» к новой строке → «User not found» каскадом).
+        # Стираем только совпадающий id: аккаунт живой соседней подписки не трогаем.
+        for subscription_id, user_id in subscription_users.items():
+            dead_panel_id = deleted_panel_ids.get(subscription_id)
+            if dead_panel_id:
+                await db.execute(
+                    update(User).where(User.id == user_id, User.remnawave_id == dead_panel_id).values(remnawave_id=None)
+                )
 
     return len(to_reset)
 
@@ -2397,7 +2424,7 @@ async def check_and_update_subscription_status(db: AsyncSession, subscription: S
     current_time = datetime.now(UTC)
 
     logger.info(
-        '🔍 Проверка статуса подписки , текущий статус дата окончания текущее время',
+        '🔍 Проверка статуса подписки',
         subscription_id=subscription.id,
         subscription_status=subscription.status,
         format_local_datetime=format_local_datetime(subscription.end_date),
@@ -2622,7 +2649,7 @@ async def create_pending_subscription(
         await db.refresh(existing_subscription)
 
         logger.info(
-            '♻️ Обновлена ожидающая подписка пользователя , ID метод оплаты',
+            '♻️ Обновлена ожидающая подписка',
             trial_label=trial_label,
             user_id=user_id,
             existing_subscription_id=existing_subscription.id,
@@ -2651,7 +2678,7 @@ async def create_pending_subscription(
     await db.refresh(subscription)
 
     logger.info(
-        '💳 Создана ожидающая подписка для пользователя , ID метод оплаты',
+        '💳 Создана ожидающая подписка',
         trial_label=trial_label,
         user_id=user_id,
         subscription_id=subscription.id,

@@ -155,6 +155,7 @@ class BotConfigurationService:
         'ETOPLATEZHI': '💳 Etoplatezhi',
         'JUPITER': '🪐 Jupiter',
         'CISPAY': '💳 CisPay',
+        'CASHERA': '💳 Cashera',
         'TABPAY': '💳 TabPay',
         'PARITYPAY': '💳 ParityPay',
         'DONUT': '🍩 Donut',
@@ -206,6 +207,7 @@ class BotConfigurationService:
         'INFO_PAGES': '📄 Инфо-страницы',
         'GRACE_ACCESS': '🛟 Grace-доступ',
         'BSCHEK': '📶 BSCHEKER (bschekbot)',
+        'DPICHECKER': '🧱 DPI//CHECKER',
     }
 
     CATEGORY_DESCRIPTIONS: dict[str, str] = {
@@ -232,6 +234,7 @@ class BotConfigurationService:
         'ETOPLATEZHI': 'Etoplatezhi: paymentpage.etoplatezhi.ru, оплата картой и через СБП.',
         'JUPITER': 'Jupiter (FPGate P2P v2.1): app.juppiter.tech, эквайринг СБП с HMAC-SHA256.',
         'CISPAY': 'cisPay: api.cispay.app, H2H-оплата картой и СБП на хостинговой странице, вебхуки с HMAC-SHA256.',
+        'CASHERA': 'Cashera: api.cashera.cash, СБП, карты, крипта и CryptoBot; ключ pk_, секрет sk_, методы оплаты.',
         'TABPAY': 'TabPay: tabpay.org, СБП и карты с 3-D Secure; вебхуки подписаны HMAC-SHA256 (X-Signature-V2).',
         'PARITYPAY': 'ParityPay: api.paritypay.net v2, СБП и карты; уведомления подписаны HMAC-SHA256 (X-SIGNATURE).',
         'DONUT': 'Donut P2P: gw.donut.business, P2P-оплата картой, СБП по телефону и QR.',
@@ -292,6 +295,10 @@ class BotConfigurationService:
             'Проверка хостов и конфигов глазами мобильных операторов РФ через bschekbot API: '
             'ключ, эталонная подписка панели, потолок цены одной задачи.'
         ),
+        'DPICHECKER': (
+            'Проверки VPN-ключей, адресов и MTProto из сетей России, Китая, Ирана и Туркменистана '
+            'через API DPI//CHECKER: включение и ключ API. Раздел — в админке кабинета.'
+        ),
     }
 
     @staticmethod
@@ -347,6 +354,7 @@ class BotConfigurationService:
         'MAX_ACTIVE_SUBSCRIPTIONS': 'SUBSCRIPTIONS_CORE',
         'BASE_PROMO_GROUP_PERIOD_DISCOUNTS_ENABLED': 'SUBSCRIPTIONS_CORE',
         'BASE_PROMO_GROUP_PERIOD_DISCOUNTS': 'SUBSCRIPTIONS_CORE',
+        'PROMO_GROUP_AUTO_ASSIGN_NOTIFY_USER': 'SUBSCRIPTIONS_CORE',
         'DEFAULT_AUTOPAY_ENABLED': 'AUTOPAY',
         'DEFAULT_AUTOPAY_DAYS_BEFORE': 'AUTOPAY',
         'MIN_BALANCE_FOR_AUTOPAY_KOPEKS': 'AUTOPAY',
@@ -430,6 +438,7 @@ class BotConfigurationService:
         'MAIN_MENU_RICH_LOGO_URL': 'INTERFACE',
         'MAIN_MENU_RICH_SUBSCRIPTIONS_COLLAPSIBLE': 'INTERFACE',
         'MAIN_MENU_RICH_INLINE_BUTTONS': 'INTERFACE',
+        'MAIN_MENU_LIVE_ENABLED': 'INTERFACE',
         'USER_NOTIFICATIONS_RICH_ENABLED': 'INTERFACE',
         'USER_ACTION_LOG_ENABLED': 'MONITORING',
         'USER_ACTION_LOG_RETENTION_DAYS': 'MONITORING',
@@ -480,6 +489,7 @@ class BotConfigurationService:
         'PRICE_TRAFFIC': 'TRAFFIC_PACKAGES',
         'TRAFFIC_': 'TRAFFIC',
         'REFERRAL_': 'REFERRAL',
+        'USER_REMINDERS_': 'NOTIFICATIONS',
         'AUTOPAY_': 'AUTOPAY',
         'TELEGRAM_OIDC_': 'TELEGRAM_OIDC',
         'TELEGRAM_WIDGET_': 'TELEGRAM_WIDGET',
@@ -501,6 +511,7 @@ class BotConfigurationService:
         'ETOPLATEZHI_': 'ETOPLATEZHI',
         'JUPITER_': 'JUPITER',
         'CISPAY_': 'CISPAY',
+        'CASHERA_': 'CASHERA',
         'TABPAY_': 'TABPAY',
         'PARITYPAY_': 'PARITYPAY',
         'DONUT_': 'DONUT',
@@ -532,6 +543,7 @@ class BotConfigurationService:
         'BAN_MSG_': 'BAN_NOTIFICATIONS',
         'GRACE_ACCESS_': 'GRACE_ACCESS',
         'BSCHEK_': 'BSCHEK',
+        'DPICHECKER_': 'DPICHECKER',
     }
 
     CHOICES: dict[str, list[ChoiceOption]] = {
@@ -836,6 +848,19 @@ class BotConfigurationService:
             'example': '1',
             'warning': 'При режиме true должно быть не меньше 1, иначе grace выключится при старте.',
         },
+        'GRACE_ACCESS_RESET_TRAFFIC_ON_START': {
+            'description': (
+                'Обнулять счётчик трафика при выдаче grace, чтобы панель и приложение показывали '
+                '«0 из N ГБ», а не почти исчерпанный лимит «расход + квота».'
+            ),
+            'format': 'Булево значение.',
+            'example': 'false',
+            'warning': (
+                'Действует только на истёкшие подписки с безлимитным трафиком — там счётчик чисто '
+                'информационный. Расход до grace при этом теряется. Упёршиеся в лимит не обнуляются никогда.'
+            ),
+            'dependencies': 'GRACE_ACCESS_TRAFFIC_GB',
+        },
         'GRACE_ACCESS_DURATION_HOURS': {
             'description': 'Сколько действует grace-доступ, если подписку так и не продлили.',
             'format': 'Целое число часов.',
@@ -943,7 +968,7 @@ class BotConfigurationService:
         'MAIN_MENU_RICH_LOGO_URL': {
             'description': (
                 'Публичный HTTPS-URL картинки-логотипа в шапке rich-меню. '
-                'Пусто — авто-режим: при заданном WEBHOOK_URL и существующем LOGO_FILE '
+                'Пусто — авто-режим (адрес меняется вместе с файлом, ?v= дописывать не нужно): при заданном WEBHOOK_URL и существующем LOGO_FILE '
                 'логотип отдаётся эндпоинтом /cabinet/branding/bot-logo.'
             ),
             'format': 'HTTPS-URL картинки (png/jpg/webp) или пустая строка.',
@@ -992,6 +1017,19 @@ class BotConfigurationService:
                 'сообщения целиком остаётся под ним: половина кнопок внутри — это потерянные кнопки.'
             ),
             'dependencies': 'MAIN_MENU_RICH_ENABLED, ADMIN_NOTIFICATIONS_RICH_ENABLED',
+        },
+        'MAIN_MENU_LIVE_ENABLED': {
+            'description': (
+                'Живое главное меню: бот сам перерисовывает последнее rich-меню пользователя '
+                'при смене трафика, статуса, лимита устройств или баланса.'
+            ),
+            'format': 'Булево значение.',
+            'example': 'false',
+            'warning': (
+                'Раз в 15 минут; при нагрузке на бот, 429 панели или лимите Telegram реже, до 360 минут. '
+                'Нужны Redis и rich-меню. Переключается без рестарта.'
+            ),
+            'dependencies': 'MAIN_MENU_RICH_ENABLED',
         },
         'USER_NOTIFICATIONS_RICH_ENABLED': {
             'description': (
@@ -1101,6 +1139,18 @@ class BotConfigurationService:
             'example': '30:10,60:20,90:30,180:50,360:65',
             'warning': 'Некорректные записи будут проигнорированы. Процент ограничен 0-100.',
         },
+        'PROMO_GROUP_AUTO_ASSIGN_NOTIFY_USER': {
+            'description': (
+                'Сообщать человеку, что ему автоматически назначена промогруппа за траты, и какие скидки '
+                'теперь действуют: в Telegram, а если его нет — на подтверждённую почту.'
+            ),
+            'format': 'Булево значение.',
+            'example': 'true',
+            'warning': (
+                'Массовый пересчёт порогов уведомлений не рассылает. Письмо отдельно выключается в '
+                'редакторе email-шаблонов (тип «Назначена промогруппа»).'
+            ),
+        },
         'AUTO_PURCHASE_AFTER_TOPUP_ENABLED': {
             'description': (
                 'При достаточном балансе автоматически оформляет сохранённую подписку сразу после пополнения.'
@@ -1115,6 +1165,73 @@ class BotConfigurationService:
             'example': '5',
             'warning': 'Слишком низкое значение может вызвать частые напоминания, слишком высокое — ухудшить SLA.',
             'dependencies': 'SUPPORT_TICKET_SLA_ENABLED, SUPPORT_TICKET_SLA_REMINDER_COOLDOWN_MINUTES',
+        },
+        'REFERRAL_WITHDRAWAL_REMINDER_ENABLED': {
+            'description': (
+                'Повторно напоминать админам о заявках на вывод, которые ждут решения (аналог SLA тикетов).'
+            ),
+            'format': 'Булево значение.',
+            'example': 'true',
+            'warning': 'Напоминания уходят в топик заявок на вывод, а без него — в категорию «партнёрки».',
+            'dependencies': 'REFERRAL_WITHDRAWAL_REMINDER_MINUTES, REFERRAL_WITHDRAWAL_REMINDER_COOLDOWN_MINUTES',
+        },
+        'REFERRAL_WITHDRAWAL_REMINDER_MINUTES': {
+            'description': 'Сколько минут заявка на вывод может ждать решения до первого напоминания.',
+            'format': 'Целое число от 1 до 10080.',
+            'example': '120',
+            'warning': 'Слишком низкое значение — частые напоминания по каждой заявке.',
+            'dependencies': 'REFERRAL_WITHDRAWAL_REMINDER_ENABLED, REFERRAL_WITHDRAWAL_REMINDER_COOLDOWN_MINUTES',
+        },
+        'REFERRAL_WITHDRAWAL_REMINDER_COOLDOWN_MINUTES': {
+            'description': 'Минимальный интервал между повторными напоминаниями по одной заявке на вывод.',
+            'format': 'Целое число от 1 до 10080 (минуты).',
+            'example': '180',
+            'warning': 'Фактический шаг округляется вверх до интервала проверки заявок.',
+            'dependencies': (
+                'REFERRAL_WITHDRAWAL_REMINDER_ENABLED, REFERRAL_WITHDRAWAL_REMINDER_CHECK_INTERVAL_SECONDS'
+            ),
+        },
+        'REFERRAL_WITHDRAWAL_REMINDER_CHECK_INTERVAL_SECONDS': {
+            'description': 'Как часто бот проверяет заявки на вывод без решения.',
+            'format': 'Целое число от 30 до 3600 (секунды).',
+            'example': '300',
+            'warning': 'Применяется на следующем круге проверки, перезапуск не нужен.',
+            'dependencies': 'REFERRAL_WITHDRAWAL_REMINDER_ENABLED',
+        },
+        'USER_REMINDERS_CHECK_INTERVAL_MINUTES': {
+            'description': 'Как часто бот отправляет пользователям напоминания в Telegram.',
+            'format': 'Целое число от 1 до 1440 (минуты).',
+            'example': '15',
+            'warning': 'Применяется на следующем проходе, перезапуск не нужен.',
+            'dependencies': 'USER_REMINDERS_MAX_PER_PASS',
+        },
+        'USER_REMINDERS_QUIET_HOURS_START': {
+            'description': 'С какого часа (по TIMEZONE) бот перестаёт отправлять напоминания.',
+            'format': 'Целое число от 0 до 23.',
+            'example': '21',
+            'warning': 'Одинаковые начало и конец — тихих часов нет.',
+            'dependencies': 'USER_REMINDERS_QUIET_HOURS_END',
+        },
+        'USER_REMINDERS_QUIET_HOURS_END': {
+            'description': 'До какого часа (по TIMEZONE) бот не отправляет напоминания.',
+            'format': 'Целое число от 0 до 23.',
+            'example': '10',
+            'warning': 'Одинаковые начало и конец — тихих часов нет.',
+            'dependencies': 'USER_REMINDERS_QUIET_HOURS_START',
+        },
+        'USER_REMINDERS_DAILY_LIMIT_ENABLED': {
+            'description': 'Не больше одного напоминания в сутки на человека по всем напоминаниям вместе.',
+            'format': 'Булево значение.',
+            'example': 'true',
+            'warning': 'Выключение позволит нескольким напоминаниям прийти в один день.',
+            'dependencies': 'USER_REMINDERS_CHECK_INTERVAL_MINUTES',
+        },
+        'USER_REMINDERS_MAX_PER_PASS': {
+            'description': 'Сколько сообщений бот отправляет за один проход; остальное — следующим.',
+            'format': 'Целое число от 1 до 10000.',
+            'example': '500',
+            'warning': 'Большое значение растягивает проход: темп 25 сообщений в секунду.',
+            'dependencies': 'USER_REMINDERS_CHECK_INTERVAL_MINUTES',
         },
         'MAINTENANCE_MODE': {
             'description': 'Переводит бота в режим технического обслуживания и скрывает действия для пользователей.',

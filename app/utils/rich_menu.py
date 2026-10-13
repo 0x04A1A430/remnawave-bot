@@ -42,6 +42,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.models import User
+from app.utils.cache import cache
+from app.utils.logo_fingerprint import logo_version
+from app.utils.rich_buttons import render_keyboard_as_rich_html
 from app.utils.validators import sanitize_html
 
 
@@ -168,7 +171,8 @@ def _resolve_rich_logo_url() -> str:
 
     Иначе, если задан WEBHOOK_URL (публичный origin нашего FastAPI) и файл
     LOGO_FILE существует, логотип отдаётся собственным эндпоинтом
-    /cabinet/branding/bot-logo.
+    /cabinet/branding/bot-logo?v=<отпечаток файла>. Telegram кэширует картинку
+    по адресу: без версии заменённый файл показывался старым до ручного ``?v=``.
     """
     if _logo_unavailable:
         return ''
@@ -188,7 +192,63 @@ def _resolve_rich_logo_url() -> str:
     parsed = urlparse(webhook_url)
     if not parsed.scheme or not parsed.netloc:
         return ''
-    return f'{parsed.scheme}://{parsed.netloc}/cabinet/branding/bot-logo'
+    version = logo_version(Path(settings.LOGO_FILE))
+    if version is None:
+        return ''
+    return f'{parsed.scheme}://{parsed.netloc}/cabinet/branding/bot-logo?v={version}'
+
+
+LIVE_MENU_TTL = 30 * 24 * 3600  # меню, которое не открывали месяц, не оживляем; открыл меню — отсчёт заново
+
+
+def _traffic_usage_text(subscription, texts) -> str:
+    used = texts.format_traffic(float(getattr(subscription, 'traffic_used_gb', 0) or 0), is_limit=False)
+    limit = texts.format_traffic(float(getattr(subscription, 'traffic_limit_gb', 0) or 0), is_limit=True)
+    return f'{used} / {limit}'
+
+
+def live_menu_fingerprint(user: User, texts) -> str:
+    """Только то, что видно в меню. HTML сравнивать нельзя: случайное сообщение админа и таймеры."""
+    now = datetime.now(UTC)
+    subscriptions = [
+        (
+            s.id,
+            s.actual_status,
+            s.end_date,
+            s.end_date and max((s.end_date - now).days, 0),  # «(N дн.)» вне tg-time
+            s.tariff_id,
+            bool(s.is_trial),
+            _traffic_usage_text(s, texts),
+            s.device_limit,
+        )
+        for s in user.subscriptions or []
+    ]
+    return repr((user.language, user.balance_kopeks, subscriptions))
+
+
+async def remember_live_menu(chat_id: int, message_id: int | None, user: User, texts) -> None:
+    """Запоминает последнее rich-меню чата для фоновой перерисовки. Никогда не бросает."""
+    if not settings.MAIN_MENU_LIVE_ENABLED or not message_id:
+        return
+    try:
+        state = {'m': message_id, 'fp': live_menu_fingerprint(user, texts)}
+        await cache.set(f'live_menu:{chat_id}', state, expire=LIVE_MENU_TTL)
+    except Exception as error:  # меню уже показано — живость не повод уводить его в классику
+        logger.warning('Живое меню: не удалось запомнить меню', chat_id=chat_id, error=str(error))
+
+
+async def forget_live_menu_on_callback(handler, event: CallbackQuery, data: dict):
+    """Нажали кнопку на живом меню — дальше подменю, фон это сообщение не трогает.
+
+    Работает и при выключенной настройке: иначе после «выкл → подменю → вкл» фон перетёр бы подменю.
+    """
+    message = event.message
+    if message is not None:
+        key = f'live_menu:{message.chat.id}'
+        state = await cache.get(key)
+        if state and state.get('m') == message.message_id:
+            await cache.delete(key)
+    return await handler(event, data)
 
 
 def _is_media_fetch_error(error: Exception) -> bool:
@@ -352,6 +412,34 @@ def _input_rich_message(rich_html: str, language: str | None) -> InputRichMessag
         is_rtl=True if (language or '').lower() in _RTL_LANGUAGES else None,
         skip_entity_detection=True,
     )
+
+
+def _apply_inline_buttons(
+    rich_html: str,
+    keyboard: InlineKeyboardMarkup,
+    *,
+    for_edit: bool = False,
+) -> tuple[str, InlineKeyboardMarkup | None]:
+    """Переносит клавиатуру внутрь полотна, если это включено настройкой.
+
+    Возвращает пару (html, reply_markup). При переносе клавиатуры под сообщением
+    не остаётся: дублировать кнопки незачем. Для РЕДАКТИРОВАНИЯ отдаётся пустая
+    клавиатура, а не None: у editMessageText отсутствующий reply_markup означает
+    «не трогать», и прежние кнопки остались бы висеть рядом с новыми.
+
+    Если хотя бы одну кнопку перенести нельзя, клавиатура остаётся снаружи
+    целиком — половина кнопок внутри означала бы потерянные кнопки.
+    """
+    if not settings.MAIN_MENU_RICH_INLINE_BUTTONS:
+        return rich_html, keyboard
+
+    # Главное меню всегда уходит в личный чат, поэтому Mini App здесь допустим.
+    buttons_html = render_keyboard_as_rich_html(keyboard, allow_web_app=True)
+    if buttons_html is None:
+        return rich_html, keyboard
+
+    empty = InlineKeyboardMarkup(inline_keyboard=[]) if for_edit else None
+    return rich_html + buttons_html, empty
 
 
 async def _send_rich_menu(

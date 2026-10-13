@@ -44,6 +44,7 @@ from app.utils.promo_offer import (
     build_test_access_hint,
 )
 from app.utils.rich_menu import try_edit_rich_main_menu
+from app.utils.subscription_time import local_days_until
 from app.utils.telegram_html import (
     html_to_telegram,
     info_page_faq_to_telegram,
@@ -171,37 +172,13 @@ def _build_group_discount_lines(group: PromoGroup, texts, language: str) -> list
     return lines
 
 
-async def show_main_menu(
-    callback: types.CallbackQuery,
-    db_user: User,
-    db: AsyncSession,
-    *,
-    skip_callback_answer: bool = False,
-):
-    if db_user is None:
-        # Пользователь не найден, используем язык по умолчанию
-        texts = get_texts(settings.DEFAULT_LANGUAGE)
-        await callback.answer(
-            texts.t(
-                'USER_NOT_FOUND_ERROR',
-                'Ошибка: пользователь не найден.',
-            ),
-            show_alert=True,
-        )
-        return
-
-    texts = get_texts(db_user.language)
-
-    db_user.last_activity = datetime.now(UTC)
-    await db.commit()
-
+async def build_main_menu_keyboard(db_user: User, db: AsyncSession):
+    """Клавиатура главного меню: show_main_menu, handle_back_to_menu и живое меню (live_menu_service)."""
     # Multi-tariff aware: check if user has ANY active subscription
     # 'limited' (traffic exhausted) subscriptions are still active for UI purposes
     _subs = getattr(db_user, 'subscriptions', None) or []
     has_active_subscription = any(sub.is_active or getattr(sub, 'actual_status', None) == 'limited' for sub in _subs)
     subscription_is_active = has_active_subscription
-
-    menu_text = await get_main_menu_text(db_user, texts, db)
 
     draft_exists = await has_subscription_checkout_draft(db_user.id)
     show_resume_checkout = should_offer_checkout_resume(db_user, draft_exists)
@@ -244,8 +221,37 @@ async def show_main_menu(
         has_saved_cart=has_saved_cart,
         custom_buttons=custom_buttons,
     )
+    return keyboard
+
+
+async def show_main_menu(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    *,
+    skip_callback_answer: bool = False,
+):
+    if db_user is None:
+        # Пользователь не найден, используем язык по умолчанию
+        texts = get_texts(settings.DEFAULT_LANGUAGE)
+        await callback.answer(
+            texts.t(
+                'USER_NOT_FOUND_ERROR',
+                'Ошибка: пользователь не найден.',
+            ),
+            show_alert=True,
+        )
+        return
+
+    texts = get_texts(db_user.language)
+
+    db_user.last_activity = datetime.now(UTC)
+    await db.commit()
+
+    keyboard = await build_main_menu_keyboard(db_user, db)
 
     if not await try_edit_rich_main_menu(callback, db_user, texts, db, keyboard):
+        menu_text = await get_main_menu_text(db_user, texts, db)
         await edit_or_answer_photo(
             callback=callback,
             caption=menu_text,
@@ -1275,10 +1281,9 @@ def _get_subscription_status(user: User, texts, is_daily_tariff: bool = False) -
     actual_status = (subscription.actual_status or '').lower()
     end_date = getattr(subscription, 'end_date', None)
     end_date_text = format_local_datetime(end_date, '%d.%m.%Y') if end_date else None
-    days_left = 0
-
-    if subscription.end_date > current_time:
-        days_left = (subscription.end_date - current_time).days
+    # Календарные дни в зоне оператора: «завтра» = дата окончания завтра,
+    # а не «осталось меньше двух суток» (целая часть суток давала «завтра» при 1 д 23 ч).
+    days_left = local_days_until(subscription.end_date, current_time)
 
     if actual_status == 'pending':
         return texts.t('SUBSCRIPTION_NONE', 'Нет активной подписки')
@@ -1392,7 +1397,7 @@ async def _get_multi_tariff_status(user, texts, db: AsyncSession) -> tuple[str, 
         elif actual == 'limited':
             status_suffix = ' — лимит трафика'
         elif sub.end_date and sub.end_date > current_time:
-            days_left = (sub.end_date - current_time).days
+            days_left = local_days_until(sub.end_date, current_time)
             if days_left > INFINITY_DAYS_THRESHOLD:
                 status_suffix = f' — {texts.t("SUB_STATUS_ACTIVE_FOREVER", "Активна (навсегда)").lower()}'
             else:

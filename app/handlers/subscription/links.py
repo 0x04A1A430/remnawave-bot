@@ -12,6 +12,7 @@ from app.keyboards.inline import (
 )
 from app.localization.texts import get_texts
 from app.utils.button_emoji import make_button
+from app.utils.subscription_time import local_days_until
 from app.utils.subscription_utils import (
     convert_subscription_link_to_happ_scheme,
     get_display_subscription_link,
@@ -44,8 +45,6 @@ async def handle_connect_subscription(
 
         active_subs = await get_active_subscriptions_by_user_id(db, db_user.id)
         if len(active_subs) > 1:
-            from datetime import UTC, datetime
-
             from app.database.crud.tariff import get_tariff_by_id as _get_tariff
 
             keyboard = []
@@ -56,7 +55,7 @@ async def handle_connect_subscription(
                     tariff_name = _t.name if _t else f'#{sub.id}'
                 else:
                     tariff_name = f'Подписка #{sub.id}'
-                days_left = max(0, (sub.end_date - datetime.now(UTC)).days) if sub.end_date else 0
+                days_left = local_days_until(sub.end_date) if sub.end_date else 0
                 keyboard.append(
                     [
                         types.InlineKeyboardButton(

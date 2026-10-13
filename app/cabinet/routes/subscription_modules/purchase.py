@@ -39,6 +39,7 @@ from app.services.notification_delivery_service import (
     NotificationType,
     notification_delivery_service,
 )
+from app.services.panel_sync import should_create_panel_account
 from app.services.pricing_engine import PricingEngine, pricing_engine
 from app.services.subscription_purchase_service import (
     MiniAppSubscriptionPurchaseService,
@@ -46,8 +47,10 @@ from app.services.subscription_purchase_service import (
     PurchaseValidationError,
 )
 from app.services.subscription_service import SubscriptionService
+from app.services.traffic_reset_policy import should_reset_traffic_on_tariff_purchase
 from app.services.user_cart_service import user_cart_service
 from app.utils.pricing_utils import calculate_price_per_month, format_period_description
+from app.utils.timezone import format_local_datetime
 
 from ...dependencies import get_cabinet_db, get_current_cabinet_user
 from ...schemas.subscription import (
@@ -110,6 +113,22 @@ async def _persist_failed_refund(user_id: int, amount_kopeks: int, reason: str, 
 # ============ Full Purchase Flow (like MiniApp) ============
 
 purchase_service = MiniAppSubscriptionPurchaseService()
+
+
+async def _ensure_tariff_not_already_active(db: AsyncSession, user_id: int, tariff_id: int) -> None:
+    """Отказ, если у человека уже есть живая подписка этого тарифа.
+
+    Нужен там, где покупка переводит на тариф другую строку (старую подписку без
+    тарифа): частичный уникальный индекс «одна живая подписка на тариф» иначе
+    сработал бы уже после списания денег.
+    """
+    from app.database.crud.subscription import get_subscription_by_user_and_tariff
+
+    if await get_subscription_by_user_and_tariff(db, user_id, tariff_id) is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail='You already have an active subscription for this tariff',
+        )
 
 
 async def _build_tariff_response(
@@ -413,6 +432,7 @@ async def get_purchase_options(
                 # Автопродление Lava: фронт показывает переключатель на странице
                 # подписки, если фича включена.
                 'lava_recurrent_enabled': settings.is_lava_recurrent_enabled(),
+                'cashera_recurrent_enabled': settings.is_cashera_recurrent_enabled(),
             }
 
         # Classic mode - return periods
@@ -424,6 +444,7 @@ async def get_purchase_options(
         # отключённой фиче из ответа 403 — по красной строке в консоли на запрос.
         payload['platega_recurrent_enabled'] = settings.is_platega_recurrent_enabled()
         payload['lava_recurrent_enabled'] = settings.is_lava_recurrent_enabled()
+        payload['cashera_recurrent_enabled'] = settings.is_cashera_recurrent_enabled()
         return payload
 
     except PurchaseValidationError as e:
@@ -534,7 +555,7 @@ async def submit_purchase(
                     if is_new_subscription
                     else NotificationType.SUBSCRIPTION_RENEWED
                 )
-                end_date_str = subscription.end_date.strftime('%d.%m.%Y') if subscription.end_date else ''
+                end_date_str = format_local_datetime(subscription.end_date, '%d.%m.%Y') if subscription.end_date else ''
                 await notification_delivery_service.send_notification(
                     user=user,
                     notification_type=notification_type,
@@ -752,11 +773,18 @@ async def purchase_tariff(
         if settings.is_multi_tariff_enabled():
             if request.subscription_id is not None:
                 existing_subscription = await get_subscription_by_id_for_user(db, request.subscription_id, user.id)
+                if existing_subscription is not None and existing_subscription.tariff_id is None:
+                    # Старая подписка (куплена в классике, тариф не задан): тариф
+                    # надевается на неё же — та же строка и тот же аккаунт панели,
+                    # у человека остаётся прежняя ссылка. Живая подписка этого
+                    # тарифа уже есть → отказ до списания, а не падение на
+                    # частичном уникальном индексе после.
+                    await _ensure_tariff_not_already_active(db, user.id, tariff.id)
                 # If the pinned sub points to a different tariff than
                 # the request carries (admin swap, stale client state),
                 # ignore it and fall back to tariff-level lookup so the
                 # purchase doesn't extend a sub of the wrong tariff.
-                if existing_subscription and existing_subscription.tariff_id != tariff.id:
+                elif existing_subscription and existing_subscription.tariff_id != tariff.id:
                     logger.warning(
                         'Cabinet purchase: explicit subscription_id has divergent tariff_id; falling back',
                         request_subscription_id=request.subscription_id,
@@ -991,6 +1019,11 @@ async def purchase_tariff(
         # нет). Пост-persist шаги (bonus_seconds, daily-маркер, синк с панелью)
         # остаются снаружи guard'а: их сбой не должен возвращать деньги за уже
         # выданную подписку.
+        # Новая подписка (и конверсия триала на месте) — квота новая, счётчик панели
+        # обнуляем; для продления/смены тарифа решение пересчитывается ниже по настройкам.
+        reset_used_traffic = True
+        # До чистки триалов: защитная ветка ниже и extend_subscription снимают флаг.
+        _purchase_converts_trial = bool(subscription and subscription.is_trial)
         try:
             # --- Trial cleanup: find and kill all trials BEFORE creating/extending ---
             from app.database.crud.subscription import deactivate_user_trial_subscriptions
@@ -1038,6 +1071,13 @@ async def purchase_tariff(
                 await db.flush()
 
             if subscription:
+                # Решаем ДО extend_subscription: он записывает в объект новый tariff_id и
+                # снимает триальный флаг — после вызова «тариф не менялся, триала не было».
+                reset_used_traffic = should_reset_traffic_on_tariff_purchase(
+                    is_tariff_change=subscription.tariff_id != tariff.id,
+                    was_trial=_purchase_converts_trial,
+                    paid_kopeks=price_kopeks,
+                )
                 # Extend/change tariff — сохраняем докупленные устройства при продлении того же тарифа
                 subscription = await extend_subscription(
                     db=db,
@@ -1047,6 +1087,7 @@ async def purchase_tariff(
                     traffic_limit_gb=traffic_limit_gb,
                     device_limit=effective_device_limit,
                     connected_squads=squads,
+                    reset_used_traffic=reset_used_traffic,
                 )
             else:
                 # Create new subscription (или конверсия исключённого выше триала)
@@ -1130,20 +1171,19 @@ async def purchase_tariff(
         try:
             # Mirror the bot handler logic: in single-tariff mode, check user.remnawave_id
             # (webhook clears it on panel deletion), not subscription.remnawave_id
-            if settings.is_multi_tariff_enabled():
-                _should_create = not subscription.remnawave_id
-            else:
-                _should_create = not getattr(user, 'remnawave_id', None)
+            _should_create = await should_create_panel_account(db, subscription, user)
 
             # Time-bounded (see REMNAWAVE_SYNC_TIMEOUT): the subscription is already
             # committed, so a slow panel must not keep the cabinet pay button spinning;
             # past the budget the sync is deferred to remnawave_retry_queue below.
             async with asyncio.timeout(REMNAWAVE_SYNC_TIMEOUT):
                 if not _should_create:
+                    # Тем же решением, что и счётчик в базе (GitHub #3227: здесь стоял
+                    # литерал True — трафик в панели слетал при любой оплате).
                     await service.update_remnawave_user(
                         db,
                         subscription,
-                        reset_traffic=True,
+                        reset_traffic=reset_used_traffic,
                         reset_reason='покупка тарифа (cabinet)',
                         sync_squads=True,
                     )
@@ -1242,7 +1282,7 @@ async def purchase_tariff(
                     if was_new_subscription
                     else NotificationType.SUBSCRIPTION_RENEWED
                 )
-                end_date_str = subscription.end_date.strftime('%d.%m.%Y') if subscription.end_date else ''
+                end_date_str = format_local_datetime(subscription.end_date, '%d.%m.%Y') if subscription.end_date else ''
                 await notification_delivery_service.send_notification(
                     user=user,
                     notification_type=notification_type,

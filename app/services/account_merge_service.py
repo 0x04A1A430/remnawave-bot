@@ -8,7 +8,8 @@ from sqlalchemy import and_, delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.database.crud.user import OAUTH_PROVIDER_COLUMNS, get_user_by_id
+from app.database.auth_methods import OAUTH_PROVIDER_COLUMNS, compute_auth_methods
+from app.database.crud.user import get_user_by_id
 from app.database.models import (
     AccessPolicy,
     AdminAuditLog,
@@ -99,19 +100,6 @@ _PARTNER_STATUS_PRIORITY: dict[str, int] = {
     PartnerStatus.PENDING.value: 2,
     PartnerStatus.APPROVED.value: 3,
 }
-
-
-def compute_auth_methods(user: User) -> list[str]:
-    """Вычисляет список методов авторизации пользователя."""
-    methods: list[str] = []
-    if user.telegram_id:
-        methods.append('telegram')
-    if user.email and user.password_hash:
-        methods.append('email')
-    for provider, column in OAUTH_PROVIDER_COLUMNS.items():
-        if getattr(user, column, None):
-            methods.append(provider)
-    return methods
 
 
 async def _count_referrals(db: AsyncSession, user_id: int) -> int:
@@ -660,11 +648,13 @@ async def _handle_subscription_merge(
             primary.remnawave_id = None
         # СБП-автопродление Platega удаляемой подписки отменяем ДО delete: CASCADE
         # снесёт локальную запись, и Platega продолжила бы списывать в никуда.
+        from app.services.cashera_recurring_cancel import cancel_cashera_recurring_for_subscription_safe
         from app.services.payment.lava import cancel_lava_recurring_for_subscription_safe
         from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
 
         await cancel_platega_recurring_for_subscription_safe(db, primary_sub.id, commit=False)
         await cancel_lava_recurring_for_subscription_safe(db, primary_sub.id, commit=False)
+        await cancel_cashera_recurring_for_subscription_safe(db, primary_sub.id, commit=False)
         # Явно удаляем subscription_servers перед подпиской (CASCADE настроен, но делаем явно для ясности)
         await db.execute(delete(SubscriptionServer).where(SubscriptionServer.subscription_id == primary_sub.id))
         # Удаляем запись подписки primary
@@ -692,11 +682,13 @@ async def _handle_subscription_merge(
             deferred_remnawave_deletions.append(secondary.remnawave_id)
             secondary.remnawave_id = None
         # СБП-автопродление Platega удаляемой подписки отменяем ДО delete (см. выше).
+        from app.services.cashera_recurring_cancel import cancel_cashera_recurring_for_subscription_safe
         from app.services.payment.lava import cancel_lava_recurring_for_subscription_safe
         from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
 
         await cancel_platega_recurring_for_subscription_safe(db, secondary_sub.id, commit=False)
         await cancel_lava_recurring_for_subscription_safe(db, secondary_sub.id, commit=False)
+        await cancel_cashera_recurring_for_subscription_safe(db, secondary_sub.id, commit=False)
         # Явно удаляем subscription_servers перед подпиской (CASCADE настроен, но делаем явно для ясности)
         await db.execute(delete(SubscriptionServer).where(SubscriptionServer.subscription_id == secondary_sub.id))
         # Удаляем запись подписки secondary

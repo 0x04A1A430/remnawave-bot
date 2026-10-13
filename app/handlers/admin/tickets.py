@@ -21,6 +21,7 @@ from app.services.notification_delivery_service import notification_delivery_ser
 from app.services.support_settings_service import SupportSettingsService
 from app.states import AdminTicketStates
 from app.utils.cache import RateLimitCache
+from app.utils.chat_scope import callback_from_group
 from app.utils.photo_message import safe_edit_or_resend
 from app.utils.ticket_text import (
     TICKET_MESSAGE_MAX_LENGTH,
@@ -28,6 +29,7 @@ from app.utils.ticket_text import (
     build_ticket_pages,
     preview_text,
 )
+from app.utils.timezone import format_local_datetime
 
 
 logger = structlog.get_logger(__name__)
@@ -128,6 +130,31 @@ async def show_admin_tickets(callback: types.CallbackQuery, db_user: User, db: A
     await callback.answer()
 
 
+def _card_in_group(callback: types.CallbackQuery) -> bool:
+    """Нажатие пришло из группового админ-чата, а не из лички админа."""
+    return callback_from_group(callback)
+
+
+async def _refresh_group_ticket_card(callback: types.CallbackQuery, db: AsyncSession, ticket_id: int) -> None:
+    """Перерисовать карточку в группе групповой клавиатурой по новому состоянию тикета.
+
+    Экран личной админки здесь не годится: «Ответить»/«Блок по времени» — FSM и в
+    группе не работают, а «⬅️ Назад» ведёт в меню админки. Оператор видел в группе
+    «Блок по времени», которая ничего не делает.
+    """
+    from app.handlers.tickets import build_ticket_card_keyboard
+
+    ticket = await TicketCRUD.get_ticket_by_id(db, ticket_id, load_user=True)
+    if not ticket:
+        return
+    try:
+        await callback.message.edit_reply_markup(
+            reply_markup=build_ticket_card_keyboard(ticket, ticket.user, role='group')
+        )
+    except TelegramBadRequest as error:
+        logger.debug('Не удалось обновить групповую карточку тикета', ticket_id=ticket_id, error=error)
+
+
 async def view_admin_ticket(
     callback: types.CallbackQuery,
     db_user: User,
@@ -199,13 +226,13 @@ async def view_admin_ticket(
         header += ' Username: отсутствует\n'
     header += f' Заголовок: {html.escape(ticket.title)}\n'
     header += f' Статус: {ticket.status_emoji} {status_text}\n'
-    header += f' Создан: {ticket.created_at.strftime("%d.%m.%Y %H:%M")}\n\n'
+    header += f' Создан: {format_local_datetime(ticket.created_at, "%d.%m.%Y %H:%M")}\n\n'
 
     if ticket.is_user_reply_blocked:
         if ticket.user_reply_block_permanent:
             header += ' Пользователь заблокирован навсегда\n\n'
         elif ticket.user_reply_block_until:
-            header += f' Блок до: {ticket.user_reply_block_until.strftime("%d.%m.%Y %H:%M")}\n\n'
+            header += f' Блок до: {format_local_datetime(ticket.user_reply_block_until, "%d.%m.%Y %H:%M")}\n\n'
 
     # Формируем блоки сообщений
     message_blocks: list[str] = []
@@ -213,7 +240,7 @@ async def view_admin_ticket(
         message_blocks.append(f' Сообщения ({len(ticket.messages)}):\n\n')
         for msg in ticket.messages:
             sender = ' Пользователь' if msg.is_user_message else ' Поддержка'
-            block = f'{sender} ({msg.created_at.strftime("%d.%m %H:%M")}):\n{html.escape(msg.message_text or "")}\n\n'
+            block = f'{sender} ({format_local_datetime(msg.created_at, "%d.%m %H:%M")}):\n{html.escape(msg.message_text or "")}\n\n'
             if getattr(msg, 'has_media', False) and getattr(msg, 'media_type', None) == 'photo':
                 block += ' Вложение: фото\n\n'
             message_blocks.append(block)
@@ -615,10 +642,14 @@ async def close_admin_ticket(callback: types.CallbackQuery, db_user: User, db: A
             except Exception:
                 await callback.answer(texts.t('TICKET_CLOSED', ' Тикет закрыт.'), show_alert=True)
 
-            # Обновляем inline-клавиатуру в текущем сообщении без кнопок действий
-            await callback.message.edit_reply_markup(
-                reply_markup=get_admin_ticket_view_keyboard(ticket_id, True, db_user.language)
-            )
+            # Обновляем inline-клавиатуру в текущем сообщении без кнопок действий.
+            # В группе — групповой клавиатурой, а не экраном личной админки.
+            if _card_in_group(callback):
+                await _refresh_group_ticket_card(callback, db, ticket_id)
+            else:
+                await callback.message.edit_reply_markup(
+                    reply_markup=get_admin_ticket_view_keyboard(ticket_id, True, db_user.language)
+                )
         else:
             texts = get_texts(db_user.language)
             await callback.answer(texts.t('TICKET_CLOSE_ERROR', ' Ошибка при закрытии тикета.'), show_alert=True)
@@ -770,8 +801,8 @@ async def handle_admin_block_duration_input(message: types.Message, state: FSMCo
             ticket_text += f' Пользователь: {user_name}\n'
             ticket_text += f' Заголовок: {html.escape(updated.title)}\n'
             ticket_text += f' Статус: {updated.status_emoji} {status_text}\n'
-            ticket_text += f' Создан: {updated.created_at.strftime("%d.%m.%Y %H:%M")}\n'
-            ticket_text += f' Обновлен: {updated.updated_at.strftime("%d.%m.%Y %H:%M")}\n'
+            ticket_text += f' Создан: {format_local_datetime(updated.created_at, "%d.%m.%Y %H:%M")}\n'
+            ticket_text += f' Обновлен: {format_local_datetime(updated.updated_at, "%d.%m.%Y %H:%M")}\n'
             if updated.user and updated.user.telegram_id:
                 ticket_text += f' Telegram ID: <code>{updated.user.telegram_id}</code>\n'
                 if updated.user.username:
@@ -794,12 +825,12 @@ async def handle_admin_block_duration_input(message: types.Message, state: FSMCo
                 if updated.user_reply_block_permanent:
                     ticket_text += ' Пользователь заблокирован навсегда для ответов в этом тикете\n'
                 elif updated.user_reply_block_until:
-                    ticket_text += f' Блок до: {updated.user_reply_block_until.strftime("%d.%m.%Y %H:%M")}\n'
+                    ticket_text += f' Блок до: {format_local_datetime(updated.user_reply_block_until, "%d.%m.%Y %H:%M")}\n'
             if updated.messages:
                 ticket_text += f' Сообщения ({len(updated.messages)}):\n\n'
                 for msg in updated.messages:
                     sender = ' Пользователь' if msg.is_user_message else ' Поддержка'
-                    ticket_text += f'{sender} ({msg.created_at.strftime("%d.%m %H:%M")}):\n'
+                    ticket_text += f'{sender} ({format_local_datetime(msg.created_at, "%d.%m %H:%M")}):\n'
                     ticket_text += f'{html.escape(msg.message_text)}\n\n'
                     if getattr(msg, 'has_media', False) and getattr(msg, 'media_type', None) == 'photo':
                         ticket_text += ' Вложение: фото\n\n'
@@ -928,7 +959,10 @@ async def unblock_user_in_ticket(callback: types.CallbackQuery, db_user: User, d
             )
         except Exception:
             pass
-        await view_admin_ticket(callback, db_user, db, state)
+        if _card_in_group(callback):
+            await _refresh_group_ticket_card(callback, db, ticket_id)
+        else:
+            await view_admin_ticket(callback, db_user, db, state)
     else:
         await callback.answer(' Ошибка', show_alert=True)
 
@@ -981,7 +1015,10 @@ async def block_user_permanently(callback: types.CallbackQuery, db_user: User, d
             )
         except Exception:
             pass
-        await view_admin_ticket(callback, db_user, db, state)
+        if _card_in_group(callback):
+            await _refresh_group_ticket_card(callback, db, ticket_id)
+        else:
+            await view_admin_ticket(callback, db_user, db, state)
     else:
         await callback.answer(' Ошибка', show_alert=True)
 

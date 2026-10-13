@@ -50,6 +50,8 @@ from app.utils.decorators import admin_required, error_handler
 from app.utils.formatters import format_datetime, format_time_ago
 from app.utils.formatting import user_html_link
 from app.utils.photo_message import safe_edit_or_resend
+from app.utils.subscription_time import format_time_left, local_days_until
+from app.utils.timezone import format_local_datetime
 from app.utils.user_utils import get_effective_referral_commission_percent
 
 
@@ -160,7 +162,7 @@ def _build_user_button_text(
         # Use first active subscription from subscriptions list
         first_sub = next((s for s in (getattr(user, 'subscriptions', None) or []) if s.is_active), None)
         if first_sub and first_sub.end_date:
-            days_left = (first_sub.end_date - datetime.now(UTC)).days
+            days_left = local_days_until(first_sub.end_date)
             button_text += f' |  {days_left}д'
 
     elif filter_type == UserFilterType.CAMPAIGN:
@@ -846,7 +848,7 @@ async def _render_user_subscription_overview(
                     tariff = await get_tariff_by_id(db, sub.tariff_id)
                     tariff_name = f' • {html.escape(tariff.name)}' if tariff else ''
 
-                days_left = max(0, (sub.end_date - datetime.now(UTC)).days) if sub.end_date else 0
+                days_left = local_days_until(sub.end_date) if sub.end_date else 0
                 btn_text = f'{status_emoji} #{sub.id}{tariff_name} ({days_left}д.)'
                 picker_keyboard.append(
                     [
@@ -912,8 +914,7 @@ async def _render_user_subscription_overview(
         text += f'<b>Устройства:</b> {Texts.format_device_limit(subscription.device_limit)}\n'
 
         if subscription.is_active:
-            days_left = (subscription.end_date - datetime.now(UTC)).days
-            text += f'<b>Осталось дней:</b> {days_left}\n'
+            text += f'<b>Осталось:</b> {format_time_left(None, subscription.end_date)}\n'
 
         current_squads = subscription.connected_squads or []
         if current_squads:
@@ -2825,7 +2826,7 @@ async def show_user_statistics(callback: types.CallbackQuery, db_user: User, db:
     elif campaign_registration and campaign_registration.campaign:
         text += f'• Регистрация через рекламную кампанию <b>{html.escape(campaign_registration.campaign.name)}</b>\n'
         if campaign_registration.created_at:
-            text += f'• Дата регистрации по кампании: {campaign_registration.created_at.strftime("%d.%m.%Y %H:%M")}\n'
+            text += f'• Дата регистрации по кампании: {format_local_datetime(campaign_registration.created_at, "%d.%m.%Y %H:%M")}\n'
     else:
         text += '• Прямая регистрация\n'
 
@@ -3429,12 +3430,14 @@ async def confirm_subscription_deletion(callback: types.CallbackQuery, db_user: 
     # runs BEFORE any irreversible panel/DB step, and the guard is
     # re-acquired immediately below — closing that window before anything
     # that can't be undone happens.
+    from app.services.cashera_recurring_cancel import cancel_cashera_recurring_for_subscription_safe
     from app.services.payment.lava import cancel_lava_recurring_for_subscription_safe
     from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
 
     await cancel_platega_recurring_for_subscription_safe(db, subscription.id)
 
     await cancel_lava_recurring_for_subscription_safe(db, subscription.id)
+    await cancel_cashera_recurring_for_subscription_safe(db, subscription.id)
     try:
         await ensure_no_open_grace_for_subscriptions(db, (subscription.id,))
     except GraceAccessDeletionBlocked:

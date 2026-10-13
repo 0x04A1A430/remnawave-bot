@@ -1,6 +1,6 @@
 """repair pending_campaign_slug when an older migration was stamped early
 
-Revision ID: 0124
+Revision ID: 9112
 Revises: 0123
 Create Date: 2026-09-16
 
@@ -15,7 +15,7 @@ import sqlalchemy as sa
 from alembic import op
 
 
-revision: str = '0124'
+revision: str = '9112'
 down_revision: Union[str, None] = '0123'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None

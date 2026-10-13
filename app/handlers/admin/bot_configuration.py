@@ -31,6 +31,7 @@ from app.services.tribute_service import TributeService
 from app.states import BotConfigStates
 from app.utils.currency_converter import currency_converter
 from app.utils.decorators import admin_required, error_handler
+from app.utils.timezone import format_local_datetime
 
 
 logger = structlog.get_logger(__name__)
@@ -66,7 +67,7 @@ CATEGORY_GROUP_METADATA: dict[str, dict[str, object]] = {
         'description': (
             'YooKassa, CryptoBot, Heleket, CloudPayments, Freekassa, MulenPay, PAL24, Wata, '
             'Platega, Tribute, Kassa AI, RioPay, SeverPay, PayPear, RollyPay, Overpay, AuraPay, '
-            'Etoplatezhi, Antilopay, Jupiter, CisPay, TabPay, ParityPay, Donut, Lava и Telegram Stars.'
+            'Etoplatezhi, Antilopay, Jupiter, CisPay, TabPay, ParityPay, Donut, Lava, Cashera и Telegram Stars.'
         ),
         'icon': '',
         'categories': (
@@ -88,6 +89,7 @@ CATEGORY_GROUP_METADATA: dict[str, dict[str, object]] = {
             'ANTILOPAY',
             'JUPITER',
             'CISPAY',
+            'CASHERA',
             'TABPAY',
             'PARITYPAY',
             'DONUT',
@@ -915,7 +917,7 @@ async def show_settings_history(
     if rows:
         for row in rows:
             timestamp = row.updated_at or row.created_at
-            ts_text = timestamp.strftime('%d.%m %H:%M') if timestamp else '—'
+            ts_text = format_local_datetime(timestamp, '%d.%m %H:%M') if timestamp else '—'
             try:
                 parsed_value = bot_configuration_service.deserialize_value(row.key, row.value)
                 formatted_value = bot_configuration_service.format_value_human(row.key, parsed_value)

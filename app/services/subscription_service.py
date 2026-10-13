@@ -281,9 +281,16 @@ class SubscriptionService:
                         subscription_id=subscription.id,
                         remnawave_id=updated_user.id,
                     )
-                # Legacy field — keep in sync for single-mode backward compat
+                # Одиночный режим адресует панель через человека — держим актуальным.
+                # Мультитариф: аккаунты у подписок, но первый записываем и человеку,
+                # иначе после возврата оператора в одиночный режим у него «нет аккаунта».
                 if not settings.is_multi_tariff_enabled():
                     user.remnawave_id = updated_user.id
+                elif not user.remnawave_id:
+                    from app.services.panel_sync import user_panel_id_is_free_for
+
+                    if await user_panel_id_is_free_for(db, user, updated_user.id):
+                        user.remnawave_id = updated_user.id
 
                 await db.commit()
 
@@ -737,12 +744,11 @@ class SubscriptionService:
         Только для действующих подписок: пересоздавать DISABLED-юзера ради
         истёкшей подписки не нужно — админ удалил его намеренно.
         """
-        # Вызывающий мог откатить транзакцию после 404, что истекает атрибуты
-        # ORM. Перечитываем строки до синхронной проверки liveness, иначе ленивая
-        # загрузка упадёт с MissingGreenlet.
+        # Сюда приходят после rollback: он экспирирует ORM-объекты, и первое же
+        # чтение поля упало бы с MissingGreenlet — пересоздание не начиналось вовсе.
+        await db.refresh(subscription)
         if user is not None:
             await db.refresh(user)
-        await db.refresh(subscription)
 
         is_actually_active = is_subscription_live(user, subscription)
         if not is_actually_active:
@@ -758,6 +764,15 @@ class SubscriptionService:
             subscription_id=subscription.id,
             user_id=subscription.user_id,
         )
+        # Мультитариф: панель только что сказала, что аккаунта с этим id нет. Оставить
+        # его человеку — значит отдать мёртвый адрес следующей покупке
+        # (should_create_panel_account привязывает «свободный аккаунт человека»).
+        # В одиночном режиме users.remnawave_id перезапишет сам create-флоу.
+        dead_panel_id = subscription.remnawave_id
+        if settings.is_multi_tariff_enabled() and dead_panel_id:
+            subscription.remnawave_id = None
+            if user is not None and user.remnawave_id == dead_panel_id:
+                user.remnawave_id = None
         return await self.create_remnawave_user(
             db, subscription, reset_traffic=reset_traffic, reset_reason=reset_reason
         )
@@ -1447,6 +1462,7 @@ async def reset_subscription_with_panel(db, user: User, subscription: Subscripti
     может купить тариф с нуля. Возвращает ``{'panel_disabled': bool, 'panel_user_id': int|None}``.
     """
     from app.database.crud.subscription import reset_subscription
+    from app.services.cashera_recurring_cancel import cancel_cashera_recurring_for_subscription_safe
     from app.services.payment.lava import cancel_lava_recurring_for_subscription_safe
 
     # Подписка обнуляется «как будто не оформляли» — СБП-автопродление Platega
@@ -1457,6 +1473,7 @@ async def reset_subscription_with_panel(db, user: User, subscription: Subscripti
     await cancel_platega_recurring_for_subscription_safe(db, subscription.id)
 
     await cancel_lava_recurring_for_subscription_safe(db, subscription.id)
+    await cancel_cashera_recurring_for_subscription_safe(db, subscription.id)
     # В мультитарифном режиме у каждой подписки свой панельный id — НЕ откатываемся
     # на user.remnawave_id (это легаси single-tariff id, иначе можно отключить
     # не того панельного пользователя). В single-tariff fallback на user корректен.

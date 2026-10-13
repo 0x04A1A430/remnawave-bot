@@ -2,6 +2,9 @@ import html
 import re
 from datetime import UTC, datetime
 
+from app.utils.subscription_time import local_days_until
+from app.utils.timezone import format_local_datetime
+
 
 # Формат Telegram-логина: 5-32 символа, первый — буква. Тот же шаблон используется
 # в app/services/guest_purchase_service.py при приёме логина от пользователя.
@@ -13,30 +16,28 @@ INFINITY_DAYS_THRESHOLD = 25000
 PERMANENT_SUBSCRIPTION_YEAR = 2050
 
 
-def format_datetime(dt: datetime | str, format_str: str = '%d.%m.%Y %H:%M') -> str:
+def _coerce_datetime(dt: datetime | str) -> datetime:
     if isinstance(dt, str):
         if dt == 'now' or dt == '':
-            dt = datetime.now(UTC)
-        else:
-            try:
-                dt = datetime.fromisoformat(dt.replace('Z', '+00:00'))
-            except (ValueError, AttributeError):
-                dt = datetime.now(UTC)
+            return datetime.now(UTC)
+        try:
+            return datetime.fromisoformat(dt.replace('Z', '+00:00'))
+        except (ValueError, AttributeError):
+            return datetime.now(UTC)
+    return dt
 
-    return dt.strftime(format_str)
+
+def format_datetime(dt: datetime | str, format_str: str = '%d.%m.%Y %H:%M') -> str:
+    """Момент в часовом поясе оператора (settings.TIMEZONE); без зоны — считается UTC.
+
+    Раньше здесь был голый strftime по UTC: админка показывала окончание
+    подписки 11:17, когда панель и «Моя подписка» — 14:17 по Москве.
+    """
+    return format_local_datetime(_coerce_datetime(dt), format_str)
 
 
 def format_date(dt: datetime | str, format_str: str = '%d.%m.%Y') -> str:
-    if isinstance(dt, str):
-        if dt == 'now' or dt == '':
-            dt = datetime.now(UTC)
-        else:
-            try:
-                dt = datetime.fromisoformat(dt.replace('Z', '+00:00'))
-            except (ValueError, AttributeError):
-                dt = datetime.now(UTC)
-
-    return dt.strftime(format_str)
+    return format_local_datetime(_coerce_datetime(dt), format_str)
 
 
 def format_subscription_end_date(dt: datetime | str | None, format_str: str = '%d.%m.%Y') -> str:
@@ -246,7 +247,7 @@ def format_subscription_status(is_active: bool, is_trial: bool, end_date: dateti
 
     now = datetime.now(UTC)
     if end_date > now:
-        days_left = (end_date - now).days
+        days_left = local_days_until(end_date, now)
         if end_date.year > PERMANENT_SUBSCRIPTION_YEAR:
             status += ' (навсегда)' if use_russian_fallback else ' (forever)'
         elif days_left > 0:

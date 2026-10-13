@@ -13,6 +13,7 @@ from app.localization.loader import DEFAULT_LANGUAGE
 from app.localization.texts import get_texts
 from app.utils.button_emoji import make_button
 from app.utils.device_display import format_device_label
+from app.utils.legacy_subscription import is_legacy_subscription as _legacy_subscription
 from app.utils.miniapp_buttons import build_miniapp_or_callback_button
 from app.utils.price_display import PriceInfo, format_price_button
 from app.utils.pricing_utils import (
@@ -1332,6 +1333,9 @@ def get_subscription_keyboard(
             # Проверяем, является ли тариф суточным
             tariff = getattr(subscription, 'tariff', None) if subscription else None
             is_daily_tariff = tariff and getattr(tariff, 'is_daily', False)
+            # Куплена в классике, потом включили тарифы: продлить нельзя,
+            # автоплатёж не работает — в меню один путь, «Перейти на тариф».
+            is_legacy_subscription = _legacy_subscription(subscription)
 
             if is_daily_tariff:
                 # Для суточного тарифа: проверяем статус подписки
@@ -1357,6 +1361,18 @@ def get_subscription_keyboard(
                         )
                     ]
                 )
+            elif is_legacy_subscription:
+                # Старая подписка (куплена в классике, тарифа нет, а оператор на
+                # тарифах): продления и автоплатежа у неё нет, единственный путь —
+                # выбрать тариф, он надевается на эту же подписку.
+                keyboard.append(
+                    [
+                        make_button(
+                            text=texts.t('MOVE_TO_TARIFF_BUTTON', 'Перейти на тариф'),
+                            callback_data='tariff_switch',
+                        )
+                    ]
+                )
             else:
                 keyboard.append(
                     [
@@ -1373,6 +1389,9 @@ def get_subscription_keyboard(
             if subscription and (subscription.traffic_limit_gb or 0) > 0:
                 if settings.is_tariffs_mode() and tariff:
                     show_traffic_topup = tariff.can_topup_traffic()
+                elif is_legacy_subscription:
+                    # Старая подписка: классические пакеты трафика ей не продаём — сперва переход на тариф.
+                    show_traffic_topup = False
                 elif settings.is_traffic_topup_enabled() and not settings.is_traffic_topup_blocked():
                     show_traffic_topup = True
 
@@ -1400,7 +1419,7 @@ def get_subscription_keyboard(
     # убрана полностью — смена тарифа недоступна отсюда. Для истёкшей/отключённой
     # подписки показываем «Купить тариф» (покупку с нуля) — переключить там
     # всё равно нельзя, а покупка нового оформляется штатно через menu_buy.
-    if settings.is_tariffs_mode() and subscription and not is_trial:
+    if settings.is_tariffs_mode() and subscription and not is_trial and not is_legacy_subscription:
         if getattr(subscription, 'actual_status', None) in ('expired', 'disabled'):
             settings_row.append(
                 make_button(
@@ -2403,6 +2422,30 @@ def get_payment_methods_keyboard(
         )
         has_direct_payment_methods = True
 
+    if settings.is_cashera_enabled():
+        cashera_name = settings.get_cashera_display_name()
+        if settings.CASHERA_INLINE_METHODS:
+            for method_code in settings.get_cashera_active_methods():
+                title = settings.get_cashera_method_display_title(method_code)
+                keyboard.append(
+                    [
+                        make_button(
+                            text=f'{title} ({cashera_name})',
+                            callback_data=_build_callback(f'cashera_m_{method_code}'),
+                        )
+                    ]
+                )
+        else:
+            keyboard.append(
+                [
+                    make_button(
+                        text=texts.t('PAYMENT_CASHERA', f'{cashera_name}'),
+                        callback_data=_build_callback('cashera'),
+                    )
+                ]
+            )
+        has_direct_payment_methods = True
+
     if settings.is_support_topup_enabled():
         keyboard.append(
             [
@@ -3171,7 +3214,7 @@ def get_manage_countries_keyboard(
             if days_left > 30:
                 price_text = f' ({discounted_per_month // 100}₽/мес × {days_left} дн. = {total_price // 100}₽)'
                 logger.info(
-                    'Сервер : ₽/мес × дн./30 = ₽ (скидка ₽)',
+                    'Стоимость сервера',
                     name=name,
                     discounted_per_month=discounted_per_month / 100,
                     days_left=days_left,
@@ -3627,6 +3670,7 @@ def get_updated_subscription_settings_keyboard(
     show_countries_management: bool = True,
     tariff=None,  # Тариф подписки (если есть - ограничиваем настройки)
     subscription=None,  # Подписка (для проверки суточной паузы)
+    is_legacy_subscription: bool = False,  # Старая подписка: без тарифа при включённых тарифах
 ) -> InlineKeyboardMarkup:
     from app.config import settings
 
@@ -3635,10 +3679,15 @@ def get_updated_subscription_settings_keyboard(
 
     # Если подписка на тарифе - отключаем страны, модем, трафик
     has_tariff = tariff is not None
+    # Классические докупки (страны, пакеты трафика, устройства по PRICE_PER_DEVICE)
+    # доступны только настоящей классической подписке. У старой подписки при
+    # включённых тарифах тарифа нет, но и классических цен для неё нет —
+    # единственный путь: перейти на тариф.
+    classic_addons_allowed = not has_tariff and not is_legacy_subscription
 
     # Для суточных тарифов кнопка паузы теперь в главном меню подписки
 
-    if show_countries_management and not has_tariff:
+    if show_countries_management and classic_addons_allowed:
         keyboard.append(
             [
                 make_button(
@@ -3648,7 +3697,7 @@ def get_updated_subscription_settings_keyboard(
             ]
         )
 
-    if settings.is_traffic_selectable() and not has_tariff:
+    if settings.is_traffic_selectable() and classic_addons_allowed:
         keyboard.append(
             [
                 make_button(
@@ -3681,7 +3730,7 @@ def get_updated_subscription_settings_keyboard(
                     )
                 ]
             )
-    elif settings.is_devices_selection_enabled():
+    elif classic_addons_allowed and settings.is_devices_selection_enabled():
         keyboard.append(
             [
                 make_button(

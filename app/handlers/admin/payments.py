@@ -42,6 +42,8 @@ def _method_display(method: PaymentMethod) -> str:
         return 'YooKassa'
     if method == PaymentMethod.PLATEGA:
         return settings.get_platega_display_name()
+    if method == PaymentMethod.PLATEGA_RECURRENT:
+        return f'{settings.get_platega_display_name()} СБП'
     if method == PaymentMethod.CRYPTOBOT:
         return 'CryptoBot'
     if method == PaymentMethod.TELEGRAM_STARS:
@@ -54,6 +56,8 @@ def _method_display(method: PaymentMethod) -> str:
         return settings.get_freekassa_display_name()
     if method == PaymentMethod.CISPAY:
         return settings.get_cispay_display_name()
+    if method == PaymentMethod.CASHERA:
+        return settings.get_cashera_display_name()
     if method == PaymentMethod.TABPAY:
         return settings.get_tabpay_display_name()
     if method == PaymentMethod.PARITYPAY:

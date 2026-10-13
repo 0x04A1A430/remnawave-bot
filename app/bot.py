@@ -86,6 +86,7 @@ from app.services.maintenance_service import maintenance_service
 from app.utils.cache import cache
 from app.utils.message_patch import patch_message_methods
 from app.utils.redis_client import create_redis
+from app.utils.rich_menu import forget_live_menu_on_callback
 
 
 patch_message_methods()
@@ -94,7 +95,7 @@ logger = structlog.get_logger(__name__)
 
 
 async def debug_callback_handler(callback: types.CallbackQuery):
-    logger.info('DEBUG CALLBACK:')
+    logger.info('DEBUG CALLBACK')
     logger.info('Data', callback_data=callback.data)
     logger.info('User', from_user_id=callback.from_user.id)
     logger.info('Username', username=callback.from_user.username)
@@ -149,6 +150,7 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
 
     dp.message.middleware(ContextVarsMiddleware())
     dp.callback_query.middleware(ContextVarsMiddleware())
+    dp.callback_query.middleware(forget_live_menu_on_callback)
     dp.pre_checkout_query.middleware(ContextVarsMiddleware())
     dp.inline_query.middleware(ContextVarsMiddleware())
     dp.chosen_inline_result.middleware(ContextVarsMiddleware())
