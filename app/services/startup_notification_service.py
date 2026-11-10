@@ -329,7 +329,12 @@ class StartupNotificationService:
             logger.info('Логотип прогрет на старте: file_id закеширован', chat_id=target)
             return True
         except Exception as e:
-            logger.warning('Не удалось прогреть логотип на старте', error=str(e)[:200])
+            # Some asyncio exceptions (TimeoutError, CancelledError) stringify
+            # to an empty string — without the type the warning is useless.
+            logger.warning(
+                'Не удалось прогреть логотип на старте',
+                error=str(e)[:200] or type(e).__name__,
+            )
             return False
 
 

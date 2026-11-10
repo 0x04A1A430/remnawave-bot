@@ -485,10 +485,19 @@ class RemnaWaveWebhookService:
         user, subscription = await self._resolve_user_and_subscription(db, data)
         if not user:
             panel_user_id, short_uuid = self._extract_panel_identity(data)
-            logger.warning(
+            telegram_id = data.get('telegramId')
+            nested_user = data.get('user')
+            if not telegram_id and isinstance(nested_user, dict):
+                telegram_id = nested_user.get('telegramId')
+
+            # Panel-only users (created directly in RemnaWave, without a bot
+            # account) have no telegramId. Their events cannot be routed and
+            # are expected — keep them out of the warning stream.
+            log = logger.debug if not telegram_id else logger.warning
+            log(
                 'RemnaWave webhook: user not found for event',
                 event_name=event_name,
-                telegram_id=data.get('telegramId'),
+                telegram_id=telegram_id,
                 panel_user_id=panel_user_id,
                 short_uuid=short_uuid,
             )
