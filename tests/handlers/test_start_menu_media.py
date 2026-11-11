@@ -73,8 +73,29 @@ async def test_removed_video_returns_to_logo(monkeypatch):
         bot.send_photo.assert_awaited_once()
 
 
-async def test_long_caption_goes_to_plain_text(monkeypatch):
-    """Подпись длиннее лимита Telegram нельзя приложить ни к видео, ни к фото."""
+async def test_long_caption_keeps_logo_in_rich_mode(monkeypatch):
+    """В rich-режиме длинная подпись едет фото-блоком, но не видео."""
+    import app.utils.rich_transport as rt
+
+    monkeypatch.setattr(rt, 'is_rich_transport_enabled', lambda: True)
+    async with memory_session(monkeypatch, TABLES) as db:
+        sms.reset_start_video_cache()
+        monkeypatch.setattr(settings, 'ENABLE_LOGO_MODE', True)
+        await sms.set_start_video_file_id(db, 'vid-123')
+
+        bot = _bot()
+        await send_menu_with_media(bot, 555, 'x' * 1100, KEYBOARD, db)
+
+        bot.send_video.assert_not_awaited()
+        bot.send_photo.assert_awaited_once()
+        bot.send_message.assert_not_awaited()
+
+
+async def test_long_caption_goes_to_plain_text_in_classic_mode(monkeypatch):
+    """Без rich длинную подпись нельзя приложить ни к видео, ни к фото."""
+    import app.utils.rich_transport as rt
+
+    monkeypatch.setattr(rt, 'is_rich_transport_enabled', lambda: False)
     async with memory_session(monkeypatch, TABLES) as db:
         sms.reset_start_video_cache()
         monkeypatch.setattr(settings, 'ENABLE_LOGO_MODE', True)

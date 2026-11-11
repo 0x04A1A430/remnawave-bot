@@ -347,9 +347,17 @@ async def send_menu_with_media(
 
     Сбой отправки видео не должен лишать пользователя меню: падаем на фото/текст.
     """
-    from app.utils.message_patch import _cache_logo_file_id, caption_fits_logo, get_logo_media
+    from app.utils.message_patch import (
+        _cache_logo_file_id,
+        caption_exceeds_telegram_limit,
+        caption_fits_logo,
+        get_logo_media,
+    )
 
-    caption_fits = caption_fits_logo(text)
+    # Видео не конвертируется в rich — для него действует классический лимит
+    # подписи. Фото-логотип в rich-режиме может нести длинный текст.
+    caption_fits = not caption_exceeds_telegram_limit(text)
+    logo_caption_fits = caption_fits_logo(text)
 
     if caption_fits:
         from app.services.start_media_service import get_start_video_file_id
@@ -371,7 +379,7 @@ async def send_menu_with_media(
                     error=str(video_error),
                 )
 
-    if settings.ENABLE_LOGO_MODE and caption_fits:
+    if settings.ENABLE_LOGO_MODE and logo_caption_fits:
         _result = await bot.send_photo(
             chat_id=chat_id,
             photo=get_logo_media(),
