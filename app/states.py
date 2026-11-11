@@ -29,6 +29,7 @@ class SubscriptionStates(StatesGroup):
     selecting_custom_days = State()
     selecting_custom_traffic = State()
     confirming_custom_purchase = State()
+    entering_tariff_device_limit = State()
 
 
 class GiftPurchaseStates(StatesGroup):
@@ -43,9 +44,11 @@ class GiftActivationStates(StatesGroup):
 
 
 class BalanceStates(StatesGroup):
+    waiting_for_antilopay_email = State()
     waiting_for_amount = State()
     waiting_for_pal24_method = State()
     waiting_for_platega_method = State()
+    waiting_for_cashera_method = State()
     waiting_for_stars_payment = State()
     waiting_for_support_request = State()
 

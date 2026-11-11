@@ -998,7 +998,7 @@
   "COPY_SUBSCRIPTION_LINK": "Скопировать ссылку подписки",
   "COUNTRY_CHANGES_ACTIVE_COUNT": "<b>Активных стран:</b> {count}",
   "COUNTRY_CHANGES_ADDED_HEADER": "<b>Добавлены страны:</b>",
-  "COUNTRY_CHANGES_CHARGED": "Списано: {amount} (за {months} мес)",
+  "COUNTRY_CHANGES_CHARGED": "Списано: {amount} (за {days} дн.)",
   "COUNTRY_CHANGES_DISCOUNT_INFO": "(скидка {percent}%: -{amount})",
   "COUNTRY_CHANGES_NOT_FOUND": "Изменения не обнаружены",
   "COUNTRY_CHANGES_REMOVED_HEADER": "<b>Отключены страны:</b>",

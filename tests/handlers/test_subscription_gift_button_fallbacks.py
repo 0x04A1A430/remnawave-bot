@@ -57,7 +57,7 @@ class TestGiftButtonFallbacks:
 
     def test_gift_subscription_button_removed_from_multi_keyboard(self):
         """Кнопка «Подарить подписку» убрана из _build_subscriptions_keyboard."""
-        subs = [SimpleNamespace(id=1, tariff=SimpleNamespace(name='Pro'))]
+        subs = [SimpleNamespace(id=1, tariff=SimpleNamespace(name='Pro'), tariff_id=1, is_trial=False)]
         kb = _build_subscriptions_keyboard(subs, language='ru', gift_enabled=True)
         gift_buttons = [b for row in kb.inline_keyboard for b in row if b.callback_data == 'subscription_gift']
         assert gift_buttons == []

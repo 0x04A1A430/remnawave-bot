@@ -14,6 +14,7 @@ from pydantic import BaseModel
 from app.bot_factory import create_bot
 from app.config import settings
 from app.database.models import User
+from app.utils.public_url import public_url
 
 from ..dependencies import get_current_cabinet_user
 from ..schemas.media import TELEGRAM_FILE_ID_PATTERN
@@ -111,9 +112,9 @@ def _media_signature(file_id: str, exp: int) -> str:
     return hmac.new(secret, f'{file_id}.{exp}'.encode(), hashlib.sha256).hexdigest()
 
 
-def make_media_token(file_id: str) -> str:
-    """Signed, expiring token authorizing download of `file_id`."""
-    exp = int(time.time()) + _MEDIA_TOKEN_TTL_SECONDS
+def make_media_token(file_id: str, *, ttl_seconds: int = _MEDIA_TOKEN_TTL_SECONDS) -> str:
+    """Signed, expiring token authorizing download of `file_id` (any opaque subject string)."""
+    exp = int(time.time()) + ttl_seconds
     return f'{exp}.{_media_signature(file_id, exp)}'
 
 
@@ -157,7 +158,7 @@ def _resolve_target_chat_id() -> int:
 
 def _build_media_url(request: Request, file_id: str) -> str:
     """Build a signed, expiring URL for downloading media."""
-    base = str(request.url_for('cabinet_download_media', file_id=file_id))
+    base = public_url(request, request.url_for('cabinet_download_media', file_id=file_id))
     sep = '&' if '?' in base else '?'
     return f'{base}{sep}token={make_media_token(file_id)}'
 
@@ -215,6 +216,13 @@ async def upload_media(
         )
 
     target_chat_id = _resolve_target_chat_id()
+    # Staging uses the notification destination too: General may be closed.
+    # Never carry a group's topic over to the private-admin fallback.
+    target_topic_id = (
+        settings.ADMIN_NOTIFICATIONS_TOPIC_ID
+        if target_chat_id < 0 and target_chat_id == settings.get_admin_notifications_chat_id()
+        else None
+    )
     upload = BufferedInputFile(file_bytes, filename=file.filename or 'upload')
 
     bot = create_bot()
@@ -224,6 +232,7 @@ async def upload_media(
         if media_type_normalized == 'photo':
             message = await bot.send_photo(
                 chat_id=target_chat_id,
+                message_thread_id=target_topic_id,
                 photo=upload,
                 disable_notification=True,
             )
@@ -231,6 +240,7 @@ async def upload_media(
         elif media_type_normalized == 'video':
             message = await bot.send_video(
                 chat_id=target_chat_id,
+                message_thread_id=target_topic_id,
                 video=upload,
                 disable_notification=True,
             )
@@ -238,6 +248,7 @@ async def upload_media(
         else:
             message = await bot.send_document(
                 chat_id=target_chat_id,
+                message_thread_id=target_topic_id,
                 document=upload,
                 disable_notification=True,
             )

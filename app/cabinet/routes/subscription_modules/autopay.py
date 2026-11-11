@@ -39,6 +39,13 @@ async def update_autopay(
         )
 
     if request.enabled:
+        from app.services.cispay_recurrent_guard import require_no_cispay
+
+        try:
+            await require_no_cispay(db, user_id=user.id, subscription_id=subscription.id)
+        except ValueError as error:
+            await db.rollback()
+            raise HTTPException(status_code=409, detail=str(error)) from None
         # Classic subscriptions cannot use autopay when tariff mode is enabled
         from app.config import settings
 
@@ -78,12 +85,14 @@ async def update_autopay(
         # иначе оба движка продления начнут списывать параллельно (двойное
         # списание). Прямое взаимоисключение (СБП -> выключение
         # balance-autopay) уже реализовано в create_platega_sbp_subscription.
+        from app.services.cashera_recurring_cancel import cancel_cashera_recurring_for_subscription_safe
         from app.services.payment.lava import cancel_lava_recurring_for_subscription_safe
         from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
 
         await cancel_platega_recurring_for_subscription_safe(db, subscription.id)
 
         await cancel_lava_recurring_for_subscription_safe(db, subscription.id)
+        await cancel_cashera_recurring_for_subscription_safe(db, subscription.id)
     return {
         'message': 'Autopay settings updated',
         'autopay_enabled': subscription.autopay_enabled,

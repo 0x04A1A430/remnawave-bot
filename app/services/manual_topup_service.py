@@ -33,6 +33,7 @@ from app.database.crud.transaction import (
 )
 from app.database.crud.user import get_user_by_id, lock_user_for_update
 from app.database.models import PaymentMethod, Transaction, TransactionType, User
+from app.localization.texts import get_texts
 
 
 logger = structlog.get_logger(__name__)
@@ -319,15 +320,19 @@ async def _notify_user(
             logger.warning('Не удалось собрать клавиатуру уведомления о пополнении', user_id=user.id, error=error)
 
         try:
+            texts = get_texts(user.language)
             await bot.send_message(
                 user.telegram_id,
-                (
-                    '<b>Баланс пополнен</b>\n\n'
-                    '<blockquote>'
-                    f'<b>Сумма:</b> {settings.format_price(amount_kopeks)}\n'
-                    f'<b>Текущий баланс:</b> {settings.format_price(user.balance_kopeks)}\n'
-                    f'<b>Транзакция:</b> {transaction.id}'
-                    '</blockquote>'
+                texts.t(
+                    'MANUAL_TOPUP_SUCCESS',
+                    '✅ <b>Баланс пополнен</b>\n\n'
+                    '💰 Сумма: {amount}\n'
+                    '💳 Текущий баланс: {balance}\n'
+                    '🆔 Транзакция: {transaction_id}',
+                ).format(
+                    amount=settings.format_price(amount_kopeks),
+                    balance=settings.format_price(user.balance_kopeks),
+                    transaction_id=transaction.id,
                 ),
                 parse_mode='HTML',
                 reply_markup=keyboard,

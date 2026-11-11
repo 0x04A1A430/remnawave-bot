@@ -998,7 +998,7 @@
   "COPY_SUBSCRIPTION_LINK": "کپی لینک اشتراک",
   "COUNTRY_CHANGES_ACTIVE_COUNT": "<b>کشورهای فعال:</b> {count}",
   "COUNTRY_CHANGES_ADDED_HEADER": "<b>کشورهای اضافه‌شده:</b>\n",
-  "COUNTRY_CHANGES_CHARGED": "کسر: {amount} ({months} ماه)",
+  "COUNTRY_CHANGES_CHARGED": "کسر: {amount} ({days} روز)",
   "COUNTRY_CHANGES_DISCOUNT_INFO": " (تخفیف {percent}%: -{amount})",
   "COUNTRY_CHANGES_NOT_FOUND": "️ تغییری یافت نشد",
   "COUNTRY_CHANGES_REMOVED_HEADER": "<b>کشورهای قطع‌شده:</b>\n",

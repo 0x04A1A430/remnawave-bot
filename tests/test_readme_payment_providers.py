@@ -1,0 +1,76 @@
+"""README может содержать выборочный обзор провайдеров.
+
+Каждый перечисленный шлюз должен существовать в коде, но таблица не обязана
+воспроизводить весь enum, а обзорный текст — точное количество интеграций.
+Полнота подключения проверяется контрактами платёжных модулей.
+"""
+
+from __future__ import annotations
+
+import re
+from pathlib import Path
+
+from app.database.models import PaymentMethod
+
+
+README_PATH = Path(__file__).resolve().parents[1] / 'README.md'
+
+# Не шлюзы: внутренний перевод с баланса и ручное начисление админом, а также
+# `platega_recurrent` — это не отдельный провайдер, а ключ отображения СБП-
+# автопродлений Platega в админке платежей. В базу он не пишется, подключать
+# его как шлюз нечего, и отдельной строки в таблице README у него быть не должно.
+NOT_A_GATEWAY = frozenset({'balance', 'manual', 'platega_recurrent'})
+
+# Как провайдер называется в таблице, если это не сам код метода.
+DISPLAY_NAMES = {
+    'telegram_stars': 'Telegram Stars',
+    'apple_iap': 'Apple In-App Purchase',
+    'kassa_ai': 'Kassa AI',
+    'pal24': 'Pal24',
+}
+
+TABLE_HEADING = '## 💳 Платёжные провайдеры'
+
+
+def _gateways() -> list[str]:
+    return sorted({method.value for method in PaymentMethod} - NOT_A_GATEWAY)
+
+
+def _readme() -> str:
+    return README_PATH.read_text(encoding='utf-8')
+
+
+def _provider_table() -> str:
+    text = _readme()
+    assert TABLE_HEADING in text, 'в README нет раздела с таблицей провайдеров'
+    return text.split(TABLE_HEADING, 1)[1].split('</div>', 1)[0]
+
+
+def _squash(value: str) -> str:
+    """Убирает всё, кроме букв и цифр: разметка и пробелы тут не значимы."""
+    return re.sub(r'[^a-z0-9]', '', value.lower())
+
+
+def test_table_has_no_rows_for_unknown_providers() -> None:
+    """Каждая строка таблицы указывает на существующий шлюз.
+
+    Строка про выпиленного провайдера вводит в заблуждение так же, как и
+    отсутствие строки про настоящего.
+
+    Считать строки нельзя: таблица перечисляет способы оплаты, как их видит
+    покупатель, а один шлюз может давать несколько. У YooKassa карты и СБП
+    показаны отдельными строками, хотя ``PaymentMethod`` у них один.
+    """
+    known = {_squash(DISPLAY_NAMES.get(gateway, gateway)) for gateway in _gateways()}
+
+    unknown = []
+    for line in _provider_table().splitlines():
+        if not line.startswith('|') or '**' not in line:
+            continue
+        title = _squash(re.search(r'\*\*(.+?)\*\*', line).group(1))
+        # Название в строке содержит имя шлюза: «YooKassa СБП» — подметод,
+        # «PayPalych (Pal24)» — торговое имя рядом с кодовым.
+        if not any(name in title for name in known):
+            unknown.append(title)
+
+    assert not unknown, f'в таблице есть строки без соответствующего шлюза в PaymentMethod: {unknown}'

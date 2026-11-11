@@ -30,7 +30,13 @@ _NON_GATEWAY_METHODS = frozenset(
         PaymentMethod.BALANCE.value,
     }
 )
-REAL_PAYMENT_METHODS = [m.value for m in PaymentMethod if m.value not in _NON_GATEWAY_METHODS]
+# Удалённые интеграции остаются только в финансовой классификации: иначе
+# обновление кода задним числом уменьшит выручку по проведённым транзакциям.
+# Это не реестр доступных способов оплаты, создавать платежи по нему нельзя.
+RETIRED_GATEWAY_METHODS = ('paypear',)
+REAL_PAYMENT_METHODS = [m.value for m in PaymentMethod if m.value not in _NON_GATEWAY_METHODS] + list(
+    RETIRED_GATEWAY_METHODS
+)
 
 
 # ── Доп. услуги (докупка трафика / устройств) ──────────────────────────────────
@@ -325,6 +331,31 @@ async def get_user_total_spent_kopeks(db: AsyncSession, user_id: int) -> int:
     return int(result.scalar_one())
 
 
+async def get_last_subscription_payment_at(db: AsyncSession, user_id: int) -> datetime | None:
+    """Когда человек последний раз платил за подписку (завершённая оплата подписки).
+
+    Нужна панельной сверке: пока с оплаты не прошло двух суток, более ранняя дата
+    из панели считается устаревшим снимком, а не правкой оператора.
+    """
+    result = await db.execute(
+        select(func.max(Transaction.created_at)).where(
+            and_(
+                Transaction.user_id == user_id,
+                Transaction.is_completed.is_(True),
+                Transaction.type == TransactionType.SUBSCRIPTION_PAYMENT.value,
+            )
+        )
+    )
+    value = result.scalar_one_or_none()
+    # Не дата (пустая выборка, чужой драйвер, подменённая сессия в тестах) —
+    # оплаты не было: сторож оплаченного срока молчит, панель — истина как раньше.
+    if not isinstance(value, datetime):
+        return None
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=UTC)
+    return value
+
+
 async def complete_transaction(db: AsyncSession, transaction: Transaction) -> Transaction:
     transaction.is_completed = True
     transaction.completed_at = datetime.now(UTC)
@@ -575,6 +606,9 @@ async def create_unique_tribute_transaction(
     Returns ``(transaction, created)``. When ``created`` is False the payment was
     already processed (a replayed webhook) and the caller MUST NOT credit the balance
     again.
+
+    Без коммита (flush) — вызывающий коммитит транзакцию вместе с зачислением
+    и после коммита вызывает ``emit_transaction_side_effects``.
     """
     external_id = f'donation_{payment_id}'
 
@@ -610,5 +644,6 @@ async def create_unique_tribute_transaction(
         payment_method=PaymentMethod.TRIBUTE,
         external_id=external_id,
         is_completed=True,
+        commit=False,
     )
     return transaction, True

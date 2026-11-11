@@ -46,6 +46,7 @@ from app.handlers.subscription.purchase import show_subscription_info
 from app.keyboards.inline import get_subscription_keyboard
 from app.services.gift_purchase_service import GiftQuote, GiftTariffOffer
 from app.states import GiftPurchaseStates
+from tests.fixtures.gift_callbacks import bind_gift_action
 
 
 def _callbacks(keyboard: InlineKeyboardMarkup) -> list[str]:
@@ -120,7 +121,7 @@ class TestSubscriptionGiftEntryVisibility:
     """Кнопка «Подарить подписку» убрана из меню подписки во всех режимах."""
 
     def test_single_mode_active_sub_has_no_gift_entry(self):
-        sub = SimpleNamespace(id=1, is_trial=False, actual_status='paid_active', traffic_limit_gb=100)
+        sub = SimpleNamespace(id=1, is_trial=False, actual_status='paid_active', tariff_id=1, traffic_limit_gb=100)
         kb = get_subscription_keyboard(
             language='ru', has_subscription=True, is_trial=False, subscription=sub, gift_enabled=True
         )
@@ -130,7 +131,7 @@ class TestSubscriptionGiftEntryVisibility:
         assert 'back_to_menu' in callbacks
 
     def test_single_mode_active_sub_with_gift_disabled(self):
-        sub = SimpleNamespace(id=1, is_trial=False, actual_status='paid_active', traffic_limit_gb=100)
+        sub = SimpleNamespace(id=1, is_trial=False, actual_status='paid_active', tariff_id=1, traffic_limit_gb=100)
         kb = get_subscription_keyboard(
             language='ru', has_subscription=True, is_trial=False, subscription=sub, gift_enabled=False
         )
@@ -139,7 +140,7 @@ class TestSubscriptionGiftEntryVisibility:
         assert 'subscription_extend' in callbacks
 
     def test_single_mode_trial_sub_has_no_gift_entry(self):
-        sub = SimpleNamespace(id=2, is_trial=True, actual_status='trial_active', traffic_limit_gb=10)
+        sub = SimpleNamespace(id=2, is_trial=True, actual_status='trial_active', tariff_id=1, traffic_limit_gb=10)
         kb = get_subscription_keyboard(
             language='ru', has_subscription=True, is_trial=True, subscription=sub, gift_enabled=True
         )
@@ -148,7 +149,7 @@ class TestSubscriptionGiftEntryVisibility:
         assert 'subscription_upgrade' in callbacks
 
     def test_single_mode_expired_sub_has_no_gift_entry(self):
-        sub = SimpleNamespace(id=3, is_trial=False, actual_status='expired', traffic_limit_gb=50)
+        sub = SimpleNamespace(id=3, is_trial=False, actual_status='expired', tariff_id=1, traffic_limit_gb=50)
         kb = get_subscription_keyboard(
             language='ru', has_subscription=True, is_trial=False, subscription=sub, gift_enabled=True
         )
@@ -183,7 +184,7 @@ class TestSubscriptionGiftEntryVisibility:
         assert 'subscription_gift' not in _callbacks(reply_markup)
 
     def test_multi_mode_build_subscriptions_keyboard_has_no_gift_entry(self):
-        subs = [SimpleNamespace(id=10, tariff=SimpleNamespace(name='Basic'))]
+        subs = [SimpleNamespace(id=10, tariff=SimpleNamespace(name='Basic'), tariff_id=10, is_trial=False)]
         kb = _build_subscriptions_keyboard(subs, language='ru', gift_enabled=True)
         callbacks = _callbacks(kb)
         assert 'subscription_gift' not in callbacks
@@ -192,7 +193,7 @@ class TestSubscriptionGiftEntryVisibility:
         assert 'back_to_menu' in callbacks
 
     def test_multi_mode_build_subscriptions_keyboard_gift_disabled(self):
-        subs = [SimpleNamespace(id=10, tariff=SimpleNamespace(name='Basic'))]
+        subs = [SimpleNamespace(id=10, tariff=SimpleNamespace(name='Basic'), tariff_id=10, is_trial=False)]
         kb = _build_subscriptions_keyboard(subs, language='ru', gift_enabled=False)
         callbacks = _callbacks(kb)
         assert 'subscription_gift' not in callbacks
@@ -256,7 +257,7 @@ class TestSubscriptionGiftCatalogFlow:
             reply_markup = mock_callback.message.edit_text.call_args[1].get('reply_markup')
             assert reply_markup is not None
             assert 'gift_enter_code' in _callbacks(reply_markup)
-            assert 'gift_cancel' in _callbacks(reply_markup)
+            assert any(value.startswith('gift_cancel:') for value in _callbacks(reply_markup))
 
     @pytest.mark.asyncio
     async def test_gift_catalog_renders_offers_and_sets_state(self, mock_callback, mock_db_user, mock_db, memory_state):
@@ -295,7 +296,7 @@ class TestSubscriptionGiftCatalogFlow:
             assert 'gift_tariff:1' in callbacks
             assert 'gift_tariff:2' in callbacks
             assert 'gift_enter_code' in callbacks
-            assert 'gift_cancel' in callbacks
+            assert any(value.startswith('gift_cancel:') for value in callbacks)
 
             # FSM state check
             assert await memory_state.get_state() == GiftPurchaseStates.selecting_tariff.state
@@ -341,7 +342,7 @@ class TestSubscriptionGiftCatalogFlow:
             assert 'gift_period:1:30' in callbacks
             assert 'gift_period:1:90' in callbacks
             assert 'gift_back_tariffs' in callbacks
-            assert 'gift_cancel' in callbacks
+            assert any(value.startswith('gift_cancel:') for value in callbacks)
 
             assert await memory_state.get_state() == GiftPurchaseStates.selecting_period.state
             data = await memory_state.get_data()
@@ -388,9 +389,9 @@ class TestSubscriptionGiftCatalogFlow:
             assert '<VIP>' not in text
 
             callbacks = _callbacks(reply_markup)
-            assert 'gift_confirm' in callbacks
+            assert any(value.startswith('gift_confirm:') for value in callbacks)
             assert 'gift_back_periods' in callbacks
-            assert 'gift_cancel' in callbacks
+            assert any(value.startswith('gift_cancel:') for value in callbacks)
 
             assert await memory_state.get_state() == GiftPurchaseStates.confirming_purchase.state
             data = await memory_state.get_data()
@@ -525,6 +526,7 @@ class TestSubscriptionGiftCatalogFlow:
         mock_callback.data = 'gift_cancel'
 
         with patch('app.handlers.subscription.gift.show_subscription_info', AsyncMock()) as mock_show_sub:
+            await bind_gift_action(mock_callback, memory_state, 'gift_cancel')
             await handle_gift_cancel(mock_callback, mock_db_user, mock_db, memory_state)
 
             assert await memory_state.get_state() is None
