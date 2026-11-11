@@ -6036,6 +6036,10 @@ async def return_to_saved_tariff_cart(
     if total_price > 0 and user_balance < total_price:
         missing = total_price - user_balance
         cart_data.update(missing_amount=missing, return_to_cart=True)
+        # Пересохранение обновляет и метку «пополняю ради корзины» (30 минут), и саму
+        # корзину (час). Экран возврата рисует кнопки оплаты на недостающую сумму,
+        # поэтому без продления метки пользователь мог оплатить ровно столько, сколько
+        # нужно, уже после её истечения — и автопродление молча не срабатывало.
         await user_cart_service.save_user_cart(db_user.id, cart_data)
 
         if cart_mode == 'daily_tariff_purchase':
@@ -6061,12 +6065,6 @@ async def return_to_saved_tariff_cart(
             )
         elif cart_mode == 'extend':
             period = cart_data.get('period_days', 30)
-            # Метка «пополняю ради корзины» живёт 30 минут, сама корзина — час.
-            # Экран возврата рисует кнопки оплаты на недостающую сумму, поэтому
-            # без продления метки пользователь мог оплатить ровно столько,
-            # сколько нужно, уже после её истечения — и автопродление молча не
-            # срабатывало. Пересохранение обновляет оба срока.
-            await user_cart_service.save_user_cart(db_user.id, cart_data)
             _cart_sub = None
             _cart_sub_id = cart_data.get('subscription_id')
             if _cart_sub_id:

@@ -509,6 +509,7 @@ async def list_users(
     purchase_count: int | None = Query(None, ge=0, le=0),
     traffic_used_percent_min: int | None = Query(None, ge=1, le=100),
     online: bool | None = Query(None),
+    in_grace: bool | None = Query(None),
     sort_by: SortByEnum = Query(SortByEnum.CREATED_AT),
     sort_order: SortOrderEnum | None = Query(None),
     admin: User = Depends(require_permission('users:read')),
@@ -525,11 +526,12 @@ async def list_users(
     - **expires_within_days**: Active subscription ends within N days (daily tariffs excluded)
     - **active_within_minutes**: Last activity in the bot or cabinet within N minutes
     - **online**: Only users connected to the VPN right now (by the panel's onlineAt)
+    - **in_grace**: Only users with temporary access open right now (the «temporary until» mark); false — everyone else
     - **has_restrictions** / **has_subscription**: Restriction flags / any subscription at all
     - **purchase_count**: Only 0 is supported — users without a completed subscription payment
     - **traffic_used_percent_min**: Live subscription with at least N % of its traffic limit used (unlimited excluded)
-    - **sort_by**: Sort field (created_at, balance, traffic, last_activity, total_spent, purchase_count, subscription_end_date)
-    - **sort_order**: asc / desc; omitted — soonest first for subscription_end_date, largest/newest first otherwise
+    - **sort_by**: Sort field (created_at, balance, traffic, last_activity, total_spent, purchase_count, subscription_end_date, grace_until)
+    - **sort_order**: asc / desc; omitted — soonest first for subscription_end_date and grace_until, largest/newest first otherwise
     """
     # Convert status enum to model enum
     user_status = None
@@ -543,6 +545,7 @@ async def list_users(
     order_by_total_spent = sort_by == SortByEnum.TOTAL_SPENT
     order_by_purchase_count = sort_by == SortByEnum.PURCHASE_COUNT
     order_by_subscription_end = sort_by == SortByEnum.SUBSCRIPTION_END_DATE
+    order_by_grace = sort_by == SortByEnum.GRACE_UNTIL
 
     # Parse comma-separated tariff_ids
     tariff_ids: list[int] | None = None
@@ -587,12 +590,14 @@ async def list_users(
         purchase_count=purchase_count,
         traffic_used_percent_min=traffic_used_percent_min,
         connected=online_filter,
+        in_grace=in_grace,
         order_by_balance=order_by_balance,
         order_by_traffic=order_by_traffic,
         order_by_last_activity=order_by_last_activity,
         order_by_total_spent=order_by_total_spent,
         order_by_purchase_count=order_by_purchase_count,
         order_by_subscription_end=order_by_subscription_end,
+        order_by_grace=order_by_grace,
         sort_descending=None if sort_order is None else sort_order == SortOrderEnum.DESC,
     )
 
@@ -613,6 +618,7 @@ async def list_users(
         purchase_count=purchase_count,
         traffic_used_percent_min=traffic_used_percent_min,
         connected=online_filter,
+        in_grace=in_grace,
     )
 
     # Get spending stats for all users
