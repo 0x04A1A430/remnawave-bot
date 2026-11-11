@@ -219,7 +219,10 @@ async def test_route_marks_connected_rows_and_filters_online(monkeypatch: pytest
 
     async with memory_session(monkeypatch, TABLES) as db:
         await _seed(db)
-        snapshot = PanelOnlineSnapshot(by_panel_id={}, by_telegram_id={2: NOW})
+        # Отметку берём в момент запроса: NOW модуля стареет, пока идёт прогон,
+        # и окно «онлайн» (60 с) успевает закрыться на медленном раннере.
+        online_at = datetime.now(UTC)
+        snapshot = PanelOnlineSnapshot(by_panel_id={}, by_telegram_id={2: online_at})
         monkeypatch.setattr(panel_online, 'get_online_snapshot', AsyncMock(return_value=snapshot))
 
         everyone = await _list(db)
@@ -232,7 +235,7 @@ async def test_route_marks_connected_rows_and_filters_online(monkeypatch: pytest
         # Строка несёт и саму отметку: кабинет гасит точку по ней, не дожидаясь сервера.
         assert {row.username: row.online_at for row in everyone.users} == {
             'soon': None,
-            'later': NOW,
+            'later': online_at,
             'nobody': None,
             'lapsed': None,
         }
