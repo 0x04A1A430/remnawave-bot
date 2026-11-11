@@ -342,6 +342,19 @@ async def show_referral_qr(
             '🌐 Ссылка на кабинет:\n{link}',
         ).format(link=cabinet_referral_link)
 
+    # Rich-сообщение нельзя превратить в фото через edit_media.
+    if getattr(callback.message, 'rich_message', None) is not None:
+        try:
+            await callback.message.delete()
+        except Exception:
+            pass
+        await callback.message.answer_photo(
+            photo,
+            caption=caption,
+            reply_markup=keyboard,
+        )
+        return
+
     try:
         await callback.message.edit_media(
             types.InputMediaPhoto(media=photo, caption=caption),

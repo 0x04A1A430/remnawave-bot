@@ -12,18 +12,20 @@ def create_bot(token: str | None = None, **kwargs) -> Bot:
     """Create a Bot instance with SOCKS5 proxy and/or custom Telegram API server."""
     proxy_url = settings.get_proxy_url()
     telegram_api_url = settings.get_telegram_api_url()
-    session = None
-    if proxy_url or telegram_api_url:
-        from aiogram.client.session.aiohttp import AiohttpSession
-        from aiogram.client.telegram import TelegramAPIServer
 
-        session_kwargs: dict = {}
-        if proxy_url:
-            session_kwargs['proxy'] = proxy_url
-        if telegram_api_url:
-            session_kwargs['api'] = TelegramAPIServer.from_base(telegram_api_url)
+    from aiogram.client.telegram import TelegramAPIServer
 
-        session = AiohttpSession(**session_kwargs)
+    from app.utils.rich_transport import RichAiohttpSession
+
+    session_kwargs: dict = {}
+    if proxy_url:
+        session_kwargs['proxy'] = proxy_url
+    if telegram_api_url:
+        session_kwargs['api'] = TelegramAPIServer.from_base(telegram_api_url)
+
+    # Rich-транспорт: обычные sendMessage/editMessageText/логотип-SendPhoto
+    # прозрачно уходят как rich-сообщения с фоллбеком на классику.
+    session = RichAiohttpSession(**session_kwargs)
 
     kwargs.setdefault('default', DefaultBotProperties(parse_mode=ParseMode.HTML))
     bot = Bot(token=token or settings.BOT_TOKEN, session=session, **kwargs)

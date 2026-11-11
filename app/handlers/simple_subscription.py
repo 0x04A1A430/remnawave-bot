@@ -1095,11 +1095,25 @@ async def handle_simple_subscription_payment_method(
             # Отправляем сообщение с инструкциями и клавиатурой
             # Если есть QR-код, отправляем его как медиа-сообщение
             if qr_photo:
-                # Используем метод отправки фото с описанием
-                await callback.message.edit_media(
-                    media=types.InputMediaPhoto(media=qr_photo, caption=message_text, parse_mode='HTML'),
-                    reply_markup=keyboard,
-                )
+                # Rich-сообщение нельзя превратить в фото через edit_media —
+                # пересоздаём его rich-карточкой с QR.
+                if getattr(callback.message, 'rich_message', None) is not None:
+                    try:
+                        await callback.message.delete()
+                    except Exception:
+                        pass
+                    await callback.message.answer_photo(
+                        qr_photo,
+                        caption=message_text,
+                        reply_markup=keyboard,
+                        parse_mode='HTML',
+                    )
+                else:
+                    # Используем метод отправки фото с описанием
+                    await callback.message.edit_media(
+                        media=types.InputMediaPhoto(media=qr_photo, caption=message_text, parse_mode='HTML'),
+                        reply_markup=keyboard,
+                    )
             else:
                 # Если QR-код недоступен, отправляем обычное текстовое сообщение
                 await callback.message.edit_text(message_text, reply_markup=keyboard, parse_mode='HTML')

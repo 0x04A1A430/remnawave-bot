@@ -1479,6 +1479,16 @@ async def handle_gift_my_qr(
     keyboard = _gift_back_keyboard(texts, item.purchase_id)
     photo = FSInputFile(file_path)
 
+    # Rich-сообщение нельзя превратить в фото через edit_media — сразу
+    # пересоздаём его rich-карточкой с QR (без лишнего падающего запроса).
+    if getattr(callback.message, 'rich_message', None) is not None:
+        try:
+            await callback.message.delete()
+        except Exception:
+            pass
+        await callback.message.answer_photo(photo, caption=caption, reply_markup=keyboard, parse_mode='HTML')
+        return
+
     try:
         await callback.message.edit_media(
             types.InputMediaPhoto(media=photo, caption=caption, parse_mode='HTML'),
