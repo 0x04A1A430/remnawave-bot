@@ -33,7 +33,7 @@ HWID_HEADERS = {
     'x-hwid': 'xilarobot-bscheker',
     'x-device-os': 'Linux',
     'x-ver-os': '1',
-    'x-device-model': 'BSCHEKER (@xilarobot)',
+    'x-device-model': 'BSCHEKER (@x1lagent)',
 }
 HWID_ACTIVE_HEADER = 'x-hwid-active'
 _BASE64_RE = re.compile(r'^[A-Za-z0-9+/=_-]+$')
