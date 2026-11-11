@@ -541,7 +541,7 @@ async def show_payment_methods(callback: types.CallbackQuery, db_user: User, db:
         await callback.answer()
         return
 
-    payment_text = get_payment_methods_text(db_user.language)
+    payment_text = get_payment_methods_text(db_user.language, balance_kopeks=db_user.balance_kopeks)
 
     # Сумма, переданная кнопкой «Пополнить на …» с экрана нехватки средств.
     amount_kopeks = 0
@@ -614,7 +614,7 @@ async def handle_payment_methods_unavailable(callback: types.CallbackQuery, db_u
 async def handle_successful_topup_with_cart(user_id: int, amount_kopeks: int, bot, db: AsyncSession):
     from aiogram.fsm.storage.base import StorageKey
 
-    from app.bot import dp
+    from app.bot import dispatcher
     from app.database.crud.user import get_user_by_id
 
     user = await get_user_by_id(db, user_id)
@@ -626,7 +626,10 @@ async def handle_successful_topup_with_cart(user_id: int, amount_kopeks: int, bo
         logger.info('Skipping cart notification for email-only user', user_id=user_id)
         return
 
-    storage = dp.storage
+    if dispatcher is None:
+        logger.warning('FSM dispatcher ещё не создан — пропускаем уведомление о корзине', user_id=user_id)
+        return
+    storage = dispatcher.storage
     key = StorageKey(bot_id=bot.id, chat_id=user.telegram_id, user_id=user.telegram_id)
 
     try:
@@ -637,25 +640,30 @@ async def handle_successful_topup_with_cart(user_id: int, amount_kopeks: int, bo
             texts = get_texts(user.language)
             total_price = state_data.get('total_price', 0)
 
+            from app.utils.notification_card import button, card
+
             keyboard = types.InlineKeyboardMarkup(
                 inline_keyboard=[
                     [
-                        types.InlineKeyboardButton(
-                            text=texts.t('PAYMENT_UI_RESUME_CHECKOUT', '🛒 Вернуться к оформлению подписки'),
+                        button(
+                            texts.t('PAYMENT_UI_RESUME_CHECKOUT', 'Вернуться к оформлению'),
+                            '🔥',
                             callback_data='return_to_saved_cart',
                             style='success',
                         )
                     ],
                     [
-                        types.InlineKeyboardButton(
-                            text=texts.t('MY_BALANCE_BUTTON', '💰 Мой баланс'),
+                        button(
+                            texts.t('MY_BALANCE_BUTTON', 'Мой баланс'),
+                            '💰',
                             callback_data='menu_balance',
                             style='primary',
                         )
                     ],
                     [
-                        types.InlineKeyboardButton(
-                            text=texts.t('SUBSCRIPTION_UI_MAIN_MENU', '🏠 Главное меню'),
+                        button(
+                            texts.t('SUBSCRIPTION_UI_MAIN_MENU', 'Главное меню'),
+                            '💬',
                             callback_data='back_to_menu',
                             style='danger',
                         )
@@ -667,19 +675,22 @@ async def handle_successful_topup_with_cart(user_id: int, amount_kopeks: int, bo
                 balance_hint = texts.t('PAYMENT_UI_CART_ENOUGH', 'Средств на балансе достаточно для оформления.')
             else:
                 missing = max(total_price - user.balance_kopeks, 0)
-                # Без округления, иначе при не хватке <50 копеек покажется «0 ₽».
                 balance_hint = texts.t('PAYMENT_UI_CART_MISSING', 'Не хватает: {value1}').format(
                     value1=texts.format_price(missing, round_kopeks=False)
                 )
 
-            success_text = texts.t(
-                'PAYMENT_UI_CART_AFTER_TOPUP',
-                '✅ Баланс пополнен на {value1}!\n\n💰 Текущий баланс: {value2}\n\n🛒 У вас есть сохранённая корзина на {value3}\n{value4}\n\nХотите продолжить оформление?',
-            ).format(
-                value1=texts.format_price(amount_kopeks),
-                value2=texts.format_price(user.balance_kopeks),
-                value3=texts.format_price(total_price),
-                value4=balance_hint,
+            success_text = card(
+                emoji='✅',
+                title=texts.t('PAYMENT_UI_CART_AFTER_TOPUP_TITLE', 'Баланс пополнен').format(),
+                lines=[
+                    f'{texts.t("NOTIFY_TOPUP_AMOUNT", "Зачислено")}: <b>{texts.format_price(amount_kopeks)}</b>',
+                    f'{texts.t("NOTIFY_BALANCE_NOW", "Текущий баланс")}: <b>{texts.format_price(user.balance_kopeks)}</b>',
+                    texts.t('PAYMENT_UI_CART_SAVED', 'Сохранённая корзина на {value3}').format(
+                        value3=texts.format_price(total_price)
+                    ),
+                    balance_hint,
+                ],
+                note=texts.t('NOTIFY_CARD_NOTE', '@x1lagent · ответим в поддержке за пару минут'),
             )
 
             await bot.send_message(

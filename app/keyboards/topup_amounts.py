@@ -1,5 +1,3 @@
-import random
-
 import structlog
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -110,12 +108,12 @@ async def get_topup_amount_keyboard(
     texts = get_texts(language)
     keyboard: list[list[InlineKeyboardButton]] = []
     row: list[InlineKeyboardButton] = []
-    for amount in amounts:
+    for amount_index, amount in enumerate(amounts):
         row.append(
             InlineKeyboardButton(
                 text=format_quick_amount(amount),
                 callback_data=f'topup_amount|{method}|{amount}',
-                style=random.choice(_QUICK_AMOUNT_STYLES),
+                style=_QUICK_AMOUNT_STYLES[amount_index % len(_QUICK_AMOUNT_STYLES)],
             )
         )
         if len(row) == 2:
