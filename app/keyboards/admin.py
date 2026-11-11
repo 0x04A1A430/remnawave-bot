@@ -2166,7 +2166,10 @@ def get_monitoring_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                     text=_t(texts, 'ADMIN_MONITORING_TEST_NOTIFICATIONS', 'Тест уведомлений'),
                     callback_data='admin_mon_test_notifications',
                 ),
-                make_button(text='Настройки трафика', callback_data='admin_mon_traffic_settings'),
+                make_button(
+                    text='Настройки трафика',
+                    callback_data='admin_mon_traffic_settings',
+                ),
             ],
             [
                 make_button(

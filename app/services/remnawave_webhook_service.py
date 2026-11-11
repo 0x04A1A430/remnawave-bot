@@ -34,7 +34,12 @@ from app.database.crud.subscription import (
     reactivate_subscription,
     update_subscription_usage,
 )
-from app.database.crud.user import get_user_by_id, get_user_by_remnawave_id, get_user_by_telegram_id
+from app.database.crud.user import (
+    get_user_by_id,
+    get_user_by_remnawave_id,
+    get_user_by_telegram_id,
+    lock_user_for_update,
+)
 from app.database.models import Subscription, SubscriptionServer, SubscriptionStatus, User
 from app.external.remnawave_api import RemnaWaveAPIError, RemnaWaveInvalidUserIdError
 from app.localization.texts import get_texts
@@ -42,7 +47,7 @@ from app.services.admin_notification_service import AdminNotificationService
 from app.services.grace_access_runtime import get_open_grace_subscription_ids, grace_access_runtime
 from app.services.grace_access_service import GraceReason
 from app.services.notification_delivery_service import NotificationType, notification_delivery_service
-from app.services.panel_sync import WEBHOOK, project_onto_subscription, read_panel_user
+from app.services.panel_sync import WEBHOOK, panel_date_behind_paid_renewal, project_onto_subscription, read_panel_user
 from app.utils.miniapp_buttons import build_miniapp_or_callback_button, build_subscription_extend_button
 
 
@@ -213,7 +218,7 @@ class RemnaWaveWebhookService:
         # `_node_event_pending_tasks` — strong-ref набор для GC-safety: задача
         # остаётся в нём до полного завершения коаллбэка через add_done_callback.
         # Asyncio docs предупреждают, что слабо-ссылочные задачи могут быть
-        # выгружены GC до завершения; на CPython 3.13 риск практически нулевой,
+        # выгружены GC до завершения; на CPython риск практически нулевой,
         # но паттерн с set — канонический.
         self._node_event_buffer: dict[str, list[dict]] = {}
         self._node_event_overflow: dict[str, int] = {}
@@ -483,6 +488,12 @@ class RemnaWaveWebhookService:
     async def _process_user_event(self, db: AsyncSession, event_name: str, data: dict, handler: Any) -> bool:
         """Resolve user and execute user-scoped handler."""
         user, subscription = await self._resolve_user_and_subscription(db, data)
+        if user and event_name == 'user.deleted':
+            # A merge may commit after the first lookup, transferring identity
+            # and deleting the selected row. Serialize with merge, refresh, then
+            # resolve again before any destructive handler side effects.
+            await lock_user_for_update(db, user)
+            user, subscription = await self._resolve_user_and_subscription(db, data)
         if not user:
             panel_user_id, short_uuid = self._extract_panel_identity(data)
             telegram_id = data.get('telegramId')
@@ -935,7 +946,17 @@ class RemnaWaveWebhookService:
         if panel_user_id is not None:
             filters.append(Subscription.remnawave_id == panel_user_id)
         if short_uuid:
-            filters.append(Subscription.remnawave_short_uuid == short_uuid)
+            short_filter = Subscription.remnawave_short_uuid == short_uuid
+            if panel_user_id is not None:
+                # A shortUuid fallback can recover missing numeric linkage, but
+                # cannot override a different, already bound panel account.
+                unbound = Subscription.remnawave_id.is_(None)
+                if not settings.is_multi_tariff_enabled():
+                    unbound = unbound & Subscription.user.has(
+                        User.remnawave_id.is_(None) | (User.remnawave_id == panel_user_id)
+                    )
+                short_filter = short_filter & (unbound | (Subscription.remnawave_id == panel_user_id))
+            filters.append(short_filter)
         return filters
 
     async def _find_subscription_by_panel_identity(
@@ -1036,8 +1057,10 @@ class RemnaWaveWebhookService:
         if not user:
             return None, None
 
-        # In multi-tariff mode, find subscription by panel identity (per-subscription)
-        if settings.is_multi_tariff_enabled() and (panel_user_id is not None or short_uuid):
+        # A panel identity addresses a subscription in BOTH modes. After a merge,
+        # telegramId can belong to the survivor while this event targets the old
+        # panel account; selecting the survivor by user_id would expire it.
+        if panel_user_id is not None or short_uuid:
             subscription = await self._find_subscription_by_panel_identity(
                 db, panel_user_id, short_uuid, user_id=user.id
             )
@@ -1067,21 +1090,33 @@ class RemnaWaveWebhookService:
                     subscription_user_id=fallback1_sub.user_id,
                     subscription_id=fallback1_sub.id,
                 )
-                # Do NOT return cross-user subscription — would mutate another user's data
-                return user, None
+                # Do NOT invoke handlers against a different current identity.
+                return None, None
 
-            # Fallback 2: all lookups exhausted
+            # Per-subscription lookups exhausted; only a proven legacy User ID
+            # may still authorize a single-subscription fallback below.
             logger.warning(
-                'Webhook: подписка не найдена ни по одному методу поиска, возвращаем (user, None)',
+                'Webhook: подписка не найдена по панельной идентичности, проверяем legacy-привязку пользователя',
                 panel_user_id=panel_user_id,
                 short_uuid=short_uuid,
                 user_id=user.id,
             )
 
+        if panel_user_id is not None or short_uuid:
+            # Legacy subscriptions may store their identity only on User.
+            # Reject unmatched explicit identities even after marker expiry.
+            if panel_user_id is None or panel_user_id != user.remnawave_id:
+                return None, None
+
         if settings.is_multi_tariff_enabled():
             # In multi-tariff mode, don't fall back to arbitrary subscription
             return user, None
         subscription = await get_subscription_by_user_id(db, user.id)
+        if subscription and (panel_user_id is not None or short_uuid):
+            if subscription.remnawave_id is not None and subscription.remnawave_id != panel_user_id:
+                return None, None
+            # shortUuid rotates on credential revocation. A matching numeric
+            # legacy User ID remains authoritative when the short key changed.
         return user, subscription
 
     # ------------------------------------------------------------------
@@ -1236,7 +1271,7 @@ class RemnaWaveWebhookService:
                 telegram_markup=reply_markup,
             )
         except Exception:
-            logger.exception('Notification delivery failed for user , text_key', user_id=user.id, text_key=text_key)
+            logger.exception('Notification delivery failed', user_id=user.id, text_key=text_key)
 
     # ------------------------------------------------------------------
     # Webhook timestamp helper
@@ -1257,6 +1292,21 @@ class RemnaWaveWebhookService:
         if not subscription:
             # Подписка уже удалена из БД — фантомный хук от панели, игнорируем
             logger.info('Webhook user.expired: подписка не найдена в БД (уже удалена), пропуск', user_id=user.id)
+            return
+
+        from app.database.crud.transaction import get_last_subscription_payment_at
+
+        snapshot = read_panel_user(data)
+        if snapshot.expire_at is None:
+            snapshot = replace(snapshot, expire_at=datetime.now(UTC))
+        paid_at = await get_last_subscription_payment_at(db, user.id)
+        if subscription.end_date > datetime.now(UTC) and panel_date_behind_paid_renewal(
+            subscription, snapshot, paid_at=paid_at
+        ):
+            from app.services.remnawave_retry_queue import remnawave_retry_queue
+
+            remnawave_retry_queue.enqueue(subscription_id=subscription.id, user_id=user.id, action='update')
+            logger.info('Ignoring stale panel expiry while local renewal is pending', subscription_id=subscription.id)
             return
 
         # Суточные подписки управляются DailySubscriptionService.
@@ -1301,12 +1351,64 @@ class RemnaWaveWebhookService:
             subscription=subscription,
         )
 
+    async def _reconcile_managed_status_event(self, db, subscription):
+        """Treat a managed status webhook as a hint to fetch current state.
+
+        Quota owns LIMITED locally and its DISABLED panel overlay. Neither a
+        delayed enable nor an old limit event may overwrite an admin disable.
+        """
+        mode = getattr(subscription, 'traffic_accounting_mode', None)
+        if mode not in ('managed', 'migrating'):
+            return None
+        from app.services.subscription_service import SubscriptionService
+        from app.services.traffic_accounting import AccountingConflict
+        from app.services.traffic_accounting_service import (
+            _fresh_panel,
+            lock_accounting_subscription,
+            reconcile_account_locked,
+            schedule_projection_after_commit,
+        )
+        from app.services.traffic_accounting_store import load_account
+
+        if mode == 'migrating':
+            raise AccountingConflict('Traffic accounting migration is not complete')
+        subscription, grace_open = await lock_accounting_subscription(db, subscription.id)
+        async with SubscriptionService().get_api_client() as api:
+            panel = await _fresh_panel(db, api, subscription)
+        account = await reconcile_account_locked(db, subscription, panel)
+        _, accounting = await load_account(db, subscription.id)
+        new_limited_candidate = False
+        if not grace_open and not accounting.grace_excluded:
+            current_status = getattr(panel.status, 'value', panel.status)
+            if current_status == 'DISABLED' and not accounting.quota_disabled:
+                subscription.status = SubscriptionStatus.DISABLED.value
+            elif (
+                accounting.phase == 'ready'
+                and account.remaining_bytes(datetime.now(UTC)) == 0
+                and subscription.status in (SubscriptionStatus.ACTIVE.value, SubscriptionStatus.TRIAL.value)
+            ):
+                subscription.status = SubscriptionStatus.LIMITED.value
+                subscription.grace_candidate_reason = GraceReason.LIMITED.value
+                subscription.grace_candidate_at = datetime.now(UTC)
+                new_limited_candidate = True
+            # Recovery belongs to post-commit delivery. A local administrative
+            # DISABLED (or a banned User) is never lifted by a panel event.
+        self._stamp_webhook_update(subscription)
+        schedule_projection_after_commit(db, subscription.id)
+        await db.commit()
+        if new_limited_candidate:
+            await grace_access_runtime.consider_candidate(subscription.id, GraceReason.LIMITED, source='webhook')
+        return panel
+
     async def _handle_user_disabled(
         self, db: AsyncSession, user: User, subscription: Subscription | None, data: dict
     ) -> None:
         if not subscription:
             # Подписка уже удалена из БД — фантомный хук от панели, игнорируем
             logger.info('Webhook user.disabled: подписка не найдена в БД (уже удалена), пропуск', user_id=user.id)
+            return
+
+        if await self._reconcile_managed_status_event(db, subscription) is not None:
             return
 
         # Суточные подписки управляются DailySubscriptionService — не деактивируем
@@ -1358,6 +1460,9 @@ class RemnaWaveWebhookService:
             logger.info('Webhook user.enabled: подписка не найдена в БД (уже удалена), пропуск', user_id=user.id)
             return
 
+        if await self._reconcile_managed_status_event(db, subscription) is not None:
+            return
+
         self._stamp_webhook_update(subscription)
         if subscription.status in (SubscriptionStatus.DISABLED.value, SubscriptionStatus.LIMITED.value):
             await reactivate_subscription(db, subscription)
@@ -1374,6 +1479,9 @@ class RemnaWaveWebhookService:
     ) -> None:
         if not subscription:
             logger.info('Webhook user.limited: подписка не найдена в БД (уже удалена), пропуск', user_id=user.id)
+            return
+
+        if await self._reconcile_managed_status_event(db, subscription) is not None:
             return
 
         candidate_at = datetime.now(UTC)
@@ -1408,12 +1516,34 @@ class RemnaWaveWebhookService:
             logger.info('Webhook user.traffic_reset: подписка не найдена в БД (уже удалена), пропуск', user_id=user.id)
             return
 
+        mode = getattr(subscription, 'traffic_accounting_mode', None)
+        if mode in ('managed', 'migrating'):
+            from app.services.traffic_accounting import AccountingConflict
+            from app.services.traffic_accounting_service import refresh_managed_account
+
+            if mode == 'migrating':
+                raise AccountingConflict('Traffic accounting migration is not complete')
+            # Webhooks may be duplicated or delayed. Read actual cumulative usage;
+            # a counter reset is never an entitlement grant or an enable request.
+            await refresh_managed_account(db, subscription)
+            self._stamp_webhook_update(subscription)
+            await db.commit()
+            return
+
         self._stamp_webhook_update(subscription)
         await update_subscription_usage(db, subscription, 0.0)
         # Re-enable if was disabled/limited due to traffic limit
         if subscription.status in (SubscriptionStatus.DISABLED.value, SubscriptionStatus.LIMITED.value):
             await reactivate_subscription(db, subscription)
-        logger.info('Webhook: traffic reset for subscription , user', subscription_id=subscription.id, user_id=user.id)
+        logger.info('Webhook: traffic reset for subscription', subscription_id=subscription.id, user_id=user.id)
+
+        # Истёкшей подписке счётчик обнуляет сам grace при выдаче
+        # (GRACE_ACCESS_RESET_TRAFFIC_ON_START): «трафик сброшен» рядом с
+        # сообщением о grace читалось бы как продление.
+        if subscription.status == SubscriptionStatus.EXPIRED.value and subscription.id in (
+            await get_open_grace_subscription_ids(db)
+        ):
+            return
 
         # The bot resets traffic itself on purchase/renewal/charge and already
         # reports the outcome — don't spam a second "Трафик сброшен" message.
@@ -1439,6 +1569,12 @@ class RemnaWaveWebhookService:
         if not subscription:
             return
 
+        current_panel = await self._reconcile_managed_status_event(db, subscription)
+        if current_panel is not None:
+            # Metadata may still synchronize, but never from an out-of-order
+            # webhook snapshot. Managed projection masks nominal quota/status.
+            data = current_panel
+
         grace_open = subscription.id in await get_open_grace_subscription_ids(db)
 
         snapshot = read_panel_user(data)
@@ -1449,13 +1585,29 @@ class RemnaWaveWebhookService:
         if snapshot.crypto_link and not self._is_valid_link(snapshot.crypto_link):
             snapshot = replace(snapshot, crypto_link=None)
 
+        from app.database.crud.transaction import get_last_subscription_payment_at
+
+        paid_at = await get_last_subscription_payment_at(db, user.id)
         changed_fields = project_onto_subscription(
             subscription,
             snapshot,
             policy=WEBHOOK,
             grace_open=grace_open,
+            paid_at=paid_at,
         )
         changed = bool(changed_fields)
+        if panel_date_behind_paid_renewal(subscription, snapshot, paid_at=paid_at):
+            # Запись оплаченного срока в панель не дошла: держим срок и досылаем.
+            from app.services.remnawave_retry_queue import remnawave_retry_queue
+
+            logger.warning(
+                'Панель показывает срок короче оплаченного — снимок не принят, срок уедет в панель повтором',
+                subscription_id=subscription.id,
+                user_id=user.id,
+                panel_expire_at=snapshot.expire_at.isoformat() if snapshot.expire_at else None,
+                end_date=subscription.end_date.isoformat() if subscription.end_date else None,
+            )
+            remnawave_retry_queue.enqueue(subscription_id=subscription.id, user_id=user.id, action='update')
 
         # Always stamp to protect from sync overwrite, even if no fields changed
         self._stamp_webhook_update(subscription)
@@ -1535,7 +1687,7 @@ class RemnaWaveWebhookService:
             except Exception:
                 # Subscription was cascade-deleted, re-fetch user and skip subscription updates
                 logger.warning(
-                    'Webhook: subscription already deleted for user , skipping subscription cleanup',
+                    'Webhook: subscription already deleted — skipping cleanup',
                     sub_id=sub_id,
                     user_id=user_id,
                 )
@@ -1591,7 +1743,12 @@ class RemnaWaveWebhookService:
                 user.remnawave_id = None
             # И uuid — тот же инвариант, что в `validate_and_clean_subscription`.
             user.remnawave_uuid = None
-        elif subscription is None:
+        elif panel_user_id is not None and user.remnawave_id == panel_user_id:
+            # Мультитариф: первый аккаунт записан и человеку. Мёртвый id там достался
+            # бы следующей покупке (should_create_panel_account привязывает «свободный
+            # аккаунт человека») — и каждый запрос по ней отвечал бы «User not found».
+            user.remnawave_id = None
+        if settings.is_multi_tariff_enabled() and subscription is None:
             # Идентичность обязана быть непустой: сравнение None с None приклеило бы
             # очистку к первой попавшейся непровиженной подписке.
             if panel_user_id is not None or short_uuid:

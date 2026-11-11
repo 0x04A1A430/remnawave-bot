@@ -205,6 +205,7 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
         dp.callback_query.middleware(RichMenuCleanupMiddleware())
         logger.info('RichMenuCleanupMiddleware активирован')
 
+    support.register_command_handlers(dp)
     start.register_handlers(dp)
     menu.register_handlers(dp)
     subscription.register_handlers(dp)

@@ -11,10 +11,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.config import settings
+from app.database.auth_methods import OAUTH_PROVIDER_COLUMNS
 from app.database.constants import POSTGRES_INT4_MAX, POSTGRES_INT4_MIN
 from app.database.crud.discount_offer import get_latest_claimed_offer_for_user
 from app.database.crud.promo_group import get_default_promo_group
 from app.database.crud.promo_offer_log import log_promo_offer_action
+from app.database.crud.subscription_segments import segment_condition
 from app.database.models import (
     AdvertisingCampaign,
     AdvertisingCampaignRegistration,
@@ -670,12 +672,14 @@ async def add_user_balance_by_id(
 
 
 async def lock_user_for_pricing(db: AsyncSession, user_id: int) -> User:
-    """Lock user row with FOR UPDATE and return refreshed instance.
+    """Lock user row with FOR NO KEY UPDATE and return refreshed instance.
 
     Call BEFORE computing prices that depend on promo offer state
     to prevent TOCTOU race conditions where two concurrent requests
     both read the same promo offer discount and charge a discounted price.
     """
+    # Balance/discount changes never alter the User primary key. Allow ledger
+    # FK KEY SHARE while a recurring payment owns the subscription row.
     result = await db.execute(
         select(User)
         .where(User.id == user_id)
@@ -684,7 +688,7 @@ async def lock_user_for_pricing(db: AsyncSession, user_id: int) -> User:
             selectinload(User.promo_group),
             selectinload(User.subscriptions).selectinload(Subscription.tariff),
         )
-        .with_for_update()
+        .with_for_update(key_share=True)
         .execution_options(populate_existing=True)
     )
     return result.scalar_one()
@@ -1012,7 +1016,8 @@ def _users_list_conditions(
     if subscription_status or tariff_ids:
         sub_conditions = []
         if subscription_status:
-            sub_conditions.append(Subscription.status == subscription_status)
+            # Сегмент, а не сырой статус: триалы лежат со статусом active и is_trial.
+            sub_conditions.append(segment_condition(subscription_status, now))
         if tariff_ids:
             sub_conditions.append(Subscription.tariff_id.in_(tariff_ids))
         sub_query = (
@@ -1083,6 +1088,7 @@ def _users_list_conditions(
                 .where(
                     Subscription.user_id == User.id,
                     Subscription.status == SubscriptionStatus.ACTIVE.value,
+                    Subscription.is_trial.is_not(True),  # «истекают» — про платных; триал — свой сегмент
                     Subscription.end_date >= now,
                     Subscription.end_date <= now + timedelta(days=expires_within_days),
                     ~and_(Tariff.is_daily.is_(True), Subscription.is_daily_paused.is_(False)),
@@ -1132,6 +1138,7 @@ def _users_list_conditions(
                             SubscriptionStatus.LIMITED.value,
                         )
                     ),
+                    Subscription.end_date > now,
                     Subscription.traffic_limit_gb > 0,
                     Subscription.traffic_used_gb >= Subscription.traffic_limit_gb * threshold,
                 )
@@ -1269,11 +1276,16 @@ async def get_users_list(
         # Статус берём тот же, по которому фильтруется список: иначе связка
         # «покажи истёкших, отсортируй по дате окончания» давала бы у ВСЕХ строк
         # пустой ключ и молча схлопывалась в сортировку по дате регистрации.
+        # Без выборки ключ — ближайшее окончание среди живых по статусу строк
+        # (и триал, и платные: строка списка показывает ту же подписку). С выборкой —
+        # ровно тот сегмент, по которому человек в неё попал.
         _sort_status = subscription_status or SubscriptionStatus.ACTIVE.value
-        soonest_end_conditions = [
-            Subscription.user_id == User.id,
-            Subscription.status == _sort_status,
-        ]
+        sort_condition = (
+            segment_condition(subscription_status, datetime.now(UTC))
+            if subscription_status
+            else Subscription.status.in_(LIVE_SUBSCRIPTION_STATUSES)
+        )
+        soonest_end_conditions = [Subscription.user_id == User.id, sort_condition]
         if _sort_status == SubscriptionStatus.ACTIVE.value:
             # Суточные тарифы исключаем ровно как `get_expiring_subscriptions`:
             # у активной суточной подписки end_date всегда +24ч, поэтому иначе
@@ -1848,12 +1860,6 @@ async def clear_email_change_pending(db: AsyncSession, user: User) -> None:
 
 # Single source of truth: provider name → User model column name.
 # Imported by account_linking.py and account_merge_service.py.
-OAUTH_PROVIDER_COLUMNS: dict[str, str] = {
-    'google': 'google_id',
-    'yandex': 'yandex_id',
-    'discord': 'discord_id',
-    'vk': 'vk_id',
-}
 
 
 async def get_user_by_oauth_provider(db: AsyncSession, provider: str, provider_id: str) -> User | None:

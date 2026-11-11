@@ -60,6 +60,8 @@ def _sub(user: User, suffix: str, status: str, days: int, *, used: float = 0.0, 
     return Subscription(
         user_id=user.id,
         status=status,
+        # Платные подписки: у модели is_trial по умолчанию True, а сегмент «Активные» — про платных.
+        is_trial=extra.pop('is_trial', False),
         start_date=NOW - timedelta(days=60),
         end_date=NOW + timedelta(days=days),
         traffic_limit_gb=limit,

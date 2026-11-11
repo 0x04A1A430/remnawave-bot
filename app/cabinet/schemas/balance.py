@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
 class BalanceResponse(BaseModel):
@@ -67,8 +67,10 @@ class PaymentMethodResponse(BaseModel):
 class TopUpRequest(BaseModel):
     """Request to create payment for balance top-up."""
 
-    amount_kopeks: int = Field(..., ge=1000, le=2_000_000_000, description='Amount in kopeks (min 10 rubles)')
+    # The selected provider supplies its effective minimum (including DB overrides).
+    amount_kopeks: int = Field(..., ge=1, le=2_000_000_000, description='Amount in kopeks')
     payment_method: str = Field(..., description='Payment method ID')
+    customer_email: EmailStr | None = None
     payment_option: str | None = Field(None, description='Payment option (e.g. Platega method code)')
 
 
@@ -81,6 +83,9 @@ class TopUpResponse(BaseModel):
     amount_rubles: float
     status: str
     expires_at: datetime | None = None
+    # Свой экран оплаты (Cashera H2H): строка QR СБП или платёжная ссылка — кабинет
+    # рисует QR рядом с кнопкой оплаты. None — обычный переход по payment_url.
+    qr_payload: str | None = None
 
 
 class StarsInvoiceRequest(BaseModel):

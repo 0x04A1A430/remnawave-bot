@@ -105,6 +105,8 @@ def _mount_uploads_static(app: FastAPI) -> None:
     uploads_path.mkdir(parents=True, exist_ok=True)
     try:
         app.mount('/uploads', StaticFiles(directory=uploads_path), name='media-uploads')
+        # The cabinet's standard reverse proxy only forwards /api/* to this app.
+        app.mount('/cabinet/uploads', StaticFiles(directory=uploads_path), name='cabinet-media-uploads')
         logger.info('Media uploads static files mounted at /uploads', uploads_path=str(uploads_path))
     except RuntimeError as error:  # pragma: no cover - defensive guard
         logger.warning('Failed to mount media uploads static files', error=error)
@@ -208,6 +210,13 @@ def create_unified_app(
         # ПЕРВЫМ в shutdown_handlers — итерация без reverse.
         shutdown_handlers.append(remnawave_webhook_service.stop)
 
+    # DPI//CHECKER: события проверок и мониторов из кабинета (подпись — секретом сервиса).
+    # Подключён всегда: модуль включают из кабинета без перезапуска, выключенный отвечает 503.
+    from app.services.dpichecker.service import dpichecker_service
+    from app.webserver.dpichecker_webhook import create_dpichecker_webhook_router
+
+    app.include_router(create_dpichecker_webhook_router(dpichecker_service))
+
     payment_providers_state = {
         'tribute': settings.TRIBUTE_ENABLED,
         'mulenpay': settings.is_mulenpay_enabled(),
@@ -215,6 +224,7 @@ def create_unified_app(
         'yookassa': settings.is_yookassa_enabled(),
         'pal24': settings.is_pal24_enabled(),
         'wata': settings.is_wata_enabled(),
+        'anore': settings.is_anore_enabled(),
         'heleket': settings.is_heleket_enabled(),
         'apple_iap': settings.is_apple_iap_enabled(),
         'freekassa': settings.is_freekassa_enabled(),

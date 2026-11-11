@@ -48,6 +48,8 @@ def _subscription(user: User, days_left: int, status: str = SubscriptionStatus.A
     return Subscription(
         user_id=user.id,
         status=status,
+        # Платные подписки: у модели is_trial по умолчанию True, а «истекают» — сегмент платных.
+        is_trial=False,
         start_date=NOW - timedelta(days=20),
         end_date=NOW + timedelta(days=days_left),
         traffic_limit_gb=100,

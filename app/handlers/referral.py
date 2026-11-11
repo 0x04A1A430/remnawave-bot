@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database.models import ReferralEarning, Transaction, TransactionType, User
 from app.keyboards.inline import get_referral_keyboard
+from app.keyboards.withdrawal import get_withdrawal_request_keyboard
 from app.localization.texts import get_texts
 from app.services.admin_notification_service import AdminNotificationService, NotificationCategory
 from app.services.referral_reward_service import format_reward_total
@@ -137,7 +138,7 @@ async def show_referral_info(callback: types.CallbackQuery, db_user: User, db: A
         if referee_bonus:
             referral_text += '\n' + texts.t(
                 'REFERRAL_REWARD_NEW_USER_LEVELS',
-                '• Новый пользователь получает: <b>{bonus}</b>',
+                '• Новый пользователь дополнительно получает: <b>{bonus}</b>',
             ).format(bonus=referee_bonus)
 
         # В режиме рангов лестница без отметки «вы здесь» не отвечает на главный
@@ -151,7 +152,7 @@ async def show_referral_info(callback: types.CallbackQuery, db_user: User, db: A
     if not levels_scheme and settings.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS > 0:
         referral_text += '\n' + texts.t(
             'REFERRAL_REWARD_NEW_USER',
-            'Новый пользователь получает: <b>{bonus}</b> при первом пополнении от <b>{minimum}</b>',
+            '• Новый пользователь получает: <b>{bonus}</b> при первом пополнении от <b>{minimum}</b>',
         ).format(
             bonus=texts.format_price(settings.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS),
             minimum=texts.format_price(settings.REFERRAL_MINIMUM_TOPUP_KOPEKS),
@@ -319,7 +320,8 @@ async def show_referral_qr(
     qr_dir = Path('data') / 'referral_qr'
     qr_dir.mkdir(parents=True, exist_ok=True)
 
-    link_hash = hashlib.md5(bot_referral_link.encode()).hexdigest()[:8]
+    # Cache identity only: changing the link must generate a different QR image.
+    link_hash = hashlib.sha256(bot_referral_link.encode()).hexdigest()
     file_path = qr_dir / f'{db_user.id}_{link_hash}.png'
     if not file_path.exists():
         img = qrcode.make(bot_referral_link)
@@ -746,7 +748,7 @@ async def start_withdrawal_request(callback: types.CallbackQuery, db_user: User,
         inline_keyboard=[
             [
                 types.InlineKeyboardButton(
-                    text=texts.t('REFERRAL_WITHDRAWAL_ALL', f'Вывести всё ({available / 100:.0f}₽)'),
+                    text=texts.t('REFERRAL_WITHDRAWAL_ALL').format(amount=f'{available / 100:.0f}'),
                     callback_data=f'referral_withdrawal_amount_{available}',
                 )
             ],
@@ -938,25 +940,14 @@ async def confirm_withdrawal_request(callback: types.CallbackQuery, db_user: Use
 {referral_withdrawal_service.format_analysis_for_admin(analysis)}
 """
 
-    # Формируем клавиатуру - кнопка профиля только для Telegram-пользователей
-    keyboard_rows = [
-        [
-            types.InlineKeyboardButton(text='✅ Одобрить', callback_data=f'admin_withdrawal_approve_{request.id}'),
-            types.InlineKeyboardButton(text='❌ Отклонить', callback_data=f'admin_withdrawal_reject_{request.id}'),
-        ]
-    ]
-    if db_user.telegram_id:
-        keyboard_rows.append(
-            [
-                types.InlineKeyboardButton(
-                    text='👤 Профиль пользователя', callback_data=f'admin_user_{db_user.telegram_id}'
-                )
-            ]
-        )
-    admin_keyboard = types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
+    # Кнопки — по роли получателя: в группе только действия, в личке админа ещё
+    # профиль (по id из базы: у callback admin_user_<telegram_id> обработчика нет).
+    notification_service = AdminNotificationService(callback.bot)
+    admin_keyboard = get_withdrawal_request_keyboard(
+        request.id, request.status, user_db_id=db_user.id, role=notification_service.resolve_recipient_role()
+    )
 
     try:
-        notification_service = AdminNotificationService(callback.bot)
         await notification_service.send_admin_notification(
             admin_text, reply_markup=admin_keyboard, category=NotificationCategory.PARTNERS
         )

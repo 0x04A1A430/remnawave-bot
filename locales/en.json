@@ -977,7 +977,7 @@
   "COPY_SUBSCRIPTION_LINK": "Copy subscription link",
   "COUNTRY_CHANGES_ACTIVE_COUNT": "<b>Active countries:</b> {count}",
   "COUNTRY_CHANGES_ADDED_HEADER": "<b>Added countries:</b>\n",
-  "COUNTRY_CHANGES_CHARGED": "Charged: {amount} (for {months} mo)",
+  "COUNTRY_CHANGES_CHARGED": "Charged: {amount} (for {days} days)",
   "COUNTRY_CHANGES_DISCOUNT_INFO": " (discount {percent}%: -{amount})",
   "COUNTRY_CHANGES_NOT_FOUND": "️ No changes detected",
   "COUNTRY_CHANGES_REMOVED_HEADER": "<b>Removed countries:</b>\n",

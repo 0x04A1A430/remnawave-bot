@@ -43,6 +43,7 @@ from app.services.gift_purchase_service import (
 )
 from app.states import GiftPurchaseStates
 from app.utils.gift_links import build_cabinet_gift_claim_link
+from tests.fixtures.gift_callbacks import bind_gift_action
 
 
 # ── Helpers & Fixtures ──────────────────────────────────────────────────────
@@ -200,6 +201,7 @@ class TestGiftBalanceConfirmation:
                 AsyncMock(return_value=sample_purchase_result),
             ) as mock_purchase,
         ):
+            await bind_gift_action(mock_callback, memory_state, 'gift_confirm')
             await handle_gift_confirm(mock_callback, mock_db_user, mock_db, memory_state)
 
             # Assert purchase service called with exact parameters
@@ -258,6 +260,7 @@ class TestGiftBalanceConfirmation:
                 AsyncMock(side_effect=GiftInsufficientBalanceError(required_kopeks=30000, available_kopeks=10000)),
             ),
         ):
+            await bind_gift_action(mock_callback, memory_state, 'gift_confirm')
             await handle_gift_confirm(mock_callback, mock_db_user, mock_db, memory_state)
 
             # Assert alert shown to user with shortfall info
@@ -311,6 +314,7 @@ class TestGiftBalanceConfirmation:
                 AsyncMock(side_effect=GiftPriceChangedError(expected_price_kopeks=30000, fresh_quote=fresh_quote)),
             ),
         ):
+            await bind_gift_action(mock_callback, memory_state, 'gift_confirm')
             await handle_gift_confirm(mock_callback, mock_db_user, mock_db, memory_state)
 
             # Assert alert about price change
@@ -325,6 +329,18 @@ class TestGiftBalanceConfirmation:
             assert mock_callback.message.edit_text.called
             text = mock_callback.message.edit_text.call_args[0][0]
             assert '380' in text  # 38000 kopeks = 380 RUB
+            keyboard = mock_callback.message.edit_text.call_args.kwargs['reply_markup']
+            confirm = next(
+                button.callback_data
+                for row in keyboard.inline_keyboard
+                for button in row
+                if button.callback_data.startswith('gift_confirm:')
+            )
+            assert confirm != mock_callback.data
+            from app.handlers.subscription.gift import _gift_action_callback
+
+            assert confirm == _gift_action_callback('gift_confirm', data, await memory_state.get_state())
+            assert len(confirm.encode()) <= 64
 
     @pytest.mark.asyncio
     async def test_purchase_restricted_clears_fsm_and_shows_alert(
@@ -348,6 +364,7 @@ class TestGiftBalanceConfirmation:
                 AsyncMock(side_effect=GiftPurchaseRestrictedError('Account restricted')),
             ),
         ):
+            await bind_gift_action(mock_callback, memory_state, 'gift_confirm')
             await handle_gift_confirm(mock_callback, mock_db_user, mock_db, memory_state)
 
             assert mock_callback.answer.called
@@ -376,6 +393,7 @@ class TestGiftBalanceConfirmation:
                 AsyncMock(side_effect=GiftFeatureDisabledError('Gift disabled')),
             ),
         ):
+            await bind_gift_action(mock_callback, memory_state, 'gift_confirm')
             await handle_gift_confirm(mock_callback, mock_db_user, mock_db, memory_state)
 
             assert mock_callback.answer.called
@@ -404,6 +422,7 @@ class TestGiftBalanceConfirmation:
                 AsyncMock(side_effect=GiftTariffUnavailableError('Tariff unavailable')),
             ),
         ):
+            await bind_gift_action(mock_callback, memory_state, 'gift_confirm')
             await handle_gift_confirm(mock_callback, mock_db_user, mock_db, memory_state)
 
             assert mock_callback.message.edit_text.called
@@ -431,6 +450,7 @@ class TestGiftBalanceConfirmation:
                 AsyncMock(side_effect=GiftPeriodUnavailableError('Period unavailable')),
             ),
         ):
+            await bind_gift_action(mock_callback, memory_state, 'gift_confirm')
             await handle_gift_confirm(mock_callback, mock_db_user, mock_db, memory_state)
 
             assert mock_callback.message.edit_text.called
@@ -472,6 +492,7 @@ class TestGiftReplayAndPresentation:
                 AsyncMock(return_value=replay_result),
             ) as mock_purchase,
         ):
+            await bind_gift_action(mock_callback, memory_state, 'gift_confirm')
             await handle_gift_confirm(mock_callback, mock_db_user, mock_db, memory_state)
 
             mock_purchase.assert_awaited_once_with(
@@ -509,6 +530,7 @@ class TestGiftReplayAndPresentation:
                 AsyncMock(),
             ) as mock_purchase,
         ):
+            await bind_gift_action(mock_callback, memory_state, 'gift_confirm')
             await handle_gift_confirm(mock_callback, mock_db_user, mock_db, memory_state)
 
             # Refuse before calling purchase/debit

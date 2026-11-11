@@ -24,6 +24,7 @@ from pydantic import BaseModel
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.cabinet.routes.subscription_modules.helpers import ensure_subscription_has_tariff
 from app.cabinet.utils.device_ownership import verify_hwid_belongs_to_user
 from app.config import settings
 from app.database.crud.tariff import get_tariff_by_id
@@ -34,6 +35,7 @@ from app.database.crud.user_device_alias import (
     set_alias,
 )
 from app.database.models import Subscription, TransactionType, User
+from app.services.panel_sync import should_create_panel_account
 from app.services.subscription_service import SubscriptionService
 from app.services.user_cart_service import user_cart_service
 
@@ -63,7 +65,9 @@ def _resolve_panel_user_id(subscription: Subscription | None, user: User) -> int
     """
     if settings.is_multi_tariff_enabled() and subscription is not None:
         return subscription.remnawave_id
-    return user.remnawave_id
+    # Одиночный режим: аккаунт мог быть создан в мультитарифе и записан только у
+    # подписки — иначе после возврата оператора в одиночный режим «0 устройств».
+    return user.remnawave_id or (subscription.remnawave_id if subscription is not None else None)
 
 
 @router.post('/devices')
@@ -86,9 +90,13 @@ async def purchase_devices_legacy(
 
     # Resolve subscription (ownership validated), then lock the row for concurrent safety
     resolved = await resolve_subscription(db, user, subscription_id)
+    ensure_subscription_has_tariff(resolved)
     if not resolved:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No subscription found')
 
+    from app.database.crud.user import lock_user_for_pricing
+
+    user = await lock_user_for_pricing(db, user.id)
     result = await db.execute(
         select(Subscription)
         .where(and_(Subscription.id == resolved.id, Subscription.user_id == user.id))
@@ -108,6 +116,9 @@ async def purchase_devices_legacy(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail='Ваша подписка неактивна',
         )
+
+    if subscription.device_limit == 0:
+        raise HTTPException(status_code=400, detail='Докупка устройств недоступна: у подписки безлимит')
 
     # Get tariff for device price (if exists)
     tariff = None
@@ -157,11 +168,6 @@ async def purchase_devices_legacy(
     if chargeable_devices > 0:
         base_total_price = max(100, base_total_price)  # Минимум 1 рубль
 
-    # Lock user row to prevent TOCTOU on promo-offer state
-    from app.database.crud.user import lock_user_for_pricing
-
-    user = await lock_user_for_pricing(db, user.id)
-
     # Apply discount from promo group
     discount_result = _apply_addon_discount(user, 'devices', base_total_price, days_left)
     total_price = discount_result['discounted']
@@ -189,6 +195,7 @@ async def purchase_devices_legacy(
         try:
             cart_data = {
                 'cart_mode': 'add_devices',
+                'subscription_id': subscription.id,
                 # Намерение пополнить ради этой корзины: без него тихая автопокупка после
                 # пополнения пропускает корзину, а кнопка «вернуться» её не знает.
                 'return_to_cart': True,
@@ -246,6 +253,7 @@ async def purchase_devices_legacy(
 
     # Re-lock subscription after subtract_user_balance committed (which released all locks).
     # Re-validate max device limit to prevent concurrent purchases exceeding the limit.
+    user = await lock_user_for_pricing(db, user.id)
     relock_result = await db.execute(
         select(Subscription)
         .where(Subscription.id == subscription.id)
@@ -256,17 +264,32 @@ async def purchase_devices_legacy(
 
     actual_current = subscription.device_limit or 1
     actual_new = actual_current + request.devices
-    if max_device_limit and actual_new > max_device_limit:
+    if subscription.device_limit == 0 or (max_device_limit and actual_new > max_device_limit):
         # Concurrent purchase already exceeded limit — refund balance
         user_refund = await db.execute(
             select(User).where(User.id == user.id).with_for_update().execution_options(populate_existing=True)
         )
         refund_user = user_refund.scalar_one()
         refund_user.balance_kopeks += total_price
+        from app.database.crud.transaction import create_transaction
+
+        await create_transaction(
+            db,
+            user.id,
+            TransactionType.REFUND,
+            total_price,
+            'Возврат отменённой докупки устройств: условия подписки изменились',
+            payment_method=PaymentMethod.BALANCE,
+            commit=False,
+        )
         await db.commit()
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f'Максимальное количество устройств: {max_device_limit}. Баланс возвращён.',
+            detail=(
+                'У подписки теперь безлимит устройств. Баланс возвращён.'
+                if subscription.device_limit == 0
+                else f'Максимальное количество устройств: {max_device_limit}. Баланс возвращён.'
+            ),
         )
 
     # Add devices (under lock)
@@ -279,10 +302,7 @@ async def purchase_devices_legacy(
     # already committed, defer slow syncs to remnawave_retry_queue).
     try:
         service = SubscriptionService()
-        if settings.is_multi_tariff_enabled():
-            _should_create = not subscription.remnawave_id
-        else:
-            _should_create = not getattr(user, 'remnawave_id', None)
+        _should_create = await should_create_panel_account(db, subscription, user)
 
         async with asyncio.timeout(REMNAWAVE_SYNC_TIMEOUT):
             if _should_create:
@@ -354,9 +374,13 @@ async def purchase_devices(
     try:
         # Resolve subscription (ownership validated), then lock the row for concurrent safety
         resolved = await resolve_subscription(db, user, subscription_id)
+        ensure_subscription_has_tariff(resolved)
         if not resolved:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='У вас нет активной подписки')
 
+        from app.database.crud.user import lock_user_for_pricing
+
+        user = await lock_user_for_pricing(db, user.id)
         result = await db.execute(
             select(Subscription)
             .where(and_(Subscription.id == resolved.id, Subscription.user_id == user.id))
@@ -376,6 +400,9 @@ async def purchase_devices(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail='Ваша подписка неактивна',
             )
+
+        if subscription.device_limit == 0:
+            raise HTTPException(status_code=400, detail='Докупка устройств недоступна: у подписки безлимит')
 
         # Get tariff for device price (if exists)
         tariff = None
@@ -443,11 +470,6 @@ async def purchase_devices(
         if chargeable_devices > 0:
             base_price_prorated = max(100, base_price_prorated)  # Minimum 1 ruble
 
-        # Lock user BEFORE discount computation to prevent TOCTOU on promo group
-        from app.database.crud.user import lock_user_for_pricing
-
-        user = await lock_user_for_pricing(db, user.id)
-
         # Apply discount from promo group
         period_hint_days = days_left
         discount_result = _apply_addon_discount(user, 'devices', base_price_prorated, period_hint_days)
@@ -467,6 +489,7 @@ async def purchase_devices(
             try:
                 cart_data = {
                     'cart_mode': 'add_devices',
+                    'subscription_id': subscription.id,
                     # Намерение пополнить ради этой корзины: без него тихая автопокупка после
                     # пополнения пропускает корзину, а кнопка «вернуться» её не знает.
                     'return_to_cart': True,
@@ -525,6 +548,7 @@ async def purchase_devices(
 
         # Re-lock subscription after subtract_user_balance committed (which released all locks).
         # Re-validate max device limit to prevent concurrent purchases exceeding the limit.
+        user = await lock_user_for_pricing(db, user.id)
         relock_result = await db.execute(
             select(Subscription)
             .where(Subscription.id == subscription.id)
@@ -535,17 +559,32 @@ async def purchase_devices(
 
         actual_current = subscription.device_limit or 1
         actual_new = actual_current + request.devices
-        if max_device_limit and actual_new > max_device_limit:
+        if subscription.device_limit == 0 or (max_device_limit and actual_new > max_device_limit):
             # Concurrent purchase already exceeded limit — refund balance
             user_refund = await db.execute(
                 select(User).where(User.id == user.id).with_for_update().execution_options(populate_existing=True)
             )
             refund_user = user_refund.scalar_one()
             refund_user.balance_kopeks += price_kopeks
+            from app.database.crud.transaction import create_transaction
+
+            await create_transaction(
+                db,
+                user.id,
+                TransactionType.REFUND,
+                price_kopeks,
+                'Возврат отменённой докупки устройств: условия подписки изменились',
+                payment_method=PaymentMethod.BALANCE,
+                commit=False,
+            )
             await db.commit()
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=f'Максимальное количество устройств: {max_device_limit}. Баланс возвращён.',
+                detail=(
+                    'У подписки теперь безлимит устройств. Баланс возвращён.'
+                    if subscription.device_limit == 0
+                    else f'Максимальное количество устройств: {max_device_limit}. Баланс возвращён.'
+                ),
             )
 
         # Increase device limit (under lock)
@@ -557,10 +596,7 @@ async def purchase_devices(
         # already committed, defer slow syncs to remnawave_retry_queue).
         service = SubscriptionService()
         try:
-            if settings.is_multi_tariff_enabled():
-                _should_create = not subscription.remnawave_id
-            else:
-                _should_create = not getattr(user, 'remnawave_id', None)
+            _should_create = await should_create_panel_account(db, subscription, user)
 
             async with asyncio.timeout(REMNAWAVE_SYNC_TIMEOUT):
                 if _should_create:
@@ -666,6 +702,7 @@ async def save_devices_cart(
 ) -> dict[str, bool]:
     """Save cart for device purchase (for insufficient balance flow)."""
     subscription = await resolve_subscription(db, user, subscription_id)
+    ensure_subscription_has_tariff(subscription)
 
     if not subscription:
         raise HTTPException(
@@ -678,6 +715,9 @@ async def save_devices_cart(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail='Ваша подписка неактивна',
         )
+
+    if subscription.device_limit == 0:
+        raise HTTPException(status_code=400, detail='Докупка устройств недоступна: у подписки безлимит')
 
     # Get tariff for device price (if exists)
     tariff = None
@@ -752,6 +792,7 @@ async def save_devices_cart(
     # Save cart for auto-purchase after balance top-up
     cart_data = {
         'cart_mode': 'add_devices',
+        'subscription_id': subscription.id,
         # Намерение пополнить ради этой корзины: без него тихая автопокупка после
         # пополнения пропускает корзину, а кнопка «вернуться» её не знает.
         'return_to_cart': True,
@@ -780,12 +821,20 @@ async def get_device_price(
 ):
     """Get price for additional devices."""
     subscription = await resolve_subscription(db, user, subscription_id)
+    ensure_subscription_has_tariff(subscription)
 
     if not subscription or subscription.status not in ['active', 'trial']:
         return {
             'available': False,
             'reason': 'Нет активной подписки',
             'reason_code': 'no_active_subscription',
+        }
+
+    if subscription.device_limit == 0:
+        return {
+            'available': False,
+            'reason': 'У подписки уже безлимит устройств',
+            'reason_code': 'devices_unavailable',
         }
 
     tariff = None

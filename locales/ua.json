@@ -918,7 +918,7 @@
   "COPY_SUBSCRIPTION_LINK": "Скопіювати посилання підписки",
   "COUNTRY_CHANGES_ACTIVE_COUNT": "<b>Активних країн:</b> {count}",
   "COUNTRY_CHANGES_ADDED_HEADER": "<b>Додані країни:</b>\n",
-  "COUNTRY_CHANGES_CHARGED": "Списано: {amount} (за {months} міс)",
+  "COUNTRY_CHANGES_CHARGED": "Списано: {amount} (за {days} дн.)",
   "COUNTRY_CHANGES_DISCOUNT_INFO": " (знижка {percent}%: -{amount})",
   "COUNTRY_CHANGES_NOT_FOUND": "️ Змін не виявлено",
   "COUNTRY_CHANGES_REMOVED_HEADER": "<b>Вимкнені країни:</b>\n",

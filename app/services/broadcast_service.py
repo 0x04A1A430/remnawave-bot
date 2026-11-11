@@ -27,9 +27,11 @@ from app.handlers.admin.messages import (
     get_custom_users,
     get_target_users,
 )
+from app.services.broadcast_audience import select_audience_users
 
 
 if TYPE_CHECKING:
+    from app.cabinet.schemas.broadcasts import BroadcastAudience
     from app.cabinet.services.email_service import EmailService
 
 
@@ -106,6 +108,7 @@ class BroadcastConfig:
     initiator_name: str | None = None
     custom_buttons: list[dict] | None = None
     category: str = 'system'  # system|news|promo
+    audience: BroadcastAudience | None = None
     # Явный список telegram_id вместо резолва target'а. Нужен отправкам, где получатели
     # уже посчитаны вызывающим кодом (промопредложения создают оффер на каждого).
     recipient_ids: list[int] | None = None
@@ -123,6 +126,30 @@ class EmailBroadcastConfig:
     email_html_content: str
     initiator_name: str | None = None
     category: str = 'system'  # system|news|promo — как у Telegram-рассылки
+    audience: BroadcastAudience | None = None
+
+
+EMAIL_TARGET_PROMO_GROUP_PREFIX = 'promo_group_'
+EMAIL_TARGET_USER_PREFIX = 'user_'
+
+
+def parse_email_scoped_target(target: str) -> tuple[str, int] | None:
+    """Email-таргет с идентификатором: ``promo_group_{id}`` или ``user_{id}``.
+
+    Возвращает ``('promo_group', id)`` / ``('user', id)``, для остальных — None.
+    Промогруппа — основная группа человека (``users.promo_group_id``), как в
+    списке участников группы в админке.
+    """
+    for prefix, kind in (
+        (EMAIL_TARGET_PROMO_GROUP_PREFIX, 'promo_group'),
+        (EMAIL_TARGET_USER_PREFIX, 'user'),
+    ):
+        if target.startswith(prefix):
+            raw = target[len(prefix) :]
+            if raw.isdigit() and int(raw) > 0:
+                return kind, int(raw)
+            return None
+    return None
 
 
 @dataclass(slots=True)
@@ -216,7 +243,7 @@ class BroadcastService:
             if config.recipient_ids is not None:
                 recipient_ids: list[int] = list(config.recipient_ids)
             else:
-                recipient_ids = await self._fetch_recipients(config.target, config.category)
+                recipient_ids = await self._fetch_recipients(config.target, config.category, config.audience)
 
             async with AsyncSessionLocal() as session:
                 broadcast = await session.get(BroadcastHistory, broadcast_id)
@@ -286,7 +313,9 @@ class BroadcastService:
             logger.exception('Критическая ошибка при выполнении рассылки', broadcast_id=broadcast_id, exc=exc)
             await self._mark_failed(broadcast_id, sent_count, failed_count, blocked_count)
 
-    async def _fetch_recipients(self, target: str, category: str = 'system') -> list[int]:
+    async def _fetch_recipients(
+        self, target: str, category: str = 'system', audience: BroadcastAudience | None = None
+    ) -> list[int]:
         """Загружает получателей и возвращает список telegram_id (скаляры, не ORM-объекты).
 
         Filters out users who disabled the given broadcast category in their
@@ -294,6 +323,9 @@ class BroadcastService:
         Category 'system' is never filtered — system notifications reach everyone.
         """
         async with AsyncSessionLocal() as session:
+            if audience is not None:
+                users_orm = await select_audience_users(session, audience, 'telegram', category)
+                return [u.telegram_id for u in users_orm if u.telegram_id is not None]
             if target.startswith('custom_'):
                 criteria = target[len('custom_') :]
                 users_orm = await get_custom_users(session, criteria)
@@ -809,7 +841,7 @@ class EmailBroadcastService:
                 await session.commit()
 
             # Fetch email recipients
-            recipients = await self._fetch_email_recipients(config.target, config.category)
+            recipients = await self._fetch_email_recipients(config.target, config.category, config.audience)
 
             # Update total count
             async with AsyncSessionLocal() as session:
@@ -851,7 +883,9 @@ class EmailBroadcastService:
             logger.exception('Critical error in email broadcast', broadcast_id=broadcast_id, exc=exc)
             await self._mark_failed(broadcast_id, sent_count, failed_count)
 
-    async def _fetch_email_recipients(self, target: str, category: str = 'system') -> list[_EmailRecipient]:
+    async def _fetch_email_recipients(
+        self, target: str, category: str = 'system', audience: BroadcastAudience | None = None
+    ) -> list[_EmailRecipient]:
         """
         Загружает получателей email-рассылки.
 
@@ -868,6 +902,24 @@ class EmailBroadcastService:
         from app.utils.notification_prefs import filter_users_by_broadcast_category
 
         async with AsyncSessionLocal() as session:
+            if audience is not None:
+                users = await select_audience_users(session, audience, 'email', category)
+                recipients = []
+                for user in users:
+                    email = user.email
+                    if not email:
+                        continue
+                    user_name = user.username or ' '.join(filter(None, (user.first_name, user.last_name)))
+                    recipients.append(
+                        _EmailRecipient(
+                            email=email,
+                            user_name=user_name or email.split('@')[0],
+                            user_id=user.id,
+                            language=user.language or 'ru',
+                        )
+                    )
+                return recipients
+
             # Base query: verified email users with active status
             base_conditions = [
                 User.email.isnot(None),
@@ -891,34 +943,45 @@ class EmailBroadcastService:
                     User.telegram_id.isnot(None),
                 )
 
+            # Подписки — подзапросом, а не JOIN: в мультитарифе JOIN давал строку
+            # человека на каждую подходящую подписку, и одно письмо уходило
+            # столько раз, сколько у него подписок. DISTINCT по User на Postgres
+            # не сработает — у пользователя есть JSON-колонки без оператора равенства.
             elif target == 'active_email':
-                query = (
-                    select(User)
-                    .join(Subscription, User.id == Subscription.user_id)
-                    .where(
-                        *base_conditions,
-                        Subscription.status == SubscriptionStatus.ACTIVE.value,
-                    )
+                query = select(User).where(
+                    *base_conditions,
+                    User.id.in_(
+                        select(Subscription.user_id).where(Subscription.status == SubscriptionStatus.ACTIVE.value)
+                    ),
                 )
 
             elif target == 'expired_email':
-                query = (
-                    select(User)
-                    .join(Subscription, User.id == Subscription.user_id)
-                    .where(
-                        *base_conditions,
-                        Subscription.status.in_(
-                            [
-                                SubscriptionStatus.EXPIRED.value,
-                                SubscriptionStatus.DISABLED.value,
-                            ]
-                        ),
-                    )
+                query = select(User).where(
+                    *base_conditions,
+                    User.id.in_(
+                        select(Subscription.user_id).where(
+                            Subscription.status.in_(
+                                [
+                                    SubscriptionStatus.EXPIRED.value,
+                                    SubscriptionStatus.DISABLED.value,
+                                ]
+                            )
+                        )
+                    ),
                 )
+
+            elif scoped := parse_email_scoped_target(target):
+                kind, target_id = scoped
+                column = User.promo_group_id if kind == 'promo_group' else User.id
+                query = select(User).where(*base_conditions, column == target_id)
 
             else:
                 logger.warning('Unknown email target filter', target=target)
                 return []
+
+            # Батчи по OFFSET без сортировки нестабильны: строка могла попасть в
+            # два батча или ни в один.
+            query = query.order_by(User.id)
 
             # Загружаем батчами и извлекаем скаляры сразу
             recipients: list[_EmailRecipient] = []
