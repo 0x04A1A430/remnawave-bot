@@ -1,5 +1,44 @@
+import re
+
 from app.config import settings
 from app.localization.texts import get_texts
+
+
+_BLANK_LINE_RUN = re.compile(r'\n{3,}')
+
+
+def compact_payment_text(text: str) -> str:
+    """Оставляет не больше одной пустой строки и убирает ведущие/хвостовые пустые строки.
+
+    Платёжные экраны собираются из независимых блоков (заголовок, реквизиты,
+    инструкция, контакт поддержки), и любой из них может прийти пустым или с
+    собственными переводами строки. Серии из трёх и более переводов строки
+    схлопываем в один пустой ряд, а ведущие и хвостовые пустые строки срезаем.
+    """
+    return _BLANK_LINE_RUN.sub('\n\n', text).strip()
+
+
+def format_payment_text(
+    template: str,
+    *,
+    support: str = '',
+    support_field: str = 'support',
+    **kwargs,
+) -> str:
+    """Форматирует текст платёжного экрана, убирая строку с пустым контактом поддержки.
+
+    support_field — имя плейсхолдера контакта в шаблоне: обычно ``support``,
+    но старые локали YooKassa используют ``value1``/``value3``. Если контакт не
+    задан, строка с ним удаляется целиком, чтобы не осталось «обратитесь в ».
+    """
+    kwargs['support'] = support
+    kwargs[support_field] = support
+    if not support:
+        # Контакт стоит отдельной строкой после приглашения с двоеточием —
+        # убираем обе строки, чтобы не осталось «обратитесь в техподдержку:».
+        template = re.sub(rf'[^\n]*:\n[ \t]*\{{{support_field}\}}[^\n]*', '', template)
+        template = re.sub(rf'(?:^|\n+)[^\n]*\{{{support_field}\}}[^\n]*', '', template)
+    return compact_payment_text(template.format(**kwargs))
 
 
 def verify_payment_amount(
@@ -578,31 +617,34 @@ def get_payment_methods_text(language: str, balance_kopeks: int | None = None) -
     methods = get_available_payment_methods()
 
     if not methods:
-        return texts.t(
-            'PAYMENT_METHODS_NONE_AVAILABLE',
-            """💳 <b>Способы пополнения баланса</b>
+        # Способов нет — приглашение «выберите способ» было бы пустым.
+        return compact_payment_text(
+            texts.t(
+                'PAYMENT_METHODS_NONE_AVAILABLE',
+                """💳 <b>Способы пополнения баланса</b>
 
 ⚠️ В данный момент способы оплаты временно недоступны.
-Попробуйте позже.
-
-Выберите способ пополнения:""",
+Попробуйте позже.""",
+            )
         )
 
     if len(methods) == 1 and methods[0]['id'] == 'support':
-        return texts.t(
-            'PAYMENT_METHODS_ONLY_SUPPORT',
-            """💳 <b>Способы пополнения баланса</b>
+        return compact_payment_text(
+            texts.t(
+                'PAYMENT_METHODS_ONLY_SUPPORT',
+                """💳 <b>Способы пополнения баланса</b>
 
 ⚠️ В данный момент автоматические способы оплаты временно недоступны.
 Обратитесь в техподдержку для пополнения баланса.
 
 Выберите способ пополнения:""",
+            )
         )
 
-    text = texts.t('PAYMENT_METHODS_TITLE', '💳 <b>Способы пополнения баланса</b>')
+    title = texts.t('PAYMENT_METHODS_TITLE', '💳 <b>Способы пополнения баланса</b>')
     if balance_kopeks is not None:
-        text += f'\n{texts.t("NOTIFY_BALANCE_NOW", "Баланс")}: <b>{texts.format_price(balance_kopeks)}</b>'
-    text += '\n\n'
+        title += f'\n{texts.t("NOTIFY_BALANCE_NOW", "Баланс")}: <b>{texts.format_price(balance_kopeks)}</b>'
+    blocks = [title]
 
     method_lines: list[str] = []
     for method in methods:
@@ -626,11 +668,17 @@ def get_payment_methods_text(language: str, balance_kopeks: int | None = None) -
             name = name.format(platega_name=platega_name_html)
             description = description.format(platega_name=platega_name)
 
-        method_lines.append(f'{name} - {description}')
+        name = name.strip()
+        description = description.strip()
+        if not name:
+            continue
+        # Не оставляем «Название - » с пустым описанием.
+        method_lines.append(f'{name} - {description}' if description else name)
 
-    text += '<blockquote>' + '\n'.join(method_lines) + '</blockquote>'
+    if method_lines:
+        blocks.append('<blockquote>' + '\n'.join(method_lines) + '</blockquote>')
 
-    return text
+    return compact_payment_text('\n\n'.join(block for block in blocks if block.strip()))
 
 
 def is_payment_method_available(method_id: str) -> bool:

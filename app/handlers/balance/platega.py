@@ -16,6 +16,7 @@ from app.localization.texts import get_texts
 from app.services.payment_service import PaymentService
 from app.states import BalanceStates
 from app.utils.decorators import error_handler
+from app.utils.payment_utils import compact_payment_text
 from app.utils.topup_retry import format_topup_amount_retry
 
 
@@ -77,10 +78,12 @@ async def _prompt_amount(
     keyboard = await get_topup_amount_keyboard('platega', db_user.language, back_callback='back_to_menu')
 
     await message.edit_text(
-        prompt_template.format(
-            method_name=method_name,
-            min_amount=min_amount_label,
-            max_amount=max_amount_label,
+        compact_payment_text(
+            prompt_template.format(
+                method_name=method_name,
+                min_amount=min_amount_label,
+                max_amount=max_amount_label,
+            )
         ),
         reply_markup=keyboard,
         parse_mode='HTML',
@@ -410,11 +413,13 @@ async def process_platega_payment_amount(
             logger.warning('Не удалось удалить сообщение с запросом суммы Platega', delete_error=delete_error)
 
     invoice_message = await message.answer(
-        instructions_template.format(
-            amount=amount_label,
-            transaction=transaction_id or local_payment_id,
-            method=method_name,
-            method_name=method_name,
+        compact_payment_text(
+            instructions_template.format(
+                amount=amount_label,
+                transaction=transaction_id or local_payment_id,
+                method=method_name,
+                method_name=method_name,
+            )
         ),
         reply_markup=keyboard,
         parse_mode='HTML',

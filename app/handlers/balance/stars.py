@@ -13,6 +13,7 @@ from app.services.payment_service import PaymentService
 from app.states import BalanceStates
 from app.utils.button_emoji import make_button
 from app.utils.decorators import error_handler
+from app.utils.payment_utils import compact_payment_text
 
 
 logger = structlog.get_logger(__name__)
@@ -144,10 +145,12 @@ async def process_stars_payment_amount(message: types.Message, db_user: User, am
                 logger.warning('Не удалось удалить сообщение с запросом суммы Stars', delete_error=delete_error)
 
         invoice_message = await message.answer(
-            texts.t(
-                'PAYMENT_UI_STARS_INSTRUCTIONS',
-                '⭐ <b>Оплата через Telegram Stars</b>\n\n💰 Сумма: {value1}\n⭐ К оплате: {value2} звезд\n📊 Курс: {value3}₽ за звезду\n\nНажмите кнопку ниже для оплаты:',
-            ).format(value1=texts.format_price(amount_kopeks), value2=stars_amount, value3=stars_rate),
+            compact_payment_text(
+                texts.t(
+                    'PAYMENT_UI_STARS_INSTRUCTIONS',
+                    '⭐ <b>Оплата через Telegram Stars</b>\n\n💰 Сумма: {value1}\n⭐ К оплате: {value2} звезд\n📊 Курс: {value3}₽ за звезду\n\nНажмите кнопку ниже для оплаты:',
+                ).format(value1=texts.format_price(amount_kopeks), value2=stars_amount, value3=stars_rate)
+            ),
             reply_markup=keyboard,
             parse_mode='HTML',
         )

@@ -7,6 +7,7 @@ from app.config import settings
 from app.database.models import User
 from app.localization.texts import get_texts
 from app.utils.decorators import error_handler
+from app.utils.payment_utils import compact_payment_text
 
 
 logger = structlog.get_logger(__name__)
@@ -74,6 +75,7 @@ async def start_tribute_payment(
             'PAYMENT_UI_TRIBUTE_INSTRUCTIONS',
             '💳 <b>Пополнение банковской картой</b>\n\n• Введите любую сумму от 100₽\n• Безопасная оплата через Tribute\n• Мгновенное зачисление на баланс\n• Принимаем карты Visa, MasterCard, МИР\n\n• 🚨 НЕ ОТПРАВЛЯТЬ ПЛАТЕЖ АНОНИМНО!\n\nНажмите кнопку для перехода к оплате:',
         )
+        message_text = compact_payment_text(message_text)
 
         await callback.message.edit_text(
             message_text,

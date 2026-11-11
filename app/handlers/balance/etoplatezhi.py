@@ -16,6 +16,7 @@ from app.localization.texts import get_texts
 from app.services.payment_service import PaymentService
 from app.states import BalanceStates
 from app.utils.decorators import error_handler
+from app.utils.payment_utils import compact_payment_text
 from app.utils.topup_retry import format_topup_amount_retry
 
 
@@ -118,6 +119,8 @@ async def _create_etoplatezhi_payment_and_respond(
         'Нажмите кнопку ниже для оплаты.\n'
         'После успешной оплаты баланс будет пополнен автоматически.',
     ).format(name=display_name, amount=f'{amount_rub:.2f}')
+
+    response_text = compact_payment_text(response_text)
 
     if edit_message:
         await message_or_callback.edit_text(

@@ -15,6 +15,7 @@ from app.localization.texts import get_texts
 from app.services.payment_service import PaymentService
 from app.states import BalanceStates
 from app.utils.decorators import error_handler
+from app.utils.payment_utils import format_payment_text
 from app.utils.timezone import format_local_datetime
 from app.utils.topup_retry import format_topup_amount_retry
 
@@ -259,16 +260,18 @@ async def process_cryptobot_payment_amount(
                 logger.warning('Не удалось удалить сообщение с запросом суммы CryptoBot', delete_error=delete_error)
 
         invoice_message = await message.answer(
-            texts.t(
-                'PAYMENT_UI_CRYPTO_INSTRUCTIONS',
-                "🪙 <b>Оплата криптовалютой</b>\n\n💰 Сумма к зачислению: {value1} ₽\n💵 К оплате: {value2} USD\n🪙 Актив: {value3}\n💱 Курс: 1 USD = {value4} ₽\n🆔 ID платежа: {value5}...\n\n📱 <b>Инструкция:</b>\n1. Нажмите кнопку 'Оплатить'\n2. Выберите удобный актив\n3. Переведите указанную сумму\n4. Деньги поступят на баланс автоматически\n\n🔒 Оплата проходит через защищенную систему CryptoBot\n⚡ Поддерживаемые активы: USDT, TON, BTC, ETH\n\n❓ Если возникнут проблемы, обратитесь в {value6}",
-            ).format(
+            format_payment_text(
+                texts.t(
+                    'PAYMENT_UI_CRYPTO_INSTRUCTIONS',
+                    "🪙 <b>Оплата криптовалютой</b>\n\n💰 Сумма к зачислению: {value1} ₽\n💵 К оплате: {value2} USD\n🪙 Актив: {value3}\n💱 Курс: 1 USD = {value4} ₽\n🆔 ID платежа: {value5}...\n\n📱 <b>Инструкция:</b>\n1. Нажмите кнопку 'Оплатить'\n2. Выберите удобный актив\n3. Переведите указанную сумму\n4. Деньги поступят на баланс автоматически\n\n🔒 Оплата проходит через защищенную систему CryptoBot\n⚡ Поддерживаемые активы: USDT, TON, BTC, ETH\n\n❓ Если возникнут проблемы, обратитесь в {value6}",
+                ),
+                support=settings.get_support_contact_display_html(),
+                support_field='value6',
                 value1=format(amount_rubles, '.0f'),
                 value2=format(amount_usd, '.2f'),
                 value3=payment_result['asset'],
                 value4=format(current_rate, '.2f'),
                 value5=payment_result['invoice_id'][:8],
-                value6=settings.get_support_contact_display_html(),
             ),
             reply_markup=keyboard,
             parse_mode='HTML',

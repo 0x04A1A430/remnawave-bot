@@ -1962,7 +1962,7 @@
   "PAYMENT_CLOUDPAYMENTS": "<tg-emoji emoji-id=\"5967548335542767952\">💳</tg-emoji> کارت بانکی (CloudPayments)",
   "REFERRAL_WITHDRAWAL_BUTTON": "💸 درخواست برداشت",
   "DEVICE_RENAME_BUTTON": "<tg-emoji emoji-id=\"5879841310902324730\">✏️</tg-emoji>",
-  "PAYMENT_METHODS_NONE_AVAILABLE": "<tg-emoji emoji-id=\"5967548335542767952\">💳</tg-emoji> <b>روش‌های شارژ موجودی</b>\n\n<tg-emoji emoji-id=\"5881702736843511327\">⚠️</tg-emoji> در حال حاضر روش‌های پرداخت موقتاً در دسترس نیستند.\nبعداً تلاش کنید.\n\nروش شارژ را انتخاب کنید:",
+  "PAYMENT_METHODS_NONE_AVAILABLE": "<tg-emoji emoji-id=\"5967548335542767952\">💳</tg-emoji> <b>روش‌های شارژ موجودی</b>\n\n<tg-emoji emoji-id=\"5881702736843511327\">⚠️</tg-emoji> در حال حاضر روش‌های پرداخت موقتاً در دسترس نیستند.\nبعداً تلاش کنید.",
   "PROMOCODE_SUBSCRIPTION_NOT_FOUND": "<tg-emoji emoji-id=\"5778527486270770928\">❌</tg-emoji> اشتراک یافت نشد",
   "PROMOCODE_TRAFFIC_NOT_APPLICABLE": "<tg-emoji emoji-id=\"5778527486270770928\">❌</tg-emoji> این کد تخفیف فقط ترافیک می‌دهد، اما اشتراک شما نامحدود است. کد مصرف نشد.",
   "PROMOCODE_USER_NOT_FOUND": "<tg-emoji emoji-id=\"5778527486270770928\">❌</tg-emoji> کاربر یافت نشد",

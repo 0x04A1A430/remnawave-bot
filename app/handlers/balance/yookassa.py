@@ -16,6 +16,7 @@ from app.localization.texts import get_texts
 from app.services.payment_service import PaymentService
 from app.states import BalanceStates
 from app.utils.decorators import error_handler
+from app.utils.payment_utils import compact_payment_text, format_payment_text
 from app.utils.timezone import format_local_datetime
 from app.utils.topup_retry import format_topup_amount_retry
 
@@ -253,13 +254,15 @@ async def process_yookassa_payment_amount(
                 logger.warning('Не удалось удалить сообщение с запросом суммы YooKassa', delete_error=delete_error)
 
         invoice_message = await message.answer(
-            texts.t(
-                'PAYMENT_UI_YOOKASSA_CARD_INSTRUCTIONS',
-                "💳 <b>Оплата банковской картой</b>\n\n💰 Сумма: {value1}\n🆔 ID платежа: {value2}...\n\n📱 <b>Инструкция:</b>\n1. Нажмите кнопку 'Оплатить картой'\n2. Введите данные вашей карты\n3. Подтвердите платеж\n4. Деньги поступят на баланс автоматически\n\n🔒 Оплата происходит через защищенную систему YooKassa\n✅ Принимаем карты: Visa, MasterCard, МИР\n\n❓ Если возникнут проблемы, обратитесь в {value3}",
-            ).format(
+            format_payment_text(
+                texts.t(
+                    'PAYMENT_UI_YOOKASSA_CARD_INSTRUCTIONS',
+                    "💳 <b>Оплата банковской картой</b>\n\n💰 Сумма: {value1}\n🆔 ID платежа: {value2}...\n\n📱 <b>Инструкция:</b>\n1. Нажмите кнопку 'Оплатить картой'\n2. Введите данные вашей карты\n3. Подтвердите платеж\n4. Деньги поступят на баланс автоматически\n\n🔒 Оплата происходит через защищенную систему YooKassa\n✅ Принимаем карты: Visa, MasterCard, МИР\n\n❓ Если возникнут проблемы, обратитесь в {value3}",
+                ),
+                support=settings.get_support_contact_display_html(),
+                support_field='value3',
                 value1=settings.format_price(amount_kopeks),
                 value2=payment_result['yookassa_payment_id'][:8],
-                value3=settings.get_support_contact_display_html(),
             ),
             reply_markup=keyboard,
             parse_mode='HTML',
@@ -527,10 +530,15 @@ async def process_yookassa_sbp_payment_amount(
                 '📱 <b>Инструкция по оплате:</b>\n1. Откройте приложение вашего банка\n2. Найдите функцию оплаты по реквизитам или перевод по СБП\n3. Введите ID платежа: <code>{value1}</code>\n4. Подтвердите платеж в приложении банка\n5. Деньги поступят на баланс автоматически\n\n',
             ).format(value1=payment_result['yookassa_payment_id'])
 
-        message_text += texts.t(
-            'PAYMENT_UI_YOOKASSA_SBP_FOOTER',
-            '🔒 Оплата происходит через защищенную систему YooKassa\n✅ Принимаем СБП от всех банков-участников\n\n❓ Если возникнут проблемы, обратитесь в {value1}',
-        ).format(value1=settings.get_support_contact_display_html())
+        message_text += format_payment_text(
+            texts.t(
+                'PAYMENT_UI_YOOKASSA_SBP_FOOTER',
+                '🔒 Оплата происходит через защищенную систему YooKassa\n✅ Принимаем СБП от всех банков-участников\n\n❓ Если возникнут проблемы, обратитесь в {value1}',
+            ),
+            support=settings.get_support_contact_display_html(),
+            support_field='value1',
+        )
+        message_text = compact_payment_text(message_text)
 
         # Отправляем сообщение с инструкциями и клавиатурой
         # Если есть QR-код, отправляем его как медиа-сообщение

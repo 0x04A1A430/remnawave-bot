@@ -16,6 +16,7 @@ from app.localization.texts import get_texts
 from app.services.payment_service import PaymentService
 from app.states import BalanceStates
 from app.utils.decorators import error_handler
+from app.utils.payment_utils import compact_payment_text
 from app.utils.topup_retry import format_topup_amount_retry
 
 
@@ -298,6 +299,7 @@ async def process_cashera_payment_amount(
         method=method_title,
         amount=settings.format_price(amount_kopeks),
     )
+    caption = compact_payment_text(caption)
 
     # Свой экран оплаты: QR прямо в чате. Без реквизитов — обычная ссылка ниже.
     h2h = await PaymentService(message.bot).get_cashera_h2h(result.get('payment_id'), method_code)
@@ -305,9 +307,11 @@ async def process_cashera_payment_amount(
     if qr_photo is not None:
         await message.answer_photo(
             qr_photo,
-            caption=caption
-            + '\n\n'
-            + texts.t('CASHERA_H2H_HINT', 'Отсканируйте QR-код в приложении банка или нажмите «Оплатить».'),
+            caption=compact_payment_text(
+                caption
+                + '\n\n'
+                + texts.t('CASHERA_H2H_HINT', 'Отсканируйте QR-код в приложении банка или нажмите «Оплатить».')
+            ),
             reply_markup=keyboard,
             parse_mode='HTML',
         )
@@ -315,16 +319,18 @@ async def process_cashera_payment_amount(
         return
 
     await message.answer(
-        texts.t(
-            'CASHERA_PAYMENT_CREATED',
-            '💳 <b>Оплата через {name} ({method})</b>\n\n'
-            'Сумма: <b>{amount}</b>\n\n'
-            'Нажмите кнопку ниже для оплаты.\n'
-            'После успешной оплаты баланс будет пополнен автоматически.',
-        ).format(
-            name=settings.get_cashera_display_name_html(),
-            method=method_title,
-            amount=settings.format_price(amount_kopeks),
+        compact_payment_text(
+            texts.t(
+                'CASHERA_PAYMENT_CREATED',
+                '💳 <b>Оплата через {name} ({method})</b>\n\n'
+                'Сумма: <b>{amount}</b>\n\n'
+                'Нажмите кнопку ниже для оплаты.\n'
+                'После успешной оплаты баланс будет пополнен автоматически.',
+            ).format(
+                name=settings.get_cashera_display_name_html(),
+                method=method_title,
+                amount=settings.format_price(amount_kopeks),
+            )
         ),
         reply_markup=keyboard,
         parse_mode='HTML',

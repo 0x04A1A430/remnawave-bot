@@ -14,6 +14,7 @@ from app.localization.texts import get_texts
 from app.services.payment_service import PaymentService
 from app.states import BalanceStates
 from app.utils.decorators import error_handler
+from app.utils.payment_utils import compact_payment_text, format_payment_text
 from app.utils.timezone import format_local_datetime
 from app.utils.topup_retry import format_topup_amount_retry
 
@@ -75,6 +76,7 @@ async def start_mulenpay_payment(
         mulenpay_name=mulenpay_name,
         mulenpay_name_html=mulenpay_name_html,
     )
+    message_text = compact_payment_text(message_text)
 
     keyboard = await get_topup_amount_keyboard('mulenpay', db_user.language, back_callback='back_to_menu')
 
@@ -239,10 +241,11 @@ async def process_mulenpay_payment_amount(
             ),
         )
 
-        message_text = message_template.format(
+        message_text = format_payment_text(
+            message_template,
+            support=settings.get_support_contact_display_html(),
             amount=settings.format_price(amount_kopeks),
             payment_id=payment_id_display,
-            support=settings.get_support_contact_display_html(),
             mulenpay_name=mulenpay_name,
             mulenpay_name_html=mulenpay_name_html,
         )

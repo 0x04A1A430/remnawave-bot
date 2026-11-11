@@ -16,6 +16,7 @@ from app.localization.texts import get_texts
 from app.services.payment_service import PaymentService
 from app.states import BalanceStates
 from app.utils.decorators import error_handler
+from app.utils.payment_utils import compact_payment_text, format_payment_text
 from app.utils.timezone import format_local_datetime
 from app.utils.topup_retry import format_topup_amount_retry
 
@@ -59,16 +60,18 @@ async def start_wata_payment(
         )
         return
 
-    message_text = texts.t(
-        'WATA_TOPUP_PROMPT',
-        (
-            '💳 <b>Оплата через WATA</b>\n\n'
-            'Введите сумму пополнения. Минимальная сумма — {min_amount}, максимальная — {max_amount}.\n'
-            'Оплата происходит через защищенную форму WATA.'
-        ),
-    ).format(
-        min_amount=settings.format_price(settings.WATA_MIN_AMOUNT_KOPEKS),
-        max_amount=settings.format_price(settings.WATA_MAX_AMOUNT_KOPEKS),
+    message_text = compact_payment_text(
+        texts.t(
+            'WATA_TOPUP_PROMPT',
+            (
+                '💳 <b>Оплата через WATA</b>\n\n'
+                'Введите сумму пополнения. Минимальная сумма — {min_amount}, максимальная — {max_amount}.\n'
+                'Оплата происходит через защищенную форму WATA.'
+            ),
+        ).format(
+            min_amount=settings.format_price(settings.WATA_MIN_AMOUNT_KOPEKS),
+            max_amount=settings.format_price(settings.WATA_MAX_AMOUNT_KOPEKS),
+        )
     )
 
     keyboard = await get_topup_amount_keyboard('wata', db_user.language, back_callback='back_to_menu')
@@ -208,10 +211,11 @@ async def process_wata_payment_amount(
         ),
     )
 
-    message_text = message_template.format(
+    message_text = format_payment_text(
+        message_template,
+        support=settings.get_support_contact_display_html(),
         amount=settings.format_price(amount_kopeks),
         payment_id=payment_link_id,
-        support=settings.get_support_contact_display_html(),
     )
 
     state_data = await state.get_data()
