@@ -18,6 +18,7 @@ from app.services.gift_claim_service import (
     claim_bound_gift_for_user,
 )
 from app.services.guest_purchase_service import GuestPurchaseError
+from app.utils.text_compact import compact_blank_lines
 
 
 logger = structlog.get_logger(__name__)
@@ -120,14 +121,18 @@ async def handle_gift_activate(callback: types.CallbackQuery, db_user: User | No
         tariff_name = html_mod.escape(purchase.tariff.name) if purchase.tariff and purchase.tariff.name else ''
         period_days = purchase.period_days
         period_text = f'{period_days} дн.' if period_days else ''
-        tariff_text = f'{tariff_name} — {period_text}' if tariff_name else period_text
+        # Без тарифа подпись « — » и пустая строка между блоками выглядели бы
+        # как потерянные данные, поэтому собираем только непустые части.
+        tariff_text = ' — '.join(part for part in (tariff_name, period_text) if part)
 
         await callback.message.edit_text(
-            texts.t(
-                'GIFT_ACTIVATION_CALLBACK_SUCCESS_TEXT',
-                '✅ <b>Подарок активирован!</b>\n{tariff_text}\n\nВаша подписка обновлена.',
-            ).format(
-                tariff_text=tariff_text,
+            compact_blank_lines(
+                texts.t(
+                    'GIFT_ACTIVATION_CALLBACK_SUCCESS_TEXT',
+                    '✅ <b>Подарок активирован!</b>\n{tariff_text}\n\nВаша подписка обновлена.',
+                ).format(
+                    tariff_text=tariff_text,
+                )
             ),
         )
 

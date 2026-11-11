@@ -22,6 +22,7 @@ from app.database.models import User
 from app.localization.texts import get_texts
 from app.utils.decorators import error_handler
 from app.utils.formatters import format_subscription_end_date
+from app.utils.text_compact import compact_blank_lines
 
 
 logger = structlog.get_logger(__name__)
@@ -166,7 +167,7 @@ async def _render(callback: types.CallbackQuery, db: AsyncSession, db_user: User
 
     keyboard.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='menu_referrals')])
     await callback.message.edit_text(
-        '\n'.join(lines), reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard)
+        compact_blank_lines('\n'.join(lines)), reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard)
     )
 
 

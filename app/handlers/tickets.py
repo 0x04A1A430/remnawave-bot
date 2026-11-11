@@ -26,6 +26,7 @@ from app.utils.cache import RateLimitCache, cache, cache_key
 from app.utils.formatters import format_username_link
 from app.utils.miniapp_buttons import build_admin_ticket_cabinet_button
 from app.utils.photo_message import edit_or_answer_photo, safe_edit_or_resend
+from app.utils.text_compact import compact_blank_lines
 from app.utils.ticket_media import get_ticket_media, ticket_media_chunks
 from app.utils.ticket_text import (
     TICKET_MESSAGE_MAX_LENGTH,
@@ -317,7 +318,7 @@ async def handle_ticket_message_input(message: types.Message, state: FSMContext,
         texts = get_texts(db_user.language)
         # Ограничим длину подтверждения чтобы не упереться в лимиты
         safe_title = html.escape(title if len(title) <= 200 else (title[:197] + '...'))
-        creation_text = (
+        creation_text = compact_blank_lines(
             f'✅ <b>Тикет #{ticket.id} создан</b>\n\n'
             f'📝 Заголовок: {safe_title}\n'
             f'📊 Статус: {ticket.status_emoji} '
@@ -600,7 +601,7 @@ async def view_ticket(callback: types.CallbackQuery, db_user: User, db: AsyncSes
         if getattr(keyboard, 'inline_keyboard', None) is not None:
             keyboard.inline_keyboard.insert(0, nav_row)
     # Показываем как текст (чтобы не упереться в caption лимит)
-    page_text = pages[page - 1]
+    page_text = compact_blank_lines(pages[page - 1])
     await safe_edit_or_resend(callback.message, page_text, keyboard)
     await callback.answer()
 

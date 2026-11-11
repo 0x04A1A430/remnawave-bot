@@ -50,6 +50,7 @@ from app.utils.telegram_html import (
     split_telegram_text,
     stored_html_to_telegram_pages,
 )
+from app.utils.text_compact import compact_blank_lines
 from app.utils.timezone import format_local_datetime
 
 
@@ -312,7 +313,7 @@ async def show_service_rules(callback: types.CallbackQuery, db_user: User, db: A
 
     await edit_long_text(
         callback.message,
-        f'{texts.t("RULES_HEADER", " <b>Правила</b>")}\n\n{rules_text}',
+        compact_blank_lines(f'{texts.t("RULES_HEADER", " <b>Правила</b>")}\n\n{rules_text}'),
         reply_markup=types.InlineKeyboardMarkup(
             inline_keyboard=[
                 [types.InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu', style='danger')]
@@ -343,7 +344,7 @@ async def show_info_menu(
 
     header = texts.t('MENU_INFO_HEADER', '<b>Инфо</b>')
     prompt = texts.t('MENU_INFO_PROMPT', '')
-    caption = f'{header}\n\n{prompt}' if prompt else header
+    caption = compact_blank_lines(f'{header}\n\n{prompt}' if prompt else header)
 
     privacy_enabled = is_visible_in_bot(
         settings.PRIVACY_POLICY_DISPLAY_MODE
@@ -408,7 +409,7 @@ async def show_promo_groups_info(
             'Промогруппы с автовыдачей ещё не настроены.',
         )
         header = texts.t('PROMO_GROUPS_INFO_HEADER', '<b>Промогруппы</b>')
-        message = f'{header}\n\n{empty_text}' if empty_text else header
+        message = compact_blank_lines(f'{header}\n\n{empty_text}' if empty_text else header)
 
         await callback.message.edit_text(
             message,
@@ -561,7 +562,7 @@ async def show_faq_pages(
 
     header = texts.t('FAQ_HEADER', '<b>FAQ</b>')
     prompt = texts.t('FAQ_PAGES_PROMPT', 'Выберите вопрос:')
-    caption = f'{header}\n\n{prompt}' if prompt else header
+    caption = compact_blank_lines(f'{header}\n\n{prompt}' if prompt else header)
 
     buttons: list[list[types.InlineKeyboardButton]] = []
     for index, page in enumerate(pages, start=1):
@@ -684,7 +685,7 @@ async def show_faq_page(
     if footer:
         parts_to_join.append(f'<code>{footer}</code>')
 
-    message_text = '\n\n'.join(segment for segment in parts_to_join if segment)
+    message_text = compact_blank_lines('\n\n'.join(segment for segment in parts_to_join if segment))
 
     keyboard_rows: list[list[types.InlineKeyboardButton]] = []
 
@@ -820,6 +821,7 @@ async def show_privacy_policy(
         message_text += f'\n\n{body}'
     if footer:
         message_text += f'\n\n<code>{footer}</code>'
+    message_text = compact_blank_lines(message_text)
 
     keyboard_rows: list[list[types.InlineKeyboardButton]] = []
 
@@ -946,6 +948,7 @@ async def show_public_offer(
         message_text += f'\n\n{body}'
     if footer:
         message_text += f'\n\n<code>{footer}</code>'
+    message_text = compact_blank_lines(message_text)
 
     keyboard_rows: list[list[types.InlineKeyboardButton]] = []
 
@@ -1047,7 +1050,7 @@ async def show_info_page(
     current_part = max(1, min(requested_part, total_parts))
 
     title = _resolve_info_page_title(page, db_user.language)
-    message_text = f'<b>{html.escape(title)}</b>\n\n{chunks[current_part - 1]}'
+    message_text = compact_blank_lines(f'<b>{html.escape(title)}</b>\n\n{chunks[current_part - 1]}')
 
     keyboard_rows: list[list[types.InlineKeyboardButton]] = []
 

@@ -8,6 +8,7 @@ from app.keyboards.inline import get_support_keyboard
 from app.localization.texts import get_texts
 from app.services.support_settings_service import SupportSettingsService
 from app.utils.photo_message import edit_or_answer_photo
+from app.utils.text_compact import compact_blank_lines
 
 
 logger = structlog.get_logger(__name__)
@@ -15,7 +16,7 @@ logger = structlog.get_logger(__name__)
 
 async def show_support_info(callback: types.CallbackQuery, db_user: User):
     get_texts(db_user.language)
-    support_info = SupportSettingsService.get_support_info_text(db_user.language)
+    support_info = compact_blank_lines(SupportSettingsService.get_support_info_text(db_user.language))
     await edit_or_answer_photo(
         callback=callback,
         caption=support_info,
@@ -53,7 +54,9 @@ async def payment_support_command(message: types.Message, db_user: User | None =
     if not rows:
         text += '\n\n' + SupportSettingsService.get_support_info_text(language)
     await message.answer(
-        text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=rows) if rows else None, parse_mode='HTML'
+        compact_blank_lines(text),
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=rows) if rows else None,
+        parse_mode='HTML',
     )
 
 
