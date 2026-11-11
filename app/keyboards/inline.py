@@ -1,5 +1,4 @@
 import math
-import random
 from datetime import UTC, datetime
 
 import structlog
@@ -2618,13 +2617,58 @@ def get_payment_methods_keyboard(
     _apply_payment_name_overrides(keyboard, language)
     _apply_payment_method_order(keyboard)
 
-    # Случайная раскраска способов оплаты: синий/зелёный (красный — для «Назад»)
+    _decorate_topup_buttons(keyboard)
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
+
+
+_TOPUP_ICON_IDS = {
+    'stars': ('⭐', '5958376256788502078'),
+    'crypto': ('🪙', '5992430854909989581'),
+    'support': ('💬', '5886666250158870040'),
+}
+_TOPUP_CARD_ICON = ('💳', '5967548335542767952')
+
+
+def _decorate_topup_buttons(keyboard: list) -> None:
+    """Цвета и premium-иконки способов пополнения — детерминированно, не случайно.
+
+    Синий — СБП, зелёный — карты и крипта, красный — поддержка/недоступность.
+    Иконка ставится один раз; ручной icon_custom_emoji_id не перетираем.
+    """
     for row in keyboard:
         for idx, btn in enumerate(row):
-            if btn.callback_data and btn.callback_data.startswith('topup_'):
-                row[idx] = btn.model_copy(update={'style': random.choice(('primary', 'success'))})
+            callback = btn.callback_data or ''
+            if callback.startswith('topup_amount|'):
+                method = callback.split('|', 1)[1]
+            elif callback.startswith('topup_'):
+                method = callback[len('topup_') :]
+            elif callback == 'payment_methods_unavailable':
+                method = 'support'
+            else:
+                continue
 
-    return InlineKeyboardMarkup(inline_keyboard=keyboard)
+            lowered = method.lower()
+            if 'support' in lowered or callback == 'payment_methods_unavailable':
+                style = 'danger'
+            elif 'sbp' in lowered or 'fps' in lowered or 'stars' in lowered:
+                style = 'primary'
+            else:
+                style = 'success'
+
+            icon_emoji, icon_id = _TOPUP_ICON_IDS.get(
+                'support'
+                if 'support' in lowered
+                else 'crypto'
+                if 'crypto' in lowered
+                else 'stars'
+                if 'stars' in lowered
+                else 'card',
+                _TOPUP_CARD_ICON,
+            )
+            update: dict = {'style': style}
+            if not btn.icon_custom_emoji_id:
+                update['icon_custom_emoji_id'] = icon_id
+            row[idx] = btn.model_copy(update=update)
 
 
 def get_yookassa_payment_keyboard(

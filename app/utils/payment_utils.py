@@ -570,7 +570,7 @@ def get_available_payment_methods() -> list[dict[str, str]]:
     return methods
 
 
-def get_payment_methods_text(language: str) -> str:
+def get_payment_methods_text(language: str, balance_kopeks: int | None = None) -> str:
     """
     Генерирует текст с описанием доступных способов оплаты
     """
@@ -599,20 +599,10 @@ def get_payment_methods_text(language: str) -> str:
 Выберите способ пополнения:""",
         )
 
-    text = (
-        texts.t(
-            'PAYMENT_METHODS_TITLE',
-            '💳 <b>Способы пополнения баланса</b>',
-        )
-        + '\n\n'
-    )
-    text += (
-        texts.t(
-            'PAYMENT_METHODS_PROMPT',
-            'Выберите удобный для вас способ оплаты:',
-        )
-        + '\n\n'
-    )
+    text = texts.t('PAYMENT_METHODS_TITLE', '💳 <b>Способы пополнения баланса</b>')
+    if balance_kopeks is not None:
+        text += f'\n{texts.t("NOTIFY_BALANCE_NOW", "Баланс")}: <b>{texts.format_price(balance_kopeks)}</b>'
+    text += '\n\n'
 
     method_lines: list[str] = []
     for method in methods:
@@ -638,12 +628,7 @@ def get_payment_methods_text(language: str) -> str:
 
         method_lines.append(f'{name} - {description}')
 
-    text += '<blockquote>' + '\n'.join(method_lines) + '</blockquote>\n'
-
-    text += '\n' + texts.t(
-        'PAYMENT_METHODS_FOOTER',
-        'Выберите способ пополнения:',
-    )
+    text += '<blockquote>' + '\n'.join(method_lines) + '</blockquote>'
 
     return text
 

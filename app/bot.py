@@ -93,6 +93,9 @@ patch_message_methods()
 
 logger = structlog.get_logger(__name__)
 
+# Диспетчер текущего процесса: нужен фоновым задачам (FSM storage).
+dispatcher: Dispatcher | None = None
+
 
 async def debug_callback_handler(callback: types.CallbackQuery):
     logger.info('DEBUG CALLBACK')
@@ -147,6 +150,8 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
         storage = MemoryStorage()
 
     dp = Dispatcher(storage=storage)
+    global dispatcher
+    dispatcher = dp
 
     dp.message.middleware(ContextVarsMiddleware())
     dp.callback_query.middleware(ContextVarsMiddleware())

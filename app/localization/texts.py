@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import re
 from typing import Any
 
 import structlog
@@ -103,6 +104,16 @@ _TRAFFIC_TIERS = (
 )
 
 
+_BLANK_LINE_RUN = re.compile(r'\n{3,}')
+
+
+def _normalize_spacing(value: Any) -> Any:
+    """Не больше одной пустой строки подряд; <pre> не трогаем."""
+    if isinstance(value, str) and '<pre' not in value:
+        return _BLANK_LINE_RUN.sub('\n\n', value)
+    return value
+
+
 def _get_cached_rules_value(language: str) -> str:
     if language in _cached_rules:
         return _cached_rules[language]
@@ -171,25 +182,25 @@ class Texts:
         try:
             return self._get_value(item, warn=False)
         except KeyError:
-            return default
+            return _normalize_spacing(default)
 
     def t(self, key: str, default: Any = None) -> Any:
         try:
             return self._get_value(key, warn=default is None)
         except KeyError:
             if default is not None:
-                return default
+                return _normalize_spacing(default)
             raise
 
     def _get_value(self, item: str, warn: bool = True) -> Any:
         if item == 'RULES_TEXT':
-            return _get_cached_rules_value(self.language)
+            return _normalize_spacing(_get_cached_rules_value(self.language))
 
         if item in self._values:
-            return self._values[item]
+            return _normalize_spacing(self._values[item])
 
         if item in self._fallback_values:
-            return self._fallback_values[item]
+            return _normalize_spacing(self._fallback_values[item])
 
         # Предупреждаем только когда у вызова НЕТ запасного текста. t(key, default) и
         # get(key, default) передают warn=False: для них отсутствие ключа штатно —
