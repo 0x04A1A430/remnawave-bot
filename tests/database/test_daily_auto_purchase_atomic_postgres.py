@@ -208,9 +208,10 @@ async def test_daily_auto_activation_is_atomic(
                         message=SimpleNamespace(edit_text=AsyncMock()),
                     )
                     await inspect.unwrap(telegram.confirm_daily_tariff_purchase)(callback, user, db, state)
-                    return bool(
-                        callback.message.edit_text.await_args and '🎉' in callback.message.edit_text.await_args.args[0]
-                    )
+                    # The success copy is localized; premium-emoji rendering may
+                    # drop the leading emoji, so match the message body instead.
+                    text = callback.message.edit_text.await_args
+                    return bool(text and 'Суточная подписка оформлена' in text.args[0])
                 return await auto._auto_purchase_daily_tariff(db, user, cart)
 
         if failure is None:
