@@ -336,9 +336,9 @@ async def process_coupon_batch_days(message: types.Message, db_user: User, state
         message,
         1,
         MAX_PERIOD_DAYS,
-        texts.t(
-            'ADMIN_COUPONS_UI_PROCESS_COUPON_BATCH_DAYS_025', ' Введите целое число дней от 1 до {value1}'
-        ).format(value1=MAX_PERIOD_DAYS),
+        texts.t('ADMIN_COUPONS_UI_PROCESS_COUPON_BATCH_DAYS_025', ' Введите целое число дней от 1 до {value1}').format(
+            value1=MAX_PERIOD_DAYS
+        ),
         language=db_user.language,
     )
     if days is None:

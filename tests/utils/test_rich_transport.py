@@ -111,9 +111,7 @@ def test_in_memory_uploads_stay_classic():
 
 
 def test_expandable_blockquote_is_downgraded_for_rich():
-    rich = rt.convert_method(
-        SendMessage(chat_id=1, text='<blockquote expandable>Секрет</blockquote>\nдальше')
-    )
+    rich = rt.convert_method(SendMessage(chat_id=1, text='<blockquote expandable>Секрет</blockquote>\nдальше'))
 
     assert isinstance(rich, SendRichMessage)
     assert rich.rich_message.html == '<blockquote>Секрет</blockquote><br/>дальше'

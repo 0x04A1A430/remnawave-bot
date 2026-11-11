@@ -627,9 +627,7 @@ async def view_withdrawal_request(callback: types.CallbackQuery, db_user: User, 
         WithdrawalRequestStatus.PENDING.value: get_texts(db_user.language).t('ADMIN_REFERRALS_UI_077', ' Ожидает'),
         WithdrawalRequestStatus.APPROVED.value: get_texts(db_user.language).t('ADMIN_REFERRALS_UI_078', ' Одобрена'),
         WithdrawalRequestStatus.REJECTED.value: get_texts(db_user.language).t('ADMIN_REFERRALS_UI_079', ' Отклонена'),
-        WithdrawalRequestStatus.COMPLETED.value: get_texts(db_user.language).t(
-            'ADMIN_REFERRALS_UI_080', ' Выполнена'
-        ),
+        WithdrawalRequestStatus.COMPLETED.value: get_texts(db_user.language).t('ADMIN_REFERRALS_UI_080', ' Выполнена'),
         WithdrawalRequestStatus.CANCELLED.value: get_texts(db_user.language).t('ADMIN_REFERRALS_UI_081', ' Отменена'),
     }.get(request.status, request.status)
 

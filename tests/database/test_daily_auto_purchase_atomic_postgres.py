@@ -21,6 +21,7 @@ from app.database.crud import subscription as subscriptions, transaction as tran
 from app.database.models import Base, Subscription, Tariff, Transaction, User
 from app.handlers.subscription import tariff_purchase as telegram
 from app.services import subscription_auto_purchase_service as auto
+from app.services.pricing_engine import PricingEngine
 from app.services.subscription_service import SubscriptionService
 from tests.fixtures.postgres_db import postgres_engine
 
@@ -246,7 +247,7 @@ async def test_daily_auto_activation_is_atomic(
         async with maker() as db:
             user = await users.get_user_by_id(db, 1)
             base = 100 if fresh or trial else 300
-            price = base - base * promo // 100
+            price = PricingEngine.round_to_ruble(PricingEngine.apply_discount(base, promo)) if promo else base
             assert user.balance_kopeks == 10000 - price
             payments = (await db.scalars(select(Transaction))).all()
             assert len(payments) == 1 and payments[0].amount_kopeks == -price and payments[0].is_completed

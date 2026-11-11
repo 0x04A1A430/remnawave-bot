@@ -77,9 +77,7 @@ def sanitize_markup(markup: Any) -> Any:
             parsed = parse_button_label(button.text or '')
             if parsed.icon_custom_emoji_id and not button.icon_custom_emoji_id:
                 new_row.append(
-                    button.model_copy(
-                        update={'text': parsed.text, 'icon_custom_emoji_id': parsed.icon_custom_emoji_id}
-                    )
+                    button.model_copy(update={'text': parsed.text, 'icon_custom_emoji_id': parsed.icon_custom_emoji_id})
                 )
                 changed = True
             else:

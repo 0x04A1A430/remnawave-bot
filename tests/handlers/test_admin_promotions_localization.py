@@ -151,4 +151,6 @@ async def test_recipient_language_and_offer_parameters(monkeypatch, language, em
             active_discount_hours=12,
         ),
     )
+
+
 pytestmark = pytest.mark.skip(reason='fork keeps hardcoded Russian admin/user copy by design (no upstream i18n)')

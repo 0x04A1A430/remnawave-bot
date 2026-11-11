@@ -589,9 +589,7 @@ class AdminNotificationService:
             if user.referred_by_id:
                 referrer_info = await self._get_referrer_info(db, user.referred_by_id, texts=texts)
                 if referrer_info not in ('Нет', texts.t('ADMIN_BACKUP_UI_035', 'Нет')):
-                    message_lines.append(
-                        texts.t('ADMIN_NOTIFY_169', '→ <b>Реферер:</b> {v0}').format(v0=referrer_info)
-                    )
+                    message_lines.append(texts.t('ADMIN_NOTIFY_169', '→ <b>Реферер:</b> {v0}').format(v0=referrer_info))
 
             message_lines.append('')
             message_lines.append(f' <i>{format_local_datetime(datetime.now(UTC), "%d.%m.%Y %H:%M:%S")}</i>')
@@ -2279,9 +2277,7 @@ class AdminNotificationService:
 
                     if details.get('max_failures'):
                         message_parts.append(
-                            texts.t('ADMIN_NOTIFY_229', '<b>Порог ошибок:</b> {v0}').format(
-                                v0=details['max_failures']
-                            )
+                            texts.t('ADMIN_NOTIFY_229', '<b>Порог ошибок:</b> {v0}').format(v0=details['max_failures'])
                         )
 
                     message_parts.append('')
@@ -2504,9 +2500,7 @@ class AdminNotificationService:
                     texts.t('ADMIN_NOTIFY_157', '▤ До {v0}').format(
                         v0=format_local_datetime(subscription.end_date, '%d.%m.%Y')
                     ),
-                    texts.t('ADMIN_NOTIFY_051', '¤ Баланс: {v0}').format(
-                        v0=settings.format_price(user.balance_kopeks)
-                    ),
+                    texts.t('ADMIN_NOTIFY_051', '¤ Баланс: {v0}').format(v0=settings.format_price(user.balance_kopeks)),
                 ]
             )
 
@@ -2754,12 +2748,8 @@ class AdminNotificationService:
             message_lines.extend(
                 [
                     '',
-                    texts.t('ADMIN_NOTIFY_165', '¤ <b>Сумма: {v0}</b>').format(
-                        v0=settings.format_price(amount_kopeks)
-                    ),
-                    texts.t('ADMIN_NOTIFY_051', '¤ Баланс: {v0}').format(
-                        v0=settings.format_price(user.balance_kopeks)
-                    ),
+                    texts.t('ADMIN_NOTIFY_165', '¤ <b>Сумма: {v0}</b>').format(v0=settings.format_price(amount_kopeks)),
+                    texts.t('ADMIN_NOTIFY_051', '¤ Баланс: {v0}').format(v0=settings.format_price(user.balance_kopeks)),
                 ]
             )
 

@@ -357,9 +357,7 @@ async def process_welcome_text_edit(message: types.Message, state: FSMContext, d
     else:
         welcome_settings = await get_current_welcome_text_settings(db)
         await message.answer(
-            get_texts(db_user.language).t(
-                'ADMIN_WELCOME_UI_019', ' Ошибка при сохранении текста. Попробуйте еще раз.'
-            ),
+            get_texts(db_user.language).t('ADMIN_WELCOME_UI_019', ' Ошибка при сохранении текста. Попробуйте еще раз.'),
             reply_markup=get_welcome_text_keyboard(db_user.language, welcome_settings['is_enabled']),
         )
 

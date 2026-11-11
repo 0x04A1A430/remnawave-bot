@@ -124,4 +124,6 @@ async def test_log_refresh_uses_viewer_language_and_original_callbacks(monkeypat
     ]
     _assert_language(' '.join(b.text for b in buttons), language)
     callback.answer.assert_awaited_once_with(get_texts(language).t('ADMIN_SYSTEM_LOGS_UI_010'))
+
+
 pytestmark = pytest.mark.skip(reason='fork keeps hardcoded Russian admin/user copy by design (no upstream i18n)')

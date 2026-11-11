@@ -1671,9 +1671,7 @@ def _render_setting_text(key: str, language: str = 'ru') -> str:
     original_value = summary.get('original')
     if original_value not in {None, ''}:
         lines.append(
-            texts.t('BOT_SETTINGS_UI_RENDER_SETTING_TEXT_104', ' По умолчанию: {value1}').format(
-                value1=original_value
-            )
+            texts.t('BOT_SETTINGS_UI_RENDER_SETTING_TEXT_104', ' По умолчанию: {value1}').format(value1=original_value)
         )
 
     lines.append(
@@ -1686,9 +1684,7 @@ def _render_setting_text(key: str, language: str = 'ru') -> str:
 
     if summary.get('is_read_only'):
         lines.append(
-            texts.t(
-                'BOT_SETTINGS_UI_RENDER_SETTING_TEXT_108', ' Режим: Только для чтения (управляется автоматически)'
-            )
+            texts.t('BOT_SETTINGS_UI_RENDER_SETTING_TEXT_108', ' Режим: Только для чтения (управляется автоматически)')
         )
 
     lines.append('')
@@ -1697,9 +1693,7 @@ def _render_setting_text(key: str, language: str = 'ru') -> str:
             texts.t('BOT_SETTINGS_UI_RENDER_SETTING_TEXT_109', ' Описание: {value1}').format(value1=description)
         )
     if format_hint:
-        lines.append(
-            texts.t('BOT_SETTINGS_UI_RENDER_SETTING_TEXT_110', ' Формат: {value1}').format(value1=format_hint)
-        )
+        lines.append(texts.t('BOT_SETTINGS_UI_RENDER_SETTING_TEXT_110', ' Формат: {value1}').format(value1=format_hint))
     if example:
         lines.append(texts.t('BOT_SETTINGS_UI_RENDER_SETTING_TEXT_111', ' Пример: {value1}').format(value1=example))
     if warning:
@@ -2323,9 +2317,7 @@ async def test_payment_provider(
         mulenpay_name_html = settings.get_mulenpay_display_name_html()
         if not settings.is_mulenpay_enabled():
             await callback.answer(
-                texts.t('BOT_SETTINGS_UI_TEST_PAYMENT_PROVIDER_151', ' {value1} отключен').format(
-                    value1=mulenpay_name
-                ),
+                texts.t('BOT_SETTINGS_UI_TEST_PAYMENT_PROVIDER_151', ' {value1} отключен').format(value1=mulenpay_name),
                 show_alert=True,
             )
             return
@@ -2588,9 +2580,7 @@ async def test_payment_provider(
 
         if not payment_url:
             await callback.answer(
-                texts.t(
-                    'BOT_SETTINGS_UI_TEST_PAYMENT_PROVIDER_169', ' Не удалось получить ссылку на оплату CryptoBot'
-                ),
+                texts.t('BOT_SETTINGS_UI_TEST_PAYMENT_PROVIDER_169', ' Не удалось получить ссылку на оплату CryptoBot'),
                 show_alert=True,
             )
             await _refresh_markup()

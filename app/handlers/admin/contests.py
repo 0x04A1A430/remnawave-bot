@@ -697,9 +697,7 @@ async def show_detailed_stats(
         texts.t('ADMIN_CONTEST_UI_005', ' Участников (рефереров): <b>{value1}</b>').format(
             value1=stats['total_participants']
         ),
-        texts.t('ADMIN_CONTEST_UI_006', ' Приглашено рефералов: <b>{value1}</b>').format(
-            value1=stats['total_invited']
-        ),
+        texts.t('ADMIN_CONTEST_UI_006', ' Приглашено рефералов: <b>{value1}</b>').format(value1=stats['total_invited']),
         '',
         texts.t('ADMIN_CONTEST_UI_007', ' Рефералов оплатили: <b>{value1}</b>').format(
             value1=stats.get('paid_count', 0)
@@ -778,9 +776,7 @@ async def show_detailed_stats_page(
                 texts.t('ADMIN_CONTEST_UI_055', '   Приглашено: {value1}').format(value1=p['total_referrals']),
                 texts.t('ADMIN_CONTEST_UI_056', '   Оплатили: {value1}').format(value1=p['paid_referrals']),
                 texts.t('ADMIN_CONTEST_UI_057', '   Не оплатили: {value1}').format(value1=p['unpaid_referrals']),
-                texts.t('ADMIN_CONTEST_UI_058', '   Сумма: {value1} руб.').format(
-                    value1=p['total_paid_amount'] // 100
-                ),
+                texts.t('ADMIN_CONTEST_UI_058', '   Сумма: {value1} руб.').format(value1=p['total_paid_amount'] // 100),
                 '',  # Пустая строка для разделения
             ]
         )
@@ -1002,9 +998,7 @@ async def debug_contest_transactions(
         '',
         texts.t('ADMIN_CONTEST_UI_009', '<b> СУММЫ:</b>'),
         texts.t('ADMIN_CONTEST_UI_035', '    Пополнения баланса: <b>{value1}</b> руб.').format(value1=deposit_total),
-        texts.t('ADMIN_CONTEST_UI_036', '    Покупки подписок: <b>{value1}</b> руб.').format(
-            value1=subscription_total
-        ),
+        texts.t('ADMIN_CONTEST_UI_036', '    Покупки подписок: <b>{value1}</b> руб.').format(value1=subscription_total),
         '',
     ]
 

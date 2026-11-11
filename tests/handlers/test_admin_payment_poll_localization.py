@@ -42,4 +42,6 @@ async def test_missing_poll_error_uses_requester_language(monkeypatch, language)
     callback = SimpleNamespace(data='poll:123', answer=AsyncMock())
     await inspect.unwrap(polls.show_poll_details)(callback, SimpleNamespace(language=language), None)
     callback.answer.assert_awaited_once_with(get_texts(language).t('POLL_NOT_FOUND'), show_alert=True)
+
+
 pytestmark = pytest.mark.skip(reason='fork keeps hardcoded Russian admin/user copy by design (no upstream i18n)')
