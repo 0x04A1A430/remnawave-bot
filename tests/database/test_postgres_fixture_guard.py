@@ -30,6 +30,7 @@ from tests.fixtures.postgres_db import (
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW_PATH = REPO_ROOT / '.github' / 'workflows' / 'tests.yml'
+PG_WORKFLOW_PATH = REPO_ROOT / '.github' / 'workflows' / 'pg-tests.yml'
 COMPOSE_PATH = REPO_ROOT / 'docker-compose.yml'
 
 
@@ -74,27 +75,27 @@ def test_blank_url_counts_as_absent(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_ci_workflow_runs_postgres_tests_for_real() -> None:
     """CI обязан поднимать базу и требовать, чтобы тесты на ней прошли.
 
-    Без этого файла достаточно убрать одну строку из workflow, и все проверки
-    блокировок начнут пропускаться, не изменив цвет пайплайна.
+    Долгий PostgreSQL-набор вынесен в отдельный workflow (pg-tests.yml: ночь и
+    кнопка), быстрый PR-гейт гоняет только тесты без базы. Проверяем, что
+    PG-набор не потерялся и по-прежнему идёт с настоящей базой.
     """
-    assert WORKFLOW_PATH.exists(), 'нет workflow с тестами'
-    workflow = WORKFLOW_PATH.read_text(encoding='utf-8')
+    assert WORKFLOW_PATH.exists(), 'нет быстрого workflow с тестами'
+    fast = yaml.safe_load(WORKFLOW_PATH.read_text(encoding='utf-8'))['jobs']['pytest']
+    assert any("-m 'not postgres'" in step.get('run', '') for step in fast['steps'])
+    assert 'services' not in fast, 'PR-гейт не должен поднимать PostgreSQL'
 
-    job = yaml.safe_load(workflow)['jobs']['pytest']
+    assert PG_WORKFLOW_PATH.exists(), 'нет workflow с PostgreSQL-тестами'
+    pg_workflow = PG_WORKFLOW_PATH.read_text(encoding='utf-8')
+    job = yaml.safe_load(pg_workflow)['jobs']['pytest']
+
     assert job['services']['postgres']['image'].startswith('postgres:'), 'CI не поднимает PostgreSQL'
-    # Весь набор обязан идти на той же версии, что у пользователей в docker-compose.yml;
-    # остальные версии матрицы — задел под переход.
     compose_version = re.search(r'image:\s*postgres:(\d+)', COMPOSE_PATH.read_text(encoding='utf-8')).group(1)
     matrix = job['strategy']['matrix']
     assert compose_version in {str(version) for version in matrix['postgres']}
     assert matrix['shard'] == list(range(4)), 'части PostgreSQL должны покрывать весь набор'
-    steps = job['steps']
-    remaining = next(step for step in steps if "-m 'not postgres'" in step.get('run', ''))
-    assert remaining['if'] == f"matrix.postgres == '{compose_version}' && matrix.shard == 0"
-    pg_step = next(step for step in steps if '-m postgres' in step.get('run', ''))
-    assert 'if' not in pg_step, 'PostgreSQL-набор должен выполняться на каждой части матрицы'
+
+    pg_step = next(step for step in job['steps'] if '-m postgres' in step.get('run', ''))
     assert '-p tests.pytest_pg_shard' in pg_step['run']
     assert '--pg-shard-index=${{ matrix.shard }} --pg-shard-count=4' in pg_step['run']
-    assert f'{TEST_DATABASE_URL_ENV}:' in workflow, 'CI не передаёт адрес тестовой базы'
-    assert f"{REQUIRE_POSTGRES_ENV}: '1'" in workflow, 'CI не запрещает молчаливый пропуск тестов на PostgreSQL'
-    assert '-m postgres' in pg_step['run'], 'CI не гоняет тесты на PostgreSQL отдельным шагом'
+    assert f'{TEST_DATABASE_URL_ENV}:' in pg_workflow, 'CI не передаёт адрес тестовой базы'
+    assert f"{REQUIRE_POSTGRES_ENV}: '1'" in pg_workflow, 'CI не запрещает молчаливый пропуск тестов на PostgreSQL'

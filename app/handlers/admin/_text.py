@@ -10,15 +10,14 @@
 import re
 
 
-_EXCESS_NEWLINES_RE = re.compile(r'\n{3,}')
+_EXCESS_NEWLINES_RE = re.compile(r'\n{2,}')
 _TRAILING_SPACES_RE = re.compile(r'[ \t]+$', re.MULTILINE)
 
 
 def compact_text(text: str) -> str:
     """Схлопнуть пустые строки и убрать пустые края сообщения.
 
-    Максимум одна пустая строка между блоками, без ведущих и хвостовых
-    пустых строк. Хвостовые пробелы в строках тоже убираются, чтобы строка
+    Без пустых строк между блоками и без ведущих/хвостовых пустых строк. Хвостовые пробелы в строках тоже убираются, чтобы строка
     из одних пробелов не выглядела как пустая.
     """
     if not text:
@@ -26,5 +25,5 @@ def compact_text(text: str) -> str:
 
     normalized = text.replace('\r\n', '\n').replace('\r', '\n')
     normalized = _TRAILING_SPACES_RE.sub('', normalized)
-    normalized = _EXCESS_NEWLINES_RE.sub('\n\n', normalized)
+    normalized = _EXCESS_NEWLINES_RE.sub('\n', normalized)
     return normalized.strip()

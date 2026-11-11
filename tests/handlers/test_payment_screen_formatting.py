@@ -83,5 +83,5 @@ async def test_payment_methods_screen_compacts_text_before_send(monkeypatch):
     await balance_main.show_payment_methods(callback, user, AsyncMock(), AsyncMock())
 
     text = callback.message.edit_text.await_args.args[0]
-    assert text == '💳 <b>Способы пополнения</b>\n\nВыберите способ:'
+    assert text == '💳 <b>Способы пополнения</b>\nВыберите способ:'
     assert '\n\n\n' not in text
