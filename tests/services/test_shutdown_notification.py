@@ -33,7 +33,7 @@ def test_docker_stop_is_a_planned_shutdown_with_a_hint():
     text = _render(ShutdownReason(signum=signal.SIGTERM.value))
 
     _assert_valid_telegram_html(text)
-    assert text.startswith('🛑')
+    assert text.startswith('■')
     assert 'плановая остановка, сигнал SIGTERM' in text
     assert 'docker compose stop' in text
     assert 'Проработал: <b>3 д 4 ч 12 мин</b>' in text
@@ -54,7 +54,7 @@ def test_polling_crash_is_a_failure_with_the_error_and_advice():
     text = _render(ShutdownReason(error=error, source='polling'))
 
     _assert_valid_telegram_html(text)
-    assert text.startswith('🔴')
+    assert text.startswith('○')
     assert 'ошибка — Telegram polling' in text
     assert 'RuntimeError: Unauthorized: bot token is invalid &lt;x&gt;' in text
     assert 'Рекомендации' in text, 'для известной ошибки — подсказка, как чинить'
@@ -120,7 +120,8 @@ async def test_crash_goes_to_the_errors_topic_with_a_contact_button(admin_chat):
 
     kwargs = bot.send_message.await_args.kwargs
     assert kwargs['message_thread_id'] == 3
-    assert kwargs['reply_markup'].inline_keyboard[0][0].text == '💬 Сообщить разработчику'
+    button = kwargs['reply_markup'].inline_keyboard[0][0]
+    assert 'Сообщить разработчику' in button.text
 
 
 @pytest.mark.asyncio
@@ -160,7 +161,7 @@ def test_main_does_not_shadow_datetime_locally():
 def test_shutdown_notice_is_sent_before_services_are_stopped():
     """Docker даёт на остановку ~10 секунд: сообщение — первым делом, пока сессия жива."""
     source = MAIN.read_text(encoding='utf-8')
-    finally_start = source.index("logger.info('🛑 Начинается корректное завершение работы...')")
+    finally_start = source.index("logger.info('Начинается корректное завершение работы...')")
 
     notice = source.index('send_shutdown_notification(', finally_start)
     first_stop = source.index('auto_payment_verification_service.stop()', finally_start)

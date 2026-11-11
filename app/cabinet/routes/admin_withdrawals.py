@@ -209,7 +209,7 @@ async def approve_withdrawal(
             if user and withdrawal:
                 formatted_amount = settings.format_price(withdrawal.amount_kopeks)
                 comment_text = f'\n{request.comment}' if request.comment else ''
-                tg_message = f'✅ Ваш запрос на вывод {formatted_amount} одобрен.{comment_text}'
+                tg_message = f'✓ Ваш запрос на вывод {formatted_amount} одобрен.{comment_text}'
                 bot = create_bot()
                 try:
                     await notification_delivery_service.notify_withdrawal_approved(
@@ -260,7 +260,7 @@ async def reject_withdrawal(
             if user and withdrawal:
                 formatted_amount = settings.format_price(withdrawal.amount_kopeks)
                 comment_text = f'\nПричина: {request.comment}' if request.comment else ''
-                tg_message = f'❌ Ваш запрос на вывод {formatted_amount} отклонён.{comment_text}'
+                tg_message = f'✗ Ваш запрос на вывод {formatted_amount} отклонён.{comment_text}'
                 bot = create_bot()
                 try:
                     await notification_delivery_service.notify_withdrawal_rejected(

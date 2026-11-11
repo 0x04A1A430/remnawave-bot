@@ -2287,7 +2287,7 @@ async def send_user_message(
 ):
     """Send a direct Telegram message to the user via the bot.
 
-    Parity with the bot's «✉️ Отправить сообщение» action in the admin user
+    Parity with the bot's «Отправить сообщение» action in the admin user
     card. Email-only users (no telegram_id) cannot receive Telegram messages —
     the endpoint returns 400 with a distinct code so the frontend can explain.
     """
@@ -3131,7 +3131,7 @@ async def reset_user_trial(
             has_active_paid = any(is_active_paid_subscription(s) for s in subs_to_delete)
             if has_active_paid:
                 logger.info(
-                    '⏭️ Пропуск удаления: среди удаляемых есть активная оплаченная подписка',
+                    'Пропуск удаления: среди удаляемых есть активная оплаченная подписка',
                     user_id=user_id,
                 )
             else:
@@ -3345,7 +3345,7 @@ async def disable_user(
 
     if has_active_paid:
         logger.info(
-            '⏭️ Пропуск отключения RemnaWave: у пользователя активная оплаченная подписка',
+            'Пропуск отключения RemnaWave: у пользователя активная оплаченная подписка',
             user_id=user_id,
             remnawave_id=user.remnawave_id,
         )

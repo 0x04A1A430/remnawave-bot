@@ -243,7 +243,7 @@ async def approve_application(
             if user:
                 comment_text = f'\n{request.comment}' if request.comment else ''
                 tg_message = (
-                    f'✅ Ваша заявка на партнёрство одобрена!\nКомиссия: {request.commission_percent}%{comment_text}'
+                    f'✓ Ваша заявка на партнёрство одобрена!\nКомиссия: {request.commission_percent}%{comment_text}'
                 )
                 bot = create_bot()
                 try:
@@ -294,7 +294,7 @@ async def reject_application(
             user = await db.get(User, application.user_id) if application else None
             if user:
                 comment_text = f'\nПричина: {request.comment}' if request.comment else ''
-                tg_message = f'❌ Ваша заявка на партнёрство отклонена.{comment_text}'
+                tg_message = f'✗ Ваша заявка на партнёрство отклонена.{comment_text}'
                 bot = create_bot()
                 try:
                     await notification_delivery_service.notify_partner_rejected(

@@ -472,7 +472,7 @@ def _build_promo_keyboard(offer_id: int, button_text: str) -> InlineKeyboardMark
             ],
             [
                 InlineKeyboardButton(
-                    text='❌ Закрыть',
+                    text='✗ Закрыть',
                     callback_data='promo_offer_close',
                 )
             ],
@@ -538,15 +538,15 @@ def _build_default_promo_message(
     valid_hours: int,
 ) -> str:
     """Build default promo notification message."""
-    lines = ['🎁 <b>Специальное предложение для вас!</b>\n']
+    lines = ['<b>Специальное предложение для вас!</b>\n']
 
     if discount_percent > 0:
-        lines.append(f'🔥 Скидка <b>{discount_percent}%</b> на подписку')
+        lines.append(f'Скидка <b>{discount_percent}%</b> на подписку')
     if bonus_amount_kopeks > 0:
         bonus_rub = bonus_amount_kopeks / 100
-        lines.append(f'💰 Бонус <b>{bonus_rub:.0f}₽</b> на баланс')
+        lines.append(f'Бонус <b>{bonus_rub:.0f}₽</b> на баланс')
 
-    lines.append(f'\n⏰ Предложение действует <b>{valid_hours} ч.</b>')
+    lines.append(f'\nПредложение действует <b>{valid_hours} ч.</b>')
     lines.append('\nНажмите кнопку ниже, чтобы активировать!')
 
     return '\n'.join(lines)
@@ -735,7 +735,7 @@ async def broadcast_offer(
                     bonus_amount_kopeks=payload.bonus_amount_kopeks,
                     valid_hours=payload.valid_hours,
                 ),
-                button_text=payload.button_text or '🎁 Получить',
+                button_text=payload.button_text or 'Получить',
                 notify_targets=notify_targets,
             )
             logger.info(

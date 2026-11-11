@@ -1,6 +1,7 @@
 """Startup/shutdown diagnostics use the recipient locale, keeping raw diagnostics intact."""
 
 import asyncio
+import re
 import signal
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
@@ -12,6 +13,10 @@ import pytest
 from app.config import settings
 from app.localization.texts import get_texts
 from app.services import startup_notification_service as module
+
+
+def _plain(value: str) -> str:
+    return re.sub(r'<tg-emoji[^>]*>(.*?)</tg-emoji>', r'\1', value)
 from tests.services.test_startup_notification_summary import _assert_valid_telegram_html, _stats
 
 
@@ -72,13 +77,13 @@ async def test_shared_senders_use_configured_locale_and_keep_crash_file(monkeypa
     texts = get_texts(language)
     assert texts.t('STARTUP_NOTICE_003') in sent['text']
     assert sent['message_thread_id'] == 42
-    assert sent['reply_markup'].inline_keyboard[0][0].text == texts.t('STARTUP_NOTICE_084')
+    assert 'reply_markup' not in sent
     assert await module.send_crash_notification(service.bot, ValueError('Redis <raw>&'), 'traceback unchanged')
     crash = service.bot.send_document.await_args.kwargs
     assert texts.t('STARTUP_NOTICE_041') in crash['caption']
     assert 'Redis &lt;raw&gt;&amp;' in crash['caption']
     assert crash['message_thread_id'] == 43
-    assert crash['reply_markup'].inline_keyboard[0][0].text == texts.t('STARTUP_NOTICE_083')
+    assert _plain(crash['reply_markup'].inline_keyboard[0][0].text) == _plain(texts.t('STARTUP_NOTICE_083'))
     assert 'Error Message: Redis <raw>&' in crash['document'].data.decode()
     assert 'traceback unchanged' in crash['document'].data.decode()
     assert await module.send_shutdown_notification(

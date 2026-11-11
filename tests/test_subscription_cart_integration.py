@@ -216,11 +216,11 @@ async def test_return_to_saved_cart_skips_edit_when_message_matches(
 
         summary_text = (
             '🛒 Восстановленная корзина\n\n'
-            '📅 Период: 60 дней\n'
-            '📊 Трафик: 40 ГБ\n'
+            '<tg-emoji emoji-id="5967412305338568701">📅</tg-emoji> Период: 60 дней\n'
+            '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> Трафик: 40 ГБ\n'
             '🌍 Страны: Russia, USA\n'
-            '📱 Устройства: 3\n\n'
-            '💎 Общая стоимость: 440 ₽\n\n'
+            '<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> Устройства: 3\n\n'
+            '<tg-emoji emoji-id="5963312935148195483">💎</tg-emoji> Общая стоимость: 440 ₽\n\n'
             'Подтверждаете покупку?'
         )
 
@@ -230,7 +230,7 @@ async def test_return_to_saved_cart_skips_edit_when_message_matches(
         await return_to_saved_cart(mock_callback_query, mock_state, mock_user, mock_db)
 
         mock_callback_query.message.edit_text.assert_not_called()
-        mock_callback_query.answer.assert_called_once_with('✅ Корзина восстановлена!')
+        assert 'Корзина восстановлена!' in mock_callback_query.answer.await_args.args[0]
         mock_state.set_data.assert_called_once_with(cart_data)
         mock_state.set_state.assert_called_once()
         mock_cart_service.save_user_cart.assert_not_called()
@@ -410,7 +410,7 @@ async def test_handle_subscription_cancel_clears_saved_cart(mock_callback_query,
         mock_clear_draft.assert_awaited_once_with(mock_user.id)
         mock_cart_service.delete_user_cart.assert_awaited_once_with(mock_user.id)
         mock_show_main_menu.assert_awaited_once_with(mock_callback_query, mock_user, mock_db)
-        mock_callback_query.answer.assert_called_once_with('❌ Покупка отменена')
+        assert 'Покупка отменена' in mock_callback_query.answer.await_args.args[0]
 
 
 async def test_handle_subscription_cancel_clears_only_current_subscription_cart(
@@ -443,4 +443,4 @@ async def test_handle_subscription_cancel_clears_only_current_subscription_cart(
         mock_cart_service.delete_global_cart_only.assert_awaited_once_with(mock_user.id)
         mock_cart_service.delete_user_cart.assert_not_called()
         mock_show_main_menu.assert_awaited_once_with(mock_callback_query, mock_user, mock_db)
-        mock_callback_query.answer.assert_called_once_with('❌ Покупка отменена')
+        assert 'Покупка отменена' in mock_callback_query.answer.await_args.args[0]

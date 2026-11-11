@@ -1863,7 +1863,7 @@
   Функции: `get_start_video_file_id` — file_id видео для стартового меню либо None., `set_start_video_file_id` — Сохраняет (или очищает) file_id видео стартового меню., `reset_start_video_cache` — Сбрасывает кеш (для тестов и ручной инвалидации).
 - `app/services/startup_notification_service.py` — Python-модуль
   Классы: `StartupNotificationService` (7 методов), `ShutdownReason` (1 методов)
-  Функции: `render_startup_message` — Классический вид (HTML): разделы деревом, внимание — отдельным блоком., `render_startup_rich` — Rich-вид (Bot API 10.1): те же разделы таблицами., `send_bot_startup_notification` — Удобная функция для отправки стартового уведомления., `format_uptime` — «3 д 4 ч 12 мин»; нули в начале опускаются, меньше минуты — словами., `render_shutdown_message` — Классический HTML: причина, аптайм, что делать дальше., `send_shutdown_notification` — Сообщить в админ-чат, что бот останавливается и почему., `send_crash_notification` — Отправляет уведомление о падении бота с лог-файлом.
+  Функции: `render_startup_message` — Классический вид (HTML): разделы деревом, внимание — отдельным блоком., `render_startup_rich` — Rich-вид: логотип, заголовок, одна общая таблица показателей и footer., `send_bot_startup_notification` — Удобная функция для отправки стартового уведомления., `format_uptime` — «3 д 4 ч 12 мин»; нули в начале опускаются, меньше минуты — словами., `render_shutdown_message` — Классический HTML: причина, аптайм, что делать дальше., `send_shutdown_notification` — Сообщить в админ-чат, что бот останавливается и почему., `send_crash_notification` — Отправляет уведомление о падении бота с лог-файлом.
 - `app/services/subscription_auto_purchase_service.py` — Python-модуль
   Классы: `AutoPurchaseContext`, `AutoExtendContext`
   Функции: `try_auto_extend_expired_after_topup` — Renew an opted-in expired subscription; release billing locks on abort., `try_resume_disabled_daily_after_topup` — Resume a DISABLED daily subscription immediately after balance top-up., `resume_addon_cart` — Докупка трафика/устройств из сохранённой корзины по явному нажатию., `auto_purchase_saved_cart_after_topup` — Attempts to automatically purchase subscriptions from saved carts.
@@ -4859,9 +4859,6 @@
 - `tests/handlers/test_daily_device_policy_pricing_entrypoints.py` — Python-модуль
   Классы: `PriceBoundary`
   Функции: `test_existing_daily_price_uses_saved_policy`
-- `tests/handlers/test_device_list_hwid.py` — Python-модуль
-  Классы: нет
-  Функции: `test_bot_device_list_exposes_full_hwid`, `test_device_hwid_stays_on_its_page`
 - `tests/handlers/test_gift_deeplink_activation.py` — Python-модуль
   Классы: `TestGiftDeeplinkActivation` (7 методов), `TestGiftSubscriptionActivationMultiTariff` (3 методов), `TestGiftSubscriptionActivationSingleTariff` (3 методов), `TestGiftProvisioningInvariants` (2 методов), `TestAdminInlineGiftDeeplink` (4 методов)
   Функции: нет

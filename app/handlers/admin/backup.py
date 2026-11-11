@@ -19,56 +19,56 @@ logger = structlog.get_logger(__name__)
 
 
 _BACKUP_RESULT_KEYS = {
-    '❌ Метаданные бекапа отсутствуют': 'ADMIN_BACKUP_RESULT_NO_METADATA',
-    '❌ Недопустимое имя файла бекапа': 'ADMIN_BACKUP_RESULT_INVALID_FILENAME',
-    '❌ Файл бекапа не содержит данных': 'ADMIN_BACKUP_RESULT_NO_DATA',
+    '✗ Метаданные бекапа отсутствуют': 'ADMIN_BACKUP_RESULT_NO_METADATA',
+    '✗ Недопустимое имя файла бекапа': 'ADMIN_BACKUP_RESULT_INVALID_FILENAME',
+    '✗ Файл бекапа не содержит данных': 'ADMIN_BACKUP_RESULT_NO_DATA',
     'Файл пуст (0 байт)': 'ADMIN_BACKUP_RESULT_EMPTY_FILE',
     'неизвестно': 'ADMIN_BACKUP_RESULT_UNKNOWN_DATE',
 }
 _BACKUP_RESULT_PATTERNS = [
     (
-        '✅\\ Бекап\\ успешно\\ создан!\\\n📁\\ Файл:\\ (?P<file>[\\s\\S]*)\\\n📊\\ Таблиц:\\ (?P<tables>\\d+)\\\n📈\\ Записей:\\ (?P<records>[\\d,]+)\\\n💾\\ Размер:\\ (?P<size>\\d+\\.\\d+)\\ MB',
+        r'✓ Бекап успешно создан!\n▣ Файл: (?P<file>[\s\S]*)\n≡ Таблиц: (?P<tables>\d+)\n↑ Записей: (?P<records>[\d,]+)\n«Размер»: (?P<size>\d+\.\d+) MB',
         'ADMIN_BACKUP_RESULT_CREATED',
-        '✅ Бекап успешно создан!\n📁 Файл: {file}\n📊 Таблиц: {tables}\n📈 Записей: {records}\n💾 Размер: {size} MB',
+        '✓ Бекап успешно создан!\n▣ Файл: {file}\n≡ Таблиц: {tables}\n↑ Записей: {records}\n«Размер»: {size} MB',
     ),
     (
-        '✅\\ Восстановление\\ завершено!\\\n📊\\ Таблиц:\\ (?P<tables>\\d+)\\\n📈\\ Записей:\\ (?P<records>[\\d,]+)\\\n📅\\ Дата\\ бекапа:\\ (?P<date>[\\s\\S]*)',
+        r'✓ Восстановление завершено!\n≡ Таблиц: (?P<tables>\d+)\n↑ Записей: (?P<records>[\d,]+)\n▤ Дата бекапа: (?P<date>[\s\S]*)',
         'ADMIN_BACKUP_RESULT_RESTORED',
-        '✅ Восстановление завершено!\n📊 Таблиц: {tables}\n📈 Записей: {records}\n📅 Дата бекапа: {date}',
+        '✓ Восстановление завершено!\n≡ Таблиц: {tables}\n↑ Записей: {records}\n▤ Дата бекапа: {date}',
     ),
-    ('✅\\ Бекап\\ (?P<file>[\\s\\S]*)\\ удален', 'ADMIN_BACKUP_RESULT_DELETED', '✅ Бекап {file} удален'),
+    (r'✓ Бекап (?P<file>[\s\S]*) удален', 'ADMIN_BACKUP_RESULT_DELETED', '✓ Бекап {file} удален'),
     (
-        '❌\\ Ошибка\\ создания\\ бекапа:\\ (?P<detail>[\\s\\S]*)',
+        r'✗ Ошибка создания бекапа: (?P<detail>[\s\S]*)',
         'ADMIN_BACKUP_RESULT_CREATE_ERROR',
-        '❌ Ошибка создания бекапа: {detail}',
+        '✗ Ошибка создания бекапа: {detail}',
     ),
     (
-        '❌\\ Ошибка\\ восстановления:\\ (?P<detail>[\\s\\S]*)',
+        r'✗ Ошибка восстановления: (?P<detail>[\s\S]*)',
         'ADMIN_BACKUP_RESULT_RESTORE_ERROR',
-        '❌ Ошибка восстановления: {detail}',
+        '✗ Ошибка восстановления: {detail}',
     ),
     (
-        '❌\\ Ошибка\\ удаления\\ бекапа:\\ (?P<detail>[\\s\\S]*)',
+        r'✗ Ошибка удаления бекапа: (?P<detail>[\s\S]*)',
         'ADMIN_BACKUP_RESULT_DELETE_ERROR',
-        '❌ Ошибка удаления бекапа: {detail}',
+        '✗ Ошибка удаления бекапа: {detail}',
     ),
     (
-        '❌\\ Файл\\ бекапа\\ не\\ найден:\\ (?P<file>[\\s\\S]*)',
+        r'✗ Файл бекапа не найден: (?P<file>[\s\S]*)',
         'ADMIN_BACKUP_RESULT_NOT_FOUND',
-        '❌ Файл бекапа не найден: {file}',
+        '✗ Файл бекапа не найден: {file}',
     ),
-    ('Ошибка\\ чтения:\\ (?P<detail>[\\s\\S]*)', 'ADMIN_BACKUP_RESULT_READ_ERROR', 'Ошибка чтения: {detail}'),
+    (r'Ошибка чтения: (?P<detail>[\s\S]*)', 'ADMIN_BACKUP_RESULT_READ_ERROR', 'Ошибка чтения: {detail}'),
     (
-        'pg_dump\\ завершился\\ с\\ ошибкой:\\ (?P<detail>[\\s\\S]*)',
+        r'pg_dump завершился с ошибкой: (?P<detail>[\s\S]*)',
         'ADMIN_BACKUP_RESULT_PG_DUMP_ERROR',
         'pg_dump завершился с ошибкой: {detail}',
     ),
     (
-        'Не\\ удалось\\ очистить\\ схему:\\ (?P<detail>[\\s\\S]*)',
+        r'Не удалось очистить схему: (?P<detail>[\s\S]*)',
         'ADMIN_BACKUP_RESULT_SCHEMA_ERROR',
         'Не удалось очистить схему: {detail}',
     ),
-    ('Ошибка\\ psql:\\ (?P<detail>[\\s\\S]*)', 'ADMIN_BACKUP_RESULT_PSQL_ERROR', 'Ошибка psql: {detail}'),
+    (r'Ошибка psql: (?P<detail>[\s\S]*)', 'ADMIN_BACKUP_RESULT_PSQL_ERROR', 'Ошибка psql: {detail}'),
 ]
 
 

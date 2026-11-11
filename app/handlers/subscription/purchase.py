@@ -530,8 +530,7 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
         )
         for device in devices_list[:5]:
             platform = device.get('platform', 'Unknown')
-            device_model = device.get('deviceModel', 'Unknown')
-            device_info = f'{platform} - {device_model}'
+            device_info = platform
 
             if len(device_info) > 35:
                 device_info = device_info[:32] + '...'
@@ -621,6 +620,10 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
     from app.services.cispay_recurrent_guard import has_live_cispay
 
     cispay_recurring = await has_live_cispay(db, subscription.id)
+    import re as _re
+
+    message = _re.sub(r'\n{3,}', '\n\n', message).strip()
+
     await callback.message.edit_text(
         message,
         reply_markup=get_subscription_keyboard(
