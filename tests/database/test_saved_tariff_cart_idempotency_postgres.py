@@ -31,6 +31,10 @@ from tests.fixtures.postgres_db import postgres_engine
 
 pytestmark = pytest.mark.postgres
 
+# A real purchase does DB round trips and, in a panel-configured environment, a
+# squad preflight; a loaded test host must not make a healthy flow look broken.
+CONCURRENCY_TIMEOUT_SECONDS = 30.0
+
 
 @pytest.mark.parametrize('concurrent', [False, True])
 async def test_saved_cart_only_charged_once(
@@ -273,10 +277,29 @@ async def test_saved_cart_only_charged_once(
 
         if concurrent:
             first = asyncio.create_task(purchase(first_flow))
+            reservation = asyncio.create_task(entered.wait())
             try:
-                await asyncio.wait_for(entered.wait(), 10)
-                second = await asyncio.wait_for(purchase(second_flow), 10)
+                # The first flow must park inside the checkout reservation. Wait
+                # for that state instead of only for the clock: if the flow dies
+                # before reserving (or skips the reservation altogether), its own
+                # error is the evidence worth reporting — a bare TimeoutError
+                # would hide it and look like a mysterious hang.
+                done, _ = await asyncio.wait(
+                    {first, reservation},
+                    timeout=CONCURRENCY_TIMEOUT_SECONDS,
+                    return_when=asyncio.FIRST_COMPLETED,
+                )
+                if first in done:
+                    await first
+                    raise AssertionError(f'first purchase ({first_flow}) finished without reserving the checkout')
+                if reservation not in done:
+                    raise AssertionError(
+                        f'first purchase ({first_flow}) did not reach the checkout reservation '
+                        f'in {CONCURRENCY_TIMEOUT_SECONDS:g}s'
+                    )
+                second = await asyncio.wait_for(purchase(second_flow), CONCURRENCY_TIMEOUT_SECONDS)
             finally:
+                reservation.cancel()
                 release.set()
             results = [await first, second]
         else:
