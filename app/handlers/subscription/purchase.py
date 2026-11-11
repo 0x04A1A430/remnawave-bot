@@ -4233,12 +4233,6 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(confirm_subscription_revoke, F.data == 'subscription_revoke_confirm')
     dp.callback_query.register(start_multi_revoke, F.data.startswith('sr:'))
 
-    # Отчёт по подписке (rich-экран)
-    from app.handlers.subscription.report import show_subscription_report
-
-    dp.callback_query.register(show_subscription_report, F.data == 'subscription_report')
-    dp.callback_query.register(show_subscription_report, F.data.startswith('subscription_report:'))
-
     dp.callback_query.register(show_trial_offer, F.data == 'menu_trial')
 
     dp.callback_query.register(activate_trial, F.data == 'trial_activate')

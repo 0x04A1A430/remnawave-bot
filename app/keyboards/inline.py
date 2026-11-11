@@ -1388,18 +1388,6 @@ def get_subscription_keyboard(
 
     # Кнопка «Подарить подписку» из меню подписки убрана по запросу.
 
-    # Подробный отчёт по подписке (rich-экран) — рядом с настройками/перевыпуском.
-    if has_subscription:
-        keyboard.append(
-            [
-                make_button(
-                    text=texts.t('SUBSCRIPTION_REPORT_BTN', '📊 Отчёт по подписке'),
-                    callback_data=f'subscription_report{_sub_suffix}',
-                    style='primary',
-                )
-            ]
-        )
-
     # Ряд: [Настройки] [+ Купить тариф для истёкших/отключённых]
     settings_row = [
         make_button(
