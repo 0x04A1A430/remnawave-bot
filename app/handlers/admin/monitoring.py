@@ -13,6 +13,7 @@ from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMar
 from app.config import settings
 from app.database.database import AsyncSessionLocal
 from app.database.models import User
+from app.handlers.admin._text import compact_text
 from app.keyboards.admin import get_monitoring_keyboard
 from app.localization.texts import get_texts
 from app.services.monitoring_service import monitoring_service
@@ -199,7 +200,7 @@ def _build_notification_settings_view(language: str):
         ]
     )
 
-    return summary_text, keyboard
+    return compact_text(summary_text), keyboard
 
 
 async def _build_notification_preview_message(language: str, notification_type: str):
@@ -343,12 +344,12 @@ async def _build_notification_preview_message(language: str, notification_type: 
     else:
         raise ValueError(f'Unsupported notification type: {notification_type}')
 
-    header = texts.t('NOTIFY_PREVIEW_HEADER', '🧪 <b>Тестовое уведомление</b>') + '\n\n'
+    header = texts.t('NOTIFY_PREVIEW_HEADER', '<b>Тестовое уведомление</b>') + '\n\n'
     footer = texts.t(
         'NOTIFY_PREVIEW_FOOTER',
         '\n\n<i>Сообщение отправлено только вам для проверки оформления.</i>',
     )
-    return header + message + footer, keyboard
+    return compact_text(header + message + footer), keyboard
 
 
 async def _send_notification_preview(bot, chat_id: int, language: str, notification_type: str) -> None:
@@ -364,7 +365,7 @@ async def _send_notification_preview(bot, chat_id: int, language: str, notificat
 async def _render_notification_settings(callback: CallbackQuery, db_user: User | None = None) -> None:
     language = _monitoring_language(callback, db_user)
     text, keyboard = _build_notification_settings_view(language)
-    await callback.message.edit_text(text, parse_mode='HTML', reply_markup=keyboard)
+    await callback.message.edit_text(compact_text(text), parse_mode='HTML', reply_markup=keyboard)
 
 
 async def _render_notification_settings_for_state(
@@ -433,7 +434,7 @@ async def admin_monitoring_menu(callback: CallbackQuery, db_user: User | None = 
 
             language = _monitoring_language(callback, db_user)
             keyboard = get_monitoring_keyboard(language)
-            await callback.message.edit_text(text, parse_mode='HTML', reply_markup=keyboard)
+            await callback.message.edit_text(compact_text(text), parse_mode='HTML', reply_markup=keyboard)
 
     except Exception as e:
         logger.error('Ошибка в админ меню мониторинга', error=e)
@@ -471,7 +472,7 @@ async def admin_monitoring_settings(callback: CallbackQuery, db_user: User | Non
             ]
         )
 
-        await callback.message.edit_text(text, parse_mode='HTML', reply_markup=keyboard)
+        await callback.message.edit_text(compact_text(text), parse_mode='HTML', reply_markup=keyboard)
 
     except Exception as e:
         logger.error('Ошибка отображения настроек мониторинга', error=e)
@@ -895,7 +896,7 @@ async def force_check_callback(callback: CallbackQuery, db_user: User | None = N
                 inline_keyboard=[[InlineKeyboardButton(text=' Назад', callback_data='admin_monitoring')]]
             )
 
-            await callback.message.edit_text(text, parse_mode='HTML', reply_markup=keyboard)
+            await callback.message.edit_text(compact_text(text), parse_mode='HTML', reply_markup=keyboard)
 
     except Exception as e:
         logger.error('Ошибка принудительной проверки', error=e)
@@ -980,7 +981,7 @@ async def traffic_check_callback(callback: CallbackQuery, db_user: User | None =
             ]
         )
 
-        await callback.message.edit_text(text, parse_mode='HTML', reply_markup=keyboard)
+        await callback.message.edit_text(compact_text(text), parse_mode='HTML', reply_markup=keyboard)
 
     except Exception as e:
         logger.error('Ошибка проверки трафика', error=e)
@@ -1009,7 +1010,7 @@ async def monitoring_logs_callback(callback: CallbackQuery, db_user: User | None
                     ' <b>Логи мониторинга пусты</b>\n\nСистема еще не выполнила проверки.',
                 )
                 keyboard = get_monitoring_logs_back_keyboard(language=language)
-                await callback.message.edit_text(text, parse_mode='HTML', reply_markup=keyboard)
+                await callback.message.edit_text(compact_text(text), parse_mode='HTML', reply_markup=keyboard)
                 return
 
             per_page = 8
@@ -1051,7 +1052,7 @@ async def monitoring_logs_callback(callback: CallbackQuery, db_user: User | None
             )
 
             keyboard = get_monitoring_logs_keyboard(page, paginated_logs.total_pages, language=language)
-            await callback.message.edit_text(text, parse_mode='HTML', reply_markup=keyboard)
+            await callback.message.edit_text(compact_text(text), parse_mode='HTML', reply_markup=keyboard)
 
     except Exception as e:
         logger.error('Ошибка получения логов', error=e)
@@ -1231,7 +1232,7 @@ async def monitoring_statistics_callback(callback: CallbackQuery, db_user: User 
             buttons.append([InlineKeyboardButton(text=' Назад', callback_data='admin_monitoring')])
             keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
 
-            await callback.message.edit_text(text, parse_mode='HTML', reply_markup=keyboard)
+            await callback.message.edit_text(compact_text(text), parse_mode='HTML', reply_markup=keyboard)
 
     except Exception as e:
         logger.error('Ошибка получения статистики', error=e)
@@ -1369,7 +1370,7 @@ async def nalogo_force_process_callback(callback: CallbackQuery, db_user: User |
             buttons.append([InlineKeyboardButton(text=' Назад', callback_data='admin_monitoring')])
             keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
 
-            await callback.message.edit_text(stats_text, parse_mode='HTML', reply_markup=keyboard)
+            await callback.message.edit_text(compact_text(stats_text), parse_mode='HTML', reply_markup=keyboard)
 
     except Exception as e:
         logger.error('Ошибка принудительной обработки чеков', error=e)
@@ -1480,7 +1481,7 @@ async def nalogo_pending_callback(callback: CallbackQuery, db_user: User | None 
         buttons.append([InlineKeyboardButton(text=' Назад', callback_data='admin_mon_statistics')])
         keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
 
-        await callback.message.edit_text(text, parse_mode='HTML', reply_markup=keyboard)
+        await callback.message.edit_text(compact_text(text), parse_mode='HTML', reply_markup=keyboard)
 
     except Exception as e:
         logger.error('Ошибка просмотра очереди проверки', error=e)
@@ -1755,7 +1756,7 @@ async def receipts_link_old_callback(callback: CallbackQuery, db_user: User | No
                 ]
             )
 
-            await callback.message.edit_text(text, parse_mode='HTML', reply_markup=keyboard)
+            await callback.message.edit_text(compact_text(text), parse_mode='HTML', reply_markup=keyboard)
 
     except Exception as e:
         logger.error('Ошибка привязки старых чеков', error=e, exc_info=True)
@@ -1916,7 +1917,7 @@ async def _do_reconcile_logs(callback: CallbackQuery, db_user: User | None = Non
         )
 
         try:
-            await callback.message.edit_text(text, parse_mode='HTML', reply_markup=keyboard)
+            await callback.message.edit_text(compact_text(text), parse_mode='HTML', reply_markup=keyboard)
         except TelegramBadRequest:
             pass  # Сообщение не изменилось
 
@@ -2029,7 +2030,7 @@ async def receipts_reconcile_logs_details_callback(callback: CallbackQuery, db_u
         )
 
         try:
-            await callback.message.edit_text(text, parse_mode='HTML', reply_markup=keyboard)
+            await callback.message.edit_text(compact_text(text), parse_mode='HTML', reply_markup=keyboard)
         except TelegramBadRequest:
             pass
 
@@ -2145,7 +2146,7 @@ async def monitoring_command(message: Message, db_user: User | None = None):
                 value3=status['stats_24h']['success_rate'],
             )
 
-            await message.answer(text, parse_mode='HTML')
+            await message.answer(compact_text(text), parse_mode='HTML')
 
     except Exception as e:
         logger.error('Ошибка команды /monitoring', error=e)
@@ -2394,7 +2395,7 @@ def _build_traffic_settings_text(language: str = 'ru') -> str:
             value1=len(excluded_user_ids)
         )
 
-    return text
+    return compact_text(text)
 
 
 @router.callback_query(F.data == 'admin_mon_traffic_settings')
@@ -2406,7 +2407,7 @@ async def admin_traffic_settings(callback: CallbackQuery, db_user: User | None =
     try:
         text = _build_traffic_settings_text(language=language)
         keyboard = _build_traffic_settings_keyboard(language=language)
-        await callback.message.edit_text(text, parse_mode='HTML', reply_markup=keyboard)
+        await callback.message.edit_text(compact_text(text), parse_mode='HTML', reply_markup=keyboard)
     except Exception as e:
         logger.error('Ошибка отображения настроек трафика', error=e)
         await callback.answer(
@@ -2439,7 +2440,7 @@ async def toggle_fast_check(callback: CallbackQuery, db_user: User | None = None
         # Обновляем отображение
         text = _build_traffic_settings_text(language=language)
         keyboard = _build_traffic_settings_keyboard(language=language)
-        await callback.message.edit_text(text, parse_mode='HTML', reply_markup=keyboard)
+        await callback.message.edit_text(compact_text(text), parse_mode='HTML', reply_markup=keyboard)
 
     except Exception as e:
         logger.error('Ошибка переключения быстрой проверки', error=e)
@@ -2470,7 +2471,7 @@ async def toggle_daily_check(callback: CallbackQuery, db_user: User | None = Non
 
         text = _build_traffic_settings_text(language=language)
         keyboard = _build_traffic_settings_keyboard(language=language)
-        await callback.message.edit_text(text, parse_mode='HTML', reply_markup=keyboard)
+        await callback.message.edit_text(compact_text(text), parse_mode='HTML', reply_markup=keyboard)
 
     except Exception as e:
         logger.error('Ошибка переключения суточной проверки', error=e)

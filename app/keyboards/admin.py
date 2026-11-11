@@ -442,7 +442,7 @@ def get_admin_reports_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                     text=_t(
                         texts,
                         'ADMIN_REPORTS_PREVIOUS_DAY',
-                        '⌨ За вчера',
+                        'За вчера',
                     ),
                     callback_data='admin_reports_daily',
                 )
@@ -452,7 +452,7 @@ def get_admin_reports_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                     text=_t(
                         texts,
                         'ADMIN_REPORTS_LAST_WEEK',
-                        '⌨ За неделю',
+                        'За неделю',
                     ),
                     callback_data='admin_reports_weekly',
                 )
@@ -462,7 +462,7 @@ def get_admin_reports_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                     text=_t(
                         texts,
                         'ADMIN_REPORTS_LAST_MONTH',
-                        '⌨ За месяц',
+                        'За месяц',
                     ),
                     callback_data='admin_reports_monthly',
                 )

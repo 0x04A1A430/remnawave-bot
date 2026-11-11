@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.models import User
+from app.handlers.admin._text import compact_text
 from app.localization.texts import Texts, get_texts
 from app.services.system_settings_service import bot_configuration_service
 from app.states import PricingStates
@@ -581,7 +582,7 @@ def _build_settings_section(
 
     keyboard_rows.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='admin_pricing', style='danger')])
     keyboard = types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
-    return '\n'.join(lines).strip(), keyboard
+    return compact_text('\n'.join(lines)), keyboard
 
 
 def _build_traffic_options_section(language: str) -> tuple[str, types.InlineKeyboardMarkup]:
@@ -643,7 +644,7 @@ def _build_traffic_options_section(language: str) -> tuple[str, types.InlineKeyb
 
     keyboard_rows.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='admin_pricing', style='danger')])
     keyboard = types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
-    return '\n'.join(lines), keyboard
+    return compact_text('\n'.join(lines)), keyboard
 
 
 def _build_period_options_section(language: str) -> tuple[str, types.InlineKeyboardMarkup]:
@@ -711,7 +712,7 @@ def _build_period_options_section(language: str) -> tuple[str, types.InlineKeybo
 
     keyboard_rows.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='admin_pricing', style='danger')])
     keyboard = types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
-    return '\n'.join(lines), keyboard
+    return compact_text('\n'.join(lines)), keyboard
 
 
 def _build_overview(language: str) -> tuple[str, types.InlineKeyboardMarkup]:
@@ -789,7 +790,7 @@ def _build_overview(language: str) -> tuple[str, types.InlineKeyboardMarkup]:
         ]
     )
 
-    return '\n'.join(lines), keyboard
+    return compact_text('\n'.join(lines)), keyboard
 
 
 def _build_section(
@@ -842,7 +843,7 @@ def _build_section(
     keyboard_rows.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='admin_pricing', style='danger')])
 
     keyboard = types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
-    return '\n'.join(lines), keyboard
+    return compact_text('\n'.join(lines)), keyboard
 
 
 def _build_price_prompt(texts: Any, label: str, current_price: str) -> str:
@@ -861,7 +862,7 @@ def _build_price_prompt(texts: Any, label: str, current_price: str) -> str:
             'Напишите «Отмена», чтобы вернуться без изменений.',
         ),
     ]
-    return '\n'.join(lines)
+    return compact_text('\n'.join(lines))
 
 
 async def _render_message(
@@ -869,6 +870,7 @@ async def _render_message(
     text: str,
     keyboard: types.InlineKeyboardMarkup,
 ) -> None:
+    text = compact_text(text)
     try:
         await message.edit_text(text, reply_markup=keyboard, parse_mode='HTML')
     except TelegramBadRequest as error:  # message changed elsewhere
@@ -883,6 +885,7 @@ async def _render_message_by_id(
     text: str,
     keyboard: types.InlineKeyboardMarkup,
 ) -> None:
+    text = compact_text(text)
     try:
         await bot.edit_message_text(
             text=text,

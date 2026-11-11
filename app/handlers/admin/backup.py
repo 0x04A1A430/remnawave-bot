@@ -10,6 +10,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import User
+from app.handlers.admin._text import compact_text
 from app.localization.texts import get_texts
 from app.services.backup_service import backup_service
 from app.utils.decorators import admin_required, error_handler
@@ -270,7 +271,9 @@ async def show_backup_panel(callback: types.CallbackQuery, db_user: User, db: As
 • Управление автоматическими бекапами
 """
 
-    await callback.message.edit_text(text, parse_mode='HTML', reply_markup=get_backup_main_keyboard(db_user.language))
+    await callback.message.edit_text(
+        compact_text(text), parse_mode='HTML', reply_markup=get_backup_main_keyboard(db_user.language)
+    )
     await callback.answer()
 
 
@@ -351,7 +354,7 @@ async def show_backup_list(callback: types.CallbackQuery, db_user: User, db: Asy
         text += get_texts(db_user.language).t('ADMIN_BACKUP_UI_013', 'Выберите бекап для управления:')
         keyboard = get_backup_list_keyboard(backups, page, language=db_user.language)
 
-    await callback.message.edit_text(text, parse_mode='HTML', reply_markup=keyboard)
+    await callback.message.edit_text(compact_text(text), parse_mode='HTML', reply_markup=keyboard)
     await callback.answer()
 
 
@@ -402,7 +405,9 @@ async def manage_backup_file(callback: types.CallbackQuery, db_user: User, db: A
         )
 
     await callback.message.edit_text(
-        text, parse_mode='HTML', reply_markup=get_backup_manage_keyboard(filename, language=db_user.language)
+        compact_text(text),
+        parse_mode='HTML',
+        reply_markup=get_backup_manage_keyboard(filename, language=db_user.language),
     )
     await callback.answer()
 
@@ -432,7 +437,7 @@ async def delete_backup_confirm(callback: types.CallbackQuery, db_user: User, db
         ]
     )
 
-    await callback.message.edit_text(text, parse_mode='HTML', reply_markup=keyboard)
+    await callback.message.edit_text(compact_text(text), parse_mode='HTML', reply_markup=keyboard)
     await callback.answer()
 
 
@@ -538,7 +543,7 @@ async def restore_backup_start(callback: types.CallbackQuery, db_user: User, db:
 
         await state.set_state(BackupStates.waiting_backup_file)
 
-    await callback.message.edit_text(text, parse_mode='HTML', reply_markup=keyboard)
+    await callback.message.edit_text(compact_text(text), parse_mode='HTML', reply_markup=keyboard)
     await callback.answer()
 
 
@@ -695,7 +700,7 @@ async def handle_backup_file_upload(message: types.Message, db_user: User, db: A
             ]
         )
 
-        await message.answer(text, parse_mode='HTML', reply_markup=keyboard)
+        await message.answer(compact_text(text), parse_mode='HTML', reply_markup=keyboard)
         await state.clear()
 
     except Exception as e:
@@ -736,7 +741,9 @@ async def show_backup_settings(callback: types.CallbackQuery, db_user: User, db:
 """
 
     await callback.message.edit_text(
-        text, parse_mode='HTML', reply_markup=get_backup_settings_keyboard(settings_obj, language=db_user.language)
+        compact_text(text),
+        parse_mode='HTML',
+        reply_markup=get_backup_settings_keyboard(settings_obj, language=db_user.language),
     )
     await callback.answer()
 
