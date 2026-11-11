@@ -209,6 +209,8 @@ async def _send_pal24_payment_message(
             support=settings.get_support_contact_display_html(),
             amount=settings.format_price(amount_kopeks),
             bill_id=bill_id,
+            # Часть локалей называет тот же идентификатор {payment_id}.
+            payment_id=bill_id,
             steps='\n'.join(steps),
         )
 

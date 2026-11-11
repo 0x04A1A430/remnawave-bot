@@ -57,6 +57,10 @@ from app.utils.timezone import format_local_datetime
 logger = structlog.get_logger(__name__)
 
 
+def _compact(text: str | None) -> str:
+    return compact_blank_lines(text or '')
+
+
 def _format_rubles(amount_kopeks: int) -> str:
     rubles = Decimal(amount_kopeks) / Decimal(100)
 
@@ -1315,10 +1319,11 @@ def _get_subscription_status(user: User, texts, is_daily_tariff: bool = False) -
 
 
 def _insert_random_message(base_text: str, random_message: str) -> str:
+    random_message = (random_message or '').strip()
     if not random_message:
         return base_text
 
-    return f'{base_text}\n\n{random_message}'
+    return f'{base_text.rstrip()}\n\n{random_message}'
 
 
 async def _get_multi_tariff_status(user, texts, db: AsyncSession) -> tuple[str, str]:
@@ -1439,12 +1444,12 @@ async def get_main_menu_text(user, texts, db: AsyncSession):
     try:
         random_message = await get_random_active_message(db)
         if random_message:
-            return _insert_random_message(base_text, random_message)
+            return _compact(_insert_random_message(base_text, random_message))
 
     except Exception as e:
         logger.error('Ошибка получения случайного сообщения', error=e)
 
-    return base_text
+    return _compact(base_text)
 
 
 async def handle_activate_button(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
