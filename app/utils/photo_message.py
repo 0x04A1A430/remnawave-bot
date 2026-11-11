@@ -17,7 +17,7 @@ from .message_patch import (
     LOGO_PATH,
     _cache_logo_file_id,
     append_privacy_hint,
-    caption_exceeds_telegram_limit,
+    caption_fits_logo,
     get_logo_media,
     is_privacy_restricted_error,
     is_qr_message,
@@ -157,6 +157,26 @@ async def edit_or_answer_photo(
                 pass
         return
 
+    # Rich-сообщение редактируется как текст (в нём нет photo/caption).
+    if getattr(callback.message, 'rich_message', None) is not None:
+        try:
+            await callback.message.edit_text(
+                caption,
+                reply_markup=keyboard,
+                parse_mode=resolved_parse_mode,
+            )
+        except TelegramForbiddenError:
+            logger.debug('Пользователь заблокировал бота, пропускаем')
+        except TelegramBadRequest as error:
+            if 'message is not modified' in str(error).lower():
+                return
+            try:
+                await callback.message.delete()
+            except Exception:
+                pass
+            await _answer_text(callback, caption, keyboard, resolved_parse_mode, error)
+        return
+
     # Если режим логотипа выключен или требуется текстовое сообщение — работаем текстом
     if force_text or not settings.ENABLE_LOGO_MODE:
         try:
@@ -180,7 +200,7 @@ async def edit_or_answer_photo(
         return
 
     # Если текст слишком длинный для caption — отправим как текст
-    if caption_exceeds_telegram_limit(caption):
+    if not caption_fits_logo(caption):
         try:
             if callback.message.photo:
                 await callback.message.delete()

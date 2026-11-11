@@ -1,10 +1,11 @@
-"""Tests for inline gift flag parsing (mixable -p/-t/-b/-d) and preview rendering."""
+"""Tests for inline gift flag parsing (mixable -p/-t/-b/-d/-s) and preview rendering."""
 
 from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from aiogram import types
 
 from app.handlers.admin.inline_gift import (
     _FOREVER_DAYS,
@@ -12,6 +13,7 @@ from app.handlers.admin.inline_gift import (
     _build_subscription_caption,
     _build_syntax_hint,
     _flag_hint,
+    _gift_result,
     _gift_summary,
     _parse_query,
     _temp_body_line,
@@ -201,6 +203,81 @@ class TestParseMulti:
         assert p.days is None
 
 
+class TestParseSilent:
+    """-s attaches the picture as a photo message instead of a link preview."""
+
+    def test_s_with_explicit_p(self):
+        p = _parse_query('@user -s -p 30 500 3')
+        assert p.silent
+        assert p.days == 30
+        assert p.traffic_gb == 500
+        assert p.devices == 3
+        assert p.has_subscription
+
+    def test_s_anywhere_in_flag_mix(self):
+        p = _parse_query('@user -b 500 -s -t 100')
+        assert p.silent
+        assert p.balance_rub == 500
+        assert p.temp_traffic_gb == 100
+
+    def test_s_in_legacy_positional(self):
+        p = _parse_query('@user -s 30 500 3')
+        assert p.silent
+        assert p.days == 30
+        assert p.traffic_gb == 500
+        assert p.devices == 3
+
+    def test_s_mid_legacy_positional(self):
+        p = _parse_query('@user 30 -s 500 3')
+        assert p.silent
+        assert p.days == 30
+        assert p.traffic_gb == 500
+        assert p.devices == 3
+
+    def test_bare_s_is_not_a_component(self):
+        p = _parse_query('@user -s')
+        assert p.silent
+        assert not p.has_any
+        assert not p.is_combo
+
+    def test_multi_with_trailing_s(self):
+        p = _parse_query('-r 5 30 500 3 -s')
+        assert p.is_multi
+        assert p.multi_count == 5
+        assert p.days == 30
+        assert p.traffic_gb == 500
+        assert p.devices == 3
+        assert p.silent
+
+    def test_multi_s_before_count(self):
+        p = _parse_query('-r -s 5 30')
+        assert p.is_multi
+        assert p.multi_count == 5
+        assert p.days == 30
+        assert p.silent
+
+    def test_s_with_reset_is_combo(self):
+        p = _parse_query('@user -s -p 30 -g')
+        assert p.silent
+        assert p.has_subscription
+        assert p.has_reset
+        assert p.is_combo
+
+    def test_s_does_not_break_p_swallow(self):
+        p = _parse_query('@user -p 30 500 -s 3')
+        assert p.silent
+        assert p.days == 30
+        assert p.traffic_gb == 500
+        assert p.devices == 3
+
+    def test_s_with_skip_sentinel(self):
+        p = _parse_query('@user -s 30 - 3')
+        assert p.silent
+        assert p.days == 30
+        assert p.traffic_gb is None
+        assert p.devices == 3
+
+
 class TestCaptions:
     def test_temp_body_line(self):
         assert _temp_body_line(100, 60, texts) == '+100 ГБ трафика (на 60 дн.)'
@@ -260,6 +337,7 @@ class TestHints:
         assert 'hint_sub' in ids
         assert 'hint_mix' in ids
         assert 'hint_t' in ids
+        assert 'hint_s' in ids
         by_id = {h.id: h for h in hints}
         assert by_id['hint_t'].title == '@user -t 100 60'
         for h in hints:
@@ -273,7 +351,40 @@ class TestHints:
         assert 'скидка 15%' in _flag_hint('@user -d 15', texts)
         assert 'пополнить баланс' in _flag_hint('@user -b 500', texts)
         assert '-p' in _flag_hint('@user -p 30', texts)
+        assert 'вложением' in _flag_hint('@user -s 30', texts)
         assert 'миксируются' in _flag_hint('@user', texts)
+
+
+class TestSilentPhotoResult:
+    THUMB = 'https://example.com/gift.png'
+
+    def _kb(self):
+        return types.InlineKeyboardMarkup(
+            inline_keyboard=[[types.InlineKeyboardButton(text='Активировать', url='https://t.me/b?start=code')]]
+        )
+
+    def test_silent_returns_photo_attachment(self):
+        r = _gift_result('code', 'T', 'D', 'C', self.THUMB, self._kb(), silent=True)
+        assert isinstance(r, types.InlineQueryResultPhoto)
+        assert r.photo_url == self.THUMB
+        assert r.thumbnail_url == self.THUMB
+        assert r.caption == 'C'
+        assert r.parse_mode == 'HTML'
+        assert r.reply_markup is not None
+        assert r.input_message_content is None
+
+    def test_silent_caption_below_photo(self):
+        r = _gift_result('code', 'T', 'D', 'C', self.THUMB, self._kb(), silent=True)
+        assert r.show_caption_above_media is not True
+
+    def test_default_returns_article_with_preview(self):
+        r = _gift_result('code', 'T', 'D', 'C', self.THUMB, self._kb(), silent=False)
+        assert isinstance(r, types.InlineQueryResultArticle)
+        content = r.input_message_content
+        assert content.message_text == 'C'
+        assert content.link_preview_options.show_above_text is True
+        assert content.link_preview_options.url == self.THUMB
+        assert r.thumbnail_url == self.THUMB
 
 
 class TestActivationPreview:

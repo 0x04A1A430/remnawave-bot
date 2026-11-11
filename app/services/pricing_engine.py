@@ -7,7 +7,7 @@ import structlog
 
 from app.config import CLASSIC_PERIOD_PRICES, PERIOD_PRICES, settings
 from app.database.crud.server_squad import get_server_squads_by_uuids
-from app.utils.pricing_utils import calculate_months_from_days
+from app.utils.pricing_utils import calculate_months_from_days, calculate_period_device_cost
 from app.utils.promo_offer import get_user_active_promo_discount_percent
 
 
@@ -18,6 +18,10 @@ if TYPE_CHECKING:
 
 
 logger = structlog.get_logger(__name__)
+
+
+class TariffSwitchPricingUnavailableError(ValueError):
+    """A periodic tariff has no configured price for switching."""
 
 
 @dataclass(frozen=True)
@@ -109,6 +113,18 @@ class PricingEngine:
         return amount_kopeks - discount
 
     @staticmethod
+    def round_to_ruble(amount_kopeks: int) -> int:
+        """Round kopeks to a whole ruble (nearest, .50 rounds down — same rule as
+        ``settings.format_price``). Used so discounted prices never show or charge
+        kopecks."""
+        if amount_kopeks <= 0:
+            return amount_kopeks
+        rubles, remainder = divmod(amount_kopeks, 100)
+        if remainder > 50:
+            rubles += 1
+        return rubles * 100
+
+    @staticmethod
     def apply_stacked_discounts(
         amount: int,
         group_percent: int,
@@ -138,6 +154,42 @@ class PricingEngine:
         if group_pct <= 0:
             return daily_price_kopeks, 0
         return PricingEngine.apply_discount(daily_price_kopeks, group_pct), group_pct
+
+    @staticmethod
+    def tariff_group_discounts(tariff: Tariff, user: User | None, period_days: int) -> tuple[int, int]:
+        """Shared tariff eligibility and category discounts for initial and later charges."""
+        group = PricingEngine.resolve_promo_group(user)
+        if group is None or not tariff.is_available_for_promo_group(group.id):
+            return 0, 0
+        return group.get_discount_percent('period', period_days), group.get_discount_percent('devices', period_days)
+
+    @staticmethod
+    def tariff_device_price(
+        tariff: Tariff, device_limit: int, period_days: int, *, daily_devices_billing_version: int = 0
+    ) -> int:
+        unit = tariff.device_price_kopeks if tariff.device_price_kopeks is not None else settings.PRICE_PER_DEVICE
+        extra = 0 if tariff.device_limit == 0 else max(0, (device_limit or 0) - (tariff.device_limit or 0))
+        if getattr(tariff, 'is_daily', False) and period_days <= 1:
+            # The admin tariff price is monthly; only legacy daily checkout used
+            # a full monthly unit per day. Preserve that path for version zero.
+            return extra * unit // 30 if daily_devices_billing_version == 1 else extra * unit
+        return calculate_period_device_cost(unit, extra, period_days)
+
+    @staticmethod
+    def daily_subscription_price(subscription: Subscription, tariff: Tariff, user: User | None) -> int:
+        """Recurring daily balance charge; legacy subscriptions retain base-only billing.
+
+        Selected-device policy uses the saved limit and the same daily device unit
+        and category discounts as checkout, without repeating its one-off offer.
+        """
+        base = int(tariff.daily_price_kopeks or 0)
+        if getattr(subscription, 'daily_devices_billing_version', 0) != 1:
+            return PricingEngine.daily_group_price(base, user)[0]
+        period_pct, devices_pct = PricingEngine.tariff_group_discounts(tariff, user, 1)
+        devices = PricingEngine.tariff_device_price(
+            tariff, subscription.device_limit, 1, daily_devices_billing_version=1
+        )
+        return PricingEngine.apply_discount(base, period_pct) + PricingEngine.apply_discount(devices, devices_pct)
 
     @staticmethod
     def resolve_promo_group(user: User | None):
@@ -228,14 +280,20 @@ class PricingEngine:
         гарантировать корректное сравнение дневных ставок при смене
         тарифов с разными наборами периодов.
         """
-        periods = tariff.get_available_periods()
-        if not periods:
+        if tariff is None:
             return 0, 1
-        best_period = min(periods)
-        price = tariff.get_price_for_period(best_period)
-        if not price or best_period <= 0:
-            return 0, 1
-        return price, best_period
+        configured = []
+        for period, price in (tariff.period_prices or {}).items():
+            try:
+                days = int(period)
+            except (TypeError, ValueError):
+                continue
+            if days > 0 and isinstance(price, int) and not isinstance(price, bool) and price >= 0:
+                configured.append((days, price))
+        if not configured:
+            raise TariffSwitchPricingUnavailableError('Tariff pricing is unavailable')
+        days, price = min(configured)
+        return price, days
 
     def calculate_tariff_switch_cost(
         self,
@@ -256,6 +314,12 @@ class PricingEngine:
         """
         current_is_daily = getattr(current_tariff, 'is_daily', False) if current_tariff else False
         new_is_daily = getattr(new_tariff, 'is_daily', False)
+
+        # Validate both sides before any free/expired or daily transition shortcut.
+        if not current_is_daily:
+            self.get_tariff_daily_rate_fraction(current_tariff)
+        if not new_is_daily:
+            self.get_tariff_daily_rate_fraction(new_tariff)
 
         # Daily tariff edge cases
         if not current_is_daily and new_is_daily:
@@ -314,7 +378,7 @@ class PricingEngine:
             promo_group = self.resolve_promo_group(user)
             if promo_group is not None:
                 best_period = min(
-                    current_tariff.get_available_periods() or [30],
+                    (current_tariff.get_available_periods() if current_tariff is not None else []) or [30],
                     key=lambda p: abs(p - remaining_days),
                 )
                 group_pct = promo_group.get_discount_percent('period', best_period)
@@ -323,6 +387,7 @@ class PricingEngine:
         # Применяем stacked скидки к итоговой сумме напрямую (без float round-trip)
         if group_pct > 0 or offer_pct > 0:
             upgrade_cost, _, _ = self.apply_stacked_discounts(raw_cost, group_pct, offer_pct)
+            upgrade_cost = self.round_to_ruble(upgrade_cost)
         else:
             upgrade_cost = raw_cost
 
@@ -365,6 +430,7 @@ class PricingEngine:
 
         if group_pct > 0 or offer_pct > 0:
             upgrade_cost, _, _ = self.apply_stacked_discounts(daily_price, group_pct, offer_pct)
+            upgrade_cost = self.round_to_ruble(upgrade_cost)
         else:
             upgrade_cost = daily_price
 
@@ -385,11 +451,7 @@ class PricingEngine:
         user: User | None = None,
     ) -> TariffSwitchResult:
         """Daily → Periodic: оплата кратчайшего периода нового тарифа с group + offer discount."""
-        min_period_days = 30
-        min_period_price = 0
-        if new_tariff.period_prices:
-            min_period_days = min(int(k) for k in new_tariff.period_prices.keys())
-            min_period_price = new_tariff.period_prices.get(str(min_period_days), 0) or 0
+        min_period_price, min_period_days = self.get_tariff_daily_rate_fraction(new_tariff)
 
         if min_period_price <= 0:
             return TariffSwitchResult(
@@ -411,6 +473,7 @@ class PricingEngine:
 
         if group_pct > 0 or offer_pct > 0:
             upgrade_cost, _, _ = self.apply_stacked_discounts(min_period_price, group_pct, offer_pct)
+            upgrade_cost = self.round_to_ruble(upgrade_cost)
         else:
             upgrade_cost = min_period_price
 
@@ -563,6 +626,7 @@ class PricingEngine:
             period_days,
             device_limit,
             user=user,
+            daily_devices_billing_version=getattr(subscription, 'daily_devices_billing_version', 0) or 0,
         )
 
     async def _calculate_tariff_core(
@@ -573,6 +637,7 @@ class PricingEngine:
         *,
         custom_traffic_gb: int | None = None,
         user: User | None = None,
+        daily_devices_billing_version: int = 0,
     ) -> RenewalPricing:
         """Core tariff pricing logic (raw params, no Subscription needed).
 
@@ -580,7 +645,7 @@ class PricingEngine:
         - 'period' → base tariff price
         - 'devices' → extra device cost
         Promo-offer discount applied on the discounted subtotal.
-        Device cost is monthly × months_in_period.
+        Periodic device cost follows exact days at a 30-day monthly rate.
         """
         months = calculate_months_from_days(period_days)
 
@@ -597,16 +662,11 @@ class PricingEngine:
                     if custom_price is not None:
                         base_price = int(custom_price)
 
-        # --- Extra devices (monthly × months) ---
-        device_price_per_unit = (
-            tariff.device_price_kopeks if tariff.device_price_kopeks is not None else settings.PRICE_PER_DEVICE
+        # --- Extra devices (monthly rate prorated to exact days) ---
+        extra_devices = 0 if tariff.device_limit == 0 else max(0, (device_limit or 0) - (tariff.device_limit or 0))
+        devices_price = self.tariff_device_price(
+            tariff, device_limit, period_days, daily_devices_billing_version=daily_devices_billing_version
         )
-        tariff_device_limit = tariff.device_limit or 0
-        extra_devices = max(0, (device_limit or 0) - tariff_device_limit)
-        if is_daily and period_days <= 1:
-            devices_price = extra_devices * device_price_per_unit
-        else:
-            devices_price = extra_devices * device_price_per_unit * months
 
         # --- Custom traffic (tariff add-on, uses addon discount path) ---
         traffic_price = 0
@@ -616,15 +676,10 @@ class PricingEngine:
                 traffic_price = int(raw_traffic)
 
         # --- Per-category group discounts ---
-        period_pct = 0
-        devices_pct = 0
+        period_pct, devices_pct = self.tariff_group_discounts(tariff, user, period_days)
         promo_group = self.resolve_promo_group(user)
-        # Only apply promo group discount if the tariff is available for this group
         if promo_group is not None and not tariff.is_available_for_promo_group(promo_group.id):
             promo_group = None
-        if promo_group is not None:
-            period_pct = promo_group.get_discount_percent('period', period_days)
-            devices_pct = promo_group.get_discount_percent('devices', period_days)
 
         offer_pct = get_user_active_promo_discount_percent(user) if user else 0
 
@@ -645,6 +700,15 @@ class PricingEngine:
         after_offer = self.apply_discount(subtotal, offer_pct)
         offer_discount = subtotal - after_offer
         final_total = after_offer
+
+        # Any discount present -> charge a whole ruble (no kopecks).
+        if period_pct or devices_pct or offer_pct or total_group_discount > 0:
+            rounded_total = self.round_to_ruble(final_total)
+            if offer_pct > 0:
+                offer_discount = subtotal - rounded_total
+            else:
+                total_group_discount += final_total - rounded_total
+            final_total = rounded_total
 
         breakdown = asdict(
             TariffBreakdown(
@@ -687,6 +751,7 @@ class PricingEngine:
         device_limit: int | None = None,
         custom_traffic_gb: int | None = None,
         user: User | None = None,
+        daily_devices_billing_version: int = 0,
     ) -> RenewalPricing:
         """Calculate price for a tariff purchase (new or renewal).
 
@@ -700,6 +765,7 @@ class PricingEngine:
             effective_device_limit,
             custom_traffic_gb=custom_traffic_gb,
             user=user,
+            daily_devices_billing_version=daily_devices_billing_version,
         )
 
     # ------------------------------------------------------------------
@@ -799,6 +865,17 @@ class PricingEngine:
         total_group_discount = (
             base_group_discount + servers_group_discount + traffic_group_discount + devices_group_discount
         )
+
+        # Any discount present -> charge a whole ruble (no kopecks). The delta is
+        # absorbed by the offer discount (if any) or the group discount, keeping
+        # original_total = final_total + group_discount + offer_discount intact.
+        if period_pct or servers_pct or traffic_pct or devices_pct or offer_pct:
+            rounded_total = self.round_to_ruble(final_total)
+            if offer_pct > 0:
+                promo_offer_discount = subtotal - rounded_total
+            else:
+                total_group_discount += final_total - rounded_total
+            final_total = rounded_total
 
         valid_servers = [d for d in server_details if d.get('id') is not None]
         breakdown = asdict(

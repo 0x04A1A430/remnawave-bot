@@ -42,36 +42,405 @@
 > Minimum to start: `BOT_TOKEN` (get it from [@BotFather](https://t.me/BotFather)), `ADMIN_IDS`,
 > `REMNAWAVE_API_URL` and `REMNAWAVE_API_KEY` from your Remnawave panel.
 
-## File Overview
+---
 
-- [**`docker-compose.yml`**](https://github.com/0x04A1A430/remnawave-bot/blob/dev/docker-compose.yml) — production stack: bot + PostgreSQL + Redis
+## 🧩 Что такое Xilarobot?
 
-- [**`Makefile`**](https://github.com/0x04A1A430/remnawave-bot/blob/dev/Makefile) — management commands:
-  - <ins>**`make up`** — start the stack in background</ins>
-  - **`make up-follow`** — start with streaming logs
-  - **`make down`** — stop and remove containers
-  - **`make migrate`** — apply Alembic migrations
-  - **`make test`** — run tests (pytest)
-  - **`make lint` / `make format` / `make fix`** — ruff checks and auto-fixes
+Xilarobot (форк [Bedolaga Bot](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot)) — полнофункциональная платформа для продажи VPN-подписок через Telegram. Бот интегрируется с панелью [Remnawave](https://github.com/remnawave/backend) и берёт на себя весь цикл: от регистрации пользователя до автопродления подписки.
 
-- [**`app/`**](https://github.com/0x04A1A430/remnawave-bot/tree/dev/app) — source code:
-  - `handlers/` — Telegram handlers (admin, subscriptions, payments, cabinet)
-  - `services/` — business logic: payments, subscriptions, broadcasts, backups
-  - `cabinet/` — web user cabinet (FastAPI)
-  - `webapi/` — REST API for external integrations
-  - `external/` — Remnawave API and payment system clients
-  - `database/` — models and CRUD (SQLAlchemy 2.0, async)
+> 🖥 **[Bedolaga Cabinet](https://github.com/BEDOLAGA-DEV/bedolaga-cabinet)** — веб-кабинет на React + TypeScript, который существенно расширяет возможности бота: личный кабинет, OAuth-авторизация (Google, Yandex, Discord, VK, Telegram OIDC), лендинги, аналитика продаж, RBAC и подарочные подписки.
 
-- [**`migrations/`**](https://github.com/0x04A1A430/remnawave-bot/tree/dev/migrations) — Alembic migrations
+<div align="center">
 
-- [**`locales/`**](https://github.com/0x04A1A430/remnawave-bot/tree/dev/locales) — bot interface localization
+<img src=".github/assets/bot-preview.png" alt="Bedolaga Bot — Telegram" width="700" />
+
+</div>
+
+---
+
+## ✨ Возможности
+
+<table>
+<tr>
+<td width="50%" valign="top">
+
+### 📦 Подписки и тарифы
+
+- 🎯 Гибкие тарифные планы (от X дней до X дней)
+- 📊 Трафик: безлимит, фиксированный лимит или пакеты с возможностью докупки
+- 📱 Управление устройствами (1–20 на подписку) или отключение лимитов
+- 🌍 Автовыбор сервера(Тарифы) или ручной выбор(Конфигуратор подписки - с возможностью докупки)
+- 🆓 Пробный период(Возможен платный) с конвертацией в платный
+- 🛒 Умная корзина — сохраняет выбор при недостатке баланса
+- 🔄 Автопродление за 3 дня до окончания
+- 🎁 Подарочные подписки (нативно в Telegram-боте и веб-кабинете) с генерацией deep-link ссылок и передачей через Telegram Share
+
+</td>
+<td width="50%" valign="top">
+
+### 💳 Платежи
+
+- 🏦 **Более 20 платёжных провайдеров** одновременно
+- 💰 Единый баланс: пополнение любым способом → покупка с баланса
+- ⚡ Автопокупка подписки после пополнения
+- 💾 Рекуррентные платежи (сохранённые карты)
+- 🧾 Фискализация через НалоGo (для самозанятых)
+- 🔍 Автопроверка статуса платежей
+- 🛍 Гостевые покупки через лендинги
+
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+
+### 📣 Маркетинг и продвижение
+
+- 🏷 Промокоды (деньги, дни подписки, триалы)
+- 👥 Реферальная программа с выводом средств
+- 👥 Партнерская система
+- 📨 Рассылки по [условиям аудитории](docs/broadcast_audiences.md) с предпросмотром получателей
+- 🌐 Кастомные лендинги с аналитикой
+- 🎮 Конкурсы и ежедневные игры с призами
+- 🎯 Персональные предложения и скидки
+- 📈 Маркетинговые кампании с трекингом
+- 🌐 Обязательная мультиподписка на каналы с возможностью автоотключения подписки - при отписки от канала
+
+</td>
+<td width="50%" valign="top">
+
+### 🛠 Администрирование
+
+- 🤖 Панель управления прямо в Telegram
+- 👤 Управление пользователями, подписками, платежами
+- 📬 Уведомления в топики: покупки, продления, пополнения
+- 💾 Автобэкапы БД с восстановлением из бота
+- 🚧 Режим техработ (авто-детект недоступности панели)
+- 📡 Мониторинг трафика и аномалий
+- 🤝 Партнёрская программа
+- 🔐 RBAC: роли и гранулярные права доступа
+- 📈 Детальная отчетность с возможностью визуализации Реф сети
+- 🔐 Блокировка юзеров из общего черного списка
+И многое др...
+
+</td>
+</tr>
+</table>
+
+---
+
+## 🎁 Подарочные подписки (Subscription Gifting)
+
+Bedolaga поддерживает полный кросс-канальный жизненный цикл покупки, управления и активации подарочных подписок как нативно в Telegram-боте, так и через веб-кабинет [Bedolaga Cabinet](https://github.com/BEDOLAGA-DEV/bedolaga-cabinet).
+
+### 🔑 Канонический формат кода и идентификация
+
+- **Канонический публичный код**: `GIFT_<59_символов>` (например, `GIFT_7b8a1c9...`). Формат специально оптимизирован под ограничение длины deep-link параметров Telegram (`/start GIFT_<59>`).
+- **Единая сущность `GuestPurchase`**: Подарок хранится в единой таблице гостевых покупок с 64-символьным токеном. Никаких дополнительных таблиц или миграций базы данных не требуется — канонический код и ссылки детерминированно выводятся из токена.
+- **Конфиденциальность**: Полные токены, фрагменты токенов и публичные коды никогда не передаются в callback data, логах, описаниях транзакций или сообщениях об ошибках.
+
+### 📲 Способы активации подарка
+
+1. **Telegram Deep-Link**: Ссылка вида `https://t.me/<bot_username>?start=GIFT_<59_символов>`. При переходе бот сразу регистрирует нового пользователя (или приветствует существующего) и активирует подарочную подписку.
+2. **Ручной ввод в Telegram-боте**: Кнопка **«🎁 Подарки» → «Ввести код»**. Принимает канонический код `GIFT_<59>`, исходный 64-значный токен, deep-link ссылку Telegram или URL веб-кабинета. При вводе недействительного кода бот сохраняет состояние для повторной попытки.
+3. **Активация в Web Cabinet**: Эндпоинт `/gift/activate` и форма в личном кабинете. Поддерживает канонические коды `GIFT_<59>`, ссылки deep-link/веб-кабинета, а также устаревшие форматы (8/12-символьные префиксы и `GIFT-<12>`).
+4. **Прямая веб-ссылка**: `https://<cabinet_url>/buy/gift/<64_символа>` — интерфейс гостевой или авторизованной активации в веб-кабинете.
+
+### 📜 Раздел «Мои подарки» (History & Recovery)
+
+- **Восстановление и шаринг**: В Telegram-боте в меню подписок доступен раздел **«🎁 Мои подарки»**. Покупатель в любой момент может открыть купленный подарок, скопировать канонический код `<code>GIFT_<59></code>`, открыть deep-link или переслать подарок через кнопку Telegram Share (`t.me/share/url`). Восстановление работает даже после очистки FSM-контекста или перезапуска бота без повторных списаний баланса.
+- **Единый вид карточки (Source-neutral)**: Подарки, купленные в боте или в веб-кабинете, отображаются в боте идентично — без указания канала покупки, способов оплаты или цены.
+- **Статус доставки**: После активации получателем статус подарка меняется на **«Активирован»**, отображается имя получателя (`@username` или email) и дата активации, а кнопки передачи и код скрываются.
+
+### ⚙️ Правила и бизнес-логика для операторов
+
+- **Включение функционала**: Установите `CABINET_GIFT_ENABLED=true` (через `SystemSetting` в БД или админ-панели / `.env`). Флаг управляет каталогом подарков одновременно в боте и веб-кабинете.
+- **Настройка тарифов**: Отметьте тарифы, доступные для дарения, флагом `show_in_gift = true` (`SHOW_IN_GIFT`).
+- **Синхронизация ссылок**: Настройте `BOT_USERNAME` (username Telegram-бота) и `CABINET_URL` (URL веб-кабинета).
+- **Оплата подарков**: В боте подарок оплачивается с внутреннего баланса. При нехватке средств бот предлагает пополнение через любой шлюз с сохранением корзины. В кабинете доступна оплата как с баланса, так и через платёжные шлюзы (YooKassa, CryptoBot, Stars и др.).
+- **Запрет самоактивации (Self-claim prohibition)**: Покупатель не может активировать свой собственный подарок ни в боте, ни в кабинете.
+- **Право первого заявителя (First-claim ownership)**: Подарок закрепляется за первым активировавшим его пользователем. Попытки активации другими пользователями отклоняются (в кабинете возвращается 404 для защиты от подбора).
+- **Идемпотентность**: Повторный ввод кода тем же самым получателем возвращает успешную карточку активации без повторного начисления подписки.
+- **Бессрочность хранения**: Оплаченные подарки не сгорают и не имеют срока давности.
+- **Управление продажами vs. право на получение**: При отключении `CABINET_GIFT_ENABLED=false` каталог покупки подарков скрывается, но все ранее оплаченные подарки остаются доступны в разделе «Мои подарки» и могут быть активированы получателями.
+
+### 🌐 Cabinet API & Frontend Boundary
+
+Бэкенд предоставляет и тестирует полный контракт API для подарочных подписок:
+- **Канонические поля**: `gift_code` (публичный код `GIFT_<59_chars>`), `bot_claim_url` (`https://t.me/<bot>?start=GIFT_<59_chars>`) и `cabinet_claim_url` (`https://<cabinet>/buy/gift/<64_chars>`) возвращаются в ответах `/gift/purchase`, `/gift/purchase/{token}`, `/gift/sent` и `/landing/purchase/{token}`, `/landing/gift/{token}` для всех активных (`PAID` / `PENDING_ACTIVATION`) подарков. Для доставленных подарков (`DELIVERED`) поля действий сбрасываются в `None`, сохраняя историю.
+- **Обратная совместимость**: Устаревшие поля (`purchase_token`, `token`, `claim_url`, `bot_claim_link`) сохраняются без изменений. Эндпоинт активации `/gift/activate` продолжает принимать короткие 8/12-символьные коды, префиксы `GIFT-`, канонические `GIFT_...` коды и URL-ссылки.
+- **Граница внешнего фронтенда**: Этот репозиторий содержит бэкенд и тесты контракта API. Внешний веб-кабинет ([Bedolaga Cabinet](https://github.com/BEDOLAGA-DEV/bedolaga-cabinet)) разрабатывается в отдельном репозитории и должен отображать новые канонические поля `gift_code`, `bot_claim_url` и `cabinet_claim_url` для визуального паритета с ботом.
+
+---
+
+## 💳 Платёжные провайдеры
+
+<div align="center">
+
+| | Провайдер | Методы оплаты | Валюта |
+|:---:|:---|:---|:---:|
+| ⭐ | **Telegram Stars** | Звёзды Telegram | XTR |
+| 🏦 | **YooKassa** | Карты, СБП | RUB |
+| 🏦 | **YooKassa СБП** | Система быстрых платежей | RUB |
+| 🪙 | **CryptoBot** | USDT, TON, BTC, ETH | Crypto |
+| 🪙 | **Heleket** | USDT, мульти-сеть | Crypto |
+| 💳 | **CloudPayments** | Карты, 3D-Secure | RUB |
+| 💳 | **Freekassa** | NSPK СБП, карты | RUB |
+| 💳 | **Kassa AI** | СБП, карты, SberPay | RUB |
+| 💳 | **PayPalych (Pal24)** | Карты, СБП | RUB |
+| 🤝 | **[Platega](https://t.me/ArstanPlatega)** 🔸 | Карты, СБП, крипто | RUB |
+| 💳 | **WATA** | СБП, Карты | RUB |
+| 💳 | **MulenPay** | Карты | RUB |
+| 💳 | **RioPay** | Карты | RUB |
+| 💳 | **SeverPay** | СБП, карты | RUB |
+| 🤝 | **[RollyPay](https://rollypay.io/?utm_source=bedolaga&utm_medium=community&utm_campaign=integration)** 🔸 | СБП, карты, крипто | RUB → USDT |
+| 🤝 | **[AuraPay](https://aurapay.tech/)** 🔸 | Карты, СБП | RUB |
+| 🤝 | **[Overpay](https://overpay.pro/)** 🔸 | Карты, СБП | RUB |
+| 🦌 | **Antilopay** | Карты, СБП, SberPay (RSA подпись) | RUB |
+| 💳 | **Etoplatezhi** | Карты, СБП | RUB |
+| 🪐 | **[Jupiter](https://t.me/k_juppiter)** 🔸 | СБП через QR (FPGate P2P v2.1) | RUB |
+| 🍩 | **[Donut](https://t.me/donut_payment)** 🔸 | Карты, СБП по телефону, СБП QR (P2P) | RUB |
+| 🌋 | **Lava Business** | Карты, СБП (gate.lava.ru) | RUB |
+| 💳 | **CisPay** | СБП, карты (api.cispay.app) | RUB |
+| 💳 | **Cashera** | СБП, карты, зарубежные карты, крипта, CryptoBot (api.cashera.cash) | RUB → USDT |
+| 💳 | **TabPay** | СБП, карты с 3-D Secure (tabpay.org) | RUB |
+| 💳 | **ParityPay** | СБП, карты (api.paritypay.net) | RUB |
+| 🍎 | **Apple In-App Purchase** | Покупки через iOS App Store | USD |
+| 📲 | **Tribute** | Telegram-платежи | RUB |
+
+</div>
+
+> 🔸 — официальный партнёр Bedolaga (особые условия по кодовому слову **`bedolaga`**)
+>
+> Все провайдеры работают параллельно через единый веб-сервер на порту 8080. Подробная настройка — в [документации](https://docs.bedolagam.ru/bot/payments).
+
+<div align="center">
+<table>
+<tr>
+<td align="center">
+
+<img src=".github/assets/platega-logo.jpg" alt="Platega" width="60" />
+
+**🤝 Официальный партнёр Platega**
+
+Bedolaga — официальный партнёр платёжной системы **Platega**.<br>
+Пользователи бота получают **особые условия** при подключении по кодовому слову **`bedolaga`**
+
+📩 По вопросам: [@ArstanPlatega](https://t.me/ArstanPlatega)
+
+</td>
+<td align="center">
+
+**🤝 Официальный партнёр RollyPay**
+
+Bedolaga — официальный партнёр платёжного шлюза **[RollyPay](https://rollypay.io/?utm_source=bedolaga&utm_medium=community&utm_campaign=integration)**.<br>
+СБП (от 5%), банковские карты РФ, крипто, вывод в USDT.<br>
+Универсальная форма оплаты, высокая проходимость, стабильная работа в каскаде.<br>
+Подключение по кодовому слову **`БЕДОЛАГА`** — **спец. условия**
+
+📩 Менеджер: [@rollypay_manager](https://t.me/rollypay_manager) | 🌐 [rollypay.io](https://rollypay.io/?utm_source=bedolaga&utm_medium=community&utm_campaign=integration)
+
+</td>
+</tr>
+<tr>
+<td align="center">
+
+**🤝 Официальный партнёр AuraPay**
+
+Bedolaga — официальный партнёр платёжной системы **[AuraPay](https://aurapay.tech/)**.<br>
+Банковские карты и СБП через единый API с быстрой интеграцией.<br>
+Подключение по кодовому слову **`БЕДОЛАГА`** — **спец. условия**
+
+📩 Менеджер: [@kickdownm](https://t.me/kickdownm) | 🌐 [aurapay.tech](https://aurapay.tech/)
+
+</td>
+<td align="center">
+
+**🤝 Официальный партнёр Overpay**
+
+Bedolaga — официальный партнёр платёжного шлюза **[Overpay](https://overpay.pro/)**.<br>
+Банковские карты и СБП, mTLS-авторизация, HPP-интеграция.<br>
+Подключение по кодовому слову **`БЕДОЛАГА`** — **спец. условия**
+
+📩 Менеджер: [@A_OverPay](https://t.me/A_OverPay) | 🌐 [overpay.pro](https://overpay.pro/)
+
+</td>
+</tr>
+<tr>
+<td align="center">
+
+**🤝 Официальный партнёр Jupiter (FPGate P2P)**
+
+Bedolaga — официальный партнёр платёжного шлюза **Jupiter** (FPGate P2P v2.1).<br>
+Эквайринг СБП через QR-код банковского приложения, HMAC-SHA256 подпись.<br>
+Высокая проходимость, callback-driven архитектура, защита от replay-атак.<br>
+Подключение по кодовому слову **`БЕДОЛАГА`** — **спец. условия**
+
+📩 Менеджер: [@k_juppiter](https://t.me/k_juppiter)
+
+</td>
+<td align="center">
+
+**🤝 Официальный партнёр Donut**
+
+Bedolaga — официальный партнёр платёжной системы **Donut** (Donut P2P).<br>
+P2P-оплата картой, СБП по номеру телефона и СБП QR — три метода через единый API.<br>
+HMAC-SHA256 подпись, sticky terminal-status guard, защита от amount tampering.<br>
+Подключение по кодовому слову **`БЕДОЛАГА`** — **спец. условия**
+
+📩 Менеджер: [@donut_payment](https://t.me/donut_payment)
+
+</td>
+</tr>
+</table>
+</div>
+
+---
+
+## 🚀 Быстрый старт
+
+```bash
+git clone https://github.com/fr1ngg/remnawave-xilarobot-telegram-bot.git
+cd remnawave-xilarobot-telegram-bot
+cp .env.example .env   # заполните переменные
+docker compose up -d
+```
+
+📖 Подробнее: **[Развёртывание →](https://docs.bedolagam.ru/getting-started/docker-deployment)** · **[Переменные окружения →](https://docs.bedolagam.ru/getting-started/environment)**
+
+> [!IMPORTANT]
+> **Обновляетесь с версии на PostgreSQL 15?** После `git pull` выполните `make pg-upgrade` —
+> скрипт сделает резервную копию и перенесёт базу на PostgreSQL 18 без потерь.
+> Подробно: [docs/postgresql-18-upgrade.md](docs/postgresql-18-upgrade.md)
+
+### Чёрный список пользователей
+
+Общий `blacklist.txt` в этом репозитории не поставляется. В `.env.example` проверка
+выключена, а `BLACKLIST_GITHUB_URL` оставлен пустым. Для использования проверки
+сначала укажите URL собственного доступного текстового списка на GitHub, затем
+установите `BLACKLIST_CHECK_ENABLED=true` и перезапустите бот.
+
+Формат файла: один Telegram ID на строку; после `#` можно указать `@username`
+и причину блокировки. Пустые строки и строки, начинающиеся с `#`, пропускаются.
+Числа ниже — условные примеры, замените их своими данными:
+
+```text
+# Комментарий
+100000001 # @example_user причина блокировки
+100000002
+```
+
+`BLACKLIST_UPDATE_INTERVAL_HOURS` задаёт интервал обновления в часах,
+`BLACKLIST_IGNORE_ADMINS=true` исключает администраторов из `ADMIN_IDS` из проверки.
+При обновлении существующей установки удалите старый URL, заканчивающийся на
+`remnawave-bedolaga-telegram-bot/refs/heads/main/blacklist.txt`, из своего `.env`
+и замените его своим источником. Пока источник не настроен, оставьте проверку
+выключенной. Изменение `.env.example` не меняет уже созданный `.env`.
+
+---
+
+## 🏗 Стек
+
+| | Компонент | Технология |
+|:---:|:---|:---|
+| 🐍 | Язык | Python 3.14, полностью async |
+| 🤖 | Telegram | aiogram 3.x |
+| 🗄 | База данных | PostgreSQL 18 + SQLAlchemy 2.x + Alembic |
+| 🔴 | Кэш/очереди | Redis |
+| ⚡ | Web-сервер | FastAPI (webhook, платежи, Cabinet API) |
+| 📝 | Логирование | structlog |
+| 🐳 | Контейнеризация | Docker + Docker Compose |
+| 🧹 | Линтер | ruff |
+
+---
+
+## 🖥 Bedolaga Cabinet
+
+<div align="center">
+
+[![Cabinet](https://img.shields.io/badge/Репозиторий-Bedolaga_Cabinet-6366f1?style=for-the-badge&logo=react&logoColor=white)](https://github.com/BEDOLAGA-DEV/bedolaga-cabinet)
+
+<br>
+
+<img src=".github/assets/cabinet-preview.png" alt="Bedolaga Cabinet" width="700" />
+
+</div>
+
+Веб-кабинет на **React + TypeScript**, существенно расширяющий возможности бота:
+
+| | Возможность | Описание |
+|:---:|:---|:---|
+| 👤 | **Личный кабинет** | Подписки, баланс, устройства, реферальная программа |
+| 🔑 | **OAuth-авторизация** | Google, Yandex, Discord, VK, Telegram OIDC |
+| 🌐 | **Лендинги** | Кастомные страницы для привлечения клиентов |
+| 📊 | **Админ-панель** | Аналитика продаж, RBAC, управление контентом |
+| 🎁 | **Подарки** | Покупка и отправка подписок другим пользователям |
+| 🔍 | **Поиск платежей** | Поиск по инвойсу, клиенту с фильтрами и статистикой |
+
+---
+
+## 📚 Документация
+
+| | Раздел | Описание |
+|:---:|:---|:---|
+| 🚀 | [Быстрый старт](https://docs.bedolagam.ru/getting-started/quickstart) | Развёртывание за 5 минут |
+| 💳 | [Настройка платежей](https://docs.bedolagam.ru/bot/payments) | Более 20 провайдеров, webhook, фискализация, Apple IAP |
+| 📦 | [Подписки и тарифы](https://docs.bedolagam.ru/bot/subscriptions) | Конфигурация планов и трафика |
+| 👥 | [Реферальная программа](https://docs.bedolagam.ru/bot/referral-program) | Партнёрка и вывод средств |
+| 🖥 | [Cabinet](https://docs.bedolagam.ru/cabinet/overview) | Настройка веб-кабинета |
+| 🏷 | [Промо-система](https://docs.bedolagam.ru/bot/promo-system) | Промокоды, предложения, скидки |
+| 🔌 | [API Reference](https://docs.bedolagam.ru/api-reference/overview) | REST API для внешних интеграций |
+
+<div align="center">
+
+**📖 Полная документация: [docs.bedolagam.ru](https://docs.bedolagam.ru)**
+
+</div>
+
+---
+
+## 💬 Сообщество
+
+<div align="center">
+
+[![Telegram Chat](https://img.shields.io/badge/Telegram-Чат_сообщества-26A5E4?style=for-the-badge&logo=telegram&logoColor=white)](https://t.me/+wTdMtSWq8YdmZmVi)
+[![GitHub Issues](https://img.shields.io/badge/GitHub-Issues-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/fr1ngg/remnawave-xilarobot-telegram-bot/issues)
+
+</div>
+
+- 🐛 **Баги и предложения** — [GitHub Issues](https://github.com/fr1ngg/remnawave-xilarobot-telegram-bot/issues)
+- 💬 **Вопросы и обсуждения** — [Telegram-чат](https://t.me/+wTdMtSWq8YdmZmVi)
+- 🤖 **Тестирование** — [@zero_ping_vpn_bot](https://t.me/zero_ping_vpn_bot?start=Git)
+
+---
+
+<div align="center">
+
+**[MIT License](LICENSE)** — используйте свободно для личных и коммерческих проектов.
+
+</div>
+
+### Хранение токенов NaloGO
+
+По умолчанию `NALOGO_STORAGE_PATH=./data/nalogo_tokens.json`: в Docker эта
+директория сохраняется в подключённом томе `./data`. Токены записываются
+атомарно с правами `0600`; каталог должен быть доступен пользователю приложения
+для записи. Ошибка сохранения отражается в журнале, текущий токен остаётся в памяти.
+
+При обновлении проверьте существующий `.env`: явно заданный старый путь
+`./nalogo_tokens.json` автоматически не меняется. Для переноса остановите бот,
+переместите существующий файл в каталог `data` и обновите `NALOGO_STORAGE_PATH`,
+сохранив владельца файла и права `0600`. Не публикуйте содержимое файла: в нём
+находятся access- и refresh-токены налогового аккаунта.
+
+При действующем сохранённом токене повторный вход по паролю не нужен;
+истекающий токен обновляется через refresh. После неоднозначной ошибки выпуска
+чек остаётся на ручной проверке. Повторная отправка из неё допустима только
+после проверки, что чек действительно не был создан.
+
+---
 
 ## Support
 
 Support the project by starring this repository (top right of this page)
 
 Bot on Telegram: [@xilarobot](https://t.me/xilarobot)
-
-## License
-
-This project is licensed under [MIT](https://github.com/0x04A1A430/remnawave-bot/blob/dev/LICENSE)

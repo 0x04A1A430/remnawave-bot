@@ -176,7 +176,7 @@ async def build_promo_offer_hint(
 
     base_hint = texts.t(
         'SUBSCRIPTION_PROMO_DISCOUNT_HINT',
-        '⚡ Extra {percent}% discount is active and will apply automatically. It stacks with other discounts.',
+        '<code>Extra discount {percent}% activated.</code>',
     ).format(percent=percent)
 
     timer_line = await build_promo_offer_timer_line(db, user, texts)

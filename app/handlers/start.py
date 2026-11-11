@@ -1,7 +1,7 @@
 import asyncio
 import html
 from collections.abc import Callable
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import structlog
@@ -27,7 +27,7 @@ from app.database.crud.user import (
     get_user_by_telegram_id,
 )
 from app.database.crud.user_message import get_random_active_message
-from app.database.models import GuestPurchase, PinnedMessage, SubscriptionStatus, UserStatus
+from app.database.models import GuestPurchase, PinnedMessage, SubscriptionStatus, User, UserStatus
 from app.keyboards.inline import (
     get_back_keyboard,
     get_language_selection_keyboard,
@@ -37,7 +37,7 @@ from app.keyboards.inline import (
     get_rules_keyboard,
 )
 from app.localization.loader import DEFAULT_LANGUAGE
-from app.localization.texts import get_privacy_policy, get_rules, get_texts
+from app.localization.texts import get_default_rules, get_privacy_policy, get_rules, get_texts
 from app.middlewares.channel_checker import (
     delete_pending_payload_from_redis,
     get_pending_payload_from_redis,
@@ -86,10 +86,20 @@ from app.states import RegistrationStates
 from app.utils.gift_links import InvalidGiftTokenError, parse_gift_claim_input
 from app.utils.long_messages import answer_long_text, edit_long_text, send_long_text
 from app.utils.rich_menu import try_answer_rich_main_menu, try_send_rich_main_menu
+from app.utils.telegram_html import html_to_telegram
 from app.utils.user_utils import generate_unique_referral_code
 
 
 logger = structlog.get_logger(__name__)
+
+
+def _within_retroactive_referral_window(user) -> bool:
+    """Разрешить только гонку создания аккаунта Mini App с обработкой /start."""
+    created_at = getattr(user, 'created_at', None)
+    if created_at is None:
+        return False
+    age = datetime.now(UTC) - created_at
+    return timedelta(0) <= age <= timedelta(minutes=10)
 
 
 _registration_invite_service = RegistrationInviteService()
@@ -150,7 +160,7 @@ def _registration_denial_text(texts: Any, decision: RegistrationAccessDecision) 
         return texts.t('ACCESS_DENIED')
     return texts.t(
         'registration_invite_required',
-        '🔒 Регистрация доступна только по приглашению.\n\n'
+        '<tg-emoji emoji-id="5832546462478635761">🔒</tg-emoji> Регистрация доступна только по приглашению.\n\n'
         'Используйте действительную пригласительную ссылку или обратитесь в поддержку.',
     )
 
@@ -347,9 +357,17 @@ async def send_menu_with_media(
 
     Сбой отправки видео не должен лишать пользователя меню: падаем на фото/текст.
     """
-    from app.utils.message_patch import _cache_logo_file_id, caption_exceeds_telegram_limit, get_logo_media
+    from app.utils.message_patch import (
+        _cache_logo_file_id,
+        caption_exceeds_telegram_limit,
+        caption_fits_logo,
+        get_logo_media,
+    )
 
+    # Видео не конвертируется в rich — для него действует классический лимит
+    # подписи. Фото-логотип в rich-режиме может нести длинный текст.
     caption_fits = not caption_exceeds_telegram_limit(text)
+    logo_caption_fits = caption_fits_logo(text)
 
     if caption_fits:
         from app.services.start_media_service import get_start_video_file_id
@@ -371,7 +389,7 @@ async def send_menu_with_media(
                     error=str(video_error),
                 )
 
-    if settings.ENABLE_LOGO_MODE and caption_fits:
+    if settings.ENABLE_LOGO_MODE and logo_caption_fits:
         _result = await bot.send_photo(
             chat_id=chat_id,
             photo=get_logo_media(),
@@ -444,7 +462,7 @@ async def _activate_pending_gift_after_registration(
             await answer_func(
                 texts.t(
                     'GIFT_ACTIVATION_SELF_CLAIM_ERROR',
-                    '⚠️ Нельзя активировать свой собственный подарок.\nОтправьте код другу!',
+                    '<tg-emoji emoji-id="5881702736843511327">⚠</tg-emoji> Нельзя активировать свой собственный подарок.\nОтправьте код другу!',
                 ),
                 parse_mode=ParseMode.HTML,
             )
@@ -462,7 +480,7 @@ async def _activate_pending_gift_after_registration(
             await answer_func(
                 texts.t(
                     'GIFT_ACTIVATION_NOT_ACTIVATABLE_ERROR',
-                    '❌ Этот подарок невозможно активировать.',
+                    '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Этот подарок невозможно активировать.',
                 ),
                 parse_mode=ParseMode.HTML,
             )
@@ -475,7 +493,7 @@ async def _activate_pending_gift_after_registration(
         await answer_func(
             texts.t(
                 'GIFT_ACTIVATION_SUCCESS_TEXT',
-                '🎁 <b>Подарок активирован!</b>\n{tariff_name} — {period_days} дн.\n\nВаша подписка обновлена.',
+                '<tg-emoji emoji-id="6032937473162614352">🎁</tg-emoji> <b>Подарок активирован!</b>\n{tariff_name} — {period_days} дн.\n\nВаша подписка обновлена.',
             ).format(
                 tariff_name=tariff_name,
                 period_days=gift_purchase.period_days,
@@ -492,7 +510,7 @@ async def _activate_pending_gift_after_registration(
             await answer_func(
                 texts.t(
                     'GIFT_ACTIVATION_GENERIC_ERROR',
-                    '❌ Произошла ошибка при активации подарка. Попробуйте активировать через личный кабинет.',
+                    '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Произошла ошибка при активации подарка. Попробуйте активировать через личный кабинет.',
                 ),
                 parse_mode=ParseMode.HTML,
             )
@@ -535,11 +553,11 @@ async def _activate_pending_inline_gift_after_registration(
 
 
 _COUPON_ERROR_TEXTS = {
-    'invalid': '❌ Купон не найден или уже использован.',
+    'invalid': '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Купон не найден или уже использован.',
     'expired': '⌛ Срок действия купона истёк.',
     'already_redeemed_by_you': 'ℹ️ Вы уже активировали этот купон.',
     'per_user_limit': 'ℹ️ Вы уже использовали свой лимит купонов из этой раздачи.',
-    'internal': '❌ Произошла ошибка при активации купона. Попробуйте позже или обратитесь в поддержку.',
+    'internal': '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Произошла ошибка при активации купона. Попробуйте позже или обратитесь в поддержку.',
 }
 
 
@@ -584,7 +602,7 @@ async def _redeem_pending_coupon(
     try:
         tariff_name = html.escape(result.tariff_name)
         await answer_func(
-            f'🎟 <b>Купон активирован!</b>\n{tariff_name} — {result.period_days} дн.\n\nВаша подписка обновлена.',
+            f'<tg-emoji emoji-id="6032937473162614352">🎁</tg-emoji> <b>Купон активирован!</b>\n{tariff_name} — {result.period_days} дн.\n\nВаша подписка обновлена.',
             parse_mode=ParseMode.HTML,
         )
     except Exception:
@@ -642,6 +660,7 @@ async def _activate_pending_trial(
 
         trial_traffic_limit = settings.TRIAL_TRAFFIC_LIMIT_GB
         trial_device_limit = settings.TRIAL_DEVICE_LIMIT
+        trial_duration_days = settings.TRIAL_DURATION_DAYS
         trial_squads: list[str] = []
         tariff_id_for_trial = None
 
@@ -655,6 +674,8 @@ async def _activate_pending_trial(
             trial_device_limit = trial_tariff.device_limit
             trial_squads = await get_effective_tariff_squad_uuids(db, trial_tariff.allowed_squads)
             tariff_id_for_trial = trial_tariff.id
+            if trial_tariff.trial_duration_days:
+                trial_duration_days = trial_tariff.trial_duration_days
         if not trial_squads:
             trial_squad_uuid = await get_random_trial_squad_uuid(db)
             trial_squads = [trial_squad_uuid] if trial_squad_uuid else []
@@ -662,7 +683,7 @@ async def _activate_pending_trial(
         subscription = await create_trial_subscription(
             db=db,
             user_id=user.id,
-            duration_days=settings.TRIAL_DURATION_DAYS,
+            duration_days=trial_duration_days,
             traffic_limit_gb=trial_traffic_limit,
             device_limit=trial_device_limit,
             connected_squads=trial_squads or None,
@@ -710,7 +731,10 @@ async def _activate_pending_trial(
     try:
         texts = get_texts(user.language)
         confirmation = await answer_func(
-            texts.t('MAIN_MENU_RICH_TRIAL_ACTIVATED', '🎉 <b>Тестовая подписка активирована!</b>'),
+            texts.t(
+                'MAIN_MENU_RICH_TRIAL_ACTIVATED',
+                '<tg-emoji emoji-id="5994502837327892086">🎉</tg-emoji> <b>Тестовая подписка активирована!</b>',
+            ),
             parse_mode=ParseMode.HTML,
         )
         # Подтверждение эфемерное: новая подписка и так видна в меню ниже.
@@ -1015,7 +1039,7 @@ async def _apply_campaign_bonus_if_needed(
         traffic_text = texts.format_traffic(result.subscription_traffic_gb or 0)
         return texts.t(
             'CAMPAIGN_BONUS_TARIFF',
-            "🎁 Вам выдан тариф '{tariff_name}' на {days} дней!\n📊 Трафик: {traffic}\n📱 Устройств: {devices}",
+            "<tg-emoji emoji-id='6032937473162614352'>🎁</tg-emoji> Вам выдан тариф '{tariff_name}' на {days} дней!\n<tg-emoji emoji-id='5877485980901971030'>📊</tg-emoji> Трафик: {traffic}\n<tg-emoji emoji-id='5985833664884250583'>📱</tg-emoji> Устройств: {devices}",
         ).format(
             tariff_name=result.tariff_name or 'Подарочный',
             days=result.tariff_duration_days,
@@ -1081,7 +1105,12 @@ async def handle_potential_referral_code(message: types.Message, state: FSMConte
         data['referrer_id'] = referrer.id
         await state.set_data(data)
 
-        await message.answer(texts.t('REFERRAL_CODE_ACCEPTED', '✅ Реферальный код принят!'))
+        await message.answer(
+            texts.t(
+                'REFERRAL_CODE_ACCEPTED',
+                '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Реферальный код принят!',
+            )
+        )
         logger.info(
             '✅ Реферальный код применен для пользователя',
             potential_code=potential_code,
@@ -1092,7 +1121,7 @@ async def handle_potential_referral_code(message: types.Message, state: FSMConte
             language = data.get('language', DEFAULT_LANGUAGE)
             texts = get_texts(language)
 
-            rules_text = await get_rules(language)
+            rules_text = await _rules_for_telegram(language)
             await answer_long_text(message, rules_text, reply_markup=get_rules_keyboard(language))
             await state.set_state(RegistrationStates.waiting_for_rules_accept)
             logger.info('📋 Правила отправлены после ввода реферального кода')
@@ -1114,7 +1143,7 @@ async def handle_potential_referral_code(message: types.Message, state: FSMConte
         await message.answer(
             texts.t(
                 'PROMOCODE_ACCEPTED_WILL_ACTIVATE',
-                '✅ Промокод принят! Он будет активирован после завершения регистрации.',
+                '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Промокод принят! Он будет активирован после завершения регистрации.',
             )
         )
         logger.info(
@@ -1127,7 +1156,7 @@ async def handle_potential_referral_code(message: types.Message, state: FSMConte
             language = data.get('language', DEFAULT_LANGUAGE)
             texts = get_texts(language)
 
-            rules_text = await get_rules(language)
+            rules_text = await _rules_for_telegram(language)
             await answer_long_text(message, rules_text, reply_markup=get_rules_keyboard(language))
             await state.set_state(RegistrationStates.waiting_for_rules_accept)
             logger.info('📋 Правила отправлены после принятия промокода')
@@ -1143,7 +1172,7 @@ async def handle_potential_referral_code(message: types.Message, state: FSMConte
     await message.answer(
         texts.t(
             'REFERRAL_OR_PROMO_CODE_INVALID_HELP',
-            '❌ Неверный реферальный код или промокод.\n\n'
+            '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Неверный реферальный код или промокод.\n\n'
             '💡 Если у вас есть реферальный код или промокод, убедитесь что он введен правильно.\n'
             '⏭️ Для продолжения регистрации без кода используйте команду /start',
         )
@@ -1152,7 +1181,7 @@ async def handle_potential_referral_code(message: types.Message, state: FSMConte
 
 
 def _get_language_prompt_text() -> str:
-    return '🌐 Выберите язык / Choose your language:'
+    return "<tg-emoji emoji-id='5879585266426973039'>🌐</tg-emoji> Выберите язык / Choose your language:"
 
 
 async def _prompt_language_selection(message: types.Message, state: FSMContext) -> None:
@@ -1215,7 +1244,7 @@ async def _continue_registration_after_language(
                 await _complete_registration_wrapper()
         return
 
-    rules_text = await get_rules(language)
+    rules_text = await _rules_for_telegram(language)
     try:
         await answer_long_text(target_message, rules_text, reply_markup=get_rules_keyboard(language))
     except TelegramForbiddenError:
@@ -1381,6 +1410,23 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
                 return
             start_parameter = None  # Don't treat as campaign or referral
 
+    # Legacy inline-gift links were generated without the bs_ prefix. Accept
+    # those too, otherwise a bare gift code falls through to the referral branch
+    # and the user sees "Вы уже зарегистрированы в системе".
+    if start_parameter and len(start_parameter) >= 32:
+        from app.handlers.inline_gift import handle_gift_deeplink, inline_gift_exists
+
+        if await inline_gift_exists(start_parameter):
+            logger.info(
+                'Legacy inline gift deep link detected',
+                gift_code_prefix=start_parameter[:8],
+                telegram_id=message.from_user.id,
+            )
+            handled = await handle_gift_deeplink(message, start_parameter, state)
+            start_parameter = None  # Don't treat as campaign or referral
+            if handled:
+                return
+
     # Handle web auth deep links: /start webauth_{token}
     if start_parameter and start_parameter.startswith('webauth_'):
         web_auth_token = start_parameter.removeprefix('webauth_')
@@ -1405,13 +1451,13 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
                 await message.answer(
                     texts.t(
                         'WEB_AUTH_CONFIRM_PROMPT',
-                        '🔐 Подтвердите вход в личный кабинет. Если вы не запрашивали вход — нажмите «Нет».',
+                        '<tg-emoji emoji-id="5832546462478635761">🔒</tg-emoji> Подтвердите вход в личный кабинет. Если вы не запрашивали вход — нажмите «Нет».',
                     ),
                     reply_markup=keyboard,
                 )
             else:
                 logger.warning('Web auth attempt from unregistered user', telegram_id=message.from_user.id)
-                await message.answer('❌ Сначала зарегистрируйтесь в боте, затем попробуйте войти в кабинет.')
+                await message.answer(get_texts(message.from_user.language_code).t('WEB_AUTH_REGISTER_FIRST'))
             return
         start_parameter = None  # Invalid token, ignore
 
@@ -1539,7 +1585,7 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
                     await save_pending_referral(message.from_user.id, referral_code, referrer.id)
                 except Exception as exc:
                     logger.warning('Failed to persist pending referral', referral_code=referral_code, error=exc)
-            elif db_user.referred_by_id is None:
+            elif db_user.referred_by_id is None and _within_retroactive_referral_window(db_user):
                 # RACE FIX: the miniapp may have created the user row
                 # between the /start link click and this handler firing
                 # (e.g. user tapped the WebApp menu button immediately
@@ -1733,6 +1779,7 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
             from sqlalchemy import delete, update as sa_update
 
             from app.database.models import (
+                AnorePayment,
                 CloudPaymentsPayment,
                 CryptoBotPayment,
                 FreekassaPayment,
@@ -1781,6 +1828,7 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
                 HeleketPayment,
                 MulenPayPayment,
                 Pal24Payment,
+                AnorePayment,
                 WataPayment,
                 PlategaPayment,
                 CloudPaymentsPayment,
@@ -1948,6 +1996,17 @@ async def process_language_selection(
     )
 
 
+async def _rules_for_telegram(language: str) -> str:
+    """Правила для регистрации — в разметке, которую принимает Telegram.
+
+    Текст правил редактируется в кабинете как HTML (заголовки, абзацы, списки),
+    а Telegram понимает восемь тегов: без преобразования регистрация падала на
+    шаге правил с «Unsupported start tag». Если после очистки текста не осталось,
+    показываются правила по умолчанию из локали — пустое сообщение Telegram не примет.
+    """
+    return html_to_telegram(await get_rules(language)) or html_to_telegram(get_default_rules(language))
+
+
 async def _show_privacy_policy_after_rules(
     callback: types.CallbackQuery,
     state: FSMContext,
@@ -1964,16 +2023,18 @@ async def _show_privacy_policy_after_rules(
         logger.info('⚠️ Политика конфиденциальности не включена, пропускаем её показ')
         return False
 
-    if not policy.content or not policy.content.strip():
-        privacy_policy_text = get_privacy_policy(language)
-        if not privacy_policy_text or not privacy_policy_text.strip():
+    # Политика редактируется в кабинете как HTML, а Telegram понимает восемь тегов —
+    # без преобразования <h1>/<p> из редактора роняли этот шаг регистрации.
+    privacy_policy_text = html_to_telegram(policy.content)
+    if not privacy_policy_text:
+        privacy_policy_text = html_to_telegram(get_privacy_policy(language))
+        if not privacy_policy_text:
             logger.info('⚠️ Политика конфиденциальности включена, но дефолтный текст пустой, пропускаем показ')
             return False
         logger.info(
             '🔒 Используется дефолтный текст политики конфиденциальности из локализации для языка', language=language
         )
     else:
-        privacy_policy_text = policy.content
         logger.info('🔒 Используется политика конфиденциальности из БД для языка', language=language)
 
     try:
@@ -2266,7 +2327,12 @@ async def process_referral_code_input(message: types.Message, state: FSMContext,
     if referrer:
         data['referrer_id'] = referrer.id
         await state.set_data(data)
-        await message.answer(texts.t('REFERRAL_CODE_ACCEPTED', '✅ Реферальный код принят!'))
+        await message.answer(
+            texts.t(
+                'REFERRAL_CODE_ACCEPTED',
+                '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Реферальный код принят!',
+            )
+        )
         logger.info('✅ Реферальный код применен', code=code)
         await complete_registration(message, state, db)
         return
@@ -2283,7 +2349,7 @@ async def process_referral_code_input(message: types.Message, state: FSMContext,
         await message.answer(
             texts.t(
                 'PROMOCODE_ACCEPTED_WILL_ACTIVATE',
-                '✅ Промокод принят! Он будет активирован после завершения регистрации.',
+                '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Промокод принят! Он будет активирован после завершения регистрации.',
             )
         )
         logger.info('✅ Промокод сохранен для активации', code=code)
@@ -3148,7 +3214,7 @@ async def get_main_menu_text_simple(user_name, texts, db: AsyncSession):
 async def required_sub_channel_check(
     query: types.CallbackQuery, bot: Bot, state: FSMContext, db: AsyncSession, db_user=None
 ):
-    from app.utils.message_patch import _cache_logo_file_id, caption_exceeds_telegram_limit, get_logo_media
+    from app.utils.message_patch import _cache_logo_file_id, caption_fits_logo, get_logo_media
 
     language = DEFAULT_LANGUAGE
     texts = get_texts(language)
@@ -3375,9 +3441,9 @@ async def required_sub_channel_check(
                 )
                 await state.set_state(RegistrationStates.waiting_for_referral_code)
             else:
-                rules_text = await get_rules(language)
+                rules_text = await _rules_for_telegram(language)
 
-                if settings.ENABLE_LOGO_MODE and not caption_exceeds_telegram_limit(rules_text):
+                if settings.ENABLE_LOGO_MODE and caption_fits_logo(rules_text):
                     _result = await bot.send_photo(
                         chat_id=query.from_user.id,
                         photo=get_logo_media(),
@@ -3415,6 +3481,7 @@ async def required_sub_channel_check(
 async def process_webauth_confirm(
     callback: types.CallbackQuery,
     db: AsyncSession,
+    db_user: User | None = None,
 ):
     """Handle web auth confirmation or denial."""
     await callback.answer()
@@ -3422,19 +3489,20 @@ async def process_webauth_confirm(
     if not isinstance(callback.message, types.Message):
         return
 
+    texts = get_texts(db_user.language if db_user else callback.from_user.language_code)
     if callback.data == 'webauth_deny':
-        await callback.message.edit_text('❌ Вход отменён.')
+        await callback.message.edit_text(texts.t('WEB_AUTH_CANCELLED'))
         return
 
     # Extract token from callback_data: "webauth_confirm:{token}"
     token = callback.data.split(':', 1)[1] if ':' in callback.data else ''
     if len(token) < WEB_AUTH_TOKEN_MIN_LENGTH:
-        await callback.message.edit_text('❌ Ошибка: неверный токен.')
+        await callback.message.edit_text(texts.t('WEB_AUTH_INVALID_TOKEN'))
         return
 
     user = await get_user_by_telegram_id(db, callback.from_user.id)
     if not user or user.status != UserStatus.ACTIVE.value:
-        await callback.message.edit_text('❌ Учётная запись неактивна.')
+        await callback.message.edit_text(texts.t('WEB_AUTH_INACTIVE'))
         return
 
     linked = await link_web_auth_token(token, callback.from_user.id, user.id)

@@ -209,7 +209,7 @@ def _build_quote_from_pricing(
         final_price_kopeks=final_price,
         promo_group_discount_kopeks=pricing_result.promo_group_discount,
         promo_offer_discount_kopeks=pricing_result.promo_offer_discount,
-        consumes_promo_offer=pricing_result.promo_offer_discount > 0,
+        consumes_promo_offer=pricing_result.breakdown.get('offer_discount_pct', 0) > 0,
     )
 
 

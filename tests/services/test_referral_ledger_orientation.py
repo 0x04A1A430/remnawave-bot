@@ -35,7 +35,7 @@ _ALLOWED = {
 
 def _iter_python_files():
     for path in sorted(APP_ROOT.rglob('*.py')):
-        if 'lib/nalogo' in str(path):
+        if 'lib/nalogo' in path.as_posix():
             continue
         yield path
 
@@ -89,9 +89,9 @@ def _spans(node: ast.stmt) -> int:
     return (getattr(node, 'end_lineno', node.lineno) or node.lineno) - node.lineno
 
 
-@pytest.mark.parametrize('path', list(_iter_python_files()), ids=lambda p: str(p.relative_to(APP_ROOT)))
+@pytest.mark.parametrize('path', list(_iter_python_files()), ids=lambda p: p.relative_to(APP_ROOT).as_posix())
 def test_referral_id_grouping_excludes_referee_rows(path):
-    relative = str(path.relative_to(APP_ROOT))
+    relative = path.relative_to(APP_ROOT).as_posix()
     if relative in _ALLOWED:
         pytest.skip('файл разобран вручную')
 

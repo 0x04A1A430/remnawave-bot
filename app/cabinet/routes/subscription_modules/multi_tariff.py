@@ -17,8 +17,11 @@ from app.database.crud.subscription import (
     get_subscription_by_id_for_user,
 )
 from app.database.models import SubscriptionStatus, User
+from app.utils.legacy_subscription import is_legacy_subscription
 
 from ...dependencies import get_cabinet_db, get_current_cabinet_user
+from ...schemas.subscription import TrafficAccountingData
+from .helpers import _load_traffic_accounting_fields
 
 
 logger = structlog.get_logger(__name__)
@@ -26,7 +29,7 @@ logger = structlog.get_logger(__name__)
 router = APIRouter(prefix='/subscriptions', tags=['Cabinet Multi-Tariff'], redirect_slashes=False)
 
 
-class SubscriptionListItem(BaseModel):
+class SubscriptionListItem(TrafficAccountingData):
     id: int
     status: str
     tariff_id: int | None = None
@@ -42,6 +45,9 @@ class SubscriptionListItem(BaseModel):
     is_daily_paused: bool = False
     autopay_enabled: bool = False
     connected_squads: list[str] | None = None
+    # Старая подписка (платная, без тарифа при включённых тарифах): продления
+    # и автоплатежа нет, карточка ведёт на выбор тарифа.
+    requires_tariff_selection: bool = False
 
 
 class SubscriptionsListResponse(BaseModel):
@@ -69,6 +75,7 @@ def _subscription_to_list_item(sub) -> SubscriptionListItem:
         is_daily=bool(sub.tariff and getattr(sub.tariff, 'is_daily', False)),
         is_daily_paused=bool(getattr(sub, 'is_daily_paused', False)),
         autopay_enabled=sub.autopay_enabled or False,
+        requires_tariff_selection=is_legacy_subscription(sub),
         connected_squads=sub.connected_squads,
     )
 
@@ -80,7 +87,13 @@ async def list_subscriptions(
 ) -> SubscriptionsListResponse:
     """List all user subscriptions. Returns all subscriptions regardless of multi-tariff mode."""
     subscriptions = await get_all_subscriptions_by_user_id(db, user.id)
-    items = [_subscription_to_list_item(sub) for sub in subscriptions]
+    items = []
+    for sub in subscriptions:
+        if sub.is_pending_trial:
+            continue
+        item = _subscription_to_list_item(sub)
+        fields = await _load_traffic_accounting_fields(db, sub)
+        items.append(item.model_copy(update={k: v for k, v in fields.items() if k in type(item).model_fields}))
     return SubscriptionsListResponse(
         subscriptions=items,
         multi_tariff_enabled=settings.is_multi_tariff_enabled(),
@@ -95,12 +108,14 @@ async def get_subscription_detail(
 ) -> SubscriptionListItem:
     """Get specific subscription details with ownership check."""
     subscription = await get_subscription_by_id_for_user(db, subscription_id, user.id)
-    if not subscription:
+    if not subscription or subscription.is_pending_trial:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail='Subscription not found',
         )
-    return _subscription_to_list_item(subscription)
+    item = _subscription_to_list_item(subscription)
+    fields = await _load_traffic_accounting_fields(db, subscription)
+    return item.model_copy(update={k: v for k, v in fields.items() if k in type(item).model_fields})
 
 
 @router.delete('/{subscription_id}')

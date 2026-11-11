@@ -32,6 +32,7 @@ from app.database.models import (
     AdminRole,
     AdvertisingCampaign,
     AdvertisingCampaignRegistration,
+    AnorePayment,
     AntilopayPayment,
     AppleIAPAbuseEvent,
     AppleIAPAccount,
@@ -41,6 +42,7 @@ from app.database.models import (
     BroadcastHistory,
     ButtonClickLog,
     CabinetRefreshToken,
+    CasheraPayment,
     CisPayPayment,
     CloudPaymentsPayment,
     ContestAttempt,
@@ -73,7 +75,6 @@ from app.database.models import (
     ParityPayPayment,
     PartnerApplication,
     PaymentMethodConfig,
-    PayPearPayment,
     PinnedMessage,
     PlategaPayment,
     Poll,
@@ -258,7 +259,6 @@ class BackupService:
             KassaAiPayment,
             RioPayPayment,
             SeverPayPayment,
-            PayPearPayment,
             RollyPayPayment,
             OverpayPayment,
             AuraPayPayment,
@@ -268,6 +268,8 @@ class BackupService:
             DonutPayment,
             LavaPayment,
             CisPayPayment,
+            CasheraPayment,
+            AnorePayment,
             TabPayPayment,
             ParityPayPayment,
             AppleIAPAccount,
@@ -579,11 +581,11 @@ class BackupService:
 
             size_mb = file_size / 1024 / 1024
             message = (
-                f'Бекап успешно создан!\n'
-                f'Файл: {filename}\n'
-                f'Таблиц: {overview.get("tables_count", 0)}\n'
-                f'Записей: {overview.get("total_records", 0):,}\n'
-                f'Размер: {size_mb:.2f} MB'
+                f'✓ Бекап успешно создан!\n'
+                f'▣ Файл: {filename}\n'
+                f'≡ Таблиц: {overview.get("tables_count", 0)}\n'
+                f'↑ Записей: {overview.get("total_records", 0):,}\n'
+                f'«Размер»: {size_mb:.2f} MB'
             )
 
             logger.info(message)
@@ -602,7 +604,7 @@ class BackupService:
             return True, message, str(backup_path)
 
         except Exception as e:
-            error_msg = f'Ошибка создания бекапа: {e!s}'
+            error_msg = f'✗ Ошибка создания бекапа: {e!s}'
             logger.error(error_msg, exc_info=True)
 
             if self.bot:
@@ -629,7 +631,7 @@ class BackupService:
 
             backup_path = Path(backup_file_path)
             if not await asyncio.to_thread(backup_path.exists):
-                return False, f'Файл бекапа не найден: {backup_file_path}'
+                return False, f'✗ Файл бекапа не найден: {backup_file_path}'
 
             if self._is_archive_backup(backup_path):
                 success, message = await self._restore_from_archive(backup_path, clear_existing)
@@ -644,7 +646,7 @@ class BackupService:
             return success, message
 
         except Exception as e:
-            error_msg = f'Ошибка восстановления: {e!s}'
+            error_msg = f'✗ Ошибка восстановления: {e!s}'
             logger.error(error_msg, exc_info=True)
 
             if self.bot:
@@ -957,7 +959,7 @@ class BackupService:
 
             metadata_path = temp_path / 'metadata.json'
             if not await asyncio.to_thread(metadata_path.exists):
-                return False, 'Метаданные бекапа отсутствуют'
+                return False, '✗ Метаданные бекапа отсутствуют'
 
             async with aiofiles.open(metadata_path, encoding='utf-8') as meta_file:
                 metadata = json_lib.loads(await meta_file.read())
@@ -991,10 +993,10 @@ class BackupService:
             self._invalidate_restored_caches()
 
             message = (
-                f'Восстановление завершено!\n'
-                f'Таблиц: {metadata.get("tables_count", 0)}\n'
-                f'Записей: {metadata.get("total_records", 0):,}\n'
-                f'Дата бекапа: {metadata.get("timestamp", "неизвестно")}'
+                f'✓ Восстановление завершено!\n'
+                f'≡ Таблиц: {metadata.get("tables_count", 0)}\n'
+                f'↑ Записей: {metadata.get("total_records", 0):,}\n'
+                f'▤ Дата бекапа: {metadata.get("timestamp", "неизвестно")}'
             )
 
             logger.info(message)
@@ -1152,7 +1154,7 @@ class BackupService:
         clear_existing: bool,
     ) -> tuple[int, int]:
         if not backup_data:
-            raise ValueError('Файл бекапа не содержит данных')
+            raise ValueError('✗ Файл бекапа не содержит данных')
 
         logger.info('Загружен дамп', metadata=metadata.get('timestamp', 'неизвестная дата'))
 
@@ -1297,10 +1299,10 @@ class BackupService:
         self._invalidate_restored_caches()
 
         message = (
-            f'Восстановление завершено!\n'
-            f'Таблиц: {restored_tables}\n'
-            f'Записей: {restored_records:,}\n'
-            f'Дата бекапа: {metadata.get("timestamp", "неизвестно")}'
+            f'✓ Восстановление завершено!\n'
+            f'≡ Таблиц: {restored_tables}\n'
+            f'↑ Записей: {restored_records:,}\n'
+            f'▤ Дата бекапа: {metadata.get("timestamp", "неизвестно")}'
         )
 
         logger.info(message)
@@ -1698,15 +1700,16 @@ class BackupService:
             'kassa_ai_payments',
             'riopay_payments',
             'severpay_payments',
-            'paypear_payments',
             'rollypay_payments',
             'overpay_payments',
             'aurapay_payments',
             'etoplatezhi_payments',
             'antilopay_payments',
+            'anore_payments',
             'tabpay_payments',
             'paritypay_payments',
             'cispay_payments',
+            'cashera_payments',
             'donut_payments',
             'jupiter_payments',
             'lava_payments',
@@ -1986,19 +1989,19 @@ class BackupService:
             backup_path = await asyncio.to_thread((self.backup_dir / backup_filename).resolve)
             backup_dir_resolved = await asyncio.to_thread(self.backup_dir.resolve)
             if not str(backup_path).startswith(str(backup_dir_resolved) + os.sep):
-                return False, 'Недопустимое имя файла бекапа'
+                return False, '✗ Недопустимое имя файла бекапа'
 
             if not await asyncio.to_thread(backup_path.is_file):
-                return False, f'Файл бекапа не найден: {backup_filename}'
+                return False, f'✗ Файл бекапа не найден: {backup_filename}'
 
             await asyncio.to_thread(backup_path.unlink)
-            message = f'Бекап {backup_filename} удален'
+            message = f'✓ Бекап {backup_filename} удален'
             logger.info(message)
 
             return True, message
 
         except Exception as e:
-            error_msg = f'Ошибка удаления бекапа: {e!s}'
+            error_msg = f'✗ Ошибка удаления бекапа: {e!s}'
             logger.error(error_msg)
             return False, error_msg
 

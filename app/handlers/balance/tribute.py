@@ -21,7 +21,10 @@ async def start_tribute_payment(
 
     # Проверка ограничения на пополнение
     if getattr(db_user, 'restriction_topup', False):
-        reason = html.escape(getattr(db_user, 'restriction_reason', None) or 'Действие ограничено администратором')
+        reason = html.escape(
+            getattr(db_user, 'restriction_reason', None)
+            or texts.t('USER_RESTRICTION_DEFAULT_REASON', 'Действие ограничено администратором')
+        )
         support_url = settings.get_support_contact_url()
         keyboard = []
         if support_url:
@@ -29,15 +32,19 @@ async def start_tribute_payment(
         keyboard.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance', style='danger')])
 
         await callback.message.edit_text(
-            f'🚫 <b>Пополнение ограничено</b>\n\n{reason}\n\n'
-            'Если вы считаете это ошибкой, вы можете обжаловать решение.',
+            texts.t(
+                'USER_RESTRICTION_TOPUP_BLOCKED',
+                '🚫 <b>Пополнение ограничено</b>\n\n{reason}\n\nЕсли вы считаете это ошибкой, вы можете обжаловать решение.',
+            ).format(reason=reason),
             reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
         )
         await callback.answer()
         return
 
     if not settings.TRIBUTE_ENABLED:
-        await callback.answer('❌ Оплата картой временно недоступна', show_alert=True)
+        await callback.answer(
+            texts.t('PAYMENT_UI_CARD_UNAVAILABLE', '❌ Оплата картой временно недоступна'), show_alert=True
+        )
         return
 
     try:
@@ -51,7 +58,9 @@ async def start_tribute_payment(
         )
 
         if not payment_url:
-            await callback.answer('❌ Ошибка создания платежа', show_alert=True)
+            await callback.answer(
+                texts.t('SUBSCRIPTION_UI_PAYMENT_CREATION_FAILED', '❌ Ошибка создания платежа'), show_alert=True
+            )
             return
 
         keyboard = types.InlineKeyboardMarkup(
@@ -61,14 +70,9 @@ async def start_tribute_payment(
             ]
         )
 
-        message_text = (
-            '💳 <b>Пополнение банковской картой</b>\n\n'
-            '• Введите любую сумму от 100₽\n'
-            '• Безопасная оплата через Tribute\n'
-            '• Мгновенное зачисление на баланс\n'
-            '• Принимаем карты Visa, MasterCard, МИР\n\n'
-            '• 🚨 НЕ ОТПРАВЛЯТЬ ПЛАТЕЖ АНОНИМНО!\n\n'
-            'Нажмите кнопку для перехода к оплате:'
+        message_text = texts.t(
+            'PAYMENT_UI_TRIBUTE_INSTRUCTIONS',
+            '💳 <b>Пополнение банковской картой</b>\n\n• Введите любую сумму от 100₽\n• Безопасная оплата через Tribute\n• Мгновенное зачисление на баланс\n• Принимаем карты Visa, MasterCard, МИР\n\n• 🚨 НЕ ОТПРАВЛЯТЬ ПЛАТЕЖ АНОНИМНО!\n\nНажмите кнопку для перехода к оплате:',
         )
 
         await callback.message.edit_text(
@@ -85,6 +89,8 @@ async def start_tribute_payment(
 
     except Exception as e:
         logger.error('Ошибка создания Tribute платежа', error=e)
-        await callback.answer('❌ Ошибка создания платежа', show_alert=True)
+        await callback.answer(
+            texts.t('SUBSCRIPTION_UI_PAYMENT_CREATION_FAILED', '❌ Ошибка создания платежа'), show_alert=True
+        )
 
     await callback.answer()

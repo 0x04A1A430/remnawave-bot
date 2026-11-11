@@ -61,6 +61,7 @@ def _panel_user(user_id=42, expire_at=None):
 
 def _api(**overrides):
     api = AsyncMock()
+    api.get_user_devices_all.return_value = {'total': 0, 'devices': []}
     api.get_user_by_id.return_value = None
     api.get_user_by_short_uuid.return_value = None
     api.find_users_by_telegram_id.return_value = []
@@ -76,6 +77,7 @@ def _db(*, panel_id_holder=None):
     """``scalar_one_or_none`` — занятость id для записи связи; ``first`` — поиск хозяина
     аккаунта: здесь его нет (чужие аккаунты — ``test_foreign_panel_owner.py``)."""
     db = AsyncMock()
+    db.scalar = AsyncMock(return_value='legacy')
     db.execute = AsyncMock(return_value=SimpleNamespace(scalar_one_or_none=lambda: panel_id_holder, first=lambda: None))
     return db
 
@@ -232,6 +234,51 @@ async def test_recreated_account_replaces_the_stale_link():
 
     assert result.action == 'created'
     assert subscription.remnawave_id == 99, 'в колонке остался id удалённого аккаунта'
+    assert user.remnawave_id == 99
+
+
+@pytest.mark.asyncio
+async def test_dead_id_is_relinked_to_the_account_that_already_exists():
+    """Прошлая попытка завела аккаунт, но связь не записала: имя занято, и создание
+    падало бы на каждом проходе. Аккаунт находится по shortUuid — пишем в него."""
+    calls = []
+
+    async def update_user(**kwargs):
+        calls.append(kwargs['user_id'])
+        if kwargs['user_id'] == 42:
+            raise RemnaWaveAPIError('User not found', 404, {'errorCode': 'A063'})
+        return _panel_user(user_id=99)
+
+    api = _api(get_user_by_short_uuid=_panel_user(user_id=99))
+    api.update_user.side_effect = update_user
+    subscription = _sub(remnawave_id=42)
+    user = _user(remnawave_id=42)
+
+    result = await push_subscription(
+        api, user, subscription, db=_db(), multi_tariff=True, verify_recorded_id=False, now=NOW
+    )
+
+    assert result.action == 'updated'
+    assert calls == [42, 99]
+    api.create_user.assert_not_awaited()
+    assert subscription.remnawave_id == 99
+    assert user.remnawave_id == 99, 'мёртвый id остался человеку и достанется следующей покупке'
+
+
+@pytest.mark.asyncio
+async def test_recreated_account_clears_the_dead_id_from_the_user_in_multi_tariff():
+    api = _api()
+    api.update_user.side_effect = RemnaWaveAPIError('User not found', 404, {'errorCode': 'A063'})
+    api.create_user.return_value = _panel_user(user_id=99)
+    subscription = _sub(remnawave_id=42)
+    user = _user(remnawave_id=42)
+
+    result = await push_subscription(
+        api, user, subscription, db=_db(), multi_tariff=True, verify_recorded_id=False, now=NOW
+    )
+
+    assert result.action == 'created'
+    assert subscription.remnawave_id == 99
     assert user.remnawave_id == 99
 
 

@@ -11,6 +11,7 @@ from aiogram.types import FSInputFile, InaccessibleMessage, InputMediaPhoto, Mes
 
 from app.config import settings
 from app.localization.texts import get_texts
+from app.utils.logo_fingerprint import logo_fingerprint
 
 
 logger = structlog.get_logger(__name__)
@@ -140,11 +141,36 @@ def caption_exceeds_telegram_limit(text: str | None) -> bool:
     return len(stripped) > TELEGRAM_CAPTION_LIMIT
 
 
+def caption_fits_logo(text: str | None) -> bool:
+    """Whether the screen can be sent as logo + text.
+
+    Rich messages allow up to 32768 characters, so the classic 1024-char caption
+    limit must not push long menus into a logo-less text message.
+    """
+    from app.utils.rich_transport import is_rich_transport_enabled
+
+    return is_rich_transport_enabled() or not caption_exceeds_telegram_limit(text)
+
+
 _PRIVACY_RESTRICTED_CODE = 'BUTTON_USER_PRIVACY_RESTRICTED'
 
 # Кеш file_id логотипа: после первой загрузки Telegram возвращает file_id,
-# который можно переиспользовать без повторной загрузки файла (экономит 3-4 сек)
+# который можно переиспользовать без повторной загрузки файла (экономит 3-4 сек).
+# Привязан к отпечатку файла: оператор заменил логотип — кэш сбрасывается,
+# иначе старая картинка уходила по старому file_id до рестарта.
 _logo_file_id: str | None = None
+_logo_file_id_fingerprint: str | None = None
+
+
+def _drop_logo_cache_if_file_changed() -> None:
+    # Отпечаток не обнуляем: его читают только при непустом file_id, а новый
+    # записывается вместе с новым file_id в _cache_logo_file_id.
+    global _logo_file_id, _logo_send_path
+    current = logo_fingerprint(LOGO_PATH)
+    if _logo_file_id is not None and _logo_file_id_fingerprint != current:
+        logger.info('Файл логотипа заменён — file_id и уменьшенная копия забыты', logo_path=str(LOGO_PATH))
+        _logo_file_id = None
+        _logo_send_path = None
 
 
 def get_logo_media():
@@ -156,6 +182,7 @@ def get_logo_media():
     If the source file is too large or too high-resolution for Telegram, a
     cached resized copy is used instead (see Telegram bug #339184).
     """
+    _drop_logo_cache_if_file_changed()
     if _logo_file_id:
         return _logo_file_id
     if not _logo_path_valid:
@@ -168,11 +195,12 @@ def get_logo_media():
 
 def _cache_logo_file_id(result: Message | None) -> None:
     """Извлекает и кеширует file_id логотипа из ответа Telegram."""
-    global _logo_file_id
+    global _logo_file_id, _logo_file_id_fingerprint
     if _logo_file_id or result is None:
         return
     if hasattr(result, 'photo') and result.photo:
         _logo_file_id = result.photo[-1].file_id
+        _logo_file_id_fingerprint = logo_fingerprint(LOGO_PATH)
 
 
 _TOPIC_REQUIRED_ERRORS = (
@@ -280,9 +308,10 @@ async def _answer_with_photo(self: Message, text: str = None, **kwargs):
         # Подавляем превью чтобы поведение не менялось при переключении режима логотипа.
         kwargs.setdefault('disable_web_page_preview', True)
         return await _original_answer(self, text, **kwargs)
-    # Если caption слишком длинный для фото — отправим как текст
+    # Если caption слишком длинный для фото — отправим как текст.
+    # В rich-режиме лимит caption не действует: длинный экран сохраняет логотип.
     try:
-        if caption_exceeds_telegram_limit(text):
+        if not caption_fits_logo(text):
             return await _text_answer(self, text, **kwargs)
     except Exception:
         pass
@@ -329,12 +358,24 @@ async def _answer_with_photo(self: Message, text: str = None, **kwargs):
 
 
 async def _edit_with_photo(self: Message, text: str, **kwargs):
+    is_rich = getattr(self, 'rich_message', None) is not None
+    # Прямой edit_text по самому rich-меню (хендлеры сплошь зовут его без
+    # edit_or_answer_photo) — это переиспользование меню, а не новый экран.
+    # Без отметки RichMenuCleanupMiddleware удалит только что отредактированное
+    # меню, и чат останется пустым.
+    try:
+        from app.utils.rich_menu import is_tracked_rich_menu, mark_rich_menu_taken_over
+
+        if is_tracked_rich_menu(getattr(self.chat, 'id', None), getattr(self, 'message_id', None)):
+            mark_rich_menu_taken_over(self.chat.id)
+    except Exception:
+        pass
     # Уважаем флаг в рантайме: если логотип выключен — не подменяем редактирование
     if not settings.ENABLE_LOGO_MODE:
         kwargs.setdefault('disable_web_page_preview', True)
         # Медиа-сообщения (фото/видео из рассылки и т.д.) не имеют text — edit_text упадёт.
         # Удаляем старое сообщение и отправляем новое.
-        if self.text is None:
+        if self.text is None and not is_rich:
             try:
                 await self.delete()
             except TelegramBadRequest:
@@ -359,7 +400,7 @@ async def _edit_with_photo(self: Message, text: str, **kwargs):
         language = _get_language(self)
         # Если caption потенциально слишком длинный — отправим как текст вместо caption
         try:
-            if caption_exceeds_telegram_limit(text):
+            if not caption_fits_logo(text):
                 try:
                     await self.delete()
                 except Exception:
@@ -408,7 +449,7 @@ async def _edit_with_photo(self: Message, text: str, **kwargs):
                     return None
                 raise
     # Не-фото медиа (видео, анимация и т.д.) с включённым логотипом — удаляем и отправляем с фото
-    if self.text is None:
+    if self.text is None and not is_rich:
         try:
             await self.delete()
         except TelegramBadRequest:

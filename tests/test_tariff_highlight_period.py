@@ -11,6 +11,7 @@
 
 from __future__ import annotations
 
+import re
 from types import SimpleNamespace
 
 import pytest
@@ -38,8 +39,12 @@ def _tariff(highlight: int | None = None, **extra) -> SimpleNamespace:
     )
 
 
+def _plain(value: str) -> str:
+    return re.sub(r'<tg-emoji[^>]*>(.*?)</tg-emoji>', r'\1', value, flags=re.DOTALL)
+
+
 def _labels(keyboard) -> list[str]:
-    return [button.text for row in keyboard.inline_keyboard for button in row]
+    return [_plain(button.text) for row in keyboard.inline_keyboard for button in row]
 
 
 def _extend_keyboard(tariff, language):

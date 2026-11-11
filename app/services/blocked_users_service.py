@@ -20,6 +20,7 @@ from sqlalchemy.orm import selectinload
 
 from app.database.models import (
     AdvertisingCampaignRegistration,
+    AnorePayment,
     ButtonClickLog,
     CabinetRefreshToken,
     CloudPaymentsPayment,
@@ -331,6 +332,7 @@ class BlockedUsersService:
             # user keeps getting charged for a deleted account. This path has
             # no grace-access guard (unlike UserService.delete_user_account), so
             # a plain best-effort cancel loop is enough — no lock to re-acquire.
+            from app.services.cashera_recurring_cancel import cancel_cashera_recurring_for_subscription_safe
             from app.services.payment.lava import cancel_lava_recurring_for_subscription_safe
             from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
 
@@ -338,6 +340,7 @@ class BlockedUsersService:
                 await cancel_platega_recurring_for_subscription_safe(db, sub.id)
 
                 await cancel_lava_recurring_for_subscription_safe(db, sub.id)
+                await cancel_cashera_recurring_for_subscription_safe(db, sub.id)
             # Удаляем связанные записи (порядок важен из-за foreign keys)
 
             # 1. Платежные системы (до транзакций, т.к. ссылаются на них)
@@ -346,6 +349,7 @@ class BlockedUsersService:
             await db.execute(delete(HeleketPayment).where(HeleketPayment.user_id == user.id))
             await db.execute(delete(MulenPayPayment).where(MulenPayPayment.user_id == user.id))
             await db.execute(delete(Pal24Payment).where(Pal24Payment.user_id == user.id))
+            await db.execute(delete(AnorePayment).where(AnorePayment.user_id == user.id))
             await db.execute(delete(WataPayment).where(WataPayment.user_id == user.id))
             await db.execute(delete(PlategaPayment).where(PlategaPayment.user_id == user.id))
             await db.execute(delete(CloudPaymentsPayment).where(CloudPaymentsPayment.user_id == user.id))

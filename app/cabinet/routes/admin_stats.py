@@ -506,7 +506,7 @@ async def _get_tariff_stats(db: AsyncSession) -> TariffStats | None:
         tariffs = tariffs_result.scalars().all()
 
         if not tariffs:
-            logger.info('📊 Нет тарифов в системе, пропускаем статистику')
+            logger.info('≡ Нет тарифов в системе, пропускаем статистику')
             return None
 
         now = datetime.now(UTC)
@@ -567,7 +567,7 @@ async def _get_tariff_stats(db: AsyncSession) -> TariffStats | None:
             purchased_month = month_result.scalar() or 0
 
             logger.info(
-                '📊 Тариф активных=, триал', tariff_name=tariff.name, active_count=active_count, trial_count=trial_count
+                '≡ Тариф активных=, триал', tariff_name=tariff.name, active_count=active_count, trial_count=trial_count
             )
 
             tariff_items.append(
@@ -584,7 +584,7 @@ async def _get_tariff_stats(db: AsyncSession) -> TariffStats | None:
 
             total_tariff_subscriptions += active_count
 
-        logger.info('📊 Всего подписок по тарифам', total_tariff_subscriptions=total_tariff_subscriptions)
+        logger.info('≡ Всего подписок по тарифам', total_tariff_subscriptions=total_tariff_subscriptions)
 
         return TariffStats(
             tariffs=tariff_items,

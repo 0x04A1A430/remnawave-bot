@@ -1,5 +1,6 @@
 import html
 import random
+from decimal import Decimal, InvalidOperation
 
 import structlog
 from aiogram import Dispatcher, F, types
@@ -22,12 +23,14 @@ from app.keyboards.inline import (
     get_pagination_keyboard,
     get_payment_methods_keyboard,
 )
+from app.localization.loader import DEFAULT_LANGUAGE
 from app.localization.texts import get_texts
 from app.services.payment_method_config_service import get_display_name_override
 from app.states import BalanceStates
 from app.utils.button_emoji import make_button
 from app.utils.decorators import error_handler
 from app.utils.timezone import format_local_datetime
+from app.utils.topup_retry import MAX_MANUAL_TOPUP_RUBLES, MIN_MANUAL_TOPUP_RUBLES, format_topup_amount_retry
 
 
 logger = structlog.get_logger(__name__)
@@ -37,6 +40,8 @@ TRANSACTIONS_PER_PAGE = 10
 # Премиум-эмодзи для типов операций (рендерятся только в HTML-сообщениях)
 CREDIT_EMOJI_HTML = "<tg-emoji emoji-id='5775937998948404844'>💰</tg-emoji>"
 DEBIT_EMOJI_HTML = "<tg-emoji emoji-id='5877413297170419326'>💸</tg-emoji>"
+# Inline-подарки помечаем отдельно, чтобы их не путали с пополнениями/рефералкой.
+GIFT_EMOJI_HTML = "<tg-emoji emoji-id='6032937473162614352'>🎁</tg-emoji>"
 
 # Цвета кнопок транзакций: рандом, кроме красного (danger зарезервирован для «Назад»)
 _TRANSACTION_ITEM_STYLES: tuple[str, ...] = ('primary', 'success')
@@ -47,6 +52,7 @@ CREDIT_TRANSACTION_TYPES: frozenset[str] = frozenset(
         TransactionType.REFERRAL_REWARD.value,
         TransactionType.REFUND.value,
         TransactionType.POLL_REWARD.value,
+        TransactionType.INLINE_GIFT.value,
     }
 )
 
@@ -164,13 +170,6 @@ async def route_payment_by_method(
             await process_severpay_payment_amount(message, db_user, db, amount_kopeks, state)
         return True
 
-    if payment_method == 'paypear':
-        from .paypear import process_paypear_payment_amount
-
-        async with AsyncSessionLocal() as db:
-            await process_paypear_payment_amount(message, db_user, db, amount_kopeks, state)
-        return True
-
     if payment_method == 'rollypay':
         from .rollypay import process_rollypay_payment_amount
 
@@ -234,6 +233,13 @@ async def route_payment_by_method(
             await process_paritypay_payment_amount(message, db_user, db, amount_kopeks, state)
         return True
 
+    if payment_method in ('anore', 'anore_sbp', 'anore_card', 'anore_yoomoney', 'anore_crypto'):
+        from .anore import process_anore_payment_amount
+
+        async with AsyncSessionLocal() as db:
+            await process_anore_payment_amount(message, db_user, db, amount_kopeks, state)
+        return True
+
     if payment_method in ('tabpay', 'tabpay_card', 'tabpay_sbp'):
         from .tabpay import process_tabpay_payment_amount
 
@@ -241,7 +247,14 @@ async def route_payment_by_method(
             await process_tabpay_payment_amount(message, db_user, db, amount_kopeks, state)
         return True
 
-    if payment_method in ('cispay', 'cispay_card', 'cispay_sbp'):
+    if payment_method == 'cashera':
+        from .cashera import process_cashera_payment_amount
+
+        async with AsyncSessionLocal() as db:
+            await process_cashera_payment_amount(message, db_user, db, amount_kopeks, state)
+        return True
+
+    if payment_method in ('cispay', 'cispay_card', 'cispay_sbp', 'cispay_crypto'):
         from .cispay import process_cispay_payment_amount
 
         async with AsyncSessionLocal() as db:
@@ -320,7 +333,10 @@ async def show_balance_history(callback: types.CallbackQuery, db_user: User, db:
 
 
 def _transaction_button_label(transaction, *, is_credit: bool, texts) -> str:
-    emoji_html = CREDIT_EMOJI_HTML if is_credit else DEBIT_EMOJI_HTML
+    if transaction.type == TransactionType.INLINE_GIFT.value:
+        emoji_html = GIFT_EMOJI_HTML
+    else:
+        emoji_html = CREDIT_EMOJI_HTML if is_credit else DEBIT_EMOJI_HTML
     sign = '+' if is_credit else '-'
     amount = texts.format_price(abs(transaction.amount_kopeks))
     date_part = transaction.created_at.strftime('%d.%m %H:%M')
@@ -448,6 +464,9 @@ async def show_transaction_detail(callback: types.CallbackQuery, db_user: User, 
     sign = '+' if is_credit else '-'
     amount_text = f'{sign}{texts.format_price(abs(transaction.amount_kopeks))}'
     op_type = 'Пополнение' if is_credit else 'Списание'
+    if transaction.type == TransactionType.INLINE_GIFT.value:
+        emoji_html = GIFT_EMOJI_HTML
+        op_type = 'Подарок'
 
     details = [f'<b>Сумма:</b> {amount_text}']
     if transaction.description:
@@ -502,7 +521,10 @@ async def show_payment_methods(callback: types.CallbackQuery, db_user: User, db:
 
     # Проверка ограничения на пополнение
     if getattr(db_user, 'restriction_topup', False):
-        reason = html.escape(getattr(db_user, 'restriction_reason', None) or 'Действие ограничено администратором')
+        reason = html.escape(
+            getattr(db_user, 'restriction_reason', None)
+            or texts.t('USER_RESTRICTION_DEFAULT_REASON', 'Действие ограничено администратором')
+        )
         support_url = settings.get_support_contact_url()
         keyboard = []
         if support_url:
@@ -510,8 +532,10 @@ async def show_payment_methods(callback: types.CallbackQuery, db_user: User, db:
         keyboard.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance', style='danger')])
 
         await callback.message.edit_text(
-            f'🚫 <b>Пополнение ограничено</b>\n\n{reason}\n\n'
-            'Если вы считаете это ошибкой, вы можете обжаловать решение.',
+            texts.t(
+                'USER_RESTRICTION_TOPUP_BLOCKED',
+                '🚫 <b>Пополнение ограничено</b>\n\n{reason}\n\nЕсли вы считаете это ошибкой, вы можете обжаловать решение.',
+            ).format(reason=reason),
             reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
         )
         await callback.answer()
@@ -519,22 +543,38 @@ async def show_payment_methods(callback: types.CallbackQuery, db_user: User, db:
 
     payment_text = get_payment_methods_text(db_user.language)
 
-    # Проверяем сохранённую корзину для автоподстановки суммы пополнения
+    # Сумма, переданная кнопкой «Пополнить на …» с экрана нехватки средств.
     amount_kopeks = 0
-    try:
-        from app.services.user_cart_service import user_cart_service
+    callback_data = callback.data or ''
+    from_insufficient_screen = callback_data.startswith('balance_topup_amount|')
+    if from_insufficient_screen:
+        try:
+            amount_kopeks = max(0, int(callback_data.split('|', 1)[1]))
+        except (IndexError, ValueError):
+            amount_kopeks = 0
 
-        cart_data = await user_cart_service.get_user_cart(db_user.id)
-        if cart_data and cart_data.get('saved_cart'):
-            missing = cart_data.get('missing_amount', 0)
-            if missing > 0:
-                amount_kopeks = missing
-    except Exception:
-        pass
+    # Иначе проверяем сохранённую корзину для автоподстановки суммы пополнения
+    if amount_kopeks <= 0:
+        try:
+            from app.services.user_cart_service import user_cart_service
+
+            cart_data = await user_cart_service.get_user_cart(db_user.id)
+            if cart_data and cart_data.get('saved_cart'):
+                missing = cart_data.get('missing_amount', 0)
+                if missing > 0:
+                    amount_kopeks = missing
+        except Exception:
+            pass
 
     full_text = payment_text
 
-    keyboard = get_payment_methods_keyboard(amount_kopeks, db_user.language)
+    # Пришли с экрана «Недостаточно средств» — возврат в главное меню, а не в баланс.
+    keyboard = get_payment_methods_keyboard(
+        amount_kopeks,
+        db_user.language,
+        back_callback='back_to_menu' if from_insufficient_screen else 'menu_balance',
+        back_text=(texts.t('BACK_TO_MAIN_MENU_BUTTON', '← В главное меню') if from_insufficient_screen else None),
+    )
 
     # Если сообщение недоступно, отправляем новое
     if isinstance(callback.message, InaccessibleMessage):
@@ -601,27 +641,45 @@ async def handle_successful_topup_with_cart(user_id: int, amount_kopeks: int, bo
                 inline_keyboard=[
                     [
                         types.InlineKeyboardButton(
-                            text='🛒 Вернуться к оформлению подписки', callback_data='return_to_saved_cart'
+                            text=texts.t('PAYMENT_UI_RESUME_CHECKOUT', '🛒 Вернуться к оформлению подписки'),
+                            callback_data='return_to_saved_cart',
+                            style='success',
                         )
                     ],
-                    [types.InlineKeyboardButton(text='Мой баланс', callback_data='menu_balance', style='danger')],
-                    [types.InlineKeyboardButton(text='← Главное меню', callback_data='back_to_menu')],
+                    [
+                        types.InlineKeyboardButton(
+                            text=texts.t('MY_BALANCE_BUTTON', '💰 Мой баланс'),
+                            callback_data='menu_balance',
+                            style='primary',
+                        )
+                    ],
+                    [
+                        types.InlineKeyboardButton(
+                            text=texts.t('SUBSCRIPTION_UI_MAIN_MENU', '🏠 Главное меню'),
+                            callback_data='back_to_menu',
+                            style='danger',
+                        )
+                    ],
                 ]
             )
 
             if 0 < total_price <= user.balance_kopeks:
-                balance_hint = 'Средств на балансе достаточно для оформления.'
+                balance_hint = texts.t('PAYMENT_UI_CART_ENOUGH', 'Средств на балансе достаточно для оформления.')
             else:
                 missing = max(total_price - user.balance_kopeks, 0)
                 # Без округления, иначе при не хватке <50 копеек покажется «0 ₽».
-                balance_hint = f'Не хватает: {texts.format_price(missing, round_kopeks=False)}'
+                balance_hint = texts.t('PAYMENT_UI_CART_MISSING', 'Не хватает: {value1}').format(
+                    value1=texts.format_price(missing, round_kopeks=False)
+                )
 
-            success_text = (
-                f'✅ Баланс пополнен на {texts.format_price(amount_kopeks)}!\n\n'
-                f'💰 Текущий баланс: {texts.format_price(user.balance_kopeks)}\n\n'
-                f'🛒 У вас есть сохранённая корзина на {texts.format_price(total_price)}\n'
-                f'{balance_hint}\n\n'
-                f'Хотите продолжить оформление?'
+            success_text = texts.t(
+                'PAYMENT_UI_CART_AFTER_TOPUP',
+                '✅ Баланс пополнен на {value1}!\n\n💰 Текущий баланс: {value2}\n\n🛒 У вас есть сохранённая корзина на {value3}\n{value4}\n\nХотите продолжить оформление?',
+            ).format(
+                value1=texts.format_price(amount_kopeks),
+                value2=texts.format_price(user.balance_kopeks),
+                value3=texts.format_price(total_price),
+                value4=balance_hint,
             )
 
             await bot.send_message(
@@ -647,30 +705,17 @@ async def request_support_topup(callback: types.CallbackQuery, db_user: User):
         return
 
     user_id_display = db_user.telegram_id or db_user.email or f'#{db_user.id}'
-    support_text = f"""
-🛠️ <b>Пополнение через поддержку</b>
-
-Для пополнения баланса обратитесь в техподдержку:
-{settings.get_support_contact_display_html()}
-
-Укажите:
-• ID: {user_id_display}
-• Сумму пополнения
-• Способ оплаты
-
-⏰ Время обработки: 1-24 часа
-
-<b>Доступные способы:</b>
-• Криптовалюта
-• Переводы между банками
-• Другие платежные системы
-"""
+    support_text = texts.t(
+        'PAYMENT_UI_SUPPORT_TOPUP_INSTRUCTIONS',
+        '\n🛠️ <b>Пополнение через поддержку</b>\n\nДля пополнения баланса обратитесь в техподдержку:\n{value1}\n\nУкажите:\n• ID: {value2}\n• Сумму пополнения\n• Способ оплаты\n\n⏰ Время обработки: 1-24 часа\n\n<b>Доступные способы:</b>\n• Криптовалюта\n• Переводы между банками\n• Другие платежные системы\n',
+    ).format(value1=settings.get_support_contact_display_html(), value2=user_id_display)
 
     keyboard = types.InlineKeyboardMarkup(
         inline_keyboard=[
             [
                 types.InlineKeyboardButton(
-                    text='💬 Написать в поддержку', url=settings.get_support_contact_url() or 'https://t.me/'
+                    text=texts.t('CONTACT_SUPPORT', '💬 Написать в поддержку'),
+                    url=settings.get_support_contact_url() or 'https://t.me/',
                 )
             ],
             [types.InlineKeyboardButton(text=texts.BACK, callback_data='balance_topup', style='danger')],
@@ -702,18 +747,25 @@ async def process_topup_amount(message: types.Message, db_user: User, state: FSM
             await message.answer(texts.INVALID_AMOUNT, reply_markup=get_back_keyboard(db_user.language))
             return
 
-        amount_rubles = float(amount_text.replace(',', '.'))
+        amount_rubles = Decimal(amount_text.replace(',', '.'))
+        if not amount_rubles.is_finite():
+            await message.answer(texts.INVALID_AMOUNT, reply_markup=get_back_keyboard(db_user.language))
+            return
 
-        if amount_rubles < 1:
+        if amount_rubles < MIN_MANUAL_TOPUP_RUBLES:
             await message.answer(
-                'Минимальная сумма пополнения: 1 ₽',
+                format_topup_amount_retry(
+                    db_user.language, MIN_MANUAL_TOPUP_RUBLES * 100, MAX_MANUAL_TOPUP_RUBLES * 100, too_low=True
+                ),
                 reply_markup=get_back_keyboard(db_user.language, callback_data='balance_topup'),
             )
             return
 
-        if amount_rubles > 50000:
+        if amount_rubles > MAX_MANUAL_TOPUP_RUBLES:
             await message.answer(
-                'Максимальная сумма пополнения: 50,000 ₽',
+                format_topup_amount_retry(
+                    db_user.language, MIN_MANUAL_TOPUP_RUBLES * 100, MAX_MANUAL_TOPUP_RUBLES * 100, too_low=False
+                ),
                 reply_markup=get_back_keyboard(db_user.language, callback_data='balance_topup'),
             )
             return
@@ -724,30 +776,46 @@ async def process_topup_amount(message: types.Message, db_user: User, state: FSM
 
         if payment_method in ['yookassa', 'yookassa_sbp']:
             if amount_kopeks < settings.YOOKASSA_MIN_AMOUNT_KOPEKS:
-                min_rubles = settings.YOOKASSA_MIN_AMOUNT_KOPEKS / 100
                 await message.answer(
-                    f'❌ Минимальная сумма для оплаты через YooKassa: {min_rubles:.0f} ₽',
+                    format_topup_amount_retry(
+                        db_user.language,
+                        settings.YOOKASSA_MIN_AMOUNT_KOPEKS,
+                        settings.YOOKASSA_MAX_AMOUNT_KOPEKS,
+                        too_low=True,
+                    ),
                     reply_markup=get_back_keyboard(db_user.language, callback_data='balance_topup'),
                 )
                 return
 
             if amount_kopeks > settings.YOOKASSA_MAX_AMOUNT_KOPEKS:
-                max_rubles = settings.YOOKASSA_MAX_AMOUNT_KOPEKS / 100
                 await message.answer(
-                    f'❌ Максимальная сумма для оплаты через YooKassa: {max_rubles:,.0f} ₽'.replace(',', ' '),
+                    format_topup_amount_retry(
+                        db_user.language,
+                        settings.YOOKASSA_MIN_AMOUNT_KOPEKS,
+                        settings.YOOKASSA_MAX_AMOUNT_KOPEKS,
+                        too_low=False,
+                    ),
                     reply_markup=get_back_keyboard(db_user.language, callback_data='balance_topup'),
                 )
                 return
 
         if not await route_payment_by_method(message, db_user, amount_kopeks, state, payment_method):
-            await message.answer('Неизвестный способ оплаты')
+            await message.answer(texts.t('PAYMENT_UI_UNKNOWN_METHOD_PLAIN', 'Неизвестный способ оплаты'))
 
-    except ValueError:
+    except (ValueError, InvalidOperation):
         await message.answer(texts.INVALID_AMOUNT, reply_markup=get_back_keyboard(db_user.language))
 
 
 @error_handler
-async def handle_sbp_payment(callback: types.CallbackQuery, db: AsyncSession):
+async def handle_sbp_payment(callback: types.CallbackQuery, db: AsyncSession, db_user: User | None = None):
+    texts = get_texts(
+        getattr(db_user, 'language', None)
+        or getattr(getattr(callback, 'from_user', None), 'language_code', None)
+        or DEFAULT_LANGUAGE
+    )
+    if db_user is None:
+        await callback.answer(texts.t('PAYMENT_UI_NOT_FOUND', '❌ Платеж не найден'), show_alert=True)
+        return
     try:
         local_payment_id = int(callback.data.split('_')[-1])
 
@@ -755,8 +823,8 @@ async def handle_sbp_payment(callback: types.CallbackQuery, db: AsyncSession):
 
         payment = await get_yookassa_payment_by_local_id(db, local_payment_id)
 
-        if not payment:
-            await callback.answer('❌ Платеж не найден', show_alert=True)
+        if not payment or payment.user_id != db_user.id:
+            await callback.answer(texts.t('PAYMENT_UI_NOT_FOUND', '❌ Платеж не найден'), show_alert=True)
             return
 
         import json
@@ -765,24 +833,26 @@ async def handle_sbp_payment(callback: types.CallbackQuery, db: AsyncSession):
         confirmation_token = metadata.get('confirmation_token')
 
         if not confirmation_token:
-            await callback.answer('❌ Токен подтверждения не найден', show_alert=True)
+            await callback.answer(
+                texts.t('PAYMENT_UI_TOKEN_MISSING', '❌ Токен подтверждения не найден'), show_alert=True
+            )
             return
 
         await callback.message.answer(
-            f'Для оплаты через СБП откройте приложение вашего банка и подтвердите платеж.\\n\\n'
-            f'Если у вас не открылось банковское приложение автоматически, вы можете:\\n'
-            f'1. Скопировать этот токен: <code>{confirmation_token}</code>\\n'
-            f'2. Открыть приложение вашего банка\\n'
-            f'3. Найти функцию оплаты по токену\\n'
-            f'4. Вставить токен и подтвердить платеж',
+            texts.t(
+                'PAYMENT_UI_SBP_TOKEN_INSTRUCTIONS',
+                'Для оплаты через СБП откройте приложение вашего банка и подтвердите платеж.\n\nЕсли у вас не открылось банковское приложение автоматически, вы можете:\n1. Скопировать этот токен: <code>{value1}</code>\n2. Открыть приложение вашего банка\n3. Найти функцию оплаты по токену\n4. Вставить токен и подтвердить платеж',
+            ).format(value1=confirmation_token),
             parse_mode='HTML',
         )
 
-        await callback.answer('Информация об оплате отправлена', show_alert=True)
+        await callback.answer(
+            texts.t('PAYMENT_UI_PAYMENT_INFO_SENT', 'Информация об оплате отправлена'), show_alert=True
+        )
 
     except Exception as e:
         logger.error('Ошибка обработки embedded платежа СБП', error=e)
-        await callback.answer('❌ Ошибка обработки платежа', show_alert=True)
+        await callback.answer(texts.t('PAYMENT_UI_PROCESSING_ERROR', '❌ Ошибка обработки платежа'), show_alert=True)
 
 
 async def _reply_after_answer(callback: types.CallbackQuery, text: str) -> None:
@@ -797,15 +867,16 @@ async def handle_topup_amount_callback(
     db_user: User,
     state: FSMContext,
 ):
+    texts = get_texts(db_user.language)
     try:
         _, method, amount_str = callback.data.split('|', 2)
         amount_kopeks = int(amount_str)
     except ValueError:
-        await callback.answer('❌ Некорректный запрос', show_alert=True)
+        await callback.answer(texts.t('DEVICES_INVALID_REQUEST', '❌ Некорректный запрос'), show_alert=True)
         return
 
     if amount_kopeks <= 0:
-        await callback.answer('❌ Некорректная сумма', show_alert=True)
+        await callback.answer(texts.t('PAYMENT_UI_INVALID_AMOUNT', '❌ Некорректная сумма'), show_alert=True)
         return
 
     # Сценарии, которым передаётся сам callback, отвечают на нажатие сами (у них свои алерты).
@@ -824,6 +895,15 @@ async def handle_topup_amount_callback(
             await start_platega_payment(callback, db_user, state)
             return
 
+    if method == 'cashera':
+        data = await state.get_data()
+        if not (data or {}).get('cashera_method'):
+            from .cashera import start_cashera_payment
+
+            await state.update_data(cashera_pending_amount=amount_kopeks)
+            await start_cashera_payment(callback, db_user, state)
+            return
+
     # Снимаем «часики» до похода к провайдеру: создание платежа может идти секунды, а Telegram
     # ждёт ответ на нажатие недолго. Поздний answer() падал с «query is too old», собственный
     # except считал это ошибкой пополнения и слал отчёт админам, хотя ссылка на оплату уже ушла.
@@ -839,6 +919,15 @@ async def handle_topup_amount_callback(
             await state.set_state(BalanceStates.waiting_for_amount)
             async with AsyncSessionLocal() as db:
                 await process_platega_payment_amount(callback.message, db_user, db, amount_kopeks, state)
+        elif method.startswith('cashera_m_'):
+            from app.database.database import AsyncSessionLocal
+
+            from .cashera import process_cashera_payment_amount
+
+            await state.update_data(payment_method='cashera', cashera_method=method.removeprefix('cashera_m_'))
+            await state.set_state(BalanceStates.waiting_for_amount)
+            async with AsyncSessionLocal() as db:
+                await process_cashera_payment_amount(callback.message, db_user, db, amount_kopeks, state)
         elif method == 'platega':
             # Код способа уже лежит в состоянии — проверено выше.
             from app.database.database import AsyncSessionLocal
@@ -853,13 +942,15 @@ async def handle_topup_amount_callback(
             await state.update_data(payment_method=method)
             await state.set_state(BalanceStates.waiting_for_amount)
             if not await route_payment_by_method(callback.message, db_user, amount_kopeks, state, method):
-                await _reply_after_answer(callback, '❌ Неизвестный способ оплаты')
+                await _reply_after_answer(
+                    callback, texts.t('SUBSCRIPTION_UI_UNKNOWN_PAYMENT_METHOD', '❌ Неизвестный способ оплаты')
+                )
 
     except TelegramBadRequest:
         raise  # устаревший запрос и прочие ответы Telegram классифицирует @error_handler
     except Exception as error:
         logger.error('Ошибка быстрого пополнения', error=error)
-        await _reply_after_answer(callback, '❌ Ошибка обработки запроса')
+        await _reply_after_answer(callback, texts.t('DEVICE_RENAME_PARSE_ERROR', '❌ Ошибка обработки запроса'))
 
 
 def register_balance_handlers(dp: Dispatcher):
@@ -881,6 +972,7 @@ def register_balance_handlers(dp: Dispatcher):
     dp.callback_query.register(show_transaction_detail, F.data.startswith('bh_view_'))
 
     dp.callback_query.register(show_payment_methods, F.data == 'balance_topup')
+    dp.callback_query.register(show_payment_methods, F.data.startswith('balance_topup_amount|'))
 
     from .stars import start_stars_payment
 
@@ -987,10 +1079,6 @@ def register_balance_handlers(dp: Dispatcher):
 
     dp.callback_query.register(start_severpay_topup, F.data == 'topup_severpay')
 
-    from .paypear import start_paypear_topup
-
-    dp.callback_query.register(start_paypear_topup, F.data == 'topup_paypear')
-
     from .rollypay import start_rollypay_topup
 
     dp.callback_query.register(start_rollypay_topup, F.data == 'topup_rollypay')
@@ -1020,12 +1108,14 @@ def register_balance_handlers(dp: Dispatcher):
     dp.callback_query.register(start_etoplatezhi_card_topup, F.data == 'topup_etoplatezhi_card')
 
     from .antilopay import (
+        process_antilopay_email,
         start_antilopay_card_topup,
         start_antilopay_sberpay_topup,
         start_antilopay_sbp_topup,
         start_antilopay_topup,
     )
 
+    dp.message.register(process_antilopay_email, BalanceStates.waiting_for_antilopay_email)
     dp.callback_query.register(start_antilopay_topup, F.data == 'topup_antilopay')
     dp.callback_query.register(start_antilopay_sbp_topup, F.data == 'topup_antilopay_sbp')
     dp.callback_query.register(start_antilopay_card_topup, F.data == 'topup_antilopay_card')
@@ -1054,11 +1144,27 @@ def register_balance_handlers(dp: Dispatcher):
     dp.callback_query.register(start_lava_card_topup, F.data == 'topup_lava_card')
     dp.callback_query.register(start_lava_sbp_topup, F.data == 'topup_lava_sbp')
 
-    from .cispay import start_cispay_card_topup, start_cispay_sbp_topup, start_cispay_topup
+    from .cashera import handle_cashera_method_selection, start_cashera_direct_method, start_cashera_payment
 
+    dp.callback_query.register(start_cashera_payment, F.data == 'topup_cashera')
+    dp.callback_query.register(handle_cashera_method_selection, F.data.startswith('cashera_method_'))
+    dp.callback_query.register(start_cashera_direct_method, F.data.startswith('topup_cashera_m_'))
+
+    from .cispay import start_cispay_card_topup, start_cispay_crypto_topup, start_cispay_sbp_topup, start_cispay_topup
+
+    dp.callback_query.register(start_cispay_crypto_topup, F.data == 'topup_cispay_crypto')
     dp.callback_query.register(start_cispay_topup, F.data == 'topup_cispay')
     dp.callback_query.register(start_cispay_card_topup, F.data == 'topup_cispay_card')
     dp.callback_query.register(start_cispay_sbp_topup, F.data == 'topup_cispay_sbp')
+
+    from .anore import start_anore_selected_topup
+
+    dp.callback_query.register(
+        start_anore_selected_topup,
+        F.data.in_(
+            {'topup_anore', 'topup_anore_sbp', 'topup_anore_card', 'topup_anore_yoomoney', 'topup_anore_crypto'}
+        ),
+    )
 
     from .tabpay import start_tabpay_card_topup, start_tabpay_sbp_topup, start_tabpay_topup
 
@@ -1087,6 +1193,10 @@ def register_balance_handlers(dp: Dispatcher):
     from .platega import check_platega_payment_status
 
     dp.callback_query.register(check_platega_payment_status, F.data.startswith('check_platega_'))
+
+    from .cashera import check_cashera_payment_status
+
+    dp.callback_query.register(check_cashera_payment_status, F.data.startswith('check_cashera_'))
 
     dp.callback_query.register(handle_payment_methods_unavailable, F.data == 'payment_methods_unavailable')
 

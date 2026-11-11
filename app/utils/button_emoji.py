@@ -54,3 +54,36 @@ def make_button(
     if emoji_id:
         kwargs['icon_custom_emoji_id'] = emoji_id
     return InlineKeyboardButton(**kwargs)
+
+
+def sanitize_markup(markup: Any) -> Any:
+    """Turn ``<tg-emoji>`` markup inside button labels into button icons.
+
+    Button captions are plain text: Telegram does not parse HTML there, so an
+    unprocessed locale string would show raw tags. Any markup built before a
+    request goes through this safety net, regardless of how the keyboard was
+    assembled.
+    """
+    from aiogram.types import InlineKeyboardMarkup
+
+    if not isinstance(markup, InlineKeyboardMarkup):
+        return markup
+
+    changed = False
+    rows = []
+    for row in markup.inline_keyboard:
+        new_row = []
+        for button in row:
+            parsed = parse_button_label(button.text or '')
+            if parsed.icon_custom_emoji_id and not button.icon_custom_emoji_id:
+                new_row.append(
+                    button.model_copy(update={'text': parsed.text, 'icon_custom_emoji_id': parsed.icon_custom_emoji_id})
+                )
+                changed = True
+            else:
+                new_row.append(button)
+        rows.append(new_row)
+
+    if not changed:
+        return markup
+    return markup.model_copy(update={'inline_keyboard': rows})
