@@ -18,6 +18,8 @@ def _enable_transport(monkeypatch):
     monkeypatch.setattr(settings, 'RICH_MESSAGES_ENABLED', True, raising=False)
     monkeypatch.setattr(rt, '_rich_unavailable', False)
     monkeypatch.setattr(rt, '_warned_unavailable', False)
+    monkeypatch.setattr(rt, '_logo_unavailable', False)
+    monkeypatch.setattr(rt, '_warned_logo_unavailable', False)
     monkeypatch.setattr(rt, '_resolve_logo_url', lambda: 'https://example.com/logo.png')
 
 
@@ -99,6 +101,29 @@ def test_other_photos_become_rich_media():
     assert rich.rich_message.media is not None
     assert rich.rich_message.media[0].id == 'photo'
     assert rich.rich_message.media[0].media.media == 'AgAD-qr-code'
+
+
+def test_logo_url_failure_keeps_rich_without_image(monkeypatch):
+    from aiogram.types import FSInputFile
+
+    monkeypatch.setattr('app.utils.message_patch._logo_send_path', LOGO_PATH)
+    monkeypatch.setattr(rt, '_logo_unavailable', True)
+    rich = rt.convert_method(SendPhoto(chat_id=1, photo=FSInputFile(LOGO_PATH), caption='Caption\n<b>x</b>'))
+
+    assert isinstance(rich, SendRichMessage)
+    assert rich.rich_message.html == 'Caption<br/><b>x</b>'
+    assert rich.rich_message.media is None
+
+
+def test_media_fetch_error_detection():
+    assert rt._is_media_fetch_error(Exception('wrong type of the web page'))
+    assert rt._is_media_fetch_error(Exception('WEBPAGE_CURL_FAILED'))
+    assert not rt._is_media_fetch_error(Exception('message is too long'))
+
+
+def test_mark_logo_unavailable_disables_logo():
+    rt._mark_logo_unavailable(Exception('bad url'))
+    assert rt._logo_unavailable is True
 
 
 def test_rich_message_gets_plain_text_fallback():
