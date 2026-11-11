@@ -41,6 +41,21 @@ logger = structlog.get_logger(__name__)
 _rich_unavailable = False
 _warned_unavailable = False
 
+# Telegram could not download the logo URL (private URL, expired CDN, wrong MIME).
+# Rich screens then keep working without the image instead of falling back to the
+# classic photo path on every single message.
+_logo_unavailable = False
+_warned_logo_unavailable = False
+
+_MEDIA_FETCH_ERROR_MARKERS = (
+    'http url',
+    'webpage_',
+    'media_empty',
+    'photo_invalid',
+    'image_process',
+    'wrong type of the web page',
+)
+
 # Newlines are line breaks in classic messages, but rich HTML needs <br/>.
 # Inside <pre> the newlines are meaningful and must survive untouched.
 _PRE_BLOCK_RE = re.compile(r'(<pre\b[^>]*>.*?</pre>)', re.IGNORECASE | re.DOTALL)
@@ -155,8 +170,26 @@ def _is_unsupported_error(error: Exception) -> bool:
     )
 
 
+def _is_media_fetch_error(error: Exception) -> bool:
+    text = str(error).lower()
+    return any(marker in text for marker in _MEDIA_FETCH_ERROR_MARKERS)
+
+
+def _mark_logo_unavailable(error: Exception) -> None:
+    global _logo_unavailable, _warned_logo_unavailable
+    _logo_unavailable = True
+    if not _warned_logo_unavailable:
+        _warned_logo_unavailable = True
+        logger.warning(
+            'Telegram не смог скачать логотип для rich-сообщений — экраны продолжат отправляться без картинки',
+            error=str(error)[:300],
+        )
+
+
 def _resolve_logo_url() -> str:
     """Public http(s) URL of the bot logo, or '' when it cannot be rendered."""
+    if _logo_unavailable:
+        return ''
     explicit = (
         getattr(settings, 'RICH_MESSAGES_LOGO_URL', '') or getattr(settings, 'MAIN_MENU_RICH_LOGO_URL', '') or ''
     ).strip()
@@ -345,6 +378,15 @@ def _convert_send_photo(method: SendPhoto) -> SendRichMessage | None:
 
     # Logo -> public URL, exactly like the classic logo+caption screen.
     if _is_logo_photo(method.photo):
+        if _logo_unavailable:
+            # URL failed once — keep the rich screen, just without the picture.
+            body = html_to_rich(method.caption, method.parse_mode) if method.caption else None
+            if not body:
+                return None
+            return SendRichMessage(
+                rich_message=InputRichMessage(html=body),
+                **_rich_send_kwargs(method),
+            )
         rich_html = _rich_html_for_logo(method.caption, method.parse_mode)
         if rich_html is None:
             return None
@@ -414,12 +456,30 @@ class RichAiohttpSession(AiohttpSession):
         except TelegramBadRequest as error:
             if _is_unsupported_error(error):
                 _mark_rich_unavailable(error)
-            else:
-                logger.debug(
-                    'Rich-сообщение отклонено, повтор классическим методом',
-                    method=type(method).__name__,
-                    error=str(error)[:200],
-                )
+                return await super().make_request(bot, method, timeout)
+            if (
+                isinstance(method, SendPhoto)
+                and _is_logo_photo(method.photo)
+                and not _logo_unavailable
+                and _is_media_fetch_error(error)
+            ):
+                # The logo URL is the only broken part: retry as rich without it.
+                _mark_logo_unavailable(error)
+                retry_method = convert_method(method)
+                if retry_method is not None:
+                    try:
+                        result = await super().make_request(bot, retry_method, timeout)
+                    except (TelegramBadRequest, TelegramNotFound):
+                        pass
+                    else:
+                        _restore_message_fields(result, method)
+                        return result
+                return await super().make_request(bot, method, timeout)
+            logger.debug(
+                'Rich-сообщение отклонено, повтор классическим методом',
+                method=type(method).__name__,
+                error=str(error)[:200],
+            )
             return await super().make_request(bot, method, timeout)
         except TelegramNotFound as error:
             _mark_rich_unavailable(error)
