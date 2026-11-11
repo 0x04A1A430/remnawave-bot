@@ -315,44 +315,13 @@ def _rich_menu_logo_html() -> str:
     return rich_ui.rich_logo_html()
 
 
-def _menu_stats_block(user: User) -> str:
-    """Компактная сводка «баланс / трафик / устройства» для одиночной подписки.
-
-    Источник данных — user.subscription (первая активная). Без подписки блок
-    не рисуем: в мультитарифе сводка была бы про одну из многих, а без
-    подписки показывать нечего. Значения — данные, поэтому экранируются;
-    прогресс-бар — разметка и вставляется как есть.
-    """
-    subscription = getattr(user, 'subscription', None)
-    if subscription is None:
-        return ''
-
-    limit_gb = getattr(subscription, 'traffic_limit_gb', 0) or 0
-    used_gb = getattr(subscription, 'traffic_used_gb', 0.0) or 0.0
-    devices = getattr(subscription, 'device_limit', 0) or 0
-
-    traffic_value = '∞' if limit_gb == 0 else html.escape(f'{used_gb:.1f} / {limit_gb} ГБ')
-    rows = [
-        ('💰 Баланс', html.escape(settings.format_price(user.balance_kopeks))),
-        ('📊 Трафик', traffic_value),
-        ('📱 Устройства', '∞' if devices == 0 else html.escape(str(devices))),
-    ]
-
-    blocks = [rich_ui.kv_table(rows)]
-    if limit_gb > 0:
-        percent = min(used_gb / limit_gb * 100, 100.0)
-        blocks.append(f'<p>{rich_ui.progress_bar(percent)} {percent:.0f}%</p>')
-    return ''.join(blocks)
-
-
 async def build_main_menu_rich_html(user: User, texts, db: AsyncSession) -> str:
     """Собирает rich-HTML главного меню (контент, без клавиатуры).
 
-    get_main_menu_text остаётся единственным источником правды для контента:
-    шапка с именем, статус подписки, подсказки, случайное сообщение. Rich-слой
-    добавляет только оформление — логотип, компактную сводку баланса/трафика/
-    устройств (в одиночном режиме) и footer. В мультитарифе сводки нет: она
-    относилась бы к одной из нескольких подписок и спорила с классическим меню.
+    Минималистичный рендер: get_main_menu_text остаётся единственным источником
+    правды (шапка с именем, статус подписки, подсказки, случайное сообщение).
+    Rich-слой не добавляет собственных таблиц, прогресс-баров и футеров — только
+    логотип и ту же самую разметку классического меню.
     """
     from app.handlers.menu import get_main_menu_text
 
@@ -362,15 +331,10 @@ async def build_main_menu_rich_html(user: User, texts, db: AsyncSession) -> str:
 
     blocks.append(_rich_menu_logo_html())
 
-    if not settings.is_multi_tariff_enabled():
-        blocks.append(_menu_stats_block(user))
-
     # Текст классического меню уже HTML (<b>, <blockquote>, tg-emoji) — прогоняем
     # его через тот же _rich_text, что и редактируемые шаблоны, а переносы строк
     # заменяем на <br>: в rich-HTML голый backslash-n не отображается.
     blocks.append(_rich_text(menu_text).replace('\n', '<br/>'))
-
-    blocks.append(rich_ui.rich_footer())
 
     return ''.join(blocks)
 
