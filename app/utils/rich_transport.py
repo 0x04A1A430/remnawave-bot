@@ -168,9 +168,16 @@ def _resolve_logo_url() -> str:
 
 
 def _normalize_parse_mode(parse_mode: object) -> str:
-    """Lower-case parse mode; aiogram defaults are HTML in this project."""
-    if parse_mode is None or isinstance(parse_mode, Default):
+    """Return the effective parse mode.
+
+    aiogram distinguishes "not passed" (``Default('parse_mode')`` → the bot's
+    HTML default) from an explicit ``None`` (no parsing at all). Treating both as
+    HTML corrupted plain-text messages and could break on a bare ``<``.
+    """
+    if isinstance(parse_mode, Default):
         return 'html'
+    if parse_mode is None:
+        return 'plain'
     return str(parse_mode).lower()
 
 
