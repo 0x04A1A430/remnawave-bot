@@ -381,9 +381,9 @@ class SubscriptionRenewalService:
 
         # Support both SubscriptionRenewalPricing and RenewalPricing
         if isinstance(pricing, SubscriptionRenewalPricing):
-            consume_promo_offer = bool(pricing.promo_discount_value)
+            consume_promo_offer = bool(pricing.promo_discount_percent)
         else:
-            consume_promo_offer = bool(pricing.promo_offer_discount)
+            consume_promo_offer = bool(pricing.breakdown.get('offer_discount_pct', 0))
 
         description_text = description or f'Продление подписки на {period_days} дней'
 

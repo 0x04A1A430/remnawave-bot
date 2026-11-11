@@ -1042,7 +1042,7 @@ async def _auto_purchase_tariff(
             ),
         )
     final_price = result.final_total
-    consume_promo = result.promo_offer_discount > 0
+    consume_promo = result.breakdown.get('offer_discount_pct', 0) > 0
 
     if final_price > 0 and user.balance_kopeks < final_price:
         logger.info(
@@ -2612,7 +2612,7 @@ async def _try_auto_extend_expired_after_topup(
         return False
 
     # Derive consume_promo_offer from PricingEngine result (user already locked above)
-    consume_promo_offer = pricing.promo_offer_discount > 0
+    consume_promo_offer = pricing.breakdown.get('offer_discount_pct', 0) > 0
 
     user_id, subscription_id = user.id, subscription.id
     description = f'Автопродление истёкшей подписки на {format_days_declension(period_days)}'

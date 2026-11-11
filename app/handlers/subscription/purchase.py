@@ -2164,7 +2164,7 @@ async def confirm_extend_subscription(
             'missing_amount': missing_kopeks,
             'return_to_cart': True,
             'description': f'Продление подписки на {days} дней',
-            'consume_promo_offer': bool(promo_offer_discount > 0),
+            'consume_promo_offer': bool(pricing.breakdown.get('offer_discount_pct', 0) > 0),
             'device_limit': device_limit,
             'devices': device_limit,
             'traffic_limit_gb': renewal_traffic_gb,
@@ -5072,7 +5072,7 @@ async def _extend_simple_tariff_subscription(
             'traffic_limit_gb': subscription.traffic_limit_gb,
             'traffic_gb': subscription.traffic_limit_gb,
             'countries': list(subscription.connected_squads or []),
-            'consume_promo_offer': pricing.promo_offer_discount > 0,
+            'consume_promo_offer': pricing.breakdown.get('offer_discount_pct', 0) > 0,
         }
         # Do not hold financial locks while contacting Redis or Telegram.
         await db.rollback()
