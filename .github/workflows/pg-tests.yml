@@ -1,0 +1,61 @@
+name: PostgreSQL tests
+
+# Метки postgres проверяют блокировки строк, VARCHAR-лимиты и TIMESTAMPTZ —
+# на SQLite они бессмысленны. Гоняем отдельно от PR: ночью и по кнопке.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 2 * * *'
+
+permissions:
+  contents: read
+
+jobs:
+  pytest:
+    name: pytest (PostgreSQL ${{ matrix.postgres }}, shard ${{ matrix.shard }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        postgres: ['18']
+        shard: [0, 1, 2, 3]
+
+    services:
+      postgres:
+        image: postgres:${{ matrix.postgres }}-alpine
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U test -d test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      TEST_DATABASE_URL: postgresql+asyncpg://test:test@localhost:5432/test
+      # Без базы тесты молча пропускаются — в CI это выглядит как успех.
+      REQUIRE_POSTGRES_TESTS: '1'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v10.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.14'
+
+      - name: Sync dependencies (locked)
+        run: uv sync --frozen --group dev
+
+      - name: Run PostgreSQL tests
+        run: >-
+          uv run --frozen python -m pytest -p tests.pytest_pg_shard -m postgres -q
+          --pg-shard-index=${{ matrix.shard }} --pg-shard-count=4
