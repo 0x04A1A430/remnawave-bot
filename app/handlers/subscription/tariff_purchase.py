@@ -3192,7 +3192,7 @@ async def confirm_tariff_extend(
         ),
     )
     final_price = result.final_total
-    consume_promo = result.promo_offer_discount > 0
+    consume_promo = result.breakdown.get('offer_discount_pct', 0) > 0
 
     # Проверяем баланс
     user_balance = db_user.balance_kopeks or 0
@@ -4055,7 +4055,7 @@ async def confirm_tariff_switch(
         user=db_user,
     )
     final_price = result.final_total
-    consume_promo = result.promo_offer_discount > 0
+    consume_promo = result.breakdown.get('offer_discount_pct', 0) > 0
 
     # Проверяем баланс
     user_balance = db_user.balance_kopeks or 0

@@ -175,6 +175,7 @@ async def renew_subscription(
     )
     price_kopeks = pricing.final_total
     promo_offer_discount_value = pricing.promo_offer_discount
+    promo_offer_applied = pricing.breakdown.get('offer_discount_pct', 0) > 0
     promo_offer_discount_percent = pricing.breakdown.get('offer_discount_pct', 0)
 
     if price_kopeks <= 0 and pricing.original_total <= 0:
@@ -224,7 +225,7 @@ async def renew_subscription(
             'description': f'Продление подписки на {request.period_days} дней'
             + (f' ({tariff_name})' if tariff_name else ''),
             'discount_percent': discount_percent,
-            'consume_promo_offer': promo_offer_discount_value > 0,
+            'consume_promo_offer': promo_offer_applied,
             'source': 'cabinet',
         }
 

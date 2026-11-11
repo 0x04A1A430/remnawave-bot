@@ -6810,7 +6810,7 @@ async def purchase_tariff_endpoint(
         ),
     )
     price_kopeks = result.final_total
-    consume_promo_offer = result.promo_offer_discount > 0
+    consume_promo_offer = result.breakdown.get('offer_discount_pct', 0) > 0
     bd = result.breakdown
     group_pcts = bd.get('group_discount_pct', {})
     discount_percent = group_pcts.get('period', 0)
