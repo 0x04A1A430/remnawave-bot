@@ -15,7 +15,7 @@ from app.utils.message_patch import LOGO_PATH
 
 @pytest.fixture(autouse=True)
 def _enable_transport(monkeypatch):
-    monkeypatch.setattr(type(settings), 'RICH_MESSAGES_ENABLED', True, raising=False)
+    monkeypatch.setattr(settings, 'RICH_MESSAGES_ENABLED', True, raising=False)
     monkeypatch.setattr(rt, '_rich_unavailable', False)
     monkeypatch.setattr(rt, '_warned_unavailable', False)
     monkeypatch.setattr(rt, '_resolve_logo_url', lambda: 'https://example.com/logo.png')
@@ -50,8 +50,21 @@ def test_edit_message_text_becomes_rich():
 
     assert isinstance(rich, EditMessageText)
     assert rich.text is None
-    assert rich.rich_message.html == 'Hi<br/><i>there</i>'
+    assert rich.rich_message.html == '<img src="https://example.com/logo.png"/>Hi<br/><i>there</i>'
     assert rich.message_id == 5
+
+
+def test_edit_without_logo_mode_has_no_image(monkeypatch):
+    monkeypatch.setattr(settings, 'ENABLE_LOGO_MODE', False, raising=False)
+    rich = rt.convert_method(EditMessageText(chat_id=1, message_id=5, text='Hi'))
+    assert rich.rich_message.html == 'Hi'
+
+
+def test_edit_does_not_duplicate_existing_image():
+    rich = rt.convert_method(
+        EditMessageText(chat_id=1, message_id=5, text='<img src="https://example.com/card.png"/>Hi')
+    )
+    assert rich.rich_message.html == '<img src="https://example.com/card.png"/>Hi'
 
 
 def test_logo_photo_becomes_rich_image(monkeypatch):
