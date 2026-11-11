@@ -6209,7 +6209,7 @@
   Функции: нет
 - `tests/utils/test_button_emoji_sanitize.py` — Python-модуль
   Классы: нет
-  Функции: `test_parse_strips_custom_emoji_from_label`, `test_make_button_converts_markup_to_icon`, `test_sanitize_markup_cleans_directly_built_buttons`, `test_sanitize_keeps_plain_markup_untouched`
+  Функции: `test_parse_strips_custom_emoji_from_label`, `test_make_button_converts_markup_to_icon`, `test_sanitize_markup_cleans_directly_built_buttons`, `test_sanitize_keeps_plain_markup_untouched`, `test_callback_answer_text_loses_markup`
 - `tests/utils/test_chat_menu_button.py` — Python-модуль
   Классы: нет
   Функции: `test_disabled_does_not_touch_menu_button`, `test_enabled_sets_webapp_menu_button`, `test_falls_back_to_miniapp_custom_url`, `test_non_https_url_is_skipped`, `test_empty_text_defaults`
