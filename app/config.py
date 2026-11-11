@@ -1177,6 +1177,14 @@ class Settings(BaseSettings):
     # Пользовательские уведомления rich-сообщением. Действует только при
     # включённом rich-меню: иначе сервер про rich может не знать вовсе.
     USER_NOTIFICATIONS_RICH_ENABLED: bool = True
+    # Весь бот работает на rich-сообщениях (Bot API 10.1+): обычные текстовые
+    # экраны и экраны с логотипом прозрачно конвертируются в rich, клавиатура и
+    # текст остаются прежними. При отказе сервера каждый экран автоматически
+    # откатывается на классический метод — потерять сообщение нельзя.
+    RICH_MESSAGES_ENABLED: bool = False
+    # Публичный http(s)-URL логотипа для rich-экранов. Пусто — берётся
+    # MAIN_MENU_RICH_LOGO_URL.
+    RICH_MESSAGES_LOGO_URL: str = ''
     # Публичный HTTPS-URL картинки-логотипа в шапке rich-меню. Пусто — авто-режим:
     # при заданном WEBHOOK_URL и существующем LOGO_FILE логотип отдаётся своим
     # эндпоинтом {origin WEBHOOK_URL}/cabinet/branding/bot-logo. Если Telegram не

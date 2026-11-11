@@ -329,12 +329,13 @@ async def _answer_with_photo(self: Message, text: str = None, **kwargs):
 
 
 async def _edit_with_photo(self: Message, text: str, **kwargs):
+    is_rich = getattr(self, 'rich_message', None) is not None
     # Уважаем флаг в рантайме: если логотип выключен — не подменяем редактирование
     if not settings.ENABLE_LOGO_MODE:
         kwargs.setdefault('disable_web_page_preview', True)
         # Медиа-сообщения (фото/видео из рассылки и т.д.) не имеют text — edit_text упадёт.
         # Удаляем старое сообщение и отправляем новое.
-        if self.text is None:
+        if self.text is None and not is_rich:
             try:
                 await self.delete()
             except TelegramBadRequest:
@@ -408,7 +409,7 @@ async def _edit_with_photo(self: Message, text: str, **kwargs):
                     return None
                 raise
     # Не-фото медиа (видео, анимация и т.д.) с включённым логотипом — удаляем и отправляем с фото
-    if self.text is None:
+    if self.text is None and not is_rich:
         try:
             await self.delete()
         except TelegramBadRequest:
