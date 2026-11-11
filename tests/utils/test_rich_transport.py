@@ -103,6 +103,22 @@ def test_other_photos_become_rich_media():
     assert rich.rich_message.media[0].media.media == 'AgAD-qr-code'
 
 
+def test_in_memory_uploads_stay_classic():
+    from aiogram.types import BufferedInputFile
+
+    upload = BufferedInputFile(b'png', filename='stage.png')
+    assert rt.convert_method(SendPhoto(chat_id=1, photo=upload)) is None
+
+
+def test_expandable_blockquote_is_downgraded_for_rich():
+    rich = rt.convert_method(
+        SendMessage(chat_id=1, text='<blockquote expandable>Секрет</blockquote>\nдальше')
+    )
+
+    assert isinstance(rich, SendRichMessage)
+    assert rich.rich_message.html == '<blockquote>Секрет</blockquote><br/>дальше'
+
+
 def test_logo_url_failure_keeps_rich_without_image(monkeypatch):
     from aiogram.types import FSInputFile
 
