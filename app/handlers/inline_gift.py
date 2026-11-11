@@ -300,6 +300,17 @@ def _check_recipient(gift: InlineGiftSubscription, telegram_id: int, username: s
     return result
 
 
+async def inline_gift_exists(gift_code: str) -> bool:
+    """True, если код принадлежит inline-подарку (для legacy-ссылок без bs_)."""
+    if not gift_code:
+        return False
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            select(InlineGiftSubscription.id).where(InlineGiftSubscription.gift_code == gift_code).limit(1)
+        )
+        return result.scalar_one_or_none() is not None
+
+
 async def handle_gift_deeplink(message: types.Message, gift_code: str, state=None) -> bool:
     telegram_id = message.from_user.id
     username = (message.from_user.username or '').lower()
@@ -1102,7 +1113,7 @@ async def _update_inline_button(
     try:
         if remaining > 0 and gift_code:
             bot_username = settings.BOT_USERNAME or ''
-            deep_link = f'https://t.me/{bot_username}?start={gift_code}'
+            deep_link = f'https://t.me/{bot_username}?start=bs_{gift_code}'
             kb = types.InlineKeyboardMarkup(inline_keyboard=[[make_button(text=text, url=deep_link)]])
         else:
             kb = types.InlineKeyboardMarkup(inline_keyboard=[[make_button(text=text, callback_data='igift_noop')]])
