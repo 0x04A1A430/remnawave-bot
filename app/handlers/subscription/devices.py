@@ -1053,11 +1053,12 @@ async def show_devices_page(
 
         for device in pagination.items:
             platform = device.get('platform', 'Unknown')
+            device_model = device.get('deviceModel') or device.get('model') or ''
             os_version = device.get('osVersion') or device.get('os_version') or ''
             app_version = device.get('appVersion') or device.get('app_version') or ''
             emoji_tag = platform_emoji.get(platform, '')
             device_info = html_mod.escape(
-                format_device_label(platform, '', os_version=os_version, app_version=app_version)
+                format_device_label(platform, device_model, os_version=os_version, app_version=app_version)
             )
 
             if len(device_info) > 45:

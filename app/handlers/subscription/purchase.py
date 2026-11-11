@@ -58,6 +58,7 @@ from app.services.trial_activation_service import (
 )
 from app.services.user_cart_service import user_cart_service
 from app.utils.decorators import error_handler
+from app.utils.device_display import format_device_label
 from app.utils.legacy_subscription import is_legacy_subscription as _legacy_subscription
 
 
@@ -524,17 +525,22 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
     )
 
     if show_devices and devices_list:
-        message += '\n\n' + texts.t(
+        message += '\n' + texts.t(
             'SUBSCRIPTION_CONNECTED_DEVICES_TITLE',
             '<blockquote>📱 <b>Подключенные устройства:</b>\n',
         )
         for device in devices_list[:5]:
             platform = device.get('platform', 'Unknown')
-            device_info = platform
+            device_info = format_device_label(
+                platform,
+                device.get('deviceModel') or device.get('model') or '',
+                os_version=device.get('osVersion') or device.get('os_version') or '',
+                app_version=device.get('appVersion') or device.get('app_version') or '',
+            )
 
-            if len(device_info) > 35:
-                device_info = device_info[:32] + '...'
-            message += f'• {device_info}\n'
+            if len(device_info) > 40:
+                device_info = device_info[:37] + '...'
+            message += f'• {html.escape(device_info)}\n'
         message += texts.t('SUBSCRIPTION_CONNECTED_DEVICES_FOOTER', '</blockquote>')
 
     # Отображаем докупленный трафик
@@ -554,7 +560,7 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
         purchases = purchases_result.scalars().all()
 
         if purchases:
-            message += '\n\n' + texts.t(
+            message += '\n' + texts.t(
                 'SUBSCRIPTION_PURCHASED_TRAFFIC_TITLE',
                 '<blockquote>📦 <b>Докупленный трафик:</b>\n',
             )
@@ -612,7 +618,7 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
         else:
             subscription_link_display = f'<code>{subscription_link}</code>'
 
-        message += '\n\n' + texts.t(
+        message += '\n' + texts.t(
             'SUBSCRIPTION_CONNECT_LINK_SECTION',
             '🔗 <b>Ссылка для подключения:</b>\n{subscription_url}',
         ).format(subscription_url=subscription_link_display)
