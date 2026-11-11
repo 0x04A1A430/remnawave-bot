@@ -54,8 +54,8 @@ async def test_main_menu_has_no_extra_blank_lines(monkeypatch):
     assert '💡 Подсказка о скидке' in text
     assert '🎲 Случайное сообщение' in text
     # Блоки разделены ровно одной пустой строкой, а не «дырой».
-    assert '</blockquote>\n\n💡 Подсказка о скидке' in text
-    assert 'Подсказка о скидке\n\n🎲 Случайное сообщение' in text
+    assert '</blockquote>\n💡 Подсказка о скидке' in text
+    assert 'Подсказка о скидке\n🎲 Случайное сообщение' in text
 
 
 @pytest.mark.asyncio
@@ -97,4 +97,4 @@ async def test_start_referral_question_screen_has_no_blank_line_holes(monkeypatc
 
     text = edit_text.await_args.args[0]
     _assert_clean_screen(text)
-    assert text == '<b>У вас есть код?</b>\n\nВведите код или пропустите:'
+    assert text == '<b>У вас есть код?</b>\nВведите код или пропустите:'

@@ -75,6 +75,7 @@
 - `.github/workflows/codeql.yml` — файл
 - `.github/workflows/docker-registry.yml` — файл
 - `.github/workflows/lint.yml` — файл
+- `.github/workflows/pg-tests.yml` — файл
 - `.github/workflows/pg-upgrade.yml` — файл
 - `.github/workflows/release-please.yml` — файл
 - `.github/workflows/release-pr-guard.yml` — файл
@@ -1019,6 +1020,9 @@
 - `app/handlers/admin/__init__.py` — Python-модуль
   Классы: нет
   Функции: нет
+- `app/handlers/admin/_text.py` — Python-модуль
+  Классы: нет
+  Функции: `compact_text` — Схлопнуть пустые строки и убрать пустые края сообщения.
 - `app/handlers/admin/backup.py` — Python-модуль
   Классы: `BackupStates`
   Функции: `get_backup_main_keyboard`, `get_backup_list_keyboard`, `get_backup_manage_keyboard`, `get_backup_settings_keyboard`, `show_backup_panel`, `create_backup_handler`, `show_backup_list`, `manage_backup_file`, `delete_backup_confirm`, `delete_backup_execute`, `restore_backup_start`, `restore_backup_execute`, `handle_backup_file_upload`, `show_backup_settings`, `toggle_backup_setting`, `register_handlers`
@@ -1270,7 +1274,7 @@
   Функции: `format_cispay_status`, `cispay_error_text`, `tariff_has_cispay_period`, `cispay_menu_rows`, `purchase_cispay_from_tariff`, `handle_cispay_recurrent`
 - `app/handlers/subscription/common.py` — Python-модуль
   Классы: нет
-  Функции: `resolve_subscription_from_context` — Resolve subscription for multi-tariff bot handlers., `update_traffic_prices`, `format_traffic_display`, `validate_traffic_price`, `get_localized_value`, `render_guide_blocks` — Render block-format guide steps to HTML text., `build_redirect_link`, `get_device_name`, `load_app_config_async` — Load app config from Remnawave API (if configured), with TTL cache., `invalidate_app_config_cache` — Clear the cached app config so next call re-fetches from Remnawave., `get_apps_for_platform_async` — Get apps for a device type from Remnawave config., `normalize_app` — Normalize Remnawave app dict to a unified format with blocks., `get_platforms_list` — Extract available platforms from config for keyboard generation., `resolve_button_url` — Resolve template variables in button URLs (port of cabinet's _resolve_button_url)., `create_deep_link`, `get_reset_devices_confirm_keyboard`, `get_traffic_switch_keyboard`, `get_confirm_switch_traffic_keyboard`
+  Функции: `compact_blank_lines` — Схлопывает пустые строки в одиночный перевод строки (общий хелпер)., `resolve_subscription_from_context` — Resolve subscription for multi-tariff bot handlers., `update_traffic_prices`, `format_traffic_display`, `validate_traffic_price`, `get_localized_value`, `render_guide_blocks` — Render block-format guide steps to HTML text., `build_redirect_link`, `get_device_name`, `load_app_config_async` — Load app config from Remnawave API (if configured), with TTL cache., `invalidate_app_config_cache` — Clear the cached app config so next call re-fetches from Remnawave., `get_apps_for_platform_async` — Get apps for a device type from Remnawave config., `normalize_app` — Normalize Remnawave app dict to a unified format with blocks., `get_platforms_list` — Extract available platforms from config for keyboard generation., `resolve_button_url` — Resolve template variables in button URLs (port of cabinet's _resolve_button_url)., `create_deep_link`, `get_reset_devices_confirm_keyboard`, `get_traffic_switch_keyboard`, `get_confirm_switch_traffic_keyboard`
 - `app/handlers/subscription/countries.py` — Python-модуль
   Классы: нет
   Функции: `handle_add_countries`, `get_countries_price_by_uuids_fallback`, `handle_manage_country`, `apply_countries_changes`, `select_country`, `countries_continue`, `handle_add_country_to_subscription`, `confirm_add_countries_to_subscription`
@@ -2356,7 +2360,7 @@
   Функции: `admin_required`, `auth_required` — Простая проверка на наличие пользователя в апдейте. Middleware уже подтягивает db_user,, `error_handler`, `state_cleanup`, `typing_action`, `rate_limit`
 - `app/utils/device_display.py` — Python-модуль
   Классы: нет
-  Функции: `is_junk_device_model`, `format_device_label` — Build a device label from the panel's platform, model, and version data.
+  Функции: `is_junk_device_model`, `format_device_label` — Build a short device label from the panel's platform, model, and version data.
 - `app/utils/display_mode.py` — Python-модуль
   Классы: нет
   Функции: `normalize_display_mode`, `is_visible_in_bot`, `is_visible_in_web`, `next_display_mode`, `display_mode_label`
@@ -2402,6 +2406,9 @@
 - `app/utils/miniapp_buttons.py` — Python-модуль
   Классы: нет
   Функции: `strip_leading_emoji` — Удалить ведущий юникод-emoji + следующий пробел. Безопасно для текста без emoji., `build_main_menu_button` — Always-callback button for "Main Menu" / "Главное меню" navigation., `build_cabinet_url` — Join ``MINIAPP_CUSTOM_URL`` with an optional *path* segment., `build_miniapp_or_callback_button` — Create a button that opens the cabinet miniapp or falls back to a callback., `build_subscription_extend_button` — Кнопка «Продлить подписку» для уведомлений — единая точка на весь бот., `build_miniapp_startapp_url` — Собрать t.me Mini App deep link, открывающий кабинет в ЛЮБОМ типе чата., `build_admin_ticket_cabinet_button` — Кнопка «открыть тикет в админ-кабинете» для уведомления о тикете.
+- `app/utils/notification_card.py` — Python-модуль
+  Классы: нет
+  Функции: `premium` — Premium-эмодзи из набора, либо обычный символ, если id неизвестен., `card` — Заголовок с premium-эмодзи, детали в цитате, необязательная подпись., `button` — Кнопка с premium-эмодзи и цветом; тег в подписи превращается в иконку.
 - `app/utils/notification_prefs.py` — Python-модуль
   Классы: нет
   Функции: `get_user_notification_pref` — Get a single notification preference for user., `is_subscription_expiry_enabled` — Check if subscription expiry notifications are enabled for user., `get_subscription_expiry_days` — Get the number of days before expiry to notify., `is_traffic_warning_enabled` — Check if traffic warning notifications are enabled for user., `get_traffic_warning_percent` — Get the traffic usage percentage threshold for warning., `is_balance_low_enabled` — Check if low balance notifications are enabled for user., `get_balance_low_threshold` — Get the low balance threshold in kopeks., `is_news_enabled` — Check if news notifications are enabled for user., `is_promo_offers_enabled` — Check if promo offer notifications are enabled for user., `filter_users_by_broadcast_category` — Отсеивает отписавшихся от рассылки этой категории.
@@ -2419,7 +2426,7 @@
   Функции: `configure_payment_logger` — Configure the payment logger with the given handler., `get_payment_logger` — Return the payment logger instance.
 - `app/utils/payment_utils.py` — Python-модуль
   Классы: нет
-  Функции: `verify_payment_amount` — Check that the received amount matches the expected amount within tolerance., `get_available_payment_methods` — Возвращает список доступных способов оплаты с их настройками, `get_payment_methods_text` — Генерирует текст с описанием доступных способов оплаты, `is_payment_method_available` — Проверяет, доступен ли конкретный способ оплаты, `get_payment_method_status` — Возвращает статус всех способов оплаты, `get_enabled_payment_methods_count` — Возвращает количество включенных способов оплаты (не считая поддержку)
+  Функции: `compact_payment_text` — Схлопывает пустые строки в одиночный перевод строки и убирает пустые края., `format_payment_text` — Форматирует текст платёжного экрана, убирая строку с пустым контактом поддержки., `verify_payment_amount` — Check that the received amount matches the expected amount within tolerance., `get_available_payment_methods` — Возвращает список доступных способов оплаты с их настройками, `get_payment_methods_text` — Генерирует текст с описанием доступных способов оплаты, `is_payment_method_available` — Проверяет, доступен ли конкретный способ оплаты, `get_payment_method_status` — Возвращает статус всех способов оплаты, `get_enabled_payment_methods_count` — Возвращает количество включенных способов оплаты (не считая поддержку)
 - `app/utils/photo_message.py` — Python-модуль
   Классы: нет
   Функции: `safe_edit_or_resend` — Безопасно отредактировать текст сообщения или отправить новое при ошибке., `edit_or_answer_photo`
@@ -2495,6 +2502,9 @@
 - `app/utils/telegram_webapp.py` — Python-модуль
   Классы: `TelegramWebAppAuthError`
   Функции: `parse_webapp_init_data` — Validate and parse Telegram WebApp init data.
+- `app/utils/text_compact.py` — Python-модуль
+  Классы: нет
+  Функции: `compact_blank_lines` — Схлопывает пустые строки и убирает пустые края.
 - `app/utils/text_search.py` — Python-модуль
   Классы: нет
   Функции: `case_variants` — Регистровые варианты термина, по которым имеет смысл искать., `contains_patterns` — LIKE-шаблоны «содержит term» для всех регистровых вариантов., `contains_conditions` — ILIKE-условия «колонка содержит term» — по каждой колонке и каждому варианту., `contains_clause` — Готовое OR-условие «хотя бы одна колонка содержит term».
@@ -4820,6 +4830,9 @@
 - `tests/handlers/test_admin_tariff_server_limits.py` — Python-модуль
   Классы: нет
   Функции: `test_card_summarizes_limits_and_has_entry`, `test_screen_lists_allowed_squads_with_limits`, `test_screen_lists_all_squads_when_tariff_allows_all`, `test_input_sets_limit_without_mutating_stored_dict`, `test_zero_removes_limit`, `test_invalid_input_keeps_state`
+- `tests/handlers/test_admin_text_compact.py` — Python-модуль
+  Классы: нет
+  Функции: `test_rendered_admin_screens_have_no_double_blank_lines`
 - `tests/handlers/test_admin_updates_localization.py` — Python-модуль
   Классы: нет
   Функции: `test_update_status_uses_account_language_and_same_controls`, `test_release_description_preserves_author_text_and_escapes_markup`
@@ -4877,6 +4890,9 @@
 - `tests/handlers/test_legacy_subscription_switch_list.py` — Python-модуль
   Классы: нет
   Функции: `test_legacy_subscription_sees_tariffs_when_switching_is_disabled`, `test_expired_legacy_subscription_sees_tariffs` — Истёкшая старая подписка переводится на тариф той же строкой, а не покупкой с нуля., `test_legacy_subscription_list_does_not_say_unknown_tariff` — Человеку не пишем «Текущий: Неизвестно» — у старой подписки тарифа просто нет., `test_legacy_subscription_period_confirmation_does_not_say_unknown_tariff` — Экран подтверждения после выбора тарифа тоже без «Текущий тариф: Неизвестно».
+- `tests/handlers/test_menu_start_screen_formatting.py` — Python-модуль
+  Классы: нет
+  Функции: `test_main_menu_has_no_extra_blank_lines`, `test_start_referral_question_screen_has_no_blank_line_holes`
 - `tests/handlers/test_my_subscriptions_delete_uses_shared_service.py` — Python-модуль
   Классы: нет
   Функции: `handler_env`, `test_delete_delegates_to_shared_service`, `test_open_grace_is_reported_not_swallowed`
@@ -4898,6 +4914,9 @@
 - `tests/handlers/test_payment_localization.py` — Python-модуль
   Классы: нет
   Функции: `test_restricted_topup_uses_account_language_and_escapes_reason`, `test_trial_invalid_payload_uses_provided_texts`, `test_status_validation_uses_account_language_before_payment_lookup`, `test_status_handler_without_injected_user_uses_telegram_language`, `test_guest_stars_invalid_payload_uses_account_language`, `test_paid_status_formats_amount_and_labels_in_callers_language`, `test_disabled_kassa_ai_submethod_uses_selected_language`
+- `tests/handlers/test_payment_screen_formatting.py` — Python-модуль
+  Классы: нет
+  Функции: `test_payment_methods_text_has_no_extra_blank_lines`, `test_payment_methods_screen_compacts_text_before_send`
 - `tests/handlers/test_payment_status_ownership.py` — Python-модуль
   Классы: нет
   Функции: `setup_case`, `test_denied_payment_status_never_reaches_provider_or_renders_details`, `test_owned_payment_preserves_provider_status_flow`
@@ -4916,6 +4935,9 @@
 - `tests/handlers/test_referral_invite.py` — Python-модуль
   Классы: нет
   Функции: `test_create_invite_message_wraps_links_in_code`, `test_referral_qr_cache_tracks_link_and_owner`
+- `tests/handlers/test_referral_screen_formatting.py` — Python-модуль
+  Классы: нет
+  Функции: `test_referral_screen_has_no_extra_blank_lines`
 - `tests/handlers/test_referral_settings_screen.py` — Python-модуль
   Классы: `TestSaving` (7 методов), `TestDaysTargetFollowsTheKindChoice` (2 методов), `TestAmountsAreShown` (2 методов)
   Функции: `allowed`, `sides` — Суммы сторон считает движок по настоящей БД — здесь она не предмет., `subs`, `test_every_handler_is_registered` — Обработчик без регистрации — кнопка, которая молча ничего не делает.
@@ -4970,6 +4992,9 @@
 - `tests/handlers/test_subscription_link_visibility.py` — Python-модуль
   Классы: нет
   Функции: `link_env`, `test_text_surfaces_use_display_link_and_existing_hide_policy`
+- `tests/handlers/test_subscription_text_layout.py` — Python-модуль
+  Классы: нет
+  Функции: `test_subscriptions_list_keeps_at_most_one_blank_line`, `test_subscription_detail_card_has_no_trailing_empty_lines`
 - `tests/handlers/test_subscription_ui_localization.py` — Python-модуль
   Классы: нет
   Функции: `test_subscription_keyboard_uses_selected_language_and_preserves_actions`, `test_stale_classic_checkout_alert_uses_user_language`, `test_payment_status_early_error_uses_callers_language`, `test_traffic_display_localizes_units_without_changing_amount`, `test_crypto_details_preserve_amount_precision_and_markup`, `test_countries_management_single_server_preserves_language`, `test_country_charge_message_formats_amount_and_days`, `test_tariff_purchase_units_use_selected_language`, `test_reset_devices_keyboard_builds_locale_once`, `test_simple_status_early_error_reuses_initial_locale`
@@ -5018,6 +5043,9 @@
 - `tests/handlers/test_user_messages_list_refresh.py` — Python-модуль
   Классы: нет
   Функции: `test_render_list_edits_message_and_never_answers`, `test_delete_confirm_renders_via_helper_and_answers_once`
+- `tests/handlers/test_user_screens_blank_lines.py` — Python-модуль
+  Классы: нет
+  Функции: `test_compact_blank_lines_collapses_runs_and_trims_edges`, `test_ticket_view_has_no_double_blank_lines`, `test_referral_analytics_has_no_double_blank_lines`
 - `tests/handlers/test_withdrawal_group_card.py` — Python-модуль
   Классы: нет
   Функции: `approved`, `test_approve_in_group_leaves_only_the_next_action`, `test_approve_in_private_keeps_profile_and_navigation`

@@ -27,23 +27,12 @@ logger = structlog.get_logger(__name__)
 
 TRAFFIC_PRICES = get_traffic_prices()
 
-_BLANK_LINE_RUN = re.compile(r'\n(?:[ \t]*\n){2,}')
-
 
 def compact_blank_lines(text: str) -> str:
-    """Collapse runs of blank lines in a screen assembled from independent blocks.
+    """Схлопывает пустые строки в одиночный перевод строки (общий хелпер)."""
+    from app.utils.text_compact import compact_blank_lines as _compact
 
-    Subscription screens are built by concatenating localized blocks, some of
-    which may be empty. That leaves two or more blank rows (or a trailing empty
-    row) in the final message. Keep at most one blank line between blocks and
-    drop leading/trailing empty lines entirely.
-    """
-    if not text:
-        return ''
-
-    normalized = text.replace('\r\n', '\n').replace('\r', '\n')
-    normalized = _BLANK_LINE_RUN.sub('\n\n', normalized)
-    return normalized.strip('\n')
+    return _compact(text)
 
 
 async def resolve_subscription_from_context(

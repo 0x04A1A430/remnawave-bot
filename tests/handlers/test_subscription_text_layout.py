@@ -62,8 +62,8 @@ async def test_subscriptions_list_keeps_at_most_one_blank_line(monkeypatch: pyte
 
     text = callback.message.edit_text.await_args.args[0]
     _assert_compact(text)
-    # Title + one block per subscription: exactly one empty row between blocks.
-    assert text.count('\n\n') == len(subscriptions)
+    # Пустых строк нет вовсе: блоки идут подряд.
+    assert '\n\n' not in text
     assert 'Первый' in text and 'Второй' in text
 
 

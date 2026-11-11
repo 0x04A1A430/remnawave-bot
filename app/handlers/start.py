@@ -94,27 +94,10 @@ logger = structlog.get_logger(__name__)
 
 
 def _compact(text: str | None) -> str:
-    """Одна пустая строка максимум, без пустых строк по краям.
+    """Схлопывает пустые строки и срезает пустые края (общий хелпер)."""
+    from app.utils.text_compact import compact_blank_lines
 
-    Регистрационные экраны и меню склеиваются из необязательных блоков; пустой
-    блок через ``'\\n\\n'`` оставлял «дыру» из нескольких пустых строк.
-    """
-    if not text:
-        return ''
-
-    lines: list[str] = []
-    for raw_line in str(text).splitlines():
-        line = raw_line.rstrip()
-        if not line.strip():
-            if lines and lines[-1] != '':
-                lines.append('')
-            continue
-        lines.append(line)
-
-    while lines and lines[-1] == '':
-        lines.pop()
-
-    return '\n'.join(lines)
+    return compact_blank_lines(str(text) if text else '')
 
 
 def _within_retroactive_referral_window(user) -> bool:

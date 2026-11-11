@@ -13,19 +13,19 @@
 import re
 
 
-_BLANK_LINE_RUN = re.compile(r'\n{3,}')
+_BLANK_LINE_RUN = re.compile(r'\n{2,}')
 _TRAILING_SPACES = re.compile(r'[ \t]+\n')
 
 
 def compact_blank_lines(text: str) -> str:
-    """Оставляет не больше одной пустой строки и убирает пустые края.
+    """Схлопывает пустые строки и убирает пустые края.
 
-    * серии из трёх и более переводов строки схлопываются в один пустой ряд;
+    * любые серии переводов строки схлопываются в один перевод строки;
     * пробелы в конце строк не создают «пустую» строку из одних пробелов;
     * ведущие и хвостовые пустые строки срезаются.
     """
     if not text:
         return ''
     compacted = _TRAILING_SPACES.sub('\n', text)
-    compacted = _BLANK_LINE_RUN.sub('\n\n', compacted)
+    compacted = _BLANK_LINE_RUN.sub('\n', compacted)
     return compacted.strip()
