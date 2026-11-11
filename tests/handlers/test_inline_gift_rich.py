@@ -42,3 +42,13 @@ def test_classic_photo_fallback_is_photo_result():
     result = _gift_result('code', 'title', 'desc', CAPTION, THUMB, _keyboard(), silent=True, rich=False)
 
     assert isinstance(result, types.InlineQueryResultPhoto)
+
+
+def test_disabled_rich_uses_classic_result(monkeypatch):
+    from app.handlers.admin import inline_gift as inline_admin
+
+    monkeypatch.setattr(inline_admin, '_rich_inline_unavailable', True)
+    result = inline_admin._gift_result('code', 'title', 'desc', CAPTION, THUMB, _keyboard(), silent=False)
+
+    assert isinstance(result, types.InlineQueryResultArticle)
+    assert isinstance(result.input_message_content, types.InputTextMessageContent)

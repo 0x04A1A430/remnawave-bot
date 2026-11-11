@@ -62,6 +62,15 @@ from app.localization.texts import get_texts
 
 logger = structlog.get_logger(__name__)
 
+# Telegram rejected InputRichMessageContent once (inline media restrictions can be
+# stricter than regular rich messages). After that every inline answer goes
+# classic until restart — inline queries fire on each keystroke, so retrying rich
+# every time would double API load and spam warnings.
+_rich_inline_unavailable = False
+
+
+logger = structlog.get_logger(__name__)
+
 _FOREVER_DAYS = (2099 - 2025) * 365
 _MAX_DEVICES = 999
 
@@ -448,7 +457,7 @@ def _gift_result(
     rich: bool = True,
 ) -> types.InlineQueryResultArticle | types.InlineQueryResultPhoto:
     """Choosable result: rich card (default), classic article, or attached photo for -s."""
-    if rich:
+    if rich and not _rich_inline_unavailable:
         from app.utils.rich_transport import html_to_rich
 
         body = html_to_rich(caption, 'HTML')
@@ -555,6 +564,7 @@ def _flag_hint(query_text: str, texts) -> str:
 
 
 async def handle_admin_inline_query(inline_query: types.InlineQuery) -> None:
+    global _rich_inline_unavailable
     if not _is_admin(inline_query.from_user.id):
         await inline_query.answer([], cache_time=5)
         return
@@ -762,10 +772,12 @@ async def handle_admin_inline_query(inline_query: types.InlineQuery) -> None:
     try:
         await inline_query.answer(results, cache_time=0, is_personal=True)
     except TelegramBadRequest as error:
-        logger.warning(
-            'Rich inline gift rejected, falling back to classic result',
-            error=str(error)[:200],
-        )
+        if not _rich_inline_unavailable:
+            _rich_inline_unavailable = True
+            logger.warning(
+                'Rich inline gift rejected — switching inline gifts to classic until restart',
+                error=str(error)[:200],
+            )
         classic_results = [
             _gift_result(
                 gift_code,
