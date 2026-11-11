@@ -127,6 +127,8 @@ async def _get(session: Any, url: str, headers: dict[str, str]) -> tuple[bytes, 
     # публичность хоста. Резолвер ниже закрывает DNS-rebinding, но сам запрос
     # не должен уходить на служебный адрес даже первым.
     url = validate_public_url(url)
+    # codeql[py/full-ssrf]: адрес прошёл allowlist схемы, запрет креденшелов и
+    # проверку публичности хоста; DNS закреплён PublicOnlyResolver.
     async with session.get(url, headers=headers, allow_redirects=True, max_redirects=MAX_REDIRECTS) as response:
         _check_host(response.url.host)
         if response.status >= 400:

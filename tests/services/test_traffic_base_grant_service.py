@@ -48,7 +48,11 @@ async def test_committed_intent_is_applied_once_after_restart(monkeypatch, reset
             intent.expires_at = now - timedelta(seconds=1)
             expected_base = 0
         elif scenario == 'superseded':
-            state.last_base_operation_at = now + timedelta(milliseconds=500)
+            # Отметку операции ставим относительно самого интента: на медленном
+            # раннере стейджинг может занять больше 500 мс от now, и интент
+            # переставал считаться устаревшим.
+            staged_at = getattr(intent, 'created_at', None) or now
+            state.last_base_operation_at = staged_at + timedelta(milliseconds=500)
             expected_base = 0
         await db.commit()
         account, _ = await load_account(db, 1)
