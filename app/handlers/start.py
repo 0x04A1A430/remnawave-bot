@@ -347,9 +347,9 @@ async def send_menu_with_media(
 
     Сбой отправки видео не должен лишать пользователя меню: падаем на фото/текст.
     """
-    from app.utils.message_patch import _cache_logo_file_id, caption_exceeds_telegram_limit, get_logo_media
+    from app.utils.message_patch import _cache_logo_file_id, caption_fits_logo, get_logo_media
 
-    caption_fits = not caption_exceeds_telegram_limit(text)
+    caption_fits = caption_fits_logo(text)
 
     if caption_fits:
         from app.services.start_media_service import get_start_video_file_id
@@ -3165,7 +3165,7 @@ async def get_main_menu_text_simple(user_name, texts, db: AsyncSession):
 async def required_sub_channel_check(
     query: types.CallbackQuery, bot: Bot, state: FSMContext, db: AsyncSession, db_user=None
 ):
-    from app.utils.message_patch import _cache_logo_file_id, caption_exceeds_telegram_limit, get_logo_media
+    from app.utils.message_patch import _cache_logo_file_id, caption_fits_logo, get_logo_media
 
     language = DEFAULT_LANGUAGE
     texts = get_texts(language)
@@ -3394,7 +3394,7 @@ async def required_sub_channel_check(
             else:
                 rules_text = await get_rules(language)
 
-                if settings.ENABLE_LOGO_MODE and not caption_exceeds_telegram_limit(rules_text):
+                if settings.ENABLE_LOGO_MODE and caption_fits_logo(rules_text):
                     _result = await bot.send_photo(
                         chat_id=query.from_user.id,
                         photo=get_logo_media(),

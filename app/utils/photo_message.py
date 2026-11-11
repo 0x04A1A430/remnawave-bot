@@ -17,7 +17,7 @@ from .message_patch import (
     LOGO_PATH,
     _cache_logo_file_id,
     append_privacy_hint,
-    caption_exceeds_telegram_limit,
+    caption_fits_logo,
     get_logo_media,
     is_privacy_restricted_error,
     is_qr_message,
@@ -200,7 +200,7 @@ async def edit_or_answer_photo(
         return
 
     # Если текст слишком длинный для caption — отправим как текст
-    if caption_exceeds_telegram_limit(caption):
+    if not caption_fits_logo(caption):
         try:
             if callback.message.photo:
                 await callback.message.delete()

@@ -140,6 +140,17 @@ def caption_exceeds_telegram_limit(text: str | None) -> bool:
     return len(stripped) > TELEGRAM_CAPTION_LIMIT
 
 
+def caption_fits_logo(text: str | None) -> bool:
+    """Whether the screen can be sent as logo + text.
+
+    Rich messages allow up to 32768 characters, so the classic 1024-char caption
+    limit must not push long menus into a logo-less text message.
+    """
+    from app.utils.rich_transport import is_rich_transport_enabled
+
+    return is_rich_transport_enabled() or not caption_exceeds_telegram_limit(text)
+
+
 _PRIVACY_RESTRICTED_CODE = 'BUTTON_USER_PRIVACY_RESTRICTED'
 
 # Кеш file_id логотипа: после первой загрузки Telegram возвращает file_id,
@@ -280,9 +291,10 @@ async def _answer_with_photo(self: Message, text: str = None, **kwargs):
         # Подавляем превью чтобы поведение не менялось при переключении режима логотипа.
         kwargs.setdefault('disable_web_page_preview', True)
         return await _original_answer(self, text, **kwargs)
-    # Если caption слишком длинный для фото — отправим как текст
+    # Если caption слишком длинный для фото — отправим как текст.
+    # В rich-режиме лимит caption не действует: длинный экран сохраняет логотип.
     try:
-        if caption_exceeds_telegram_limit(text):
+        if not caption_fits_logo(text):
             return await _text_answer(self, text, **kwargs)
     except Exception:
         pass
@@ -371,7 +383,7 @@ async def _edit_with_photo(self: Message, text: str, **kwargs):
         language = _get_language(self)
         # Если caption потенциально слишком длинный — отправим как текст вместо caption
         try:
-            if caption_exceeds_telegram_limit(text):
+            if not caption_fits_logo(text):
                 try:
                     await self.delete()
                 except Exception:
