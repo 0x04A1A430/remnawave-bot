@@ -363,27 +363,24 @@ class TestSilentPhotoResult:
             inline_keyboard=[[types.InlineKeyboardButton(text='Активировать', url='https://t.me/b?start=code')]]
         )
 
-    def test_silent_returns_photo_attachment(self):
+    def test_silent_returns_rich_card(self):
         r = _gift_result('code', 'T', 'D', 'C', self.THUMB, self._kb(), silent=True)
-        assert isinstance(r, types.InlineQueryResultPhoto)
-        assert r.photo_url == self.THUMB
-        assert r.thumbnail_url == self.THUMB
-        assert r.caption == 'C'
-        assert r.parse_mode == 'HTML'
+        assert isinstance(r, types.InlineQueryResultArticle)
+        assert isinstance(r.input_message_content, types.InputRichMessageContent)
+        assert f'<img src="{self.THUMB}"/>' in r.input_message_content.rich_message.html
+        assert 'C' in r.input_message_content.rich_message.html
         assert r.reply_markup is not None
-        assert r.input_message_content is None
 
     def test_silent_caption_below_photo(self):
         r = _gift_result('code', 'T', 'D', 'C', self.THUMB, self._kb(), silent=True)
-        assert r.show_caption_above_media is not True
+        html = r.input_message_content.rich_message.html
+        assert html.startswith(f'<img src="{self.THUMB}"/>')
 
-    def test_default_returns_article_with_preview(self):
+    def test_default_returns_rich_card(self):
         r = _gift_result('code', 'T', 'D', 'C', self.THUMB, self._kb(), silent=False)
         assert isinstance(r, types.InlineQueryResultArticle)
-        content = r.input_message_content
-        assert content.message_text == 'C'
-        assert content.link_preview_options.show_above_text is True
-        assert content.link_preview_options.url == self.THUMB
+        assert isinstance(r.input_message_content, types.InputRichMessageContent)
+        assert r.input_message_content.rich_message.html.startswith(f'<img src="{self.THUMB}"/>')
         assert r.thumbnail_url == self.THUMB
 
 

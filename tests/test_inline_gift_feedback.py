@@ -196,7 +196,7 @@ class TestUpdateInlineButton:
         kwargs = bot.edit_message_reply_markup.await_args.kwargs
         button = kwargs['reply_markup'].inline_keyboard[0][0]
         assert button.url is not None
-        assert button.url.endswith('start=c3')
+        assert button.url.endswith('start=bs_c3')
 
     @pytest.mark.asyncio
     async def test_edit_failure_is_swallowed(self):
