@@ -19,6 +19,7 @@ from app.localization.texts import get_texts
 from app.services.payment_service import PaymentService
 from app.states import BalanceStates
 from app.utils.decorators import error_handler
+from app.utils.payment_utils import compact_payment_text, format_payment_text
 from app.utils.timezone import format_local_datetime
 from app.utils.topup_retry import format_topup_amount_retry
 
@@ -203,11 +204,12 @@ async def _send_pal24_payment_message(
 
         keyboard = types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
 
-        message_text = message_template.format(
+        message_text = format_payment_text(
+            message_template,
+            support=settings.get_support_contact_display_html(),
             amount=settings.format_price(amount_kopeks),
             bill_id=bill_id,
             steps='\n'.join(steps),
-            support=settings.get_support_contact_display_html(),
         )
 
         invoice_message = await message.answer(
@@ -309,13 +311,15 @@ async def start_pal24_payment(
         # Если обе кнопки отключены, используем общий текст
         payment_methods_text = texts.t('PAYMENT_UI_AVAILABLE_METHODS', 'доступными способами')
 
-    message_text = texts.t(
-        'PAL24_TOPUP_PROMPT',
-        (
-            f'🏦 <b>Оплата через PayPalych ({payment_methods_text})</b>\n\n'
-            'Введите сумму для пополнения от 100 до 1 000 000 ₽.\n'
-            f'Оплата проходит через PayPalych ({payment_methods_text}).'
-        ),
+    message_text = compact_payment_text(
+        texts.t(
+            'PAL24_TOPUP_PROMPT',
+            (
+                f'🏦 <b>Оплата через PayPalych ({payment_methods_text})</b>\n\n'
+                'Введите сумму для пополнения от 100 до 1 000 000 ₽.\n'
+                f'Оплата проходит через PayPalych ({payment_methods_text}).'
+            ),
+        )
     )
 
     keyboard = await get_topup_amount_keyboard('pal24', db_user.language, back_callback='back_to_menu')

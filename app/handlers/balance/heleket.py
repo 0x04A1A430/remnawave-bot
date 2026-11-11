@@ -16,6 +16,7 @@ from app.localization.texts import get_texts
 from app.services.payment_service import PaymentService
 from app.states import BalanceStates
 from app.utils.decorators import error_handler
+from app.utils.payment_utils import compact_payment_text
 from app.utils.topup_retry import format_topup_amount_retry
 
 
@@ -69,22 +70,27 @@ async def start_heleket_payment(
     else:
         markup_text = None
 
-    message_lines = [
+    blocks = [
         texts.t('PAYMENT_UI_HELEKET_TOPUP_TITLE', '🪙 <b>Пополнение через Heleket</b>'),
-        '\n',
         texts.t('PAYMENT_UI_CRYPTO_AMOUNT_PROMPT', 'Введите сумму пополнения от 100 до 100,000 ₽:'),
-        '',
-        texts.t('PAYMENT_UI_INSTANT_CREDIT', '⚡ Мгновенное зачисление'),
-        texts.t('PAYMENT_UI_SECURE_PAYMENT', '🔒 Безопасная оплата'),
+        '\n'.join(
+            filter(
+                None,
+                [
+                    texts.t('PAYMENT_UI_INSTANT_CREDIT', '⚡ Мгновенное зачисление'),
+                    texts.t('PAYMENT_UI_SECURE_PAYMENT', '🔒 Безопасная оплата'),
+                ],
+            )
+        ),
     ]
 
     if markup_text:
-        message_lines.extend(['', markup_text])
+        blocks.append(markup_text)
 
     keyboard = await get_topup_amount_keyboard('heleket', db_user.language, back_callback='back_to_menu')
 
     await callback.message.edit_text(
-        '\n'.join(filter(None, message_lines)),
+        compact_payment_text('\n\n'.join(filter(None, blocks))),
         reply_markup=keyboard,
         parse_mode='HTML',
     )
@@ -273,7 +279,9 @@ async def process_heleket_payment_amount(
         except Exception as delete_error:  # pragma: no cover - diagnostic
             logger.warning('Не удалось удалить сообщение с запросом суммы Heleket', delete_error=delete_error)
 
-    invoice_message = await message.answer('\n'.join(details), parse_mode='HTML', reply_markup=keyboard)
+    invoice_message = await message.answer(
+        compact_payment_text('\n'.join(details)), parse_mode='HTML', reply_markup=keyboard
+    )
 
     try:
         from app.services import payment_service as payment_module

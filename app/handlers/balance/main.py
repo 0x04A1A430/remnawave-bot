@@ -29,6 +29,7 @@ from app.services.payment_method_config_service import get_display_name_override
 from app.states import BalanceStates
 from app.utils.button_emoji import make_button
 from app.utils.decorators import error_handler
+from app.utils.payment_utils import compact_payment_text, format_payment_text
 from app.utils.timezone import format_local_datetime
 from app.utils.topup_retry import MAX_MANUAL_TOPUP_RUBLES, MIN_MANUAL_TOPUP_RUBLES, format_topup_amount_retry
 
@@ -566,7 +567,7 @@ async def show_payment_methods(callback: types.CallbackQuery, db_user: User, db:
         except Exception:
             pass
 
-    full_text = payment_text
+    full_text = compact_payment_text(payment_text)
 
     # Пришли с экрана «Недостаточно средств» — возврат в главное меню, а не в баланс.
     keyboard = get_payment_methods_keyboard(
@@ -692,6 +693,7 @@ async def handle_successful_topup_with_cart(user_id: int, amount_kopeks: int, bo
                 ],
                 note=texts.t('NOTIFY_CARD_NOTE', '@x1lagent · ответим в поддержке за пару минут'),
             )
+            success_text = compact_payment_text(success_text)
 
             await bot.send_message(
                 chat_id=user.telegram_id, text=success_text, reply_markup=keyboard, parse_mode='HTML'
@@ -716,10 +718,15 @@ async def request_support_topup(callback: types.CallbackQuery, db_user: User):
         return
 
     user_id_display = db_user.telegram_id or db_user.email or f'#{db_user.id}'
-    support_text = texts.t(
-        'PAYMENT_UI_SUPPORT_TOPUP_INSTRUCTIONS',
-        '\n🛠️ <b>Пополнение через поддержку</b>\n\nДля пополнения баланса обратитесь в техподдержку:\n{value1}\n\nУкажите:\n• ID: {value2}\n• Сумму пополнения\n• Способ оплаты\n\n⏰ Время обработки: 1-24 часа\n\n<b>Доступные способы:</b>\n• Криптовалюта\n• Переводы между банками\n• Другие платежные системы\n',
-    ).format(value1=settings.get_support_contact_display_html(), value2=user_id_display)
+    support_text = format_payment_text(
+        texts.t(
+            'PAYMENT_UI_SUPPORT_TOPUP_INSTRUCTIONS',
+            '\n🛠️ <b>Пополнение через поддержку</b>\n\nДля пополнения баланса обратитесь в техподдержку:\n{value1}\n\nУкажите:\n• ID: {value2}\n• Сумму пополнения\n• Способ оплаты\n\n⏰ Время обработки: 1-24 часа\n\n<b>Доступные способы:</b>\n• Криптовалюта\n• Переводы между банками\n• Другие платежные системы\n',
+        ),
+        support=settings.get_support_contact_display_html(),
+        support_field='value1',
+        value2=user_id_display,
+    )
 
     keyboard = types.InlineKeyboardMarkup(
         inline_keyboard=[

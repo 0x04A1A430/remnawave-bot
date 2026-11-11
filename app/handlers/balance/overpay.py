@@ -15,6 +15,7 @@ from app.localization.texts import get_texts
 from app.services.payment_service import PaymentService
 from app.states import BalanceStates
 from app.utils.decorators import error_handler
+from app.utils.payment_utils import compact_payment_text
 from app.utils.topup_retry import format_topup_amount_retry
 
 
@@ -144,6 +145,8 @@ async def _create_overpay_payment_and_respond(
         ]
     )
 
+    response_text = compact_payment_text(response_text)
+
     if edit_message:
         await message_or_callback.edit_text(
             response_text,
@@ -221,16 +224,18 @@ async def process_overpay_payment_amount(
         if amount_eur < settings.OVERPAY_INT_MIN_EUR:
             min_rub = math.ceil(settings.OVERPAY_INT_MIN_EUR * settings.OVERPAY_RUB_PER_EUR)
             await message.answer(
-                texts.t(
-                    'OVERPAY_INT_AMOUNT_TOO_LOW',
-                    'Минимальная сумма для оплаты в евро: {min_eur}€ (≈ {min_rub}₽)',
-                ).format(min_eur=f'{settings.OVERPAY_INT_MIN_EUR:g}', min_rub=min_rub)
-                + '\n\n'
-                + format_topup_amount_retry(
-                    db_user.language,
-                    max(min_amount, min_rub * 100),
-                    max_amount,
-                    too_low=True,
+                compact_payment_text(
+                    texts.t(
+                        'OVERPAY_INT_AMOUNT_TOO_LOW',
+                        'Минимальная сумма для оплаты в евро: {min_eur}€ (≈ {min_rub}₽)',
+                    ).format(min_eur=f'{settings.OVERPAY_INT_MIN_EUR:g}', min_rub=min_rub)
+                    + '\n\n'
+                    + format_topup_amount_retry(
+                        db_user.language,
+                        max(min_amount, min_rub * 100),
+                        max_amount,
+                        too_low=True,
+                    )
                 ),
                 reply_markup=get_back_keyboard(db_user.language, callback_data='balance_topup'),
                 parse_mode='HTML',

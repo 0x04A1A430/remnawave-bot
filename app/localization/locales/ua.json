@@ -1727,7 +1727,7 @@
   "PAYMENT_CLOUDPAYMENTS": "Банківська картка (CloudPayments)",
   "REFERRAL_WITHDRAWAL_BUTTON": "Запросити виведення",
   "DEVICE_RENAME_BUTTON": "",
-  "PAYMENT_METHODS_NONE_AVAILABLE": "<b>Способи поповнення балансу</b>\n\nНаразі способи оплати тимчасово недоступні.\nСпробуйте пізніше.\n\nОберіть спосіб поповнення:",
+  "PAYMENT_METHODS_NONE_AVAILABLE": "<b>Способи поповнення балансу</b>\n\nНаразі способи оплати тимчасово недоступні.\nСпробуйте пізніше.",
   "PROMOCODE_SUBSCRIPTION_NOT_FOUND": "Підписку не знайдено",
   "PROMOCODE_TRAFFIC_NOT_APPLICABLE": "Цей промокод дає лише трафік, а у вашої підписки він безлімітний. Код не витрачено.",
   "PROMOCODE_USER_NOT_FOUND": "Користувача не знайдено",

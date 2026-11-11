@@ -1962,7 +1962,7 @@
   "PAYMENT_CLOUDPAYMENTS": "Банковская карта (CloudPayments)",
   "REFERRAL_WITHDRAWAL_BUTTON": "Запросить вывод",
   "DEVICE_RENAME_BUTTON": "",
-  "PAYMENT_METHODS_NONE_AVAILABLE": "<b>Способы пополнения баланса</b>\n\nВ данный момент способы оплаты временно недоступны.\nПопробуйте позже.\n\nВыберите способ пополнения:",
+  "PAYMENT_METHODS_NONE_AVAILABLE": "<b>Способы пополнения баланса</b>\n\nВ данный момент способы оплаты временно недоступны.\nПопробуйте позже.",
   "PROMOCODE_SUBSCRIPTION_NOT_FOUND": "Подписка не найдена",
   "PROMOCODE_TRAFFIC_NOT_APPLICABLE": "Этот промокод даёт только трафик, а у вашей подписки он безлимитный. Код не потрачен.",
   "PROMOCODE_USER_NOT_FOUND": "Пользователь не найден",
