@@ -29,7 +29,11 @@ jobs:
         uses: github/codeql-action/init@v4
         with:
           languages: python
-          queries: security-and-quality
+          # security-extended: только security-запросы. quality-набор на таком
+          # объёме кода даёт сотни note-алертов (empty-except, cyclic-import),
+          # которые в PR-гейте выглядят как «новые» и топят реальные находки.
+          # Качество по-прежнему проверяют ruff и тесты в Lint/Tests.
+          queries: security-extended
           config-file: ./.github/codeql/codeql-config.yml
 
       - name: Perform CodeQL Analysis
