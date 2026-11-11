@@ -538,8 +538,6 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
                 app_version=device.get('appVersion') or device.get('app_version') or '',
             )
 
-            if len(device_info) > 40:
-                device_info = device_info[:37] + '...'
             message += f'• {html.escape(device_info)}\n'
         message += texts.t('SUBSCRIPTION_CONNECTED_DEVICES_FOOTER', '</blockquote>')
 
