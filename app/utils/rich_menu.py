@@ -575,3 +575,50 @@ async def try_edit_rich_main_menu(
     except TelegramNetworkError as error:
         logger.warning('Сетевая ошибка при показе rich-меню', error=str(error), chat_id=chat_id)
         return False
+
+
+def live_menu_fingerprint(user: User, texts) -> str:
+    """Только то, что видно в меню: без HTML, таймеров и случайных сообщений."""
+    now = datetime.now(UTC)
+    subscriptions = []
+    for subscription in getattr(user, 'subscriptions', None) or []:
+        used = texts.format_traffic(float(getattr(subscription, 'traffic_used_gb', 0) or 0), is_limit=False)
+        limit = texts.format_traffic(float(getattr(subscription, 'traffic_limit_gb', 0) or 0), is_limit=True)
+        subscriptions.append(
+            (
+                subscription.id,
+                subscription.actual_status,
+                subscription.end_date,
+                subscription.end_date and max((subscription.end_date - now).days, 0),
+                subscription.tariff_id,
+                bool(subscription.is_trial),
+                f'{used} / {limit}',
+                subscription.device_limit,
+            )
+        )
+    return repr((user.language, user.balance_kopeks, subscriptions))
+
+
+def _apply_inline_buttons(
+    rich_html: str,
+    keyboard: InlineKeyboardMarkup,
+    *,
+    for_edit: bool = False,
+) -> tuple[str, InlineKeyboardMarkup | None]:
+    """Переносит клавиатуру внутрь полотна, если это включено настройкой.
+
+    Главное меню всегда уходит в личный чат, поэтому Mini App здесь допустим.
+    Если хотя бы одну кнопку перенести нельзя — клавиатура остаётся снаружи
+    целиком: половина кнопок внутри означала бы потерянные кнопки.
+    """
+    if not getattr(settings, 'MAIN_MENU_RICH_INLINE_BUTTONS', False):
+        return rich_html, keyboard
+
+    from app.utils.rich_buttons import render_keyboard_as_rich_html
+
+    buttons_html = render_keyboard_as_rich_html(keyboard, allow_web_app=True)
+    if buttons_html is None:
+        return rich_html, keyboard
+
+    empty = InlineKeyboardMarkup(inline_keyboard=[]) if for_edit else None
+    return rich_html + buttons_html, empty
