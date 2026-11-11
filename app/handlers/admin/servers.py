@@ -56,7 +56,7 @@ def _build_server_edit_view(server, language: str = 'ru'):
         get_texts(language)
         .t(
             'ADMIN_SERVER_UI_000',
-            '\n <b>Редактирование сервера</b>\n\n<b>Информация:</b>\n• ID: {v0}\n• UUID: <code>{v1}</code>\n• Название: {v2}\n• Оригинальное: {v3}\n• Статус: {v4}\n\n<b>Настройки:</b>\n• Цена: {v5}\n• Код страны: {v6}\n• Лимит пользователей: {v7}\n• Текущих пользователей: {v8}\n• Промогруппы: {v9}\n• Выдача триала: {v10}\n\n<b>Описание:</b>\n{v11}\n\nВыберите что изменить:\n',
+            ' <b>Редактирование сервера</b>\n\n<b>Информация:</b>\n• ID: {v0}\n• UUID: <code>{v1}</code>\n• Название: {v2}\n• Оригинальное: {v3}\n• Статус: {v4}\n\n<b>Настройки:</b>\n• Цена: {v5}\n• Код страны: {v6}\n• Лимит пользователей: {v7}\n• Текущих пользователей: {v8}\n• Промогруппы: {v9}\n• Выдача триала: {v10}\n\n<b>Описание:</b>\n{v11}',
         )
         .format(
             v0=server.id,
@@ -177,8 +177,7 @@ def _build_server_promo_groups_keyboard(server_id: int, promo_groups, selected_i
 async def show_servers_menu(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
     stats = await get_server_statistics(db)
 
-    text = f"""
- <b>Управление серверами</b>
+    text = f""" <b>Управление серверами</b>
 
  <b>Статистика:</b>
 • Всего серверов: {stats['total_servers']}
@@ -187,10 +186,7 @@ async def show_servers_menu(callback: types.CallbackQuery, db_user: User, db: As
 • С подключениями: {stats['servers_with_connections']}
 
  <b>Выручка от серверов:</b>
-• Общая: {int(stats['total_revenue_rubles'])} ₽
-
-Выберите действие:
-"""
+• Общая: {int(stats['total_revenue_rubles'])} ₽"""
 
     keyboard = [
         [

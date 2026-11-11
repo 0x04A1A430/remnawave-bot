@@ -3198,7 +3198,7 @@ async def get_main_menu_text_simple(user_name, texts, db: AsyncSession):
         user_name=html.escape(user_name or ''), subscription_status=_get_subscription_status_simple(texts)
     )
 
-    action_prompt = texts.t('MAIN_MENU_ACTION_PROMPT', 'Выберите действие:')
+    action_prompt = texts.t('MAIN_MENU_ACTION_PROMPT', '')
 
     try:
         random_message = await get_random_active_message(db)

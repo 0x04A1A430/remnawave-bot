@@ -154,8 +154,7 @@ async def handle_autopay_menu(callback: types.CallbackQuery, db_user: User, db: 
             '💳 <b>Автоплатеж</b>\n\n'
             '📊 <b>Статус:</b> {status}\n'
             '⏰ <b>Списание за:</b> {days} дн. до окончания\n'
-            '📅 <b>Период продления:</b> {period}\n\n'
-            'Выберите действие:'
+            '📅 <b>Период продления:</b> {period}'
         ),
     ).format(status=status, days=days, period=period_text)
 

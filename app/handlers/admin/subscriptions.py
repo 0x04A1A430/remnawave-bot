@@ -91,8 +91,7 @@ async def show_subscriptions_menu(callback: types.CallbackQuery, db_user: User, 
     texts = get_texts(db_user.language)
     stats = await get_subscriptions_statistics(db)
 
-    text = f"""
- <b>Управление подписками</b>
+    text = f""" <b>Управление подписками</b>
 
  <b>Статистика:</b>
 - Всего: {stats['total_subscriptions']}
@@ -103,10 +102,7 @@ async def show_subscriptions_menu(callback: types.CallbackQuery, db_user: User, 
  <b>Продажи:</b>
 - Сегодня: {stats['purchased_today']}
 - За неделю: {stats['purchased_week']}
-- За месяц: {stats['purchased_month']}
-
-Выберите действие:
-"""
+- За месяц: {stats['purchased_month']}"""
 
     keyboard = [
         [

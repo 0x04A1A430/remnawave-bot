@@ -308,7 +308,7 @@ def _build_edit_menu_content(
     lines.append(
         texts.t(
             'ADMIN_PROMO_GROUP_EDIT_MENU_HINT',
-            'Выберите параметр для изменения:',
+            '',
         )
     )
 

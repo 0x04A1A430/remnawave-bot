@@ -43,17 +43,19 @@ async def show_admin_panel(callback: types.CallbackQuery, db_user: User, db: Asy
         users_online = system_stats.get('users_online', 0)
         users_today = system_stats.get('users_last_day', 0)
         users_week = system_stats.get('users_last_week', 0)
-        admin_text = admin_text.replace(
-            get_texts(db_user.language).t('ADMIN_MAIN_UI_006', '\n\nВыберите раздел для управления:'),
-            (
-                get_texts(db_user.language)
-                .t(
-                    'ADMIN_MAIN_UI_007',
-                    '\n\n-  Онлайн сейчас: {v0}\n-  Онлайн сегодня: {v1}\n-  На этой неделе: {v2}\n\nВыберите раздел для управления:',
-                )
-                .format(v0=users_online, v1=users_today, v2=users_week)
-            ),
+        prompt = get_texts(db_user.language).t('ADMIN_MAIN_UI_006', '')
+        stats_block = (
+            get_texts(db_user.language)
+            .t(
+                'ADMIN_MAIN_UI_007',
+                '\n\n-  Онлайн сейчас: {v0}\n-  Онлайн сегодня: {v1}\n-  На этой неделе: {v2}',
+            )
+            .format(v0=users_online, v1=users_today, v2=users_week)
         )
+        if prompt:
+            admin_text = admin_text.replace(prompt, stats_block)
+        else:
+            admin_text = f'{admin_text.rstrip()}{stats_block}'
     except Exception as e:
         logger.error('Не удалось получить статистику Remnawave для админ-панели', error=e)
 
@@ -67,8 +69,8 @@ async def show_users_submenu(callback: types.CallbackQuery, db_user: User, db: A
     texts = get_texts(db_user.language)
 
     await callback.message.edit_text(
-        texts.t('ADMIN_USERS_SUBMENU_TITLE', ' **Управление пользователями и подписками**\n\n')
-        + texts.t('ADMIN_SUBMENU_SELECT_SECTION', 'Выберите нужный раздел:'),
+        texts.t('ADMIN_USERS_SUBMENU_TITLE', ' **Управление пользователями и подписками**')
+        + texts.t('ADMIN_SUBMENU_SELECT_SECTION', ''),
         reply_markup=get_admin_users_submenu_keyboard(db_user.language),
         parse_mode='Markdown',
     )
@@ -81,8 +83,8 @@ async def show_promo_submenu(callback: types.CallbackQuery, db_user: User, db: A
     texts = get_texts(db_user.language)
 
     await callback.message.edit_text(
-        texts.t('ADMIN_PROMO_SUBMENU_TITLE', ' **Промокоды и статистика**\n\n')
-        + texts.t('ADMIN_SUBMENU_SELECT_SECTION', 'Выберите нужный раздел:'),
+        texts.t('ADMIN_PROMO_SUBMENU_TITLE', ' **Промокоды и статистика**')
+        + texts.t('ADMIN_SUBMENU_SELECT_SECTION', ''),
         reply_markup=get_admin_promo_submenu_keyboard(db_user.language),
         parse_mode='Markdown',
     )

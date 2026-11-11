@@ -434,8 +434,7 @@ async def admin_monitoring_menu(callback: CallbackQuery, db_user: User | None = 
             running_status = ' Работает' if status['is_running'] else ' Остановлен'
             last_update = status['last_update'].strftime('%H:%M:%S') if status['last_update'] else 'Никогда'
 
-            text = f"""
- <b>Система мониторинга</b>
+            text = f""" <b>Система мониторинга</b>
 
  <b>Статус:</b> {running_status}
  <b>Последнее обновление:</b> {last_update}
@@ -445,10 +444,7 @@ async def admin_monitoring_menu(callback: CallbackQuery, db_user: User | None = 
 • Всего событий: {status['stats_24h']['total_events']}
 • Успешных: {status['stats_24h']['successful']}
 • Ошибок: {status['stats_24h']['failed']}
-• Успешность: {status['stats_24h']['success_rate']}%
-
- Выберите действие:
-"""
+• Успешность: {status['stats_24h']['success_rate']}%"""
 
             language = _monitoring_language(callback, db_user)
             keyboard = get_monitoring_keyboard(language)
@@ -478,7 +474,7 @@ async def admin_monitoring_settings(callback: CallbackQuery, db_user: User | Non
 
         text = texts.t(
             'ADMIN_MONITORING_UI_ADMIN_MONITORING_SETTINGS_029',
-            ' <b>Настройки мониторинга</b>\n\n <b>Уведомления пользователям:</b> {value1}\n• Скидка 2-3 дня: {value2}%\n• Скидка после {value3} дней: {value4}%\n\nВыберите раздел для настройки.',
+            ' <b>Настройки мониторинга</b>\n\n <b>Уведомления пользователям:</b> {value1}\n• Скидка 2-3 дня: {value2}%\n• Скидка после {value3} дней: {value4}%',
         ).format(value1=global_status, value2=second_percent, value3=third_days, value4=third_percent)
 
         from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup

@@ -575,7 +575,7 @@ def _build_settings_section(
         lines.append('')
 
     if entries:
-        lines.append(texts.t('ADMIN_PRICING_SECTION_PROMPT', 'Выберите что изменить:'))
+        lines.append(texts.t('ADMIN_PRICING_SECTION_PROMPT', ''))
     else:
         lines.append(texts.t('ADMIN_PRICING_SECTION_EMPTY', 'Нет параметров для изменения.'))
 
@@ -744,8 +744,6 @@ def _build_overview(language: str) -> tuple[str, types.InlineKeyboardMarkup]:
         f' {texts.t("ADMIN_PRICING_MENU_SUMMARY_PERIODS", "Стоимость периодов: {summary}").format(summary=summary_periods)}',
         f' {texts.t("ADMIN_PRICING_MENU_SUMMARY_TRAFFIC", "Пакеты трафика: {summary}").format(summary=summary_traffic)}',
         f' {texts.t("ADMIN_PRICING_MENU_SUMMARY_EXTRA", "Дополнительно: {summary}").format(summary=summary_extra)}',
-        '',
-        texts.t('ADMIN_PRICING_MENU_PROMPT', 'Выберите раздел для редактирования:'),
     ]
 
     keyboard = types.InlineKeyboardMarkup(
@@ -826,7 +824,7 @@ def _build_section(
         for key, label, price in items:
             lines.append(f'• {label} — {settings.format_price(price)}')
         lines.append('')
-        lines.append(texts.t('ADMIN_PRICING_SECTION_PROMPT', 'Выберите что изменить:'))
+        lines.append(texts.t('ADMIN_PRICING_SECTION_PROMPT', ''))
     else:
         lines.append(texts.t('ADMIN_PRICING_SECTION_EMPTY', 'Нет доступных значений.'))
 

@@ -98,7 +98,7 @@ async def _build_overview(
     )
     actions_prompt = texts.t(
         'ADMIN_PRIVACY_POLICY_ACTION_PROMPT',
-        'Выберите действие:',
+        '',
     )
 
     message_parts = [

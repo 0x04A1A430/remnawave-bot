@@ -342,7 +342,7 @@ async def show_info_menu(
     texts = get_texts(db_user.language)
 
     header = texts.t('MENU_INFO_HEADER', '<b>Инфо</b>')
-    prompt = texts.t('MENU_INFO_PROMPT', 'Выберите раздел:')
+    prompt = texts.t('MENU_INFO_PROMPT', '')
     caption = f'{header}\n\n{prompt}' if prompt else header
 
     privacy_enabled = is_visible_in_bot(

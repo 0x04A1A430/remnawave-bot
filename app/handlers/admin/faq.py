@@ -125,7 +125,7 @@ async def _build_overview(
     header = texts.t('ADMIN_FAQ_HEADER', ' <b>FAQ</b>')
     actions_prompt = texts.t(
         'ADMIN_FAQ_ACTION_PROMPT',
-        'Выберите действие:',
+        '',
     )
 
     message_parts = [
