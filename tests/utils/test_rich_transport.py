@@ -39,6 +39,20 @@ def test_markdown_is_left_classic():
     assert rt.convert_method(SendMessage(chat_id=1, text='*x*', parse_mode='Markdown')) is None
 
 
+def test_explicit_none_is_plain_text():
+    rich = rt.convert_method(SendMessage(chat_id=1, text='1 < 2 & <b>not bold</b>', parse_mode=None))
+
+    assert isinstance(rich, SendRichMessage)
+    assert rich.rich_message.html == '1 &lt; 2 &amp; &lt;b&gt;not bold&lt;/b&gt;'
+
+
+def test_omitted_parse_mode_uses_html_default():
+    rich = rt.convert_method(SendMessage(chat_id=1, text='<b>bold</b>'))
+
+    assert isinstance(rich, SendRichMessage)
+    assert rich.rich_message.html == '<b>bold</b>'
+
+
 def test_entities_are_left_classic():
     method = SendMessage(chat_id=1, text='x')
     method.entities = [object()]
