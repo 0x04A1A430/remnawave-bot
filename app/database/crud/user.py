@@ -1001,6 +1001,7 @@ def _users_list_conditions(
     purchase_count: int | None = None,
     traffic_used_percent_min: int | None = None,
     connected: 'ConnectedAccounts | None' = None,
+    in_grace: bool | None = None,
 ) -> list:
     """Условия WHERE списка пользователей админки — одни для списка и для счётчика.
 
@@ -1108,6 +1109,17 @@ def _users_list_conditions(
         any_subscription = exists(select(Subscription.id).where(Subscription.user_id == User.id).correlate(User))
         conditions.append(any_subscription if has_subscription else ~any_subscription)
 
+    if in_grace is not None:
+        # «В грейсе» — открытый временный доступ: тот же признак, по которому строка
+        # получает «временно до …». Закрытый грейс держит старую дату оверлея, но
+        # доступа у человека уже нет — он не в сегменте.
+        on_grace = exists(
+            select(Subscription.id)
+            .where(Subscription.user_id == User.id, Subscription.grace_session_open.is_(True))
+            .correlate(User)
+        )
+        conditions.append(on_grace if in_grace else ~on_grace)
+
     if purchase_count == 0:
         # Покупка — ровно то, что считает статистика трат: завершённая оплата подписки.
         conditions.append(
@@ -1188,21 +1200,22 @@ async def get_users_list(
     purchase_count: int | None = None,
     traffic_used_percent_min: int | None = None,
     connected: 'ConnectedAccounts | None' = None,
+    in_grace: bool | None = None,
     order_by_balance: bool = False,
     order_by_traffic: bool = False,
     order_by_last_activity: bool = False,
     order_by_total_spent: bool = False,
     order_by_purchase_count: bool = False,
     order_by_subscription_end: bool = False,
+    order_by_grace: bool = False,
     sort_descending: bool | None = None,
 ) -> list[User]:
     """Страница списка пользователей админки.
 
     ``sort_descending`` — направление выбранной сортировки; ``None`` оставляет
-    привычное: окончание подписки — сначала скорые, остальное — сначала больше/новее.
-    Люди без значения ключа (нет активности, нет подходящей подписки) внизу в обе стороны.
-    При равных ключах порядок детерминированный — новые, затем по id: иначе LIMIT/OFFSET
-    разных страниц мог вернуть одних и тех же людей в разном порядке (и пропустить других).
+    привычное: окончание подписки и грейса — сначала скорые, остальное — сначала
+    больше/новее. Люди без значения ключа (нет активности, нет подходящей подписки,
+    нет открытого грейса) внизу в обе стороны, при равных ключах — сначала новые.
     """
     query = select(User).options(
         selectinload(User.subscriptions).selectinload(Subscription.tariff),
@@ -1227,6 +1240,7 @@ async def get_users_list(
             purchase_count=purchase_count,
             traffic_used_percent_min=traffic_used_percent_min,
             connected=connected,
+            in_grace=in_grace,
         )
     )
 
@@ -1237,10 +1251,11 @@ async def get_users_list(
         order_by_total_spent,
         order_by_purchase_count,
         order_by_subscription_end,
+        order_by_grace,
     ]
     if sum(int(flag) for flag in sort_flags) > 1:
         logger.debug(
-            'Выбрано несколько сортировок пользователей — применяется приоритет: трафик > траты > покупки > баланс > активность > окончание подписки'
+            'Выбрано несколько сортировок пользователей — применяется приоритет: трафик > траты > покупки > баланс > активность > окончание подписки > грейс'
         )
 
     transactions_stats = None
@@ -1313,14 +1328,23 @@ async def get_users_list(
             .scalar_subquery()
         )
         sort_key, natural_descending = soonest_end, False
+    elif order_by_grace:
+        # MIN(grace_overlay_expire_at) среди подписок с ОТКРЫТЫМ грейсом — та же дата,
+        # что кабинет показывает строкой «временно до …» (``_grace_until`` в admin_users).
+        # У закрытого грейса дата оверлея остаётся в строке, но грейса у человека
+        # нет — ключ пустой, и такие люди внизу в обе стороны.
+        soonest_grace = (
+            select(func.min(Subscription.grace_overlay_expire_at))
+            .where(Subscription.user_id == User.id, Subscription.grace_session_open.is_(True))
+            .correlate(User)
+            .scalar_subquery()
+        )
+        sort_key, natural_descending = soonest_grace, False
     else:
         sort_key, natural_descending = User.created_at, True
 
     descending = natural_descending if sort_descending is None else sort_descending
     ordered_key = nullslast(sort_key.desc() if descending else sort_key.asc())
-    # created_at/id — обязательный tie-breaker: при равных ключах (например, все
-    # пользователи зарегистрированы в одной транзакции) без него LIMIT/OFFSET
-    # страницы возвращали людей в разном порядке и теряли/дублировали строки.
     query = query.order_by(ordered_key, User.created_at.desc(), User.id.desc())
 
     query = query.offset(offset).limit(limit)
@@ -1354,6 +1378,7 @@ async def get_users_count(
     purchase_count: int | None = None,
     traffic_used_percent_min: int | None = None,
     connected: 'ConnectedAccounts | None' = None,
+    in_grace: bool | None = None,
 ) -> int:
     query = select(func.count(User.id)).where(
         *_users_list_conditions(
@@ -1372,6 +1397,7 @@ async def get_users_count(
             purchase_count=purchase_count,
             traffic_used_percent_min=traffic_used_percent_min,
             connected=connected,
+            in_grace=in_grace,
         )
     )
 
