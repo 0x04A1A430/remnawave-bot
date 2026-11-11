@@ -205,162 +205,147 @@ def _build_notification_settings_view(language: str):
 async def _build_notification_preview_message(language: str, notification_type: str):
     texts = get_texts(language)
     now = datetime.now(UTC)
-    price_30_days = settings.format_price(settings.PRICE_30_DAYS)
+    price = settings.format_price(settings.PRICE_30_DAYS)
 
-    from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+    from aiogram.types import InlineKeyboardMarkup
 
-    from app.keyboards.inline import get_channel_sub_keyboard
     from app.services.channel_subscription_service import channel_subscription_service
+    from app.utils.notification_card import button, card
 
-    header = texts.t(
-        'ADMIN_MONITORING_UI_BUILD_NOTIFICATION_PREVIEW_MESSAGE_018', ' <b>Тестовое уведомление мониторинга</b>\n\n'
-    )
+    def support_note() -> str:
+        return texts.t('NOTIFY_CARD_NOTE', '@x1lagent · ответим в поддержке за пару минут')
 
     if notification_type == 'trial_channel_unsubscribed':
-        template = texts.get(
-            'TRIAL_CHANNEL_UNSUBSCRIBED',
-            (
-                ' <b>Доступ приостановлен</b>\n\n'
-                'Мы не нашли вашу подписку на наш канал, поэтому тестовая подписка отключена.\n\n'
-                'Подпишитесь на канал и нажмите «{check_button}», чтобы вернуть доступ.'
-            ),
+        check_button = texts.t('CHANNEL_CHECK_BUTTON', 'Я подписался')
+        message = card(
+            emoji='🔒',
+            title=texts.t('NOTIFY_TRIAL_UNSUB_TITLE', 'Доступ приостановлен'),
+            lines=[
+                texts.t('NOTIFY_TRIAL_UNSUB_LINE_1', 'Не нашли подписку на наш канал.'),
+                texts.t('NOTIFY_TRIAL_UNSUB_LINE_2', 'Подпишитесь и нажмите кнопку ниже — вернём тестовый доступ.'),
+            ],
+            note=support_note(),
         )
-        check_button = texts.t('CHANNEL_CHECK_BUTTON', ' Я подписался')
-        message = template.format(check_button=check_button)
-        # Use all required channels for the preview keyboard
-        required_channels = await channel_subscription_service.get_required_channels()
-        keyboard = get_channel_sub_keyboard(required_channels, language=language)
+        rows = []
+        for channel in await channel_subscription_service.get_required_channels():
+            link = channel.get('channel_link')
+            if link:
+                title = channel.get('title') or texts.t('CHANNEL_SUBSCRIBE_BUTTON', 'Подписаться')
+                rows.append([button(title, '💬', url=link, style='primary')])
+        rows.append([button(check_button, '✅', callback_data='sub_channel_check', style='success')])
+        keyboard = InlineKeyboardMarkup(inline_keyboard=rows)
     elif notification_type == 'expired_1d':
-        template = texts.get(
-            'SUBSCRIPTION_EXPIRED_1D',
-            (
-                ' <b>Подписка закончилась</b>\n\n'
-                'Доступ был отключён {end_date}. Продлите подписку, чтобы вернуться в сервис.'
-            ),
-        )
-        message = template.format(
-            end_date=(now - timedelta(days=1)).strftime('%d.%m.%Y %H:%M'),
-            price=price_30_days,
-            tariff_label='',
+        message = card(
+            emoji='⏰',
+            title=texts.t('NOTIFY_EXPIRED_TITLE', 'Подписка закончилась'),
+            lines=[
+                (
+                    f'{texts.t("NOTIFY_EXPIRED_DATE", "Доступ отключён")}: '
+                    f'{(now - timedelta(days=1)).strftime("%d.%m.%Y %H:%M")}'
+                ),
+                f'{texts.t("NOTIFY_EXPIRED_PRICE", "Продление")}: <b>{price}</b>',
+                texts.t('NOTIFY_EXPIRED_LINE', 'Вернитесь в сервис — настройки и устройства сохранились.'),
+            ],
+            note=support_note(),
         )
         keyboard = InlineKeyboardMarkup(
             inline_keyboard=[
                 [
-                    InlineKeyboardButton(
-                        text=texts.t('SUBSCRIPTION_EXTEND', ' Продлить подписку'),
+                    button(
+                        texts.t('SUBSCRIPTION_EXTEND', 'Продлить подписку'),
+                        '💳',
                         callback_data='subscription_extend',
+                        style='success',
                     )
                 ],
                 [
-                    InlineKeyboardButton(
-                        text=texts.t('BALANCE_TOPUP', ' Пополнить баланс'),
+                    button(
+                        texts.t('BALANCE_TOPUP', 'Пополнить баланс'),
+                        '💰',
                         callback_data='balance_topup',
+                        style='primary',
                     )
                 ],
-                [
-                    InlineKeyboardButton(
-                        text=texts.t('SUPPORT_BUTTON', ' Поддержка'),
-                        callback_data='menu_support',
-                    )
-                ],
+                [button(texts.t('SUPPORT_BUTTON', 'Поддержка'), '💬', callback_data='menu_support', style='danger')],
             ]
         )
     elif notification_type == 'expired_2d':
         percent = NotificationSettingsService.get_second_wave_discount_percent()
         valid_hours = NotificationSettingsService.get_second_wave_valid_hours()
-        template = texts.get(
-            'SUBSCRIPTION_EXPIRED_SECOND_WAVE',
-            (
-                ' <b>Скидка {percent}% на продление</b>\n\n'
-                'Активируйте предложение, чтобы получить дополнительную скидку. '
-                'Она суммируется с вашей промогруппой и действует до {expires_at}.'
-            ),
-        )
-        message = template.format(
-            percent=percent,
-            expires_at=(now + timedelta(hours=valid_hours)).strftime('%d.%m.%Y %H:%M'),
-            trigger_days=3,
-            tariff_label='',
+        expires_at = (now + timedelta(hours=valid_hours)).strftime('%d.%m.%Y %H:%M')
+        message = card(
+            emoji='🎁',
+            title=texts.t('NOTIFY_WAVE2_TITLE', 'Скидка {percent}% на возвращение').format(percent=percent),
+            lines=[
+                texts.t('NOTIFY_WAVE_LINE', 'Суммируется с вашей промогруппой.'),
+                f'{texts.t("NOTIFY_WAVE_VALID_UNTIL", "Действует до")}: <b>{expires_at}</b>',
+            ],
+            note=support_note(),
         )
         keyboard = InlineKeyboardMarkup(
             inline_keyboard=[
                 [
-                    InlineKeyboardButton(
-                        text=texts.t('ADMIN_MONITORING_UI_BUILD_NOTIFICATION_PREVIEW_MESSAGE_019', ' Получить скидку'),
+                    button(
+                        texts.t('NOTIFY_CLAIM_DISCOUNT', 'Забрать скидку'),
+                        '🎁',
                         callback_data='claim_discount_preview',
+                        style='success',
                     )
                 ],
                 [
-                    InlineKeyboardButton(
-                        text=texts.t('SUBSCRIPTION_EXTEND', ' Продлить подписку'),
+                    button(
+                        texts.t('SUBSCRIPTION_EXTEND', 'Продлить подписку'),
+                        '🔥',
                         callback_data='subscription_extend',
+                        style='primary',
                     )
                 ],
-                [
-                    InlineKeyboardButton(
-                        text=texts.t('BALANCE_TOPUP', ' Пополнить баланс'),
-                        callback_data='balance_topup',
-                    )
-                ],
-                [
-                    InlineKeyboardButton(
-                        text=texts.t('SUPPORT_BUTTON', ' Поддержка'),
-                        callback_data='menu_support',
-                    )
-                ],
+                [button(texts.t('SUPPORT_BUTTON', 'Поддержка'), '💬', callback_data='menu_support', style='danger')],
             ]
         )
     elif notification_type == 'expired_nd':
         percent = NotificationSettingsService.get_third_wave_discount_percent()
         valid_hours = NotificationSettingsService.get_third_wave_valid_hours()
         trigger_days = NotificationSettingsService.get_third_wave_trigger_days()
-        template = texts.get(
-            'SUBSCRIPTION_EXPIRED_THIRD_WAVE',
-            (
-                ' <b>Индивидуальная скидка {percent}%</b>\n\n'
-                'Прошло {trigger_days} дней без подписки — возвращайтесь и активируйте дополнительную скидку. '
-                'Она суммируется с промогруппой и действует до {expires_at}.'
-            ),
-        )
-        message = template.format(
-            percent=percent,
-            trigger_days=trigger_days,
-            expires_at=(now + timedelta(hours=valid_hours)).strftime('%d.%m.%Y %H:%M'),
-            tariff_label='',
+        expires_at = (now + timedelta(hours=valid_hours)).strftime('%d.%m.%Y %H:%M')
+        message = card(
+            emoji='💎',
+            title=texts.t('NOTIFY_WAVE3_TITLE', 'Индивидуальная скидка {percent}%').format(percent=percent),
+            lines=[
+                texts.t('NOTIFY_WAVE3_LINE', 'Прошло {days} дней без подписки — возвращайтесь.').format(
+                    days=trigger_days
+                ),
+                f'{texts.t("NOTIFY_WAVE_VALID_UNTIL", "Действует до")}: <b>{expires_at}</b>',
+            ],
+            note=support_note(),
         )
         keyboard = InlineKeyboardMarkup(
             inline_keyboard=[
                 [
-                    InlineKeyboardButton(
-                        text=texts.t('ADMIN_MONITORING_UI_BUILD_NOTIFICATION_PREVIEW_MESSAGE_019', ' Получить скидку'),
+                    button(
+                        texts.t('NOTIFY_CLAIM_DISCOUNT', 'Забрать скидку'),
+                        '🎁',
                         callback_data='claim_discount_preview',
+                        style='success',
                     )
                 ],
                 [
-                    InlineKeyboardButton(
-                        text=texts.t('SUBSCRIPTION_EXTEND', ' Продлить подписку'),
+                    button(
+                        texts.t('SUBSCRIPTION_EXTEND', 'Продлить подписку'),
+                        '🔥',
                         callback_data='subscription_extend',
+                        style='primary',
                     )
                 ],
-                [
-                    InlineKeyboardButton(
-                        text=texts.t('BALANCE_TOPUP', ' Пополнить баланс'),
-                        callback_data='balance_topup',
-                    )
-                ],
-                [
-                    InlineKeyboardButton(
-                        text=texts.t('SUPPORT_BUTTON', ' Поддержка'),
-                        callback_data='menu_support',
-                    )
-                ],
+                [button(texts.t('SUPPORT_BUTTON', 'Поддержка'), '💬', callback_data='menu_support', style='danger')],
             ]
         )
     else:
         raise ValueError(f'Unsupported notification type: {notification_type}')
 
+    header = texts.t('NOTIFY_PREVIEW_HEADER', '🧪 <b>Тестовое уведомление</b>') + '\n\n'
     footer = texts.t(
-        'ADMIN_MONITORING_UI_BUILD_NOTIFICATION_PREVIEW_MESSAGE_021',
+        'NOTIFY_PREVIEW_FOOTER',
         '\n\n<i>Сообщение отправлено только вам для проверки оформления.</i>',
     )
     return header + message + footer, keyboard
