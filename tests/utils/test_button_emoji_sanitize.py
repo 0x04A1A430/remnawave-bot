@@ -42,3 +42,18 @@ def test_sanitize_keeps_plain_markup_untouched():
 
     assert sanitize_markup(markup) is markup
     assert sanitize_markup(None) is None
+
+
+def test_callback_answer_text_loses_markup():
+    from aiogram.methods import AnswerCallbackQuery
+
+    from app.utils.rich_transport import _sanitize_method
+
+    method = AnswerCallbackQuery(
+        callback_query_id='1',
+        text='<tg-emoji emoji-id="9">🌐</tg-emoji> Язык обновлён',
+    )
+
+    cleaned = _sanitize_method(method)
+
+    assert cleaned.text == '🌐 Язык обновлён'

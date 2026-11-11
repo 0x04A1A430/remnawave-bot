@@ -27,7 +27,7 @@ import structlog
 from aiogram.client.default import Default
 from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.exceptions import TelegramBadRequest, TelegramNetworkError, TelegramNotFound
-from aiogram.methods import EditMessageText, SendMessage, SendPhoto, SendRichMessage
+from aiogram.methods import AnswerCallbackQuery, EditMessageText, SendMessage, SendPhoto, SendRichMessage
 from aiogram.methods.base import TelegramMethod, TelegramType
 from aiogram.types import FSInputFile, InputMediaPhoto, InputRichMessage, InputRichMessageMedia, Message
 
@@ -449,18 +449,29 @@ def convert_method(method: TelegramMethod) -> TelegramMethod | None:
     return None
 
 
-def _sanitize_reply_markup(method: TelegramMethod[TelegramType]) -> TelegramMethod[TelegramType]:
-    """Keep button captions plain: custom emoji inside labels become button icons."""
+_TG_EMOJI_TAG_RE = re.compile(r'<tg-emoji\b[^>]*>(.*?)</tg-emoji>', re.DOTALL)
+
+
+def _sanitize_method(method: TelegramMethod[TelegramType]) -> TelegramMethod[TelegramType]:
+    """Keep method payloads valid outside HTML parsing.
+
+    Button captions cannot carry HTML — custom emoji becomes a button icon.
+    Callback answers are plain text (toasts/alerts) — tags are unwrapped.
+    """
+    updates: dict = {}
+
     markup = getattr(method, 'reply_markup', None)
-    if markup is None:
-        return method
+    if markup is not None:
+        from app.utils.button_emoji import sanitize_markup
 
-    from app.utils.button_emoji import sanitize_markup
+        sanitized = sanitize_markup(markup)
+        if sanitized is not markup:
+            updates['reply_markup'] = sanitized
 
-    sanitized = sanitize_markup(markup)
-    if sanitized is markup:
-        return method
-    return method.model_copy(update={'reply_markup': sanitized})
+    if isinstance(method, AnswerCallbackQuery) and method.text and '<tg-emoji' in method.text:
+        updates['text'] = _TG_EMOJI_TAG_RE.sub(r'\1', method.text)
+
+    return method.model_copy(update=updates) if updates else method
 
 
 class RichAiohttpSession(AiohttpSession):
@@ -472,7 +483,7 @@ class RichAiohttpSession(AiohttpSession):
         method: TelegramMethod[TelegramType],
         timeout: int | None = None,
     ) -> TelegramType:
-        method = _sanitize_reply_markup(method)
+        method = _sanitize_method(method)
         rich_method = convert_method(method)
         if rich_method is None:
             return await super().make_request(bot, method, timeout)
