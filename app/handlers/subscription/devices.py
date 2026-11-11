@@ -1043,7 +1043,6 @@ async def show_devices_page(
         connected_header = '<blockquote>' + connected_header.removeprefix('<blockquote>')
         devices_text += connected_header
 
-
         for device in pagination.items:
             platform = device.get('platform', 'Unknown')
             device_model = device.get('deviceModel') or device.get('model') or ''
