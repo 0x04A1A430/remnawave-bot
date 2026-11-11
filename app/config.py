@@ -4580,7 +4580,11 @@ class Settings(BaseSettings):
     def get_bschek_api_url(self) -> str:
         return (self.BSCHEK_API_URL or 'https://bsbord.com/v1').rstrip('/')
 
-    model_config = {'env_file': '.env', 'env_file_encoding': 'utf-8', 'extra': 'ignore'}
+    model_config = {
+        'env_file': (os.getenv('APP_ENV_FILE', '.env') or None),
+        'env_file_encoding': 'utf-8',
+        'extra': 'ignore',
+    }
 
     @field_validator('TIMEZONE', 'REMNAWAVE_TRAFFIC_RESET_TIMEZONE')
     @classmethod

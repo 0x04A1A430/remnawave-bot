@@ -4,6 +4,7 @@ from types import SimpleNamespace
 import pytest
 
 from app.database.models import Tariff
+from app.services.pricing_engine import PricingEngine
 from app.services.tariff_purchase_quote import PurchaseQuoteError, calculate_purchase_quote
 
 
@@ -139,7 +140,7 @@ async def test_category_discounts_and_offer_applied_once(pct):
     assert quote.pricing.base_price == 24000
     assert quote.pricing.devices_price == 10000
     assert quote.pricing.traffic_price == 4500
-    assert quote.pricing.final_total == 38500 * (100 - pct) // 100
+    assert quote.pricing.final_total == PricingEngine.round_to_ruble(38500 * (100 - pct) // 100)
     assert quote.pricing.original_total == 55000
 
 

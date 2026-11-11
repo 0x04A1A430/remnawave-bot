@@ -1430,7 +1430,7 @@ def get_subscription_keyboard(
     # подписки показываем «Купить тариф» (покупку с нуля) — переключить там
     # всё равно нельзя, а покупка нового оформляется штатно через menu_buy.
     if settings.is_tariffs_mode() and subscription and not is_trial:
-        if getattr(subscription, 'actual_status', None) in ('expired', 'disabled'):
+        if getattr(subscription, 'actual_status', None) in ('expired', 'disabled') and not is_legacy_subscription:
             settings_row.append(
                 make_button(
                     text=texts.t('BUY_TARIFF_BUTTON', 'Купить тариф'),

@@ -15,6 +15,10 @@ import pytest
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
+# Tests must not inherit the production .env: it pins settings that several
+# suites intentionally override (notifications, support, referral levels, ...).
+os.environ['APP_ENV_FILE'] = ''
+
 # Подменяем параметры подключения к БД, чтобы SQLAlchemy не требовал aiosqlite.
 os.environ.setdefault('DATABASE_MODE', 'postgresql')
 os.environ.setdefault('DATABASE_URL', 'postgresql+asyncpg://user:pass@localhost/test_db')

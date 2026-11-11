@@ -95,7 +95,7 @@ logger = structlog.get_logger(__name__)
 
 
 async def debug_callback_handler(callback: types.CallbackQuery):
-    logger.info('DEBUG CALLBACK:')
+    logger.info('DEBUG CALLBACK')
     logger.info('Data', callback_data=callback.data)
     logger.info('User', from_user_id=callback.from_user.id)
     logger.info('Username', username=callback.from_user.username)

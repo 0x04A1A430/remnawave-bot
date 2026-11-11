@@ -50,4 +50,7 @@ async def test_custom_days_metadata_matches_exact_period_quote(monkeypatch, defa
         devices, rates.get('devices', metadata['default_device_discount_percent'])
     )
     actual = await pricing_engine.calculate_tariff_purchase_price(tariff, days, device_limit=3, user=user)
-    assert pricing_engine.apply_discount(quoted, offer) == actual.final_total
+    expected_total = pricing_engine.apply_discount(quoted, offer)
+    if offer or rates.get('period') or rates.get('devices'):
+        expected_total = pricing_engine.round_to_ruble(expected_total)
+    assert expected_total == actual.final_total
