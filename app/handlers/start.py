@@ -1381,6 +1381,23 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
                 return
             start_parameter = None  # Don't treat as campaign or referral
 
+    # Legacy inline-gift links were generated without the bs_ prefix. Accept
+    # those too, otherwise a bare gift code falls through to the referral branch
+    # and the user sees "Вы уже зарегистрированы в системе".
+    if start_parameter and len(start_parameter) >= 32:
+        from app.handlers.inline_gift import handle_gift_deeplink, inline_gift_exists
+
+        if await inline_gift_exists(start_parameter):
+            logger.info(
+                'Legacy inline gift deep link detected',
+                gift_code_prefix=start_parameter[:8],
+                telegram_id=message.from_user.id,
+            )
+            handled = await handle_gift_deeplink(message, start_parameter, state)
+            start_parameter = None  # Don't treat as campaign or referral
+            if handled:
+                return
+
     # Handle web auth deep links: /start webauth_{token}
     if start_parameter and start_parameter.startswith('webauth_'):
         web_auth_token = start_parameter.removeprefix('webauth_')

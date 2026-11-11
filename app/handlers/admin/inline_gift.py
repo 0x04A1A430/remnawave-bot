@@ -48,6 +48,7 @@ from dataclasses import dataclass
 
 import structlog
 from aiogram import Dispatcher, types
+from aiogram.exceptions import TelegramBadRequest
 from sqlalchemy import select
 
 from app.config import settings
@@ -444,8 +445,28 @@ def _gift_result(
     keyboard: types.InlineKeyboardMarkup,
     *,
     silent: bool,
+    rich: bool = True,
 ) -> types.InlineQueryResultArticle | types.InlineQueryResultPhoto:
-    """Choosable result: article with link-preview, or attached photo for -s."""
+    """Choosable result: rich card (default), classic article, or attached photo for -s."""
+    if rich:
+        from app.utils.rich_transport import html_to_rich
+
+        body = html_to_rich(caption, 'HTML')
+        if body:
+            rich_html = f'<img src="{html.escape(thumb, quote=True)}"/>{body}'
+            return types.InlineQueryResultArticle(
+                id=result_id,
+                title=title,
+                description=description,
+                thumbnail_url=thumb,
+                thumbnail_width=512,
+                thumbnail_height=512,
+                input_message_content=types.InputRichMessageContent(
+                    rich_message=types.InputRichMessage(html=rich_html),
+                ),
+                reply_markup=keyboard,
+            )
+
     if silent:
         return types.InlineQueryResultPhoto(
             id=result_id,
@@ -675,7 +696,7 @@ async def handle_admin_inline_query(inline_query: types.InlineQuery) -> None:
 
     gift_code = secrets.token_urlsafe(32)
     bot_username = settings.BOT_USERNAME or ''
-    deep_link = f'https://t.me/{bot_username}?start={gift_code}'
+    deep_link = f'https://t.me/{bot_username}?start=bs_{gift_code}'
     keyboard = types.InlineKeyboardMarkup(
         inline_keyboard=[
             [
@@ -738,7 +759,26 @@ async def handle_admin_inline_query(inline_query: types.InlineQuery) -> None:
             silent=parsed.silent,
         )
     ]
-    await inline_query.answer(results, cache_time=0, is_personal=True)
+    try:
+        await inline_query.answer(results, cache_time=0, is_personal=True)
+    except TelegramBadRequest as error:
+        logger.warning(
+            'Rich inline gift rejected, falling back to classic result',
+            error=str(error)[:200],
+        )
+        classic_results = [
+            _gift_result(
+                gift_code,
+                title,
+                description,
+                caption,
+                thumb,
+                keyboard,
+                silent=parsed.silent,
+                rich=False,
+            )
+        ]
+        await inline_query.answer(classic_results, cache_time=0, is_personal=True)
 
 
 async def handle_chosen_inline_result(chosen: types.ChosenInlineResult) -> None:
