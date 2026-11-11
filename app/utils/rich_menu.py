@@ -11,9 +11,9 @@ telegram-bot-api) модуль запоминает недоступность �
 пытается. Ошибки конкретного рендера (например, неотредактированное сообщение)
 на флаг не влияют — просто отдаём False и меню рисуется классикой.
 
-Ограничение: у rich-сообщения нет фото, поэтому при ENABLE_LOGO_MODE главное
-меню в rich-режиме показывается без логотипа, а переходы меню <-> разделы с
-логотипом идут через delete+send (существующие fallback-и photo_message).
+Ограничение: у rich-сообщения нет фото-подписи, поэтому логотип главного меню
+показывается image-блоком в шапке (rich_ui.rich_logo_html); переходы меню <->
+разделы с логотипом идут через delete+send (существующие fallback-и photo_message).
 """
 
 import html
@@ -42,6 +42,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.models import User
+from app.utils import rich_ui
 from app.utils.validators import sanitize_html
 
 
@@ -210,7 +211,7 @@ def _retry_without_logo(error: Exception) -> bool:
     в классику («рич не включается»), хотя достаточно было убрать картинку.
     Повтор ровно один — _mark_logo_unavailable_once взводит флаг до рестарта.
     """
-    if not _resolve_rich_logo_url():
+    if not _rich_menu_logo_html():
         return False
     if not _is_media_fetch_error(error):
         logger.warning(
@@ -307,13 +308,51 @@ def _rich_text(value: str) -> str:
     return _sanitize_rich_inline(sanitize_html(html.escape(value)))
 
 
+def _rich_menu_logo_html() -> str:
+    """Логотип шапки rich-меню ('' — если его нет или Telegram его не скачал)."""
+    if _logo_unavailable:
+        return ''
+    return rich_ui.rich_logo_html()
+
+
+def _menu_stats_block(user: User) -> str:
+    """Компактная сводка «баланс / трафик / устройства» для одиночной подписки.
+
+    Источник данных — user.subscription (первая активная). Без подписки блок
+    не рисуем: в мультитарифе сводка была бы про одну из многих, а без
+    подписки показывать нечего. Значения — данные, поэтому экранируются;
+    прогресс-бар — разметка и вставляется как есть.
+    """
+    subscription = getattr(user, 'subscription', None)
+    if subscription is None:
+        return ''
+
+    limit_gb = getattr(subscription, 'traffic_limit_gb', 0) or 0
+    used_gb = getattr(subscription, 'traffic_used_gb', 0.0) or 0.0
+    devices = getattr(subscription, 'device_limit', 0) or 0
+
+    traffic_value = '∞' if limit_gb == 0 else html.escape(f'{used_gb:.1f} / {limit_gb} ГБ')
+    rows = [
+        ('💰 Баланс', html.escape(settings.format_price(user.balance_kopeks))),
+        ('📊 Трафик', traffic_value),
+        ('📱 Устройства', '∞' if devices == 0 else html.escape(str(devices))),
+    ]
+
+    blocks = [rich_ui.kv_table(rows)]
+    if limit_gb > 0:
+        percent = min(used_gb / limit_gb * 100, 100.0)
+        blocks.append(f'<p>{rich_ui.progress_bar(percent)} {percent:.0f}%</p>')
+    return ''.join(blocks)
+
+
 async def build_main_menu_rich_html(user: User, texts, db: AsyncSession) -> str:
     """Собирает rich-HTML главного меню (контент, без клавиатуры).
 
-    Минималистичный рендер: контент ровно тот же, что у классического меню —
-    get_main_menu_text остаётся единственным источником правды (шапка с именем,
-    статус подписки, подсказки, случайное сообщение). Никаких таблиц,
-    прогресс-баров и отдельных блоков трафика/устройств/ссылок.
+    get_main_menu_text остаётся единственным источником правды для контента:
+    шапка с именем, статус подписки, подсказки, случайное сообщение. Rich-слой
+    добавляет только оформление — логотип, компактную сводку баланса/трафика/
+    устройств (в одиночном режиме) и footer. В мультитарифе сводки нет: она
+    относилась бы к одной из нескольких подписок и спорила с классическим меню.
     """
     from app.handlers.menu import get_main_menu_text
 
@@ -321,14 +360,17 @@ async def build_main_menu_rich_html(user: User, texts, db: AsyncSession) -> str:
 
     blocks: list[str] = []
 
-    logo_url = _resolve_rich_logo_url()
-    if logo_url:
-        blocks.append(f'<img src="{html.escape(logo_url, quote=True)}"/>')
+    blocks.append(_rich_menu_logo_html())
+
+    if not settings.is_multi_tariff_enabled():
+        blocks.append(_menu_stats_block(user))
 
     # Текст классического меню уже HTML (<b>, <blockquote>, tg-emoji) — прогоняем
     # его через тот же _rich_text, что и редактируемые шаблоны, а переносы строк
     # заменяем на <br>: в rich-HTML голый backslash-n не отображается.
     blocks.append(_rich_text(menu_text).replace('\n', '<br/>'))
+
+    blocks.append(rich_ui.rich_footer())
 
     return ''.join(blocks)
 
