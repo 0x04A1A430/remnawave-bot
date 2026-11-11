@@ -3262,8 +3262,7 @@ async def handle_subscription_settings(callback: types.CallbackQuery, db_user: U
             '📊 <b>Текущие параметры:</b>\n'
             '🌐 Стран: {countries_count}\n'
             '📈 Трафик: {traffic_used} / {traffic_limit}\n'
-            '📱 Устройства: {devices_used} / {devices_limit}\n\n'
-            'Выберите что хотите изменить:'
+            '📱 Устройства: {devices_used} / {devices_limit}'
         ),
     )
 

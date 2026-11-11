@@ -299,8 +299,7 @@ async def show_users_menu(callback: types.CallbackQuery, db_user: User, db: Asyn
     user_service = UserService()
     stats = await user_service.get_user_statistics(db)
 
-    text = f"""
- <b>Управление пользователями</b>
+    text = f""" <b>Управление пользователями</b>
 
  <b>Статистика:</b>
 • Всего: {stats['total_users']}
@@ -310,10 +309,7 @@ async def show_users_menu(callback: types.CallbackQuery, db_user: User, db: Asyn
  <b>Новые пользователи:</b>
 • Сегодня: {stats['new_today']}
 • За неделю: {stats['new_week']}
-• За месяц: {stats['new_month']}
-
-Выберите действие:
-"""
+• За месяц: {stats['new_month']}"""
 
     await callback.message.edit_text(text, reply_markup=get_admin_users_keyboard(db_user.language))
     await callback.answer()

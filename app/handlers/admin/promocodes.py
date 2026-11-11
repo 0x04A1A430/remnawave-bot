@@ -39,16 +39,12 @@ async def show_promocodes_menu(callback: types.CallbackQuery, db_user: User, db:
     total_codes = await get_promocodes_count(db)
     active_codes = await get_promocodes_count(db, is_active=True)
 
-    text = f"""
- <b>Управление промокодами</b>
+    text = f""" <b>Управление промокодами</b>
 
  <b>Статистика:</b>
 - Всего промокодов: {total_codes}
 - Активных: {active_codes}
-- Неактивных: {total_codes - active_codes}
-
-Выберите действие:
-"""
+- Неактивных: {total_codes - active_codes}"""
 
     await callback.message.edit_text(text, reply_markup=get_admin_promocodes_keyboard(db_user.language))
     await callback.answer()
@@ -429,7 +425,7 @@ async def show_promocode_edit_menu(callback: types.CallbackQuery, db_user: User,
     else:
         text += get_texts(db_user.language).t('ADMIN_PROMOCODE_UI_023', '• Срок: бессрочно\n')
 
-    text += get_texts(db_user.language).t('ADMIN_PROMOCODE_UI_007', '\nВыберите параметр для изменения:')
+    text += get_texts(db_user.language).t('ADMIN_PROMOCODE_UI_007', '')
 
     keyboard = [
         [

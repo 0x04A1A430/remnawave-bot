@@ -30,13 +30,9 @@ logger = structlog.get_logger(__name__)
 @admin_required
 @error_handler
 async def show_rules_management(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
-    text = """
- <b>Управление правилами сервиса</b>
+    text = """ <b>Управление правилами сервиса</b>
 
-Текущие правила показываются пользователям при регистрации и в главном меню.
-
-Выберите действие:
-"""
+Текущие правила показываются пользователям при регистрации и в главном меню."""
 
     keyboard = [
         [

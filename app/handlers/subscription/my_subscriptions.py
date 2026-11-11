@@ -459,7 +459,7 @@ async def handle_subscription_devices(
         get_texts(db_user.language)
         .t(
             'SUBSCRIPTION_UI_DEVICES_MENU',
-            '📱 <b>Устройства</b>\n\nТекущий лимит: {devices} устройств\n\nВыберите действие:',
+            '📱 <b>Устройства</b>\n\nТекущий лимит: {devices} устройств',
         )
         .format(devices=current_devices)
     )

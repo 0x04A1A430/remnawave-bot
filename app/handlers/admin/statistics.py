@@ -25,11 +25,7 @@ logger = structlog.get_logger(__name__)
 @admin_required
 @error_handler
 async def show_statistics_menu(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
-    text = """
- <b>Статистика системы</b>
-
-Выберите раздел для просмотра статистики:
-"""
+    text = ' <b>Статистика системы</b>'
 
     await callback.message.edit_text(text, reply_markup=get_admin_statistics_keyboard(db_user.language))
     await callback.answer()

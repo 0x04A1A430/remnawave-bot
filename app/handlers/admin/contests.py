@@ -129,7 +129,7 @@ async def show_contests_menu(
         return
 
     await callback.message.edit_text(
-        texts.t('ADMIN_CONTESTS_TITLE', ' <b>Конкурсы</b>\n\nВыберите действие:'),
+        texts.t('ADMIN_CONTESTS_TITLE', ' <b>Конкурсы</b>'),
         reply_markup=get_admin_contests_root_keyboard(db_user.language),
     )
     await callback.answer()
@@ -145,7 +145,7 @@ async def show_referral_contests_menu(
     texts = get_texts(db_user.language)
 
     await callback.message.edit_text(
-        texts.t('ADMIN_CONTESTS_TITLE', ' <b>Конкурсы</b>\n\nВыберите действие:'),
+        texts.t('ADMIN_CONTESTS_TITLE', ' <b>Конкурсы</b>'),
         reply_markup=get_admin_contests_keyboard(db_user.language),
     )
     await callback.answer()

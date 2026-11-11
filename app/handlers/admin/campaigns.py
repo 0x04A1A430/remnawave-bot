@@ -128,7 +128,7 @@ async def _render_campaign_edit_menu(
     texts = get_texts(language)
     text = (
         get_texts(language)
-        .t('ADMIN_CAMPAIGN_UI_001', ' <b>Редактирование кампании</b>\n\n{v0}\nВыберите, что изменить:')
+        .t('ADMIN_CAMPAIGN_UI_001', ' <b>Редактирование кампании</b>\n\n{v0}')
         .format(v0=_format_campaign_summary(campaign, texts))
     )
 

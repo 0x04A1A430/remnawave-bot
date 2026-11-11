@@ -1032,14 +1032,10 @@ async def show_remnawave_menu(callback: types.CallbackQuery, db_user: User, db: 
 
     api_url_display = settings.REMNAWAVE_API_URL or '—'
 
-    text = f"""
- <b>Управление Remnawave</b>
+    text = f""" <b>Управление Remnawave</b>
 
  <b>Соединение:</b> {status_emoji} {connection_test.get('message', 'Нет данных')}
- <b>URL:</b> <code>{api_url_display}</code>
-
-Выберите действие:
-"""
+ <b>URL:</b> <code>{api_url_display}</code>"""
 
     await callback.message.edit_text(text, reply_markup=get_admin_remnawave_keyboard(db_user.language))
     await callback.answer()
