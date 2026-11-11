@@ -46,6 +46,8 @@ from app.utils.subscription_utils import (
     resolve_tariff_renewal_device_limit,
 )
 
+from .common import compact_blank_lines
+
 
 logger = structlog.get_logger(__name__)
 
@@ -294,7 +296,7 @@ def format_tariffs_list_text(
 
         lines.append('')
 
-    return '\n'.join(lines)
+    return compact_blank_lines('\n'.join(lines))
 
 
 def get_tariffs_keyboard(
@@ -604,7 +606,7 @@ def format_tariff_info_for_user(
     if not is_daily:
         text += '\n\n' + texts.t('TARIFF_PURCHASE_CHOOSE_PERIOD', 'Выберите период подписки:')
 
-    return text
+    return compact_blank_lines(text)
 
 
 def get_daily_tariff_confirm_keyboard(
@@ -1189,7 +1191,7 @@ async def format_custom_tariff_preview(
             amount=format_price_kopeks(user_balance - total_price)
         )
 
-    return text
+    return compact_blank_lines(text)
 
 
 @error_handler
@@ -3453,7 +3455,7 @@ def format_tariff_switch_list_text(
 
         lines.append('')
 
-    return '\n'.join(lines)
+    return compact_blank_lines('\n'.join(lines))
 
 
 def get_tariff_switch_keyboard(
@@ -4729,7 +4731,7 @@ def format_instant_switch_list_text(
 
         lines.append('')
 
-    return '\n'.join(lines)
+    return compact_blank_lines('\n'.join(lines))
 
 
 def get_instant_switch_keyboard(

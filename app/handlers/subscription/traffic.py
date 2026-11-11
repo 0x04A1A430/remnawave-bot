@@ -33,6 +33,7 @@ from app.utils.pricing_utils import (
 
 from .common import (
     _get_period_hint_from_subscription,
+    compact_blank_lines,
     get_confirm_switch_traffic_keyboard,
     get_traffic_switch_keyboard,
     logger,
@@ -656,7 +657,7 @@ async def get_traffic_packages_info(language: str | None = None) -> str:
             texts.t('SUBSCRIPTION_UI_PACKAGES_DISABLED', '🔴 Отключенных: {count}').format(count=len(disabled_packages))
         )
 
-        return '\n'.join(info_lines)
+        return compact_blank_lines('\n'.join(info_lines))
 
     except Exception as e:
         return texts.t('SUBSCRIPTION_UI_PACKAGES_INFO_ERROR', '⚠️ Ошибка получения информации: {error}').format(error=e)
@@ -1164,7 +1165,7 @@ async def confirm_switch_traffic(
     confirm_text += texts.t('SUBSCRIPTION_UI_CONFIRM_SWITCH_QUESTION', 'Подтвердить переключение?')
 
     await callback.message.edit_text(
-        confirm_text,
+        compact_blank_lines(confirm_text),
         reply_markup=get_confirm_switch_traffic_keyboard(
             new_traffic_gb,
             total_price_difference,
@@ -1299,7 +1300,9 @@ async def execute_switch_traffic(
             )
             success_text += texts.t('SUBSCRIPTION_UI_NO_REFUND_INFO', 'ℹ️ Возврат средств не производится')
 
-        await callback.message.edit_text(success_text, reply_markup=get_back_keyboard(db_user.language))
+        await callback.message.edit_text(
+            compact_blank_lines(success_text), reply_markup=get_back_keyboard(db_user.language)
+        )
 
         logger.info(
             '✅ Пользователь переключил трафик с на доплата: ₽',

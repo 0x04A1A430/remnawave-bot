@@ -33,6 +33,7 @@ from app.services.user_cart_service import user_cart_service
 from app.states import SubscriptionStates
 from app.utils.formatters import format_datetime
 
+from .common import compact_blank_lines
 from .countries import (
     _build_countries_selection_text,
     _get_available_countries,
@@ -180,7 +181,7 @@ async def handle_autopay_menu(callback: types.CallbackQuery, db_user: User, db: 
         keyboard.inline_keyboard.insert(-1, row)
 
     await callback.message.edit_text(
-        text,
+        compact_blank_lines(text),
         reply_markup=keyboard,
         parse_mode='HTML',
     )
@@ -485,7 +486,7 @@ async def handle_sbp_recurring_menu(
         ]
     )
 
-    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='HTML')
+    await callback.message.edit_text(compact_blank_lines(text), reply_markup=keyboard, parse_mode='HTML')
     await callback.answer()
 
 
@@ -688,7 +689,7 @@ async def handle_unlink_card(callback: types.CallbackQuery, db_user: User, db: A
         )
 
     await callback.message.edit_text(
-        text,
+        compact_blank_lines(text),
         reply_markup=get_confirm_unlink_keyboard(card_id, db_user.language),
         parse_mode='HTML',
     )

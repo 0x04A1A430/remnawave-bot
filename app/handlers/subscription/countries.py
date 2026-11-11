@@ -30,7 +30,7 @@ from app.utils.pricing_utils import (
     calculate_prorated_price,
 )
 
-from .common import _get_period_hint_from_subscription, logger
+from .common import _get_period_hint_from_subscription, compact_blank_lines, logger
 from .summary import present_subscription_summary
 
 
@@ -86,22 +86,24 @@ async def handle_add_countries(callback: types.CallbackQuery, db_user: User, db:
         else texts.t('COUNTRY_MANAGEMENT_NONE', 'Нет подключенных стран')
     )
 
-    text = texts.t(
-        'COUNTRY_MANAGEMENT_PROMPT',
-        (
-            '🌍 <b>Управление странами подписки</b>\n\n'
-            '📋 <b>Текущие страны ({current_count}):</b>\n'
-            '{current_list}\n\n'
-            '💡 <b>Инструкция:</b>\n'
-            '✅ - страна подключена\n'
-            '➕ - будет добавлена (платно)\n'
-            '➖ - будет отключена (бесплатно)\n'
-            '⚪ - не выбрана\n\n'
-            '⚠️ <b>Важно:</b> Повторное подключение отключенных стран будет платным!'
-        ),
-    ).format(
-        current_count=len(current_countries),
-        current_list=current_list,
+    text = compact_blank_lines(
+        texts.t(
+            'COUNTRY_MANAGEMENT_PROMPT',
+            (
+                '🌍 <b>Управление странами подписки</b>\n\n'
+                '📋 <b>Текущие страны ({current_count}):</b>\n'
+                '{current_list}\n\n'
+                '💡 <b>Инструкция:</b>\n'
+                '✅ - страна подключена\n'
+                '➕ - будет добавлена (платно)\n'
+                '➖ - будет отключена (бесплатно)\n'
+                '⚪ - не выбрана\n\n'
+                '⚠️ <b>Важно:</b> Повторное подключение отключенных стран будет платным!'
+            ),
+        ).format(
+            current_count=len(current_countries),
+            current_list=current_list,
+        )
     )
 
     await state.update_data(countries=current_countries.copy())
@@ -490,7 +492,7 @@ async def apply_countries_changes(callback: types.CallbackQuery, db_user: User, 
         ).format(count=len(selected_countries))
 
         await callback.message.edit_text(
-            success_text, reply_markup=get_back_keyboard(db_user.language), parse_mode='HTML'
+            compact_blank_lines(success_text), reply_markup=get_back_keyboard(db_user.language), parse_mode='HTML'
         )
 
         await state.clear()
@@ -707,7 +709,7 @@ def _build_countries_selection_text(countries: list[dict], base_text: str) -> st
     if not descriptions:
         return base_text
 
-    return f'{base_text}\n\n' + '\n\n'.join(descriptions)
+    return compact_blank_lines(f'{base_text}\n\n' + '\n\n'.join(descriptions))
 
 
 async def handle_add_country_to_subscription(
@@ -1000,7 +1002,9 @@ async def confirm_add_countries_to_subscription(
             count=len(selected_countries)
         )
 
-        await callback.message.edit_text(success_text, reply_markup=get_back_keyboard(db_user.language))
+        await callback.message.edit_text(
+            compact_blank_lines(success_text), reply_markup=get_back_keyboard(db_user.language)
+        )
 
         logger.info(
             '✅ Пользователь обновил страны подписки. Добавлено: убрано',

@@ -44,6 +44,7 @@ from app.utils.subscription_utils import (
 
 from .common import (
     _get_period_hint_from_subscription,
+    compact_blank_lines,
     get_apps_for_platform_async,
     get_device_name,
     logger,
@@ -268,7 +269,7 @@ async def handle_change_devices(
     back_cb = f'sm:{sub_id}' if settings.is_multi_tariff_enabled() and sub_id else 'subscription_settings'
 
     await callback.message.edit_text(
-        prompt_text,
+        compact_blank_lines(prompt_text),
         reply_markup=get_change_devices_keyboard(
             current_devices,
             db_user.language,
@@ -541,7 +542,7 @@ async def confirm_change_devices(
         confirm_text += devices_warning
 
     await callback.message.edit_text(
-        confirm_text,
+        compact_blank_lines(confirm_text),
         reply_markup=get_confirm_change_devices_keyboard(
             new_devices_count,
             price,
@@ -877,7 +878,9 @@ async def execute_change_devices(
                 'ℹ️ Возврат средств не производится',
             )
 
-        await callback.message.edit_text(success_text, reply_markup=get_back_keyboard(db_user.language))
+        await callback.message.edit_text(
+            compact_blank_lines(success_text), reply_markup=get_back_keyboard(db_user.language)
+        )
 
         logger.info(
             '✅ Пользователь изменил количество устройств с на доплата: ₽',
@@ -1059,7 +1062,7 @@ async def show_devices_page(
         devices_text += '</blockquote>\n'
 
     await callback.message.edit_text(
-        devices_text,
+        compact_blank_lines(devices_text),
         reply_markup=get_devices_management_keyboard(
             pagination.items,
             pagination,
@@ -1647,7 +1650,9 @@ async def confirm_add_devices(callback: types.CallbackQuery, db_user: User, db: 
                 percent=devices_discount_percent, amount=texts.format_price(total_discount)
             )
 
-        await callback.message.edit_text(success_text, reply_markup=get_back_keyboard(db_user.language))
+        await callback.message.edit_text(
+            compact_blank_lines(success_text), reply_markup=get_back_keyboard(db_user.language)
+        )
 
         logger.info(
             '✅ Пользователь добавил устройств за ₽',
@@ -1777,7 +1782,7 @@ async def handle_device_guide(callback: types.CallbackQuery, db_user: User, db: 
     )
 
     await callback.message.edit_text(
-        guide_text,
+        compact_blank_lines(guide_text),
         reply_markup=get_connection_guide_keyboard(
             subscription_link,
             featured_app,
@@ -1886,7 +1891,7 @@ async def handle_specific_app_guide(
         guide_text += blocks_text + '\n\n'
 
     await callback.message.edit_text(
-        guide_text,
+        compact_blank_lines(guide_text),
         reply_markup=get_specific_app_keyboard(
             subscription_link,
             app,

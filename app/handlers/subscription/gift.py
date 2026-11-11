@@ -62,6 +62,8 @@ from app.states import GiftActivationStates, GiftPurchaseStates
 from app.utils.fsm_selection import mutate_fsm_if_current
 from app.utils.gift_links import build_gift_claim_artifacts
 
+from .common import compact_blank_lines
+
 
 logger = structlog.get_logger(__name__)
 
@@ -134,7 +136,7 @@ def _render_tariff_catalog(db_user: User, offers: list[GiftTariffOffer]) -> tupl
     )
     buttons.append([InlineKeyboardButton(text=texts.t('GIFT_CANCEL_BUTTON', '❌ Отмена'), callback_data='gift_cancel')])
 
-    return text, InlineKeyboardMarkup(inline_keyboard=buttons)
+    return compact_blank_lines(text), InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
 def _render_history_list(
@@ -164,7 +166,7 @@ def _render_history_list(
                 )
             ],
         ]
-        return text, InlineKeyboardMarkup(inline_keyboard=buttons)
+        return compact_blank_lines(text), InlineKeyboardMarkup(inline_keyboard=buttons)
 
     total_pages = max(1, (total_count + GIFT_HISTORY_PAGE_SIZE - 1) // GIFT_HISTORY_PAGE_SIZE)
     if total_pages > 1:
@@ -219,7 +221,7 @@ def _render_history_list(
         ]
     )
 
-    return text, InlineKeyboardMarkup(inline_keyboard=buttons)
+    return compact_blank_lines(text), InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
 def _render_period_selection(db_user: User, offer: GiftTariffOffer) -> tuple[str, InlineKeyboardMarkup]:
@@ -272,7 +274,7 @@ def _render_period_selection(db_user: User, offer: GiftTariffOffer) -> tuple[str
     ]
     buttons.append(nav_row)
 
-    return text, InlineKeyboardMarkup(inline_keyboard=buttons)
+    return compact_blank_lines(text), InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
 def _render_confirmation_summary(db_user: User, quote: GiftQuote) -> tuple[str, InlineKeyboardMarkup]:
@@ -331,7 +333,7 @@ def _render_confirmation_summary(db_user: User, quote: GiftQuote) -> tuple[str, 
         ],
     ]
 
-    return text, InlineKeyboardMarkup(inline_keyboard=buttons)
+    return compact_blank_lines(text), InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
 # ── Callback Handlers ───────────────────────────────────────────────────────

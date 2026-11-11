@@ -18,7 +18,7 @@ from app.utils.subscription_utils import (
     get_happ_cryptolink_redirect_link,
 )
 
-from .common import get_platforms_list, load_app_config_async, logger
+from .common import compact_blank_lines, get_platforms_list, load_app_config_async, logger
 
 
 async def _resolve_subscription(callback: types.CallbackQuery, db_user: User, db: AsyncSession, state=None):
@@ -311,7 +311,7 @@ async def handle_open_subscription_link(
         )
 
         await callback.message.answer(
-            happ_message,
+            compact_blank_lines(happ_message),
             parse_mode='HTML',
             disable_web_page_preview=True,
             reply_markup=keyboard,
@@ -326,7 +326,7 @@ async def handle_open_subscription_link(
     )
 
     await callback.message.edit_text(
-        link_text,
+        compact_blank_lines(link_text),
         reply_markup=InlineKeyboardMarkup(
             inline_keyboard=[
                 [
