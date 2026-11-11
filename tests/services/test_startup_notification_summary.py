@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import asyncio
+import re
 from datetime import UTC, datetime, timedelta
 from html.parser import HTMLParser
 from unittest.mock import AsyncMock
@@ -27,6 +28,10 @@ from tests.fixtures.sqlite_memory import memory_session
 TABLES = list(Base.metadata.sorted_tables)
 # Классический parse_mode=HTML Telegram: других тегов он не примет.
 TELEGRAM_TAGS = {'b', 'i', 'code', 'blockquote', 'tg-emoji'}
+
+
+def _plain(value: str) -> str:
+    return re.sub(r'<tg-emoji[^>]*>(.*?)</tg-emoji>', r'\1', value, flags=re.DOTALL)
 
 
 def _stats(**changes) -> _StartupStats:
@@ -98,7 +103,7 @@ def test_problems_are_called_out_explicitly():
     text = render_startup_message(stats, timestamp='t')
 
     _assert_valid_telegram_html(text)
-    assert '⚠ <b>Требует внимания</b>' in text
+    assert '⚠ <b>Требует внимания</b>' in _plain(text)
     assert 'Панель Remnawave не отвечает' in text
     assert 'режим техработ' in text
     assert 'Открытых тикетов ждут ответа: 3' in text

@@ -1141,7 +1141,7 @@
   "PAYMENT_METHOD_PLATEGA_DESCRIPTION": "через {platega_name} (картки + СБП)",
   "PAYMENT_METHOD_PLATEGA_NAME": "<b>Банківська картка {platega_name}</b>",
   "PAYMENT_METHOD_STARS_DESCRIPTION": "швидко та зручно",
-  "PAYMENT_METHOD_STARS_NAME": "⭐ <b>Telegram Stars</b>",
+  "PAYMENT_METHOD_STARS_NAME": "<tg-emoji emoji-id=\"5958376256788502078\">⭐</tg-emoji> <b>Telegram Stars</b>",
   "PAYMENT_METHOD_SUPPORT_DESCRIPTION": "інші способи",
   "PAYMENT_METHOD_SUPPORT_NAME": "️ <b>Через підтримку</b>",
   "PAYMENT_METHOD_TRIBUTE_DESCRIPTION": "через Tribute",

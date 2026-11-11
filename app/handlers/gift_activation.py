@@ -47,12 +47,12 @@ async def handle_gift_activate(callback: types.CallbackQuery, db_user: User | No
         return
 
     await callback.answer()
-    await callback.message.edit_text(texts.t('GIFT_ACTIVATION_IN_PROGRESS'), parse_mode=None)
+    await callback.message.edit_text(texts.t('GIFT_ACTIVATION_IN_PROGRESS'))
 
     async with AsyncSessionLocal() as db:
         user = await get_user_by_telegram_id(db, callback.from_user.id)
         if not user:
-            await callback.message.edit_text(texts.t('GIFT_ACTIVATION_NOT_FOUND'), parse_mode=None)
+            await callback.message.edit_text(texts.t('GIFT_ACTIVATION_NOT_FOUND'))
             return
 
         texts = get_texts(user.language)
@@ -66,7 +66,6 @@ async def handle_gift_activate(callback: types.CallbackQuery, db_user: User | No
         except (GiftClaimNotFoundError, GiftClaimAlreadyOwnedError):
             await callback.message.edit_text(
                 texts.t('GIFT_ACTIVATION_NOT_FOUND', _GIFT_NOT_FOUND),
-                parse_mode=None,
             )
             return
         except GiftClaimSelfActivationError:
@@ -75,13 +74,11 @@ async def handle_gift_activate(callback: types.CallbackQuery, db_user: User | No
                     'GIFT_ACTIVATION_SELF_CLAIM_ERROR',
                     '⚠️ Нельзя активировать свой собственный подарок.\nОтправьте код другу!',
                 ),
-                parse_mode=None,
             )
             return
         except GiftClaimNotActivatableError:
             await callback.message.edit_text(
                 texts.t('GIFT_ACTIVATION_NOT_ACTIVATABLE_ERROR', '❌ Этот подарок невозможно активировать.'),
-                parse_mode=None,
             )
             return
         except GuestPurchaseError as exc:
@@ -97,7 +94,6 @@ async def handle_gift_activate(callback: types.CallbackQuery, db_user: User | No
                         'GIFT_ACTIVATION_GENERIC_ERROR',
                         'Произошла ошибка при активации. Попробуйте позже.',
                     ),
-                    parse_mode=None,
                 )
             else:
                 await callback.message.edit_text(
@@ -105,7 +101,6 @@ async def handle_gift_activate(callback: types.CallbackQuery, db_user: User | No
                         'GIFT_ACTIVATION_FAILED_PREFIX',
                         'Не удалось активировать подарок: {error}',
                     ).format(error=html_mod.escape(exc.message)),
-                    parse_mode=None,
                 )
             return
         except Exception:
@@ -119,7 +114,6 @@ async def handle_gift_activate(callback: types.CallbackQuery, db_user: User | No
                     'GIFT_ACTIVATION_GENERIC_ERROR',
                     'Произошла ошибка при активации. Попробуйте позже.',
                 ),
-                parse_mode=None,
             )
             return
 
