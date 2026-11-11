@@ -28,9 +28,7 @@ def progress_bar(percent: float, length: int = 10, *, filled: str = '▓', empty
 def kv_table(rows: list[tuple[str, str]], *, bordered: bool = True, striped: bool = True) -> str:
     """Two-column table «label → value». Labels are escaped, values are raw HTML."""
     attrs = ' '.join(attr for attr, enabled in (('bordered', bordered), ('striped', striped)) if enabled)
-    body = ''.join(
-        f'<tr><td>{html.escape(str(key))}</td><td align="right">{value}</td></tr>' for key, value in rows
-    )
+    body = ''.join(f'<tr><td>{html.escape(str(key))}</td><td align="right">{value}</td></tr>' for key, value in rows)
     return f'<table {attrs}>{body}</table>' if attrs else f'<table>{body}</table>'
 
 

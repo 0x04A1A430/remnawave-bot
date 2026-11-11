@@ -247,9 +247,7 @@ def _scheme_line(texts: Texts | None = None) -> str:
     if not settings.is_referral_levels_scheme():
         return texts.t('ADMIN_REFERRAL_LEVEL_UI_029', ' Схема наград: классическая — уровни ниже НЕ применяются')
     if settings.is_referral_tier_levels():
-        return texts.t(
-            'ADMIN_REFERRAL_LEVEL_UI_030', ' Многоуровневая схема включена (режим: уровни за приглашённых)'
-        )
+        return texts.t('ADMIN_REFERRAL_LEVEL_UI_030', ' Многоуровневая схема включена (режим: уровни за приглашённых)')
     return texts.t(
         'ADMIN_REFERRAL_LEVEL_UI_008', ' Многоуровневая схема включена (режим: цепочка, глубина до {value1})'
     ).format(value1=settings.get_referral_max_level_depth())
@@ -375,9 +373,7 @@ async def _render_levels(callback: types.CallbackQuery, db: AsyncSession, texts:
         keyboard_rows.append(
             [
                 types.InlineKeyboardButton(
-                    text=texts.t('ADMIN_REFERRAL_LEVEL_UI_124', ' Добавить уровень {value1}').format(
-                        value1=next_level
-                    ),
+                    text=texts.t('ADMIN_REFERRAL_LEVEL_UI_124', ' Добавить уровень {value1}').format(value1=next_level),
                     callback_data='admin_ref_lvl_add',
                 )
             ]
@@ -1298,9 +1294,7 @@ async def process_level_value(message: types.Message, db_user: User, db: AsyncSe
     value = int(round(parsed * 100)) if field in _MONEY_FIELDS else int(parsed)
     if maximum is not None and value > maximum:
         await message.answer(
-            texts.t('ADMIN_REFERRAL_LEVEL_UI_094', ' Максимум: {value1} {value2}.').format(
-                value1=maximum, value2=unit
-            )
+            texts.t('ADMIN_REFERRAL_LEVEL_UI_094', ' Максимум: {value1} {value2}.').format(value1=maximum, value2=unit)
         )
         return
 

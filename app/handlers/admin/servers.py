@@ -232,9 +232,7 @@ async def show_servers_list(callback: types.CallbackQuery, db_user: User, db: As
     total_pages = (total_count + 9) // 10
 
     if not servers:
-        text = get_texts(db_user.language).t(
-            'ADMIN_SERVER_UI_011', ' <b>Список серверов</b>\n\n Серверы не найдены.'
-        )
+        text = get_texts(db_user.language).t('ADMIN_SERVER_UI_011', ' <b>Список серверов</b>\n\n Серверы не найдены.')
     else:
         text = get_texts(db_user.language).t('ADMIN_SERVER_UI_012', ' <b>Список серверов</b>\n\n')
         text += (
@@ -558,9 +556,7 @@ async def toggle_server_availability(callback: types.CallbackQuery, db_user: Use
         if new_status
         else get_texts(db_user.language).t('ADMIN_SERVER_UI_020', 'отключен')
     )
-    await callback.answer(
-        get_texts(db_user.language).t('ADMIN_SERVER_UI_033', ' Сервер {v0}!').format(v0=status_text)
-    )
+    await callback.answer(get_texts(db_user.language).t('ADMIN_SERVER_UI_033', ' Сервер {v0}!').format(v0=status_text))
 
     server = await get_server_squad_by_id(db, server_id)
 
@@ -690,9 +686,7 @@ async def process_server_price_edit(message: types.Message, state: FSMContext, d
                 parse_mode='HTML',
             )
         else:
-            await message.answer(
-                get_texts(db_user.language).t('ADMIN_SERVER_UI_049', ' Ошибка при обновлении сервера')
-            )
+            await message.answer(get_texts(db_user.language).t('ADMIN_SERVER_UI_049', ' Ошибка при обновлении сервера'))
 
     except ValueError:
         await message.answer(
@@ -1111,9 +1105,7 @@ async def process_server_limit_edit(message: types.Message, state: FSMContext, d
                 parse_mode='HTML',
             )
         else:
-            await message.answer(
-                get_texts(db_user.language).t('ADMIN_SERVER_UI_049', ' Ошибка при обновлении сервера')
-            )
+            await message.answer(get_texts(db_user.language).t('ADMIN_SERVER_UI_049', ' Ошибка при обновлении сервера'))
 
     except ValueError:
         await message.answer(

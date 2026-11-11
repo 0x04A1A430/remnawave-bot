@@ -938,9 +938,7 @@ async def process_promocode_combo_days(message: types.Message, db_user: User, st
         await state.set_state(AdminStates.setting_promocode_uses)
 
     except ValueError:
-        await message.answer(
-            get_texts(db_user.language).t('ADMIN_PROMOCODE_UI_092', ' Введите корректное число дней')
-        )
+        await message.answer(get_texts(db_user.language).t('ADMIN_PROMOCODE_UI_092', ' Введите корректное число дней'))
 
 
 async def handle_edit_value(message: types.Message, db_user: User, state: FSMContext, db: AsyncSession):
@@ -960,9 +958,7 @@ async def handle_edit_value(message: types.Message, db_user: User, state: FSMCon
         if edit_action == 'amount':
             if value < 1 or value > 10000:
                 await message.answer(
-                    get_texts(db_user.language).t(
-                        'ADMIN_PROMOCODE_UI_087', ' Сумма должна быть от 1 до 10,000 рублей'
-                    )
+                    get_texts(db_user.language).t('ADMIN_PROMOCODE_UI_087', ' Сумма должна быть от 1 до 10,000 рублей')
                 )
                 return
 
@@ -986,9 +982,7 @@ async def handle_edit_value(message: types.Message, db_user: User, state: FSMCon
         elif edit_action == 'days':
             if value < 1 or value > 3650:
                 await message.answer(
-                    get_texts(db_user.language).t(
-                        'ADMIN_PROMOCODE_UI_088', ' Количество дней должно быть от 1 до 3650'
-                    )
+                    get_texts(db_user.language).t('ADMIN_PROMOCODE_UI_088', ' Количество дней должно быть от 1 до 3650')
                 )
                 return
 
@@ -1139,9 +1133,7 @@ async def process_promocode_expiry(message: types.Message, db_user: User, state:
 
         if expiry_days < 0 or expiry_days > 3650:
             await message.answer(
-                get_texts(db_user.language).t(
-                    'ADMIN_PROMOCODE_UI_096', ' Срок действия должен быть от 0 до 3650 дней'
-                )
+                get_texts(db_user.language).t('ADMIN_PROMOCODE_UI_096', ' Срок действия должен быть от 0 до 3650 дней')
             )
             return
 
@@ -1273,9 +1265,7 @@ async def process_promocode_expiry(message: types.Message, db_user: User, state:
         logger.info('Создан промокод администратором', code=code, telegram_id=db_user.telegram_id)
 
     except ValueError:
-        await message.answer(
-            get_texts(db_user.language).t('ADMIN_PROMOCODE_UI_092', ' Введите корректное число дней')
-        )
+        await message.answer(get_texts(db_user.language).t('ADMIN_PROMOCODE_UI_092', ' Введите корректное число дней'))
 
 
 @admin_required
@@ -1375,9 +1365,7 @@ async def process_discount_hours(message: types.Message, db_user: User, state: F
         )
 
     except ValueError:
-        await message.answer(
-            get_texts(db_user.language).t('ADMIN_PROMOCODE_UI_099', ' Введите корректное число часов')
-        )
+        await message.answer(get_texts(db_user.language).t('ADMIN_PROMOCODE_UI_099', ' Введите корректное число часов'))
 
 
 async def handle_edit_expiry(message: types.Message, db_user: User, state: FSMContext, db: AsyncSession):
@@ -1395,9 +1383,7 @@ async def handle_edit_expiry(message: types.Message, db_user: User, state: FSMCo
 
         if expiry_days < 0 or expiry_days > 3650:
             await message.answer(
-                get_texts(db_user.language).t(
-                    'ADMIN_PROMOCODE_UI_096', ' Срок действия должен быть от 0 до 3650 дней'
-                )
+                get_texts(db_user.language).t('ADMIN_PROMOCODE_UI_096', ' Срок действия должен быть от 0 до 3650 дней')
             )
             return
 
@@ -1441,9 +1427,7 @@ async def handle_edit_expiry(message: types.Message, db_user: User, state: FSMCo
         )
 
     except ValueError:
-        await message.answer(
-            get_texts(db_user.language).t('ADMIN_PROMOCODE_UI_092', ' Введите корректное число дней')
-        )
+        await message.answer(get_texts(db_user.language).t('ADMIN_PROMOCODE_UI_092', ' Введите корректное число дней'))
 
 
 @admin_required
@@ -1496,9 +1480,7 @@ async def toggle_promocode_first_purchase(callback: types.CallbackQuery, db_user
         else get_texts(db_user.language).t('ADMIN_PROMOCODE_UI_036', 'выключен')
     )
     await callback.answer(
-        get_texts(db_user.language)
-        .t('ADMIN_PROMOCODE_UI_059', " Режим 'первая покупка' {v0}")
-        .format(v0=status_text),
+        get_texts(db_user.language).t('ADMIN_PROMOCODE_UI_059', " Режим 'первая покупка' {v0}").format(v0=status_text),
         show_alert=True,
     )
 

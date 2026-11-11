@@ -2580,9 +2580,7 @@ async def process_balance_edit(message: types.Message, db_user: User, state: FSM
         amount_kopeks = int(amount_rubles * 100)
 
         if abs(amount_kopeks) > 10000000:
-            await message.answer(
-                texts.t('ADMIN_USERS_RESTRICTIONS_034', ' Слишком большая сумма (максимум 100,000 ₽)')
-            )
+            await message.answer(texts.t('ADMIN_USERS_RESTRICTIONS_034', ' Слишком большая сумма (максимум 100,000 ₽)'))
             return
 
         user_service = UserService()
@@ -4075,9 +4073,7 @@ async def process_subscription_grant_days(callback: types.CallbackQuery, db_user
 
     if success:
         await callback.message.edit_text(
-            texts.t('ADMIN_USERS_SUBACTIONS_027', ' Пользователю выдана подписка на {value1} дней').format(
-                value1=days
-            ),
+            texts.t('ADMIN_USERS_SUBACTIONS_027', ' Пользователю выдана подписка на {value1} дней').format(value1=days),
             reply_markup=types.InlineKeyboardMarkup(
                 inline_keyboard=[
                     [types.InlineKeyboardButton(text=' К подписке', callback_data=f'admin_user_subscription_{user_id}')]
@@ -4473,9 +4469,7 @@ async def process_devices_edit_text(message: types.Message, db_user: User, state
 
         if success:
             await message.answer(
-                texts.t('ADMIN_USERS_LIMITS_014', ' Количество устройств изменено на: {value1}').format(
-                    value1=devices
-                ),
+                texts.t('ADMIN_USERS_LIMITS_014', ' Количество устройств изменено на: {value1}').format(value1=devices),
                 reply_markup=types.InlineKeyboardMarkup(
                     inline_keyboard=[[types.InlineKeyboardButton(text=' Подписка и настройки', callback_data=back_cb)]]
                 ),
@@ -4538,11 +4532,7 @@ async def start_traffic_edit(callback: types.CallbackQuery, db_user: User, state
                         callback_data=f'admin_user_traffic_set_{user_id}{_sid}_0',
                     )
                 ],
-                [
-                    types.InlineKeyboardButton(
-                        text=texts.t('ADMIN_USERS_LIMITS_023', ' Отмена'), callback_data=back_cb
-                    )
-                ],
+                [types.InlineKeyboardButton(text=texts.t('ADMIN_USERS_LIMITS_023', ' Отмена'), callback_data=back_cb)],
             ]
         ),
     )
@@ -6268,9 +6258,7 @@ async def admin_buy_tariff_execute(callback: types.CallbackQuery, db_user: User,
         return
 
     if target_user.balance_kopeks < price_kopeks:
-        await callback.answer(
-            texts.t('ADMIN_USERS_PURCHASE_073', ' Недостаточно средств на балансе'), show_alert=True
-        )
+        await callback.answer(texts.t('ADMIN_USERS_PURCHASE_073', ' Недостаточно средств на балансе'), show_alert=True)
         return
 
     try:

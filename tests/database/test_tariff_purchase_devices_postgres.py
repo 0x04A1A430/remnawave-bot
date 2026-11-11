@@ -650,7 +650,7 @@ async def test_admin_daily_renewal_preserves_devices_it_charges(postgres_databas
             callback.data = buttons[0][0].callback_data
             await inspect.unwrap(admin.admin_buy_tariff_confirm)(callback, user, db)
             confirmation = callback.message.edit_text.await_args
-            assert '📱 Устройств: 3' in confirmation.args[0]
+            assert 'Устройств: 3' in confirmation.args[0]
             callback.data = confirmation.kwargs['reply_markup'].inline_keyboard[0][0].callback_data
             assert callback.data.endswith('_1200')
             if price_changed:
@@ -658,8 +658,8 @@ async def test_admin_daily_renewal_preserves_devices_it_charges(postgres_databas
                 await db.commit()
             await inspect.unwrap(admin.admin_buy_tariff_execute)(callback, user, db)
             if not price_changed:
-                assert '📱 Устройств: 3' in callback.message.edit_text.await_args.args[0]
-                assert '📱 Устройств: 3' in callback.bot.send_message.await_args.kwargs['text']
+                assert 'Устройств: 3' in callback.message.edit_text.await_args.args[0]
+                assert 'Устройств: 3' in callback.bot.send_message.await_args.kwargs['text']
         async with checkout.maker() as db:
             assert (await db.get(User, 1)).balance_kopeks == (100000 if price_changed else 98800)
             assert (await db.get(Subscription, 10)).device_limit == 3

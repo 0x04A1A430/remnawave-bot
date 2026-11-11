@@ -609,9 +609,7 @@ class TestGiftReplayAndPresentation:
             assert f'https://cabinet.example.com/buy/gift/{sample_purchase_result.purchase.token}' in text
             buttons = [b for row in kb.inline_keyboard for b in row]
             send_btn = next(
-                b
-                for b in buttons
-                if b.url == 'https://t.me/share/url?url=https%3A%2F%2Ft.me%2Ftest_gift_bot&text=Gift'
+                b for b in buttons if b.url == 'https://t.me/share/url?url=https%3A%2F%2Ft.me%2Ftest_gift_bot&text=Gift'
             )
             assert send_btn.text
             button_urls = _button_urls(kb)

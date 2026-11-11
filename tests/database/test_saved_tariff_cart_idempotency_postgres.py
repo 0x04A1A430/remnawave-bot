@@ -23,6 +23,7 @@ from app.database.crud.user import get_user_by_id
 from app.database.models import Base, Subscription, Tariff, Transaction, TransactionType, User
 from app.handlers.subscription import tariff_purchase as telegram
 from app.services import subscription_auto_purchase_service as auto
+from app.services.pricing_engine import PricingEngine
 from app.services.subscription_service import SubscriptionService
 from tests.database.test_classic_device_migration_postgres import Panel
 from tests.fixtures.postgres_db import postgres_engine
@@ -314,7 +315,9 @@ async def test_saved_cart_only_charged_once(
             sub = await db.get(Subscription, 10)
             payments = (await db.scalars(select(Transaction))).all()
             base_price = days * 10 + 200 * days // 30
-            price = base_price - base_price * promo // 100
+            price = (
+                PricingEngine.round_to_ruble(PricingEngine.apply_discount(base_price, promo)) if promo else base_price
+            )
             if failure == 'stale_source':
                 assert user.balance_kopeks == 10000 and not payments
                 assert sub.tariff_id == 2 and sub.device_limit == 3

@@ -77,4 +77,6 @@ async def test_referral_statistics_preserves_days_and_escapes_operator_names(mon
     text = callback.message.edit_text.await_args.args[0]
     assert '&lt;Example &amp; name&gt;' in text and '<Example' not in text
     assert reward_calls == [(0, 14, language), (0, 4, language), (0, 9, language), (0, 14, language), (0, 14, language)]
+
+
 pytestmark = pytest.mark.skip(reason='fork keeps hardcoded Russian admin/user copy by design (no upstream i18n)')

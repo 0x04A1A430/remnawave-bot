@@ -94,4 +94,6 @@ def test_diagnostic_service_errors_have_explicit_translations(language):
     for value in referrals._DIAGNOSTIC_ERROR_KEYS:
         assert re.search('[А-Яа-яЁё]', referrals._localize_diagnostic_error(value, language)) is None
     assert referrals._localize_diagnostic_error('custom exception', language) == 'custom exception'
+
+
 pytestmark = pytest.mark.skip(reason='fork keeps hardcoded Russian admin/user copy by design (no upstream i18n)')

@@ -1092,9 +1092,7 @@ async def block_user_permanently(callback: types.CallbackQuery, db_user: User, d
                 ),
             )
         except Exception:
-            await callback.answer(
-                texts.t('ADMIN_TICKETS_UI_BLOCK_USER_PERMANENTLY_056', ' Пользователь заблокирован')
-            )
+            await callback.answer(texts.t('ADMIN_TICKETS_UI_BLOCK_USER_PERMANENTLY_056', ' Пользователь заблокирован'))
         # audit
         try:
             is_mod = not settings.is_admin(callback.from_user.id) and SupportSettingsService.is_moderator(

@@ -507,9 +507,7 @@ async def process_edit_campaign_name(
     campaign_id = data.get('editing_campaign_id')
     if not campaign_id:
         await message.answer(
-            get_texts(db_user.language).t(
-                'ADMIN_CAMPAIGN_UI_072', ' Сессия редактирования устарела. Попробуйте снова.'
-            )
+            get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_072', ' Сессия редактирования устарела. Попробуйте снова.')
         )
         await state.clear()
         return
@@ -607,9 +605,7 @@ async def process_edit_campaign_start_parameter(
     campaign_id = data.get('editing_campaign_id')
     if not campaign_id:
         await message.answer(
-            get_texts(db_user.language).t(
-                'ADMIN_CAMPAIGN_UI_072', ' Сессия редактирования устарела. Попробуйте снова.'
-            )
+            get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_072', ' Сессия редактирования устарела. Попробуйте снова.')
         )
         await state.clear()
         return
@@ -723,9 +719,7 @@ async def process_edit_campaign_balance_bonus(
     campaign_id = data.get('editing_campaign_id')
     if not campaign_id:
         await message.answer(
-            get_texts(db_user.language).t(
-                'ADMIN_CAMPAIGN_UI_072', ' Сессия редактирования устарела. Попробуйте снова.'
-            )
+            get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_072', ' Сессия редактирования устарела. Попробуйте снова.')
         )
         await state.clear()
         return
@@ -734,9 +728,7 @@ async def process_edit_campaign_balance_bonus(
         amount_rubles = float(message.text.replace(',', '.'))
     except ValueError:
         await message.answer(
-            get_texts(db_user.language).t(
-                'ADMIN_CAMPAIGN_UI_096', ' Введите корректную сумму (например, 100 или 99.5)'
-            )
+            get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_096', ' Введите корректную сумму (например, 100 или 99.5)')
         )
         return
 
@@ -784,9 +776,7 @@ async def _ensure_subscription_campaign(message_or_callback, campaign, language:
             )
         else:
             await message_or_callback.answer(
-                get_texts(language).t(
-                    'ADMIN_CAMPAIGN_UI_098', ' Для этой кампании нельзя изменить параметры подписки'
-                )
+                get_texts(language).t('ADMIN_CAMPAIGN_UI_098', ' Для этой кампании нельзя изменить параметры подписки')
             )
         return False
     return True
@@ -855,9 +845,7 @@ async def process_edit_campaign_subscription_days(
     campaign_id = data.get('editing_campaign_id')
     if not campaign_id:
         await message.answer(
-            get_texts(db_user.language).t(
-                'ADMIN_CAMPAIGN_UI_072', ' Сессия редактирования устарела. Попробуйте снова.'
-            )
+            get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_072', ' Сессия редактирования устарела. Попробуйте снова.')
         )
         await state.clear()
         return
@@ -972,9 +960,7 @@ async def process_edit_campaign_subscription_traffic(
     campaign_id = data.get('editing_campaign_id')
     if not campaign_id:
         await message.answer(
-            get_texts(db_user.language).t(
-                'ADMIN_CAMPAIGN_UI_072', ' Сессия редактирования устарела. Попробуйте снова.'
-            )
+            get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_072', ' Сессия редактирования устарела. Попробуйте снова.')
         )
         await state.clear()
         return
@@ -1088,9 +1074,7 @@ async def process_edit_campaign_subscription_devices(
     campaign_id = data.get('editing_campaign_id')
     if not campaign_id:
         await message.answer(
-            get_texts(db_user.language).t(
-                'ADMIN_CAMPAIGN_UI_072', ' Сессия редактирования устарела. Попробуйте снова.'
-            )
+            get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_072', ' Сессия редактирования устарела. Попробуйте снова.')
         )
         await state.clear()
         return
@@ -1633,9 +1617,7 @@ async def process_campaign_balance_value(
         amount_rubles = float(message.text.replace(',', '.'))
     except ValueError:
         await message.answer(
-            get_texts(db_user.language).t(
-                'ADMIN_CAMPAIGN_UI_096', ' Введите корректную сумму (например, 100 или 99.5)'
-            )
+            get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_096', ' Введите корректную сумму (например, 100 или 99.5)')
         )
         return
 
@@ -2117,9 +2099,7 @@ async def process_edit_campaign_tariff_days(
     campaign_id = data.get('editing_campaign_id')
     if not campaign_id:
         await message.answer(
-            get_texts(db_user.language).t(
-                'ADMIN_CAMPAIGN_UI_072', ' Сессия редактирования устарела. Попробуйте снова.'
-            )
+            get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_072', ' Сессия редактирования устарела. Попробуйте снова.')
         )
         await state.clear()
         return

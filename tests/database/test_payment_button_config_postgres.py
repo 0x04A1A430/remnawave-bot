@@ -7,6 +7,12 @@ from app.services import payment_method_config_service as service
 from tests.fixtures.postgres_db import postgres_session
 
 
+def _plain(value: str) -> str:
+    import re
+
+    return re.sub(r'<tg-emoji[^>]*>(.*?)</tg-emoji>', r'\1', value)
+
+
 pytestmark = [pytest.mark.postgres, pytest.mark.asyncio]
 
 
@@ -54,7 +60,7 @@ async def test_saved_names_order_and_reset_reach_telegram_without_restart(postgr
             'topup_amount|tribute|12345',
         ]
         assert current['topup_amount|yookassa_sbp|12345'] == '🏦 Оплата по СБП (Gateway)'
-        assert current['topup_amount|yookassa|12345'] == '💳 Банковская карта (Gateway)'
+        assert _plain(current['topup_amount|yookassa|12345']) == '💳 Банковская карта (Gateway)'
         assert current['topup_amount|stars|12345'] == 'Custom Stars'
         await service.update_config(db, 'yookassa', {'display_name': None})
         reset = buttons()

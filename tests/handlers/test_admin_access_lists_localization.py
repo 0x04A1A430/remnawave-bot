@@ -83,4 +83,6 @@ def test_blacklist_known_result_is_localized(language):
     result = blacklist._localize_blacklist_result(message, language)
     assert result != message
     assert '12' in result
+
+
 pytestmark = pytest.mark.skip(reason='fork keeps hardcoded Russian admin/user copy by design (no upstream i18n)')

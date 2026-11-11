@@ -131,4 +131,6 @@ async def test_ticket_reply_uses_recipient_language_and_escapes_operator_text(mo
     assert 'Operator &lt;config&gt; &amp; value' in kwargs['text']
     assert kwargs['reply_markup'].inline_keyboard[0][0].text == get_texts(language).t('VIEW_TICKET', '')
     assert kwargs['reply_markup'].inline_keyboard[0][0].callback_data == 'view_ticket_7'
+
+
 pytestmark = pytest.mark.skip(reason='fork keeps hardcoded Russian admin/user copy by design (no upstream i18n)')

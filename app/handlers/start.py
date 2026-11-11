@@ -731,7 +731,10 @@ async def _activate_pending_trial(
     try:
         texts = get_texts(user.language)
         confirmation = await answer_func(
-            texts.t('MAIN_MENU_RICH_TRIAL_ACTIVATED', '<tg-emoji emoji-id="5994502837327892086">🎉</tg-emoji> <b>Тестовая подписка активирована!</b>'),
+            texts.t(
+                'MAIN_MENU_RICH_TRIAL_ACTIVATED',
+                '<tg-emoji emoji-id="5994502837327892086">🎉</tg-emoji> <b>Тестовая подписка активирована!</b>',
+            ),
             parse_mode=ParseMode.HTML,
         )
         # Подтверждение эфемерное: новая подписка и так видна в меню ниже.
@@ -1102,7 +1105,12 @@ async def handle_potential_referral_code(message: types.Message, state: FSMConte
         data['referrer_id'] = referrer.id
         await state.set_data(data)
 
-        await message.answer(texts.t('REFERRAL_CODE_ACCEPTED', '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Реферальный код принят!'))
+        await message.answer(
+            texts.t(
+                'REFERRAL_CODE_ACCEPTED',
+                '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Реферальный код принят!',
+            )
+        )
         logger.info(
             '✅ Реферальный код применен для пользователя',
             potential_code=potential_code,
@@ -2319,7 +2327,12 @@ async def process_referral_code_input(message: types.Message, state: FSMContext,
     if referrer:
         data['referrer_id'] = referrer.id
         await state.set_data(data)
-        await message.answer(texts.t('REFERRAL_CODE_ACCEPTED', '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Реферальный код принят!'))
+        await message.answer(
+            texts.t(
+                'REFERRAL_CODE_ACCEPTED',
+                '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Реферальный код принят!',
+            )
+        )
         logger.info('✅ Реферальный код применен', code=code)
         await complete_registration(message, state, db)
         return

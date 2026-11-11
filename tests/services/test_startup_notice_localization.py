@@ -17,6 +17,8 @@ from app.services import startup_notification_service as module
 
 def _plain(value: str) -> str:
     return re.sub(r'<tg-emoji[^>]*>(.*?)</tg-emoji>', r'\1', value)
+
+
 from tests.services.test_startup_notification_summary import _assert_valid_telegram_html, _stats
 
 

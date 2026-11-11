@@ -163,4 +163,6 @@ def test_welcome_missing_name_uses_recipient_language(language, expected):
     )
     user.first_name = '<Example>'
     assert replace_placeholders('{user_name}', user) == '&lt;Example&gt;'
+
+
 pytestmark = pytest.mark.skip(reason='fork keeps hardcoded Russian admin/user copy by design (no upstream i18n)')

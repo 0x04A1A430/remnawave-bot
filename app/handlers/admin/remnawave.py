@@ -1384,9 +1384,7 @@ async def show_node_details(callback: types.CallbackQuery, db_user: User, db: As
     node = await remnawave_service.get_node_details(node_uuid)
 
     if not node:
-        await callback.answer(
-            texts.t('ADMIN_REMNAWAVE_UI_SHOW_NODE_DETAILS_056', ' Нода не найдена'), show_alert=True
-        )
+        await callback.answer(texts.t('ADMIN_REMNAWAVE_UI_SHOW_NODE_DETAILS_056', ' Нода не найдена'), show_alert=True)
         return
 
     status_emoji = '●' if node['is_node_online'] else '○'
@@ -1494,9 +1492,7 @@ async def show_node_statistics(callback: types.CallbackQuery, db_user: User, db:
     node = await remnawave_service.get_node_details(node_uuid)
 
     if not node:
-        await callback.answer(
-            texts.t('ADMIN_REMNAWAVE_UI_SHOW_NODE_DETAILS_056', ' Нода не найдена'), show_alert=True
-        )
+        await callback.answer(texts.t('ADMIN_REMNAWAVE_UI_SHOW_NODE_DETAILS_056', ' Нода не найдена'), show_alert=True)
         return
 
     status_emoji = '●' if node['is_node_online'] else '○'
@@ -1677,9 +1673,7 @@ async def show_squad_details(callback: types.CallbackQuery, db_user: User, db: A
     squad = await remnawave_service.get_squad_details(squad_uuid)
 
     if not squad:
-        await callback.answer(
-            texts.t('ADMIN_REMNAWAVE_UI_SHOW_SQUAD_DETAILS_102', ' Сквад не найден'), show_alert=True
-        )
+        await callback.answer(texts.t('ADMIN_REMNAWAVE_UI_SHOW_SQUAD_DETAILS_102', ' Сквад не найден'), show_alert=True)
         return
 
     text = f"""
@@ -1767,9 +1761,7 @@ async def show_squad_edit_menu(callback: types.CallbackQuery, db_user: User, db:
     squad = await remnawave_service.get_squad_details(squad_uuid)
 
     if not squad:
-        await callback.answer(
-            texts.t('ADMIN_REMNAWAVE_UI_SHOW_SQUAD_DETAILS_102', ' Сквад не найден'), show_alert=True
-        )
+        await callback.answer(texts.t('ADMIN_REMNAWAVE_UI_SHOW_SQUAD_DETAILS_102', ' Сквад не найден'), show_alert=True)
         return
 
     text = f"""
@@ -1802,9 +1794,7 @@ async def show_squad_inbounds_selection(callback: types.CallbackQuery, db_user: 
     all_inbounds = await remnawave_service.get_all_inbounds()
 
     if not squad:
-        await callback.answer(
-            texts.t('ADMIN_REMNAWAVE_UI_SHOW_SQUAD_DETAILS_102', ' Сквад не найден'), show_alert=True
-        )
+        await callback.answer(texts.t('ADMIN_REMNAWAVE_UI_SHOW_SQUAD_DETAILS_102', ' Сквад не найден'), show_alert=True)
         return
 
     if not all_inbounds:
@@ -1866,9 +1856,7 @@ async def show_squad_rename_form(callback: types.CallbackQuery, db_user: User, d
     squad = await remnawave_service.get_squad_details(squad_uuid)
 
     if not squad:
-        await callback.answer(
-            texts.t('ADMIN_REMNAWAVE_UI_SHOW_SQUAD_DETAILS_102', ' Сквад не найден'), show_alert=True
-        )
+        await callback.answer(texts.t('ADMIN_REMNAWAVE_UI_SHOW_SQUAD_DETAILS_102', ' Сквад не найден'), show_alert=True)
         return
 
     await state.update_data(squad_uuid=squad_uuid, squad_name=squad['name'])
@@ -2011,9 +1999,7 @@ async def toggle_squad_inbound(callback: types.CallbackQuery, db_user: User, db:
             break
 
     if not full_squad_uuid:
-        await callback.answer(
-            texts.t('ADMIN_REMNAWAVE_UI_SHOW_SQUAD_DETAILS_102', ' Сквад не найден'), show_alert=True
-        )
+        await callback.answer(texts.t('ADMIN_REMNAWAVE_UI_SHOW_SQUAD_DETAILS_102', ' Сквад не найден'), show_alert=True)
         return
 
     all_inbounds = await remnawave_service.get_all_inbounds()
@@ -2093,9 +2079,7 @@ async def save_squad_inbounds(callback: types.CallbackQuery, db_user: User, db: 
             break
 
     if not full_squad_uuid:
-        await callback.answer(
-            texts.t('ADMIN_REMNAWAVE_UI_SHOW_SQUAD_DETAILS_102', ' Сквад не найден'), show_alert=True
-        )
+        await callback.answer(texts.t('ADMIN_REMNAWAVE_UI_SHOW_SQUAD_DETAILS_102', ' Сквад не найден'), show_alert=True)
         return
 
     selected_inbounds = squad_inbound_selections.get(full_squad_uuid, set())
@@ -2158,9 +2142,7 @@ async def show_squad_edit_menu_short(callback: types.CallbackQuery, db_user: Use
             break
 
     if not full_squad_uuid:
-        await callback.answer(
-            texts.t('ADMIN_REMNAWAVE_UI_SHOW_SQUAD_DETAILS_102', ' Сквад не найден'), show_alert=True
-        )
+        await callback.answer(texts.t('ADMIN_REMNAWAVE_UI_SHOW_SQUAD_DETAILS_102', ' Сквад не найден'), show_alert=True)
         return
 
     refreshed_callback = callback.model_copy(update={'data': f'squad_edit_{full_squad_uuid}'}).as_(callback.bot)
@@ -3331,9 +3313,7 @@ async def sync_users(callback: types.CallbackQuery, db_user: User, db: AsyncSess
 
     if sync_type == 'all_users':
         text += texts.t('ADMIN_REMNAWAVE_UI_SYNC_USERS_298', '•  Создано: {value1}\n').format(value1=stats['created'])
-        text += texts.t('ADMIN_REMNAWAVE_UI_SYNC_USERS_299', '•  Обновлено: {value1}\n').format(
-            value1=stats['updated']
-        )
+        text += texts.t('ADMIN_REMNAWAVE_UI_SYNC_USERS_299', '•  Обновлено: {value1}\n').format(value1=stats['updated'])
         if 'deleted' in stats:
             text += texts.t('ADMIN_REMNAWAVE_UI_SYNC_USERS_300', '•  Удалено: {value1}\n').format(
                 value1=stats['deleted']
@@ -3345,9 +3325,7 @@ async def sync_users(callback: types.CallbackQuery, db_user: User, db: AsyncSess
         if stats['created'] == 0 and stats['errors'] == 0:
             text += texts.t('ADMIN_REMNAWAVE_UI_SYNC_USERS_304', '\n Новых пользователей не найдено')
     elif sync_type == 'update_data':
-        text += texts.t('ADMIN_REMNAWAVE_UI_SYNC_USERS_299', '•  Обновлено: {value1}\n').format(
-            value1=stats['updated']
-        )
+        text += texts.t('ADMIN_REMNAWAVE_UI_SYNC_USERS_299', '•  Обновлено: {value1}\n').format(value1=stats['updated'])
         text += texts.t('ADMIN_REMNAWAVE_UI_SYNC_USERS_301', '•  Ошибок: {value1}\n').format(value1=stats['errors'])
         if stats['updated'] == 0 and stats['errors'] == 0:
             text += texts.t('ADMIN_REMNAWAVE_UI_SYNC_USERS_307', '\n Все данные актуальны')

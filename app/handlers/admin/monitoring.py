@@ -286,9 +286,7 @@ async def _build_notification_preview_message(language: str, notification_type: 
             inline_keyboard=[
                 [
                     InlineKeyboardButton(
-                        text=texts.t(
-                            'ADMIN_MONITORING_UI_BUILD_NOTIFICATION_PREVIEW_MESSAGE_019', ' Получить скидку'
-                        ),
+                        text=texts.t('ADMIN_MONITORING_UI_BUILD_NOTIFICATION_PREVIEW_MESSAGE_019', ' Получить скидку'),
                         callback_data='claim_discount_preview',
                     )
                 ],
@@ -334,9 +332,7 @@ async def _build_notification_preview_message(language: str, notification_type: 
             inline_keyboard=[
                 [
                     InlineKeyboardButton(
-                        text=texts.t(
-                            'ADMIN_MONITORING_UI_BUILD_NOTIFICATION_PREVIEW_MESSAGE_019', ' Получить скидку'
-                        ),
+                        text=texts.t('ADMIN_MONITORING_UI_BUILD_NOTIFICATION_PREVIEW_MESSAGE_019', ' Получить скидку'),
                         callback_data='claim_discount_preview',
                     )
                 ],
@@ -923,9 +919,7 @@ async def force_check_callback(callback: CallbackQuery, db_user: User | None = N
     except Exception as e:
         logger.error('Ошибка принудительной проверки', error=e)
         await callback.answer(
-            texts.t('ADMIN_MONITORING_UI_FORCE_CHECK_CALLBACK_070', ' Ошибка проверки: {value1}').format(
-                value1=str(e)
-            ),
+            texts.t('ADMIN_MONITORING_UI_FORCE_CHECK_CALLBACK_070', ' Ошибка проверки: {value1}').format(value1=str(e)),
             show_alert=True,
         )
 
@@ -1473,9 +1467,9 @@ async def nalogo_pending_callback(callback: CallbackQuery, db_user: User | None 
                         callback_data=f'admin_nalogo_verified:{token}',
                     ),
                     InlineKeyboardButton(
-                        text=texts.t(
-                            'ADMIN_MONITORING_UI_NALOGO_PENDING_CALLBACK_134', ' Отправить ({value1})'
-                        ).format(value1=i),
+                        text=texts.t('ADMIN_MONITORING_UI_NALOGO_PENDING_CALLBACK_134', ' Отправить ({value1})').format(
+                            value1=i
+                        ),
                         callback_data=f'admin_nalogo_retry:{token}',
                     ),
                 ]
@@ -1874,9 +1868,9 @@ async def _do_reconcile_logs(callback: CallbackQuery, db_user: User | None = Non
         except Exception as e:
             logger.error('Ошибка чтения логов', error=e)
             await callback.message.edit_text(
-                texts.t(
-                    'ADMIN_MONITORING_UI_DO_RECONCILE_LOGS_168', ' <b>Ошибка чтения логов</b>\n\n{value1}'
-                ).format(value1=str(e)),
+                texts.t('ADMIN_MONITORING_UI_DO_RECONCILE_LOGS_168', ' <b>Ошибка чтения логов</b>\n\n{value1}').format(
+                    value1=str(e)
+                ),
                 parse_mode='HTML',
                 reply_markup=InlineKeyboardMarkup(
                     inline_keyboard=[[InlineKeyboardButton(text=' Назад', callback_data='admin_mon_statistics')]]

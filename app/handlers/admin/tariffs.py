@@ -2804,9 +2804,7 @@ async def delete_tariff_confirmed(
 
     if not tariffs_data:
         await callback.message.edit_text(
-            get_texts(db_user.language).t(
-                'ADMIN_TARIFF_EMPTY_LIST_SHORT', ' <b>Тарифы</b>\n\nТарифы ещё не созданы.'
-            ),
+            get_texts(db_user.language).t('ADMIN_TARIFF_EMPTY_LIST_SHORT', ' <b>Тарифы</b>\n\nТарифы ещё не созданы.'),
             reply_markup=InlineKeyboardMarkup(
                 inline_keyboard=[
                     [InlineKeyboardButton(text='Создать тариф', callback_data='admin_tariff_create')],

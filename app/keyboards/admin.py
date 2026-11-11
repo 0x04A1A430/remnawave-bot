@@ -1044,7 +1044,7 @@ def get_campaign_edit_keyboard(
 
     # Поддержка старого API
     if bonus_type is None and is_balance_bonus is not None:
-        bonus_type = 'balance'if is_balance_bonus else 'subscription'
+        bonus_type = 'balance' if is_balance_bonus else 'subscription'
 
     keyboard: list[list[InlineKeyboardButton]] = [
         [
@@ -1532,7 +1532,7 @@ def get_user_restrictions_keyboard(
     keyboard = []
 
     # Toggle для ограничения пополнения
-    topup_emoji = ''if restriction_topup else ''
+    topup_emoji = '' if restriction_topup else ''
     topup_text = f'{topup_emoji} Пополнение'
     keyboard.append(
         [
@@ -1544,7 +1544,7 @@ def get_user_restrictions_keyboard(
     )
 
     # Toggle для ограничения подписки
-    sub_emoji = ''if restriction_subscription else ''
+    sub_emoji = '' if restriction_subscription else ''
     sub_text = f'{sub_emoji} Продление/покупка'
     keyboard.append(
         [
@@ -1601,7 +1601,7 @@ def get_user_promo_group_keyboard(
     for group, members_count in promo_groups:
         # Check if user has this group
         has_group = group.id in current_group_ids
-        prefix = ''if has_group else ''
+        prefix = '' if has_group else ''
         count_text = f'({members_count})' if members_count else ''
         keyboard.append(
             [
@@ -1682,7 +1682,7 @@ def get_promocode_list_keyboard(
     keyboard = []
 
     for promo in promocodes:
-        status_emoji = ''if promo.is_active else ''
+        status_emoji = '' if promo.is_active else ''
         type_emoji = {
             'balance': '',
             'subscription_days': '',
@@ -2620,7 +2620,7 @@ def get_maintenance_keyboard(
                 callback_data='maintenance_check_api',
             ),
             make_button(
-                text=_t(texts, 'ADMIN_MAINTENANCE_PANEL_STATUS', 'Статус панели') + (''if panel_has_issues else ''),
+                text=_t(texts, 'ADMIN_MAINTENANCE_PANEL_STATUS', 'Статус панели') + ('' if panel_has_issues else ''),
                 callback_data='maintenance_check_panel',
             ),
         ]

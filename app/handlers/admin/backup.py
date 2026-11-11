@@ -461,9 +461,7 @@ async def delete_backup_execute(callback: types.CallbackQuery, db_user: User, db
         )
     else:
         await callback.message.edit_text(
-            get_texts(db_user.language)
-            .t('ADMIN_BACKUP_UI_040', ' <b>Ошибка удаления</b>\n\n{v0}')
-            .format(v0=message),
+            get_texts(db_user.language).t('ADMIN_BACKUP_UI_040', ' <b>Ошибка удаления</b>\n\n{v0}').format(v0=message),
             parse_mode='HTML',
             reply_markup=get_backup_manage_keyboard(filename, language=db_user.language),
         )
