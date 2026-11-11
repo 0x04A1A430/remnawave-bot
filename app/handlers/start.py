@@ -93,6 +93,30 @@ from app.utils.user_utils import generate_unique_referral_code
 logger = structlog.get_logger(__name__)
 
 
+def _compact(text: str | None) -> str:
+    """Одна пустая строка максимум, без пустых строк по краям.
+
+    Регистрационные экраны и меню склеиваются из необязательных блоков; пустой
+    блок через ``'\\n\\n'`` оставлял «дыру» из нескольких пустых строк.
+    """
+    if not text:
+        return ''
+
+    lines: list[str] = []
+    for raw_line in str(text).splitlines():
+        line = raw_line.rstrip()
+        if not line.strip():
+            if lines and lines[-1] != '':
+                lines.append('')
+            continue
+        lines.append(line)
+
+    while lines and lines[-1] == '':
+        lines.pop()
+
+    return '\n'.join(lines)
+
+
 def _within_retroactive_referral_window(user) -> bool:
     """Разрешить только гонку создания аккаунта Mini App с обработкой /start."""
     created_at = getattr(user, 'created_at', None)
@@ -183,7 +207,7 @@ async def _answer_registration_denial(
                 ]
             ]
         )
-    await answer_func(_registration_denial_text(texts, decision), reply_markup=reply_markup)
+    await answer_func(_compact(_registration_denial_text(texts, decision)), reply_markup=reply_markup)
 
 
 async def _withdraw_admission_after_invite_conflict(
@@ -319,6 +343,8 @@ async def answer_menu_with_media(message, text: str, keyboard, db) -> None:
     """
     from app.utils.message_patch import caption_exceeds_telegram_limit
 
+    text = _compact(text)
+
     if not caption_exceeds_telegram_limit(text):
         from app.services.start_media_service import get_start_video_file_id
 
@@ -366,6 +392,7 @@ async def send_menu_with_media(
 
     # Видео не конвертируется в rich — для него действует классический лимит
     # подписи. Фото-логотип в rich-режиме может нести длинный текст.
+    text = _compact(text)
     caption_fits = not caption_exceeds_telegram_limit(text)
     logo_caption_fits = caption_fits_logo(text)
 
@@ -1231,9 +1258,11 @@ async def _continue_registration_after_language(
         else:
             try:
                 await target_message.answer(
-                    texts.t(
-                        'REFERRAL_CODE_QUESTION',
-                        "У вас есть реферальный код? Введите его или нажмите 'Пропустить'",
+                    _compact(
+                        texts.t(
+                            'REFERRAL_CODE_QUESTION',
+                            "У вас есть реферальный код? Введите его или нажмите 'Пропустить'",
+                        )
                     ),
                     reply_markup=get_referral_code_keyboard(language),
                 )
@@ -2004,7 +2033,7 @@ async def _rules_for_telegram(language: str) -> str:
     шаге правил с «Unsupported start tag». Если после очистки текста не осталось,
     показываются правила по умолчанию из локали — пустое сообщение Telegram не примет.
     """
-    return html_to_telegram(await get_rules(language)) or html_to_telegram(get_default_rules(language))
+    return _compact(html_to_telegram(await get_rules(language)) or html_to_telegram(get_default_rules(language)))
 
 
 async def _show_privacy_policy_after_rules(
@@ -2036,6 +2065,8 @@ async def _show_privacy_policy_after_rules(
         )
     else:
         logger.info('🔒 Используется политика конфиденциальности из БД для языка', language=language)
+
+    privacy_policy_text = _compact(privacy_policy_text)
 
     try:
         await edit_long_text(
@@ -2095,9 +2126,11 @@ async def _continue_registration_after_rules(
     else:
         try:
             await callback.message.edit_text(
-                texts.t(
-                    'REFERRAL_CODE_QUESTION',
-                    "У вас есть реферальный код? Введите его или нажмите 'Пропустить'",
+                _compact(
+                    texts.t(
+                        'REFERRAL_CODE_QUESTION',
+                        "У вас есть реферальный код? Введите его или нажмите 'Пропустить'",
+                    )
                 ),
                 reply_markup=get_referral_code_keyboard(language),
             )
@@ -2237,9 +2270,11 @@ async def process_privacy_policy_accept(callback: types.CallbackQuery, state: FS
 
                     await callback.bot.send_message(
                         chat_id=callback.from_user.id,
-                        text=texts.t(
-                            'REFERRAL_CODE_QUESTION',
-                            "У вас есть реферальный код? Введите его или нажмите 'Пропустить'",
+                        text=_compact(
+                            texts.t(
+                                'REFERRAL_CODE_QUESTION',
+                                "У вас есть реферальный код? Введите его или нажмите 'Пропустить'",
+                            )
                         ),
                         reply_markup=get_referral_code_keyboard(language),
                     )
@@ -2666,6 +2701,7 @@ async def complete_registration_from_callback(callback: types.CallbackQuery, sta
     from app.database.crud.welcome_text import get_welcome_text_for_user
 
     offer_text = await get_welcome_text_for_user(db, callback.from_user)
+    offer_text = _compact(offer_text)
     pinned_message = await get_active_pinned_message(db)
 
     if offer_text:
@@ -3058,6 +3094,7 @@ async def complete_registration(message: types.Message, state: FSMContext, db: A
     from app.database.crud.welcome_text import get_welcome_text_for_user
 
     offer_text = await get_welcome_text_for_user(db, message.from_user)
+    offer_text = _compact(offer_text)
     pinned_message = await get_active_pinned_message(db)
 
     if offer_text:
@@ -3158,10 +3195,11 @@ def _get_subscription_status_simple(texts):
 
 
 def _insert_random_message(base_text: str, random_message: str, action_prompt: str) -> str:
+    random_message = (random_message or '').strip()
     if not random_message:
         return base_text
 
-    prompt = action_prompt or ''
+    prompt = (action_prompt or '').strip()
     if prompt and prompt in base_text:
         parts = base_text.split(prompt, 1)
         if len(parts) == 2:
@@ -3203,12 +3241,12 @@ async def get_main_menu_text_simple(user_name, texts, db: AsyncSession):
     try:
         random_message = await get_random_active_message(db)
         if random_message:
-            return _insert_random_message(base_text, random_message, action_prompt)
+            return _compact(_insert_random_message(base_text, random_message, action_prompt))
 
     except Exception as e:
         logger.error('Ошибка получения случайного сообщения', error=e)
 
-    return base_text
+    return _compact(base_text)
 
 
 async def required_sub_channel_check(
@@ -3433,9 +3471,11 @@ async def required_sub_channel_check(
                     return None
                 await bot.send_message(
                     chat_id=query.from_user.id,
-                    text=texts.t(
-                        'REFERRAL_CODE_QUESTION',
-                        "У вас есть реферальный код? Введите его или нажмите 'Пропустить'",
+                    text=_compact(
+                        texts.t(
+                            'REFERRAL_CODE_QUESTION',
+                            "У вас есть реферальный код? Введите его или нажмите 'Пропустить'",
+                        )
                     ),
                     reply_markup=get_referral_code_keyboard(language),
                 )
