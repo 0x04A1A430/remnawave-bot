@@ -147,6 +147,11 @@ def is_rich_transport_available() -> bool:
     return not _rich_unavailable
 
 
+def get_logo_url() -> str:
+    """Public logo URL for hand-built rich screens ('' when unavailable)."""
+    return _resolve_logo_url()
+
+
 def _mark_rich_unavailable(error: Exception) -> None:
     global _rich_unavailable, _warned_unavailable
     _rich_unavailable = True
