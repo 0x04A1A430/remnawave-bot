@@ -370,13 +370,14 @@ class MonitoringService:
                 self._device_overflow_task = asyncio.create_task(self._device_overflow_loop())
         except Exception as e:
             logger.error('Не удалось запустить проверку превышения лимита устройств', error=e)
-        try:
-            if not self._live_menu_task or self._live_menu_task.done():
-                from app.services.live_menu_service import live_menu_loop
+        if settings.MAIN_MENU_LIVE_ENABLED:
+            try:
+                if not self._live_menu_task or self._live_menu_task.done():
+                    from app.services.live_menu_service import live_menu_loop
 
-                self._live_menu_task = asyncio.create_task(live_menu_loop(self))
-        except Exception as e:
-            logger.error('Не удалось запустить живое меню', error=e)
+                    self._live_menu_task = asyncio.create_task(live_menu_loop(self))
+            except Exception as e:
+                logger.error('Не удалось запустить живое меню', error=e)
 
         while self.is_running:
             try:
