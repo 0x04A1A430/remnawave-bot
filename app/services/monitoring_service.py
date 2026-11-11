@@ -2123,21 +2123,23 @@ class MonitoringService:
     async def _send_trial_channel_unsubscribed_notification(self, user: User) -> bool:
         try:
             texts = get_texts(user.language)
-            template = texts.get(
-                'TRIAL_CHANNEL_UNSUBSCRIBED',
-                (
-                    '<b>Доступ приостановлен</b>\n\n'
-                    'Мы не нашли вашу подписку на наш канал, поэтому тестовая подписка отключена.\n\n'
-                    'Подпишитесь на канал и нажмите «{check_button}», чтобы вернуть доступ.'
-                ),
-            )
+            from app.utils.notification_card import card
 
             check_button = texts.t('CHANNEL_CHECK_BUTTON', 'Я подписался')
-            message = template.format(check_button=check_button)
+            message = card(
+                emoji='🔒',
+                title=texts.t('NOTIFY_TRIAL_UNSUB_TITLE', 'Доступ приостановлен'),
+                lines=[
+                    texts.t('NOTIFY_TRIAL_UNSUB_LINE_1', 'Не нашли подписку на наш канал.'),
+                    texts.t('NOTIFY_TRIAL_UNSUB_LINE_2', 'Подпишитесь и нажмите кнопку ниже — вернём тестовый доступ.'),
+                ],
+                note=texts.t('NOTIFY_CARD_NOTE', '@x1lagent · ответим в поддержке за пару минут'),
+            )
 
-            from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+            from aiogram.types import InlineKeyboardMarkup
 
             from app.services.channel_subscription_service import channel_subscription_service
+            from app.utils.notification_card import button
 
             unsubscribed = await channel_subscription_service.get_unsubscribed_channels(user.telegram_id)
 
@@ -2146,16 +2148,8 @@ class MonitoringService:
                 link = ch.get('channel_link')
                 if link:
                     title = ch.get('title') or texts.t('CHANNEL_SUBSCRIBE_BUTTON', 'Подписаться')
-                    buttons.append([InlineKeyboardButton(text=f'{title}', url=link)])
-            buttons.append(
-                [
-                    InlineKeyboardButton(
-                        text=check_button,
-                        callback_data='sub_channel_check',
-                    )
-                ]
-            )
-
+                    buttons.append([button(title, '💬', url=link, style='primary')])
+            buttons.append([button(check_button, '✅', callback_data='sub_channel_check', style='success')])
             keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
 
             await self._send_message_with_logo(
@@ -2220,20 +2214,25 @@ class MonitoringService:
                 )
                 renewal_price_kopeks = settings.PRICE_30_DAYS
 
-            template = texts.get(
-                'SUBSCRIPTION_EXPIRED_1D',
-                (
-                    '<b>Подписка{tariff_label} закончилась</b>\n\n'
-                    'Доступ был отключён {end_date}. Продлите подписку, чтобы вернуться в сервис.'
-                ),
-            )
-            message = template.format(
-                end_date=format_local_datetime(subscription.end_date, '%d.%m.%Y %H:%M'),
-                price=settings.format_price(renewal_price_kopeks),
-                tariff_label=tariff_label,
+            from app.utils.notification_card import ICONS, card
+
+            message = card(
+                emoji='⏰',
+                title=texts.t('NOTIFY_EXPIRED_TITLE', 'Подписка закончилась') + tariff_label,
+                lines=[
+                    (
+                        f'{texts.t("NOTIFY_EXPIRED_DATE", "Доступ отключён")}: '
+                        f'{format_local_datetime(subscription.end_date, "%d.%m.%Y %H:%M")}'
+                    ),
+                    f'{texts.t("NOTIFY_EXPIRED_PRICE", "Продление")}: <b>{settings.format_price(renewal_price_kopeks)}</b>',
+                    texts.t('NOTIFY_EXPIRED_LINE', 'Вернитесь в сервис — настройки и устройства сохранились.'),
+                ],
+                note=texts.t('NOTIFY_CARD_NOTE', '@x1lagent · ответим в поддержке за пару минут'),
             )
 
-            from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+            from aiogram.types import InlineKeyboardMarkup
+
+            from app.utils.miniapp_buttons import build_miniapp_or_callback_button
 
             keyboard = InlineKeyboardMarkup(
                 inline_keyboard=[
@@ -2241,19 +2240,24 @@ class MonitoringService:
                         build_subscription_extend_button(
                             texts.t('SUBSCRIPTION_EXTEND', 'Продлить подписку'),
                             subscription.id,
+                            style='success',
+                            icon_custom_emoji_id=ICONS['💳'],
                         )
                     ],
                     [
                         build_miniapp_or_callback_button(
                             text=texts.t('BALANCE_TOPUP', 'Пополнить баланс'),
                             callback_data='balance_topup',
+                            style='primary',
+                            icon_custom_emoji_id=ICONS['💰'],
                         )
                     ],
                     [
-                        InlineKeyboardButton(
+                        build_miniapp_or_callback_button(
                             text=texts.t('SUPPORT_BUTTON', 'Поддержка'),
                             callback_data='menu_support',
-                            style='primary',
+                            style='danger',
+                            icon_custom_emoji_id=ICONS['💬'],
                         )
                     ],
                 ]
