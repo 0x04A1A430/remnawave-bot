@@ -299,6 +299,14 @@ class StartupNotificationService:
         """
         try:
             from app.utils.message_patch import _cache_logo_file_id, _logo_file_id, get_logo_media
+            from app.utils.rich_transport import is_rich_transport_enabled
+
+            # In rich mode every photo send is converted to a rich message, so
+            # Telegram never returns a photo file_id and the warm-up would be a
+            # no-op that still sends and deletes a message on every restart.
+            if is_rich_transport_enabled():
+                logger.debug('prewarm_logo: rich-режим — file_id не используется, прогрев пропущен')
+                return True
 
             if _logo_file_id:
                 return True
@@ -326,7 +334,10 @@ class StartupNotificationService:
             except Exception:
                 pass  # удаление best-effort — file_id уже пойман
 
-            logger.info('Логотип прогрет на старте: file_id закеширован', chat_id=target)
+            if getattr(msg, 'photo', None):
+                logger.info('Логотип прогрет на старте: file_id закеширован', chat_id=target)
+            else:
+                logger.debug('prewarm_logo: ответ без фото — file_id не получен', chat_id=target)
             return True
         except Exception as e:
             # Some asyncio exceptions (TimeoutError, CancelledError) stringify
