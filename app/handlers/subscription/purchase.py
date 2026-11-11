@@ -136,7 +136,7 @@ from .autopay import (
     show_autopay_period,
     toggle_autopay,
 )
-from .common import _get_promo_offer_discount_percent, update_traffic_prices
+from .common import _get_promo_offer_discount_percent, compact_blank_lines, update_traffic_prices
 from .countries import (
     _build_countries_selection_text,
     _get_available_countries,
@@ -624,9 +624,8 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
     from app.services.cispay_recurrent_guard import has_live_cispay
 
     cispay_recurring = await has_live_cispay(db, subscription.id)
-    import re as _re
 
-    message = _re.sub(r'\n{3,}', '\n\n', message).strip()
+    message = compact_blank_lines(message)
 
     await callback.message.edit_text(
         message,
@@ -952,7 +951,7 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
         else:
             message_lines.append(texts.t('PAID_TRIAL_SELECT_PAYMENT', 'Выберите подходящий способ оплаты:'))
 
-        message_text = '\n'.join(message_lines)
+        message_text = compact_blank_lines('\n'.join(message_lines))
         keyboard = _get_trial_payment_keyboard(db_user.language, can_pay_from_balance)
 
         await callback.message.edit_text(message_text, reply_markup=keyboard, parse_mode='HTML')
@@ -1731,7 +1730,7 @@ async def return_to_saved_cart(callback: types.CallbackQuery, state: FSMContext,
         ]
     )
 
-    summary_text = '\n'.join(summary_lines)
+    summary_text = compact_blank_lines('\n'.join(summary_lines))
 
     # Устанавливаем данные в FSM для продолжения процесса
     await state.set_data(prepared_cart_data)
@@ -2016,6 +2015,7 @@ async def handle_extend_subscription(
     message_text += texts.t(
         'SUBSCRIPTION_UI_PRICE_INCLUDES_CONFIG', '💡 <i>Цена включает все ваши текущие серверы и настройки</i>'
     )
+    message_text = compact_blank_lines(message_text)
 
     extend_markup = get_extend_subscription_keyboard_with_prices(db_user.language, renewal_prices)
     if deviation.has():
@@ -3103,16 +3103,20 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
                     ]
                 )
 
-            await callback.message.edit_text(success_text, reply_markup=connect_keyboard, parse_mode='HTML')
+            await callback.message.edit_text(
+                compact_blank_lines(success_text), reply_markup=connect_keyboard, parse_mode='HTML'
+            )
         else:
             purchase_text = texts.SUBSCRIPTION_PURCHASED
             if discount_note:
                 purchase_text = f'{purchase_text}\n\n{discount_note}'
             await callback.message.edit_text(
-                texts.t(
-                    'SUBSCRIPTION_LINK_GENERATING_NOTICE',
-                    "{purchase_text}\n\nСсылка генерируется, перейдите в раздел 'Моя подписка' через несколько секунд.",
-                ).format(purchase_text=purchase_text),
+                compact_blank_lines(
+                    texts.t(
+                        'SUBSCRIPTION_LINK_GENERATING_NOTICE',
+                        "{purchase_text}\n\nСсылка генерируется, перейдите в раздел 'Моя подписка' через несколько секунд.",
+                    ).format(purchase_text=purchase_text)
+                ),
                 reply_markup=get_back_keyboard(db_user.language),
             )
 
@@ -4936,7 +4940,7 @@ async def handle_simple_subscription_purchase(
             ]
         )
 
-        message_text = '\n'.join(simple_lines)
+        message_text = compact_blank_lines('\n'.join(simple_lines))
 
         keyboard = types.InlineKeyboardMarkup(
             inline_keyboard=[
@@ -4992,7 +4996,7 @@ async def handle_simple_subscription_purchase(
             ]
         )
 
-        message_text = '\n'.join(simple_lines)
+        message_text = compact_blank_lines('\n'.join(simple_lines))
 
         keyboard = _get_simple_subscription_payment_keyboard(db_user.language)
 

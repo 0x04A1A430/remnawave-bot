@@ -27,6 +27,24 @@ logger = structlog.get_logger(__name__)
 
 TRAFFIC_PRICES = get_traffic_prices()
 
+_BLANK_LINE_RUN = re.compile(r'\n(?:[ \t]*\n){2,}')
+
+
+def compact_blank_lines(text: str) -> str:
+    """Collapse runs of blank lines in a screen assembled from independent blocks.
+
+    Subscription screens are built by concatenating localized blocks, some of
+    which may be empty. That leaves two or more blank rows (or a trailing empty
+    row) in the final message. Keep at most one blank line between blocks and
+    drop leading/trailing empty lines entirely.
+    """
+    if not text:
+        return ''
+
+    normalized = text.replace('\r\n', '\n').replace('\r', '\n')
+    normalized = _BLANK_LINE_RUN.sub('\n\n', normalized)
+    return normalized.strip('\n')
+
 
 async def resolve_subscription_from_context(
     callback,
@@ -257,7 +275,7 @@ def render_guide_blocks(blocks: list[dict], language: str) -> str:
                 step += f'\n{desc_text}'
             parts.append(step)
             step_num += 1
-    return '\n\n'.join(parts)
+    return compact_blank_lines('\n\n'.join(parts))
 
 
 def build_redirect_link(target_link: str | None, template: str | None) -> str | None:

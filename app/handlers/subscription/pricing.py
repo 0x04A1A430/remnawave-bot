@@ -12,7 +12,7 @@ from app.utils.pricing_utils import (
 from app.utils.subscription_utils import get_display_subscription_link
 from app.utils.timezone import format_local_datetime
 
-from .common import logger
+from .common import compact_blank_lines, logger
 from .countries import _get_available_countries, _get_countries_info
 from .devices import get_current_devices_count
 from .promo import _build_promo_group_discount_text, _get_promo_offer_hint
@@ -261,7 +261,7 @@ async def _prepare_subscription_summary(
 
     summary_text = '\n'.join(summary_lines)
 
-    return summary_text, summary_data
+    return compact_blank_lines(summary_text), summary_data
 
 
 async def _build_subscription_period_prompt(
@@ -286,7 +286,7 @@ async def _build_subscription_period_prompt(
     if promo_text:
         lines.extend(['', promo_text])
 
-    return '\n'.join(lines) + '\n'
+    return compact_blank_lines('\n'.join(lines))
 
 
 async def get_subscription_cost(subscription, db: AsyncSession) -> int:
@@ -444,4 +444,4 @@ async def get_subscription_info_text(subscription, texts, db_user, db: AsyncSess
             '\n\n🔗 <b>Ваша ссылка для импорта в VPN приложениe:</b>\n<code>{link}</code>',
         ).format(link=html.escape(subscription_url))
 
-    return info_text
+    return compact_blank_lines(info_text)

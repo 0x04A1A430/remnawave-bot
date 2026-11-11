@@ -25,6 +25,8 @@ from app.utils.formatters import format_subscription_end_date
 from app.utils.legacy_subscription import is_legacy_subscription
 from app.utils.subscription_utils import get_display_subscription_link
 
+from .common import compact_blank_lines
+
 
 logger = structlog.get_logger(__name__)
 
@@ -247,7 +249,9 @@ async def show_my_subscriptions(
     subscriptions = [sub for sub in subscriptions if not sub.is_pending_trial]
 
     if not subscriptions:
-        text = texts.t('SUBSCRIPTION_UI_LIST_EMPTY', '📋 <b>Мои подписки</b>\n\nУ вас нет подписок.')
+        text = compact_blank_lines(
+            texts.t('SUBSCRIPTION_UI_LIST_EMPTY', '📋 <b>Мои подписки</b>\n\nУ вас нет подписок.')
+        )
         buttons = [
             [
                 types.InlineKeyboardButton(
@@ -259,11 +263,10 @@ async def show_my_subscriptions(
         buttons.append([types.InlineKeyboardButton(text='← Назад', callback_data='back_to_menu')])
         keyboard = types.InlineKeyboardMarkup(inline_keyboard=buttons)
     else:
-        lines = [texts.t('SUBSCRIPTION_UI_LIST_TITLE', '📋 <b>Мои подписки</b>\n')]
+        blocks = [texts.t('SUBSCRIPTION_UI_LIST_TITLE', '📋 <b>Мои подписки</b>')]
         for idx, sub in enumerate(subscriptions, 1):
-            lines.append(_format_subscription_line(sub, idx, db_user.language))
-            lines.append('')  # empty line between subscriptions
-        text = '\n'.join(lines)
+            blocks.append(_format_subscription_line(sub, idx, db_user.language))
+        text = compact_blank_lines('\n\n'.join(blocks))
         keyboard = _build_subscriptions_keyboard(subscriptions, db_user.language)
 
     if callback.message:
@@ -340,6 +343,8 @@ async def show_subscription_detail(
     subscription_link = get_display_subscription_link(subscription)
     if subscription_link and not settings.should_hide_subscription_link():
         text += f'\n🔗 <code>{html.escape(subscription_link)}</code>'
+
+    text = compact_blank_lines(text)
 
     from app.database.crud.campaign import is_campaign_bonus_tariff_subscription
 
@@ -455,7 +460,7 @@ async def handle_subscription_devices(
         can_buy_devices = settings.is_devices_selection_enabled()
 
     current_devices = Texts.format_device_limit(subscription.device_limit)
-    text = (
+    text = compact_blank_lines(
         get_texts(db_user.language)
         .t(
             'SUBSCRIPTION_UI_DEVICES_MENU',
