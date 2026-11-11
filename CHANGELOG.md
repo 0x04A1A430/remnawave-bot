@@ -1,5 +1,33 @@
 # Changelog
 
+## [5.3.0](https://github.com/0x04A1A430/remnawave-bot/compare/v5.2.0...v5.3.0) (2026-11-11)
+
+
+### New Features
+
+* **design:** premium emoji for users, clean admin UI, compact subscription screen ([6ab9fc8](https://github.com/0x04A1A430/remnawave-bot/commit/6ab9fc8ea70b8e5b6b3042cc07084143bf3f3cf2))
+* **ui:** show device model, compact subscription card, de-emoji admin texts ([a2bab84](https://github.com/0x04A1A430/remnawave-bot/commit/a2bab84ec4dba703f574ba03b9df43c24a0cb25a))
+
+
+### Bug Fixes
+
+* **admin:** deterministic user list order and asc/desc sort direction ([51cbe56](https://github.com/0x04A1A430/remnawave-bot/commit/51cbe56cefdea1d074183579f5a03915b4d9e3ca))
+* **admin:** restore grace segment and drop duplicate cart save ([9787470](https://github.com/0x04A1A430/remnawave-bot/commit/97874705c627a3f35e40dc6df9bef5975aa5cbe3))
+* **menu:** restore live-menu helpers lost in the merge ([afb424b](https://github.com/0x04A1A430/remnawave-bot/commit/afb424bddca3d5f83ce516e48718c0108306c7d4))
+* **payments:** consume daily promo offer when its percent was applied ([eb332e0](https://github.com/0x04A1A430/remnawave-bot/commit/eb332e0584d08ef286d19c5325fd8f4367d1f94b))
+* **payments:** consume promo offer by applied percent; validate subscription URL before fetch ([1d528db](https://github.com/0x04A1A430/remnawave-bot/commit/1d528dbf17dc9022cf238532af38f684d68f513c))
+* **referral:** один пустой ряд между блоками экрана и без хвоста ([4dce126](https://github.com/0x04A1A430/remnawave-bot/commit/4dce126b4e72f442c261297b0ce6376dd459c006))
+* stabilize superseded base-grant test, refresh structure reference, annotate SSRF mitigation ([ed1d430](https://github.com/0x04A1A430/remnawave-bot/commit/ed1d430ac383637cca9d020aca5b344c08c78c97))
+* **ui:** premium emoji in user texts, plain captions in buttons ([4e75fd7](https://github.com/0x04A1A430/remnawave-bot/commit/4e75fd74b51ca1f388ef9b1b83d62ab741ad60d0))
+* **ui:** shorten device labels, kill blank-line holes, clean tariff type markers ([82b2a59](https://github.com/0x04A1A430/remnawave-bot/commit/82b2a59cabe98ecbe3481b2558bbe7ef836f966a))
+* **ui:** unwrap custom emoji in callback answers ([36f47b9](https://github.com/0x04A1A430/remnawave-bot/commit/36f47b9f78682e7959d286abc274611aa2a1740e))
+
+
+### Documentation
+
+* **changelog:** replace duplicated 5.3.0 notes with the real change list ([1e2b5cf](https://github.com/0x04A1A430/remnawave-bot/commit/1e2b5cf7d0262b018785f8e317b3eaad044ef619))
+* restore the fork README with [@x1lagent](https://github.com/x1lagent) branding ([ddccff1](https://github.com/0x04A1A430/remnawave-bot/commit/ddccff15166ec00a1ed09152be65ba336f250647))
+
 ## [5.2.0](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v5.1.1...v5.2.0) (2026-11-03)
 
 
