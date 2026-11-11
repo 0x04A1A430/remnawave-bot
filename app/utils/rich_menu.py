@@ -72,6 +72,11 @@ def mark_rich_menu_taken_over(chat_id: int | None) -> None:
         _taken_over_chats.add(chat_id)
 
 
+def is_tracked_rich_menu(chat_id: int | None, message_id: int | None) -> bool:
+    """True, если это сообщение — последнее отправленное rich-меню этого чата."""
+    return chat_id is not None and message_id is not None and _tracked_rich_menus.get(chat_id) == message_id
+
+
 def reset_rich_menu_takeover(chat_id: int | None) -> None:
     """Сбрасывает флаг «переиспользовано» перед обработкой нового события."""
     if chat_id is not None:

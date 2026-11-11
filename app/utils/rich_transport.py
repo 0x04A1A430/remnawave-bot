@@ -9,11 +9,13 @@ Converted methods:
 - ``SendMessage`` -> ``SendRichMessage`` (text only, no logo);
 - ``SendPhoto`` whose photo is the bot logo -> ``SendRichMessage`` with the logo
   image block + caption (this is the visual the bot already shows);
+- ``SendPhoto`` with any other picture (gift QR, ticket attachment, news image)
+  -> ``SendRichMessage`` with an uploaded media block (``tg://photo?id=…``);
 - ``EditMessageText`` -> ``EditMessageText`` with ``rich_message``.
 
-Everything else (QR codes, gift/ticket photos, documents, albums, media groups)
-is left untouched. If Telegram rejects a rich message for any reason, the
-original method is executed as a fallback, so a screen can never be lost.
+Documents, albums/media groups and inline-mode results stay classic. If
+Telegram rejects a rich message for any reason, the original method is executed
+as a fallback, so a screen can never be lost.
 """
 
 from __future__ import annotations
@@ -293,12 +295,30 @@ def _convert_send_message(method: SendMessage) -> SendRichMessage | None:
     )
 
 
+def _with_logo(rich_html: str) -> str:
+    """Prepend the bot logo to a text screen, unless it already carries media.
+
+    Classic navigation always kept the logo: text menus were photo messages, and
+    editing one replaced the photo with the logo. Rich messages have no caption
+    photo, so the logo has to be added to the rich payload explicitly.
+    """
+    if not getattr(settings, 'ENABLE_LOGO_MODE', False):
+        return rich_html
+    if '<img' in rich_html.lower() or 'tg://photo' in rich_html.lower():
+        return rich_html
+    logo_url = _resolve_logo_url()
+    if not logo_url:
+        return rich_html
+    return f'<img src="{html.escape(logo_url, quote=True)}"/>{rich_html}'
+
+
 def _convert_edit_message_text(method: EditMessageText) -> EditMessageText | None:
     if _has_entities(method) or not method.text:
         return None
     rich_html = _rich_html_for_text(method.text, method.parse_mode)
     if rich_html is None:
         return None
+    rich_html = _with_logo(rich_html)
 
     return method.model_copy(
         update={

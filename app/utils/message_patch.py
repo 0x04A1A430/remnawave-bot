@@ -330,6 +330,17 @@ async def _answer_with_photo(self: Message, text: str = None, **kwargs):
 
 async def _edit_with_photo(self: Message, text: str, **kwargs):
     is_rich = getattr(self, 'rich_message', None) is not None
+    # Прямой edit_text по самому rich-меню (хендлеры сплошь зовут его без
+    # edit_or_answer_photo) — это переиспользование меню, а не новый экран.
+    # Без отметки RichMenuCleanupMiddleware удалит только что отредактированное
+    # меню, и чат останется пустым.
+    try:
+        from app.utils.rich_menu import is_tracked_rich_menu, mark_rich_menu_taken_over
+
+        if is_tracked_rich_menu(getattr(self.chat, 'id', None), getattr(self, 'message_id', None)):
+            mark_rich_menu_taken_over(self.chat.id)
+    except Exception:
+        pass
     # Уважаем флаг в рантайме: если логотип выключен — не подменяем редактирование
     if not settings.ENABLE_LOGO_MODE:
         kwargs.setdefault('disable_web_page_preview', True)
