@@ -1,6 +1,5 @@
 import hashlib
 import json
-import re
 from datetime import UTC, datetime
 from html import escape as html_escape
 from pathlib import Path
@@ -25,6 +24,7 @@ from app.services.referral_withdrawal_service import referral_withdrawal_service
 from app.states import ReferralWithdrawalStates
 from app.utils.button_emoji import make_button
 from app.utils.photo_message import edit_or_answer_photo
+from app.utils.text_compact import compact_blank_lines
 from app.utils.timezone import format_local_datetime
 from app.utils.user_utils import (
     get_detailed_referral_list,
@@ -34,19 +34,6 @@ from app.utils.user_utils import (
 
 
 logger = structlog.get_logger(__name__)
-
-_BLANK_LINE_RUN = re.compile(r'\n{3,}')
-
-
-def _compact_blank_lines(text: str) -> str:
-    """Оставляет не больше одной пустой строки между блоками и убирает хвост.
-
-    Экран собирается из независимых блоков, и часть из них локализована в
-    JSON: любая правка текста могла добавить лишние переводы строки и раздуть
-    сообщение пустотой. Схлопываем серии из трёх и более переводов в один
-    пустой ряд, а хвостовые пустые строки убираем совсем.
-    """
-    return _BLANK_LINE_RUN.sub('\n\n', text).strip('\n')
 
 
 async def _reward_tariff_names(db) -> dict[int, str]:
@@ -312,7 +299,7 @@ async def show_referral_info(callback: types.CallbackQuery, db_user: User, db: A
                 + '</blockquote>'
             )
 
-    referral_text = _compact_blank_lines('\n\n'.join(blocks))
+    referral_text = compact_blank_lines('\n\n'.join(blocks))
 
     await edit_or_answer_photo(
         callback,
@@ -363,6 +350,7 @@ async def show_referral_qr(
             'REFERRAL_QR_CABINET_LINK',
             '🌐 Ссылка на кабинет:\n{link}',
         ).format(link=cabinet_referral_link)
+    caption = compact_blank_lines(caption)
 
     # Rich-сообщение нельзя превратить в фото через edit_media.
     if getattr(callback.message, 'rich_message', None) is not None:
@@ -399,9 +387,11 @@ async def show_detailed_referral_list(callback: types.CallbackQuery, db_user: Us
     if not referrals_data['referrals']:
         await edit_or_answer_photo(
             callback,
-            texts.t(
-                'REFERRAL_LIST_EMPTY',
-                '📋 У вас пока нет рефералов.\n\nПоделитесь своей реферальной ссылкой, чтобы начать зарабатывать!',
+            compact_blank_lines(
+                texts.t(
+                    'REFERRAL_LIST_EMPTY',
+                    '📋 У вас пока нет рефералов.\n\nПоделитесь своей реферальной ссылкой, чтобы начать зарабатывать!',
+                )
             ),
             types.InlineKeyboardMarkup(
                 inline_keyboard=[[make_button(text=texts.BACK, callback_data='menu_referrals', style='danger')]]
@@ -455,7 +445,7 @@ async def show_detailed_referral_list(callback: types.CallbackQuery, db_user: Us
 
     await edit_or_answer_photo(
         callback,
-        text,
+        compact_blank_lines(text),
         types.InlineKeyboardMarkup(inline_keyboard=keyboard),
         parse_mode='HTML',
     )
@@ -545,7 +535,7 @@ async def show_referral_detail(callback: types.CallbackQuery, db_user: User, db:
 
     await edit_or_answer_photo(
         callback,
-        text,
+        compact_blank_lines(text),
         types.InlineKeyboardMarkup(inline_keyboard=keyboard),
         parse_mode='HTML',
     )
@@ -598,7 +588,7 @@ async def show_referral_analytics(callback: types.CallbackQuery, db_user: User, 
 
     await edit_or_answer_photo(
         callback,
-        text,
+        compact_blank_lines(text),
         types.InlineKeyboardMarkup(
             inline_keyboard=[[make_button(text=texts.BACK, callback_data='menu_referrals', style='danger')]]
         ),
@@ -675,7 +665,7 @@ async def create_invite_message(callback: types.CallbackQuery, db_user: User, db
 
     await edit_or_answer_photo(
         callback,
-        (
+        compact_blank_lines(
             texts.t('REFERRAL_INVITE_CREATED_TITLE', '📝 <b>Приглашение создано!</b>')
             + '\n\n'
             + texts.t(
@@ -740,7 +730,9 @@ async def show_withdrawal_info(callback: types.CallbackQuery, db_user: User, db:
 
     keyboard.append([make_button(text=texts.BACK, callback_data='menu_referrals', style='danger')])
 
-    await edit_or_answer_photo(callback, text, types.InlineKeyboardMarkup(inline_keyboard=keyboard))
+    await edit_or_answer_photo(
+        callback, compact_blank_lines(text), types.InlineKeyboardMarkup(inline_keyboard=keyboard)
+    )
     await callback.answer()
 
 
@@ -920,7 +912,7 @@ async def process_payment_details(message: types.Message, db_user: User, db: Asy
         ]
     )
 
-    await message.answer(text, reply_markup=keyboard)
+    await message.answer(compact_blank_lines(text), reply_markup=keyboard)
 
 
 async def confirm_withdrawal_request(callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext):
@@ -1006,7 +998,7 @@ async def confirm_withdrawal_request(callback: types.CallbackQuery, db_user: Use
         inline_keyboard=[[make_button(text=texts.BACK, callback_data='menu_referrals', style='danger')]]
     )
 
-    await edit_or_answer_photo(callback, text, keyboard)
+    await edit_or_answer_photo(callback, compact_blank_lines(text), keyboard)
     await callback.answer()
 
 

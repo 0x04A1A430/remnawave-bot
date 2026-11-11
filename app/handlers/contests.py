@@ -22,6 +22,7 @@ from app.services.contests import (
 from app.states import ContestStates
 from app.utils.button_emoji import make_button
 from app.utils.decorators import auth_required, error_handler
+from app.utils.text_compact import compact_blank_lines
 
 
 logger = structlog.get_logger(__name__)
@@ -137,7 +138,7 @@ async def _build_contests_menu_view(db: AsyncSession, db_user) -> tuple[str, typ
     buttons.append([make_button(text=texts.BACK, callback_data='back_to_menu', style='danger')])
 
     return (
-        texts.t('CONTEST_MENU_TITLE', '🎲 <b>Игры/Конкурсы</b>\nВыберите игру:'),
+        compact_blank_lines(texts.t('CONTEST_MENU_TITLE', '🎲 <b>Игры/Конкурсы</b>\nВыберите игру:')),
         types.InlineKeyboardMarkup(inline_keyboard=buttons),
     )
 
@@ -278,7 +279,7 @@ async def play_contest(callback: types.CallbackQuery, state: FSMContext, db_user
             await state.update_data(contest_round_id=round_obj.id)
 
         await callback.message.edit_text(
-            render_result.text,
+            compact_blank_lines(render_result.text),
             reply_markup=render_result.keyboard,
         )
         await callback.answer()
@@ -346,7 +347,7 @@ async def handle_pick(callback: types.CallbackQuery, db_user, db: AsyncSession):
             language=db_user.language,
         )
 
-        await callback.answer(result.message, show_alert=True)
+        await callback.answer(compact_blank_lines(result.message), show_alert=True)
 
 
 @auth_required
@@ -384,7 +385,7 @@ async def handle_text_answer(message: types.Message, state: FSMContext, db_user,
         )
 
         await message.answer(
-            result.message,
+            compact_blank_lines(result.message),
             reply_markup=get_back_keyboard(db_user.language),
         )
 
