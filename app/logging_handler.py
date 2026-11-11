@@ -30,7 +30,6 @@ import time
 from typing import Any, Final
 
 from aiogram import Bot
-from aiogram.exceptions import TelegramNetworkError, TelegramRetryAfter, TelegramServerError
 
 from app.logging_safety import redact_text, safe_event, safe_traceback
 
@@ -183,11 +182,24 @@ def _is_transient_telegram_error(event_dict: dict[str, Any]) -> bool:
     so it only counts when logged by aiogram itself.
     """
     from_aiogram = str(event_dict.get('logger') or '').startswith('aiogram')
-    for exc in _exception_chain(_event_exception(event_dict)):
-        name = type(exc).__name__
-        if name == 'TelegramNetworkError' or (from_aiogram and name == 'ClientOSError'):
-            return True
-    return False
+    transient_names = {'TelegramServerError', 'TelegramNetworkError', 'TelegramRetryAfter'}
+    exception = _event_exception(event_dict)
+    if exception is not None:
+        for exc in _exception_chain(exception):
+            name = type(exc).__name__
+            if name in transient_names:
+                return True
+            # Bare aiohttp drop: only aiogram's own polling, not payment/panel clients.
+            if from_aiogram and name == 'ClientOSError':
+                return True
+        return False
+
+    # aiogram's polling log carries the exception only as formatted text.
+    event = str(event_dict.get('event', '')).lower()
+    return any(
+        marker in event
+        for marker in ('failed to fetch updates', 'bad gateway', 'gateway timeout', 'telegram server says')
+    )
 
 
 class TelegramNotifierProcessor:
