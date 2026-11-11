@@ -63,6 +63,9 @@ _PRE_BLOCK_RE = re.compile(r'(<pre\b[^>]*>.*?</pre>)', re.IGNORECASE | re.DOTALL
 # (CodeQL py/polynomial-redos), and it also eats "1 < 2" as a tag.
 _TAG_RE = re.compile(r'<[^<>]+>')
 _BR_RE = re.compile(r'<br\s*/?>', re.IGNORECASE)
+# Classic Telegram HTML has <blockquote expandable>; rich HTML only knows
+# <blockquote>. Passing the attribute through rejects the whole rich message.
+_EXPANDABLE_QUOTE_RE = re.compile(r'<blockquote\s+expandable\s*>', re.IGNORECASE)
 _HTML_PARSE_MODES = {'html', 'htm', 'text.html'}
 _MARKDOWN_PARSE_MODES = {'markdown', 'markdownv2', 'md', 'text.markdown', 'text.markdownv2'}
 _LOGO_DISABLED_VALUES = {'none', 'off', 'no', 'false', 'disabled', '-'}
@@ -242,7 +245,7 @@ def html_to_rich(text: str, parse_mode: object) -> str | None:
         # Unknown/plain mode: the text is data, not markup.
         return _newlines_to_br(html.escape(text, quote=False))
 
-    return _newlines_to_br(text)
+    return _newlines_to_br(_EXPANDABLE_QUOTE_RE.sub('<blockquote>', text))
 
 
 def _is_logo_photo(photo: object) -> bool:
@@ -403,6 +406,13 @@ def _convert_send_photo(method: SendPhoto) -> SendRichMessage | None:
     # Any other photo (gift QR, ticket attachment, news image…) becomes a rich
     # media block. Bot API 10.2 lets us upload the file and reference it through
     # tg://photo?id=, so locally generated images stay supported.
+    #
+    # In-memory uploads (BufferedInputFile) are functional attachments: staging
+    # and support routes read `message.photo[-1].file_id` from the result, and a
+    # rich message has no `.photo`. Keep those classic so uploads cannot break.
+    if not isinstance(method.photo, (str, FSInputFile)):
+        return None
+
     caption_html = html_to_rich(method.caption, method.parse_mode) if method.caption else ''
     if caption_html is None:
         return None
