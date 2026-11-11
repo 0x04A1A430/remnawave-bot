@@ -153,33 +153,38 @@ class UserService:
         texts = get_texts(user.language)
         if amount_kopeks > 0:
             # Пополнение
-            emoji = '💰'
+            from app.utils.notification_card import premium
+
+            emoji = premium('💰')
             amount_text = f'+{settings.format_price(amount_kopeks)}'
             message = texts.t('USER_BALANCE_CREDIT', '').format(
                 emoji=emoji, amount=amount_text, balance=settings.format_price(user.balance_kopeks)
             )
         else:
             # Списание
-            emoji = '💸'
+            from app.utils.notification_card import premium
+
+            emoji = premium('🪙')
             amount_text = f'-{settings.format_price(abs(amount_kopeks))}'
             message = texts.t('USER_BALANCE_DEBIT', '').format(
                 emoji=emoji, amount=amount_text, balance=settings.format_price(user.balance_kopeks)
             )
 
         keyboard_rows = []
-        subs = getattr(user, 'subscriptions', None) or []
-        has_extendable = any(sub.status in {'active', 'expired', 'trial'} for sub in subs)
-        if has_extendable:
-            extend_callback = 'menu_subscription' if settings.is_multi_tariff_enabled() else 'subscription_extend'
-            keyboard_rows.append(
-                [
-                    types.InlineKeyboardButton(
-                        text=texts.t('SUBSCRIPTION_EXTEND', '💎 Продлить подписку'),
-                        callback_data=extend_callback,
-                        style='success',
-                    )
-                ]
-            )
+        # Начисление/списание баланса — не повод звать продлевать: ведём в меню,
+        # откуда человек сам выберет, что делать дальше.
+        from app.utils.button_emoji import make_button
+
+        keyboard_rows.append(
+            [
+                make_button(
+                    '🏠 На главную',
+                    callback_data='back_to_menu',
+                    style='primary',
+                    icon_custom_emoji_id='5967822972931542886',
+                )
+            ]
+        )
 
         reply_markup = types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows) if keyboard_rows else None
 
