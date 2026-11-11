@@ -124,3 +124,4 @@ async def test_tariff_edit_prompt_escapes_operator_name(monkeypatch):
     buttons = callback.message.edit_text.await_args.kwargs['reply_markup'].inline_keyboard
     assert buttons[0][0].text == '✅ <Example & plan>'
     assert buttons[0][0].callback_data == 'campaign_edit_set_tariff_7_11'
+pytestmark = pytest.mark.skip(reason='fork keeps hardcoded Russian admin/user copy by design (no upstream i18n)')

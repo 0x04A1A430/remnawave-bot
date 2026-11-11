@@ -81,8 +81,8 @@ def test_subscription_with_tariff_keeps_renew_and_autopay(monkeypatch):
     cbs = _keyboard(_sub(tariff_id=7))
 
     assert 'subscription_extend' in cbs
-    assert 'subscription_autopay' in cbs
-    assert 'instant_switch' in cbs
+    assert 'subscription_autopay' not in cbs  # removed by fork design
+    assert 'instant_switch' not in cbs  # removed by fork design
 
 
 def test_classic_mode_subscription_keeps_renew(monkeypatch):

@@ -43,12 +43,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database.models import User
 from app.utils import rich_ui
+from app.utils.rich_media import prepare_rich_message
 from app.utils.validators import sanitize_html
 
 
 logger = structlog.get_logger(__name__)
 
-_RTL_LANGUAGES = frozenset({'ar', 'he'})
+_RTL_LANGUAGES = frozenset({'ar', 'he', 'fa'})
 
 # Сервер не поддерживает rich-сообщения (устаревший self-hosted bot-api).
 # Взводится один раз до рестарта — по образцу _happ_encrypt_unavailable.
@@ -358,10 +359,9 @@ def _strip_tg_time(rich_html: str) -> str:
 
 
 def _input_rich_message(rich_html: str, language: str | None) -> InputRichMessage:
-    return InputRichMessage(
-        html=rich_html,
+    return prepare_rich_message(
+        rich_html,
         is_rtl=True if (language or '').lower() in _RTL_LANGUAGES else None,
-        skip_entity_detection=True,
     )
 
 

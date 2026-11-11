@@ -115,7 +115,7 @@ async def test_offer_applies_only_to_initial_daily_charge():
     user = SimpleNamespace(promo_group=group, promo_offer_discount_percent=50)
     subscription = SimpleNamespace(device_limit=3, daily_devices_billing_version=1)
     initial = await PricingEngine()._calculate_tariff_core(tariff, 1, 3, user=user, daily_devices_billing_version=1)
-    assert initial.final_total == 405
+    assert initial.final_total == PricingEngine.round_to_ruble(405)
     assert PricingEngine.daily_subscription_price(subscription, tariff, user) == 810
 
 

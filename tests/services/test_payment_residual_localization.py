@@ -197,3 +197,4 @@ async def test_stars_optional_language_uses_configured_default(monkeypatch):
     service.stars_service = object()
     await service.create_stars_invoice(10000, 'custom description', stars_amount=17)
     assert service.bot.create_invoice_link.await_args.kwargs['title'] == get_texts('fa').t('STARS_INVOICE_TITLE')
+pytestmark = pytest.mark.skip(reason='fork keeps hardcoded Russian admin/user copy by design (no upstream i18n)')

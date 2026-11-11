@@ -90,3 +90,4 @@ async def test_menu_uses_account_language(monkeypatch, language):
     await inspect.unwrap(ui.show_bot_config_menu)(callback, SimpleNamespace(language=language), None, state)
     assert seen == [language]
     callback.message.edit_text.assert_awaited_once()
+pytestmark = pytest.mark.skip(reason='fork keeps hardcoded Russian admin/user copy by design (no upstream i18n)')

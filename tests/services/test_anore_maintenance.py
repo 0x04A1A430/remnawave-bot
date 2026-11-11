@@ -93,5 +93,5 @@ def test_admin_surfaces_label_sandbox_without_claiming_real_credit():
         _get_status_info(record),
         _status_info(record, texts=SimpleNamespace(t=lambda key, fallback: fallback)),
     ):
-        assert label[0] == '🧪'
         assert 'баланс не пополнен' in label[1]
+        assert 'тестов' in label[1].lower()

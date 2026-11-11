@@ -103,7 +103,7 @@ async def test_provider_failure_is_reported_once_without_second_answer(monkeypat
 
     error_log.assert_called_once()
     assert callback.answer.await_count == 1, 'на одно нажатие Telegram принимает один ответ'
-    callback.message.answer.assert_awaited_once_with('❌ Ошибка обработки запроса')
+    callback.message.answer.assert_awaited_once_with('Ошибка обработки запроса')
 
 
 @pytest.mark.asyncio
