@@ -449,6 +449,20 @@ def convert_method(method: TelegramMethod) -> TelegramMethod | None:
     return None
 
 
+def _sanitize_reply_markup(method: TelegramMethod[TelegramType]) -> TelegramMethod[TelegramType]:
+    """Keep button captions plain: custom emoji inside labels become button icons."""
+    markup = getattr(method, 'reply_markup', None)
+    if markup is None:
+        return method
+
+    from app.utils.button_emoji import sanitize_markup
+
+    sanitized = sanitize_markup(markup)
+    if sanitized is markup:
+        return method
+    return method.model_copy(update={'reply_markup': sanitized})
+
+
 class RichAiohttpSession(AiohttpSession):
     """Aiohttp session that transparently upgrades messages to rich ones."""
 
@@ -458,6 +472,7 @@ class RichAiohttpSession(AiohttpSession):
         method: TelegramMethod[TelegramType],
         timeout: int | None = None,
     ) -> TelegramType:
+        method = _sanitize_reply_markup(method)
         rich_method = convert_method(method)
         if rich_method is None:
             return await super().make_request(bot, method, timeout)

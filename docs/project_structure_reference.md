@@ -2332,7 +2332,7 @@
   Функции: `sync_bot_username` — Sync settings.BOT_USERNAME from the live bot (token-authoritative).
 - `app/utils/button_emoji.py` — Python-модуль
   Классы: `ParsedButtonLabel`
-  Функции: `parse_button_label` — Extract a custom emoji ID and visible text from a locale string., `make_button` — Create an inline button, extracting custom emoji markup when present.
+  Функции: `parse_button_label` — Extract a custom emoji ID and visible text from a locale string., `make_button` — Create an inline button, extracting custom emoji markup when present., `sanitize_markup` — Turn ``<tg-emoji>`` markup inside button labels into button icons.
 - `app/utils/button_styles_cache.py` — Python-модуль
   Классы: нет
   Функции: `get_cached_button_styles` — Return the current merged config (DB overrides + defaults)., `load_button_styles_cache` — Load button styles from DB and refresh the module cache.
@@ -6207,6 +6207,9 @@
 - `tests/utils/__init__.py` — Python-модуль
   Классы: нет
   Функции: нет
+- `tests/utils/test_button_emoji_sanitize.py` — Python-модуль
+  Классы: нет
+  Функции: `test_parse_strips_custom_emoji_from_label`, `test_make_button_converts_markup_to_icon`, `test_sanitize_markup_cleans_directly_built_buttons`, `test_sanitize_keeps_plain_markup_untouched`
 - `tests/utils/test_chat_menu_button.py` — Python-модуль
   Классы: нет
   Функции: `test_disabled_does_not_touch_menu_button`, `test_enabled_sets_webapp_menu_button`, `test_falls_back_to_miniapp_custom_url`, `test_non_https_url_is_skipped`, `test_empty_text_defaults`

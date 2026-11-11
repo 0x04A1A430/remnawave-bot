@@ -160,7 +160,7 @@ def _registration_denial_text(texts: Any, decision: RegistrationAccessDecision) 
         return texts.t('ACCESS_DENIED')
     return texts.t(
         'registration_invite_required',
-        '🔒 Регистрация доступна только по приглашению.\n\n'
+        '<tg-emoji emoji-id="5832546462478635761">🔒</tg-emoji> Регистрация доступна только по приглашению.\n\n'
         'Используйте действительную пригласительную ссылку или обратитесь в поддержку.',
     )
 
@@ -462,7 +462,7 @@ async def _activate_pending_gift_after_registration(
             await answer_func(
                 texts.t(
                     'GIFT_ACTIVATION_SELF_CLAIM_ERROR',
-                    '⚠️ Нельзя активировать свой собственный подарок.\nОтправьте код другу!',
+                    '<tg-emoji emoji-id="5881702736843511327">⚠</tg-emoji> Нельзя активировать свой собственный подарок.\nОтправьте код другу!',
                 ),
                 parse_mode=ParseMode.HTML,
             )
@@ -480,7 +480,7 @@ async def _activate_pending_gift_after_registration(
             await answer_func(
                 texts.t(
                     'GIFT_ACTIVATION_NOT_ACTIVATABLE_ERROR',
-                    '❌ Этот подарок невозможно активировать.',
+                    '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Этот подарок невозможно активировать.',
                 ),
                 parse_mode=ParseMode.HTML,
             )
@@ -493,7 +493,7 @@ async def _activate_pending_gift_after_registration(
         await answer_func(
             texts.t(
                 'GIFT_ACTIVATION_SUCCESS_TEXT',
-                '🎁 <b>Подарок активирован!</b>\n{tariff_name} — {period_days} дн.\n\nВаша подписка обновлена.',
+                '<tg-emoji emoji-id="6032937473162614352">🎁</tg-emoji> <b>Подарок активирован!</b>\n{tariff_name} — {period_days} дн.\n\nВаша подписка обновлена.',
             ).format(
                 tariff_name=tariff_name,
                 period_days=gift_purchase.period_days,
@@ -510,7 +510,7 @@ async def _activate_pending_gift_after_registration(
             await answer_func(
                 texts.t(
                     'GIFT_ACTIVATION_GENERIC_ERROR',
-                    '❌ Произошла ошибка при активации подарка. Попробуйте активировать через личный кабинет.',
+                    '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Произошла ошибка при активации подарка. Попробуйте активировать через личный кабинет.',
                 ),
                 parse_mode=ParseMode.HTML,
             )
@@ -553,11 +553,11 @@ async def _activate_pending_inline_gift_after_registration(
 
 
 _COUPON_ERROR_TEXTS = {
-    'invalid': '❌ Купон не найден или уже использован.',
+    'invalid': '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Купон не найден или уже использован.',
     'expired': '⌛ Срок действия купона истёк.',
     'already_redeemed_by_you': 'ℹ️ Вы уже активировали этот купон.',
     'per_user_limit': 'ℹ️ Вы уже использовали свой лимит купонов из этой раздачи.',
-    'internal': '❌ Произошла ошибка при активации купона. Попробуйте позже или обратитесь в поддержку.',
+    'internal': '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Произошла ошибка при активации купона. Попробуйте позже или обратитесь в поддержку.',
 }
 
 
@@ -602,7 +602,7 @@ async def _redeem_pending_coupon(
     try:
         tariff_name = html.escape(result.tariff_name)
         await answer_func(
-            f'🎟 <b>Купон активирован!</b>\n{tariff_name} — {result.period_days} дн.\n\nВаша подписка обновлена.',
+            f'<tg-emoji emoji-id="6032937473162614352">🎁</tg-emoji> <b>Купон активирован!</b>\n{tariff_name} — {result.period_days} дн.\n\nВаша подписка обновлена.',
             parse_mode=ParseMode.HTML,
         )
     except Exception:
@@ -731,7 +731,7 @@ async def _activate_pending_trial(
     try:
         texts = get_texts(user.language)
         confirmation = await answer_func(
-            texts.t('MAIN_MENU_RICH_TRIAL_ACTIVATED', '🎉 <b>Тестовая подписка активирована!</b>'),
+            texts.t('MAIN_MENU_RICH_TRIAL_ACTIVATED', '<tg-emoji emoji-id="5994502837327892086">🎉</tg-emoji> <b>Тестовая подписка активирована!</b>'),
             parse_mode=ParseMode.HTML,
         )
         # Подтверждение эфемерное: новая подписка и так видна в меню ниже.
@@ -1036,7 +1036,7 @@ async def _apply_campaign_bonus_if_needed(
         traffic_text = texts.format_traffic(result.subscription_traffic_gb or 0)
         return texts.t(
             'CAMPAIGN_BONUS_TARIFF',
-            "🎁 Вам выдан тариф '{tariff_name}' на {days} дней!\n📊 Трафик: {traffic}\n📱 Устройств: {devices}",
+            "<tg-emoji emoji-id='6032937473162614352'>🎁</tg-emoji> Вам выдан тариф '{tariff_name}' на {days} дней!\n<tg-emoji emoji-id='5877485980901971030'>📊</tg-emoji> Трафик: {traffic}\n<tg-emoji emoji-id='5985833664884250583'>📱</tg-emoji> Устройств: {devices}",
         ).format(
             tariff_name=result.tariff_name or 'Подарочный',
             days=result.tariff_duration_days,
@@ -1102,7 +1102,7 @@ async def handle_potential_referral_code(message: types.Message, state: FSMConte
         data['referrer_id'] = referrer.id
         await state.set_data(data)
 
-        await message.answer(texts.t('REFERRAL_CODE_ACCEPTED', '✅ Реферальный код принят!'))
+        await message.answer(texts.t('REFERRAL_CODE_ACCEPTED', '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Реферальный код принят!'))
         logger.info(
             '✅ Реферальный код применен для пользователя',
             potential_code=potential_code,
@@ -1135,7 +1135,7 @@ async def handle_potential_referral_code(message: types.Message, state: FSMConte
         await message.answer(
             texts.t(
                 'PROMOCODE_ACCEPTED_WILL_ACTIVATE',
-                '✅ Промокод принят! Он будет активирован после завершения регистрации.',
+                '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Промокод принят! Он будет активирован после завершения регистрации.',
             )
         )
         logger.info(
@@ -1164,7 +1164,7 @@ async def handle_potential_referral_code(message: types.Message, state: FSMConte
     await message.answer(
         texts.t(
             'REFERRAL_OR_PROMO_CODE_INVALID_HELP',
-            '❌ Неверный реферальный код или промокод.\n\n'
+            '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Неверный реферальный код или промокод.\n\n'
             '💡 Если у вас есть реферальный код или промокод, убедитесь что он введен правильно.\n'
             '⏭️ Для продолжения регистрации без кода используйте команду /start',
         )
@@ -1173,7 +1173,7 @@ async def handle_potential_referral_code(message: types.Message, state: FSMConte
 
 
 def _get_language_prompt_text() -> str:
-    return '🌐 Выберите язык / Choose your language:'
+    return "<tg-emoji emoji-id='5879585266426973039'>🌐</tg-emoji> Выберите язык / Choose your language:"
 
 
 async def _prompt_language_selection(message: types.Message, state: FSMContext) -> None:
@@ -1443,7 +1443,7 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
                 await message.answer(
                     texts.t(
                         'WEB_AUTH_CONFIRM_PROMPT',
-                        '🔐 Подтвердите вход в личный кабинет. Если вы не запрашивали вход — нажмите «Нет».',
+                        '<tg-emoji emoji-id="5832546462478635761">🔒</tg-emoji> Подтвердите вход в личный кабинет. Если вы не запрашивали вход — нажмите «Нет».',
                     ),
                     reply_markup=keyboard,
                 )
@@ -2319,7 +2319,7 @@ async def process_referral_code_input(message: types.Message, state: FSMContext,
     if referrer:
         data['referrer_id'] = referrer.id
         await state.set_data(data)
-        await message.answer(texts.t('REFERRAL_CODE_ACCEPTED', '✅ Реферальный код принят!'))
+        await message.answer(texts.t('REFERRAL_CODE_ACCEPTED', '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Реферальный код принят!'))
         logger.info('✅ Реферальный код применен', code=code)
         await complete_registration(message, state, db)
         return
@@ -2336,7 +2336,7 @@ async def process_referral_code_input(message: types.Message, state: FSMContext,
         await message.answer(
             texts.t(
                 'PROMOCODE_ACCEPTED_WILL_ACTIVATE',
-                '✅ Промокод принят! Он будет активирован после завершения регистрации.',
+                '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Промокод принят! Он будет активирован после завершения регистрации.',
             )
         )
         logger.info('✅ Промокод сохранен для активации', code=code)
