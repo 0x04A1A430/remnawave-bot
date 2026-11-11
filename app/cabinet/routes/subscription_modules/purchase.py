@@ -1093,6 +1093,10 @@ async def purchase_tariff(
         promo_offer_discount_percent = bd.get('offer_discount_pct', 0)
         promo_offer_discount_value = result.promo_offer_discount
         price_before_promo_offer = price_kopeks + promo_offer_discount_value
+        # Consume the offer when its percentage was applied, not when the
+        # resulting kopeks delta is non-zero: a tiny daily price rounds to a
+        # whole ruble and can leave no visible discount.
+        consume_promo = promo_offer_discount_percent > 0
 
         # Safety guard: reject purchases whose price is zero because nothing is
         # configured. Use original_total (pre-discount price) — base_price is
@@ -1134,7 +1138,7 @@ async def purchase_tariff(
                     'traffic_limit_gb': tariff.traffic_limit_gb,
                     'device_limit': effective_device_limit,
                     'allowed_squads': tariff.allowed_squads or [],
-                    'consume_promo_offer': promo_offer_discount_value > 0,
+                    'consume_promo_offer': consume_promo,
                     'source': 'cabinet',
                     'subscription_id': existing_subscription.id if existing_subscription else None,
                 }
@@ -1154,7 +1158,7 @@ async def purchase_tariff(
                     'device_limit': effective_device_limit,
                     'allowed_squads': tariff.allowed_squads or [],
                     'discount_percent': discount_percent,
-                    'consume_promo_offer': promo_offer_discount_value > 0,
+                    'consume_promo_offer': consume_promo,
                     'source': 'cabinet',
                     'subscription_id': existing_subscription.id if existing_subscription else None,
                 }
@@ -1227,7 +1231,7 @@ async def purchase_tariff(
                 user,
                 price_kopeks,
                 description,
-                consume_promo_offer=promo_offer_discount_value > 0,
+                consume_promo_offer=consume_promo,
                 mark_as_paid_subscription=True,
                 **({'commit': False} if atomic_charge else {}),
             )
@@ -1312,7 +1316,7 @@ async def purchase_tariff(
                     )
                     failed_transaction = await db.get(Transaction, transaction_id)
                     failed_transaction.external_id = None
-                    if promo_offer_discount_value > 0:
+                    if consume_promo:
                         (
                             refund_user.promo_offer_discount_percent,
                             refund_user.promo_offer_discount_source,

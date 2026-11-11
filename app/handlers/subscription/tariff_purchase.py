@@ -2411,7 +2411,10 @@ async def confirm_daily_tariff_purchase(
         ),
     )
     final_daily_price = pricing_result.final_total
-    consume_promo = pricing_result.promo_offer_discount > 0
+    # Consume the offer when its percentage was applied, not when the resulting
+    # kopeks delta is non-zero: a tiny daily price rounds to a whole ruble and
+    # can leave no visible kopecks discount even though the offer was used.
+    consume_promo = pricing_result.breakdown.get('offer_discount_pct', 0) > 0
 
     # Проверяем баланс (user already locked, balance is fresh)
     user_balance = db_user.balance_kopeks or 0

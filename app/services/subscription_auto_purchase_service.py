@@ -1505,7 +1505,10 @@ async def _auto_purchase_daily_tariff(
         ),
     )
     final_price = pricing_result.final_total
-    consume_promo = pricing_result.promo_offer_discount > 0
+    # Consume the offer when its percentage was applied, not when the resulting
+    # kopeks delta is non-zero: a tiny daily price rounds to a whole ruble and
+    # can leave no visible kopecks discount even though the offer was used.
+    consume_promo = pricing_result.breakdown.get('offer_discount_pct', 0) > 0
 
     if final_price > 0 and user.balance_kopeks < final_price:
         logger.info(
