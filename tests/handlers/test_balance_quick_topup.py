@@ -118,7 +118,8 @@ async def test_unknown_method_is_reported_with_a_message(monkeypatch):
     await balance_main.handle_topup_amount_callback(callback, _user(), _state())
 
     assert callback.answer.await_count == 1
-    callback.message.answer.assert_awaited_once_with('❌ Неизвестный способ оплаты')
+    answered = callback.message.answer.await_args.args[0]
+    assert 'Неизвестный способ оплаты' in answered
 
 
 @pytest.mark.asyncio
@@ -145,7 +146,8 @@ async def test_invalid_amount_alerts_immediately(monkeypatch):
 
     await balance_main.handle_topup_amount_callback(callback, _user(), _state())
 
-    callback.answer.assert_awaited_once_with('❌ Некорректная сумма', show_alert=True)
+    assert 'Некорректная сумма' in callback.answer.await_args.args[0]
+    assert callback.answer.await_args.kwargs.get('show_alert') is True
     route.assert_not_awaited()
 
 

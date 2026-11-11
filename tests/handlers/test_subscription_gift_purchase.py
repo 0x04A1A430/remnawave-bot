@@ -608,8 +608,12 @@ class TestGiftReplayAndPresentation:
             assert f'<code>GIFT_{sample_purchase_result.purchase.token[:59]}</code>' in text
             assert f'https://cabinet.example.com/buy/gift/{sample_purchase_result.purchase.token}' in text
             buttons = [b for row in kb.inline_keyboard for b in row]
-            send_btn = next(b for b in buttons if b.text.startswith('🎁'))
-            assert send_btn.url == 'https://t.me/share/url?url=https%3A%2F%2Ft.me%2Ftest_gift_bot&text=Gift'
+            send_btn = next(
+                b
+                for b in buttons
+                if b.url == 'https://t.me/share/url?url=https%3A%2F%2Ft.me%2Ftest_gift_bot&text=Gift'
+            )
+            assert send_btn.text
             button_urls = _button_urls(kb)
             assert f'https://t.me/test_gift_bot?start=GIFT_{sample_purchase_result.purchase.token[:59]}' in button_urls
             assert f'https://cabinet.example.com/buy/gift/{sample_purchase_result.purchase.token}' in button_urls

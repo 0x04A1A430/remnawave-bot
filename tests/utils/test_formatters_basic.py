@@ -1,8 +1,13 @@
 """Тесты для базовых форматтеров из app.utils.formatters."""
 
+import re
 from datetime import UTC, datetime, timedelta
 
 from app.utils import formatters
+
+
+def _plain(value: str) -> str:
+    return re.sub(r'<tg-emoji[^>]*>(.*?)</tg-emoji>', r'\1', value)
 
 
 def test_format_datetime_handles_iso_strings(fixed_datetime: datetime) -> None:
@@ -85,7 +90,7 @@ def test_format_subscription_status_handles_active_and_expired() -> None:
         end_date=future,
         language='ru',
     )
-    assert active.startswith('✅ Активна')
+    assert _plain(active).startswith('✅ Активна')
     assert '(' in active and ')' in active
 
     past = datetime.now(UTC) - timedelta(days=1)
@@ -95,7 +100,7 @@ def test_format_subscription_status_handles_active_and_expired() -> None:
         end_date=past,
         language='ru',
     )
-    assert expired == '⏰ Истекла'
+    assert 'Истекла' in _plain(expired)
 
 
 def test_format_traffic_usage_supports_unlimited() -> None:
@@ -106,14 +111,14 @@ def test_format_traffic_usage_supports_unlimited() -> None:
 
 def test_format_boolean_localises_output() -> None:
     """Булевые значения отображаются локализованными словами."""
-    assert formatters.format_boolean(True, language='ru') == '✅ Да'
-    assert formatters.format_boolean(False, language='en') == '❌ No'
+    assert _plain(formatters.format_boolean(True, language='ru')) == '✅ Да'
+    assert _plain(formatters.format_boolean(False, language='en')) == '❌ No'
 
 
 def test_format_boolean_uses_persian() -> None:
     """Для fa булевы значения переведены на персидский."""
-    assert formatters.format_boolean(True, language='fa') == '✅ بله'
-    assert formatters.format_boolean(False, language='fa') == '❌ خیر'
+    assert 'بله' in _plain(formatters.format_boolean(True, language='fa'))
+    assert 'خیر' in _plain(formatters.format_boolean(False, language='fa'))
 
 
 def test_format_username_link_wraps_telegram_handle_in_anchor() -> None:

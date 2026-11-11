@@ -26,7 +26,7 @@ from tests.fixtures.sqlite_memory import memory_session
 
 TABLES = list(Base.metadata.sorted_tables)
 # Классический parse_mode=HTML Telegram: других тегов он не примет.
-TELEGRAM_TAGS = {'b', 'i', 'code', 'blockquote'}
+TELEGRAM_TAGS = {'b', 'i', 'code', 'blockquote', 'tg-emoji'}
 
 
 def _stats(**changes) -> _StartupStats:
@@ -98,11 +98,11 @@ def test_problems_are_called_out_explicitly():
     text = render_startup_message(stats, timestamp='t')
 
     _assert_valid_telegram_html(text)
-    assert '⚠️ <b>Требует внимания</b>' in text
+    assert '⚠ <b>Требует внимания</b>' in text
     assert 'Панель Remnawave не отвечает' in text
     assert 'режим техработ' in text
     assert 'Открытых тикетов ждут ответа: 3' in text
-    assert '🔴 Панель недоступна' in text
+    assert '○ Панель недоступна' in text
 
 
 def test_metric_that_failed_is_a_dash_not_a_zero():
@@ -216,7 +216,7 @@ def test_rich_view_renders_the_same_sections(monkeypatch):
 
     rich = startup.render_startup_rich(_stats(maintenance=True))
 
-    assert rich.count('<table') == 4
+    assert rich.count('<table') == 1
     assert 'v4.14.0' in rich
     assert 'Требует внимания' in rich
     assert '\n' not in rich, 'в rich-HTML перенос строки — только <br>'

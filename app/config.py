@@ -130,6 +130,8 @@ class Settings(BaseSettings):
     MINIAPP_SUPPORT_URL: str = ''  # Custom URL to redirect when tickets disabled (only for url type)
 
     ADMIN_NOTIFICATIONS_ENABLED: bool = False
+    # Ежедневная сводка «устройств больше лимита подписки» в админ-чат.
+    DEVICE_LIMIT_OVERFLOW_NOTIFICATIONS_ENABLED: bool = True
     # Rich-вид сообщений админ-чата (Bot API 10.1): заголовки, таблицы,
     # сворачиваемые трейсбеки в error-отчётах. При недоступности сервера
     # бот сам откатывается на классический вид до рестарта.

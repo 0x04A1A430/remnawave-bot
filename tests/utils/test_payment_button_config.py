@@ -1,9 +1,15 @@
+import re
+
 import pytest
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from app.config import settings
 from app.keyboards.inline import _apply_payment_name_overrides, get_payment_methods_keyboard
 from app.services import payment_method_config_service as config_service
+
+
+def _plain(value: str) -> str:
+    return re.sub(r'<tg-emoji[^>]*>(.*?)</tg-emoji>', r'\1', value)
 
 
 @pytest.fixture(autouse=True)
@@ -39,8 +45,8 @@ def test_yookassa_override_keeps_card_and_sbp_distinguishable(amount, language, 
     ]
     before = [row[0].callback_data for row in keyboard]
     _apply_payment_name_overrides(keyboard, language)
-    assert keyboard[0][0].text == sbp
-    assert keyboard[1][0].text == card
+    assert _plain(keyboard[0][0].text) == sbp
+    assert _plain(keyboard[1][0].text) == card
     assert keyboard[2][0].text == 'Custom Stars'
     assert keyboard[3][0].text == 'Back'
     assert [row[0].callback_data for row in keyboard] == before

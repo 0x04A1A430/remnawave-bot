@@ -1053,12 +1053,11 @@ async def show_devices_page(
 
         for device in pagination.items:
             platform = device.get('platform', 'Unknown')
-            device_model = device.get('deviceModel', 'Unknown')
             os_version = device.get('osVersion') or device.get('os_version') or ''
             app_version = device.get('appVersion') or device.get('app_version') or ''
             emoji_tag = platform_emoji.get(platform, '')
             device_info = html_mod.escape(
-                format_device_label(platform, device_model, os_version=os_version, app_version=app_version)
+                format_device_label(platform, '', os_version=os_version, app_version=app_version)
             )
 
             if len(device_info) > 45:
@@ -1070,8 +1069,6 @@ async def show_devices_page(
             ).format(
                 device=f'{emoji_tag} {html_mod.escape(device_info)}' if emoji_tag else html_mod.escape(device_info)
             )
-            if hwid := device.get('hwid'):
-                devices_text += f'  <code>{html_mod.escape(hwid)}</code>\n'
         devices_text += '</blockquote>\n'
 
     await callback.message.edit_text(
@@ -1177,8 +1174,7 @@ async def handle_single_device_reset(
                             return
 
                         platform = device.get('platform', 'Unknown')
-                        device_model = device.get('deviceModel', 'Unknown')
-                        device_info = f'{platform} - {device_model}'
+                        device_info = platform
 
                         await callback.answer(
                             texts.t(

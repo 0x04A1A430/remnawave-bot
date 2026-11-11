@@ -365,11 +365,12 @@ class MonitoringService:
         except Exception as e:
             logger.error('Не удалось запустить напоминания пользователям', error=e)
         # Устройства сверх лимита подписки — раз в сутки, сводка админам
-        try:
-            if not self._device_overflow_task or self._device_overflow_task.done():
-                self._device_overflow_task = asyncio.create_task(self._device_overflow_loop())
-        except Exception as e:
-            logger.error('Не удалось запустить проверку превышения лимита устройств', error=e)
+        if settings.DEVICE_LIMIT_OVERFLOW_NOTIFICATIONS_ENABLED:
+            try:
+                if not self._device_overflow_task or self._device_overflow_task.done():
+                    self._device_overflow_task = asyncio.create_task(self._device_overflow_loop())
+            except Exception as e:
+                logger.error('Не удалось запустить проверку превышения лимита устройств', error=e)
         if settings.MAIN_MENU_LIVE_ENABLED:
             try:
                 if not self._live_menu_task or self._live_menu_task.done():
@@ -1825,7 +1826,7 @@ class MonitoringService:
                             processed_count += 1
                             self._notified_users.add(autopay_key)
                             logger.info(
-                                '💳 Автопродление подписки прошло успешно',
+                                'Автопродление подписки прошло успешно',
                                 user_identifier=user_identifier,
                                 charge_amount=charge_amount,
                                 promo_discount_percent=promo_discount_percent,
@@ -3303,6 +3304,8 @@ class MonitoringService:
             await asyncio.sleep(interval_seconds)
 
     async def _device_overflow_loop(self):
+        if not settings.DEVICE_LIMIT_OVERFLOW_NOTIFICATIONS_ENABLED:
+            return
         from app.services.device_limit_overflow import check_device_limit_overflows
 
         # Первый проход не сразу после старта: бот поднимается вместе с остальными

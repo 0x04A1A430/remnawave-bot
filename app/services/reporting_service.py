@@ -270,15 +270,15 @@ class ReportingService:
 
         lines: list[str] = []
         header = (
-            texts.t('ADMIN_REPORT_UI_004', '📊 <b>Отчет за {value1}</b>').format(value1=period_range.label)
+            texts.t('ADMIN_REPORT_UI_004', '≡ <b>Отчет за {value1}</b>').format(value1=period_range.label)
             if period == ReportPeriod.DAILY
-            else texts.t('ADMIN_REPORT_UI_005', '📊 <b>Отчет за период {value1}</b>').format(value1=period_range.label)
+            else texts.t('ADMIN_REPORT_UI_005', '≡ <b>Отчет за период {value1}</b>').format(value1=period_range.label)
         )
         lines += [header, '']
 
         # TL;DR
         lines += [
-            texts.t('ADMIN_REPORT_UI_006', '🧭 <b>Итог по периоду</b>'),
+            texts.t('ADMIN_REPORT_UI_006', '<b>Итог по периоду</b>'),
             texts.t('ADMIN_REPORT_UI_007', '• Новых пользователей: <b>{value1}</b>').format(value1=stats['new_users']),
             texts.t('ADMIN_REPORT_UI_008', '• Новых триалов: <b>{value1}</b>').format(value1=stats['new_trials']),
             (
@@ -297,7 +297,7 @@ class ReportingService:
 
         # Подписки
         lines += [
-            texts.t('ADMIN_REPORT_UI_012', '💎 <b>Подписки</b>'),
+            texts.t('ADMIN_REPORT_UI_012', '<b>Подписки</b>'),
             texts.t('ADMIN_REPORT_UI_013', '• Активные триалы сейчас: {value1}').format(value1=totals['active_trials']),
             texts.t('ADMIN_REPORT_UI_014', '• Активные платные сейчас: {value1}').format(value1=totals['active_paid']),
             '',
@@ -305,7 +305,7 @@ class ReportingService:
 
         # Финансы
         lines += [
-            texts.t('ADMIN_REPORT_UI_015', '💰 <b>Финансы</b>'),
+            texts.t('ADMIN_REPORT_UI_015', '<b>Финансы</b>'),
             (
                 texts.t('ADMIN_REPORT_UI_016', '• Оплаты подписок: {value1} на сумму {value2}').format(
                     value1=stats['subscription_payments_count'],
@@ -328,7 +328,7 @@ class ReportingService:
 
         # Поддержка
         lines += [
-            texts.t('ADMIN_REPORT_UI_019', '🎟️ <b>Поддержка</b>'),
+            texts.t('ADMIN_REPORT_UI_019', '<b>Поддержка</b>'),
             texts.t('ADMIN_REPORT_UI_020', '• Новых тикетов: {value1}').format(value1=stats['new_tickets']),
             texts.t('ADMIN_REPORT_UI_021', '• Активных тикетов сейчас: {value1}').format(value1=totals['open_tickets']),
             '',
@@ -336,7 +336,7 @@ class ReportingService:
 
         # Активность пользователей
         lines += [
-            texts.t('ADMIN_REPORT_UI_022', '👤 <b>Активность пользователей</b>'),
+            texts.t('ADMIN_REPORT_UI_022', '<b>Активность пользователей</b>'),
             texts.t('ADMIN_REPORT_UI_023', '• Пользователей с активной платной подпиской: {value1}').format(
                 value1=usage['active_paid_users']
             ),
@@ -347,7 +347,7 @@ class ReportingService:
         ]
 
         # Топ по рефералам
-        lines += [texts.t('ADMIN_REPORT_UI_025', '🤝 <b>Топ по рефералам (за период)</b>')]
+        lines += [texts.t('ADMIN_REPORT_UI_025', '<b>Топ по рефералам (за период)</b>')]
         if top_referrers:
             for index, row in enumerate(top_referrers, 1):
                 referrer_label = escape(row['referrer_label'], quote=False)
