@@ -11,9 +11,9 @@ telegram-bot-api) модуль запоминает недоступность �
 пытается. Ошибки конкретного рендера (например, неотредактированное сообщение)
 на флаг не влияют — просто отдаём False и меню рисуется классикой.
 
-Ограничение: у rich-сообщения нет фото, поэтому при ENABLE_LOGO_MODE главное
-меню в rich-режиме показывается без логотипа, а переходы меню <-> разделы с
-логотипом идут через delete+send (существующие fallback-и photo_message).
+Ограничение: у rich-сообщения нет фото-подписи, поэтому логотип главного меню
+показывается image-блоком в шапке (rich_ui.rich_logo_html); переходы меню <->
+разделы с логотипом идут через delete+send (существующие fallback-и photo_message).
 """
 
 import html
@@ -42,12 +42,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.models import User
+from app.utils import rich_ui
+from app.utils.rich_media import prepare_rich_message
 from app.utils.validators import sanitize_html
 
 
 logger = structlog.get_logger(__name__)
 
-_RTL_LANGUAGES = frozenset({'ar', 'he'})
+_RTL_LANGUAGES = frozenset({'ar', 'he', 'fa'})
 
 # Сервер не поддерживает rich-сообщения (устаревший self-hosted bot-api).
 # Взводится один раз до рестарта — по образцу _happ_encrypt_unavailable.
@@ -70,6 +72,11 @@ def mark_rich_menu_taken_over(chat_id: int | None) -> None:
     """Отмечает, что при этом нажатии прежнее rich-меню было поглощено/заменено."""
     if chat_id is not None:
         _taken_over_chats.add(chat_id)
+
+
+def is_tracked_rich_menu(chat_id: int | None, message_id: int | None) -> bool:
+    """True, если это сообщение — последнее отправленное rich-меню этого чата."""
+    return chat_id is not None and message_id is not None and _tracked_rich_menus.get(chat_id) == message_id
 
 
 def reset_rich_menu_takeover(chat_id: int | None) -> None:
@@ -205,7 +212,7 @@ def _retry_without_logo(error: Exception) -> bool:
     в классику («рич не включается»), хотя достаточно было убрать картинку.
     Повтор ровно один — _mark_logo_unavailable_once взводит флаг до рестарта.
     """
-    if not _resolve_rich_logo_url():
+    if not _rich_menu_logo_html():
         return False
     if not _is_media_fetch_error(error):
         logger.warning(
@@ -302,13 +309,20 @@ def _rich_text(value: str) -> str:
     return _sanitize_rich_inline(sanitize_html(html.escape(value)))
 
 
+def _rich_menu_logo_html() -> str:
+    """Логотип шапки rich-меню ('' — если его нет или Telegram его не скачал)."""
+    if _logo_unavailable:
+        return ''
+    return rich_ui.rich_logo_html()
+
+
 async def build_main_menu_rich_html(user: User, texts, db: AsyncSession) -> str:
     """Собирает rich-HTML главного меню (контент, без клавиатуры).
 
-    Минималистичный рендер: контент ровно тот же, что у классического меню —
-    get_main_menu_text остаётся единственным источником правды (шапка с именем,
-    статус подписки, подсказки, случайное сообщение). Никаких таблиц,
-    прогресс-баров и отдельных блоков трафика/устройств/ссылок.
+    Минималистичный рендер: get_main_menu_text остаётся единственным источником
+    правды (шапка с именем, статус подписки, подсказки, случайное сообщение).
+    Rich-слой не добавляет собственных таблиц, прогресс-баров и футеров — только
+    логотип и ту же самую разметку классического меню.
     """
     from app.handlers.menu import get_main_menu_text
 
@@ -316,9 +330,7 @@ async def build_main_menu_rich_html(user: User, texts, db: AsyncSession) -> str:
 
     blocks: list[str] = []
 
-    logo_url = _resolve_rich_logo_url()
-    if logo_url:
-        blocks.append(f'<img src="{html.escape(logo_url, quote=True)}"/>')
+    blocks.append(_rich_menu_logo_html())
 
     # Текст классического меню уже HTML (<b>, <blockquote>, tg-emoji) — прогоняем
     # его через тот же _rich_text, что и редактируемые шаблоны, а переносы строк
@@ -347,10 +359,9 @@ def _strip_tg_time(rich_html: str) -> str:
 
 
 def _input_rich_message(rich_html: str, language: str | None) -> InputRichMessage:
-    return InputRichMessage(
-        html=rich_html,
+    return prepare_rich_message(
+        rich_html,
         is_rtl=True if (language or '').lower() in _RTL_LANGUAGES else None,
-        skip_entity_detection=True,
     )
 
 
@@ -564,3 +575,50 @@ async def try_edit_rich_main_menu(
     except TelegramNetworkError as error:
         logger.warning('Сетевая ошибка при показе rich-меню', error=str(error), chat_id=chat_id)
         return False
+
+
+def live_menu_fingerprint(user: User, texts) -> str:
+    """Только то, что видно в меню: без HTML, таймеров и случайных сообщений."""
+    now = datetime.now(UTC)
+    subscriptions = []
+    for subscription in getattr(user, 'subscriptions', None) or []:
+        used = texts.format_traffic(float(getattr(subscription, 'traffic_used_gb', 0) or 0), is_limit=False)
+        limit = texts.format_traffic(float(getattr(subscription, 'traffic_limit_gb', 0) or 0), is_limit=True)
+        subscriptions.append(
+            (
+                subscription.id,
+                subscription.actual_status,
+                subscription.end_date,
+                subscription.end_date and max((subscription.end_date - now).days, 0),
+                subscription.tariff_id,
+                bool(subscription.is_trial),
+                f'{used} / {limit}',
+                subscription.device_limit,
+            )
+        )
+    return repr((user.language, user.balance_kopeks, subscriptions))
+
+
+def _apply_inline_buttons(
+    rich_html: str,
+    keyboard: InlineKeyboardMarkup,
+    *,
+    for_edit: bool = False,
+) -> tuple[str, InlineKeyboardMarkup | None]:
+    """Переносит клавиатуру внутрь полотна, если это включено настройкой.
+
+    Главное меню всегда уходит в личный чат, поэтому Mini App здесь допустим.
+    Если хотя бы одну кнопку перенести нельзя — клавиатура остаётся снаружи
+    целиком: половина кнопок внутри означала бы потерянные кнопки.
+    """
+    if not getattr(settings, 'MAIN_MENU_RICH_INLINE_BUTTONS', False):
+        return rich_html, keyboard
+
+    from app.utils.rich_buttons import render_keyboard_as_rich_html
+
+    buttons_html = render_keyboard_as_rich_html(keyboard, allow_web_app=True)
+    if buttons_html is None:
+        return rich_html, keyboard
+
+    empty = InlineKeyboardMarkup(inline_keyboard=[]) if for_edit else None
+    return rich_html + buttons_html, empty

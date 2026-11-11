@@ -7,16 +7,25 @@ from aiogram import Bot
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from app.config import settings
-from app.database.crud.transaction import create_transaction, get_transaction_by_external_id
+from app.database.crud.transaction import (
+    create_transaction,
+    emit_transaction_side_effects,
+    get_transaction_by_external_id,
+)
 from app.database.crud.user import get_user_by_telegram_id
 from app.database.database import get_db
 from app.database.models import PaymentMethod, TransactionType
 from app.external.tribute import TributeService as TributeAPI
+from app.localization.texts import get_texts
 from app.services.payment_service import PaymentService
 from app.utils.user_utils import format_referrer_info
 
 
 logger = structlog.get_logger(__name__)
+# логгеры платёжных модулей не доходят ни до админ-чата и журнала ошибок (IGNORED_LOGGER_PREFIXES),
+# ни до файлов (ExcludePaymentFilter) — только stdout. Незачисленную оплату сообщаем логгером вне этих списков:
+# запись в system_error_events (страница системных ошибок, 30 дней), админ-чат, error.log.
+alert_logger = structlog.get_logger('app.tribute_alert')
 
 
 class TributeService:
@@ -77,6 +86,16 @@ class TributeService:
 
         processed_data = await self.tribute_api.process_webhook(webhook_data)
         if not processed_data:
+            # Подпись уже проверена — это событие Tribute (например, анонимный донат без telegram_user_id).
+            # Тревожим только за донаты: отмена подписки и прочие события без денег — не повод.
+            event_name = webhook_data.get('name')
+            if event_name not in (None, 'new_donation', 'recurrent_donation'):
+                return {'status': 'ignored', 'reason': 'invalid_data'}
+            alert_logger.error(
+                'Tribute: событие без telegram_user_id, оплата могла не зачислиться — сверить в кабинете Tribute',
+                event_name=webhook_data.get('name'),
+                created_at=webhook_data.get('created_at'),
+            )
             return {'status': 'ignored', 'reason': 'invalid_data'}
 
         event_type = processed_data.get('event_type', 'payment')
@@ -92,6 +111,11 @@ class TributeService:
         return {'status': 'ok', 'event': event_type}
 
     async def _handle_successful_payment(self, payment_data: dict[str, Any]):
+        # ошибка не глотается — вебхук отвечает 5xx, Tribute повторяет доставку (5 мин … 8 ч,
+        # около суток). Повтор безопасен: транзакция и баланс — один коммит, зачисленный payment_id пропускается.
+        # Но только ДО коммита: после него деньги уже на балансе, и 5xx здесь опасен — у синтетического
+        # ключа tribute_<tg>_<amount> повтор старше 24 ч зачисляется заново (см. create_unique_tribute_transaction).
+        credited = False
         try:
             user_telegram_id = payment_data['user_id']
             amount_kopeks = payment_data['amount_kopeks']
@@ -109,7 +133,15 @@ class TributeService:
             async for session in get_db():
                 user = await get_user_by_telegram_id(session, user_telegram_id)
                 if not user:
-                    logger.error('Пользователь не найден', user_telegram_id=user_telegram_id)
+                    # 200 и громкая запись, а не 5xx: платили с Telegram-аккаунта, которого нет в боте,
+                    # повтор доставки этого не исправит, а сутки отказов — 9 одинаковых тревог и риск для вебхука.
+                    alert_logger.error(
+                        'Tribute: пользователь не найден, оплата НЕ зачислена — зачислить вручную',
+                        user_telegram_id=user_telegram_id,
+                        amount_kopeks=amount_kopeks,
+                        payment_id=payment_id,
+                        trb_user_id=trb_user_id,
+                    )
                     return
 
                 logger.info(
@@ -169,7 +201,19 @@ class TributeService:
                 referrer_info = format_referrer_info(user)
                 topup_status = '🆕 Первое пополнение' if was_first_topup else '🔄 Пополнение'
 
+                # транзакция (flush в create_unique_tribute_transaction) и зачисление — одним коммитом
                 await session.commit()
+                credited = True
+                await emit_transaction_side_effects(
+                    session,
+                    transaction,
+                    amount_kopeks=amount_kopeks,
+                    user_id=user.id,
+                    type=TransactionType.DEPOSIT,
+                    payment_method=PaymentMethod.TRIBUTE,
+                    external_id=transaction.external_id,
+                    description=transaction.description,
+                )
 
                 try:
                     from app.services.referral_service import process_referral_topup
@@ -224,7 +268,17 @@ class TributeService:
                 break
 
         except Exception as e:
-            logger.error('Ошибка обработки успешного Tribute платежа', error=e, exc_info=True)
+            if credited:
+                # Баланс уже пополнен — сбой в уведомлениях/побочных эффектах. Отвечаем 200: повтор не нужен
+                # и для синтетического ключа привёл бы к двойному зачислению.
+                alert_logger.error(
+                    'Tribute: оплата зачислена, но обработка после зачисления упала', error=e, exc_info=True
+                )
+                return
+            alert_logger.error(
+                'Tribute: ошибка зачисления, ответ 5xx — Tribute повторит доставку', error=e, exc_info=True
+            )
+            raise
 
     async def _handle_failed_payment(self, payment_data: dict[str, Any]):
         try:
@@ -237,11 +291,14 @@ class TributeService:
                     session, f'donation_{payment_id}', PaymentMethod.TRIBUTE
                 )
 
+                user = await get_user_by_telegram_id(session, user_id)
+                language = getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE
+
                 if transaction:
                     transaction.description = f'{transaction.description} (платеж отклонен)'
                     await session.commit()
 
-                await self._send_failure_notification(user_id)
+                await self._send_failure_notification(user_id, language=language)
 
                 logger.info(
                     'Обработан неудачный Tribute платеж для пользователя',
@@ -282,9 +339,10 @@ class TributeService:
                     if user.balance_kopeks >= amount_kopeks:
                         user.balance_kopeks -= amount_kopeks
 
+                language = getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE
                 await session.commit()
 
-                await self._send_refund_notification(user_id, amount_kopeks)
+                await self._send_refund_notification(user_id, amount_kopeks, language=language)
 
                 logger.info(
                     'Обработан возврат Tribute: ₽ для пользователя',
@@ -315,19 +373,18 @@ class TributeService:
                     logger.warning('Пользователь не найден для уведомления Tribute', user_id=user_id)
                     break
 
+                texts = get_texts(user.language or settings.DEFAULT_LANGUAGE)
+
                 # Сначала отправляем стандартное уведомление
                 payment_service = PaymentService(self.bot)
                 keyboard = await payment_service.build_topup_success_keyboard(user)
 
-                text = (
-                    '<b>Платеж успешно получен</b>\n\n'
-                    f'Сумма: <code>{int(amount_rubles)} ₽</code>\n'
-                    'Способ оплаты: Tribute\n'
-                    'Средства зачислены на баланс\n\n'
-                    'Спасибо за оплату!'
-                )
+                text = texts.t(
+                    'TRIBUTE_SUCCESS_NOTICE',
+                    '✅ **Платеж успешно получен!**\n\n💰 Сумма: {amount} ₽\n💳 Способ оплаты: Tribute\n🎉 Средства зачислены на баланс!\n\nСпасибо за оплату! 🙏',
+                ).format(amount=int(amount_rubles))
 
-                await self.bot.send_message(user_id, text, reply_markup=keyboard, parse_mode='HTML')
+                await self.bot.send_message(user_id, text, reply_markup=keyboard, parse_mode='Markdown')
 
                 # Проверяем наличие сохраненной корзины для возврата к оформлению подписки
                 from app.services.payment.common import send_cart_notification_after_topup
@@ -338,7 +395,7 @@ class TributeService:
         except Exception as e:
             logger.error('Ошибка отправки уведомления об успешном платеже', error=e)
 
-    async def _send_failure_notification(self, user_id: int):
+    async def _send_failure_notification(self, user_id: int, language: str | None = None):
         if not settings.is_notifications_enabled():
             return
 
@@ -348,29 +405,33 @@ class TributeService:
             return
 
         try:
-            text = (
-                '<b>Платеж не прошел</b>\n\n'
-                'К сожалению, ваш платеж через Tribute был отклонен.\n\n'
-                'Возможные причины:\n'
-                '• Недостаточно средств на карте\n'
-                '• Технические проблемы банка\n'
-                '• Превышен лимит операций\n\n'
-                'Попробуйте еще раз или обратитесь в поддержку.'
+            texts = get_texts(language or settings.DEFAULT_LANGUAGE)
+            text = texts.t(
+                'TRIBUTE_FAILED_NOTICE',
+                '⌘ **Платеж не прошел**\n\nК сожалению, ваш платеж через Tribute был отклонен.\n\nВозможные причины:\n• Недостаточно средств на карте\n• Технические проблемы банка\n• Превышен лимит операций\n\nПопробуйте еще раз или обратитесь в поддержку.',
             )
 
             keyboard = InlineKeyboardMarkup(
                 inline_keyboard=[
-                    [InlineKeyboardButton(text='Попробовать снова', callback_data='menu_balance', style='primary')],
-                    [InlineKeyboardButton(text='Поддержка', callback_data='menu_support', style='primary')],
+                    [
+                        InlineKeyboardButton(
+                            text=texts.t('TRIBUTE_RETRY_BUTTON', '🔄 Попробовать снова'), callback_data='menu_balance'
+                        )
+                    ],
+                    [
+                        InlineKeyboardButton(
+                            text=texts.t('TRIBUTE_SUPPORT_BUTTON', '💬 Поддержка'), callback_data='menu_support'
+                        )
+                    ],
                 ]
             )
 
-            await self.bot.send_message(user_id, text, reply_markup=keyboard, parse_mode='HTML')
+            await self.bot.send_message(user_id, text, reply_markup=keyboard, parse_mode='Markdown')
 
         except Exception as e:
             logger.error('Ошибка отправки уведомления о неудачном платеже', error=e)
 
-    async def _send_refund_notification(self, user_id: int, amount_kopeks: int):
+    async def _send_refund_notification(self, user_id: int, amount_kopeks: int, language: str | None = None):
         if not settings.is_notifications_enabled():
             return
 
@@ -380,24 +441,30 @@ class TributeService:
             return
 
         try:
+            texts = get_texts(language or settings.DEFAULT_LANGUAGE)
             amount_rubles = amount_kopeks / 100
 
-            text = (
-                '<b>Возврат средств</b>\n\n'
-                f'Сумма возврата: <code>{int(amount_rubles)} ₽</code>\n'
-                'Способ: Tribute\n\n'
-                'Средства будут возвращены на вашу карту в течение 3-5 рабочих дней.\n\n'
-                'Если у вас есть вопросы, обратитесь в поддержку.'
-            )
+            text = texts.t(
+                'TRIBUTE_REFUND_NOTICE',
+                '🔄 **Возврат средств**\n\n💰 Сумма возврата: {amount} ₽\n💳 Способ: Tribute\n\nСредства будут возвращены на вашу карту в течение 3-5 рабочих дней.\n\nЕсли у вас есть вопросы, обратитесь в поддержку.',
+            ).format(amount=int(amount_rubles))
 
             keyboard = InlineKeyboardMarkup(
                 inline_keyboard=[
-                    [InlineKeyboardButton(text='Поддержка', callback_data='menu_support', style='primary')],
-                    [InlineKeyboardButton(text='Главное меню', callback_data='back_to_menu', style='danger')],
+                    [
+                        InlineKeyboardButton(
+                            text=texts.t('TRIBUTE_SUPPORT_BUTTON', '💬 Поддержка'), callback_data='menu_support'
+                        )
+                    ],
+                    [
+                        InlineKeyboardButton(
+                            text=texts.t('TRIBUTE_MENU_BUTTON', '🏠 Главное меню'), callback_data='back_to_menu'
+                        )
+                    ],
                 ]
             )
 
-            await self.bot.send_message(user_id, text, reply_markup=keyboard, parse_mode='HTML')
+            await self.bot.send_message(user_id, text, reply_markup=keyboard, parse_mode='Markdown')
 
         except Exception as e:
             logger.error('Ошибка отправки уведомления о возврате', error=e)

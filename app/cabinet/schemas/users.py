@@ -36,6 +36,15 @@ class SortByEnum(StrEnum):
     TOTAL_SPENT = 'total_spent'
     PURCHASE_COUNT = 'purchase_count'
     SUBSCRIPTION_END_DATE = 'subscription_end_date'
+    #: Конец временного доступа (грейса) — та дата, что в строке «временно до …».
+    GRACE_UNTIL = 'grace_until'
+
+
+class SortOrderEnum(StrEnum):
+    """Direction of the users list sort; omitted — the field's usual direction."""
+
+    ASC = 'asc'
+    DESC = 'desc'
 
 
 # === User Subscription Info ===
@@ -56,6 +65,7 @@ class UserSubscriptionInfo(BaseModel):
     """User subscription information."""
 
     id: int
+    remnawave_id: int | None = None
     status: str
     is_trial: bool
     start_date: datetime | None = None
@@ -189,35 +199,6 @@ class UserTransactionItem(BaseModel):
     payment_method: str | None = None
     is_completed: bool = True
     created_at: datetime
-
-
-class UserActivityItem(BaseModel):
-    """Одна запись в таймлайне активности пользователя (бот + кабинет).
-
-    ``type`` — источник записи (transaction, event, promocode, coupon, ticket,
-    wheel_spin, poll, gift_sent, gift_received, referral_earning, cabinet_login,
-    withdrawal); ``subtype`` уточняет его (тип транзакции, event_type события,
-    статус тикета и т.п.). ``title`` — сырой человекочитаемый текст источника
-    (описание транзакции, код промокода, название тикета) — локализованный
-    заголовок строит фронт по type/subtype.
-    """
-
-    type: str
-    subtype: str | None = None
-    source: str | None = None  # 'bot' | 'cabinet' — где произошло действие, если известно
-    title: str | None = None
-    amount_kopeks: int | None = None
-    timestamp: datetime
-    meta: dict[str, Any] | None = None
-
-
-class UserActivityResponse(BaseModel):
-    """Paginated user activity timeline."""
-
-    items: list[UserActivityItem]
-    total: int
-    offset: int = 0
-    limit: int = 50
 
 
 class UserReferralInfo(BaseModel):
@@ -388,7 +369,9 @@ class UpdateSubscriptionRequest(BaseModel):
 
     # For set_traffic action
     traffic_limit_gb: int | None = Field(None, ge=0, description='New traffic limit in GB')
-    traffic_used_gb: float | None = Field(None, ge=0, description='Set traffic used in GB')
+    traffic_used_gb: float | None = Field(
+        None, ge=0, description='Set cached traffic used in GB for legacy subscriptions; managed usage is read-only'
+    )
 
     # For toggle_autopay
     autopay_enabled: bool | None = Field(None, description='Enable/disable autopay')

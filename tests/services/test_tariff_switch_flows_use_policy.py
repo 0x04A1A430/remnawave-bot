@@ -68,7 +68,7 @@ def test_no_new_direct_readers_of_the_traffic_switch():
     вопрос «а переключение вообще оплачено?», а не голая настройка.
     """
     readers = {
-        str(path.relative_to(APP.parent))
+        path.relative_to(APP.parent).as_posix()
         for path in APP.rglob('*.py')
         if 'RESET_TRAFFIC_ON_TARIFF_SWITCH' in path.read_text(encoding='utf-8')
     }

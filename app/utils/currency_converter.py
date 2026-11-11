@@ -67,7 +67,9 @@ class CurrencyConverter:
             async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10)) as session:
                 async with session.get('https://www.cbr-xml-daily.ru/daily_json.js') as response:
                     if response.status == 200:
-                        data = await response.json()
+                        # CBR serves this endpoint as application/javascript,
+                        # so aiohttp's JSON MIME check must be bypassed.
+                        data = await response.json(content_type=None)
                         usd_rate = data['Valute']['USD']['Value']
                         return float(usd_rate)
         except Exception as e:

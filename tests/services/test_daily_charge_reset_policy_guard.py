@@ -62,7 +62,7 @@ def _daily_charge_sites() -> dict[str, ast.AST]:
             if not isinstance(node, ast.AsyncFunctionDef | ast.FunctionDef):
                 continue
             if _is_daily_charge_site(node):
-                sites[f'{path.relative_to(ROOT)}::{node.name}'] = node
+                sites[f'{path.relative_to(ROOT).as_posix()}::{node.name}'] = node
     return sites
 
 
@@ -103,6 +103,13 @@ def test_daily_charge_sync_never_hardcodes_reset():
     for site, func in _daily_charge_sites().items():
         arguments = _reset_traffic_arguments(func)
         assert arguments, f'{site}: синхронизация без reset_traffic — сторож устарел'
+
+        calls = {_called_name(node) for node in ast.walk(func) if isinstance(node, ast.Call)}
+        if {'stage_daily_reset', 'deliver_daily_reset'} <= calls:
+            # The committed intent owns destructive reset delivery, separately
+            # from the safely repeatable canonical synchronization.
+            assert all(isinstance(value, ast.Constant) and value.value is False for value in arguments)
+            continue
 
         computed = [value for value in arguments if not isinstance(value, ast.Constant)]
         assert computed, f'{site}: все вызовы синхронизации задают reset_traffic константой'

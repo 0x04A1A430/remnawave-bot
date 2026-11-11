@@ -3,6 +3,7 @@ import logging
 import os
 import signal
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 
 import structlog
@@ -19,9 +20,11 @@ from app.localization.loader import ensure_locale_templates
 from app.logging_config import _resolve_log_level, setup_logging
 from app.services.backup_service import backup_service
 from app.services.ban_notification_service import ban_notification_service
+from app.services.bot_commands import CommandMenuStore, CommandMenuSync
 from app.services.broadcast_service import broadcast_service
 from app.services.contest_rotation_service import contest_rotation_service
 from app.services.daily_subscription_service import daily_subscription_service
+from app.services.dpichecker.service import dpichecker_service
 from app.services.grace_access_runtime import grace_access_runtime
 from app.services.log_rotation_service import log_rotation_service
 from app.services.maintenance_service import maintenance_service
@@ -41,6 +44,7 @@ from app.services.remnawave_sync_service import remnawave_sync_service
 from app.services.reporting_service import reporting_service
 from app.services.riopay_service import riopay_service
 from app.services.system_settings_service import bot_configuration_service
+from app.services.traffic_accounting_worker import traffic_accounting_worker
 from app.services.traffic_monitoring_service import traffic_monitoring_scheduler
 from app.services.version_service import version_service
 from app.services.web_api_token_service import ensure_default_web_api_token
@@ -51,13 +55,33 @@ from app.webapi.server import WebAPIServer
 from app.webserver.unified_app import create_unified_app
 
 
+# Уведомление об остановке не должно съесть время остального завершения.
+SHUTDOWN_NOTIFICATION_TIMEOUT_SECONDS = 5
+
+
 class GracefulExit:
     def __init__(self):
         self.exit = False
+        # Каким сигналом остановили — для уведомления об остановке.
+        self.signum: int | None = None
 
     def exit_gracefully(self, signum, frame):
         structlog.get_logger(__name__).info('Получен сигнал, корректное завершение работы', signum=signum)
+        if self.signum is None:
+            self.signum = signum
         self.exit = True
+
+
+def _dpichecker_notifier(bot):
+    """Итог прогона монитора DPI//CHECKER → админ-чат, категория «Инфраструктура»."""
+    from app.services.admin_notification_service import AdminNotificationService, NotificationCategory
+
+    async def notify(text: str) -> bool:
+        return await AdminNotificationService(bot).send_admin_notification(
+            text, category=NotificationCategory.INFRASTRUCTURE
+        )
+
+    return notify
 
 
 async def main():
@@ -148,7 +172,7 @@ async def main():
     # handled inside setup_logging() / logging_config.py.
 
     logger = structlog.get_logger(__name__)
-    timeline = StartupTimeline(logger, '@xilarobot')
+    timeline = StartupTimeline(logger, '@x1lagent')
     timeline.log_banner(
         [
             ('Уровень логирования', settings.LOG_LEVEL),
@@ -177,12 +201,18 @@ async def main():
     traffic_monitoring_task = None
     daily_subscription_task = None
     polling_task = None
+    command_menu_task = None
     web_api_server = None
     telegram_webhook_enabled = False
     polling_enabled = True
     payment_webhooks_enabled = False
 
     summary_logged = False
+    # Для уведомления об остановке: когда бот поднялся и почему он останавливается.
+    # started_at остаётся None, если упал ещё на запуске — это покрывает краш-отчёт.
+    started_at: datetime | None = None
+    shutdown_error: BaseException | None = None
+    shutdown_source: str | None = None
 
     try:
         skip_migration = os.getenv('SKIP_MIGRATION', 'false').lower() == 'true'
@@ -315,6 +345,12 @@ async def main():
             except Exception as error:
                 logger.error('❌ Не удалось перенести настройки из файлов в базу', error=error)
 
+        bot_run_mode = settings.get_bot_run_mode()
+        polling_enabled = bot_run_mode == 'polling'
+        telegram_webhook_enabled = bot_run_mode == 'webhook'
+        if telegram_webhook_enabled and not settings.get_telegram_webhook_url():
+            raise ValueError('WEBHOOK_URL is required when BOT_RUN_MODE=webhook')
+
         bot = None
         dp = None
         async with timeline.stage('Настройка бота', '🤖', success_message='Бот настроен') as stage:
@@ -322,6 +358,9 @@ async def main():
             stage.log('Кеш и FSM подготовлены')
 
         bot_user = await bot.get_me()
+        command_menu_task = asyncio.create_task(
+            CommandMenuSync(bot, CommandMenuStore(bot.id)).run(), name='telegram-command-menus'
+        )
         if bot_user.username and not settings.BOT_USERNAME:
             settings.BOT_USERNAME = bot_user.username
             logger.info('BOT_USERNAME auto-detected', bot_username=bot_user.username)
@@ -455,8 +494,6 @@ async def main():
                     if status.send_to_telegram:
                         stage.log('Отправка в Telegram: включена')
                     if status.next_rotation:
-                        from datetime import datetime
-
                         next_dt = datetime.fromisoformat(status.next_rotation)
                         stage.log(f'Следующая ротация: {next_dt.strftime("%d.%m.%Y %H:%M")}')
                 except Exception as e:
@@ -495,6 +532,11 @@ async def main():
             except Exception as e:
                 stage.warning(f'Grace-доступ безопасно отключён из-за ошибки конфигурации: {e}')
                 logger.error('Ошибка запуска grace-доступа; основной бот продолжает работу', error=e)
+
+        try:
+            await traffic_accounting_worker.start()
+        except Exception as error:
+            logger.warning('Traffic accounting worker startup failed', error_type=type(error).__name__)
 
         # Разовая фоновая чистка накопившихся дублей тарифных подписок (multi-tariff):
         # лишние истёкшие дубли удаляются из БД и панели вместе, как штатное удаление.
@@ -579,10 +621,6 @@ async def main():
                     logger.error('❌ Ошибка запуска очереди чеков NaloGO', error=e)
             else:
                 stage.skip('NaloGO отключен настройками')
-
-        bot_run_mode = settings.get_bot_run_mode()
-        polling_enabled = bot_run_mode == 'polling'
-        telegram_webhook_enabled = bot_run_mode == 'webhook'
 
         payment_webhooks_enabled = any(
             [
@@ -684,6 +722,19 @@ async def main():
                 stage.skip('Интеграция bschekbot выключена или без ключа')
 
         async with timeline.stage(
+            'DPI//CHECKER',
+            '🧱',
+            success_message='Обходчик мониторов запущен',
+        ) as stage:
+            dpichecker_notify = _dpichecker_notifier(bot)
+            # Модуль могут включить из кабинета на ходу — цикл здоровья ниже сверяется с настройками.
+            dpichecker_service.sync_background(dpichecker_notify)
+            if dpichecker_service.background_running:
+                stage.log('Итоги мониторов из кабинета будут приходить в админ-чат')
+            else:
+                stage.skip('DPI//CHECKER выключен или без ключа')
+
+        async with timeline.stage(
             'Служба техработ',
             '🛡️',
             success_message='Служба техработ запущена',
@@ -749,6 +800,9 @@ async def main():
             success_message='Aiogram polling запущен',
         ) as stage:
             if polling_enabled:
+                # A webhook survives process restarts and prevents getUpdates.
+                # Keep queued updates when changing the transport to polling.
+                await bot.delete_webhook(drop_pending_updates=False)
                 polling_task = asyncio.create_task(dp.start_polling(bot, skip_updates=False))
                 stage.log('skip_updates=False — накопившиеся обновления будут обработаны')
             else:
@@ -825,6 +879,8 @@ async def main():
         except Exception as startup_notify_error:
             logger.warning('Не удалось отправить стартовое уведомление', startup_notify_error=startup_notify_error)
 
+        started_at = datetime.now(UTC)
+
         try:
             while not killer.exit:
                 await asyncio.sleep(1)
@@ -844,6 +900,9 @@ async def main():
                 if reachability_enabled:
                     # Идемпотентно: перезапускает только упавший обходчик, живой не трогает.
                     reachability_service.start_background()
+
+                # Идемпотентно и по живым настройкам: включили — запустит, выключили — остановит.
+                dpichecker_service.sync_background(dpichecker_notify)
 
                 if version_check_task and version_check_task.done():
                     exception = version_check_task.exception()
@@ -895,10 +954,12 @@ async def main():
                     exception = polling_task.exception()
                     if exception:
                         logger.error('Polling завершился с ошибкой', error=exception)
+                        shutdown_error, shutdown_source = exception, 'polling'
                         break
 
         except Exception as e:
             logger.error('Ошибка в основном цикле', error=e)
+            shutdown_error, shutdown_source = e, 'main_loop'
 
     except Exception as e:
         logger.error('❌ Критическая ошибка при запуске', error=e)
@@ -908,7 +969,21 @@ async def main():
         if not summary_logged:
             timeline.log_summary()
             summary_logged = True
-        logger.info('🛑 Начинается корректное завершение работы...')
+        logger.info('Начинается корректное завершение работы...')
+
+        # Первым делом, пока сессия бота жива: остальное завершение может не уложиться
+        # в отведённые Docker'ом ~10 секунд, и сообщение не ушло бы вовсе.
+        if started_at is not None and 'bot' in locals():
+            try:
+                from app.services.startup_notification_service import ShutdownReason, send_shutdown_notification
+
+                reason = ShutdownReason(signum=killer.signum, error=shutdown_error, source=shutdown_source)
+                await asyncio.wait_for(
+                    send_shutdown_notification(bot, reason, started_at=started_at),
+                    timeout=SHUTDOWN_NOTIFICATION_TIMEOUT_SECONDS,
+                )
+            except Exception as shutdown_notify_error:
+                logger.warning('Не удалось отправить уведомление об остановке', error=shutdown_notify_error)
 
         logger.info('ℹ️ Остановка сервиса автопроверки пополнений...')
         try:
@@ -921,6 +996,12 @@ async def main():
             monitoring_service.stop_monitoring()
             monitoring_task.cancel()
             await asyncio.wait([monitoring_task])
+
+        logger.info('ℹ️ Остановка обходчика мониторов DPI//CHECKER...')
+        try:
+            await dpichecker_service.stop_background()
+        except Exception as error:
+            logger.warning('Не удалось остановить обходчик мониторов DPI//CHECKER', error=error)
 
         logger.info('ℹ️ Остановка обходчика задач проверки доступности...')
         try:
@@ -974,6 +1055,15 @@ async def main():
             await referral_contest_service.stop()
         except Exception as e:
             logger.error('Ошибка остановки сервиса конкурсов', error=e)
+
+        try:
+            await traffic_accounting_worker.stop()
+        except Exception as error:
+            logger.warning('Traffic accounting worker shutdown failed', error_type=type(error).__name__)
+
+        if command_menu_task is not None:
+            command_menu_task.cancel()
+            await asyncio.gather(command_menu_task, return_exceptions=True)
 
         logger.info('ℹ️ Остановка сервиса grace-доступа...')
         try:

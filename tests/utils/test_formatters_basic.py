@@ -1,8 +1,13 @@
 """Тесты для базовых форматтеров из app.utils.formatters."""
 
+import re
 from datetime import UTC, datetime, timedelta
 
 from app.utils import formatters
+
+
+def _plain(value: str) -> str:
+    return re.sub(r'<tg-emoji[^>]*>(.*?)</tg-emoji>', r'\1', value)
 
 
 def test_format_datetime_handles_iso_strings(fixed_datetime: datetime) -> None:
@@ -31,10 +36,10 @@ def test_format_days_declension_handles_russian_rules() -> None:
     assert formatters.format_days_declension(10) == '10 дней'
 
 
-def test_format_days_declension_uses_russian_fallback_for_fa() -> None:
-    """Для fa используем fallback на русские формы до полной локализации."""
-    assert formatters.format_days_declension(1, language='fa') == '1 день'
-    assert formatters.format_days_declension(3, language='fa') == '3 дня'
+def test_format_days_declension_uses_persian() -> None:
+    """Для fa показываем персидские единицы без русского fallback."""
+    assert formatters.format_days_declension(1, language='fa') == '1 روز'
+    assert formatters.format_days_declension(3, language='fa') == '3 روز'
 
 
 def test_format_duration_switches_units() -> None:
@@ -85,7 +90,7 @@ def test_format_subscription_status_handles_active_and_expired() -> None:
         end_date=future,
         language='ru',
     )
-    assert active.startswith('✅ Активна')
+    assert _plain(active).startswith('✅ Активна')
     assert '(' in active and ')' in active
 
     past = datetime.now(UTC) - timedelta(days=1)
@@ -95,7 +100,7 @@ def test_format_subscription_status_handles_active_and_expired() -> None:
         end_date=past,
         language='ru',
     )
-    assert expired == '⏰ Истекла'
+    assert 'Истекла' in _plain(expired)
 
 
 def test_format_traffic_usage_supports_unlimited() -> None:
@@ -106,14 +111,14 @@ def test_format_traffic_usage_supports_unlimited() -> None:
 
 def test_format_boolean_localises_output() -> None:
     """Булевые значения отображаются локализованными словами."""
-    assert formatters.format_boolean(True, language='ru') == '✅ Да'
-    assert formatters.format_boolean(False, language='en') == '❌ No'
+    assert _plain(formatters.format_boolean(True, language='ru')) == '✅ Да'
+    assert _plain(formatters.format_boolean(False, language='en')) == '❌ No'
 
 
-def test_format_boolean_uses_russian_fallback_for_fa() -> None:
-    """Для fa булевы значения пока используют базовый ru fallback."""
-    assert formatters.format_boolean(True, language='fa') == '✅ Да'
-    assert formatters.format_boolean(False, language='fa') == '❌ Нет'
+def test_format_boolean_uses_persian() -> None:
+    """Для fa булевы значения переведены на персидский."""
+    assert 'بله' in _plain(formatters.format_boolean(True, language='fa'))
+    assert 'خیر' in _plain(formatters.format_boolean(False, language='fa'))
 
 
 def test_format_username_link_wraps_telegram_handle_in_anchor() -> None:

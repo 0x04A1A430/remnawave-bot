@@ -204,8 +204,7 @@ class Texts:
     def format_price(kopeks: int, round_kopeks: bool | None = None) -> str:
         return settings.format_price(kopeks, round_kopeks=round_kopeks)
 
-    @staticmethod
-    def format_traffic(gb: float, is_limit: bool = True) -> str:
+    def format_traffic(self, gb: float, is_limit: bool = True) -> str:
         """Format traffic value.
 
         Args:
@@ -213,10 +212,14 @@ class Texts:
             is_limit: If True, 0 means unlimited. If False, 0 means zero used.
         """
         if gb == 0:
-            return '∞ (безлимит)' if is_limit else '0 ГБ'
+            return (
+                self.t('FORMAT_TRAFFIC_UNLIMITED_WITH_SYMBOL')
+                if is_limit
+                else self.t('FORMAT_TRAFFIC_GB').format(value=0)
+            )
         if gb >= 1024:
-            return f'{gb / 1024:.1f} ТБ'
-        return f'{gb:.0f} ГБ'
+            return self.t('FORMAT_TRAFFIC_TB').format(value=f'{gb / 1024:.1f}')
+        return self.t('FORMAT_TRAFFIC_GB').format(value=f'{gb:.0f}')
 
     @staticmethod
     def format_device_limit(limit: int | None) -> str:
@@ -275,6 +278,11 @@ def _get_default_privacy_policy(language: str = DEFAULT_LANGUAGE) -> str:
 
 def get_privacy_policy(language: str = DEFAULT_LANGUAGE) -> str:
     return _get_default_privacy_policy(language)
+
+
+def get_default_rules(language: str = DEFAULT_LANGUAGE) -> str:
+    """Правила из локали — когда в базе их нет или они пустые."""
+    return _get_default_rules(language)
 
 
 def get_rules_sync(language: str = DEFAULT_LANGUAGE) -> str:

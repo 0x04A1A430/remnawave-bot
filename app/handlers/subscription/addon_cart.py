@@ -42,7 +42,12 @@ async def resume_addon_cart_from_button(
         missing = price - db_user.balance_kopeks
         text = texts.t(
             'ADDON_CART_STILL_INSUFFICIENT',
-            ('❌ Все еще недостаточно средств\n\nТребуется: {required}\nУ вас: {balance}\nНе хватает: {missing}'),
+            (
+                '<b>Все еще недостаточно средств</b>\n\n'
+                'Требуется: <code>{required}</code>\n'
+                'У вас: <code>{balance}</code>\n'
+                'Не хватает: <code>{missing}</code>'
+            ),
         ).format(
             required=texts.format_price(price, round_kopeks=False),
             balance=texts.format_price(db_user.balance_kopeks, round_kopeks=False),
@@ -51,6 +56,7 @@ async def resume_addon_cart_from_button(
         await callback.message.edit_text(
             text,
             reply_markup=get_insufficient_balance_keyboard_with_cart(db_user.language, missing),
+            parse_mode='HTML',
         )
         await callback.answer()
         return

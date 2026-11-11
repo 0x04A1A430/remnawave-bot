@@ -39,7 +39,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import structlog
 
@@ -53,6 +53,8 @@ logger = structlog.get_logger(__name__)
 
 #: Меньшую разницу дат считаем дрожанием часов, а не изменением.
 _DATE_TOLERANCE_SECONDS = 60
+#: Сколько после оплаты панель не может укоротить срок подписки (см. panel_date_behind_paid_renewal).
+PAID_DATE_HOLD = timedelta(hours=48)
 #: Меньшую разницу трафика не переносим — она набегает на каждом запросе.
 _TRAFFIC_TOLERANCE_GB = 0.01
 #: Статусы, из которых подписка ещё может уйти в «исчерпана» или «истекла».
@@ -288,6 +290,37 @@ def _next_status(subscription, snapshot: PanelSnapshot, *, now: datetime) -> str
     return subscription.status
 
 
+def panel_date_behind_paid_renewal(
+    subscription,
+    snapshot: PanelSnapshot,
+    *,
+    paid_at: datetime | None,
+    now: datetime | None = None,
+) -> bool:
+    """Не принимать более короткий срок, пока локальное продление не подтверждено.
+
+    Намерение хранится с end_date в БД и переживает рестарт/исчерпание повторов.
+    Более позднее локальное изменение даты заменяет прежнее намерение.
+    Без действующего намерения сохраняется прежняя защита PAID_DATE_HOLD
+    после оплаты, в том числе после подтверждения. За пределами этого окна
+    ручные изменения панели принимаются как раньше.
+    """
+    if snapshot.expire_at is None or getattr(subscription, 'end_date', None) is None:
+        return False
+    end_date = panel_datetime_to_utc(subscription.end_date)
+    pending = getattr(subscription, 'pending_panel_expire_at', None)
+    # A committed local renewal is not a time-limited guess. Keep its expiry
+    # until the writer confirms it. A later local date change supersedes it.
+    if isinstance(pending, datetime) and panel_datetime_to_utc(pending) == end_date:
+        return (end_date - snapshot.expire_at).total_seconds() > _DATE_TOLERANCE_SECONDS
+    if paid_at is None:
+        return False
+    moment = now or datetime.now(UTC)
+    if moment - panel_datetime_to_utc(paid_at) > PAID_DATE_HOLD:
+        return False
+    return (end_date - snapshot.expire_at).total_seconds() > _DATE_TOLERANCE_SECONDS
+
+
 def project_onto_subscription(
     subscription,
     snapshot: PanelSnapshot,
@@ -297,8 +330,13 @@ def project_onto_subscription(
     grace_open: bool = False,
     trust_status: bool = True,
     snapshot_taken_at: datetime | None = None,
+    paid_at: datetime | None = None,
 ) -> set[str]:
     """Перенести состояние панели в подписку. Возвращает имена изменённых полей.
+
+    Неподтверждённое локальное продление удерживает свой срок без таймера.
+    ``paid_at`` сохраняет прежний ``PAID_DATE_HOLD`` для записей без намерения: ранняя дата не переносится
+    (см. ``panel_date_behind_paid_renewal``).
 
     ``policy`` — насколько доверять панели (см. ROUTINE / BULK_SNAPSHOT /
     ADMIN_PULL в начале модуля).
@@ -316,6 +354,12 @@ def project_onto_subscription(
     """
     moment = now or datetime.now(UTC)
     changed: set[str] = set()
+    managed = getattr(subscription, 'traffic_accounting_mode', 'legacy') in {'managed', 'migrating'}
+    if managed:
+        # Only a fresh snapshot under the accounting lease may reconcile quota
+        # and quota-owned DISABLED. Bulk/event snapshots cannot carry that proof.
+        policy = replace(policy, takes_traffic_limit=False)
+        trust_status = False
 
     if snapshot_taken_at is not None:
         touched_at = max(
@@ -345,11 +389,16 @@ def project_onto_subscription(
     if snapshot.subscription_url and subscription.subscription_url != snapshot.subscription_url:
         subscription.subscription_url = snapshot.subscription_url
         changed.add('subscription_url')
+        # A cached encrypted link encodes the previous URL. Leave it missing so
+        # connection consumers can generate one for the new URL.
+        if not snapshot.crypto_link and subscription.subscription_crypto_link:
+            subscription.subscription_crypto_link = None
+            changed.add('subscription_crypto_link')
     if snapshot.crypto_link and subscription.subscription_crypto_link != snapshot.crypto_link:
         subscription.subscription_crypto_link = snapshot.crypto_link
         changed.add('subscription_crypto_link')
 
-    if snapshot.traffic_used_gb is not None:
+    if snapshot.traffic_used_gb is not None and not managed:
         current = subscription.traffic_used_gb or 0.0
         if abs(current - snapshot.traffic_used_gb) > _TRAFFIC_TOLERANCE_GB:
             subscription.traffic_used_gb = snapshot.traffic_used_gb
@@ -387,6 +436,10 @@ def project_onto_subscription(
         # лимит в снимке — грейса.
         return changed
 
+    # Срок в панели отстаёт от недавно оплаченного: запись нового срока в панель
+    # не прошла. Устаревшую дату не берём — и статус, выведенный из неё, тоже.
+    paid_date_held = panel_date_behind_paid_renewal(subscription, snapshot, paid_at=paid_at, now=moment)
+
     locally_disabled = subscription.status == SubscriptionStatus.DISABLED.value
     if (
         policy.takes_date
@@ -398,7 +451,7 @@ def project_onto_subscription(
         and not (policy.respects_local_disable and locally_disabled)
     ):
         end_date = panel_datetime_to_utc(subscription.end_date)
-        if abs((end_date - snapshot.expire_at).total_seconds()) > _DATE_TOLERANCE_SECONDS:
+        if abs((end_date - snapshot.expire_at).total_seconds()) > _DATE_TOLERANCE_SECONDS and not paid_date_held:
             subscription.end_date = snapshot.expire_at
             changed.add('end_date')
 
@@ -411,6 +464,18 @@ def project_onto_subscription(
         new_status = subscription.status
     else:
         new_status = status_rules[policy.status_mode](subscription, snapshot, now=moment)
+    if (
+        paid_date_held
+        and panel_datetime_to_utc(subscription.end_date) > moment
+        and new_status == SubscriptionStatus.EXPIRED.value
+        and snapshot.status in ('ACTIVE', 'EXPIRED')
+    ):
+        # «Истекла» здесь выведено из той же старой даты, которую мы только что
+        # не приняли: ACTIVE с прошедшим сроком или EXPIRED, выставленный панелью
+        # по нему. Иначе оплаченная подписка на всё окно удержания показывалась
+        # истёкшей и попадала в кандидаты грейса. DISABLED и LIMITED — настоящие
+        # действия (админ, трафик) и по-прежнему принимаются.
+        new_status = subscription.status
     if new_status != subscription.status:
         subscription.status = new_status
         if new_status in (SubscriptionStatus.EXPIRED.value, SubscriptionStatus.LIMITED.value):

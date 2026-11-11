@@ -1,7 +1,7 @@
 """
 Ban System API Client.
 
-Client for interacting with the @xilarobot monitoring system.
+Client for interacting with the @x1lagent monitoring system.
 """
 
 from typing import Any

@@ -80,6 +80,7 @@ from app.middlewares.global_error import GlobalErrorMiddleware
 from app.middlewares.logging import LoggingMiddleware
 from app.middlewares.maintenance import MaintenanceMiddleware
 from app.middlewares.rich_menu_cleanup import RichMenuCleanupMiddleware
+from app.middlewares.rich_message_compat import RichMessageCompatMiddleware
 from app.middlewares.subscription_checker import SubscriptionStatusMiddleware
 from app.middlewares.throttling import ThrottlingMiddleware
 from app.services.maintenance_service import maintenance_service
@@ -94,7 +95,7 @@ logger = structlog.get_logger(__name__)
 
 
 async def debug_callback_handler(callback: types.CallbackQuery):
-    logger.info('DEBUG CALLBACK:')
+    logger.info('DEBUG CALLBACK')
     logger.info('Data', callback_data=callback.data)
     logger.info('User', from_user_id=callback.from_user.id)
     logger.info('Username', username=callback.from_user.username)
@@ -192,11 +193,19 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
     dp.callback_query.middleware(SubscriptionStatusMiddleware())
     dp.pre_checkout_query.middleware(SubscriptionStatusMiddleware())
 
+    # Rich-сообщения не имеют .text/.caption — мидлварь возвращает их для старых проверок
+    if settings.RICH_MESSAGES_ENABLED or settings.MAIN_MENU_RICH_ENABLED:
+        compat_middleware = RichMessageCompatMiddleware()
+        dp.message.middleware(compat_middleware)
+        dp.callback_query.middleware(compat_middleware)
+        logger.info('RichMessageCompatMiddleware активирован')
+
     # Удаление прежнего rich-меню, когда кнопка открыла экран новым сообщением
     if settings.MAIN_MENU_RICH_ENABLED:
         dp.callback_query.middleware(RichMenuCleanupMiddleware())
         logger.info('RichMenuCleanupMiddleware активирован')
 
+    support.register_command_handlers(dp)
     start.register_handlers(dp)
     menu.register_handlers(dp)
     subscription.register_handlers(dp)

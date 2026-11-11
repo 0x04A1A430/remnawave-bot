@@ -32,7 +32,7 @@ from app.database.crud.subscription import (
 )
 from app.database.crud.user import get_user_by_telegram_id
 from app.database.database import AsyncSessionLocal
-from app.database.models import InlineGiftSubscription, SubscriptionStatus
+from app.database.models import InlineGiftSubscription, SubscriptionStatus, TransactionType
 from app.localization.loader import DEFAULT_LANGUAGE
 from app.localization.texts import get_texts
 from app.services.subscription_service import SubscriptionService
@@ -109,6 +109,12 @@ def _build_info_text(
             f'<b>{texts.t("INLINE_GIFT_TITLE", "Подарочная подписка")}</b>\n\n'
             f'<blockquote>{body}</blockquote>\n\n'
             f'{texts.t("INLINE_GIFT_CONFIRM_PROMPT", "Хотите активировать?")}'
+        )
+
+    if gift_type == 'discount' and discount_percent:
+        lines.append(
+            f'{texts.t("INLINE_GIFT_EMOJI_GIFT", "<tg-emoji emoji-id='6032937473162614352'>🎁</tg-emoji>")} '
+            f'{texts.t("INLINE_GIFT_LABEL_DISCOUNT", "Скидка")}: <b>{discount_percent}%</b>'
         )
 
     if gift_days is not None or gift_traffic_gb is not None or gift_devices is not None:
@@ -224,6 +230,12 @@ async def _reset_panel_traffic(subscription, user) -> None:
     if not panel_user_id:
         return
     try:
+        from app.services.remnawave_webhook_service import RemnaWaveWebhookService
+
+        RemnaWaveWebhookService.mark_intentional_traffic_reset(
+            panel_user_ids=[panel_user_id],
+            telegram_id=getattr(user, 'telegram_id', None),
+        )
         remnawave_service = RemnaWaveService()
         async with remnawave_service.get_api_client() as api:
             await api.reset_user_traffic(panel_user_id)
@@ -264,7 +276,7 @@ async def _apply_gift_panel_update(db, subscription, user) -> None:
 
 def _check_recipient(gift: InlineGiftSubscription, telegram_id: int, username: str) -> bool:
     if gift.recipient_telegram_id == 0:
-        raw = gift.inline_message_id or ''
+        raw = gift.intended_recipient or ''
         if not raw.startswith('u:') and not raw.startswith('tid:'):
             return True
         if raw.startswith('tid:'):
@@ -286,6 +298,17 @@ def _check_recipient(gift: InlineGiftSubscription, telegram_id: int, username: s
             inline_message_id=gift.inline_message_id,
         )
     return result
+
+
+async def inline_gift_exists(gift_code: str) -> bool:
+    """True, если код принадлежит inline-подарку (для legacy-ссылок без bs_)."""
+    if not gift_code:
+        return False
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            select(InlineGiftSubscription.id).where(InlineGiftSubscription.gift_code == gift_code).limit(1)
+        )
+        return result.scalar_one_or_none() is not None
 
 
 async def handle_gift_deeplink(message: types.Message, gift_code: str, state=None) -> bool:
@@ -430,21 +453,26 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
 
         try:
             if gift_type == 'discount':
-                import secrets as _secrets
-
-                from app.database.crud.promocode import create_promocode
-                from app.database.models import PromoCodeType
+                from app.database.crud.promo_offer_log import log_promo_offer_action
 
                 pct = gift.discount_percent or 0
-                promo_code_str = _secrets.token_hex(4).upper()
-                await create_promocode(
-                    db,
-                    code=promo_code_str,
-                    type=PromoCodeType.DISCOUNT,
-                    balance_bonus_kopeks=pct,
-                    max_uses=1,
-                    created_by=gift.sender_user_id,
-                )
+                user.promo_offer_discount_percent = pct
+                user.promo_offer_discount_source = 'inline_gift'
+                user.promo_offer_discount_expires_at = None
+                user.updated_at = datetime.now(UTC)
+                try:
+                    await log_promo_offer_action(
+                        db,
+                        user_id=user.id,
+                        offer_id=None,
+                        action='claimed',
+                        source='inline_gift',
+                        percent=pct,
+                        details={'context': 'inline_gift_discount'},
+                        commit=False,
+                    )
+                except Exception as log_error:
+                    logger.warning('Failed to log inline gift discount', error=log_error)
                 gift.activated_count = activated + 1
                 gift.is_activated = True
                 gift.activated_at = datetime.now(UTC)
@@ -454,8 +482,8 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
 
                 success_text = texts.t(
                     'INLINE_GIFT_DISCOUNT_SUCCESS',
-                    '<b>Скидка активирована!</b>\n\n<blockquote>Скидка {pct}% — промокод: <code>{code}</code></blockquote>',
-                ).format(pct=pct, code=promo_code_str)
+                    '<b>Скидка активирована!</b>\n\n<blockquote><code>Активирована доп. скидка {pct}%.</code></blockquote>',
+                ).format(pct=pct)
                 back_kb = types.InlineKeyboardMarkup(
                     inline_keyboard=[
                         [
@@ -485,7 +513,13 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
 
                 kopeks = gift.balance_amount_kopeks or 0
                 rub = kopeks // 100
-                await add_user_balance(db, user, kopeks, description='Подарок от администратора')
+                await add_user_balance(
+                    db,
+                    user,
+                    kopeks,
+                    description='Подарок от администратора (inline-подарок)',
+                    transaction_type=TransactionType.INLINE_GIFT,
+                )
                 gift.activated_count = activated + 1
                 gift.is_activated = True
                 gift.activated_at = datetime.now(UTC)
@@ -642,13 +676,10 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
                 return
 
             if gift_type == 'combo':
-                import secrets as _secrets
-
-                from app.database.crud.promocode import create_promocode
                 from app.database.crud.server_squad import get_available_server_squads
                 from app.database.crud.subscription import _lock_subscription_row
                 from app.database.crud.user import add_user_balance
-                from app.database.models import PromoCodeType, TrafficPurchase
+                from app.database.models import TrafficPurchase
 
                 buffer: list[str] = []
                 inline_msg_id = gift.inline_message_id
@@ -756,27 +787,43 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
 
                 # --- discount component ---
                 if gift.discount_percent:
+                    from app.database.crud.promo_offer_log import log_promo_offer_action
+
                     pct = gift.discount_percent
-                    promo_code_str = _secrets.token_hex(4).upper()
-                    await create_promocode(
-                        db,
-                        code=promo_code_str,
-                        type=PromoCodeType.DISCOUNT,
-                        balance_bonus_kopeks=pct,
-                        max_uses=1,
-                        created_by=gift.sender_user_id,
-                    )
+                    user.promo_offer_discount_percent = pct
+                    user.promo_offer_discount_source = 'inline_gift'
+                    user.promo_offer_discount_expires_at = None
+                    user.updated_at = datetime.now(UTC)
+                    try:
+                        await log_promo_offer_action(
+                            db,
+                            user_id=user.id,
+                            offer_id=None,
+                            action='claimed',
+                            source='inline_gift',
+                            percent=pct,
+                            details={'context': 'inline_gift_discount_combo'},
+                            commit=False,
+                        )
+                    except Exception as log_error:
+                        logger.warning('Failed to log inline gift combo discount', error=log_error)
                     buffer.append(
                         texts.t(
                             'INLINE_GIFT_COMBO_DISCOUNT',
-                            'скидка {pct}% — промокод <code>{code}</code>',
-                        ).format(pct=pct, code=promo_code_str)
+                            'скидка {pct}%',
+                        ).format(pct=pct)
                     )
 
                 # --- balance component ---
                 if gift.balance_amount_kopeks:
                     kopeks = gift.balance_amount_kopeks
-                    await add_user_balance(db, user, kopeks, description='Подарок от администратора')
+                    await add_user_balance(
+                        db,
+                        user,
+                        kopeks,
+                        description='Подарок от администратора (inline-подарок)',
+                        transaction_type=TransactionType.INLINE_GIFT,
+                    )
                     buffer.append(texts.t('INLINE_GIFT_COMBO_BALANCE', '+{rub} ₽ на баланс').format(rub=kopeks // 100))
 
                 # --- temp-traffic component ---
@@ -1050,18 +1097,29 @@ async def _update_inline_button(
     gift_code: str = '',
 ) -> None:
     raw = inline_msg_id or ''
-    if not raw or raw.startswith('u:') or raw.startswith('tid:'):
+    if not raw:
+        logger.warning(
+            'Inline gift button not updated: inline_message_id is missing '
+            '(inline feedback may be disabled in @BotFather)',
+            gift_code=gift_code,
+        )
+        return
+    if raw.startswith('u:') or raw.startswith('tid:'):
+        logger.warning(
+            'Inline gift button not updated: legacy recipient sentinel instead of inline_message_id',
+            gift_code=gift_code,
+        )
         return
     try:
         if remaining > 0 and gift_code:
             bot_username = settings.BOT_USERNAME or ''
-            deep_link = f'https://t.me/{bot_username}?start={gift_code}'
+            deep_link = f'https://t.me/{bot_username}?start=bs_{gift_code}'
             kb = types.InlineKeyboardMarkup(inline_keyboard=[[make_button(text=text, url=deep_link)]])
         else:
             kb = types.InlineKeyboardMarkup(inline_keyboard=[[make_button(text=text, callback_data='igift_noop')]])
         await bot.edit_message_reply_markup(inline_message_id=raw, reply_markup=kb)
     except Exception as e:
-        logger.warning('Could not update inline message button', error=str(e))
+        logger.warning('Could not update inline message button', gift_code=gift_code, error=str(e))
 
 
 async def handle_cancel_callback(callback: types.CallbackQuery) -> None:

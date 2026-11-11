@@ -42,37 +42,41 @@ _CAMPAIGNS_PAGE_SIZE = 5
 
 
 def _format_campaign_summary(campaign, texts) -> str:
-    status = ' Активна' if campaign.is_active else ' Выключена'
+    status = (
+        texts.t('ADMIN_CAMPAIGN_UI_006', ' Активна')
+        if campaign.is_active
+        else texts.t('ADMIN_CAMPAIGN_UI_007', ' Выключена')
+    )
 
     if campaign.is_balance_bonus:
         bonus_text = texts.format_price(campaign.balance_bonus_kopeks)
-        bonus_info = f' Бонус на баланс: <b>{bonus_text}</b>'
+        bonus_info = texts.t('ADMIN_CAMPAIGN_UI_008', ' Бонус на баланс: <b>{v0}</b>').format(v0=bonus_text)
     elif campaign.is_subscription_bonus:
         traffic_text = texts.format_traffic(campaign.subscription_traffic_gb or 0)
         device_limit = campaign.subscription_device_limit
         if device_limit is None:
             device_limit = settings.DEFAULT_DEVICE_LIMIT
-        bonus_info = (
-            f' Пробная подписка: <b>{campaign.subscription_duration_days or 0} д.</b>\n'
-            f' Трафик: <b>{traffic_text}</b>\n'
-            f' Устройства: <b>{Texts.format_device_limit(device_limit)}</b>'
+        bonus_info = texts.t(
+            'ADMIN_CAMPAIGN_UI_037',
+            ' Пробная подписка: <b>{v0} д.</b>\n Трафик: <b>{v1}</b>\n Устройства: <b>{v2}</b>',
+        ).format(
+            v0=campaign.subscription_duration_days or 0, v1=traffic_text, v2=Texts.format_device_limit(device_limit)
         )
     elif campaign.is_tariff_bonus:
-        tariff_name = 'Не выбран'
+        tariff_name = texts.t('ADMIN_CAMPAIGN_UI_005', 'Не выбран')
         if hasattr(campaign, 'tariff') and campaign.tariff:
             tariff_name = campaign.tariff.name
-        bonus_info = f' Тариф: <b>{tariff_name}</b>\n Длительность: <b>{campaign.tariff_duration_days or 0} д.</b>'
+        bonus_info = texts.t('ADMIN_CAMPAIGN_UI_069', ' Тариф: <b>{v0}</b>\n Длительность: <b>{v1} д.</b>').format(
+            v0=html.escape(tariff_name), v1=campaign.tariff_duration_days or 0
+        )
     elif campaign.is_none_bonus:
-        bonus_info = ' Только ссылка (без награды)'
+        bonus_info = texts.t('ADMIN_CAMPAIGN_UI_092', ' Только ссылка (без награды)')
     else:
-        bonus_info = ' Неизвестный тип бонуса'
+        bonus_info = texts.t('ADMIN_CAMPAIGN_UI_093', ' Неизвестный тип бонуса')
 
-    return (
-        f'<b>{html.escape(campaign.name)}</b>\n'
-        f'Стартовый параметр: <code>{html.escape(campaign.start_parameter)}</code>\n'
-        f'Статус: {status}\n'
-        f'{bonus_info}\n'
-    )
+    return texts.t(
+        'ADMIN_CAMPAIGN_UI_000', '<b>{v0}</b>\nСтартовый параметр: <code>{v1}</code>\nСтатус: {v2}\n{v3}\n'
+    ).format(v0=html.escape(campaign.name), v1=html.escape(campaign.start_parameter), v2=status, v3=bonus_info)
 
 
 async def _get_bot_deep_link(callback: types.CallbackQuery, start_parameter: str) -> str:
@@ -92,6 +96,7 @@ def _build_campaign_servers_keyboard(
     toggle_prefix: str = 'campaign_toggle_server_',
     save_callback: str = 'campaign_servers_save',
     back_callback: str = 'admin_campaigns',
+    language: str = 'ru',
 ) -> types.InlineKeyboardMarkup:
     keyboard: list[list[types.InlineKeyboardButton]] = []
 
@@ -121,7 +126,11 @@ async def _render_campaign_edit_menu(
     use_caption: bool = False,
 ):
     texts = get_texts(language)
-    text = f' <b>Редактирование кампании</b>\n\n{_format_campaign_summary(campaign, texts)}\nВыберите, что изменить:'
+    text = (
+        get_texts(language)
+        .t('ADMIN_CAMPAIGN_UI_001', ' <b>Редактирование кампании</b>\n\n{v0}\nВыберите, что изменить:')
+        .format(v0=_format_campaign_summary(campaign, texts))
+    )
 
     edit_kwargs = dict(
         chat_id=chat_id,
@@ -157,12 +166,19 @@ async def show_campaigns_menu(
     overview = await get_campaigns_overview(db)
 
     text = (
-        ' <b>Рекламные кампании</b>\n\n'
-        f'Всего кампаний: <b>{overview["total"]}</b>\n'
-        f'Активных: <b>{overview["active"]}</b> | Выключены: <b>{overview["inactive"]}</b>\n'
-        f'Регистраций: <b>{overview["registrations"]}</b>\n'
-        f'Выдано баланса: <b>{texts.format_price(overview["balance_total"])}</b>\n'
-        f'Выдано подписок: <b>{overview["subscription_total"]}</b>'
+        get_texts(db_user.language)
+        .t(
+            'ADMIN_CAMPAIGN_UI_002',
+            ' <b>Рекламные кампании</b>\n\nВсего кампаний: <b>{v0}</b>\nАктивных: <b>{v1}</b> | Выключены: <b>{v2}</b>\nРегистраций: <b>{v3}</b>\nВыдано баланса: <b>{v4}</b>\nВыдано подписок: <b>{v5}</b>',
+        )
+        .format(
+            v0=overview['total'],
+            v1=overview['active'],
+            v2=overview['inactive'],
+            v3=overview['registrations'],
+            v4=texts.format_price(overview['balance_total']),
+            v5=overview['subscription_total'],
+        )
     )
 
     await callback.message.edit_text(
@@ -182,12 +198,32 @@ async def show_campaigns_overall_stats(
     texts = get_texts(db_user.language)
     overview = await get_campaigns_overview(db)
 
-    text = [' <b>Общая статистика кампаний</b>\n']
-    text.append(f'Всего кампаний: <b>{overview["total"]}</b>')
-    text.append(f'Активны: <b>{overview["active"]}</b>, выключены: <b>{overview["inactive"]}</b>')
-    text.append(f'Всего регистраций: <b>{overview["registrations"]}</b>')
-    text.append(f'Суммарно выдано баланса: <b>{texts.format_price(overview["balance_total"])}</b>')
-    text.append(f'Выдано подписок: <b>{overview["subscription_total"]}</b>')
+    text = [get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_009', ' <b>Общая статистика кампаний</b>\n')]
+    text.append(
+        get_texts(db_user.language)
+        .t('ADMIN_CAMPAIGN_UI_010', 'Всего кампаний: <b>{v0}</b>')
+        .format(v0=overview['total'])
+    )
+    text.append(
+        get_texts(db_user.language)
+        .t('ADMIN_CAMPAIGN_UI_011', 'Активны: <b>{v0}</b>, выключены: <b>{v1}</b>')
+        .format(v0=overview['active'], v1=overview['inactive'])
+    )
+    text.append(
+        get_texts(db_user.language)
+        .t('ADMIN_CAMPAIGN_UI_012', 'Всего регистраций: <b>{v0}</b>')
+        .format(v0=overview['registrations'])
+    )
+    text.append(
+        get_texts(db_user.language)
+        .t('ADMIN_CAMPAIGN_UI_013', 'Суммарно выдано баланса: <b>{v0}</b>')
+        .format(v0=texts.format_price(overview['balance_total']))
+    )
+    text.append(
+        get_texts(db_user.language)
+        .t('ADMIN_CAMPAIGN_UI_014', 'Выдано подписок: <b>{v0}</b>')
+        .format(v0=overview['subscription_total'])
+    )
 
     await callback.message.edit_text(
         '\n'.join(text),
@@ -225,7 +261,7 @@ async def show_campaigns_list(
 
     if not campaigns:
         await callback.message.edit_text(
-            ' Рекламные кампании не найдены.',
+            get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_070', ' Рекламные кампании не найдены.'),
             reply_markup=types.InlineKeyboardMarkup(
                 inline_keyboard=[
                     [types.InlineKeyboardButton(text=' Создать', callback_data='admin_campaigns_create')],
@@ -236,7 +272,7 @@ async def show_campaigns_list(
         await callback.answer()
         return
 
-    text_lines = [' <b>Список кампаний</b>\n']
+    text_lines = [get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_015', ' <b>Список кампаний</b>\n')]
 
     for campaign in campaigns:
         # Access from instance dict to avoid MissingGreenlet on lazy load
@@ -245,13 +281,24 @@ async def show_campaigns_list(
         total_balance = sum(r.balance_bonus_kopeks or 0 for r in regs)
         status = '' if campaign.is_active else ''
         line = (
-            f'{status} <b>{html.escape(campaign.name)}</b> — <code>{html.escape(campaign.start_parameter)}</code>\n'
-            f'   Регистраций: {registrations}, баланс: {texts.format_price(total_balance)}'
+            get_texts(db_user.language)
+            .t('ADMIN_CAMPAIGN_UI_016', '{v0} <b>{v1}</b> — <code>{v2}</code>\n   Регистраций: {v3}, баланс: {v4}')
+            .format(
+                v0=status,
+                v1=html.escape(campaign.name),
+                v2=html.escape(campaign.start_parameter),
+                v3=registrations,
+                v4=texts.format_price(total_balance),
+            )
         )
         if campaign.is_subscription_bonus:
-            line += f', подписка: {campaign.subscription_duration_days or 0} д.'
+            line += (
+                get_texts(db_user.language)
+                .t('ADMIN_CAMPAIGN_UI_038', ', подписка: {v0} д.')
+                .format(v0=campaign.subscription_duration_days or 0)
+            )
         else:
-            line += ', бонус: баланс'
+            line += get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_039', ', бонус: баланс')
         text_lines.append(line)
 
     keyboard_rows = [
@@ -292,31 +339,71 @@ async def show_campaign_detail(
     campaign = await get_campaign_by_id(db, campaign_id)
 
     if not campaign:
-        await callback.answer(' Кампания не найдена', show_alert=True)
+        await callback.answer(
+            get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_071', ' Кампания не найдена'), show_alert=True
+        )
         return
 
     texts = get_texts(db_user.language)
     stats = await get_campaign_statistics(db, campaign_id)
     deep_link = await _get_bot_deep_link(callback, campaign.start_parameter)
 
-    text = [' <b>Управление кампанией</b>\n']
+    text = [get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_017', ' <b>Управление кампанией</b>\n')]
     text.append(_format_campaign_summary(campaign, texts))
-    text.append(f' Ссылка: <code>{deep_link}</code>')
-    text.append('\n <b>Статистика</b>')
-    text.append(f'• Регистраций: <b>{stats["registrations"]}</b>')
-    text.append(f'• Выдано баланса: <b>{texts.format_price(stats["balance_issued"])}</b>')
-    text.append(f'• Выдано подписок: <b>{stats["subscription_issued"]}</b>')
-    text.append(f'• Доход: <b>{texts.format_price(stats["total_revenue_kopeks"])}</b>')
-    text.append(f'• Получили триал: <b>{stats["trial_users_count"]}</b> (активно: {stats["active_trials_count"]})')
     text.append(
-        '• Конверсий в оплату: '
-        f'<b>{stats["conversion_count"]}</b>'
-        f' / пользователей с оплатой: {stats["paid_users_count"]}'
+        get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_018', ' Ссылка: <code>{v0}</code>').format(v0=deep_link)
     )
-    text.append(f'• Конверсия в оплату: <b>{stats["conversion_rate"]:.1f}%</b>')
-    text.append(f'• Конверсия триала: <b>{stats["trial_conversion_rate"]:.1f}%</b>')
-    text.append(f'• Средний доход на пользователя: <b>{texts.format_price(stats["avg_revenue_per_user_kopeks"])}</b>')
-    text.append(f'• Средний первый платеж: <b>{texts.format_price(stats["avg_first_payment_kopeks"])}</b>')
+    text.append(get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_019', '\n <b>Статистика</b>'))
+    text.append(
+        get_texts(db_user.language)
+        .t('ADMIN_CAMPAIGN_UI_020', '• Регистраций: <b>{v0}</b>')
+        .format(v0=stats['registrations'])
+    )
+    text.append(
+        get_texts(db_user.language)
+        .t('ADMIN_CAMPAIGN_UI_021', '• Выдано баланса: <b>{v0}</b>')
+        .format(v0=texts.format_price(stats['balance_issued']))
+    )
+    text.append(
+        get_texts(db_user.language)
+        .t('ADMIN_CAMPAIGN_UI_022', '• Выдано подписок: <b>{v0}</b>')
+        .format(v0=stats['subscription_issued'])
+    )
+    text.append(
+        get_texts(db_user.language)
+        .t('ADMIN_CAMPAIGN_UI_023', '• Доход: <b>{v0}</b>')
+        .format(v0=texts.format_price(stats['total_revenue_kopeks']))
+    )
+    text.append(
+        get_texts(db_user.language)
+        .t('ADMIN_CAMPAIGN_UI_024', '• Получили триал: <b>{v0}</b> (активно: {v1})')
+        .format(v0=stats['trial_users_count'], v1=stats['active_trials_count'])
+    )
+    text.append(
+        get_texts(db_user.language)
+        .t('ADMIN_CAMPAIGN_UI_025', '• Конверсий в оплату: <b>{v0}</b> / пользователей с оплатой: {v1}')
+        .format(v0=stats['conversion_count'], v1=stats['paid_users_count'])
+    )
+    text.append(
+        get_texts(db_user.language)
+        .t('ADMIN_CAMPAIGN_UI_026', '• Конверсия в оплату: <b>{v0:.1f}%</b>')
+        .format(v0=stats['conversion_rate'])
+    )
+    text.append(
+        get_texts(db_user.language)
+        .t('ADMIN_CAMPAIGN_UI_027', '• Конверсия триала: <b>{v0:.1f}%</b>')
+        .format(v0=stats['trial_conversion_rate'])
+    )
+    text.append(
+        get_texts(db_user.language)
+        .t('ADMIN_CAMPAIGN_UI_028', '• Средний доход на пользователя: <b>{v0}</b>')
+        .format(v0=texts.format_price(stats['avg_revenue_per_user_kopeks']))
+    )
+    text.append(
+        get_texts(db_user.language)
+        .t('ADMIN_CAMPAIGN_UI_029', '• Средний первый платеж: <b>{v0}</b>')
+        .format(v0=texts.format_price(stats['avg_first_payment_kopeks']))
+    )
     if stats['last_registration']:
         text.append(f'• Последняя: {stats["last_registration"].strftime("%d.%m.%Y %H:%M")}')
 
@@ -340,7 +427,9 @@ async def show_campaign_edit_menu(
 
     if not campaign:
         await state.clear()
-        await callback.answer(' Кампания не найдена', show_alert=True)
+        await callback.answer(
+            get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_071', ' Кампания не найдена'), show_alert=True
+        )
         return
 
     await state.clear()
@@ -369,7 +458,9 @@ async def start_edit_campaign_name(
     campaign_id = int(callback.data.split('_')[-1])
     campaign = await get_campaign_by_id(db, campaign_id)
     if not campaign:
-        await callback.answer(' Кампания не найдена', show_alert=True)
+        await callback.answer(
+            get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_071', ' Кампания не найдена'), show_alert=True
+        )
         return
 
     await state.clear()
@@ -383,15 +474,18 @@ async def start_edit_campaign_name(
 
     await callback.message.edit_text(
         (
-            ' <b>Изменение названия кампании</b>\n\n'
-            f'Текущее название: <b>{html.escape(campaign.name)}</b>\n'
-            'Введите новое название (3-100 символов):'
+            get_texts(db_user.language)
+            .t(
+                'ADMIN_CAMPAIGN_UI_041',
+                ' <b>Изменение названия кампании</b>\n\nТекущее название: <b>{v0}</b>\nВведите новое название (3-100 символов):',
+            )
+            .format(v0=html.escape(campaign.name))
         ),
         reply_markup=types.InlineKeyboardMarkup(
             inline_keyboard=[
                 [
                     types.InlineKeyboardButton(
-                        text=' Отмена',
+                        text=get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_106', ' Отмена'),
                         callback_data=f'admin_campaign_edit_{campaign_id}',
                     )
                 ]
@@ -412,25 +506,31 @@ async def process_edit_campaign_name(
     data = await state.get_data()
     campaign_id = data.get('editing_campaign_id')
     if not campaign_id:
-        await message.answer(' Сессия редактирования устарела. Попробуйте снова.')
+        await message.answer(
+            get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_072', ' Сессия редактирования устарела. Попробуйте снова.')
+        )
         await state.clear()
         return
 
     new_name = message.text.strip()
     if len(new_name) < 3 or len(new_name) > 100:
-        await message.answer(' Название должно содержать от 3 до 100 символов. Попробуйте снова.')
+        await message.answer(
+            get_texts(db_user.language).t(
+                'ADMIN_CAMPAIGN_UI_073', ' Название должно содержать от 3 до 100 символов. Попробуйте снова.'
+            )
+        )
         return
 
     campaign = await get_campaign_by_id(db, campaign_id)
     if not campaign:
-        await message.answer(' Кампания не найдена')
+        await message.answer(get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_071', ' Кампания не найдена'))
         await state.clear()
         return
 
     await update_campaign(db, campaign, name=new_name)
     await state.clear()
 
-    await message.answer(' Название обновлено.')
+    await message.answer(get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_042', ' Название обновлено.'))
 
     edit_message_id = data.get('campaign_edit_message_id')
     edit_message_is_caption = data.get('campaign_edit_message_is_caption', False)
@@ -456,7 +556,9 @@ async def start_edit_campaign_start_parameter(
     campaign_id = int(callback.data.split('_')[-1])
     campaign = await get_campaign_by_id(db, campaign_id)
     if not campaign:
-        await callback.answer(' Кампания не найдена', show_alert=True)
+        await callback.answer(
+            get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_071', ' Кампания не найдена'), show_alert=True
+        )
         return
 
     await state.clear()
@@ -470,15 +572,18 @@ async def start_edit_campaign_start_parameter(
 
     await callback.message.edit_text(
         (
-            ' <b>Изменение стартового параметра</b>\n\n'
-            f'Текущий параметр: <code>{campaign.start_parameter}</code>\n'
-            'Введите новый параметр (латинские буквы, цифры, - или _, 3-32 символа):'
+            get_texts(db_user.language)
+            .t(
+                'ADMIN_CAMPAIGN_UI_043',
+                ' <b>Изменение стартового параметра</b>\n\nТекущий параметр: <code>{v0}</code>\nВведите новый параметр (латинские буквы, цифры, - или _, 3-32 символа):',
+            )
+            .format(v0=campaign.start_parameter)
         ),
         reply_markup=types.InlineKeyboardMarkup(
             inline_keyboard=[
                 [
                     types.InlineKeyboardButton(
-                        text=' Отмена',
+                        text=get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_106', ' Отмена'),
                         callback_data=f'admin_campaign_edit_{campaign_id}',
                     )
                 ]
@@ -499,30 +604,41 @@ async def process_edit_campaign_start_parameter(
     data = await state.get_data()
     campaign_id = data.get('editing_campaign_id')
     if not campaign_id:
-        await message.answer(' Сессия редактирования устарела. Попробуйте снова.')
+        await message.answer(
+            get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_072', ' Сессия редактирования устарела. Попробуйте снова.')
+        )
         await state.clear()
         return
 
     new_param = message.text.strip()
     if not _CAMPAIGN_PARAM_REGEX.match(new_param):
-        await message.answer(' Разрешены только латинские буквы, цифры, символы - и _. Длина 3-32 символа.')
+        await message.answer(
+            get_texts(db_user.language).t(
+                'ADMIN_CAMPAIGN_UI_074',
+                ' Разрешены только латинские буквы, цифры, символы - и _. Длина 3-32 символа.',
+            )
+        )
         return
 
     campaign = await get_campaign_by_id(db, campaign_id)
     if not campaign:
-        await message.answer(' Кампания не найдена')
+        await message.answer(get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_071', ' Кампания не найдена'))
         await state.clear()
         return
 
     existing = await get_campaign_by_start_parameter(db, new_param)
     if existing and existing.id != campaign_id:
-        await message.answer(' Такой параметр уже используется. Введите другой вариант.')
+        await message.answer(
+            get_texts(db_user.language).t(
+                'ADMIN_CAMPAIGN_UI_075', ' Такой параметр уже используется. Введите другой вариант.'
+            )
+        )
         return
 
     await update_campaign(db, campaign, start_parameter=new_param)
     await state.clear()
 
-    await message.answer(' Стартовый параметр обновлен.')
+    await message.answer(get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_044', ' Стартовый параметр обновлен.'))
 
     edit_message_id = data.get('campaign_edit_message_id')
     edit_message_is_caption = data.get('campaign_edit_message_is_caption', False)
@@ -548,11 +664,15 @@ async def start_edit_campaign_balance_bonus(
     campaign_id = int(callback.data.split('_')[-1])
     campaign = await get_campaign_by_id(db, campaign_id)
     if not campaign:
-        await callback.answer(' Кампания не найдена', show_alert=True)
+        await callback.answer(
+            get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_071', ' Кампания не найдена'), show_alert=True
+        )
         return
 
     if not campaign.is_balance_bonus:
-        await callback.answer(' У кампании другой тип бонуса', show_alert=True)
+        await callback.answer(
+            get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_076', ' У кампании другой тип бонуса'), show_alert=True
+        )
         return
 
     await state.clear()
@@ -566,15 +686,18 @@ async def start_edit_campaign_balance_bonus(
 
     await callback.message.edit_text(
         (
-            ' <b>Изменение бонуса на баланс</b>\n\n'
-            f'Текущий бонус: <b>{get_texts(db_user.language).format_price(campaign.balance_bonus_kopeks)}</b>\n'
-            'Введите новую сумму в рублях (например, 100 или 99.5):'
+            get_texts(db_user.language)
+            .t(
+                'ADMIN_CAMPAIGN_UI_045',
+                ' <b>Изменение бонуса на баланс</b>\n\nТекущий бонус: <b>{v0}</b>\nВведите новую сумму в рублях (например, 100 или 99.5):',
+            )
+            .format(v0=get_texts(db_user.language).format_price(campaign.balance_bonus_kopeks))
         ),
         reply_markup=types.InlineKeyboardMarkup(
             inline_keyboard=[
                 [
                     types.InlineKeyboardButton(
-                        text=' Отмена',
+                        text=get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_106', ' Отмена'),
                         callback_data=f'admin_campaign_edit_{campaign_id}',
                     )
                 ]
@@ -595,37 +718,41 @@ async def process_edit_campaign_balance_bonus(
     data = await state.get_data()
     campaign_id = data.get('editing_campaign_id')
     if not campaign_id:
-        await message.answer(' Сессия редактирования устарела. Попробуйте снова.')
+        await message.answer(
+            get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_072', ' Сессия редактирования устарела. Попробуйте снова.')
+        )
         await state.clear()
         return
 
     try:
         amount_rubles = float(message.text.replace(',', '.'))
     except ValueError:
-        await message.answer(' Введите корректную сумму (например, 100 или 99.5)')
+        await message.answer(
+            get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_096', ' Введите корректную сумму (например, 100 или 99.5)')
+        )
         return
 
     if amount_rubles <= 0:
-        await message.answer(' Сумма должна быть больше нуля')
+        await message.answer(get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_077', ' Сумма должна быть больше нуля'))
         return
 
     amount_kopeks = int(round(amount_rubles * 100))
 
     campaign = await get_campaign_by_id(db, campaign_id)
     if not campaign:
-        await message.answer(' Кампания не найдена')
+        await message.answer(get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_071', ' Кампания не найдена'))
         await state.clear()
         return
 
     if not campaign.is_balance_bonus:
-        await message.answer(' У кампании другой тип бонуса')
+        await message.answer(get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_076', ' У кампании другой тип бонуса'))
         await state.clear()
         return
 
     await update_campaign(db, campaign, balance_bonus_kopeks=amount_kopeks)
     await state.clear()
 
-    await message.answer(' Бонус обновлен.')
+    await message.answer(get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_046', ' Бонус обновлен.'))
 
     edit_message_id = data.get('campaign_edit_message_id')
     edit_message_is_caption = data.get('campaign_edit_message_is_caption', False)
@@ -640,15 +767,17 @@ async def process_edit_campaign_balance_bonus(
         )
 
 
-async def _ensure_subscription_campaign(message_or_callback, campaign) -> bool:
+async def _ensure_subscription_campaign(message_or_callback, campaign, language: str = 'ru') -> bool:
     if campaign.is_balance_bonus:
         if isinstance(message_or_callback, types.CallbackQuery):
             await message_or_callback.answer(
-                ' Для этой кампании доступен только бонус на баланс',
+                get_texts(language).t('ADMIN_CAMPAIGN_UI_097', ' Для этой кампании доступен только бонус на баланс'),
                 show_alert=True,
             )
         else:
-            await message_or_callback.answer(' Для этой кампании нельзя изменить параметры подписки')
+            await message_or_callback.answer(
+                get_texts(language).t('ADMIN_CAMPAIGN_UI_098', ' Для этой кампании нельзя изменить параметры подписки')
+            )
         return False
     return True
 
@@ -664,10 +793,12 @@ async def start_edit_campaign_subscription_days(
     campaign_id = int(callback.data.split('_')[-1])
     campaign = await get_campaign_by_id(db, campaign_id)
     if not campaign:
-        await callback.answer(' Кампания не найдена', show_alert=True)
+        await callback.answer(
+            get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_071', ' Кампания не найдена'), show_alert=True
+        )
         return
 
-    if not await _ensure_subscription_campaign(callback, campaign):
+    if not await _ensure_subscription_campaign(callback, campaign, language=db_user.language):
         return
 
     await state.clear()
@@ -681,15 +812,18 @@ async def start_edit_campaign_subscription_days(
 
     await callback.message.edit_text(
         (
-            ' <b>Изменение длительности подписки</b>\n\n'
-            f'Текущее значение: <b>{campaign.subscription_duration_days or 0} д.</b>\n'
-            'Введите новое количество дней (1-730):'
+            get_texts(db_user.language)
+            .t(
+                'ADMIN_CAMPAIGN_UI_047',
+                ' <b>Изменение длительности подписки</b>\n\nТекущее значение: <b>{v0} д.</b>\nВведите новое количество дней (1-730):',
+            )
+            .format(v0=campaign.subscription_duration_days or 0)
         ),
         reply_markup=types.InlineKeyboardMarkup(
             inline_keyboard=[
                 [
                     types.InlineKeyboardButton(
-                        text=' Отмена',
+                        text=get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_106', ' Отмена'),
                         callback_data=f'admin_campaign_edit_{campaign_id}',
                     )
                 ]
@@ -710,34 +844,38 @@ async def process_edit_campaign_subscription_days(
     data = await state.get_data()
     campaign_id = data.get('editing_campaign_id')
     if not campaign_id:
-        await message.answer(' Сессия редактирования устарела. Попробуйте снова.')
+        await message.answer(
+            get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_072', ' Сессия редактирования устарела. Попробуйте снова.')
+        )
         await state.clear()
         return
 
     try:
         days = int(message.text.strip())
     except ValueError:
-        await message.answer(' Введите число дней (1-730)')
+        await message.answer(get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_099', ' Введите число дней (1-730)'))
         return
 
     if days <= 0 or days > 730:
-        await message.answer(' Длительность должна быть от 1 до 730 дней')
+        await message.answer(
+            get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_078', ' Длительность должна быть от 1 до 730 дней')
+        )
         return
 
     campaign = await get_campaign_by_id(db, campaign_id)
     if not campaign:
-        await message.answer(' Кампания не найдена')
+        await message.answer(get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_071', ' Кампания не найдена'))
         await state.clear()
         return
 
-    if not await _ensure_subscription_campaign(message, campaign):
+    if not await _ensure_subscription_campaign(message, campaign, language=db_user.language):
         await state.clear()
         return
 
     await update_campaign(db, campaign, subscription_duration_days=days)
     await state.clear()
 
-    await message.answer(' Длительность подписки обновлена.')
+    await message.answer(get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_048', ' Длительность подписки обновлена.'))
 
     edit_message_id = data.get('campaign_edit_message_id')
     edit_message_is_caption = data.get('campaign_edit_message_is_caption', False)
@@ -763,10 +901,12 @@ async def start_edit_campaign_subscription_traffic(
     campaign_id = int(callback.data.split('_')[-1])
     campaign = await get_campaign_by_id(db, campaign_id)
     if not campaign:
-        await callback.answer(' Кампания не найдена', show_alert=True)
+        await callback.answer(
+            get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_071', ' Кампания не найдена'), show_alert=True
+        )
         return
 
-    if not await _ensure_subscription_campaign(callback, campaign):
+    if not await _ensure_subscription_campaign(callback, campaign, language=db_user.language):
         return
 
     await state.clear()
@@ -779,19 +919,26 @@ async def start_edit_campaign_subscription_traffic(
     )
 
     current_traffic = campaign.subscription_traffic_gb or 0
-    traffic_text = 'безлимит' if current_traffic == 0 else f'{current_traffic} ГБ'
+    traffic_text = (
+        get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_030', 'безлимит')
+        if current_traffic == 0
+        else get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_031', '{v0} ГБ').format(v0=current_traffic)
+    )
 
     await callback.message.edit_text(
         (
-            ' <b>Изменение лимита трафика</b>\n\n'
-            f'Текущее значение: <b>{traffic_text}</b>\n'
-            'Введите новый лимит в ГБ (0 = безлимит, максимум 10000):'
+            get_texts(db_user.language)
+            .t(
+                'ADMIN_CAMPAIGN_UI_049',
+                ' <b>Изменение лимита трафика</b>\n\nТекущее значение: <b>{v0}</b>\nВведите новый лимит в ГБ (0 = безлимит, максимум 10000):',
+            )
+            .format(v0=traffic_text)
         ),
         reply_markup=types.InlineKeyboardMarkup(
             inline_keyboard=[
                 [
                     types.InlineKeyboardButton(
-                        text=' Отмена',
+                        text=get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_106', ' Отмена'),
                         callback_data=f'admin_campaign_edit_{campaign_id}',
                     )
                 ]
@@ -812,34 +959,40 @@ async def process_edit_campaign_subscription_traffic(
     data = await state.get_data()
     campaign_id = data.get('editing_campaign_id')
     if not campaign_id:
-        await message.answer(' Сессия редактирования устарела. Попробуйте снова.')
+        await message.answer(
+            get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_072', ' Сессия редактирования устарела. Попробуйте снова.')
+        )
         await state.clear()
         return
 
     try:
         traffic = int(message.text.strip())
     except ValueError:
-        await message.answer(' Введите целое число (0 или больше)')
+        await message.answer(
+            get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_100', ' Введите целое число (0 или больше)')
+        )
         return
 
     if traffic < 0 or traffic > 10000:
-        await message.answer(' Лимит трафика должен быть от 0 до 10000 ГБ')
+        await message.answer(
+            get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_079', ' Лимит трафика должен быть от 0 до 10000 ГБ')
+        )
         return
 
     campaign = await get_campaign_by_id(db, campaign_id)
     if not campaign:
-        await message.answer(' Кампания не найдена')
+        await message.answer(get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_071', ' Кампания не найдена'))
         await state.clear()
         return
 
-    if not await _ensure_subscription_campaign(message, campaign):
+    if not await _ensure_subscription_campaign(message, campaign, language=db_user.language):
         await state.clear()
         return
 
     await update_campaign(db, campaign, subscription_traffic_gb=traffic)
     await state.clear()
 
-    await message.answer(' Лимит трафика обновлен.')
+    await message.answer(get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_050', ' Лимит трафика обновлен.'))
 
     edit_message_id = data.get('campaign_edit_message_id')
     edit_message_is_caption = data.get('campaign_edit_message_is_caption', False)
@@ -865,10 +1018,12 @@ async def start_edit_campaign_subscription_devices(
     campaign_id = int(callback.data.split('_')[-1])
     campaign = await get_campaign_by_id(db, campaign_id)
     if not campaign:
-        await callback.answer(' Кампания не найдена', show_alert=True)
+        await callback.answer(
+            get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_071', ' Кампания не найдена'), show_alert=True
+        )
         return
 
-    if not await _ensure_subscription_campaign(callback, campaign):
+    if not await _ensure_subscription_campaign(callback, campaign, language=db_user.language):
         return
 
     await state.clear()
@@ -886,15 +1041,18 @@ async def start_edit_campaign_subscription_devices(
 
     await callback.message.edit_text(
         (
-            ' <b>Изменение лимита устройств</b>\n\n'
-            f'Текущее значение: <b>{current_devices}</b>\n'
-            f'Введите новое количество (1-{settings.MAX_DEVICES_LIMIT}):'
+            get_texts(db_user.language)
+            .t(
+                'ADMIN_CAMPAIGN_UI_051',
+                ' <b>Изменение лимита устройств</b>\n\nТекущее значение: <b>{v0}</b>\nВведите новое количество (1-{v1}):',
+            )
+            .format(v0=current_devices, v1=settings.MAX_DEVICES_LIMIT)
         ),
         reply_markup=types.InlineKeyboardMarkup(
             inline_keyboard=[
                 [
                     types.InlineKeyboardButton(
-                        text=' Отмена',
+                        text=get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_106', ' Отмена'),
                         callback_data=f'admin_campaign_edit_{campaign_id}',
                     )
                 ]
@@ -915,34 +1073,40 @@ async def process_edit_campaign_subscription_devices(
     data = await state.get_data()
     campaign_id = data.get('editing_campaign_id')
     if not campaign_id:
-        await message.answer(' Сессия редактирования устарела. Попробуйте снова.')
+        await message.answer(
+            get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_072', ' Сессия редактирования устарела. Попробуйте снова.')
+        )
         await state.clear()
         return
 
     try:
         devices = int(message.text.strip())
     except ValueError:
-        await message.answer(' Введите целое число устройств')
+        await message.answer(get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_101', ' Введите целое число устройств'))
         return
 
     if devices < 1 or devices > settings.MAX_DEVICES_LIMIT:
-        await message.answer(f' Количество устройств должно быть от 1 до {settings.MAX_DEVICES_LIMIT}')
+        await message.answer(
+            get_texts(db_user.language)
+            .t('ADMIN_CAMPAIGN_UI_080', ' Количество устройств должно быть от 1 до {v0}')
+            .format(v0=settings.MAX_DEVICES_LIMIT)
+        )
         return
 
     campaign = await get_campaign_by_id(db, campaign_id)
     if not campaign:
-        await message.answer(' Кампания не найдена')
+        await message.answer(get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_071', ' Кампания не найдена'))
         await state.clear()
         return
 
-    if not await _ensure_subscription_campaign(message, campaign):
+    if not await _ensure_subscription_campaign(message, campaign, language=db_user.language):
         await state.clear()
         return
 
     await update_campaign(db, campaign, subscription_device_limit=devices)
     await state.clear()
 
-    await message.answer(' Лимит устройств обновлен.')
+    await message.answer(get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_052', ' Лимит устройств обновлен.'))
 
     edit_message_id = data.get('campaign_edit_message_id')
     edit_message_is_caption = data.get('campaign_edit_message_is_caption', False)
@@ -968,16 +1132,20 @@ async def start_edit_campaign_subscription_servers(
     campaign_id = int(callback.data.split('_')[-1])
     campaign = await get_campaign_by_id(db, campaign_id)
     if not campaign:
-        await callback.answer(' Кампания не найдена', show_alert=True)
+        await callback.answer(
+            get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_071', ' Кампания не найдена'), show_alert=True
+        )
         return
 
-    if not await _ensure_subscription_campaign(callback, campaign):
+    if not await _ensure_subscription_campaign(callback, campaign, language=db_user.language):
         return
 
     servers, _ = await get_all_server_squads(db, available_only=False)
     if not servers:
         await callback.answer(
-            ' Не найдены доступные серверы. Добавьте серверы перед изменением.',
+            get_texts(db_user.language).t(
+                'ADMIN_CAMPAIGN_UI_081', ' Не найдены доступные серверы. Добавьте серверы перед изменением.'
+            ),
             show_alert=True,
         )
         return
@@ -1000,13 +1168,15 @@ async def start_edit_campaign_subscription_servers(
         toggle_prefix=f'campaign_edit_toggle_{campaign_id}_',
         save_callback=f'campaign_edit_servers_save_{campaign_id}',
         back_callback=f'admin_campaign_edit_{campaign_id}',
+        language=db_user.language,
     )
 
     await callback.message.edit_text(
         (
-            ' <b>Редактирование доступных серверов</b>\n\n'
-            'Нажмите на сервер, чтобы добавить или убрать его из кампании.\n'
-            'После выбора нажмите " Сохранить".'
+            get_texts(db_user.language).t(
+                'ADMIN_CAMPAIGN_UI_053',
+                ' <b>Редактирование доступных серверов</b>\n\nНажмите на сервер, чтобы добавить или убрать его из кампании.\nПосле выбора нажмите " Сохранить".',
+            )
         ),
         reply_markup=keyboard,
     )
@@ -1025,19 +1195,25 @@ async def toggle_edit_campaign_server(
     try:
         server_id = int(parts[-1])
     except (ValueError, IndexError):
-        await callback.answer(' Не удалось определить сервер', show_alert=True)
+        await callback.answer(
+            get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_102', ' Не удалось определить сервер'), show_alert=True
+        )
         return
 
     data = await state.get_data()
     campaign_id = data.get('editing_campaign_id')
     if not campaign_id:
-        await callback.answer(' Сессия редактирования устарела', show_alert=True)
+        await callback.answer(
+            get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_082', ' Сессия редактирования устарела'), show_alert=True
+        )
         await state.clear()
         return
 
     server = await get_server_squad_by_id(db, server_id)
     if not server:
-        await callback.answer(' Сервер не найден', show_alert=True)
+        await callback.answer(
+            get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_083', ' Сервер не найден'), show_alert=True
+        )
         return
 
     selected = list(data.get('campaign_subscription_squads', []))
@@ -1056,6 +1232,7 @@ async def toggle_edit_campaign_server(
         toggle_prefix=f'campaign_edit_toggle_{campaign_id}_',
         save_callback=f'campaign_edit_servers_save_{campaign_id}',
         back_callback=f'admin_campaign_edit_{campaign_id}',
+        language=db_user.language,
     )
 
     await callback.message.edit_reply_markup(reply_markup=keyboard)
@@ -1073,22 +1250,28 @@ async def save_edit_campaign_subscription_servers(
     data = await state.get_data()
     campaign_id = data.get('editing_campaign_id')
     if not campaign_id:
-        await callback.answer(' Сессия редактирования устарела', show_alert=True)
+        await callback.answer(
+            get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_082', ' Сессия редактирования устарела'), show_alert=True
+        )
         await state.clear()
         return
 
     selected = list(data.get('campaign_subscription_squads', []))
     if not selected:
-        await callback.answer(' Выберите хотя бы один сервер', show_alert=True)
+        await callback.answer(
+            get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_084', ' Выберите хотя бы один сервер'), show_alert=True
+        )
         return
 
     campaign = await get_campaign_by_id(db, campaign_id)
     if not campaign:
         await state.clear()
-        await callback.answer(' Кампания не найдена', show_alert=True)
+        await callback.answer(
+            get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_071', ' Кампания не найдена'), show_alert=True
+        )
         return
 
-    if not await _ensure_subscription_campaign(callback, campaign):
+    if not await _ensure_subscription_campaign(callback, campaign, language=db_user.language):
         await state.clear()
         return
 
@@ -1105,7 +1288,7 @@ async def save_edit_campaign_subscription_servers(
         db_user.language,
         use_caption=use_caption,
     )
-    await callback.answer(' Сохранено')
+    await callback.answer(get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_054', ' Сохранено'))
 
 
 @admin_required
@@ -1118,7 +1301,9 @@ async def toggle_campaign_status(
     campaign_id = int(callback.data.split('_')[-1])
     campaign = await get_campaign_by_id(db, campaign_id)
     if not campaign:
-        await callback.answer(' Кампания не найдена', show_alert=True)
+        await callback.answer(
+            get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_071', ' Кампания не найдена'), show_alert=True
+        )
         return
 
     new_status = not campaign.is_active
@@ -1139,17 +1324,31 @@ async def show_campaign_stats(
     campaign_id = int(callback.data.split('_')[-1])
     campaign = await get_campaign_by_id(db, campaign_id)
     if not campaign:
-        await callback.answer(' Кампания не найдена', show_alert=True)
+        await callback.answer(
+            get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_071', ' Кампания не найдена'), show_alert=True
+        )
         return
 
     texts = get_texts(db_user.language)
     stats = await get_campaign_statistics(db, campaign_id)
 
-    text = [' <b>Статистика кампании</b>\n']
+    text = [get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_034', ' <b>Статистика кампании</b>\n')]
     text.append(_format_campaign_summary(campaign, texts))
-    text.append(f'Регистраций: <b>{stats["registrations"]}</b>')
-    text.append(f'Выдано баланса: <b>{texts.format_price(stats["balance_issued"])}</b>')
-    text.append(f'Выдано подписок: <b>{stats["subscription_issued"]}</b>')
+    text.append(
+        get_texts(db_user.language)
+        .t('ADMIN_CAMPAIGN_UI_035', 'Регистраций: <b>{v0}</b>')
+        .format(v0=stats['registrations'])
+    )
+    text.append(
+        get_texts(db_user.language)
+        .t('ADMIN_CAMPAIGN_UI_036', 'Выдано баланса: <b>{v0}</b>')
+        .format(v0=texts.format_price(stats['balance_issued']))
+    )
+    text.append(
+        get_texts(db_user.language)
+        .t('ADMIN_CAMPAIGN_UI_014', 'Выдано подписок: <b>{v0}</b>')
+        .format(v0=stats['subscription_issued'])
+    )
     if stats['last_registration']:
         text.append(f'Последняя регистрация: {stats["last_registration"].strftime("%d.%m.%Y %H:%M")}')
 
@@ -1179,14 +1378,18 @@ async def confirm_delete_campaign(
     campaign_id = int(callback.data.split('_')[-1])
     campaign = await get_campaign_by_id(db, campaign_id)
     if not campaign:
-        await callback.answer(' Кампания не найдена', show_alert=True)
+        await callback.answer(
+            get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_071', ' Кампания не найдена'), show_alert=True
+        )
         return
 
     text = (
-        ' <b>Удаление кампании</b>\n\n'
-        f'Название: <b>{html.escape(campaign.name)}</b>\n'
-        f'Параметр: <code>{html.escape(campaign.start_parameter)}</code>\n\n'
-        'Вы уверены, что хотите удалить кампанию?'
+        get_texts(db_user.language)
+        .t(
+            'ADMIN_CAMPAIGN_UI_003',
+            ' <b>Удаление кампании</b>\n\nНазвание: <b>{v0}</b>\nПараметр: <code>{v1}</code>\n\nВы уверены, что хотите удалить кампанию?',
+        )
+        .format(v0=html.escape(campaign.name), v1=html.escape(campaign.start_parameter))
     )
 
     await callback.message.edit_text(
@@ -1209,15 +1412,17 @@ async def delete_campaign_confirmed(
     campaign_id = int(callback.data.split('_')[-1])
     campaign = await get_campaign_by_id(db, campaign_id)
     if not campaign:
-        await callback.answer(' Кампания не найдена', show_alert=True)
+        await callback.answer(
+            get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_071', ' Кампания не найдена'), show_alert=True
+        )
         return
 
     await delete_campaign(db, campaign)
     await callback.message.edit_text(
-        ' Кампания удалена.',
+        get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_056', ' Кампания удалена.'),
         reply_markup=get_admin_campaigns_keyboard(db_user.language),
     )
-    await callback.answer('Удалено')
+    await callback.answer(get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_057', 'Удалено'))
 
 
 @admin_required
@@ -1230,7 +1435,9 @@ async def start_campaign_creation(
 ):
     await state.clear()
     await callback.message.edit_text(
-        ' <b>Создание рекламной кампании</b>\n\nВведите название кампании:',
+        get_texts(db_user.language).t(
+            'ADMIN_CAMPAIGN_UI_058', ' <b>Создание рекламной кампании</b>\n\nВведите название кампании:'
+        ),
         reply_markup=types.InlineKeyboardMarkup(
             inline_keyboard=[[types.InlineKeyboardButton(text=' Назад', callback_data='admin_campaigns')]]
         ),
@@ -1249,13 +1456,19 @@ async def process_campaign_name(
 ):
     name = message.text.strip()
     if len(name) < 3 or len(name) > 100:
-        await message.answer(' Название должно содержать от 3 до 100 символов. Попробуйте снова.')
+        await message.answer(
+            get_texts(db_user.language).t(
+                'ADMIN_CAMPAIGN_UI_073', ' Название должно содержать от 3 до 100 символов. Попробуйте снова.'
+            )
+        )
         return
 
     await state.update_data(campaign_name=name)
     await state.set_state(AdminStates.creating_campaign_start)
     await message.answer(
-        ' Теперь введите параметр старта (латинские буквы, цифры, - или _):',
+        get_texts(db_user.language).t(
+            'ADMIN_CAMPAIGN_UI_059', ' Теперь введите параметр старта (латинские буквы, цифры, - или _):'
+        ),
     )
 
 
@@ -1269,18 +1482,27 @@ async def process_campaign_start_parameter(
 ):
     start_param = message.text.strip()
     if not _CAMPAIGN_PARAM_REGEX.match(start_param):
-        await message.answer(' Разрешены только латинские буквы, цифры, символы - и _. Длина 3-32 символа.')
+        await message.answer(
+            get_texts(db_user.language).t(
+                'ADMIN_CAMPAIGN_UI_074',
+                ' Разрешены только латинские буквы, цифры, символы - и _. Длина 3-32 символа.',
+            )
+        )
         return
 
     existing = await get_campaign_by_start_parameter(db, start_param)
     if existing:
-        await message.answer(' Кампания с таким параметром уже существует. Введите другой параметр.')
+        await message.answer(
+            get_texts(db_user.language).t(
+                'ADMIN_CAMPAIGN_UI_085', ' Кампания с таким параметром уже существует. Введите другой параметр.'
+            )
+        )
         return
 
     await state.update_data(campaign_start_parameter=start_param)
     await state.set_state(AdminStates.creating_campaign_bonus)
     await message.answer(
-        ' Выберите тип бонуса для кампании:',
+        get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_060', ' Выберите тип бонуса для кампании:'),
         reply_markup=get_campaign_bonus_type_keyboard(db_user.language),
     )
 
@@ -1310,7 +1532,7 @@ async def select_campaign_bonus_type(
     if bonus_type == 'balance':
         await state.set_state(AdminStates.creating_campaign_balance)
         await callback.message.edit_text(
-            ' Введите сумму бонуса на баланс (в рублях):',
+            get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_086', ' Введите сумму бонуса на баланс (в рублях):'),
             reply_markup=types.InlineKeyboardMarkup(
                 inline_keyboard=[[types.InlineKeyboardButton(text=' Назад', callback_data='admin_campaigns')]]
             ),
@@ -1318,7 +1540,9 @@ async def select_campaign_bonus_type(
     elif bonus_type == 'subscription':
         await state.set_state(AdminStates.creating_campaign_subscription_days)
         await callback.message.edit_text(
-            ' Введите длительность пробной подписки в днях (1-730):',
+            get_texts(db_user.language).t(
+                'ADMIN_CAMPAIGN_UI_103', ' Введите длительность пробной подписки в днях (1-730):'
+            ),
             reply_markup=types.InlineKeyboardMarkup(
                 inline_keyboard=[[types.InlineKeyboardButton(text=' Назад', callback_data='admin_campaigns')]]
             ),
@@ -1328,7 +1552,9 @@ async def select_campaign_bonus_type(
         tariffs = await get_all_tariffs(db, include_inactive=False)
         if not tariffs:
             await callback.answer(
-                ' Нет доступных тарифов. Сначала создайте тариф.',
+                get_texts(db_user.language).t(
+                    'ADMIN_CAMPAIGN_UI_105', ' Нет доступных тарифов. Сначала создайте тариф.'
+                ),
                 show_alert=True,
             )
             return
@@ -1347,7 +1573,7 @@ async def select_campaign_bonus_type(
 
         await state.set_state(AdminStates.creating_campaign_tariff_select)
         await callback.message.edit_text(
-            ' Выберите тариф для выдачи:',
+            get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_104', ' Выберите тариф для выдачи:'),
             reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
         )
     elif bonus_type == 'none':
@@ -1365,7 +1591,11 @@ async def select_campaign_bonus_type(
         deep_link = await _get_bot_deep_link(callback, campaign.start_parameter)
         texts = get_texts(db_user.language)
         summary = _format_campaign_summary(campaign, texts)
-        text = f' <b>Кампания создана!</b>\n\n{summary}\n Ссылка: <code>{deep_link}</code>'
+        text = (
+            get_texts(db_user.language)
+            .t('ADMIN_CAMPAIGN_UI_004', ' <b>Кампания создана!</b>\n\n{v0}\n Ссылка: <code>{v1}</code>')
+            .format(v0=summary, v1=deep_link)
+        )
 
         await callback.message.edit_text(
             text,
@@ -1386,11 +1616,13 @@ async def process_campaign_balance_value(
     try:
         amount_rubles = float(message.text.replace(',', '.'))
     except ValueError:
-        await message.answer(' Введите корректную сумму (например, 100 или 99.5)')
+        await message.answer(
+            get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_096', ' Введите корректную сумму (например, 100 или 99.5)')
+        )
         return
 
     if amount_rubles <= 0:
-        await message.answer(' Сумма должна быть больше нуля')
+        await message.answer(get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_077', ' Сумма должна быть больше нуля'))
         return
 
     amount_kopeks = int(round(amount_rubles * 100))
@@ -1410,7 +1642,11 @@ async def process_campaign_balance_value(
     deep_link = await _get_bot_deep_link_from_message(message, campaign.start_parameter)
     texts = get_texts(db_user.language)
     summary = _format_campaign_summary(campaign, texts)
-    text = f' <b>Кампания создана!</b>\n\n{summary}\n Ссылка: <code>{deep_link}</code>'
+    text = (
+        get_texts(db_user.language)
+        .t('ADMIN_CAMPAIGN_UI_004', ' <b>Кампания создана!</b>\n\n{v0}\n Ссылка: <code>{v1}</code>')
+        .format(v0=summary, v1=deep_link)
+    )
 
     await message.answer(
         text,
@@ -1429,16 +1665,20 @@ async def process_campaign_subscription_days(
     try:
         days = int(message.text.strip())
     except ValueError:
-        await message.answer(' Введите число дней (1-730)')
+        await message.answer(get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_099', ' Введите число дней (1-730)'))
         return
 
     if days <= 0 or days > 730:
-        await message.answer(' Длительность должна быть от 1 до 730 дней')
+        await message.answer(
+            get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_078', ' Длительность должна быть от 1 до 730 дней')
+        )
         return
 
     await state.update_data(campaign_subscription_days=days)
     await state.set_state(AdminStates.creating_campaign_subscription_traffic)
-    await message.answer(' Введите лимит трафика в ГБ (0 = безлимит):')
+    await message.answer(
+        get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_061', ' Введите лимит трафика в ГБ (0 = безлимит):')
+    )
 
 
 @admin_required
@@ -1452,16 +1692,24 @@ async def process_campaign_subscription_traffic(
     try:
         traffic = int(message.text.strip())
     except ValueError:
-        await message.answer(' Введите целое число (0 или больше)')
+        await message.answer(
+            get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_100', ' Введите целое число (0 или больше)')
+        )
         return
 
     if traffic < 0 or traffic > 10000:
-        await message.answer(' Лимит трафика должен быть от 0 до 10000 ГБ')
+        await message.answer(
+            get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_079', ' Лимит трафика должен быть от 0 до 10000 ГБ')
+        )
         return
 
     await state.update_data(campaign_subscription_traffic=traffic)
     await state.set_state(AdminStates.creating_campaign_subscription_devices)
-    await message.answer(f' Введите количество устройств (1-{settings.MAX_DEVICES_LIMIT}):')
+    await message.answer(
+        get_texts(db_user.language)
+        .t('ADMIN_CAMPAIGN_UI_062', ' Введите количество устройств (1-{v0}):')
+        .format(v0=settings.MAX_DEVICES_LIMIT)
+    )
 
 
 @admin_required
@@ -1475,11 +1723,15 @@ async def process_campaign_subscription_devices(
     try:
         devices = int(message.text.strip())
     except ValueError:
-        await message.answer(' Введите целое число устройств')
+        await message.answer(get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_101', ' Введите целое число устройств'))
         return
 
     if devices < 1 or devices > settings.MAX_DEVICES_LIMIT:
-        await message.answer(f' Количество устройств должно быть от 1 до {settings.MAX_DEVICES_LIMIT}')
+        await message.answer(
+            get_texts(db_user.language)
+            .t('ADMIN_CAMPAIGN_UI_080', ' Количество устройств должно быть от 1 до {v0}')
+            .format(v0=settings.MAX_DEVICES_LIMIT)
+        )
         return
 
     await state.update_data(campaign_subscription_devices=devices)
@@ -1489,14 +1741,19 @@ async def process_campaign_subscription_devices(
     servers, _ = await get_all_server_squads(db, available_only=False)
     if not servers:
         await message.answer(
-            ' Не найдены доступные серверы. Добавьте сервера перед созданием кампании.',
+            get_texts(db_user.language).t(
+                'ADMIN_CAMPAIGN_UI_087', ' Не найдены доступные серверы. Добавьте сервера перед созданием кампании.'
+            ),
         )
         await state.clear()
         return
 
-    keyboard = _build_campaign_servers_keyboard(servers, [])
+    keyboard = _build_campaign_servers_keyboard(servers, [], language=db_user.language)
     await message.answer(
-        ' Выберите серверы, которые будут доступны по подписке (максимум 20 отображаются).',
+        get_texts(db_user.language).t(
+            'ADMIN_CAMPAIGN_UI_063',
+            ' Выберите серверы, которые будут доступны по подписке (максимум 20 отображаются).',
+        ),
         reply_markup=keyboard,
     )
 
@@ -1512,7 +1769,9 @@ async def toggle_campaign_server(
     server_id = int(callback.data.split('_')[-1])
     server = await get_server_squad_by_id(db, server_id)
     if not server:
-        await callback.answer(' Сервер не найден', show_alert=True)
+        await callback.answer(
+            get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_083', ' Сервер не найден'), show_alert=True
+        )
         return
 
     data = await state.get_data()
@@ -1526,7 +1785,7 @@ async def toggle_campaign_server(
     await state.update_data(campaign_subscription_squads=selected)
 
     servers, _ = await get_all_server_squads(db, available_only=False)
-    keyboard = _build_campaign_servers_keyboard(servers, selected)
+    keyboard = _build_campaign_servers_keyboard(servers, selected, language=db_user.language)
 
     await callback.message.edit_reply_markup(reply_markup=keyboard)
     await callback.answer()
@@ -1544,7 +1803,9 @@ async def finalize_campaign_subscription(
     selected = data.get('campaign_subscription_squads', [])
 
     if not selected:
-        await callback.answer(' Выберите хотя бы один сервер', show_alert=True)
+        await callback.answer(
+            get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_084', ' Выберите хотя бы один сервер'), show_alert=True
+        )
         return
 
     campaign = await create_campaign(
@@ -1564,7 +1825,11 @@ async def finalize_campaign_subscription(
     deep_link = await _get_bot_deep_link(callback, campaign.start_parameter)
     texts = get_texts(db_user.language)
     summary = _format_campaign_summary(campaign, texts)
-    text = f' <b>Кампания создана!</b>\n\n{summary}\n Ссылка: <code>{deep_link}</code>'
+    text = (
+        get_texts(db_user.language)
+        .t('ADMIN_CAMPAIGN_UI_004', ' <b>Кампания создана!</b>\n\n{v0}\n Ссылка: <code>{v1}</code>')
+        .format(v0=summary, v1=deep_link)
+    )
 
     await callback.message.edit_text(
         text,
@@ -1586,13 +1851,17 @@ async def select_campaign_tariff(
     tariff = await get_tariff_by_id(db, tariff_id)
 
     if not tariff:
-        await callback.answer(' Тариф не найден', show_alert=True)
+        await callback.answer(
+            get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_088', ' Тариф не найден'), show_alert=True
+        )
         return
 
     await state.update_data(campaign_tariff_id=tariff_id, campaign_tariff_name=tariff.name)
     await state.set_state(AdminStates.creating_campaign_tariff_days)
     await callback.message.edit_text(
-        f' Выбран тариф: <b>{html.escape(tariff.name)}</b>\n\n Введите длительность тарифа в днях (1-730):',
+        get_texts(db_user.language)
+        .t('ADMIN_CAMPAIGN_UI_064', ' Выбран тариф: <b>{v0}</b>\n\n Введите длительность тарифа в днях (1-730):')
+        .format(v0=html.escape(tariff.name)),
         reply_markup=types.InlineKeyboardMarkup(
             inline_keyboard=[[types.InlineKeyboardButton(text=' Назад', callback_data='admin_campaigns')]]
         ),
@@ -1612,18 +1881,24 @@ async def process_campaign_tariff_days(
     try:
         days = int(message.text.strip())
     except ValueError:
-        await message.answer(' Введите число дней (1-730)')
+        await message.answer(get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_099', ' Введите число дней (1-730)'))
         return
 
     if days <= 0 or days > 730:
-        await message.answer(' Длительность должна быть от 1 до 730 дней')
+        await message.answer(
+            get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_078', ' Длительность должна быть от 1 до 730 дней')
+        )
         return
 
     data = await state.get_data()
     tariff_id = data.get('campaign_tariff_id')
 
     if not tariff_id:
-        await message.answer(' Тариф не выбран. Начните создание кампании заново.')
+        await message.answer(
+            get_texts(db_user.language).t(
+                'ADMIN_CAMPAIGN_UI_089', ' Тариф не выбран. Начните создание кампании заново.'
+            )
+        )
         await state.clear()
         return
 
@@ -1645,7 +1920,11 @@ async def process_campaign_tariff_days(
     deep_link = await _get_bot_deep_link_from_message(message, campaign.start_parameter)
     texts = get_texts(db_user.language)
     summary = _format_campaign_summary(campaign, texts)
-    text = f' <b>Кампания создана!</b>\n\n{summary}\n Ссылка: <code>{deep_link}</code>'
+    text = (
+        get_texts(db_user.language)
+        .t('ADMIN_CAMPAIGN_UI_004', ' <b>Кампания создана!</b>\n\n{v0}\n Ссылка: <code>{v1}</code>')
+        .format(v0=summary, v1=deep_link)
+    )
 
     await message.answer(
         text,
@@ -1665,16 +1944,23 @@ async def start_edit_campaign_tariff(
     campaign_id = int(callback.data.split('_')[-1])
     campaign = await get_campaign_by_id(db, campaign_id)
     if not campaign:
-        await callback.answer(' Кампания не найдена', show_alert=True)
+        await callback.answer(
+            get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_071', ' Кампания не найдена'), show_alert=True
+        )
         return
 
     if not campaign.is_tariff_bonus:
-        await callback.answer(" Эта кампания не использует тип 'Тариф'", show_alert=True)
+        await callback.answer(
+            get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_090', " Эта кампания не использует тип 'Тариф'"),
+            show_alert=True,
+        )
         return
 
     tariffs = await get_all_tariffs(db, include_inactive=False)
     if not tariffs:
-        await callback.answer(' Нет доступных тарифов', show_alert=True)
+        await callback.answer(
+            get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_091', ' Нет доступных тарифов'), show_alert=True
+        )
         return
 
     keyboard = []
@@ -1691,12 +1977,17 @@ async def start_edit_campaign_tariff(
         )
     keyboard.append([types.InlineKeyboardButton(text=' Назад', callback_data=f'admin_campaign_edit_{campaign_id}')])
 
-    current_tariff_name = 'Не выбран'
+    current_tariff_name = get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_005', 'Не выбран')
     if campaign.tariff:
         current_tariff_name = campaign.tariff.name
 
     await callback.message.edit_text(
-        f' <b>Изменение тарифа кампании</b>\n\nТекущий тариф: <b>{current_tariff_name}</b>\nВыберите новый тариф:',
+        get_texts(db_user.language)
+        .t(
+            'ADMIN_CAMPAIGN_UI_065',
+            ' <b>Изменение тарифа кампании</b>\n\nТекущий тариф: <b>{v0}</b>\nВыберите новый тариф:',
+        )
+        .format(v0=html.escape(current_tariff_name)),
         reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
     )
     await callback.answer()
@@ -1717,16 +2008,22 @@ async def set_campaign_tariff(
 
     campaign = await get_campaign_by_id(db, campaign_id)
     if not campaign:
-        await callback.answer(' Кампания не найдена', show_alert=True)
+        await callback.answer(
+            get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_071', ' Кампания не найдена'), show_alert=True
+        )
         return
 
     tariff = await get_tariff_by_id(db, tariff_id)
     if not tariff:
-        await callback.answer(' Тариф не найден', show_alert=True)
+        await callback.answer(
+            get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_088', ' Тариф не найден'), show_alert=True
+        )
         return
 
     await update_campaign(db, campaign, tariff_id=tariff_id)
-    await callback.answer(f" Тариф изменён на '{tariff.name}'")
+    await callback.answer(
+        get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_066', " Тариф изменён на '{v0}'").format(v0=tariff.name)
+    )
 
     await _render_campaign_edit_menu(
         callback.bot,
@@ -1749,11 +2046,16 @@ async def start_edit_campaign_tariff_days(
     campaign_id = int(callback.data.split('_')[-1])
     campaign = await get_campaign_by_id(db, campaign_id)
     if not campaign:
-        await callback.answer(' Кампания не найдена', show_alert=True)
+        await callback.answer(
+            get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_071', ' Кампания не найдена'), show_alert=True
+        )
         return
 
     if not campaign.is_tariff_bonus:
-        await callback.answer(" Эта кампания не использует тип 'Тариф'", show_alert=True)
+        await callback.answer(
+            get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_090', " Эта кампания не использует тип 'Тариф'"),
+            show_alert=True,
+        )
         return
 
     await state.clear()
@@ -1764,14 +2066,17 @@ async def start_edit_campaign_tariff_days(
     )
 
     await callback.message.edit_text(
-        f' <b>Изменение длительности тарифа</b>\n\n'
-        f'Текущее значение: <b>{campaign.tariff_duration_days or 0} д.</b>\n'
-        'Введите новое количество дней (1-730):',
+        get_texts(db_user.language)
+        .t(
+            'ADMIN_CAMPAIGN_UI_067',
+            ' <b>Изменение длительности тарифа</b>\n\nТекущее значение: <b>{v0} д.</b>\nВведите новое количество дней (1-730):',
+        )
+        .format(v0=campaign.tariff_duration_days or 0),
         reply_markup=types.InlineKeyboardMarkup(
             inline_keyboard=[
                 [
                     types.InlineKeyboardButton(
-                        text=' Отмена',
+                        text=get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_106', ' Отмена'),
                         callback_data=f'admin_campaign_edit_{campaign_id}',
                     )
                 ]
@@ -1793,30 +2098,34 @@ async def process_edit_campaign_tariff_days(
     data = await state.get_data()
     campaign_id = data.get('editing_campaign_id')
     if not campaign_id:
-        await message.answer(' Сессия редактирования устарела. Попробуйте снова.')
+        await message.answer(
+            get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_072', ' Сессия редактирования устарела. Попробуйте снова.')
+        )
         await state.clear()
         return
 
     try:
         days = int(message.text.strip())
     except ValueError:
-        await message.answer(' Введите число дней (1-730)')
+        await message.answer(get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_099', ' Введите число дней (1-730)'))
         return
 
     if days <= 0 or days > 730:
-        await message.answer(' Длительность должна быть от 1 до 730 дней')
+        await message.answer(
+            get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_078', ' Длительность должна быть от 1 до 730 дней')
+        )
         return
 
     campaign = await get_campaign_by_id(db, campaign_id)
     if not campaign:
-        await message.answer(' Кампания не найдена')
+        await message.answer(get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_071', ' Кампания не найдена'))
         await state.clear()
         return
 
     await update_campaign(db, campaign, tariff_duration_days=days)
     await state.clear()
 
-    await message.answer(' Длительность тарифа обновлена.')
+    await message.answer(get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_068', ' Длительность тарифа обновлена.'))
 
     edit_message_id = data.get('campaign_edit_message_id')
     if edit_message_id:

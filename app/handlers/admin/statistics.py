@@ -1,3 +1,4 @@
+import html
 from datetime import UTC, datetime, timedelta
 
 import structlog
@@ -10,6 +11,7 @@ from app.database.crud.subscription import get_subscriptions_statistics
 from app.database.crud.transaction import get_revenue_by_period, get_transactions_statistics
 from app.database.models import User
 from app.keyboards.admin import get_admin_statistics_keyboard
+from app.localization.texts import get_texts
 from app.services.referral_reward_service import format_reward_total
 from app.services.user_service import UserService
 from app.utils.decorators import admin_required, error_handler
@@ -36,6 +38,7 @@ async def show_statistics_menu(callback: types.CallbackQuery, db_user: User, db:
 @admin_required
 @error_handler
 async def show_users_statistics(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+    texts = get_texts(getattr(db_user, 'language', 'ru'))
     user_service = UserService()
     stats = await user_service.get_user_statistics(db)
 
@@ -76,18 +79,19 @@ async def show_users_statistics(callback: types.CallbackQuery, db_user: User, db
         await callback.message.edit_text(text, reply_markup=keyboard)
     except Exception as e:
         if 'message is not modified' in str(e):
-            await callback.answer(' Данные актуальны', show_alert=False)
+            await callback.answer(texts.t('ADMIN_STATISTICS_015'), show_alert=False)
         else:
             logger.error('Ошибка обновления статистики пользователей', error=e)
-            await callback.answer(' Ошибка обновления данных', show_alert=True)
+            await callback.answer(texts.t('ADMIN_STATISTICS_016'), show_alert=True)
             return
 
-    await callback.answer(' Статистика обновлена')
+    await callback.answer(texts.t('ADMIN_STATISTICS_012'))
 
 
 @admin_required
 @error_handler
 async def show_subscriptions_statistics(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+    texts = get_texts(getattr(db_user, 'language', 'ru'))
     stats = await get_subscriptions_statistics(db)
 
     total_subs = stats['total_subscriptions']
@@ -124,18 +128,19 @@ async def show_subscriptions_statistics(callback: types.CallbackQuery, db_user: 
 
     try:
         await callback.message.edit_text(text, reply_markup=keyboard)
-        await callback.answer(' Статистика обновлена')
+        await callback.answer(texts.t('ADMIN_STATISTICS_012'))
     except Exception as e:
         if 'message is not modified' in str(e):
-            await callback.answer(' Данные актуальны', show_alert=False)
+            await callback.answer(texts.t('ADMIN_STATISTICS_015'), show_alert=False)
         else:
             logger.error('Ошибка обновления статистики подписок', error=e)
-            await callback.answer(' Ошибка обновления данных', show_alert=True)
+            await callback.answer(texts.t('ADMIN_STATISTICS_016'), show_alert=True)
 
 
 @admin_required
 @error_handler
 async def show_revenue_statistics(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+    texts = get_texts(getattr(db_user, 'language', 'ru'))
     now = datetime.now(UTC)
     month_start = local_month_start(now)
 
@@ -167,7 +172,7 @@ async def show_revenue_statistics(callback: types.CallbackQuery, db_user: User, 
         if method and data['count'] > 0:
             text += f'• {method}: {data["count"]} ({settings.format_price(data["amount"])})\n'
 
-    text += f'\n<b>Обновлено:</b> {current_time}'
+    text += texts.t('ADMIN_STATISTICS_004').format(value1=current_time)
 
     keyboard = types.InlineKeyboardMarkup(
         inline_keyboard=[
@@ -179,18 +184,19 @@ async def show_revenue_statistics(callback: types.CallbackQuery, db_user: User, 
 
     try:
         await callback.message.edit_text(text, reply_markup=keyboard)
-        await callback.answer(' Статистика обновлена')
+        await callback.answer(texts.t('ADMIN_STATISTICS_012'))
     except Exception as e:
         if 'message is not modified' in str(e):
-            await callback.answer(' Данные актуальны', show_alert=False)
+            await callback.answer(texts.t('ADMIN_STATISTICS_015'), show_alert=False)
         else:
             logger.error('Ошибка обновления статистики доходов', error=e)
-            await callback.answer(' Ошибка обновления данных', show_alert=True)
+            await callback.answer(texts.t('ADMIN_STATISTICS_016'), show_alert=True)
 
 
 @admin_required
 @error_handler
 async def show_referral_statistics(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+    texts = get_texts(getattr(db_user, 'language', 'ru'))
     stats = await get_referral_statistics(db)
     current_time = format_datetime(datetime.now(UTC))
 
@@ -219,22 +225,27 @@ async def show_referral_statistics(callback: types.CallbackQuery, db_user: User,
 
     meaningful_levels = [row for row in (stats.get('by_level') or []) if row.get('money_kopeks') or row.get('days')]
     if len(meaningful_levels) > 1:
-        text += '\n<b>По уровням:</b>\n'
+        text += texts.t('ADMIN_STATISTICS_009')
         for row in meaningful_levels:
-            text += f'- Уровень {row["level"]}: {format_reward_total(row.get("money_kopeks", 0), row.get("days", 0))}\n'
+            text += texts.t('ADMIN_STATISTICS_013').format(
+                value1=row['level'],
+                value2=format_reward_total(row.get('money_kopeks', 0), row.get('days', 0), language=texts.language),
+            )
 
-    text += '\n<b>Топ рефереры:</b>\n'
+    text += texts.t('ADMIN_STATISTICS_006')
 
     if stats['top_referrers']:
         for i, referrer in enumerate(stats['top_referrers'][:5], 1):
-            name = referrer['display_name']
-            earned = format_reward_total(referrer['total_earned_kopeks'], referrer.get('total_earned_days', 0))
+            name = html.escape(referrer['display_name'])
+            earned = format_reward_total(
+                referrer['total_earned_kopeks'], referrer.get('total_earned_days', 0), language=texts.language
+            )
             count = referrer['referrals_count']
-            text += f'{i}. {name}: {earned} ({count} реф.)\n'
+            text += texts.t('ADMIN_STATISTICS_014').format(value1=i, value2=name, value3=earned, value4=count)
     else:
-        text += 'Пока нет активных рефереров'
+        text += texts.t('ADMIN_STATISTICS_010')
 
-    text += f'\n<b>Обновлено:</b> {current_time}'
+    text += texts.t('ADMIN_STATISTICS_004').format(value1=current_time)
 
     keyboard = types.InlineKeyboardMarkup(
         inline_keyboard=[
@@ -245,18 +256,19 @@ async def show_referral_statistics(callback: types.CallbackQuery, db_user: User,
 
     try:
         await callback.message.edit_text(text, reply_markup=keyboard)
-        await callback.answer(' Статистика обновлена')
+        await callback.answer(texts.t('ADMIN_STATISTICS_012'))
     except Exception as e:
         if 'message is not modified' in str(e):
-            await callback.answer(' Данные актуальны', show_alert=False)
+            await callback.answer(texts.t('ADMIN_STATISTICS_015'), show_alert=False)
         else:
             logger.error('Ошибка обновления реферальной статистики', error=e)
-            await callback.answer(' Ошибка обновления данных', show_alert=True)
+            await callback.answer(texts.t('ADMIN_STATISTICS_016'), show_alert=True)
 
 
 @admin_required
 @error_handler
 async def show_summary_statistics(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+    texts = get_texts(getattr(db_user, 'language', 'ru'))
     user_service = UserService()
     user_stats = await user_service.get_user_statistics(db)
     sub_stats = await get_subscriptions_statistics(db)
@@ -308,18 +320,19 @@ async def show_summary_statistics(callback: types.CallbackQuery, db_user: User, 
 
     try:
         await callback.message.edit_text(text, reply_markup=keyboard)
-        await callback.answer(' Статистика обновлена')
+        await callback.answer(texts.t('ADMIN_STATISTICS_012'))
     except Exception as e:
         if 'message is not modified' in str(e):
-            await callback.answer(' Данные актуальны', show_alert=False)
+            await callback.answer(texts.t('ADMIN_STATISTICS_015'), show_alert=False)
         else:
             logger.error('Ошибка обновления общей статистики', error=e)
-            await callback.answer(' Ошибка обновления данных', show_alert=True)
+            await callback.answer(texts.t('ADMIN_STATISTICS_016'), show_alert=True)
 
 
 @admin_required
 @error_handler
 async def show_revenue_by_period(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+    texts = get_texts(getattr(db_user, 'language', 'ru'))
     period = callback.data.split('_')[-1]
 
     # Дни — календарные, в settings.TIMEZONE; «вчера» требует двух дней данных.
@@ -353,7 +366,7 @@ async def show_revenue_by_period(callback: types.CallbackQuery, db_user: User, d
         text += f'• {revenue["date"].strftime("%d.%m")}: {settings.format_price(revenue["amount_kopeks"])}\n'
 
     if len(revenue_data) > 10:
-        text += f'... и еще {len(revenue_data) - 10} дней'
+        text += texts.t('ADMIN_STATISTICS_011').format(value1=len(revenue_data) - 10)
 
     await callback.message.edit_text(
         text,

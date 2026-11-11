@@ -11,15 +11,23 @@ permissions:
 
 jobs:
   pytest:
-    name: pytest (PostgreSQL 15)
+    name: pytest (PostgreSQL ${{ matrix.postgres }}, shard ${{ matrix.shard }})
     runs-on: ubuntu-latest
 
-    # Тот же образ, что и в docker-compose.yml. Проверки блокировок строк,
-    # ограничений VARCHAR и TIMESTAMPTZ имеют смысл только против настоящего
-    # PostgreSQL: на SQLite они молча проходят, ничего не проверяя.
+    # Each shard gets its own PostgreSQL service: no shared test schemas.
+    # Stable nodeid partitions preserve the complete suite on both versions.
+    strategy:
+      fail-fast: false
+      matrix:
+        postgres: ['18', '15']
+        shard: [0, 1, 2, 3]
+
+    # Проверки блокировок строк, ограничений VARCHAR и TIMESTAMPTZ имеют смысл
+    # только против настоящего PostgreSQL: на SQLite они молча проходят,
+    # ничего не проверяя.
     services:
       postgres:
-        image: postgres:15-alpine
+        image: postgres:${{ matrix.postgres }}-alpine
         env:
           POSTGRES_USER: test
           POSTGRES_PASSWORD: test
@@ -48,7 +56,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v7
         with:
-          python-version: '3.13'
+          python-version: '3.14'
 
       - name: Sync dependencies (locked)
         run: uv sync --frozen --group dev
@@ -56,7 +64,12 @@ jobs:
       # Отдельным шагом и первыми: если инфраструктура PostgreSQL сломалась,
       # это должно быть видно сразу, а не утонуть в общем прогоне.
       - name: Run PostgreSQL tests
-        run: uv run pytest -m postgres -q
+        run: >-
+          uv run --frozen python -m pytest -p tests.pytest_pg_shard -m postgres -q
+          --pg-shard-index=${{ matrix.shard }} --pg-shard-count=4
 
-      - name: Run full test suite
-        run: uv run pytest -q
+      # PostgreSQL cases already ran above; the two marker partitions together
+      # cover the full suite without repeating expensive database setup.
+      - name: Run remaining test suite
+        if: matrix.postgres == '18' && matrix.shard == 0
+        run: uv run --frozen pytest -m 'not postgres' -q

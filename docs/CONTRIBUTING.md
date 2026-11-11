@@ -89,10 +89,10 @@ Use the `enhancement` label and describe:
 
 ### Requirements
 
-- Python 3.13+
+- Python 3.14+
 - Docker and Docker Compose
 - Git
-- PostgreSQL 15+ (optional for local development)
+- PostgreSQL 18 (optional for local development)
 - Redis (optional for local development)
 
 ### Installation
@@ -301,6 +301,26 @@ make test
 # Or directly
 uv run pytest -v
 ```
+
+### Tests on a real PostgreSQL
+
+Some guarantees cannot be checked on SQLite at all: it silently ignores
+`SELECT ... FOR UPDATE`, does not enforce `VARCHAR(n)` length and stores no
+time zone. Row locks, concurrent webhook delivery and schema constraints are
+verified on the same engine as in production.
+
+```bash
+make pg-test-up      # start PostgreSQL 18 on port 55433
+make test-postgres   # only tests marked with postgres
+make test-all        # the full suite together with them
+make pg-test-down    # remove the container
+```
+
+Such tests are marked with `@pytest.mark.postgres` and take the database from
+`TEST_DATABASE_URL`. Without that variable they are **skipped**, so an
+environment without PostgreSQL does not fail the run. In CI skipping is
+forbidden: `REQUIRE_POSTGRES_TESTS=1` turns a skip into a failure — otherwise a
+broken database would look like a green pipeline.
 
 ### Component Testing
 

@@ -20,7 +20,10 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 import structlog
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.database.models import Subscription
 from app.services.reachability.xray_json import links_from_xray_json
 
 
@@ -33,7 +36,7 @@ HWID_HEADERS = {
     'x-hwid': 'xilarobot-bscheker',
     'x-device-os': 'Linux',
     'x-ver-os': '1',
-    'x-device-model': 'BSCHEKER (@xilarobot)',
+    'x-device-model': 'BSCHEKER (@x1lagent)',
 }
 HWID_ACTIVE_HEADER = 'x-hwid-active'
 _BASE64_RE = re.compile(r'^[A-Za-z0-9+/=_-]+$')
@@ -108,3 +111,14 @@ async def fetch_panel_links(api: Any, short_uuid: str, *, prefer_public: bool = 
             return [str(link) for link in links if link]
     logger.warning('Ссылки подписки: все источники пусты', short_uuid=short_uuid)
     return []
+
+
+async def short_uuid_for_user(db: AsyncSession, user_id: int) -> str | None:
+    """shortUuid последней подписки пользователя в панели (общий для BSCHEKER и DPI//CHECKER)."""
+    rows = await db.execute(
+        select(Subscription.remnawave_short_uuid)
+        .where(Subscription.user_id == user_id, Subscription.remnawave_short_uuid.is_not(None))
+        .order_by(Subscription.created_at.desc())
+        .limit(1)
+    )
+    return rows.scalar_one_or_none()
