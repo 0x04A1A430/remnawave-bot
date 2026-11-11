@@ -8,9 +8,18 @@ from __future__ import annotations
 import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
+
 import app.utils.message_patch as mp
+import app.utils.rich_transport as rt
 from app.config import settings
 from app.services.startup_notification_service import StartupNotificationService
+
+
+@pytest.fixture(autouse=True)
+def _classic_transport(monkeypatch):
+    """Эти тесты проверяют классический прогрев file_id."""
+    monkeypatch.setattr(rt, 'is_rich_transport_enabled', lambda: False)
 
 
 def _msg(file_id: str, message_id: int = 99) -> MagicMock:
@@ -82,3 +91,16 @@ async def test_prewarm_is_best_effort_on_timeout(monkeypatch):
 
     ok = await asyncio.wait_for(_service(bot).prewarm_logo(), timeout=5)
     assert ok is False  # timed out, swallowed, never raises
+
+
+async def test_prewarm_skips_send_in_rich_mode(monkeypatch):
+    monkeypatch.setattr(rt, 'is_rich_transport_enabled', lambda: True)
+    monkeypatch.setattr(mp, '_logo_file_id', None, raising=False)
+
+    bot = MagicMock()
+    bot.send_photo = AsyncMock()
+
+    ok = await _service(bot).prewarm_logo()
+
+    assert ok is True
+    bot.send_photo.assert_not_awaited()
