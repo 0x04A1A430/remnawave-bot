@@ -542,7 +542,7 @@ async def show_payment_methods(callback: types.CallbackQuery, db_user: User, db:
         await callback.answer()
         return
 
-    payment_text = get_payment_methods_text(db_user.language, balance_kopeks=db_user.balance_kopeks)
+    payment_text = get_payment_methods_text(db_user.language, balance_kopeks=getattr(db_user, 'balance_kopeks', None))
 
     # Сумма, переданная кнопкой «Пополнить на …» с экрана нехватки средств.
     amount_kopeks = 0

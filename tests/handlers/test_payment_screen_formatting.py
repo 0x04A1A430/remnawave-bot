@@ -68,7 +68,7 @@ async def test_payment_methods_screen_compacts_text_before_send(monkeypatch):
     monkeypatch.setattr(
         payment_utils,
         'get_payment_methods_text',
-        lambda _language: '\n\n💳 <b>Способы пополнения</b>\n\n\n\nВыберите способ:\n\n',
+        lambda _language, **_kwargs: '\n\n💳 <b>Способы пополнения</b>\n\n\n\nВыберите способ:\n\n',
     )
     monkeypatch.setattr(balance_main, 'get_payment_methods_keyboard', lambda *_args, **_kwargs: SimpleNamespace())
     monkeypatch.setattr(cart_module.user_cart_service, 'get_user_cart', AsyncMock(return_value=None))

@@ -290,7 +290,9 @@ async def _show_users_list_filtered(
         ]
     )
 
-    await callback.message.edit_text(compact_text(text), reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
+    await callback.message.edit_text(
+        compact_text(text), reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard)
+    )
     await callback.answer()
 
 
@@ -323,7 +325,9 @@ async def show_users_filters(callback: types.CallbackQuery, db_user: User, state
         'ADMIN_USERS_LIST_003', ' <b>Фильтры пользователей</b>\n\nВыберите фильтр для отображения пользователей:\n'
     )
 
-    await callback.message.edit_text(compact_text(text), reply_markup=get_admin_users_filters_keyboard(db_user.language))
+    await callback.message.edit_text(
+        compact_text(text), reply_markup=get_admin_users_filters_keyboard(db_user.language)
+    )
     await callback.answer()
 
 
@@ -406,7 +410,9 @@ async def show_users_list(
         ]
     )
 
-    await callback.message.edit_text(compact_text(text), reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
+    await callback.message.edit_text(
+        compact_text(text), reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard)
+    )
     await callback.answer()
 
 
@@ -1139,7 +1145,9 @@ async def _render_user_subscription_overview(
         ]
     )
 
-    await callback.message.edit_text(compact_text(text), reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
+    await callback.message.edit_text(
+        compact_text(text), reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard)
+    )
     return True
 
 
@@ -2980,7 +2988,9 @@ async def show_inactive_users(callback: types.CallbackQuery, db_user: User, db: 
         [types.InlineKeyboardButton(text=' Назад', callback_data='admin_users')],
     ]
 
-    await callback.message.edit_text(compact_text(text), reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
+    await callback.message.edit_text(
+        compact_text(text), reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard)
+    )
     await callback.answer()
 
 
@@ -4231,7 +4241,9 @@ async def _show_servers_for_user(
             ]
         )
 
-        await callback.message.edit_text(compact_text(text), reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
+        await callback.message.edit_text(
+            compact_text(text), reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard)
+        )
 
     except Exception as e:
         logger.error('Ошибка показа серверов', error=e)
@@ -5552,7 +5564,9 @@ async def admin_buy_subscription_confirm(callback: types.CallbackQuery, db_user:
         ],
     ]
 
-    await callback.message.edit_text(compact_text(text), reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
+    await callback.message.edit_text(
+        compact_text(text), reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard)
+    )
     await callback.answer()
 
 
@@ -6626,7 +6640,9 @@ async def show_admin_tariff_change(callback: types.CallbackQuery, db_user: User,
 
     keyboard.append([types.InlineKeyboardButton(text=' Назад', callback_data=back_cb)])
 
-    await callback.message.edit_text(compact_text(text), reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
+    await callback.message.edit_text(
+        compact_text(text), reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard)
+    )
     await callback.answer()
 
 
@@ -6713,7 +6729,9 @@ async def select_admin_tariff_change(callback: types.CallbackQuery, db_user: Use
         ]
     ]
 
-    await callback.message.edit_text(compact_text(text), reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
+    await callback.message.edit_text(
+        compact_text(text), reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard)
+    )
     await callback.answer()
 
 
@@ -7029,7 +7047,9 @@ async def show_admin_user_autopay(callback: types.CallbackQuery, db_user: User, 
         ],
     ]
 
-    await callback.message.edit_text(compact_text(text), reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
+    await callback.message.edit_text(
+        compact_text(text), reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard)
+    )
     await callback.answer()
 
 

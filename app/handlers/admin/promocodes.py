@@ -182,7 +182,9 @@ async def show_promocodes_list(callback: types.CallbackQuery, db_user: User, db:
         ]
     )
 
-    await callback.message.edit_text(compact_text(text), reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
+    await callback.message.edit_text(
+        compact_text(text), reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard)
+    )
     await callback.answer()
 
 
@@ -353,7 +355,9 @@ async def show_promocode_management(callback: types.CallbackQuery, db_user: User
         [types.InlineKeyboardButton(text=' К списку', callback_data='admin_promo_list')],
     ]
 
-    await callback.message.edit_text(compact_text(text), reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
+    await callback.message.edit_text(
+        compact_text(text), reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard)
+    )
     await callback.answer()
 
 
@@ -485,7 +489,9 @@ async def show_promocode_edit_menu(callback: types.CallbackQuery, db_user: User,
 
     keyboard.extend([[types.InlineKeyboardButton(text=' Назад', callback_data=f'promo_manage_{promo.id}')]])
 
-    await callback.message.edit_text(compact_text(text), reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
+    await callback.message.edit_text(
+        compact_text(text), reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard)
+    )
     await callback.answer()
 
 
