@@ -1,5 +1,6 @@
 import hashlib
 import json
+import re
 from datetime import UTC, datetime
 from html import escape as html_escape
 from pathlib import Path
@@ -33,6 +34,19 @@ from app.utils.user_utils import (
 
 
 logger = structlog.get_logger(__name__)
+
+_BLANK_LINE_RUN = re.compile(r'\n{3,}')
+
+
+def _compact_blank_lines(text: str) -> str:
+    """Оставляет не больше одной пустой строки между блоками и убирает хвост.
+
+    Экран собирается из независимых блоков, и часть из них локализована в
+    JSON: любая правка текста могла добавить лишние переводы строки и раздуть
+    сообщение пустотой. Схлопываем серии из трёх и более переводов в один
+    пустой ряд, а хвостовые пустые строки убираем совсем.
+    """
+    return _BLANK_LINE_RUN.sub('\n\n', text).strip('\n')
 
 
 async def _reward_tariff_names(db) -> dict[int, str]:
@@ -75,44 +89,43 @@ async def show_referral_info(callback: types.CallbackQuery, db_user: User, db: A
     bot_referral_link = settings.get_bot_referral_link(db_user.referral_code, bot_username)
     cabinet_referral_link = settings.get_cabinet_referral_link(db_user.referral_code)
 
-    referral_text = (
-        texts.t('REFERRAL_PROGRAM_TITLE', '👥 <b>Реферальная программа</b>')
-        + '\n\n'
-        + '<blockquote>'
-        + texts.t(
-            'REFERRAL_STATS_INVITED',
-            'Приглашено пользователей: <b>{count}</b>',
-        ).format(count=summary['invited_count'])
-        + '\n'
-        + texts.t(
-            'REFERRAL_STATS_FIRST_TOPUPS',
-            'Сделали первое пополнение: <b>{count}</b>',
-        ).format(count=summary['paid_referrals_count'])
-        + '\n'
-        + texts.t(
-            'REFERRAL_STATS_ACTIVE',
-            'Активных рефералов: <b>{count}</b>',
-        ).format(count=summary['active_referrals_count'])
-        + '\n'
-        + texts.t(
-            'REFERRAL_STATS_CONVERSION',
-            'Конверсия: <b>{rate}%</b>',
-        ).format(rate=summary['conversion_rate'])
-        + '\n'
-        + texts.t(
-            'REFERRAL_STATS_TOTAL_EARNED',
-            'Заработано всего: <b>{amount}</b>',
-        ).format(amount=texts.format_price(summary['total_earned_kopeks']))
-        + '\n'
-        + texts.t(
-            'REFERRAL_STATS_MONTH_EARNED',
-            'За последний месяц: <b>{amount}</b>',
-        ).format(amount=texts.format_price(summary['month_earned_kopeks']))
-        + '</blockquote>\n\n'
-        + '<blockquote>'
-    )
+    blocks = [
+        texts.t('REFERRAL_PROGRAM_TITLE', '👥 <b>Реферальная программа</b>'),
+        '<blockquote>'
+        + '\n'.join(
+            [
+                texts.t(
+                    'REFERRAL_STATS_INVITED',
+                    'Приглашено пользователей: <b>{count}</b>',
+                ).format(count=summary['invited_count']),
+                texts.t(
+                    'REFERRAL_STATS_FIRST_TOPUPS',
+                    'Сделали первое пополнение: <b>{count}</b>',
+                ).format(count=summary['paid_referrals_count']),
+                texts.t(
+                    'REFERRAL_STATS_ACTIVE',
+                    'Активных рефералов: <b>{count}</b>',
+                ).format(count=summary['active_referrals_count']),
+                texts.t(
+                    'REFERRAL_STATS_CONVERSION',
+                    'Конверсия: <b>{rate}%</b>',
+                ).format(rate=summary['conversion_rate']),
+                texts.t(
+                    'REFERRAL_STATS_TOTAL_EARNED',
+                    'Заработано всего: <b>{amount}</b>',
+                ).format(amount=texts.format_price(summary['total_earned_kopeks'])),
+                texts.t(
+                    'REFERRAL_STATS_MONTH_EARNED',
+                    'За последний месяц: <b>{amount}</b>',
+                ).format(amount=texts.format_price(summary['month_earned_kopeks'])),
+            ]
+        )
+        + '</blockquote>',
+    ]
 
     levels_scheme = settings.is_referral_levels_scheme()
+    reward_lines: list[str] = []
+    progress_lines: list[str] = []
 
     if levels_scheme:
         # Описание берётся из того же источника, что и расчёт: расхождение
@@ -129,54 +142,59 @@ async def show_referral_info(callback: types.CallbackQuery, db_user: User, db: A
         for line in await describe_active_levels(
             db, tariff_names=tariff_names, language=db_user.language, viewer=db_user
         ):
-            referral_text += f'\n• {line}'
+            reward_lines.append(f'• {line}')
         # «Новый пользователь получает» на экране партнёра — это обещание тем,
         # кого пригласит ИМЕННО ЭТОТ партнёр, поэтому берётся его ранг.
         referee_bonus = await describe_referee_bonus(
             db, tariff_names=tariff_names, language=db_user.language, referrer=db_user
         )
         if referee_bonus:
-            referral_text += '\n' + texts.t(
-                'REFERRAL_REWARD_NEW_USER_LEVELS',
-                '• Новый пользователь дополнительно получает: <b>{bonus}</b>',
-            ).format(bonus=referee_bonus)
+            reward_lines.append(
+                texts.t(
+                    'REFERRAL_REWARD_NEW_USER_LEVELS',
+                    '• Новый пользователь дополнительно получает: <b>{bonus}</b>',
+                ).format(bonus=referee_bonus)
+            )
 
         # В режиме рангов лестница без отметки «вы здесь» не отвечает на главный
         # вопрос пользователя: какой ранг у НЕГО и сколько до следующего.
         progress_lines = format_tier_progress(await resolve_tier_progress(db, db_user), db_user.language)
-        if progress_lines:
-            referral_text += '\n\n' + '\n'.join(progress_lines)
-
-        referral_text += '\n\n'
 
     if not levels_scheme and settings.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS > 0:
-        referral_text += '\n' + texts.t(
-            'REFERRAL_REWARD_NEW_USER',
-            '• Новый пользователь получает: <b>{bonus}</b> при первом пополнении от <b>{minimum}</b>',
-        ).format(
-            bonus=texts.format_price(settings.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS),
-            minimum=texts.format_price(settings.REFERRAL_MINIMUM_TOPUP_KOPEKS),
+        reward_lines.append(
+            texts.t(
+                'REFERRAL_REWARD_NEW_USER',
+                '• Новый пользователь получает: <b>{bonus}</b> при первом пополнении от <b>{minimum}</b>',
+            ).format(
+                bonus=texts.format_price(settings.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS),
+                minimum=texts.format_price(settings.REFERRAL_MINIMUM_TOPUP_KOPEKS),
+            )
         )
 
     if not levels_scheme and settings.REFERRAL_INVITER_BONUS_KOPEKS > 0:
-        referral_text += '\n' + texts.t(
-            'REFERRAL_REWARD_INVITER',
-            'Вы получаете при первом пополнении реферала: <b>{bonus}</b>',
-        ).format(bonus=texts.format_price(settings.REFERRAL_INVITER_BONUS_KOPEKS))
+        reward_lines.append(
+            texts.t(
+                'REFERRAL_REWARD_INVITER',
+                'Вы получаете при первом пополнении реферала: <b>{bonus}</b>',
+            ).format(bonus=texts.format_price(settings.REFERRAL_INVITER_BONUS_KOPEKS))
+        )
 
-    referral_text += '</blockquote>\n\n'
+    reward_content = '\n'.join(reward_lines)
+    if progress_lines:
+        reward_content += ('\n\n' if reward_content else '') + '\n'.join(progress_lines)
+    # Пустую цитату не показываем: она занимает строку, ничего не сообщая.
+    if reward_content:
+        blocks.append('<blockquote>\n' + reward_content + '\n</blockquote>')
 
-    # Show bot link
-    referral_text += (
-        texts.t('REFERRAL_BOT_LINK_TITLE', '🤖 <b>Ссылка на бота:</b>') + f'\n{html_escape(bot_referral_link)}\n'
+    blocks.append(
+        texts.t('REFERRAL_BOT_LINK_TITLE', '🤖 <b>Ссылка на бота:</b>') + f'\n{html_escape(bot_referral_link)}'
     )
 
     # Show cabinet link if configured
     if cabinet_referral_link:
-        referral_text += (
-            '\n'
-            + texts.t('REFERRAL_CABINET_LINK_TITLE', '🌐 <b>Ссылка на кабинет:</b>')
-            + f'\n{html_escape(cabinet_referral_link)}\n'
+        blocks.append(
+            texts.t('REFERRAL_CABINET_LINK_TITLE', '🌐 <b>Ссылка на кабинет:</b>')
+            + f'\n{html_escape(cabinet_referral_link)}'
         )
 
     if summary['recent_earnings']:
@@ -231,11 +249,11 @@ async def show_referral_info(callback: types.CallbackQuery, db_user: User, db: A
                         referral_name=html_escape(str(earning['referral_name'] or '')),
                     )
                 )
-            referral_text += (
+            blocks.append(
                 texts.t('REFERRAL_RECENT_EARNINGS_HEADER', '<b>Последние начисления:</b>')
                 + '\n<blockquote>'
                 + '\n'.join(earnings_lines)
-                + '</blockquote>\n\n'
+                + '</blockquote>'
             )
 
     if summary['earnings_by_type']:
@@ -287,12 +305,14 @@ async def show_referral_info(callback: types.CallbackQuery, db_user: User, db: A
                 )
 
         if type_lines:
-            referral_text += (
+            blocks.append(
                 texts.t('REFERRAL_EARNINGS_BY_TYPE_HEADER', '<b>Доходы по типам:</b>')
                 + '\n<blockquote>'
                 + '\n'.join(type_lines)
-                + '</blockquote>\n\n'
+                + '</blockquote>'
             )
+
+    referral_text = _compact_blank_lines('\n\n'.join(blocks))
 
     await edit_or_answer_photo(
         callback,
