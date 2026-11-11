@@ -19,6 +19,7 @@ from app.database.crud.promocode import (
     update_promocode,
 )
 from app.database.models import PromoCodeType, User
+from app.handlers.admin._text import compact_text
 from app.keyboards.admin import (
     get_admin_pagination_keyboard,
     get_admin_promocodes_keyboard,
@@ -46,7 +47,7 @@ async def show_promocodes_menu(callback: types.CallbackQuery, db_user: User, db:
 - Активных: {active_codes}
 - Неактивных: {total_codes - active_codes}"""
 
-    await callback.message.edit_text(text, reply_markup=get_admin_promocodes_keyboard(db_user.language))
+    await callback.message.edit_text(compact_text(text), reply_markup=get_admin_promocodes_keyboard(db_user.language))
     await callback.answer()
 
 
@@ -181,7 +182,7 @@ async def show_promocodes_list(callback: types.CallbackQuery, db_user: User, db:
         ]
     )
 
-    await callback.message.edit_text(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
+    await callback.message.edit_text(compact_text(text), reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
     await callback.answer()
 
 
@@ -352,7 +353,7 @@ async def show_promocode_management(callback: types.CallbackQuery, db_user: User
         [types.InlineKeyboardButton(text=' К списку', callback_data='admin_promo_list')],
     ]
 
-    await callback.message.edit_text(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
+    await callback.message.edit_text(compact_text(text), reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
     await callback.answer()
 
 
@@ -484,7 +485,7 @@ async def show_promocode_edit_menu(callback: types.CallbackQuery, db_user: User,
 
     keyboard.extend([[types.InlineKeyboardButton(text=' Назад', callback_data=f'promo_manage_{promo.id}')]])
 
-    await callback.message.edit_text(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
+    await callback.message.edit_text(compact_text(text), reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
     await callback.answer()
 
 
@@ -524,7 +525,7 @@ ID промокода: {promo_id}
         ]
     )
 
-    await callback.message.edit_text(text, reply_markup=keyboard)
+    await callback.message.edit_text(compact_text(text), reply_markup=keyboard)
     await state.set_state(AdminStates.setting_promocode_expiry)
     await callback.answer()
 
@@ -562,7 +563,7 @@ ID промокода: {promo_id}
         ]
     )
 
-    await callback.message.edit_text(text, reply_markup=keyboard)
+    await callback.message.edit_text(compact_text(text), reply_markup=keyboard)
     await state.set_state(AdminStates.setting_promocode_value)
     await callback.answer()
 
@@ -601,7 +602,7 @@ ID промокода: {promo_id}
         ]
     )
 
-    await callback.message.edit_text(text, reply_markup=keyboard)
+    await callback.message.edit_text(compact_text(text), reply_markup=keyboard)
     await state.set_state(AdminStates.setting_promocode_value)
     await callback.answer()
 
@@ -642,7 +643,7 @@ ID промокода: {promo_id}
         ]
     )
 
-    await callback.message.edit_text(text, reply_markup=keyboard)
+    await callback.message.edit_text(compact_text(text), reply_markup=keyboard)
     await state.set_state(AdminStates.setting_promocode_uses)
     await callback.answer()
 
@@ -817,7 +818,7 @@ async def process_promocode_code(message: types.Message, db_user: User, state: F
             ]
         )
 
-        await message.answer(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
+        await message.answer(compact_text(text), reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
         await state.set_state(AdminStates.selecting_promo_group)
 
 
@@ -1530,7 +1531,7 @@ ID: {promo_id}
         ]
     )
 
-    await callback.message.edit_text(text, reply_markup=keyboard)
+    await callback.message.edit_text(compact_text(text), reply_markup=keyboard)
     await callback.answer()
 
 
@@ -1613,7 +1614,7 @@ async def show_promocode_stats(callback: types.CallbackQuery, db_user: User, db:
         inline_keyboard=[[types.InlineKeyboardButton(text=' Назад', callback_data=f'promo_manage_{promo.id}')]]
     )
 
-    await callback.message.edit_text(text, reply_markup=keyboard)
+    await callback.message.edit_text(compact_text(text), reply_markup=keyboard)
     await callback.answer()
 
 
@@ -1641,7 +1642,7 @@ async def show_general_promocode_stats(callback: types.CallbackQuery, db_user: U
         ]
     )
 
-    await callback.message.edit_text(text, reply_markup=keyboard)
+    await callback.message.edit_text(compact_text(text), reply_markup=keyboard)
     await callback.answer()
 
 

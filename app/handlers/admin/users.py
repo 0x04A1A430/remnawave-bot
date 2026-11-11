@@ -32,6 +32,7 @@ from app.database.crud.user import (
     get_user_by_username,
 )
 from app.database.models import Subscription, SubscriptionStatus, TransactionType, User, UserStatus
+from app.handlers.admin._text import compact_text
 from app.keyboards.admin import (
     get_admin_pagination_keyboard,
     get_admin_users_filters_keyboard,
@@ -289,7 +290,7 @@ async def _show_users_list_filtered(
         ]
     )
 
-    await callback.message.edit_text(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
+    await callback.message.edit_text(compact_text(text), reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
     await callback.answer()
 
 
@@ -311,7 +312,7 @@ async def show_users_menu(callback: types.CallbackQuery, db_user: User, db: Asyn
 • За неделю: {stats['new_week']}
 • За месяц: {stats['new_month']}"""
 
-    await callback.message.edit_text(text, reply_markup=get_admin_users_keyboard(db_user.language))
+    await callback.message.edit_text(compact_text(text), reply_markup=get_admin_users_keyboard(db_user.language))
     await callback.answer()
 
 
@@ -322,7 +323,7 @@ async def show_users_filters(callback: types.CallbackQuery, db_user: User, state
         'ADMIN_USERS_LIST_003', ' <b>Фильтры пользователей</b>\n\nВыберите фильтр для отображения пользователей:\n'
     )
 
-    await callback.message.edit_text(text, reply_markup=get_admin_users_filters_keyboard(db_user.language))
+    await callback.message.edit_text(compact_text(text), reply_markup=get_admin_users_filters_keyboard(db_user.language))
     await callback.answer()
 
 
@@ -405,7 +406,7 @@ async def show_users_list(
         ]
     )
 
-    await callback.message.edit_text(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
+    await callback.message.edit_text(compact_text(text), reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
     await callback.answer()
 
 
@@ -1138,7 +1139,7 @@ async def _render_user_subscription_overview(
         ]
     )
 
-    await callback.message.edit_text(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
+    await callback.message.edit_text(compact_text(text), reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
     return True
 
 
@@ -1346,7 +1347,7 @@ async def process_user_search(message: types.Message, db_user: User, state: FSMC
 
     keyboard.append([types.InlineKeyboardButton(text=' Назад', callback_data='admin_users')])
 
-    await message.answer(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
+    await message.answer(compact_text(text), reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
     await state.clear()
 
 
@@ -1700,7 +1701,7 @@ async def _build_user_referrals_view(
         ]
     )
 
-    return '\n\n'.join(lines), keyboard
+    return compact_text('\n\n'.join(lines)), keyboard
 
 
 @admin_required
@@ -1981,7 +1982,7 @@ async def process_referral_percent_input(
     view = await _build_user_referrals_view(db, db_user.language, int(user_id))
     if view:
         text, keyboard = view
-        await message.answer(f'{success_message}\n\n{text}', reply_markup=keyboard)
+        await message.answer(compact_text(f'{success_message}\n\n{text}'), reply_markup=keyboard)
     else:
         await message.answer(success_message)
 
@@ -2305,7 +2306,7 @@ async def _render_user_promo_group(message: types.Message, language: str, user: 
     )
 
     await message.edit_text(
-        text,
+        compact_text(text),
         reply_markup=get_user_promo_group_keyboard(
             promo_groups,
             user.id,
@@ -2736,7 +2737,7 @@ async def show_user_restrictions(callback: types.CallbackQuery, db_user: User, d
         language=db_user.language,
     )
 
-    await callback.message.edit_text('\n'.join(text_lines), reply_markup=keyboard)
+    await callback.message.edit_text(compact_text('\n'.join(text_lines)), reply_markup=keyboard)
     await callback.answer()
 
 
@@ -2890,7 +2891,7 @@ async def save_restriction_reason(message: types.Message, db_user: User, db: Asy
         language=db_user.language,
     )
 
-    await message.answer('\n'.join(text_lines), reply_markup=keyboard)
+    await message.answer(compact_text('\n'.join(text_lines)), reply_markup=keyboard)
 
 
 @admin_required
@@ -2979,7 +2980,7 @@ async def show_inactive_users(callback: types.CallbackQuery, db_user: User, db: 
         [types.InlineKeyboardButton(text=' Назад', callback_data='admin_users')],
     ]
 
-    await callback.message.edit_text(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
+    await callback.message.edit_text(compact_text(text), reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
     await callback.answer()
 
 
@@ -4230,7 +4231,7 @@ async def _show_servers_for_user(
             ]
         )
 
-        await callback.message.edit_text(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
+        await callback.message.edit_text(compact_text(text), reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
 
     except Exception as e:
         logger.error('Ошибка показа серверов', error=e)
@@ -5282,7 +5283,7 @@ async def change_subscription_type(callback: types.CallbackQuery, db_user: User,
 
     keyboard.append([InlineKeyboardButton(text=' Назад', callback_data=back_cb)])
 
-    await callback.message.edit_text(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard))
+    await callback.message.edit_text(compact_text(text), reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard))
     await callback.answer()
 
 
@@ -5551,7 +5552,7 @@ async def admin_buy_subscription_confirm(callback: types.CallbackQuery, db_user:
         ],
     ]
 
-    await callback.message.edit_text(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
+    await callback.message.edit_text(compact_text(text), reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
     await callback.answer()
 
 
@@ -6625,7 +6626,7 @@ async def show_admin_tariff_change(callback: types.CallbackQuery, db_user: User,
 
     keyboard.append([types.InlineKeyboardButton(text=' Назад', callback_data=back_cb)])
 
-    await callback.message.edit_text(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
+    await callback.message.edit_text(compact_text(text), reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
     await callback.answer()
 
 
@@ -6712,7 +6713,7 @@ async def select_admin_tariff_change(callback: types.CallbackQuery, db_user: Use
         ]
     ]
 
-    await callback.message.edit_text(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
+    await callback.message.edit_text(compact_text(text), reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
     await callback.answer()
 
 
@@ -7028,7 +7029,7 @@ async def show_admin_user_autopay(callback: types.CallbackQuery, db_user: User, 
         ],
     ]
 
-    await callback.message.edit_text(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
+    await callback.message.edit_text(compact_text(text), reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
     await callback.answer()
 
 

@@ -17,6 +17,7 @@ from app.database.models import (
     SubscriptionStatus,
     User,
 )
+from app.handlers.admin._text import compact_text
 from app.localization.texts import Texts, get_texts
 from app.utils.decorators import admin_required, error_handler
 from app.utils.formatters import format_datetime
@@ -129,7 +130,7 @@ async def show_subscriptions_menu(callback: types.CallbackQuery, db_user: User, 
         [types.InlineKeyboardButton(text=' Назад', callback_data='admin_panel')],
     ]
 
-    await callback.message.edit_text(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
+    await callback.message.edit_text(compact_text(text), reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
     await callback.answer()
 
 
@@ -192,7 +193,7 @@ async def show_subscriptions_list(callback: types.CallbackQuery, db_user: User, 
         ]
     )
 
-    await callback.message.edit_text(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
+    await callback.message.edit_text(compact_text(text), reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
     await callback.answer()
 
 
@@ -246,7 +247,7 @@ async def show_expiring_subscriptions(callback: types.CallbackQuery, db_user: Us
         [types.InlineKeyboardButton(text=' Назад', callback_data='admin_subscriptions')],
     ]
 
-    await callback.message.edit_text(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
+    await callback.message.edit_text(compact_text(text), reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
     await callback.answer()
 
 
@@ -295,7 +296,7 @@ async def show_subscriptions_stats(callback: types.CallbackQuery, db_user: User,
         [types.InlineKeyboardButton(text=' Назад', callback_data='admin_subscriptions')]
     ]
 
-    await callback.message.edit_text(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
+    await callback.message.edit_text(compact_text(text), reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
     await callback.answer()
 
 
@@ -410,7 +411,7 @@ async def show_countries_management(callback: types.CallbackQuery, db_user: User
         [types.InlineKeyboardButton(text=' Назад', callback_data='admin_subscriptions')],
     ]
 
-    await callback.message.edit_text(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
+    await callback.message.edit_text(compact_text(text), reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
     await callback.answer()
 
 
