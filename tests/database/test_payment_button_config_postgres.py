@@ -66,4 +66,4 @@ async def test_saved_names_order_and_reset_reach_telegram_without_restart(postgr
         reset = buttons()
         assert list(reset) == list(current)
         assert 'Gateway' not in str(reset)
-        assert _plain(reset['topup_amount|yookassa|12345']) == '💳 Банковская карта (YooKassa)'
+        assert _plain(reset['topup_amount|yookassa|12345']) == 'Банковская карта (YooKassa)'
