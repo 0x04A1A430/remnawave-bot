@@ -565,6 +565,7 @@ class MonitoringService:
         current_time: datetime,
         *,
         cause: str = 'insufficient_balance',
+        auto_renew_expired: bool = False,
     ) -> None:
         """Send an autopay-failure notification iff policy allows it this tick, then
         record state. Policy = decide_autopay_fail_notification() + AUTOPAY_FAIL_* config.
@@ -592,9 +593,17 @@ class MonitoringService:
 
         is_final = reason == 'final'
         if user.telegram_id and self.bot:
-            await self._send_autopay_failed_notification(
-                user, user.balance_kopeks, charge_amount, subscription=subscription, is_final=is_final
-            )
+            if auto_renew_expired:
+                await self._send_auto_renew_insufficient_notification(
+                    user,
+                    user.balance_kopeks,
+                    charge_amount,
+                    subscription=subscription,
+                )
+            else:
+                await self._send_autopay_failed_notification(
+                    user, user.balance_kopeks, charge_amount, subscription=subscription, is_final=is_final
+                )
         elif not user.telegram_id:
             texts = get_texts(getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE)
             if is_final:
@@ -1899,8 +1908,13 @@ class MonitoringService:
                             )
                     else:
                         failed_count += 1
-                        if subscription.autopay_enabled:
-                            await self._maybe_notify_autopay_failure(user, charge_amount, subscription, current_time)
+                        await self._maybe_notify_autopay_failure(
+                            user,
+                            charge_amount,
+                            subscription,
+                            current_time,
+                            auto_renew_expired=not subscription.autopay_enabled,
+                        )
                         logger.warning(
                             'Недостаточно средств для автопродления у пользователя',
                             user_identifier=user_identifier,
@@ -2383,6 +2397,77 @@ class MonitoringService:
             )
         except Exception as e:
             logger.error('Ошибка отправки уведомления об автоплатеже пользователю', telegram_id=user.telegram_id, e=e)
+
+    async def _send_auto_renew_insufficient_notification(
+        self,
+        user: User,
+        balance: int,
+        required: int,
+        *,
+        subscription: Subscription | None = None,
+    ):
+        """Сообщить, что для авто-продления истёкшей подписки не хватает баланса."""
+        try:
+            from aiogram.types import InlineKeyboardMarkup
+
+            texts = get_texts(getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE)
+            message = texts.t(
+                'AUTO_RENEW_EXPIRED_INSUFFICIENT',
+                '<tg-emoji emoji-id="5881702736843511327">⚠</tg-emoji> <b>Недостаточно средств для продления</b>\n\n'
+                'Подписка закончилась, но на балансе не хватает денег для автоматического продления.\n\n'
+                'Баланс: {balance}\nТребуется: {required}\n\n'
+                'Пополните баланс — подписка продлится автоматически.',
+            ).format(balance=settings.format_price(balance), required=settings.format_price(required))
+            if (
+                settings.is_multi_tariff_enabled()
+                and subscription
+                and hasattr(subscription, 'tariff')
+                and subscription.tariff
+            ):
+                message += texts.t('MONITOR_TARIFF_LINE', '').format(
+                    tariff_label=f' «{html.escape(subscription.tariff.name)}»'
+                )
+
+            keyboard = InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [
+                        build_miniapp_or_callback_button(
+                            text=texts.t('BALANCE_TOPUP', ''), callback_data='balance_topup'
+                        )
+                    ],
+                    [
+                        build_miniapp_or_callback_button(
+                            text=texts.t('MY_SUBSCRIPTION_BUTTON', ''), callback_data='menu_subscription'
+                        )
+                    ],
+                ]
+            )
+
+            await self._send_message_with_logo(
+                chat_id=user.telegram_id,
+                text=message,
+                parse_mode='HTML',
+                reply_markup=keyboard,
+            )
+        except (TelegramForbiddenError, TelegramBadRequest) as exc:
+            if not await self._handle_unreachable_user(user, exc, 'уведомление о нехватке баланса'):
+                logger.error(
+                    'Ошибка Telegram API при отправке уведомления о нехватке баланса',
+                    telegram_id=user.telegram_id,
+                    exc=exc,
+                )
+        except TelegramNetworkError as e:
+            logger.warning(
+                'Таймаут отправки уведомления о нехватке баланса',
+                telegram_id=user.telegram_id,
+                e=e,
+            )
+        except Exception as e:
+            logger.error(
+                'Ошибка отправки уведомления о нехватке баланса',
+                telegram_id=user.telegram_id,
+                e=e,
+            )
 
     async def _send_autopay_failed_notification(
         self,

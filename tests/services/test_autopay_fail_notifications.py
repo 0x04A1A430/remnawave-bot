@@ -368,3 +368,47 @@ async def test_email_only_final_reminder_reason(monkeypatch):
 
     assert reasons[0] == 'Недостаточно средств на балансе'
     assert reasons[1].startswith('Последнее напоминание')
+
+
+async def test_expired_auto_renew_notifies_about_insufficient_balance(monkeypatch):
+    """Истёкшая подписка без autopay: если денег не хватает — человек получает
+    отдельное уведомление, а не тишину."""
+    from app.services import monitoring_service as ms
+
+    svc = ms.MonitoringService(bot=object())
+    monkeypatch.setattr(ms.settings, 'ENABLE_NOTIFICATIONS', True)
+    monkeypatch.setattr(ms.settings, 'AUTOPAY_FAIL_MAX_NOTIFICATIONS', 2)
+    monkeypatch.setattr(ms.settings, 'AUTOPAY_FAIL_FINAL_REMINDER_HOURS', 3)
+    monkeypatch.setattr(ms.settings, 'AUTOPAY_FAIL_REPEAT_INTERVAL_HOURS', 0)
+    monkeypatch.setattr(
+        svc,
+        '_load_autopay_fail_state',
+        AsyncMock(return_value=ms.AutopayFailState()),
+    )
+    save = AsyncMock()
+    monkeypatch.setattr(svc, '_save_autopay_fail_state', save)
+    insufficient = AsyncMock()
+    monkeypatch.setattr(svc, '_send_auto_renew_insufficient_notification', insufficient)
+    generic = AsyncMock()
+    monkeypatch.setattr(svc, '_send_autopay_failed_notification', generic)
+
+    now = datetime.now(UTC)
+    user = SimpleNamespace(telegram_id=1001, balance_kopeks=10000, language='ru')
+    subscription = SimpleNamespace(
+        id=10,
+        end_date=now - timedelta(hours=1),
+        autopay_enabled=False,
+        tariff=None,
+    )
+
+    await svc._maybe_notify_autopay_failure(
+        user,
+        30000,
+        subscription,
+        now,
+        auto_renew_expired=True,
+    )
+
+    insufficient.assert_awaited_once()
+    generic.assert_not_awaited()
+    save.assert_awaited_once()
