@@ -588,7 +588,7 @@ class Settings(BaseSettings):
     AUTO_RENEW_EXPIRED_WINDOW_HOURS: int = 24
 
     DEFAULT_AUTOPAY_ENABLED: bool = False
-    DEFAULT_AUTOPAY_DAYS_BEFORE: int = 3
+    DEFAULT_AUTOPAY_DAYS_BEFORE: int = 1
     # 0 → use the tariff's shortest (cheapest) period, as before.
     # >0 → autopay charges this many days each cycle by default (must be present in tariff/renewal periods).
     # Per-subscription override lives in Subscription.autopay_period_days.

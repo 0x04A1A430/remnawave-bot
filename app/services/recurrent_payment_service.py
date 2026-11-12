@@ -195,7 +195,8 @@ async def _reload_subscription_with_user(db: AsyncSession, subscription_id: int)
 async def _find_subscriptions_needing_topup(db: AsyncSession) -> list:
     """Находит подписки с autopay, которым скоро нужно продление."""
     current_time = datetime.now(UTC)
-    max_days_before = settings.DEFAULT_AUTOPAY_DAYS_BEFORE
+    # Пользователь может выбрать до 14 дней; горизонт выборки должен это покрывать.
+    max_days_before = max(settings.DEFAULT_AUTOPAY_DAYS_BEFORE, 14)
 
     # Максимальный горизонт проверки
     check_horizon = current_time + timedelta(days=max_days_before + 1)

@@ -305,14 +305,21 @@ async def toggle_autopay(callback: types.CallbackQuery, db_user: User, db: Async
             raise
 
 
-async def show_autopay_days(callback: types.CallbackQuery, db_user: User):
+async def show_autopay_days(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext = None,
+):
     texts = get_texts(db_user.language)
+    subscription, _ = await _resolve_subscription(callback, db_user, db, state)
+    current_days = subscription.autopay_days_before if subscription else None
     await callback.message.edit_text(
         texts.t(
             'AUTOPAY_SELECT_DAYS_PROMPT',
             '<tg-emoji emoji-id="5985616167740379273">⏰</tg-emoji> Выберите за сколько дней до окончания списывать средства:',
         ),
-        reply_markup=get_autopay_days_keyboard(db_user.language),
+        reply_markup=get_autopay_days_keyboard(db_user.language, current_days=current_days),
     )
     await callback.answer()
 

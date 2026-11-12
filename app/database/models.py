@@ -2780,7 +2780,7 @@ class Subscription(Base):
     connected_squads = Column(JSON, default=list)
 
     autopay_enabled = Column(Boolean, default=False)
-    autopay_days_before = Column(Integer, default=3)
+    autopay_days_before = Column(Integer, default=1)
     # NULL → fall back to settings.DEFAULT_AUTOPAY_PERIOD_DAYS, then tariff shortest period
     autopay_period_days = Column(Integer, nullable=True)
 
