@@ -322,15 +322,15 @@ def get_html_help_text(language: str = 'ru') -> str:
 • <code>&lt;tg-spoiler&gt;спойлер&lt;/tg-spoiler&gt;</code>
 • <code>&lt;tg-emoji emoji-id="123"&gt;😀&lt;/tg-emoji&gt;</code>
 
-<b>⚠️ Важные правила:</b>
+<b><tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> Важные правила:</b>
 • Каждый открывающий тег должен быть закрыт
 • Теги должны быть правильно вложены
 • Атрибуты ссылок берите в кавычки
 
-<b>❌ Неправильно:</b>
+<b><tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Неправильно:</b>
 <code>&lt;b&gt;жирный &lt;i&gt;курсив&lt;/b&gt;&lt;/i&gt;</code>
 
-<b>✅ Правильно:</b>
+<b><tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Правильно:</b>
 <code>&lt;b&gt;жирный &lt;i&gt;курсив&lt;/i&gt;&lt;/b&gt;</code>""",
     )
 

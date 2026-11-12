@@ -113,11 +113,20 @@ def format_expiry_warning(texts: _Texts, end_date: datetime, now: datetime | Non
     if remaining <= timedelta(0):
         return ''
     if remaining < timedelta(hours=1):
-        return texts.t('SUBSCRIPTION_WARNING_MINUTES', '\n🔴 истекает через несколько минут!')
+        return texts.t(
+            'SUBSCRIPTION_WARNING_MINUTES',
+            '\n<tg-emoji emoji-id="5967333011652350314">🔴</tg-emoji> истекает через несколько минут!',
+        )
 
     days = local_days_until(end_date, now)
     if days == 0:
-        return texts.t('SUBSCRIPTION_WARNING_TODAY', '\n⚠️ истекает сегодня!')
+        return texts.t(
+            'SUBSCRIPTION_WARNING_TODAY',
+            '\n<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> истекает сегодня!',
+        )
     if days == 1:
-        return texts.t('SUBSCRIPTION_WARNING_TOMORROW', '\n⚠️ истекает завтра!')
+        return texts.t(
+            'SUBSCRIPTION_WARNING_TOMORROW',
+            '\n<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> истекает завтра!',
+        )
     return ''

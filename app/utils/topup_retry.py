@@ -20,14 +20,14 @@ def format_topup_amount_retry(language: str, minimum: int, maximum: int, *, too_
     if lower > upper:
         return texts.t(
             'TOPUP_RETRY_NO_RANGE',
-            '❌ У этого способа нет допустимой суммы для ручного ввода '
-            '(минимум {minimum} ₽, максимум {maximum} ₽). Выберите другой способ оплаты.',
+            '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> У этого способа нет допустимой суммы '
+            'для ручного ввода (минимум {minimum} ₽, максимум {maximum} ₽). Выберите другой способ оплаты.',
         ).format(**values)
     key = 'TOPUP_RETRY_TOO_LOW' if too_low else 'TOPUP_RETRY_TOO_HIGH'
     fallback = (
-        '❌ Минимальная сумма пополнения — {minimum} ₽.\n\n'
+        '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Минимальная сумма пополнения — {minimum} ₽.\n\n'
         if too_low
-        else '❌ Максимальная сумма пополнения — {maximum} ₽.\n\n'
+        else '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Максимальная сумма пополнения — {maximum} ₽.\n\n'
     ) + (
         'Чтобы продолжить, отправьте боту сообщение с суммой пополнения не меньше {minimum} ₽ и не больше {maximum} ₽.'
     )

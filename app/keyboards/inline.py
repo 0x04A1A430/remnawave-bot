@@ -333,7 +333,11 @@ def get_language_selection_keyboard(
             normalized_code.upper(),
         )
 
-        prefix = '✅ ' if normalized_code == normalized_current and normalized_current else ''
+        prefix = (
+            '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> '
+            if normalized_code == normalized_current and normalized_current
+            else ''
+        )
 
         row.append(
             make_button(
@@ -1655,7 +1659,7 @@ def get_countries_keyboard(
         if not country.get('is_available', True):
             continue
 
-        emoji = '✅' if country['uuid'] in selected else '⚪'
+        emoji = '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> ' if country['uuid'] in selected else ''
 
         if country['price_kopeks'] > 0:
             price_text = f' (+{texts.format_price(country["price_kopeks"])})'
@@ -1665,7 +1669,7 @@ def get_countries_keyboard(
         keyboard.append(
             [
                 make_button(
-                    text=f'{emoji} {country["name"]}{price_text}',
+                    text=f'{emoji}{country["name"]}{price_text}',
                     callback_data=f'country_{country["uuid"]}',
                 )
             ]
@@ -1715,9 +1719,9 @@ def get_devices_keyboard(current: int, language: str = DEFAULT_LANGUAGE) -> Inli
     for devices in range(start_devices, end_devices):
         price = max(0, devices - settings.DEFAULT_DEVICE_LIMIT) * settings.PRICE_PER_DEVICE
         price_text = f' (+{texts.format_price(price)})' if price > 0 else ' (вкл.)'
-        emoji = '✅' if devices == current else '⚪'
+        emoji = '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> ' if devices == current else ''
 
-        button_text = f'{emoji} {devices}{price_text}'
+        button_text = f'{emoji}{devices}{price_text}'
 
         buttons.append(make_button(text=button_text, callback_data=f'devices_{devices}'))
 
@@ -2419,8 +2423,9 @@ def get_payment_methods_keyboard(
     if settings.is_cispay_crypto_enabled():
         keyboard.append(
             [
-                InlineKeyboardButton(
-                    text=f'🪙 {settings.get_cispay_crypto_display_name()}',
+                make_button(
+                    text=f'<tg-emoji emoji-id="5992430854909989581">🪙</tg-emoji> '
+                    f'{settings.get_cispay_crypto_display_name()}',
                     callback_data=_build_callback('cispay_crypto'),
                 )
             ]
@@ -2479,8 +2484,11 @@ def get_payment_methods_keyboard(
         else:
             keyboard.append(
                 [
-                    InlineKeyboardButton(
-                        text=texts.t('PAYMENT_CASHERA', f'💳 {cashera_name}'),
+                    make_button(
+                        text=texts.t(
+                            'PAYMENT_CASHERA',
+                            '<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> ' + cashera_name,
+                        ),
                         callback_data=_build_callback('cashera'),
                     )
                 ]
@@ -2492,8 +2500,9 @@ def get_payment_methods_keyboard(
             label = {'sbp': 'СБП', 'card': 'Карта', 'yoomoney': 'ЮMoney', 'crypto': 'Криптовалюта'}[method]
             keyboard.append(
                 [
-                    InlineKeyboardButton(
-                        text=f'💳 {settings.get_anore_display_name()} — {label}',
+                    make_button(
+                        text=f'<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> '
+                        f'{settings.get_anore_display_name()} — {label}',
                         callback_data=_build_callback(f'anore_{method}'),
                     )
                 ]
@@ -2504,8 +2513,11 @@ def get_payment_methods_keyboard(
         tabpay_card_name = settings.get_tabpay_card_display_name()
         keyboard.append(
             [
-                InlineKeyboardButton(
-                    text=texts.t('PAYMENT_TABPAY_CARD', f'💳 {tabpay_card_name}'),
+                make_button(
+                    text=texts.t(
+                        'PAYMENT_TABPAY_CARD',
+                        f'<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> {tabpay_card_name}',
+                    ),
                     callback_data=_build_callback('tabpay_card'),
                 )
             ]
@@ -2516,8 +2528,11 @@ def get_payment_methods_keyboard(
         tabpay_sbp_name = settings.get_tabpay_sbp_display_name()
         keyboard.append(
             [
-                InlineKeyboardButton(
-                    text=texts.t('PAYMENT_TABPAY_SBP', f'📱 {tabpay_sbp_name}'),
+                make_button(
+                    text=texts.t(
+                        'PAYMENT_TABPAY_SBP',
+                        f'<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> {tabpay_sbp_name}',
+                    ),
                     callback_data=_build_callback('tabpay_sbp'),
                 )
             ]
@@ -2528,8 +2543,11 @@ def get_payment_methods_keyboard(
         tabpay_name = settings.get_tabpay_display_name()
         keyboard.append(
             [
-                InlineKeyboardButton(
-                    text=texts.t('PAYMENT_TABPAY', f'💳 {tabpay_name}'),
+                make_button(
+                    text=texts.t(
+                        'PAYMENT_TABPAY',
+                        f'<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> {tabpay_name}',
+                    ),
                     callback_data=_build_callback('tabpay'),
                 )
             ]
@@ -2540,8 +2558,11 @@ def get_payment_methods_keyboard(
         paritypay_card_name = settings.get_paritypay_card_display_name()
         keyboard.append(
             [
-                InlineKeyboardButton(
-                    text=texts.t('PAYMENT_PARITYPAY_CARD', f'💳 {paritypay_card_name}'),
+                make_button(
+                    text=texts.t(
+                        'PAYMENT_PARITYPAY_CARD',
+                        f'<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> {paritypay_card_name}',
+                    ),
                     callback_data=_build_callback('paritypay_card'),
                 )
             ]
@@ -2552,8 +2573,11 @@ def get_payment_methods_keyboard(
         paritypay_sbp_name = settings.get_paritypay_sbp_display_name()
         keyboard.append(
             [
-                InlineKeyboardButton(
-                    text=texts.t('PAYMENT_PARITYPAY_SBP', f'📱 {paritypay_sbp_name}'),
+                make_button(
+                    text=texts.t(
+                        'PAYMENT_PARITYPAY_SBP',
+                        f'<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> {paritypay_sbp_name}',
+                    ),
                     callback_data=_build_callback('paritypay_sbp'),
                 )
             ]
@@ -2568,8 +2592,11 @@ def get_payment_methods_keyboard(
         paritypay_name = settings.get_paritypay_display_name()
         keyboard.append(
             [
-                InlineKeyboardButton(
-                    text=texts.t('PAYMENT_PARITYPAY', f'💳 {paritypay_name}'),
+                make_button(
+                    text=texts.t(
+                        'PAYMENT_PARITYPAY',
+                        f'<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> {paritypay_name}',
+                    ),
                     callback_data=_build_callback('paritypay'),
                 )
             ]
@@ -3390,7 +3417,7 @@ def get_manage_countries_keyboard(
             if days_left > 30:
                 price_text = f' ({discounted_per_month // 100}₽/мес × {days_left} дн. = {total_price // 100}₽)'
                 logger.info(
-                    '🔍 Стоимость сервера',
+                    'Стоимость сервера',
                     name=name,
                     discounted_per_month=discounted_per_month / 100,
                     days_left=days_left,
@@ -4320,10 +4347,10 @@ def get_ticket_notification_keyboard(
 ) -> InlineKeyboardMarkup:
     """Клавиатура для уведомления о тикете (личный или групповой админ-чат).
 
-    Отображает кнопки действий без «⬅️ Назад» — она не имеет смысла вне
+    Отображает кнопки действий без «Назад» — она не имеет смысла вне
     контекста админки. Набор кнопок зависит от роли получателя:
-    - is_admin=True  → полный набор (включая «👤 К пользователю»);
-    - is_admin=False → набор без «👤 К пользователю» (@admin_required).
+    - is_admin=True  → полный набор (включая «К пользователю»);
+    - is_admin=False → набор без «К пользователю» (@admin_required).
 
     Args:
         ticket_id: ID тикета.

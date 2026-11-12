@@ -10,9 +10,9 @@ VALID_DISPLAY_MODES = (DISPLAY_MODE_BOT, DISPLAY_MODE_WEB, DISPLAY_MODE_BOTH)
 _CYCLE_ORDER = (DISPLAY_MODE_BOTH, DISPLAY_MODE_BOT, DISPLAY_MODE_WEB)
 
 _DISPLAY_MODE_LABELS = {
-    DISPLAY_MODE_BOT: '🤖 Только бот',
-    DISPLAY_MODE_WEB: '🌐 Только веб',
-    DISPLAY_MODE_BOTH: '🔁 Бот и веб',
+    DISPLAY_MODE_BOT: '<tg-emoji emoji-id="5931415565955503486">🤖</tg-emoji> Только бот',
+    DISPLAY_MODE_WEB: '<tg-emoji emoji-id="5879585266426973039">🌐</tg-emoji> Только веб',
+    DISPLAY_MODE_BOTH: '<tg-emoji emoji-id="6005843436479975944">🔁</tg-emoji> Бот и веб',
 }
 
 

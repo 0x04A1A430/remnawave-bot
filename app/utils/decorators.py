@@ -90,17 +90,17 @@ def error_handler(func: Callable) -> Callable:
                         f'@{event.from_user.username}' if event.from_user.username else f'ID:{event.from_user.id}'
                     )
                     logger.warning(
-                        '🕐 Игнорируем устаревший callback',
+                        'Игнорируем устаревший callback',
                         event_data=event.data,
                         user_info=user_info,
                         __name__=func.__name__,
                     )
                 else:
-                    logger.warning('🕐 Игнорируем устаревший запрос', __name__=func.__name__, error=e)
+                    logger.warning('Игнорируем устаревший запрос', __name__=func.__name__, error=e)
                 return None
 
             if 'message is not modified' in error_message:
-                logger.debug('📝 Сообщение не изменено', __name__=func.__name__)
+                logger.debug('Сообщение не изменено', __name__=func.__name__)
                 event = _extract_event(args)
                 if event and isinstance(event, types.CallbackQuery):
                     try:
