@@ -43,7 +43,7 @@ async def start_yookassa_payment(callback: types.CallbackQuery, db_user: User, s
         await callback.message.edit_text(
             texts.t(
                 'USER_RESTRICTION_TOPUP_BLOCKED',
-                '🚫 <b>Пополнение ограничено</b>\n\n{reason}\n\nЕсли вы считаете это ошибкой, вы можете обжаловать решение.',
+                '<tg-emoji emoji-id="5872829476143894491">🚫</tg-emoji> <b>Пополнение ограничено</b>\n\n{reason}\n\nЕсли вы считаете это ошибкой, вы можете обжаловать решение.',
             ).format(reason=reason),
             reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
         )
@@ -52,7 +52,10 @@ async def start_yookassa_payment(callback: types.CallbackQuery, db_user: User, s
 
     if not settings.is_yookassa_enabled():
         await callback.answer(
-            texts.t('PAYMENT_UI_YOOKASSA_CARD_UNAVAILABLE', '❌ Оплата картой через YooKassa временно недоступна'),
+            texts.t(
+                'PAYMENT_UI_YOOKASSA_CARD_UNAVAILABLE',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Оплата картой через YooKassa временно недоступна',
+            ),
             show_alert=True,
         )
         return
@@ -62,7 +65,7 @@ async def start_yookassa_payment(callback: types.CallbackQuery, db_user: User, s
 
     message_text = texts.t(
         'PAYMENT_UI_YOOKASSA_CARD_PROMPT',
-        '💳 <b>Оплата банковской картой</b>\n\nВведите сумму для пополнения от {value1} до {value2} рублей:',
+        '<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> <b>Оплата банковской картой</b>\n\nВведите сумму для пополнения от {value1} до {value2} рублей:',
     ).format(value1=format(min_amount_rub, '.0f'), value2=format(max_amount_rub, ',.0f'))
 
     keyboard = await get_topup_amount_keyboard('yookassa', db_user.language, back_callback='back_to_menu')
@@ -97,7 +100,7 @@ async def start_yookassa_sbp_payment(callback: types.CallbackQuery, db_user: Use
         await callback.message.edit_text(
             texts.t(
                 'USER_RESTRICTION_TOPUP_BLOCKED',
-                '🚫 <b>Пополнение ограничено</b>\n\n{reason}\n\nЕсли вы считаете это ошибкой, вы можете обжаловать решение.',
+                '<tg-emoji emoji-id="5872829476143894491">🚫</tg-emoji> <b>Пополнение ограничено</b>\n\n{reason}\n\nЕсли вы считаете это ошибкой, вы можете обжаловать решение.',
             ).format(reason=reason),
             reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
         )
@@ -106,7 +109,11 @@ async def start_yookassa_sbp_payment(callback: types.CallbackQuery, db_user: Use
 
     if not settings.is_yookassa_enabled() or not settings.YOOKASSA_SBP_ENABLED:
         await callback.answer(
-            texts.t('SUBSCRIPTION_UI_SBP_UNAVAILABLE', '❌ Оплата через СБП временно недоступна'), show_alert=True
+            texts.t(
+                'SUBSCRIPTION_UI_SBP_UNAVAILABLE',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Оплата через СБП временно недоступна',
+            ),
+            show_alert=True,
         )
         return
 
@@ -115,7 +122,7 @@ async def start_yookassa_sbp_payment(callback: types.CallbackQuery, db_user: Use
 
     message_text = texts.t(
         'PAYMENT_UI_YOOKASSA_SBP_PROMPT',
-        '🏦 <b>Оплата через СБП</b>\n\nВведите сумму для пополнения от {value1} до {value2} рублей:',
+        '<b>Оплата через СБП</b>\n\nВведите сумму для пополнения от {value1} до {value2} рублей:',
     ).format(value1=format(min_amount_rub, '.0f'), value2=format(max_amount_rub, ',.0f'))
 
     keyboard = await get_topup_amount_keyboard('yookassa_sbp', db_user.language, back_callback='back_to_menu')
@@ -152,7 +159,7 @@ async def process_yookassa_payment_amount(
         await message.answer(
             texts.t(
                 'USER_RESTRICTION_TOPUP_BLOCKED',
-                '🚫 <b>Пополнение ограничено</b>\n\n{reason}\n\nЕсли вы считаете это ошибкой, вы можете обжаловать решение.',
+                '<tg-emoji emoji-id="5872829476143894491">🚫</tg-emoji> <b>Пополнение ограничено</b>\n\n{reason}\n\nЕсли вы считаете это ошибкой, вы можете обжаловать решение.',
             ).format(reason=reason),
             reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
             parse_mode='HTML',
@@ -162,7 +169,10 @@ async def process_yookassa_payment_amount(
 
     if not settings.is_yookassa_enabled():
         await message.answer(
-            texts.t('SUBSCRIPTION_UI_YOOKASSA_UNAVAILABLE', '❌ Оплата через YooKassa временно недоступна')
+            texts.t(
+                'SUBSCRIPTION_UI_YOOKASSA_UNAVAILABLE',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Оплата через YooKassa временно недоступна',
+            )
         )
         return
 
@@ -208,7 +218,7 @@ async def process_yookassa_payment_amount(
             await message.answer(
                 texts.t(
                     'PAYMENT_UI_CREATE_ERROR_SUPPORT',
-                    '❌ Ошибка создания платежа. Попробуйте позже или обратитесь в поддержку.',
+                    '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Ошибка создания платежа. Попробуйте позже или обратитесь в поддержку.',
                 )
             )
             await state.clear()
@@ -218,7 +228,8 @@ async def process_yookassa_payment_amount(
         if not confirmation_url:
             await message.answer(
                 texts.t(
-                    'PAYMENT_UI_LINK_ERROR_SUPPORT', '❌ Ошибка получения ссылки для оплаты. Обратитесь в поддержку.'
+                    'PAYMENT_UI_LINK_ERROR_SUPPORT',
+                    '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Ошибка получения ссылки для оплаты. Обратитесь в поддержку.',
                 )
             )
             await state.clear()
@@ -257,7 +268,7 @@ async def process_yookassa_payment_amount(
             format_payment_text(
                 texts.t(
                     'PAYMENT_UI_YOOKASSA_CARD_INSTRUCTIONS',
-                    "💳 <b>Оплата банковской картой</b>\n\n💰 Сумма: {value1}\n🆔 ID платежа: {value2}...\n\n📱 <b>Инструкция:</b>\n1. Нажмите кнопку 'Оплатить картой'\n2. Введите данные вашей карты\n3. Подтвердите платеж\n4. Деньги поступят на баланс автоматически\n\n🔒 Оплата происходит через защищенную систему YooKassa\n✅ Принимаем карты: Visa, MasterCard, МИР\n\n❓ Если возникнут проблемы, обратитесь в {value3}",
+                    "<tg-emoji emoji-id='5967548335542767952'>💳</tg-emoji> <b>Оплата банковской картой</b>\n\n<tg-emoji emoji-id='5811989245761426317'>💰</tg-emoji> Сумма: {value1}\nID платежа: {value2}...\n\n<tg-emoji emoji-id='5985833664884250583'>📱</tg-emoji> <b>Инструкция:</b>\n1. Нажмите кнопку 'Оплатить картой'\n2. Введите данные вашей карты\n3. Подтвердите платеж\n4. Деньги поступят на баланс автоматически\n\n<tg-emoji emoji-id='5832546462478635761'>🔒</tg-emoji> Оплата происходит через защищенную систему YooKassa\n<tg-emoji emoji-id='5776375003280838798'>✅</tg-emoji> Принимаем карты: Visa, MasterCard, МИР\n\n<tg-emoji emoji-id='5873121512445187130'>❓</tg-emoji> Если возникнут проблемы, обратитесь в {value3}",
                 ),
                 support=settings.get_support_contact_display_html(),
                 support_field='value3',
@@ -305,7 +316,7 @@ async def process_yookassa_payment_amount(
         await message.answer(
             texts.t(
                 'PAYMENT_UI_CREATE_ERROR_SUPPORT',
-                '❌ Ошибка создания платежа. Попробуйте позже или обратитесь в поддержку.',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Ошибка создания платежа. Попробуйте позже или обратитесь в поддержку.',
             )
         )
         await state.clear()
@@ -332,7 +343,7 @@ async def process_yookassa_sbp_payment_amount(
         await message.answer(
             texts.t(
                 'USER_RESTRICTION_TOPUP_BLOCKED',
-                '🚫 <b>Пополнение ограничено</b>\n\n{reason}\n\nЕсли вы считаете это ошибкой, вы можете обжаловать решение.',
+                '<tg-emoji emoji-id="5872829476143894491">🚫</tg-emoji> <b>Пополнение ограничено</b>\n\n{reason}\n\nЕсли вы считаете это ошибкой, вы можете обжаловать решение.',
             ).format(reason=reason),
             reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
             parse_mode='HTML',
@@ -341,7 +352,12 @@ async def process_yookassa_sbp_payment_amount(
         return
 
     if not settings.is_yookassa_enabled() or not settings.YOOKASSA_SBP_ENABLED:
-        await message.answer(texts.t('SUBSCRIPTION_UI_SBP_UNAVAILABLE', '❌ Оплата через СБП временно недоступна'))
+        await message.answer(
+            texts.t(
+                'SUBSCRIPTION_UI_SBP_UNAVAILABLE',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Оплата через СБП временно недоступна',
+            )
+        )
         return
 
     if amount_kopeks < settings.YOOKASSA_MIN_AMOUNT_KOPEKS:
@@ -386,7 +402,7 @@ async def process_yookassa_sbp_payment_amount(
             await message.answer(
                 texts.t(
                     'PAYMENT_UI_SBP_CREATE_ERROR',
-                    '❌ Ошибка создания платежа через СБП. Попробуйте позже или обратитесь в поддержку.',
+                    '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Ошибка создания платежа через СБП. Попробуйте позже или обратитесь в поддержку.',
                 )
             )
             await state.clear()
@@ -399,7 +415,7 @@ async def process_yookassa_sbp_payment_amount(
             await message.answer(
                 texts.t(
                     'PAYMENT_UI_SBP_DATA_ERROR',
-                    '❌ Ошибка получения данных для оплаты через СБП. Обратитесь в поддержку.',
+                    '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Ошибка получения данных для оплаты через СБП. Обратитесь в поддержку.',
                 )
             )
             await state.clear()
@@ -468,7 +484,11 @@ async def process_yookassa_sbp_payment_amount(
             keyboard_buttons.append(
                 [
                     types.InlineKeyboardButton(
-                        text=texts.t('SUBSCRIPTION_UI_OPEN_PAYMENT', '🔗 Перейти к оплате'), url=confirmation_url
+                        text=texts.t(
+                            'SUBSCRIPTION_UI_OPEN_PAYMENT',
+                            '<tg-emoji emoji-id="5877465816030515018">🔗</tg-emoji> Перейти к оплате',
+                        ),
+                        url=confirmation_url,
                     )
                 ]
             )
@@ -520,20 +540,20 @@ async def process_yookassa_sbp_payment_amount(
         # Подготавливаем текст сообщения
         message_text = texts.t(
             'PAYMENT_UI_SBP_PAYMENT_HEADER',
-            '🔗 <b>Оплата через СБП</b>\n\n💰 Сумма: {value1}\n🆔 ID платежа: {value2}...\n\n',
+            '<tg-emoji emoji-id="5877465816030515018">🔗</tg-emoji> <b>Оплата через СБП</b>\n\n<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> Сумма: {value1}\nID платежа: {value2}...\n\n',
         ).format(value1=settings.format_price(amount_kopeks), value2=payment_result['yookassa_payment_id'][:8])
 
         # Добавляем инструкции в зависимости от доступных способов оплаты
         if not confirmation_url:
             message_text += texts.t(
                 'PAYMENT_UI_SBP_BANK_INSTRUCTIONS',
-                '📱 <b>Инструкция по оплате:</b>\n1. Откройте приложение вашего банка\n2. Найдите функцию оплаты по реквизитам или перевод по СБП\n3. Введите ID платежа: <code>{value1}</code>\n4. Подтвердите платеж в приложении банка\n5. Деньги поступят на баланс автоматически\n\n',
+                '<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> <b>Инструкция по оплате:</b>\n1. Откройте приложение вашего банка\n2. Найдите функцию оплаты по реквизитам или перевод по СБП\n3. Введите ID платежа: <code>{value1}</code>\n4. Подтвердите платеж в приложении банка\n5. Деньги поступят на баланс автоматически\n\n',
             ).format(value1=payment_result['yookassa_payment_id'])
 
         message_text += format_payment_text(
             texts.t(
                 'PAYMENT_UI_YOOKASSA_SBP_FOOTER',
-                '🔒 Оплата происходит через защищенную систему YooKassa\n✅ Принимаем СБП от всех банков-участников\n\n❓ Если возникнут проблемы, обратитесь в {value1}',
+                '<tg-emoji emoji-id="5832546462478635761">🔒</tg-emoji> Оплата происходит через защищенную систему YooKassa\n<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Принимаем СБП от всех банков-участников\n\n<tg-emoji emoji-id="5873121512445187130">❓</tg-emoji> Если возникнут проблемы, обратитесь в {value1}',
             ),
             support=settings.get_support_contact_display_html(),
             support_field='value1',
@@ -588,7 +608,7 @@ async def process_yookassa_sbp_payment_amount(
         await message.answer(
             texts.t(
                 'PAYMENT_UI_SBP_CREATE_ERROR',
-                '❌ Ошибка создания платежа через СБП. Попробуйте позже или обратитесь в поддержку.',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Ошибка создания платежа через СБП. Попробуйте позже или обратитесь в поддержку.',
             )
         )
         await state.clear()
@@ -602,7 +622,10 @@ async def check_yookassa_payment_status(callback: types.CallbackQuery, db: Async
         or DEFAULT_LANGUAGE
     )
     if db_user is None:
-        await callback.answer(texts.t('PAYMENT_UI_NOT_FOUND', '❌ Платеж не найден'), show_alert=True)
+        await callback.answer(
+            texts.t('PAYMENT_UI_NOT_FOUND', '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Платеж не найден'),
+            show_alert=True,
+        )
         return
     try:
         local_payment_id = int(callback.data.split('_')[-1])
@@ -612,15 +635,20 @@ async def check_yookassa_payment_status(callback: types.CallbackQuery, db: Async
         payment = await get_yookassa_payment_by_local_id(db, local_payment_id)
 
         if not payment or payment.user_id != db_user.id:
-            await callback.answer(texts.t('PAYMENT_UI_NOT_FOUND', '❌ Платеж не найден'), show_alert=True)
+            await callback.answer(
+                texts.t(
+                    'PAYMENT_UI_NOT_FOUND', '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Платеж не найден'
+                ),
+                show_alert=True,
+            )
             return
 
         status_emoji = {
             'pending': '⏳',
             'waiting_for_capture': '⌛',
-            'succeeded': '✅',
-            'canceled': '❌',
-            'failed': '❌',
+            'succeeded': '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji>',
+            'canceled': '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji>',
+            'failed': '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji>',
         }
 
         status_text = {
@@ -631,20 +659,21 @@ async def check_yookassa_payment_status(callback: types.CallbackQuery, db: Async
             'failed': texts.t('ADMIN_PAYMENT_STATUS_FAILED', 'Ошибка'),
         }
 
-        emoji = status_emoji.get(payment.status, '❓')
+        emoji = status_emoji.get(payment.status, '<tg-emoji emoji-id="5873121512445187130">❓</tg-emoji>')
         status = status_text.get(payment.status, texts.t('WATA_STATUS_UNKNOWN', 'Неизвестно'))
 
         message_text = (
-            f'💳 Статус платежа:\n\n'
-            f'🆔 ID: {payment.yookassa_payment_id[:8]}...\n'
-            f'💰 Сумма: {settings.format_price(payment.amount_kopeks)}\n'
-            f'📊 Статус: {emoji} {status}\n'
-            f'📅 Создан: {format_local_datetime(payment.created_at, "%d.%m.%Y %H:%M")}\n'
+            f'<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> Статус платежа:\n\n'
+            f'ID: {payment.yookassa_payment_id[:8]}...\n'
+            f'<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> Сумма: {settings.format_price(payment.amount_kopeks)}\n'
+            f'<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> Статус: {emoji} {status}\n'
+            f'<tg-emoji emoji-id="5967412305338568701">📅</tg-emoji> Создан: {format_local_datetime(payment.created_at, "%d.%m.%Y %H:%M")}\n'
         )
 
         if payment.is_succeeded:
             message_text += texts.t(
-                'PAYMENT_UI_SUCCESS_CREDITED', '\n✅ Платеж успешно завершен!\n\nСредства зачислены на баланс.'
+                'PAYMENT_UI_SUCCESS_CREDITED',
+                '\n<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Платеж успешно завершен!\n\nСредства зачислены на баланс.',
             )
         elif payment.is_pending:
             message_text += texts.t(
@@ -652,11 +681,18 @@ async def check_yookassa_payment_status(callback: types.CallbackQuery, db: Async
             )
         elif payment.is_failed:
             message_text += texts.t(
-                'PAYMENT_UI_PAYMENT_FAILED_SUPPORT', '\n❌ Платеж не прошел. Обратитесь в {value1}'
+                'PAYMENT_UI_PAYMENT_FAILED_SUPPORT',
+                '\n<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Платеж не прошел. Обратитесь в {value1}',
             ).format(value1=settings.get_support_contact_display())
 
         await callback.answer(message_text, show_alert=True)
 
     except Exception as e:
         logger.error('Ошибка проверки статуса платежа', error=e)
-        await callback.answer(texts.t('PAYMENT_UI_STATUS_ERROR', '❌ Ошибка проверки статуса'), show_alert=True)
+        await callback.answer(
+            texts.t(
+                'PAYMENT_UI_STATUS_ERROR',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Ошибка проверки статуса',
+            ),
+            show_alert=True,
+        )

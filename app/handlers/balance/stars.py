@@ -25,7 +25,10 @@ async def start_stars_payment(callback: types.CallbackQuery, db_user: User, stat
 
     if not settings.TELEGRAM_STARS_ENABLED:
         await callback.answer(
-            texts.t('PAYMENT_UI_STARS_TOPUP_UNAVAILABLE', '❌ Пополнение через Stars временно недоступно'),
+            texts.t(
+                'PAYMENT_UI_STARS_TOPUP_UNAVAILABLE',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Пополнение через Stars временно недоступно',
+            ),
             show_alert=True,
         )
         return
@@ -45,7 +48,7 @@ async def start_stars_payment(callback: types.CallbackQuery, db_user: User, stat
         await callback.message.edit_text(
             texts.t(
                 'USER_RESTRICTION_TOPUP_BLOCKED',
-                '🚫 <b>Пополнение ограничено</b>\n\n{reason}\n\nЕсли вы считаете это ошибкой, вы можете обжаловать решение.',
+                '<tg-emoji emoji-id="5872829476143894491">🚫</tg-emoji> <b>Пополнение ограничено</b>\n\n{reason}\n\nЕсли вы считаете это ошибкой, вы можете обжаловать решение.',
             ).format(reason=reason),
             reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
         )
@@ -87,7 +90,7 @@ async def process_stars_payment_amount(message: types.Message, db_user: User, am
         await message.answer(
             texts.t(
                 'USER_RESTRICTION_TOPUP_BLOCKED',
-                '🚫 <b>Пополнение ограничено</b>\n\n{reason}\n\nЕсли вы считаете это ошибкой, вы можете обжаловать решение.',
+                '<tg-emoji emoji-id="5872829476143894491">🚫</tg-emoji> <b>Пополнение ограничено</b>\n\n{reason}\n\nЕсли вы считаете это ошибкой, вы можете обжаловать решение.',
             ).format(reason=reason),
             reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
             parse_mode='HTML',
@@ -96,7 +99,12 @@ async def process_stars_payment_amount(message: types.Message, db_user: User, am
         return
 
     if not settings.TELEGRAM_STARS_ENABLED:
-        await message.answer(texts.t('PAYMENT_UI_STARS_UNAVAILABLE', '⚠️ Оплата Stars временно недоступна'))
+        await message.answer(
+            texts.t(
+                'PAYMENT_UI_STARS_UNAVAILABLE',
+                '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> Оплата Stars временно недоступна',
+            )
+        )
         return
 
     try:
@@ -148,7 +156,7 @@ async def process_stars_payment_amount(message: types.Message, db_user: User, am
             compact_payment_text(
                 texts.t(
                     'PAYMENT_UI_STARS_INSTRUCTIONS',
-                    '⭐ <b>Оплата через Telegram Stars</b>\n\n💰 Сумма: {value1}\n⭐ К оплате: {value2} звезд\n📊 Курс: {value3}₽ за звезду\n\nНажмите кнопку ниже для оплаты:',
+                    '<tg-emoji emoji-id="5958376256788502078">⭐</tg-emoji> <b>Оплата через Telegram Stars</b>\n\n<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> Сумма: {value1}\n<tg-emoji emoji-id="5958376256788502078">⭐</tg-emoji> К оплате: {value2} звезд\n<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> Курс: {value3}₽ за звезду\n\nНажмите кнопку ниже для оплаты:',
                 ).format(value1=texts.format_price(amount_kopeks), value2=stars_amount, value3=stars_rate)
             ),
             reply_markup=keyboard,
@@ -164,4 +172,9 @@ async def process_stars_payment_amount(message: types.Message, db_user: User, am
 
     except Exception as e:
         logger.error('Ошибка создания Stars invoice', error=e)
-        await message.answer(texts.t('PAYMENT_UI_CREATE_ERROR_WARNING', '⚠️ Ошибка создания платежа'))
+        await message.answer(
+            texts.t(
+                'PAYMENT_UI_CREATE_ERROR_WARNING',
+                '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> Ошибка создания платежа',
+            )
+        )

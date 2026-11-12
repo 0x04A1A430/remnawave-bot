@@ -63,7 +63,7 @@ async def _send_pal24_payment_message(
             await message.answer(
                 texts.t(
                     'PAL24_PAYMENT_ERROR',
-                    '❌ Ошибка создания платежа PayPalych. Попробуйте позже или обратитесь в поддержку.',
+                    '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Ошибка создания платежа PayPalych. Попробуйте позже или обратитесь в поддержку.',
                 )
             )
             await state.clear()
@@ -77,7 +77,7 @@ async def _send_pal24_payment_message(
             await message.answer(
                 texts.t(
                     'PAL24_PAYMENT_ERROR',
-                    '❌ Ошибка создания платежа PayPalych. Попробуйте позже или обратитесь в поддержку.',
+                    '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Ошибка создания платежа PayPalych. Попробуйте позже или обратитесь в поддержку.',
                 )
             )
             await state.clear()
@@ -183,18 +183,20 @@ async def _send_pal24_payment_message(
         message_template = texts.t(
             'PAL24_PAYMENT_INSTRUCTIONS',
             (
-                '🏦 <b>Оплата через PayPalych</b>\n\n'
-                '💰 Сумма: {amount}\n'
-                '🆔 ID счета: {bill_id}\n\n'
-                '📱 <b>Инструкция:</b>\n{steps}\n\n'
-                '❓ Если возникнут проблемы, обратитесь в {support}'
+                '<b>Оплата через PayPalych</b>\n\n'
+                '<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> Сумма: {amount}\n'
+                'ID счета: {bill_id}\n\n'
+                '<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> <b>Инструкция:</b>\n{steps}\n\n'
+                '<tg-emoji emoji-id="5873121512445187130">❓</tg-emoji> Если возникнут проблемы, обратитесь в {support}'
             ),
         )
 
         keyboard_rows = pay_buttons + [
             [
                 types.InlineKeyboardButton(
-                    text=texts.t('CHECK_STATUS_BUTTON', '📊 Проверить статус'),
+                    text=texts.t(
+                        'CHECK_STATUS_BUTTON', '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> Проверить статус'
+                    ),
                     callback_data=f'check_pal24_{local_payment_id}',
                     style='primary',
                 )
@@ -259,7 +261,7 @@ async def _send_pal24_payment_message(
         await message.answer(
             texts.t(
                 'PAL24_PAYMENT_ERROR',
-                '❌ Ошибка создания платежа PayPalych. Попробуйте позже или обратитесь в поддержку.',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Ошибка создания платежа PayPalych. Попробуйте позже или обратитесь в поддержку.',
             )
         )
         await state.clear()
@@ -288,7 +290,7 @@ async def start_pal24_payment(
         await callback.message.edit_text(
             texts.t(
                 'USER_RESTRICTION_TOPUP_BLOCKED',
-                '🚫 <b>Пополнение ограничено</b>\n\n{reason}\n\nЕсли вы считаете это ошибкой, вы можете обжаловать решение.',
+                '<tg-emoji emoji-id="5872829476143894491">🚫</tg-emoji> <b>Пополнение ограничено</b>\n\n{reason}\n\nЕсли вы считаете это ошибкой, вы можете обжаловать решение.',
             ).format(reason=reason),
             reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
         )
@@ -297,7 +299,10 @@ async def start_pal24_payment(
 
     if not settings.is_pal24_enabled():
         await callback.answer(
-            texts.t('SUBSCRIPTION_UI_PAL24_UNAVAILABLE', '❌ Оплата через PayPalych временно недоступна'),
+            texts.t(
+                'SUBSCRIPTION_UI_PAL24_UNAVAILABLE',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Оплата через PayPalych временно недоступна',
+            ),
             show_alert=True,
         )
         return
@@ -317,7 +322,7 @@ async def start_pal24_payment(
         texts.t(
             'PAL24_TOPUP_PROMPT',
             (
-                f'🏦 <b>Оплата через PayPalych ({payment_methods_text})</b>\n\n'
+                f'<b>Оплата через PayPalych ({payment_methods_text})</b>\n\n'
                 'Введите сумму для пополнения от 100 до 1 000 000 ₽.\n'
                 f'Оплата проходит через PayPalych ({payment_methods_text}).'
             ),
@@ -366,7 +371,7 @@ async def process_pal24_payment_amount(
         await message.answer(
             texts.t(
                 'USER_RESTRICTION_TOPUP_BLOCKED',
-                '🚫 <b>Пополнение ограничено</b>\n\n{reason}\n\nЕсли вы считаете это ошибкой, вы можете обжаловать решение.',
+                '<tg-emoji emoji-id="5872829476143894491">🚫</tg-emoji> <b>Пополнение ограничено</b>\n\n{reason}\n\nЕсли вы считаете это ошибкой, вы можете обжаловать решение.',
             ).format(reason=reason),
             reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
             parse_mode='HTML',
@@ -376,7 +381,10 @@ async def process_pal24_payment_amount(
 
     if not settings.is_pal24_enabled():
         await message.answer(
-            texts.t('SUBSCRIPTION_UI_PAL24_UNAVAILABLE', '❌ Оплата через PayPalych временно недоступна')
+            texts.t(
+                'SUBSCRIPTION_UI_PAL24_UNAVAILABLE',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Оплата через PayPalych временно недоступна',
+            )
         )
         return
 
@@ -475,7 +483,7 @@ async def handle_pal24_method_selection(
         await callback.answer(
             texts.t(
                 'PAL24_PAYMENT_ERROR',
-                '❌ Ошибка создания платежа PayPalych. Попробуйте позже или обратитесь в поддержку.',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Ошибка создания платежа PayPalych. Попробуйте позже или обратитесь в поддержку.',
             ),
             show_alert=True,
         )
@@ -509,7 +517,10 @@ async def check_pal24_payment_status(
         or DEFAULT_LANGUAGE
     )
     if db_user is None:
-        await callback.answer(texts.t('PAYMENT_UI_NOT_FOUND', '❌ Платеж не найден'), show_alert=True)
+        await callback.answer(
+            texts.t('PAYMENT_UI_NOT_FOUND', '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Платеж не найден'),
+            show_alert=True,
+        )
         return
     try:
         local_payment_id = int(callback.data.split('_')[-1])
@@ -517,14 +528,24 @@ async def check_pal24_payment_status(
 
         payment = await get_pal24_payment_by_id(db, local_payment_id)
         if not payment or payment.user_id != db_user.id:
-            await callback.answer(texts.t('PAYMENT_UI_NOT_FOUND', '❌ Платеж не найден'), show_alert=True)
+            await callback.answer(
+                texts.t(
+                    'PAYMENT_UI_NOT_FOUND', '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Платеж не найден'
+                ),
+                show_alert=True,
+            )
             return
 
         payment_service = PaymentService(callback.bot)
         status_info = await payment_service.get_pal24_payment_status(db, local_payment_id)
 
         if not status_info:
-            await callback.answer(texts.t('PAYMENT_UI_NOT_FOUND', '❌ Платеж не найден'), show_alert=True)
+            await callback.answer(
+                texts.t(
+                    'PAYMENT_UI_NOT_FOUND', '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Платеж не найден'
+                ),
+                show_alert=True,
+            )
             return
 
         payment = status_info['payment']
@@ -532,13 +553,28 @@ async def check_pal24_payment_status(
         status_labels = {
             'NEW': ('⏳', texts.t('WATA_STATUS_OPENED', 'Ожидает оплаты')),
             'PROCESS': ('⌛', texts.t('WATA_STATUS_CLOSED', 'Обрабатывается')),
-            'SUCCESS': ('✅', texts.t('WATA_STATUS_PAID', 'Оплачен')),
-            'FAIL': ('❌', texts.t('PAYMENT_UI_STATUS_CANCELLED', 'Отменен')),
-            'UNDERPAID': ('⚠️', texts.t('PAYMENT_UI_STATUS_UNDERPAID', 'Недоплата')),
-            'OVERPAID': ('⚠️', texts.t('PAYMENT_UI_STATUS_OVERPAID', 'Переплата')),
+            'SUCCESS': (
+                '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji>',
+                texts.t('WATA_STATUS_PAID', 'Оплачен'),
+            ),
+            'FAIL': (
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji>',
+                texts.t('PAYMENT_UI_STATUS_CANCELLED', 'Отменен'),
+            ),
+            'UNDERPAID': (
+                '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji>',
+                texts.t('PAYMENT_UI_STATUS_UNDERPAID', 'Недоплата'),
+            ),
+            'OVERPAID': (
+                '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji>',
+                texts.t('PAYMENT_UI_STATUS_OVERPAID', 'Переплата'),
+            ),
         }
 
-        emoji, status_text = status_labels.get(payment.status, ('❓', texts.t('WATA_STATUS_UNKNOWN', 'Неизвестно')))
+        emoji, status_text = status_labels.get(
+            payment.status,
+            ('<tg-emoji emoji-id="5873121512445187130">❓</tg-emoji>', texts.t('WATA_STATUS_UNKNOWN', 'Неизвестно')),
+        )
 
         metadata = payment.metadata_json or {}
         links_meta = metadata.get('links') if isinstance(metadata, dict) else None
@@ -608,18 +644,21 @@ async def check_pal24_payment_status(
             card_link = payment.link_page_url
 
         message_lines = [
-            texts.t('PAYMENT_UI_PAL24_STATUS_TITLE', '🏦 Статус платежа PayPalych:'),
+            texts.t('PAYMENT_UI_PAL24_STATUS_TITLE', 'Статус платежа PayPalych:'),
             '',
-            f'🆔 ID счета: {payment.bill_id}',
-            f'💰 Сумма: {settings.format_price(payment.amount_kopeks)}',
-            f'📊 Статус: {emoji} {status_text}',
-            f'📅 Создан: {format_local_datetime(payment.created_at, "%d.%m.%Y %H:%M")}',
+            f'ID счета: {payment.bill_id}',
+            f'<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> Сумма: {settings.format_price(payment.amount_kopeks)}',
+            f'<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> Статус: {emoji} {status_text}',
+            f'<tg-emoji emoji-id="5967412305338568701">📅</tg-emoji> Создан: {format_local_datetime(payment.created_at, "%d.%m.%Y %H:%M")}',
         ]
 
         if payment.is_paid:
             message_lines.append('')
             message_lines.append(
-                texts.t('PAYMENT_UI_SUCCESS_CREDITED_NO_BREAK', '✅ Платеж успешно завершен! Средства уже на балансе.')
+                texts.t(
+                    'PAYMENT_UI_SUCCESS_CREDITED_NO_BREAK',
+                    '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Платеж успешно завершен! Средства уже на балансе.',
+                )
             )
         elif payment.status in {'NEW', 'PROCESS'}:
             message_lines.append('')
@@ -630,17 +669,21 @@ async def check_pal24_payment_status(
             )
             if sbp_link:
                 message_lines.append('')
-                message_lines.append(texts.t('PAYMENT_UI_SBP_LINK', '🏦 СБП: {value1}').format(value1=sbp_link))
+                message_lines.append(texts.t('PAYMENT_UI_SBP_LINK', 'СБП: {value1}').format(value1=sbp_link))
             if card_link and card_link != sbp_link:
                 message_lines.append(
-                    texts.t('PAYMENT_UI_CARD_LINK', '💳 Банковская карта: {value1}').format(value1=card_link)
+                    texts.t(
+                        'PAYMENT_UI_CARD_LINK',
+                        '<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> Банковская карта: {value1}',
+                    ).format(value1=card_link)
                 )
         elif payment.status in {'FAIL', 'UNDERPAID', 'OVERPAID'}:
             message_lines.append('')
             message_lines.append(
-                texts.t('PAYMENT_UI_FAILED_SUPPORT', '❌ Платеж не завершен корректно. Обратитесь в {value1}').format(
-                    value1=settings.get_support_contact_display()
-                )
+                texts.t(
+                    'PAYMENT_UI_FAILED_SUPPORT',
+                    '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Платеж не завершен корректно. Обратитесь в {value1}',
+                ).format(value1=settings.get_support_contact_display())
             )
 
         pay_rows: list[list[types.InlineKeyboardButton]] = []
@@ -686,7 +729,9 @@ async def check_pal24_payment_status(
         keyboard_rows = pay_rows + [
             [
                 types.InlineKeyboardButton(
-                    text=texts.t('CHECK_STATUS_BUTTON', '📊 Проверить статус'),
+                    text=texts.t(
+                        'CHECK_STATUS_BUTTON', '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> Проверить статус'
+                    ),
                     callback_data=f'check_pal24_{local_payment_id}',
                     style='primary',
                 )
@@ -711,4 +756,10 @@ async def check_pal24_payment_status(
 
     except Exception as e:
         logger.error('Ошибка проверки статуса PayPalych', error=e)
-        await callback.answer(texts.t('PAYMENT_UI_STATUS_ERROR', '❌ Ошибка проверки статуса'), show_alert=True)
+        await callback.answer(
+            texts.t(
+                'PAYMENT_UI_STATUS_ERROR',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Ошибка проверки статуса',
+            ),
+            show_alert=True,
+        )

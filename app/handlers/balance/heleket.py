@@ -46,7 +46,7 @@ async def start_heleket_payment(
         await callback.message.edit_text(
             texts.t(
                 'USER_RESTRICTION_TOPUP_BLOCKED',
-                '🚫 <b>Пополнение ограничено</b>\n\n{reason}\n\nЕсли вы считаете это ошибкой, вы можете обжаловать решение.',
+                '<tg-emoji emoji-id="5872829476143894491">🚫</tg-emoji> <b>Пополнение ограничено</b>\n\n{reason}\n\nЕсли вы считаете это ошибкой, вы можете обжаловать решение.',
             ).format(reason=reason),
             reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
         )
@@ -55,7 +55,11 @@ async def start_heleket_payment(
 
     if not settings.is_heleket_enabled():
         await callback.answer(
-            texts.t('PAYMENT_UI_HELEKET_UNAVAILABLE', '❌ Оплата через Heleket недоступна'), show_alert=True
+            texts.t(
+                'PAYMENT_UI_HELEKET_UNAVAILABLE',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Оплата через Heleket недоступна',
+            ),
+            show_alert=True,
         )
         return
 
@@ -71,14 +75,23 @@ async def start_heleket_payment(
         markup_text = None
 
     blocks = [
-        texts.t('PAYMENT_UI_HELEKET_TOPUP_TITLE', '🪙 <b>Пополнение через Heleket</b>'),
+        texts.t(
+            'PAYMENT_UI_HELEKET_TOPUP_TITLE',
+            '<tg-emoji emoji-id="5992430854909989581">🪙</tg-emoji> <b>Пополнение через Heleket</b>',
+        ),
         texts.t('PAYMENT_UI_CRYPTO_AMOUNT_PROMPT', 'Введите сумму пополнения от 100 до 100,000 ₽:'),
         '\n'.join(
             filter(
                 None,
                 [
-                    texts.t('PAYMENT_UI_INSTANT_CREDIT', '⚡ Мгновенное зачисление'),
-                    texts.t('PAYMENT_UI_SECURE_PAYMENT', '🔒 Безопасная оплата'),
+                    texts.t(
+                        'PAYMENT_UI_INSTANT_CREDIT',
+                        '<tg-emoji emoji-id="5843553939672274145">⚡</tg-emoji> Мгновенное зачисление',
+                    ),
+                    texts.t(
+                        'PAYMENT_UI_SECURE_PAYMENT',
+                        '<tg-emoji emoji-id="5832546462478635761">🔒</tg-emoji> Безопасная оплата',
+                    ),
                 ],
             )
         ),
@@ -129,7 +142,7 @@ async def process_heleket_payment_amount(
         await message.answer(
             texts.t(
                 'USER_RESTRICTION_TOPUP_BLOCKED',
-                '🚫 <b>Пополнение ограничено</b>\n\n{reason}\n\nЕсли вы считаете это ошибкой, вы можете обжаловать решение.',
+                '<tg-emoji emoji-id="5872829476143894491">🚫</tg-emoji> <b>Пополнение ограничено</b>\n\n{reason}\n\nЕсли вы считаете это ошибкой, вы можете обжаловать решение.',
             ).format(reason=reason),
             reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
             parse_mode='HTML',
@@ -138,7 +151,12 @@ async def process_heleket_payment_amount(
         return
 
     if not settings.is_heleket_enabled():
-        await message.answer(texts.t('PAYMENT_UI_HELEKET_UNAVAILABLE', '❌ Оплата через Heleket недоступна'))
+        await message.answer(
+            texts.t(
+                'PAYMENT_UI_HELEKET_UNAVAILABLE',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Оплата через Heleket недоступна',
+            )
+        )
         return
 
     amount_rubles = amount_kopeks / 100
@@ -171,7 +189,7 @@ async def process_heleket_payment_amount(
         await message.answer(
             texts.t(
                 'PAYMENT_UI_HELEKET_CREATE_ERROR',
-                '❌ Не удалось создать счёт в Heleket. Попробуйте позже или обратитесь в поддержку.',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Не удалось создать счёт в Heleket. Попробуйте позже или обратитесь в поддержку.',
             )
         )
         await state.clear()
@@ -180,7 +198,10 @@ async def process_heleket_payment_amount(
     payment_url = result.get('payment_url')
     if not payment_url:
         await message.answer(
-            texts.t('PAYMENT_UI_HELEKET_LINK_ERROR', '❌ Не удалось получить ссылку для оплаты Heleket')
+            texts.t(
+                'PAYMENT_UI_HELEKET_LINK_ERROR',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Не удалось получить ссылку для оплаты Heleket',
+            )
         )
         await state.clear()
         return
@@ -191,18 +212,23 @@ async def process_heleket_payment_amount(
     discount_percent = result.get('discount_percent')
 
     details = [
-        texts.t('PAYMENT_UI_HELEKET_PAYMENT_TITLE', '🪙 <b>Оплата через Heleket</b>'),
-        '',
-        texts.t('PAYMENT_UI_CREDIT_AMOUNT', '💰 Сумма к зачислению: {value1} ₽').format(
-            value1=format(amount_rubles, '.0f')
+        texts.t(
+            'PAYMENT_UI_HELEKET_PAYMENT_TITLE',
+            '<tg-emoji emoji-id="5992430854909989581">🪙</tg-emoji> <b>Оплата через Heleket</b>',
         ),
+        '',
+        texts.t(
+            'PAYMENT_UI_CREDIT_AMOUNT',
+            '<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> Сумма к зачислению: {value1} ₽',
+        ).format(value1=format(amount_rubles, '.0f')),
     ]
 
     if payer_amount and payer_currency:
         details.append(
-            texts.t('PAYMENT_UI_PAY_AMOUNT_CURRENCY', '🪙 К оплате: {value1} {value2}').format(
-                value1=payer_amount, value2=payer_currency
-            )
+            texts.t(
+                'PAYMENT_UI_PAY_AMOUNT_CURRENCY',
+                '<tg-emoji emoji-id="5992430854909989581">🪙</tg-emoji> К оплате: {value1} {value2}',
+            ).format(value1=payer_amount, value2=payer_currency)
         )
 
     markup_percent: float | None = None
@@ -218,9 +244,9 @@ async def process_heleket_payment_amount(
         label_discount = texts.t('PAYMENT_HELEKET_DISCOUNT_LABEL', 'Скидка провайдера')
         absolute = abs(markup_percent)
         if markup_percent > 0:
-            details.append(f'📈 {label_markup}: +{absolute}%')
+            details.append(f'<tg-emoji emoji-id="5776219138917668486">📈</tg-emoji> {label_markup}: +{absolute}%')
         else:
-            details.append(f'📉 {label_discount}: {absolute}%')
+            details.append(f'{label_discount}: {absolute}%')
 
     if payer_amount and payer_currency:
         try:
@@ -228,7 +254,7 @@ async def process_heleket_payment_amount(
             if payer_amount_float > 0:
                 rub_per_currency = amount_rubles / payer_amount_float
                 details.append(
-                    texts.t('PAYMENT_UI_EXCHANGE_RATE_CURRENCY', '💱 Курс: 1 {value1} ≈ {value2} ₽').format(
+                    texts.t('PAYMENT_UI_EXCHANGE_RATE_CURRENCY', 'Курс: 1 {value1} ≈ {value2} ₽').format(
                         value1=payer_currency, value2=format(rub_per_currency, '.2f')
                     )
                 )
@@ -238,7 +264,9 @@ async def process_heleket_payment_amount(
     details.extend(
         [
             '',
-            texts.t('PAYMENT_UI_INSTRUCTIONS_TITLE', '📱 Инструкция:'),
+            texts.t(
+                'PAYMENT_UI_INSTRUCTIONS_TITLE', '<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> Инструкция:'
+            ),
             texts.t('PAYMENT_UI_STEP_PAY', "1. Нажмите кнопку 'Оплатить'"),
             texts.t('PAYMENT_UI_STEP_HELEKET', '2. Перейдите на страницу Heleket'),
             texts.t('PAYMENT_UI_STEP_TRANSFER', '3. Оплатите указанную сумму'),
@@ -255,7 +283,9 @@ async def process_heleket_payment_amount(
             ],
             [
                 types.InlineKeyboardButton(
-                    text=texts.t('CHECK_STATUS_BUTTON', '📊 Проверить статус'),
+                    text=texts.t(
+                        'CHECK_STATUS_BUTTON', '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> Проверить статус'
+                    ),
                     callback_data=f'check_heleket_{result["local_payment_id"]}',
                     style='primary',
                 )
@@ -322,7 +352,10 @@ async def check_heleket_payment_status(
         or DEFAULT_LANGUAGE
     )
     if db_user is None:
-        await callback.answer(texts.t('PAYMENT_UI_NOT_FOUND', '❌ Платеж не найден'), show_alert=True)
+        await callback.answer(
+            texts.t('PAYMENT_UI_NOT_FOUND', '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Платеж не найден'),
+            show_alert=True,
+        )
         return
     try:
         local_payment_id = int(callback.data.split('_')[-1])
@@ -336,11 +369,16 @@ async def check_heleket_payment_status(
 
     payment = await get_heleket_payment_by_id(db, local_payment_id)
     if not payment or payment.user_id != db_user.id:
-        await callback.answer(texts.t('PAYMENT_UI_NOT_FOUND', '❌ Платеж не найден'), show_alert=True)
+        await callback.answer(
+            texts.t('PAYMENT_UI_NOT_FOUND', '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Платеж не найден'),
+            show_alert=True,
+        )
         return
 
     if payment.is_paid:
-        message = texts.t('HELEKET_PAYMENT_ALREADY_PAID', '✅ Платёж уже зачислен')
+        message = texts.t(
+            'HELEKET_PAYMENT_ALREADY_PAID', '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Платёж уже зачислен'
+        )
         await callback.answer(message, show_alert=True)
         return
 
@@ -354,40 +392,69 @@ async def check_heleket_payment_status(
         payment = updated_payment
 
     if payment.is_paid:
-        message = texts.t('HELEKET_PAYMENT_SUCCESS', '✅ Платёж зачислен на баланс')
+        message = texts.t(
+            'HELEKET_PAYMENT_SUCCESS',
+            '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Платёж зачислен на баланс',
+        )
         await callback.answer(message, show_alert=True)
         return
 
     status_normalized = (payment.status or '').lower()
     status_messages = {
         'check': texts.t('HELEKET_STATUS_CHECK', '⏳ Ожидание оплаты'),
-        'process': texts.t('HELEKET_STATUS_PROCESS', '⚙️ Платёж обрабатывается'),
-        'confirm_check': texts.t('HELEKET_STATUS_CONFIRM_CHECK', '⛓ Ожидание подтверждений сети'),
-        'wrong_amount': texts.t('HELEKET_STATUS_WRONG_AMOUNT', '❗️ Оплачена неверная сумма'),
+        'process': texts.t(
+            'HELEKET_STATUS_PROCESS', '<tg-emoji emoji-id="5877260593903177342">⚙️</tg-emoji> Платёж обрабатывается'
+        ),
+        'confirm_check': texts.t('HELEKET_STATUS_CONFIRM_CHECK', 'Ожидание подтверждений сети'),
+        'wrong_amount': texts.t(
+            'HELEKET_STATUS_WRONG_AMOUNT',
+            '<tg-emoji emoji-id="5775887550262546277">❗️</tg-emoji> Оплачена неверная сумма',
+        ),
         'wrong_amount_waiting': texts.t(
             'HELEKET_STATUS_WRONG_AMOUNT_WAITING',
-            '❗️ Недостаточная сумма, ожидаем доплату',
+            '<tg-emoji emoji-id="5775887550262546277">❗️</tg-emoji> Недостаточная сумма, ожидаем доплату',
         ),
-        'paid_over': texts.t('HELEKET_STATUS_PAID_OVER', '✅ Платёж зачислен (с переплатой)'),
-        'paid': texts.t('HELEKET_STATUS_PAID', '✅ Платёж зачислен'),
-        'cancel': texts.t('HELEKET_STATUS_CANCEL', '🚫 Платёж отменён'),
-        'fail': texts.t('HELEKET_STATUS_FAIL', '❌ Ошибка при оплате'),
-        'system_fail': texts.t('HELEKET_STATUS_SYSTEM_FAIL', '❌ Системная ошибка Heleket'),
-        'refund_process': texts.t('HELEKET_STATUS_REFUND_PROCESS', '↩️ Возврат обрабатывается'),
-        'refund_fail': texts.t('HELEKET_STATUS_REFUND_FAIL', '⚠️ Ошибка возврата'),
-        'refund_paid': texts.t('HELEKET_STATUS_REFUND_PAID', '✅ Возврат выполнен'),
-        'locked': texts.t('HELEKET_STATUS_LOCKED', '🔒 Средства заблокированы'),
+        'paid_over': texts.t(
+            'HELEKET_STATUS_PAID_OVER',
+            '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Платёж зачислен (с переплатой)',
+        ),
+        'paid': texts.t(
+            'HELEKET_STATUS_PAID', '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Платёж зачислен'
+        ),
+        'cancel': texts.t(
+            'HELEKET_STATUS_CANCEL', '<tg-emoji emoji-id="5872829476143894491">🚫</tg-emoji> Платёж отменён'
+        ),
+        'fail': texts.t(
+            'HELEKET_STATUS_FAIL', '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Ошибка при оплате'
+        ),
+        'system_fail': texts.t(
+            'HELEKET_STATUS_SYSTEM_FAIL',
+            '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Системная ошибка Heleket',
+        ),
+        'refund_process': texts.t('HELEKET_STATUS_REFUND_PROCESS', 'Возврат обрабатывается'),
+        'refund_fail': texts.t(
+            'HELEKET_STATUS_REFUND_FAIL', '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> Ошибка возврата'
+        ),
+        'refund_paid': texts.t(
+            'HELEKET_STATUS_REFUND_PAID', '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Возврат выполнен'
+        ),
+        'locked': texts.t(
+            'HELEKET_STATUS_LOCKED', '<tg-emoji emoji-id="5832546462478635761">🔒</tg-emoji> Средства заблокированы'
+        ),
     }
 
     message = status_messages.get(status_normalized)
     if message is None:
-        template = texts.t('HELEKET_STATUS_UNKNOWN', 'ℹ️ Статус платежа: {status}')
+        template = texts.t(
+            'HELEKET_STATUS_UNKNOWN', '<tg-emoji emoji-id="5879785854284599288">ℹ️</tg-emoji> Статус платежа: {status}'
+        )
         status_value = payment.status or status_normalized or '—'
         try:
             message = template.format(status=status_value)
         except Exception:  # pragma: no cover - defensive formatting
-            message = texts.t('PAYMENT_UI_STATUS_UNKNOWN_VALUE', 'ℹ️ Статус платежа: {value1}').format(
-                value1=status_value
-            )
+            message = texts.t(
+                'PAYMENT_UI_STATUS_UNKNOWN_VALUE',
+                '<tg-emoji emoji-id="5879785854284599288">ℹ️</tg-emoji> Статус платежа: {value1}',
+            ).format(value1=status_value)
 
     await callback.answer(message, show_alert=True)

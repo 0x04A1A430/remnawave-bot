@@ -535,7 +535,7 @@ async def show_payment_methods(callback: types.CallbackQuery, db_user: User, db:
         await callback.message.edit_text(
             texts.t(
                 'USER_RESTRICTION_TOPUP_BLOCKED',
-                '🚫 <b>Пополнение ограничено</b>\n\n{reason}\n\nЕсли вы считаете это ошибкой, вы можете обжаловать решение.',
+                '<tg-emoji emoji-id="5872829476143894491">🚫</tg-emoji> <b>Пополнение ограничено</b>\n\n{reason}\n\nЕсли вы считаете это ошибкой, вы можете обжаловать решение.',
             ).format(reason=reason),
             reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
         )
@@ -605,7 +605,7 @@ async def handle_payment_methods_unavailable(callback: types.CallbackQuery, db_u
     await callback.answer(
         texts.t(
             'PAYMENT_METHODS_UNAVAILABLE_ALERT',
-            '⚠️ В данный момент автоматические способы оплаты временно недоступны. Для пополнения баланса обратитесь в техподдержку.',
+            '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> В данный момент автоматические способы оплаты временно недоступны. Для пополнения баланса обратитесь в техподдержку.',
         ),
         show_alert=True,
     )
@@ -721,7 +721,7 @@ async def request_support_topup(callback: types.CallbackQuery, db_user: User):
     support_text = format_payment_text(
         texts.t(
             'PAYMENT_UI_SUPPORT_TOPUP_INSTRUCTIONS',
-            '\n🛠️ <b>Пополнение через поддержку</b>\n\nДля пополнения баланса обратитесь в техподдержку:\n{value1}\n\nУкажите:\n• ID: {value2}\n• Сумму пополнения\n• Способ оплаты\n\n⏰ Время обработки: 1-24 часа\n\n<b>Доступные способы:</b>\n• Криптовалюта\n• Переводы между банками\n• Другие платежные системы\n',
+            '\n<tg-emoji emoji-id="5988023995125993550">🛠️</tg-emoji> <b>Пополнение через поддержку</b>\n\nДля пополнения баланса обратитесь в техподдержку:\n{value1}\n\nУкажите:\n• ID: {value2}\n• Сумму пополнения\n• Способ оплаты\n\n⏰ Время обработки: 1-24 часа\n\n<b>Доступные способы:</b>\n• Криптовалюта\n• Переводы между банками\n• Другие платежные системы\n',
         ),
         support=settings.get_support_contact_display_html(),
         support_field='value1',
@@ -732,7 +732,9 @@ async def request_support_topup(callback: types.CallbackQuery, db_user: User):
         inline_keyboard=[
             [
                 types.InlineKeyboardButton(
-                    text=texts.t('CONTACT_SUPPORT', '💬 Написать в поддержку'),
+                    text=texts.t(
+                        'CONTACT_SUPPORT', '<tg-emoji emoji-id="5886666250158870040">💬</tg-emoji> Написать в поддержку'
+                    ),
                     url=settings.get_support_contact_url() or 'https://t.me/',
                 )
             ],
@@ -832,7 +834,10 @@ async def handle_sbp_payment(callback: types.CallbackQuery, db: AsyncSession, db
         or DEFAULT_LANGUAGE
     )
     if db_user is None:
-        await callback.answer(texts.t('PAYMENT_UI_NOT_FOUND', '❌ Платеж не найден'), show_alert=True)
+        await callback.answer(
+            texts.t('PAYMENT_UI_NOT_FOUND', '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Платеж не найден'),
+            show_alert=True,
+        )
         return
     try:
         local_payment_id = int(callback.data.split('_')[-1])
@@ -842,7 +847,12 @@ async def handle_sbp_payment(callback: types.CallbackQuery, db: AsyncSession, db
         payment = await get_yookassa_payment_by_local_id(db, local_payment_id)
 
         if not payment or payment.user_id != db_user.id:
-            await callback.answer(texts.t('PAYMENT_UI_NOT_FOUND', '❌ Платеж не найден'), show_alert=True)
+            await callback.answer(
+                texts.t(
+                    'PAYMENT_UI_NOT_FOUND', '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Платеж не найден'
+                ),
+                show_alert=True,
+            )
             return
 
         import json
@@ -852,7 +862,11 @@ async def handle_sbp_payment(callback: types.CallbackQuery, db: AsyncSession, db
 
         if not confirmation_token:
             await callback.answer(
-                texts.t('PAYMENT_UI_TOKEN_MISSING', '❌ Токен подтверждения не найден'), show_alert=True
+                texts.t(
+                    'PAYMENT_UI_TOKEN_MISSING',
+                    '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Токен подтверждения не найден',
+                ),
+                show_alert=True,
             )
             return
 
@@ -870,7 +884,13 @@ async def handle_sbp_payment(callback: types.CallbackQuery, db: AsyncSession, db
 
     except Exception as e:
         logger.error('Ошибка обработки embedded платежа СБП', error=e)
-        await callback.answer(texts.t('PAYMENT_UI_PROCESSING_ERROR', '❌ Ошибка обработки платежа'), show_alert=True)
+        await callback.answer(
+            texts.t(
+                'PAYMENT_UI_PROCESSING_ERROR',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Ошибка обработки платежа',
+            ),
+            show_alert=True,
+        )
 
 
 async def _reply_after_answer(callback: types.CallbackQuery, text: str) -> None:
@@ -890,11 +910,21 @@ async def handle_topup_amount_callback(
         _, method, amount_str = callback.data.split('|', 2)
         amount_kopeks = int(amount_str)
     except ValueError:
-        await callback.answer(texts.t('DEVICES_INVALID_REQUEST', '❌ Некорректный запрос'), show_alert=True)
+        await callback.answer(
+            texts.t(
+                'DEVICES_INVALID_REQUEST', '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Некорректный запрос'
+            ),
+            show_alert=True,
+        )
         return
 
     if amount_kopeks <= 0:
-        await callback.answer(texts.t('PAYMENT_UI_INVALID_AMOUNT', '❌ Некорректная сумма'), show_alert=True)
+        await callback.answer(
+            texts.t(
+                'PAYMENT_UI_INVALID_AMOUNT', '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Некорректная сумма'
+            ),
+            show_alert=True,
+        )
         return
 
     # Сценарии, которым передаётся сам callback, отвечают на нажатие сами (у них свои алерты).
@@ -961,14 +991,24 @@ async def handle_topup_amount_callback(
             await state.set_state(BalanceStates.waiting_for_amount)
             if not await route_payment_by_method(callback.message, db_user, amount_kopeks, state, method):
                 await _reply_after_answer(
-                    callback, texts.t('SUBSCRIPTION_UI_UNKNOWN_PAYMENT_METHOD', '❌ Неизвестный способ оплаты')
+                    callback,
+                    texts.t(
+                        'SUBSCRIPTION_UI_UNKNOWN_PAYMENT_METHOD',
+                        '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Неизвестный способ оплаты',
+                    ),
                 )
 
     except TelegramBadRequest:
         raise  # устаревший запрос и прочие ответы Telegram классифицирует @error_handler
     except Exception as error:
         logger.error('Ошибка быстрого пополнения', error=error)
-        await _reply_after_answer(callback, texts.t('DEVICE_RENAME_PARSE_ERROR', '❌ Ошибка обработки запроса'))
+        await _reply_after_answer(
+            callback,
+            texts.t(
+                'DEVICE_RENAME_PARSE_ERROR',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Ошибка обработки запроса',
+            ),
+        )
 
 
 def register_balance_handlers(dp: Dispatcher):

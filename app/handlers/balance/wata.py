@@ -47,7 +47,7 @@ async def start_wata_payment(
         await callback.message.edit_text(
             texts.t(
                 'USER_RESTRICTION_TOPUP_BLOCKED',
-                '🚫 <b>Пополнение ограничено</b>\n\n{reason}\n\nЕсли вы считаете это ошибкой, вы можете обжаловать решение.',
+                '<tg-emoji emoji-id="5872829476143894491">🚫</tg-emoji> <b>Пополнение ограничено</b>\n\n{reason}\n\nЕсли вы считаете это ошибкой, вы можете обжаловать решение.',
             ).format(reason=reason),
             reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
         )
@@ -56,7 +56,11 @@ async def start_wata_payment(
 
     if not settings.is_wata_enabled():
         await callback.answer(
-            texts.t('SUBSCRIPTION_UI_WATA_UNAVAILABLE', '❌ Оплата через WATA временно недоступна'), show_alert=True
+            texts.t(
+                'SUBSCRIPTION_UI_WATA_UNAVAILABLE',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Оплата через WATA временно недоступна',
+            ),
+            show_alert=True,
         )
         return
 
@@ -64,7 +68,7 @@ async def start_wata_payment(
         texts.t(
             'WATA_TOPUP_PROMPT',
             (
-                '💳 <b>Оплата через WATA</b>\n\n'
+                '<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> <b>Оплата через WATA</b>\n\n'
                 'Введите сумму пополнения. Минимальная сумма — {min_amount}, максимальная — {max_amount}.\n'
                 'Оплата происходит через защищенную форму WATA.'
             ),
@@ -116,7 +120,7 @@ async def process_wata_payment_amount(
         await message.answer(
             texts.t(
                 'USER_RESTRICTION_TOPUP_BLOCKED',
-                '🚫 <b>Пополнение ограничено</b>\n\n{reason}\n\nЕсли вы считаете это ошибкой, вы можете обжаловать решение.',
+                '<tg-emoji emoji-id="5872829476143894491">🚫</tg-emoji> <b>Пополнение ограничено</b>\n\n{reason}\n\nЕсли вы считаете это ошибкой, вы можете обжаловать решение.',
             ).format(reason=reason),
             reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
             parse_mode='HTML',
@@ -125,7 +129,12 @@ async def process_wata_payment_amount(
         return
 
     if not settings.is_wata_enabled():
-        await message.answer(texts.t('SUBSCRIPTION_UI_WATA_UNAVAILABLE', '❌ Оплата через WATA временно недоступна'))
+        await message.answer(
+            texts.t(
+                'SUBSCRIPTION_UI_WATA_UNAVAILABLE',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Оплата через WATA временно недоступна',
+            )
+        )
         return
 
     if amount_kopeks < settings.WATA_MIN_AMOUNT_KOPEKS:
@@ -164,7 +173,7 @@ async def process_wata_payment_amount(
         await message.answer(
             texts.t(
                 'WATA_PAYMENT_ERROR',
-                '❌ Ошибка создания платежа WATA. Попробуйте позже или обратитесь в поддержку.',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Ошибка создания платежа WATA. Попробуйте позже или обратитесь в поддержку.',
             )
         )
         await state.clear()
@@ -187,7 +196,9 @@ async def process_wata_payment_amount(
             ],
             [
                 types.InlineKeyboardButton(
-                    text=texts.t('CHECK_STATUS_BUTTON', '📊 Проверить статус'),
+                    text=texts.t(
+                        'CHECK_STATUS_BUTTON', '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> Проверить статус'
+                    ),
                     callback_data=f'check_wata_{local_payment_id}',
                     style='primary',
                 )
@@ -199,15 +210,15 @@ async def process_wata_payment_amount(
     message_template = texts.t(
         'WATA_PAYMENT_INSTRUCTIONS',
         (
-            '💳 <b>Оплата через WATA</b>\n\n'
-            '💰 Сумма: {amount}\n'
-            '🆔 ID платежа: {payment_id}\n\n'
-            '📱 <b>Инструкция:</b>\n'
+            '<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> <b>Оплата через WATA</b>\n\n'
+            '<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> Сумма: {amount}\n'
+            'ID платежа: {payment_id}\n\n'
+            '<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> <b>Инструкция:</b>\n'
             "1. Нажмите кнопку 'Оплатить через WATA'\n"
             '2. Следуйте подсказкам платежной системы\n'
             '3. Подтвердите перевод\n'
             '4. Средства зачислятся автоматически\n\n'
-            '❓ Если возникнут проблемы, обратитесь в {support}'
+            '<tg-emoji emoji-id="5873121512445187130">❓</tg-emoji> Если возникнут проблемы, обратитесь в {support}'
         ),
     )
 
@@ -285,13 +296,20 @@ async def check_wata_payment_status(
         or DEFAULT_LANGUAGE
     )
     if db_user is None:
-        await callback.answer(texts.t('PAYMENT_UI_NOT_FOUND', '❌ Платеж не найден'), show_alert=True)
+        await callback.answer(
+            texts.t('PAYMENT_UI_NOT_FOUND', '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Платеж не найден'),
+            show_alert=True,
+        )
         return
     try:
         local_payment_id = int(callback.data.split('_')[-1])
     except (ValueError, IndexError):
         await callback.answer(
-            texts.t('PAYMENT_UI_INVALID_ID', '❌ Некорректный идентификатор платежа'), show_alert=True
+            texts.t(
+                'PAYMENT_UI_INVALID_ID',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Некорректный идентификатор платежа',
+            ),
+            show_alert=True,
         )
         return
 
@@ -299,14 +317,20 @@ async def check_wata_payment_status(
 
     payment = await get_wata_payment_by_id(db, local_payment_id)
     if not payment or payment.user_id != db_user.id:
-        await callback.answer(texts.t('PAYMENT_UI_NOT_FOUND', '❌ Платеж не найден'), show_alert=True)
+        await callback.answer(
+            texts.t('PAYMENT_UI_NOT_FOUND', '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Платеж не найден'),
+            show_alert=True,
+        )
         return
 
     payment_service = PaymentService(callback.bot)
     status_info = await payment_service.get_wata_payment_status(db, local_payment_id)
 
     if not status_info:
-        await callback.answer(texts.t('PAYMENT_UI_NOT_FOUND', '❌ Платеж не найден'), show_alert=True)
+        await callback.answer(
+            texts.t('PAYMENT_UI_NOT_FOUND', '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Платеж не найден'),
+            show_alert=True,
+        )
         return
 
     payment = status_info['payment']
@@ -314,26 +338,41 @@ async def check_wata_payment_status(
     status_labels: dict[str, dict[str, str]] = {
         'Opened': {'emoji': '⏳', 'label': texts.t('WATA_STATUS_OPENED', 'Ожидает оплаты')},
         'Closed': {'emoji': '⌛', 'label': texts.t('WATA_STATUS_CLOSED', 'Обрабатывается')},
-        'Paid': {'emoji': '✅', 'label': texts.t('WATA_STATUS_PAID', 'Оплачен')},
-        'Declined': {'emoji': '❌', 'label': texts.t('WATA_STATUS_DECLINED', 'Отклонен')},
+        'Paid': {
+            'emoji': '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji>',
+            'label': texts.t('WATA_STATUS_PAID', 'Оплачен'),
+        },
+        'Declined': {
+            'emoji': '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji>',
+            'label': texts.t('WATA_STATUS_DECLINED', 'Отклонен'),
+        },
     }
 
     label_info = status_labels.get(
-        payment.status, {'emoji': '❓', 'label': texts.t('WATA_STATUS_UNKNOWN', 'Неизвестно')}
+        payment.status,
+        {
+            'emoji': '<tg-emoji emoji-id="5873121512445187130">❓</tg-emoji>',
+            'label': texts.t('WATA_STATUS_UNKNOWN', 'Неизвестно'),
+        },
     )
 
     message_lines = [
-        texts.t('WATA_STATUS_TITLE', '💳 <b>Статус платежа WATA</b>'),
+        texts.t(
+            'WATA_STATUS_TITLE', '<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> <b>Статус платежа WATA</b>'
+        ),
         '',
-        f'🆔 ID: {payment.payment_link_id}',
-        f'💰 Сумма: {settings.format_price(payment.amount_kopeks)}',
-        f'📊 Статус: {label_info["emoji"]} {label_info["label"]}',
-        f'📅 Создан: {format_local_datetime(payment.created_at, "%d.%m.%Y %H:%M") if payment.created_at else "—"}',
+        f'ID: {payment.payment_link_id}',
+        f'<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> Сумма: {settings.format_price(payment.amount_kopeks)}',
+        f'<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> Статус: {label_info["emoji"]} {label_info["label"]}',
+        f'<tg-emoji emoji-id="5967412305338568701">📅</tg-emoji> Создан: {format_local_datetime(payment.created_at, "%d.%m.%Y %H:%M") if payment.created_at else "—"}',
     ]
 
     if payment.is_paid:
         message_lines.append(
-            texts.t('PAYMENT_UI_SUCCESS_CREDITED_SHORT', '\n✅ Платеж успешно завершен! Средства уже на балансе.')
+            texts.t(
+                'PAYMENT_UI_SUCCESS_CREDITED_SHORT',
+                '\n<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Платеж успешно завершен! Средства уже на балансе.',
+            )
         )
     elif payment.status in {'Opened', 'Closed'}:
         message_lines.append(
