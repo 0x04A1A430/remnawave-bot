@@ -1667,5 +1667,6 @@
   "AUTO_RENEW_EXPIRED_INSUFFICIENT": "<tg-emoji emoji-id=\"5881702736843511327\">⚠</tg-emoji> <b>Недостатньо коштів для продовження</b>\n\nПідписка закінчилася, але на балансі не вистачає грошей для автоматичного продовження.\n\nБаланс: {balance}\nПотрібно: {required}\n\nПоповніть баланс — підписка продовжиться автоматично.",
   "SUB_STATUS_GRACE": "Тимчасовий доступ\n{end_date}",
   "CHANGE_TARIFF_BUTTON": "<tg-emoji emoji-id=\"5924720918826848520\">📦</tg-emoji> Змінити тариф",
-  "SUBSCRIPTION_UI_BUY": "<tg-emoji emoji-id=\"5974217466270716579\">💵</tg-emoji> Купити підписку"
+  "SUBSCRIPTION_UI_BUY": "<tg-emoji emoji-id=\"5974217466270716579\">💵</tg-emoji> Купити підписку",
+  "TARIFF_DEVICES_SHORT": "пристр."
 }

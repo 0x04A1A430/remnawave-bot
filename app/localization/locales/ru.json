@@ -7197,5 +7197,6 @@
   "ADMIN_USERS_CLEANUP_BACKUP_FILE": "\nБекап: <code>{value1}</code>",
   "ADMIN_USERS_CLEANUP_SUBSCRIPTION_RULE": "Подписка отсутствует или истекла более {value1} дней назад.\n",
   "AUTO_RENEW_EXPIRED_INSUFFICIENT": "<tg-emoji emoji-id=\"5881702736843511327\">⚠</tg-emoji> <b>Недостаточно средств для продления</b>\n\nПодписка закончилась, но на балансе не хватает денег для автоматического продления.\n\nБаланс: {balance}\nТребуется: {required}\n\nПополните баланс — подписка продлится автоматически.",
-  "SUB_STATUS_GRACE": "Временный доступ\n{end_date}"
+  "SUB_STATUS_GRACE": "Временный доступ\n{end_date}",
+  "TARIFF_DEVICES_SHORT": "устр."
 }
