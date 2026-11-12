@@ -97,11 +97,13 @@ class UserService:
             message = texts.t('USER_TOPUP_ACTIVE', '').format(
                 amount=settings.format_price(amount_kopeks), balance=settings.format_price(user.balance_kopeks)
             )
+            from app.utils.button_emoji import make_button
+
             keyboard = types.InlineKeyboardMarkup(
                 inline_keyboard=[
                     [
-                        types.InlineKeyboardButton(
-                            text=texts.t('SUBSCRIPTION_EXTEND', 'Продлить подписку'),
+                        make_button(
+                            texts.t('SUBSCRIPTION_EXTEND', 'Продлить подписку'),
                             callback_data=extend_callback,
                             style='success',
                         )
@@ -115,21 +117,29 @@ class UserService:
                 balance=settings.format_price(user.balance_kopeks),
                 separator='─' * 25,
             )
+            from app.utils.button_emoji import make_button
+
             keyboard = types.InlineKeyboardMarkup(
                 inline_keyboard=[
                     [
-                        types.InlineKeyboardButton(
-                            text=texts.t('USER_TOPUP_ACTIVATE', ''), callback_data='subscription_buy'
+                        make_button(
+                            texts.t('USER_TOPUP_ACTIVATE', 'Активировать подписку'),
+                            callback_data='subscription_buy',
+                            style='success',
                         )
                     ],
                     [
-                        types.InlineKeyboardButton(
-                            text=texts.t('SUBSCRIPTION_EXTEND', ''), callback_data=extend_callback
+                        make_button(
+                            texts.t('SUBSCRIPTION_EXTEND', 'Продлить подписку'),
+                            callback_data=extend_callback,
+                            style='primary',
                         )
                     ],
                     [
-                        types.InlineKeyboardButton(
-                            text=texts.t('USER_TOPUP_ADD_DEVICES', ''), callback_data='subscription_add_devices'
+                        make_button(
+                            texts.t('USER_TOPUP_ADD_DEVICES', 'Добавить устройства'),
+                            callback_data='subscription_add_devices',
+                            style='primary',
                         )
                     ],
                 ]
