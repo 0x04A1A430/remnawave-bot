@@ -104,13 +104,13 @@ _TRAFFIC_TIERS = (
 )
 
 
-_BLANK_LINE_RUN = re.compile(r'\n{2,}')
+_BLANK_LINE_RUN = re.compile(r'\n{3,}')
 
 
 def _normalize_spacing(value: Any) -> Any:
     """Пустые строки схлопываются в одиночный перевод строки; <pre> не трогаем."""
     if isinstance(value, str) and '<pre' not in value:
-        return _BLANK_LINE_RUN.sub('\n', value)
+        return _BLANK_LINE_RUN.sub('\n\n', value)
     return value
 
 

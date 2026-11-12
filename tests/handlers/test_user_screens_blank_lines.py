@@ -18,8 +18,8 @@ from app.utils.text_compact import compact_blank_lines
 
 
 def test_compact_blank_lines_collapses_runs_and_trims_edges() -> None:
-    assert compact_blank_lines('\n\nЗаголовок\n\n\n\nТекст\n\n') == 'Заголовок\nТекст'
-    assert compact_blank_lines('А\n \n\nБ') == 'А\nБ'
+    assert compact_blank_lines('\n\nЗаголовок\n\n\n\nТекст\n\n') == 'Заголовок\n\nТекст'
+    assert compact_blank_lines('А\n \n\nБ') == 'А\n\nБ'
     assert compact_blank_lines('   ') == ''
 
 
@@ -59,7 +59,7 @@ async def test_ticket_view_has_no_double_blank_lines() -> None:
     shown = send_mock.await_args.args[1]
     assert '\n\n\n' not in shown
     assert shown == shown.strip('\n')
-    assert 'Первая строка\nВторая строка' in shown
+    assert 'Первая строка\n\nВторая строка' in shown
 
 
 @pytest.mark.asyncio

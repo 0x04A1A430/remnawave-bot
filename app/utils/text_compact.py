@@ -13,7 +13,7 @@
 import re
 
 
-_BLANK_LINE_RUN = re.compile(r'\n{2,}')
+_BLANK_LINE_RUN = re.compile(r'\n{3,}')
 _TRAILING_SPACES = re.compile(r'[ \t]+\n')
 
 
@@ -26,6 +26,6 @@ def compact_blank_lines(text: str) -> str:
     """
     if not text:
         return ''
-    compacted = _TRAILING_SPACES.sub('\n', text)
-    compacted = _BLANK_LINE_RUN.sub('\n', compacted)
+    compacted = _TRAILING_SPACES.sub('\n\n', text)
+    compacted = _BLANK_LINE_RUN.sub('\n\n', compacted)
     return compacted.strip()
