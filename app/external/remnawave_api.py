@@ -1396,64 +1396,6 @@ class RemnaWaveAPI:
             updated_at=self._parse_optional_datetime(squad_data.get('updatedAt')),
         )
 
-    # ── Subscription templates (панель 3.x) ──────────────────────────────
-
-    async def get_subscription_templates(self) -> list[dict[str, Any]]:
-        response = await self._make_request('GET', '/api/subscription-templates')
-        return response['response']['templates']
-
-    async def get_subscription_template(self, template_uuid: str) -> dict[str, Any]:
-        response = await self._make_request('GET', f'/api/subscription-templates/{template_uuid}')
-        return response['response']
-
-    async def create_subscription_template(
-        self,
-        name: str,
-        template_type: str,
-        template_json: dict[str, Any] | None = None,
-        encoded_template_yaml: str | None = None,
-        tags: list[str] | None = None,
-    ) -> dict[str, Any]:
-        data: dict[str, Any] = {
-            'name': name,
-            'templateType': template_type,
-            'tags': tags or [],
-        }
-        if template_json is not None:
-            data['templateJson'] = template_json
-        if encoded_template_yaml is not None:
-            data['encodedTemplateYaml'] = encoded_template_yaml
-        response = await self._make_request('POST', '/api/subscription-templates', data)
-        return response['response']
-
-    async def update_subscription_template(
-        self,
-        template_uuid: str,
-        *,
-        name: str | None = None,
-        template_type: str | None = None,
-        template_json: dict[str, Any] | None = None,
-        encoded_template_yaml: str | None = None,
-        tags: list[str] | None = None,
-    ) -> dict[str, Any]:
-        data: dict[str, Any] = {'uuid': template_uuid}
-        if name is not None:
-            data['name'] = name
-        if template_type is not None:
-            data['templateType'] = template_type
-        if template_json is not None:
-            data['templateJson'] = template_json
-        if encoded_template_yaml is not None:
-            data['encodedTemplateYaml'] = encoded_template_yaml
-        if tags is not None:
-            data['tags'] = tags
-        response = await self._make_request('PATCH', '/api/subscription-templates', data)
-        return response['response']
-
-    async def delete_subscription_template(self, template_uuid: str) -> bool:
-        await self._make_request('DELETE', f'/api/subscription-templates/{template_uuid}')
-        return True
-
     async def get_all_nodes(self) -> list[RemnaWaveNode]:
         response = await self._make_request('GET', '/api/nodes')
         return [self._parse_node(node) for node in response['response']]
