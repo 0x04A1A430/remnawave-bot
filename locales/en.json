@@ -1478,7 +1478,7 @@
   "SUBSCRIPTION_PURCHASED": "Subscription purchased successfully!",
   "SUBSCRIPTION_REACTIVATED_CHANNEL_SUBSCRIBE": "Your subscription has been restored!\n\nThank you for subscribing to the channels. VPN is active again.",
   "SUBSCRIPTION_REACTIVATED_CHANNEL_SUBSCRIBE_MULTI": "Your subscriptions have been restored!\n\nThank you for subscribing to the channels. VPN is active again.",
-  "SUBSCRIPTION_SETTINGS_BUTTON": "Settings",
+  "SUBSCRIPTION_SETTINGS_BUTTON": "<tg-emoji emoji-id=\"5877260593903177342\">⚙</tg-emoji> Settings",
   "SUBSCRIPTION_SETTINGS_OVERVIEW": "<b>Subscription settings</b>\n\n<blockquote><b>Current parameters:</b>\nTraffic: {traffic_used} / {traffic_limit}\nDevices: {devices_used} / {devices_limit}</blockquote>",
   "SUBSCRIPTION_SETTINGS_PAID_ONLY": "Settings are available only for paid subscriptions",
   "SUBSCRIPTION_SPECIFIC_APP_TITLE": "<b>{app_name} - {device_name}</b>",
@@ -1779,5 +1779,7 @@
   "ADMIN_USERS_CLEANUP_BACKUP_FILE": "\nBackup: <code>{value1}</code>",
   "ADMIN_USERS_CLEANUP_SUBSCRIPTION_RULE": "No subscription, or it expired more than {value1} days ago.\n",
   "AUTO_RENEW_EXPIRED_INSUFFICIENT": "<tg-emoji emoji-id=\"5881702736843511327\">⚠</tg-emoji> <b>Not enough funds to renew</b>\n\nYour subscription has ended, but your balance is too low to renew it automatically.\n\nBalance: {balance}\nRequired: {required}\n\nTop up your balance and the subscription will renew automatically.",
-  "SUB_STATUS_GRACE": "Temporary access\n{end_date}"
+  "SUB_STATUS_GRACE": "Temporary access\n{end_date}",
+  "CHANGE_TARIFF_BUTTON": "<tg-emoji emoji-id=\"5924720918826848520\">📦</tg-emoji> Change plan",
+  "SUBSCRIPTION_UI_BUY": "<tg-emoji emoji-id=\"5974217466270716579\">💵</tg-emoji> Buy a subscription"
 }

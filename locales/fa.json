@@ -972,7 +972,7 @@
   "CHANGE_DEVICES_SUCCESS_DECREASE": "\nتعداد دستگاه کاهش یافت!\n\nقبلی: {old_count} → جدید: {new_count}\n",
   "CHANGE_DEVICES_SUCCESS_INCREASE": "\nتعداد دستگاه افزایش یافت!\n\nقبلی: {old_count} → جدید: {new_count}\nکسر: {amount}\n",
   "CHANGE_DEVICES_TITLE": "تغییر تعداد دستگاه",
-  "CHANGE_TARIFF_BUTTON": "تعرفه",
+  "CHANGE_TARIFF_BUTTON": "<tg-emoji emoji-id=\"5924720918826848520\">📦</tg-emoji> تغییر تعرفه",
   "CHANNEL_CHECK_BUTTON": "عضو شدم",
   "CHANNEL_CHECK_NOT_SUBSCRIBED": "شما هنوز در همه کانال‌ها عضو نشده‌اید! لطفاً عضو شوید و دوباره امتحان کنید.",
   "CHANNEL_REQUIRED_TEXT": "لطفاً در کانال‌های اجباری عضو شوید و سپس دکمه زیر را فشار دهید.",
@@ -1499,7 +1499,7 @@
   "SUBSCRIPTION_PURCHASED": "اشتراک خریداری شد!",
   "SUBSCRIPTION_REACTIVATED_CHANNEL_SUBSCRIBE": "اشتراک شما بازیابی شد!\n\nبا تشکر از عضویت در کانال‌ها. VPN دوباره فعال است.",
   "SUBSCRIPTION_REACTIVATED_CHANNEL_SUBSCRIBE_MULTI": "اشتراک‌های شما بازیابی شدند!\n\nبا تشکر از عضویت در کانال‌ها. VPN دوباره فعال است.",
-  "SUBSCRIPTION_SETTINGS_BUTTON": "تنظیمات",
+  "SUBSCRIPTION_SETTINGS_BUTTON": "<tg-emoji emoji-id=\"5877260593903177342\">⚙</tg-emoji> تنظیمات",
   "SUBSCRIPTION_SETTINGS_OVERVIEW": "<b>Настройки подписки</b>\n\n<blockquote><b>Текущие параметры:</b>\nТрафик: {traffic_used} / {traffic_limit}\nУстройства: {devices_used} / {devices_limit}</blockquote>",
   "SUBSCRIPTION_SETTINGS_PAID_ONLY": "تنظیمات فقط برای اشتراک پولی",
   "SUBSCRIPTION_SPECIFIC_APP_TITLE": "<b>{app_name} - {device_name}</b>",
@@ -1794,5 +1794,6 @@
   "ADMIN_USERS_CLEANUP_BACKUP_FILE": "\nپشتیبان: <code>{value1}</code>",
   "ADMIN_USERS_CLEANUP_SUBSCRIPTION_RULE": "اشتراک وجود ندارد یا بیش از {value1} روز پیش منقضی شده است.\n",
   "AUTO_RENEW_EXPIRED_INSUFFICIENT": "<tg-emoji emoji-id=\"5881702736843511327\">⚠</tg-emoji> <b>موجودی کافی برای تمدید نیست</b>\n\nاشتراک به پایان رسیده، اما موجودی برای تمدید خودکار کافی نیست.\n\nموجودی: {balance}\nمورد نیاز: {required}\n\nموجودی را افزایش دهید تا اشتراک به‌صورت خودکار تمدید شود.",
-  "SUB_STATUS_GRACE": "دسترسی موقت\n{end_date}"
+  "SUB_STATUS_GRACE": "دسترسی موقت\n{end_date}",
+  "SUBSCRIPTION_UI_BUY": "<tg-emoji emoji-id=\"5974217466270716579\">💵</tg-emoji> خرید اشتراک"
 }

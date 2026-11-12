@@ -12,7 +12,6 @@ from app.localization.loader import DEFAULT_LANGUAGE
 from app.localization.texts import get_texts
 from app.utils.button_emoji import make_button
 from app.utils.device_display import format_device_label
-from app.utils.legacy_subscription import is_legacy_subscription as _legacy_subscription
 from app.utils.miniapp_buttons import build_miniapp_or_callback_button
 from app.utils.price_display import PriceInfo, format_price_button
 from app.utils.pricing_utils import (
@@ -763,13 +762,27 @@ def get_main_menu_keyboard(
         subscription_buttons.append(make_button(text=texts.MENU_TRIAL, callback_data='menu_trial', style='success'))
 
     if show_buy:
-        subscription_buttons.append(
-            make_button(
-                text=texts.MENU_BUY_SUBSCRIPTION,
-                callback_data='menu_buy',
-                style='success',
+        existing_status = getattr(subscription, 'actual_status', None) if subscription else None
+        if existing_status in ('expired', 'disabled'):
+            # Подписка уже была: это не «купить ещё одну», а сменить текущую.
+            subscription_buttons.append(
+                make_button(
+                    text=texts.t(
+                        'CHANGE_TARIFF_BUTTON',
+                        '<tg-emoji emoji-id="5924720918826848520">📦</tg-emoji> Сменить тариф',
+                    ),
+                    callback_data='tariff_switch',
+                    style='primary',
+                )
             )
-        )
+        else:
+            subscription_buttons.append(
+                make_button(
+                    text=texts.MENU_BUY_SUBSCRIPTION,
+                    callback_data='menu_buy',
+                    style='success',
+                )
+            )
 
     if subscription_buttons:
         paired_buttons.extend(subscription_buttons)
@@ -1343,114 +1356,48 @@ def get_subscription_keyboard(
         if happ_row:
             keyboard.append(happ_row)
 
-        if is_trial:
-            keyboard.append(
-                [
-                    make_button(
-                        text=texts.MENU_BUY_SUBSCRIPTION,
-                        callback_data='subscription_upgrade',
-                    )
-                ]
-            )
-        else:
-            # Проверяем, является ли тариф суточным
-            tariff = getattr(subscription, 'tariff', None) if subscription else None
-            is_daily_tariff = tariff and getattr(tariff, 'is_daily', False)
-            # Куплена в классике, потом включили тарифы: продлить нельзя,
-            # автоплатёж не работает — в меню один путь, «Перейти на тариф».
-            is_legacy_subscription = _legacy_subscription(subscription)
-
-            if is_daily_tariff:
-                # Для суточного тарифа: проверяем статус подписки
-                from app.database.models import SubscriptionStatus
-
-                sub_status = getattr(subscription, 'status', None)
-                is_paused = getattr(subscription, 'is_daily_paused', False)
-                is_inactive = sub_status in (
-                    SubscriptionStatus.DISABLED.value,
-                    SubscriptionStatus.EXPIRED.value,
-                    SubscriptionStatus.LIMITED.value,
-                )
-
-                if is_inactive or is_paused:
-                    pause_text = texts.t('RESUME_DAILY_BUTTON', 'Возобновить подписку')
-                else:
-                    pause_text = texts.t('PAUSE_DAILY_BUTTON', 'Приостановить подписку')
-                keyboard.append(
-                    [
-                        make_button(
-                            text=pause_text,
-                            callback_data='toggle_daily_subscription_pause',
-                        )
-                    ]
-                )
-            elif is_legacy_subscription:
-                # Старая подписка (куплена в классике, тарифа нет, а оператор на
-                # тарифах): продления и автоплатежа у неё нет, единственный путь —
-                # выбрать тариф, он надевается на эту же подписку.
-                keyboard.append(
-                    [
-                        make_button(
-                            text=texts.t('MOVE_TO_TARIFF_BUTTON', 'Перейти на тариф'),
-                            callback_data='tariff_switch',
-                        )
-                    ]
-                )
-            else:
-                keyboard.append(
-                    [
-                        make_button(
-                            text=texts.MENU_EXTEND_SUBSCRIPTION,
-                            callback_data='subscription_extend',
-                        )
-                    ]
-                )
-
-            # Кнопка докупки трафика для платных подписок
-            # В режиме тарифов проверяем can_topup_traffic() у тарифа, в классическом - глобальные настройки
-            show_traffic_topup = False
-            if subscription and (subscription.traffic_limit_gb or 0) > 0:
-                if settings.is_tariffs_mode() and tariff:
-                    show_traffic_topup = tariff.can_topup_traffic()
-                elif is_legacy_subscription:
-                    # Старая подписка: классические пакеты трафика ей не продаём — сперва переход на тариф.
-                    show_traffic_topup = False
-                elif settings.is_traffic_topup_enabled() and not settings.is_traffic_topup_blocked():
-                    show_traffic_topup = True
-
-            if show_traffic_topup:
-                keyboard.append(
-                    [
-                        make_button(
-                            text=texts.t('BUY_TRAFFIC_BUTTON', 'Докупить трафик'),
-                            callback_data='buy_traffic',
-                        )
-                    ]
-                )
-
     # Кнопка «Подарить подписку» из меню подписки убрана по запросу.
 
-    # Ряд: [Настройки] [+ Купить тариф для истёкших/отключённых]
-    settings_row = [
-        make_button(
-            text=texts.t('SUBSCRIPTION_SETTINGS_BUTTON', 'Настройки'),
-            callback_data='subscription_settings',
-            style='primary',
-        )
-    ]
-    # Вкладка подписки: кнопка мгновенного переключения тарифа (instant_switch)
-    # убрана полностью — смена тарифа недоступна отсюда. Для истёкшей/отключённой
-    # подписки показываем «Купить тариф» (покупку с нуля) — переключить там
-    # всё равно нельзя, а покупка нового оформляется штатно через menu_buy.
-    if settings.is_tariffs_mode() and subscription and not is_trial:
-        if getattr(subscription, 'actual_status', None) in ('expired', 'disabled') and not is_legacy_subscription:
-            settings_row.append(
+    # Триалу нужен переход на платный тариф — это не «продление», оставляем в карточке.
+    if has_subscription and is_trial:
+        keyboard.append(
+            [
                 make_button(
-                    text=texts.t('BUY_TARIFF_BUTTON', 'Купить тариф'),
-                    callback_data='menu_buy',
+                    text=texts.MENU_BUY_SUBSCRIPTION,
+                    callback_data='subscription_upgrade',
+                    style='success',
                 )
-            )
-    keyboard.append(settings_row)
+            ]
+        )
+
+    # Продление, докупка трафика и смена тарифа живут в «Настройках»:
+    # в карточке подписки оставляем только подключение и вход в настройки.
+    if has_subscription and not is_trial:
+        keyboard.append(
+            [
+                make_button(
+                    text=texts.t(
+                        'SUBSCRIPTION_SETTINGS_BUTTON',
+                        '<tg-emoji emoji-id="5877260593903177342">⚙</tg-emoji> Настройки',
+                    ),
+                    callback_data='subscription_settings',
+                    style='primary',
+                )
+            ]
+        )
+    elif not has_subscription:
+        keyboard.append(
+            [
+                make_button(
+                    text=texts.t(
+                        'SUBSCRIPTION_UI_BUY',
+                        '<tg-emoji emoji-id="5974217466270716579">💵</tg-emoji> Купить подписку',
+                    ),
+                    callback_data='menu_buy',
+                    style='success',
+                )
+            ]
+        )
 
     keyboard.append([make_button(text=texts.BACK, style='danger', callback_data='back_to_menu')])
 
@@ -3902,7 +3849,92 @@ def get_updated_subscription_settings_keyboard(
     # единственный путь: перейти на тариф.
     classic_addons_allowed = not has_tariff and not is_legacy_subscription
 
-    # Для суточных тарифов кнопка паузы теперь в главном меню подписки
+    is_daily = bool(tariff and getattr(tariff, 'is_daily', False))
+    actual_status = getattr(subscription, 'actual_status', None) if subscription else None
+
+    # Основные действия с подпиской живут здесь, а не в карточке подписки.
+    if subscription:
+        if is_legacy_subscription:
+            keyboard.append(
+                [
+                    make_button(
+                        text=texts.t(
+                            'MOVE_TO_TARIFF_BUTTON',
+                            '<tg-emoji emoji-id="5924720918826848520">📦</tg-emoji> Перейти на тариф',
+                        ),
+                        callback_data='tariff_switch',
+                        style='primary',
+                    )
+                ]
+            )
+        elif is_daily:
+            is_paused = getattr(subscription, 'is_daily_paused', False)
+            is_inactive = actual_status in ('expired', 'disabled', 'limited')
+            pause_text = (
+                texts.t('RESUME_DAILY_BUTTON', 'Возобновить подписку')
+                if is_inactive or is_paused
+                else texts.t('PAUSE_DAILY_BUTTON', 'Приостановить подписку')
+            )
+            keyboard.append(
+                [
+                    make_button(
+                        text=pause_text,
+                        callback_data='toggle_daily_subscription_pause',
+                    )
+                ]
+            )
+        else:
+            keyboard.append(
+                [
+                    make_button(
+                        text=texts.t(
+                            'SUBSCRIPTION_UI_RENEW_BUTTON',
+                            '<tg-emoji emoji-id="5839200986022812209">🔄</tg-emoji> Продлить',
+                        ),
+                        callback_data='subscription_extend',
+                        style='success',
+                    )
+                ]
+            )
+
+        show_traffic_topup = False
+        if not is_daily and (subscription.traffic_limit_gb or 0) > 0:
+            if settings.is_tariffs_mode() and tariff:
+                show_traffic_topup = tariff.can_topup_traffic()
+            elif is_legacy_subscription:
+                show_traffic_topup = False
+            elif settings.is_traffic_topup_enabled() and not settings.is_traffic_topup_blocked():
+                show_traffic_topup = True
+        if show_traffic_topup:
+            keyboard.append(
+                [
+                    make_button(
+                        text=texts.t('BUY_TRAFFIC_BUTTON', 'Докупить трафик'),
+                        callback_data='buy_traffic',
+                        style='primary',
+                    )
+                ]
+            )
+
+        # Истёкшая подписка: не «купить ещё одну», а сменить текущую на другой тариф.
+        if (
+            not is_daily
+            and not is_legacy_subscription
+            and settings.is_tariffs_mode()
+            and actual_status in ('expired', 'disabled')
+        ):
+            keyboard.append(
+                [
+                    make_button(
+                        text=texts.t(
+                            'CHANGE_TARIFF_BUTTON',
+                            '<tg-emoji emoji-id="5924720918826848520">📦</tg-emoji> Сменить тариф',
+                        ),
+                        callback_data='tariff_switch',
+                        style='primary',
+                    )
+                ]
+            )
 
     if show_countries_management and classic_addons_allowed:
         keyboard.append(

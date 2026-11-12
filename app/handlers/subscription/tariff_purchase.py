@@ -3757,36 +3757,6 @@ async def show_tariff_switch_list(
     # тариф надевается на неё же (confirm_tariff_switch → extend_subscription).
     is_legacy_subscription = _legacy_subscription(subscription)
 
-    # Истёкшая подписка: смены тарифа нет, предлагаем купить новый тариф с нуля
-    # (раньше кнопка «Тариф» вела сюда в тупик на истёкшей подписке).
-    subscription_expired = not subscription.end_date or subscription.end_date <= datetime.now(UTC)
-    if subscription_expired and not is_legacy_subscription:
-        await callback.message.edit_text(
-            texts.t(
-                'TARIFF_SWITCH_EXPIRED',
-                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> <b>Переключение недоступно</b>\n\n'
-                'У вашей подписки не осталось активных дней.\n'
-                'Оформите новый тариф с нуля.',
-            ),
-            reply_markup=InlineKeyboardMarkup(
-                inline_keyboard=[
-                    [
-                        InlineKeyboardButton(
-                            text=texts.t(
-                                'BUY_TARIFF_BUTTON',
-                                '<tg-emoji emoji-id="5924720918826848520">📦</tg-emoji> Купить тариф',
-                            ),
-                            callback_data='menu_buy',
-                        )
-                    ],
-                    [InlineKeyboardButton(text=texts.BACK, callback_data='menu_subscription', style='danger')],
-                ]
-            ),
-            parse_mode='HTML',
-        )
-        await callback.answer()
-        return
-
     current_tariff_id = subscription.tariff_id
 
     # Проверяем, разрешена ли смена тарифа хотя бы в одном направлении
