@@ -49,6 +49,7 @@ from app.services.grace_access_service import GraceReason
 from app.services.notification_delivery_service import NotificationType, notification_delivery_service
 from app.services.panel_sync import WEBHOOK, panel_date_behind_paid_renewal, project_onto_subscription, read_panel_user
 from app.utils.miniapp_buttons import build_miniapp_or_callback_button, build_subscription_extend_button
+from app.utils.notification_card import premium
 
 
 logger = structlog.get_logger(__name__)
@@ -119,42 +120,42 @@ _EXPIRATION_HOURS_TO_TEXT_KEY: dict[int, str] = {
 
 # Admin event display names for notification messages
 _ADMIN_NODE_EVENTS: dict[str, str] = {
-    'node.created': '● Нода создана',
-    'node.modified': '<tg-emoji emoji-id="5877260593903177342">⚙</tg-emoji> Нода изменена',
-    'node.disabled': '○ Нода отключена',
-    'node.enabled': '● Нода включена',
-    'node.deleted': '× Нода удалена',
-    'node.connection_lost': '! Потеряно соединение с нодой',
-    'node.connection_restored': '✓ Соединение с нодой восстановлено',
-    'node.traffic_notify': '≡ Уведомление о трафике ноды',
+    'node.created': f'{premium("✅")} Нода создана',
+    'node.modified': f'{premium("⚙")} Нода изменена',
+    'node.disabled': f'{premium("⚠")} Нода отключена',
+    'node.enabled': f'{premium("✅")} Нода включена',
+    'node.deleted': f'{premium("❌")} Нода удалена',
+    'node.connection_lost': f'{premium("⚠")} Потеряно соединение с нодой',
+    'node.connection_restored': f'{premium("✅")} Соединение с нодой восстановлено',
+    'node.traffic_notify': f'{premium("📊")} Уведомление о трафике ноды',
 }
 
 _ADMIN_SERVICE_EVENTS: dict[str, str] = {
-    'service.panel_started': '↗ Панель RemnaWave запущена',
-    'service.login_attempt_failed': 'Неудачная попытка входа в панель',
-    'service.login_attempt_success': 'Успешный вход в панель',
-    'service.subpage_config_changed': '▤ Конфиг страницы подписки изменён',
+    'service.panel_started': f'{premium("✅")} Панель RemnaWave запущена',
+    'service.login_attempt_failed': f'{premium("🔒")} Неудачная попытка входа в панель',
+    'service.login_attempt_success': f'{premium("✅")} Успешный вход в панель',
+    'service.subpage_config_changed': f'{premium("📄")} Конфиг страницы подписки изменён',
     # 2.8.0: новые события жизненного цикла API-токена панели (security-релевантно)
-    'service.api_token_created': 'Создан API-токен панели',
-    'service.api_token_deleted': ' Удалён API-токен панели',
+    'service.api_token_created': f'{premium("🔑")} Создан API-токен панели',
+    'service.api_token_deleted': f'{premium("🗑")} Удалён API-токен панели',
 }
 
 _ADMIN_CRM_EVENTS: dict[str, str] = {
-    'crm.infra_billing_node_payment_in_7_days': '¤ Оплата ноды через 7 дней',
-    'crm.infra_billing_node_payment_in_48hrs': '¤ Оплата ноды через 48 часов',
-    'crm.infra_billing_node_payment_in_24hrs': ' Оплата ноды через 24 часа',
-    'crm.infra_billing_node_payment_due_today': '○ Оплата ноды сегодня',
-    'crm.infra_billing_node_payment_overdue_24hrs': '! Просрочка оплаты ноды: 24 часа',
-    'crm.infra_billing_node_payment_overdue_48hrs': '! Просрочка оплаты ноды: 48 часов',
-    'crm.infra_billing_node_payment_overdue_7_days': '! Просрочка оплаты ноды: 7 дней',
+    'crm.infra_billing_node_payment_in_7_days': f'{premium("💳")} Оплата ноды через 7 дней',
+    'crm.infra_billing_node_payment_in_48hrs': f'{premium("💳")} Оплата ноды через 48 часов',
+    'crm.infra_billing_node_payment_in_24hrs': f'{premium("⚠")} Оплата ноды через 24 часа',
+    'crm.infra_billing_node_payment_due_today': f'{premium("⚠")} Оплата ноды сегодня',
+    'crm.infra_billing_node_payment_overdue_24hrs': f'{premium("⚠")} Просрочка оплаты ноды: 24 часа',
+    'crm.infra_billing_node_payment_overdue_48hrs': f'{premium("⚠")} Просрочка оплаты ноды: 48 часов',
+    'crm.infra_billing_node_payment_overdue_7_days': f'{premium("⚠")} Просрочка оплаты ноды: 7 дней',
 }
 
 _ADMIN_ERROR_EVENTS: dict[str, str] = {
-    'errors.bandwidth_usage_threshold_reached_max_notifications': ' Достигнут лимит уведомлений о трафике',
+    'errors.bandwidth_usage_threshold_reached_max_notifications': f'{premium("⚠")} Достигнут лимит уведомлений о трафике',
 }
 
 _ADMIN_TORRENT_BLOCKER_EVENTS: dict[str, str] = {
-    'torrent_blocker.report': '✗ Торрент-блокировщик: обнаружен торрент',
+    'torrent_blocker.report': f'{premium("🚫")} Торрент-блокировщик: обнаружен торрент',
 }
 
 _ADMIN_NODE_CONNECTION_EVENTS = frozenset({'node.connection_lost', 'node.connection_restored'})
