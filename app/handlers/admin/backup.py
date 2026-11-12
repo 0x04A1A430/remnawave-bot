@@ -20,43 +20,43 @@ logger = structlog.get_logger(__name__)
 
 
 _BACKUP_RESULT_KEYS = {
-    '✗ Метаданные бекапа отсутствуют': 'ADMIN_BACKUP_RESULT_NO_METADATA',
-    '✗ Недопустимое имя файла бекапа': 'ADMIN_BACKUP_RESULT_INVALID_FILENAME',
-    '✗ Файл бекапа не содержит данных': 'ADMIN_BACKUP_RESULT_NO_DATA',
+    '\u2717 Метаданные бекапа отсутствуют': 'ADMIN_BACKUP_RESULT_NO_METADATA',
+    '\u2717 Недопустимое имя файла бекапа': 'ADMIN_BACKUP_RESULT_INVALID_FILENAME',
+    '\u2717 Файл бекапа не содержит данных': 'ADMIN_BACKUP_RESULT_NO_DATA',
     'Файл пуст (0 байт)': 'ADMIN_BACKUP_RESULT_EMPTY_FILE',
     'неизвестно': 'ADMIN_BACKUP_RESULT_UNKNOWN_DATE',
 }
 _BACKUP_RESULT_PATTERNS = [
     (
-        r'✓ Бекап успешно создан!\n▣ Файл: (?P<file>[\s\S]*)\n≡ Таблиц: (?P<tables>\d+)\n↑ Записей: (?P<records>[\d,]+)\n«Размер»: (?P<size>\d+\.\d+) MB',
+        r'\u2713 Бекап успешно создан!\n▣ Файл: (?P<file>[\s\S]*)\n≡ Таблиц: (?P<tables>\d+)\n↑ Записей: (?P<records>[\d,]+)\n«Размер»: (?P<size>\d+\.\d+) MB',
         'ADMIN_BACKUP_RESULT_CREATED',
-        '✓ Бекап успешно создан!\n▣ Файл: {file}\n≡ Таблиц: {tables}\n↑ Записей: {records}\n«Размер»: {size} MB',
+        '\u2713 Бекап успешно создан!\n▣ Файл: {file}\n≡ Таблиц: {tables}\n↑ Записей: {records}\n«Размер»: {size} MB',
     ),
     (
-        r'✓ Восстановление завершено!\n≡ Таблиц: (?P<tables>\d+)\n↑ Записей: (?P<records>[\d,]+)\n▤ Дата бекапа: (?P<date>[\s\S]*)',
+        r'\u2713 Восстановление завершено!\n≡ Таблиц: (?P<tables>\d+)\n↑ Записей: (?P<records>[\d,]+)\n▤ Дата бекапа: (?P<date>[\s\S]*)',
         'ADMIN_BACKUP_RESULT_RESTORED',
-        '✓ Восстановление завершено!\n≡ Таблиц: {tables}\n↑ Записей: {records}\n▤ Дата бекапа: {date}',
+        '\u2713 Восстановление завершено!\n≡ Таблиц: {tables}\n↑ Записей: {records}\n▤ Дата бекапа: {date}',
     ),
-    (r'✓ Бекап (?P<file>[\s\S]*) удален', 'ADMIN_BACKUP_RESULT_DELETED', '✓ Бекап {file} удален'),
+    (r'\u2713 Бекап (?P<file>[\s\S]*) удален', 'ADMIN_BACKUP_RESULT_DELETED', '\u2713 Бекап {file} удален'),
     (
-        r'✗ Ошибка создания бекапа: (?P<detail>[\s\S]*)',
+        r'\u2717 Ошибка создания бекапа: (?P<detail>[\s\S]*)',
         'ADMIN_BACKUP_RESULT_CREATE_ERROR',
-        '✗ Ошибка создания бекапа: {detail}',
+        '\u2717 Ошибка создания бекапа: {detail}',
     ),
     (
-        r'✗ Ошибка восстановления: (?P<detail>[\s\S]*)',
+        r'\u2717 Ошибка восстановления: (?P<detail>[\s\S]*)',
         'ADMIN_BACKUP_RESULT_RESTORE_ERROR',
-        '✗ Ошибка восстановления: {detail}',
+        '\u2717 Ошибка восстановления: {detail}',
     ),
     (
-        r'✗ Ошибка удаления бекапа: (?P<detail>[\s\S]*)',
+        r'\u2717 Ошибка удаления бекапа: (?P<detail>[\s\S]*)',
         'ADMIN_BACKUP_RESULT_DELETE_ERROR',
-        '✗ Ошибка удаления бекапа: {detail}',
+        '\u2717 Ошибка удаления бекапа: {detail}',
     ),
     (
-        r'✗ Файл бекапа не найден: (?P<file>[\s\S]*)',
+        r'\u2717 Файл бекапа не найден: (?P<file>[\s\S]*)',
         'ADMIN_BACKUP_RESULT_NOT_FOUND',
-        '✗ Файл бекапа не найден: {file}',
+        '\u2717 Файл бекапа не найден: {file}',
     ),
     (r'Ошибка чтения: (?P<detail>[\s\S]*)', 'ADMIN_BACKUP_RESULT_READ_ERROR', 'Ошибка чтения: {detail}'),
     (
