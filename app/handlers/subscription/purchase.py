@@ -322,7 +322,6 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
         ).format(used=used_traffic, limit=subscription.traffic_limit_gb)
 
     devices_used_str = '—'
-    devices_list = []
     devices_count = 0
 
     show_devices = settings.is_devices_selection_enabled()
