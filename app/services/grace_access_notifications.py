@@ -19,7 +19,7 @@ from datetime import UTC, datetime
 from typing import Any, Literal
 
 import structlog
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import InlineKeyboardMarkup
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
@@ -185,8 +185,21 @@ async def _notify_user(bot: Any, event: GraceEvent, subscription: Subscription, 
         'reason': details.reason,
         'tariff_name': tariff_name,
     }
-    renew = build_subscription_extend_button(texts.get('WEBHOOK_RENEW_BUTTON', 'Renew subscription'), subscription.id)
-    close = InlineKeyboardButton(text=texts.get('WEBHOOK_CLOSE_BUTTON', 'Закрыть'), callback_data='webhook:close')
+    from app.utils import notification_card
+    from app.utils.button_emoji import make_button
+
+    renew = build_subscription_extend_button(
+        texts.get('WEBHOOK_RENEW_BUTTON', 'Renew subscription'),
+        subscription.id,
+        style='success',
+        icon_custom_emoji_id=notification_card.ICONS.get('🔥'),
+    )
+    close = make_button(
+        texts.get('WEBHOOK_CLOSE_BUTTON', 'Закрыть'),
+        callback_data='webhook:close',
+        style='danger',
+        icon_custom_emoji_id=notification_card.ICONS.get('❌'),
+    )
     await notification_delivery_service.send_notification(
         user=user,
         notification_type=notification_type,
