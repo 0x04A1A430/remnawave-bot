@@ -270,7 +270,7 @@ async def build_test_access_hint(
 
     header_template = texts.t(
         'MAIN_MENU_TEST_ACCESS_HEADER',
-        '🧪 Test servers active: {servers}',
+        '<tg-emoji emoji-id="5897607722295103204">🧪</tg-emoji> Test servers active: {servers}',
     )
     timer_template = texts.t(
         'MAIN_MENU_TEST_ACCESS_TIMER',

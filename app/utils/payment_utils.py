@@ -6,6 +6,12 @@ from app.localization.texts import get_texts
 
 _BLANK_LINE_RUN = re.compile(r'\n{3,}')
 
+_PREMIUM_CARD_ICON = "<tg-emoji emoji-id='5967548335542767952'>💳</tg-emoji>"
+_PREMIUM_SBP_ICON = "<tg-emoji emoji-id='5985833664884250583'>📱</tg-emoji>"
+_PREMIUM_CRYPTO_ICON = "<tg-emoji emoji-id='5992430854909989581'>🪙</tg-emoji>"
+_PREMIUM_SUPPORT_ICON = "<tg-emoji emoji-id='5988023995125993550'>🛠️</tg-emoji>"
+_PREMIUM_WARNING_ICON = "<tg-emoji emoji-id='5881702736843511327'>⚠️</tg-emoji>"
+
 
 def compact_payment_text(text: str) -> str:
     """Схлопывает пустые строки в одиночный перевод строки и убирает пустые края.
@@ -73,7 +79,7 @@ def get_available_payment_methods() -> list[dict[str, str]]:
                 {
                     'id': 'yookassa_sbp',
                     'name': 'СБП YooKassa',
-                    'icon': '🏦',
+                    'icon': '',
                     'description': 'моментальная оплата по QR',
                     'callback': 'topup_yookassa_sbp',
                 }
@@ -83,7 +89,7 @@ def get_available_payment_methods() -> list[dict[str, str]]:
             {
                 'id': 'yookassa',
                 'name': 'Банковская карта',
-                'icon': '💳',
+                'icon': _PREMIUM_CARD_ICON,
                 'description': 'через YooKassa',
                 'callback': 'topup_yookassa',
             }
@@ -94,7 +100,7 @@ def get_available_payment_methods() -> list[dict[str, str]]:
             {
                 'id': 'tribute',
                 'name': 'Банковская карта',
-                'icon': '💳',
+                'icon': _PREMIUM_CARD_ICON,
                 'description': 'через Tribute',
                 'callback': 'topup_tribute',
             }
@@ -106,7 +112,7 @@ def get_available_payment_methods() -> list[dict[str, str]]:
             {
                 'id': 'mulenpay',
                 'name': 'Банковская карта',
-                'icon': '💳',
+                'icon': _PREMIUM_CARD_ICON,
                 'description': f'через {mulenpay_name}',
                 'callback': 'topup_mulenpay',
             }
@@ -117,7 +123,7 @@ def get_available_payment_methods() -> list[dict[str, str]]:
             {
                 'id': 'wata',
                 'name': 'Банковская карта',
-                'icon': '💳',
+                'icon': _PREMIUM_CARD_ICON,
                 'description': 'через WATA',
                 'callback': 'topup_wata',
             }
@@ -125,7 +131,7 @@ def get_available_payment_methods() -> list[dict[str, str]]:
 
     if settings.is_pal24_enabled():
         methods.append(
-            {'id': 'pal24', 'name': 'СБП', 'icon': '🏦', 'description': 'через PayPalych', 'callback': 'topup_pal24'}
+            {'id': 'pal24', 'name': 'СБП', 'icon': '', 'description': 'через PayPalych', 'callback': 'topup_pal24'}
         )
 
     if settings.is_cryptobot_enabled():
@@ -144,7 +150,7 @@ def get_available_payment_methods() -> list[dict[str, str]]:
             {
                 'id': 'heleket',
                 'name': 'Криптовалюта',
-                'icon': '🪙',
+                'icon': _PREMIUM_CRYPTO_ICON,
                 'description': 'через Heleket',
                 'callback': 'topup_heleket',
             }
@@ -169,7 +175,7 @@ def get_available_payment_methods() -> list[dict[str, str]]:
                 {
                     'id': 'platega',
                     'name': 'Банковская карта',
-                    'icon': '💳',
+                    'icon': _PREMIUM_CARD_ICON,
                     'description': f'через {platega_name} (карты + СБП)',
                     'callback': 'topup_platega',
                 }
@@ -181,7 +187,7 @@ def get_available_payment_methods() -> list[dict[str, str]]:
             {
                 'id': 'cloudpayments',
                 'name': 'Банковская карта',
-                'icon': '💳',
+                'icon': _PREMIUM_CARD_ICON,
                 'description': f'через {cloudpayments_name}',
                 'callback': 'topup_cloudpayments',
             }
@@ -193,7 +199,7 @@ def get_available_payment_methods() -> list[dict[str, str]]:
             {
                 'id': 'freekassa',
                 'name': freekassa_name,
-                'icon': '💳',
+                'icon': _PREMIUM_CARD_ICON,
                 'description': f'через {freekassa_name}',
                 'callback': 'topup_freekassa',
             }
@@ -205,7 +211,7 @@ def get_available_payment_methods() -> list[dict[str, str]]:
             {
                 'id': 'kassa_ai',
                 'name': kassa_ai_name,
-                'icon': '💳',
+                'icon': _PREMIUM_CARD_ICON,
                 'description': f'через {kassa_ai_name}',
                 'callback': 'topup_kassa_ai',
             }
@@ -217,7 +223,7 @@ def get_available_payment_methods() -> list[dict[str, str]]:
             {
                 'id': 'riopay',
                 'name': f'Банковская карта {riopay_name}',
-                'icon': '💳',
+                'icon': _PREMIUM_CARD_ICON,
                 'description': f'через {riopay_name}',
                 'callback': 'topup_riopay',
             }
@@ -229,7 +235,7 @@ def get_available_payment_methods() -> list[dict[str, str]]:
             {
                 'id': 'severpay',
                 'name': f'Банковская карта {severpay_name}',
-                'icon': '💳',
+                'icon': _PREMIUM_CARD_ICON,
                 'description': f'через {severpay_name}',
                 'callback': 'topup_severpay',
             }
@@ -241,7 +247,7 @@ def get_available_payment_methods() -> list[dict[str, str]]:
             {
                 'id': 'rollypay',
                 'name': rollypay_name,
-                'icon': '💳',
+                'icon': _PREMIUM_CARD_ICON,
                 'description': f'через {rollypay_name}',
                 'callback': 'topup_rollypay',
             }
@@ -253,7 +259,7 @@ def get_available_payment_methods() -> list[dict[str, str]]:
             {
                 'id': 'overpay',
                 'name': overpay_name,
-                'icon': '💳',
+                'icon': _PREMIUM_CARD_ICON,
                 'description': f'через {overpay_name}',
                 'callback': 'topup_overpay',
             }
@@ -265,7 +271,7 @@ def get_available_payment_methods() -> list[dict[str, str]]:
             {
                 'id': 'aurapay_sbp',
                 'name': sbp_name,
-                'icon': '📱',
+                'icon': _PREMIUM_SBP_ICON,
                 'description': f'через {sbp_name}',
                 'callback': 'topup_aurapay_sbp',
             }
@@ -277,7 +283,7 @@ def get_available_payment_methods() -> list[dict[str, str]]:
             {
                 'id': 'aurapay_card',
                 'name': card_name,
-                'icon': '💳',
+                'icon': _PREMIUM_CARD_ICON,
                 'description': f'через {card_name}',
                 'callback': 'topup_aurapay_card',
             }
@@ -293,7 +299,7 @@ def get_available_payment_methods() -> list[dict[str, str]]:
             {
                 'id': 'aurapay',
                 'name': aurapay_name,
-                'icon': '💳',
+                'icon': _PREMIUM_CARD_ICON,
                 'description': f'через {aurapay_name}',
                 'callback': 'topup_aurapay',
             }
@@ -309,7 +315,7 @@ def get_available_payment_methods() -> list[dict[str, str]]:
             {
                 'id': 'lava_sbp',
                 'name': sbp_name,
-                'icon': '📱',
+                'icon': _PREMIUM_SBP_ICON,
                 'description': f'через {lava_name}',
                 'callback': 'topup_lava_sbp',
             }
@@ -322,7 +328,7 @@ def get_available_payment_methods() -> list[dict[str, str]]:
             {
                 'id': 'lava_card',
                 'name': card_name,
-                'icon': '💳',
+                'icon': _PREMIUM_CARD_ICON,
                 'description': f'через {lava_name}',
                 'callback': 'topup_lava_card',
             }
@@ -334,7 +340,7 @@ def get_available_payment_methods() -> list[dict[str, str]]:
             {
                 'id': 'lava',
                 'name': lava_name,
-                'icon': '💳',
+                'icon': _PREMIUM_CARD_ICON,
                 'description': f'через {lava_name}',
                 'callback': 'topup_lava',
             }
@@ -346,7 +352,7 @@ def get_available_payment_methods() -> list[dict[str, str]]:
             {
                 'id': 'cispay_crypto',
                 'name': name,
-                'icon': '🪙',
+                'icon': _PREMIUM_CRYPTO_ICON,
                 'description': f'через {name}',
                 'callback': 'topup_cispay_crypto',
             }
@@ -358,7 +364,7 @@ def get_available_payment_methods() -> list[dict[str, str]]:
             {
                 'id': 'cispay_sbp',
                 'name': sbp_name,
-                'icon': '📱',
+                'icon': _PREMIUM_SBP_ICON,
                 'description': f'через {sbp_name}',
                 'callback': 'topup_cispay_sbp',
             }
@@ -370,7 +376,7 @@ def get_available_payment_methods() -> list[dict[str, str]]:
             {
                 'id': 'cispay_card',
                 'name': card_name,
-                'icon': '💳',
+                'icon': _PREMIUM_CARD_ICON,
                 'description': f'через {card_name}',
                 'callback': 'topup_cispay_card',
             }
@@ -382,7 +388,7 @@ def get_available_payment_methods() -> list[dict[str, str]]:
             {
                 'id': 'cispay',
                 'name': cispay_name,
-                'icon': '💳',
+                'icon': _PREMIUM_CARD_ICON,
                 'description': f'через {cispay_name}',
                 'callback': 'topup_cispay',
             }
@@ -397,7 +403,9 @@ def get_available_payment_methods() -> list[dict[str, str]]:
                     {
                         'id': f'cashera_m_{method_code}',
                         'name': info.get('name', method_code),
-                        'icon': info.get('title', '💳').split(' ', 1)[0] if info.get('title') else '💳',
+                        'icon': info.get('title', _PREMIUM_CARD_ICON).split(' ', 1)[0]
+                        if info.get('title')
+                        else _PREMIUM_CARD_ICON,
                         'description': f'через {cashera_name}',
                         'callback': f'topup_cashera_m_{method_code}',
                     }
@@ -407,7 +415,7 @@ def get_available_payment_methods() -> list[dict[str, str]]:
                 {
                     'id': 'cashera',
                     'name': cashera_name,
-                    'icon': '💳',
+                    'icon': _PREMIUM_CARD_ICON,
                     'description': f'через {cashera_name}',
                     'callback': 'topup_cashera',
                 }
@@ -420,7 +428,7 @@ def get_available_payment_methods() -> list[dict[str, str]]:
                 {
                     'id': f'anore_{method}',
                     'name': name,
-                    'icon': '💳',
+                    'icon': _PREMIUM_CARD_ICON,
                     'description': f'через {name}',
                     'callback': f'topup_anore_{method}',
                 }
@@ -432,7 +440,7 @@ def get_available_payment_methods() -> list[dict[str, str]]:
             {
                 'id': 'tabpay_sbp',
                 'name': sbp_name,
-                'icon': '📱',
+                'icon': _PREMIUM_SBP_ICON,
                 'description': f'через {sbp_name}',
                 'callback': 'topup_tabpay_sbp',
             }
@@ -444,7 +452,7 @@ def get_available_payment_methods() -> list[dict[str, str]]:
             {
                 'id': 'tabpay_card',
                 'name': card_name,
-                'icon': '💳',
+                'icon': _PREMIUM_CARD_ICON,
                 'description': f'через {card_name}',
                 'callback': 'topup_tabpay_card',
             }
@@ -456,7 +464,7 @@ def get_available_payment_methods() -> list[dict[str, str]]:
             {
                 'id': 'tabpay',
                 'name': tabpay_name,
-                'icon': '💳',
+                'icon': _PREMIUM_CARD_ICON,
                 'description': f'через {tabpay_name}',
                 'callback': 'topup_tabpay',
             }
@@ -468,7 +476,7 @@ def get_available_payment_methods() -> list[dict[str, str]]:
             {
                 'id': 'paritypay_sbp',
                 'name': sbp_name,
-                'icon': '📱',
+                'icon': _PREMIUM_SBP_ICON,
                 'description': f'через {sbp_name}',
                 'callback': 'topup_paritypay_sbp',
             }
@@ -480,7 +488,7 @@ def get_available_payment_methods() -> list[dict[str, str]]:
             {
                 'id': 'paritypay_card',
                 'name': card_name,
-                'icon': '💳',
+                'icon': _PREMIUM_CARD_ICON,
                 'description': f'через {card_name}',
                 'callback': 'topup_paritypay_card',
             }
@@ -496,7 +504,7 @@ def get_available_payment_methods() -> list[dict[str, str]]:
             {
                 'id': 'paritypay',
                 'name': paritypay_name,
-                'icon': '💳',
+                'icon': _PREMIUM_CARD_ICON,
                 'description': f'через {paritypay_name}',
                 'callback': 'topup_paritypay',
             }
@@ -508,7 +516,7 @@ def get_available_payment_methods() -> list[dict[str, str]]:
             {
                 'id': 'etoplatezhi_sbp',
                 'name': sbp_name,
-                'icon': '📱',
+                'icon': _PREMIUM_SBP_ICON,
                 'description': f'через {sbp_name}',
                 'callback': 'topup_etoplatezhi_sbp',
             }
@@ -520,7 +528,7 @@ def get_available_payment_methods() -> list[dict[str, str]]:
             {
                 'id': 'etoplatezhi_card',
                 'name': card_name,
-                'icon': '💳',
+                'icon': _PREMIUM_CARD_ICON,
                 'description': f'через {card_name}',
                 'callback': 'topup_etoplatezhi_card',
             }
@@ -536,7 +544,7 @@ def get_available_payment_methods() -> list[dict[str, str]]:
             {
                 'id': 'etoplatezhi',
                 'name': etoplatezhi_name,
-                'icon': '💳',
+                'icon': _PREMIUM_CARD_ICON,
                 'description': f'через {etoplatezhi_name}',
                 'callback': 'topup_etoplatezhi',
             }
@@ -548,7 +556,7 @@ def get_available_payment_methods() -> list[dict[str, str]]:
             {
                 'id': 'antilopay_sbp',
                 'name': sbp_name,
-                'icon': '📱',
+                'icon': _PREMIUM_SBP_ICON,
                 'description': f'через {sbp_name}',
                 'callback': 'topup_antilopay_sbp',
             }
@@ -560,7 +568,7 @@ def get_available_payment_methods() -> list[dict[str, str]]:
             {
                 'id': 'antilopay_card',
                 'name': card_name,
-                'icon': '💳',
+                'icon': _PREMIUM_CARD_ICON,
                 'description': f'через {card_name}',
                 'callback': 'topup_antilopay_card',
             }
@@ -572,7 +580,7 @@ def get_available_payment_methods() -> list[dict[str, str]]:
             {
                 'id': 'antilopay_sberpay',
                 'name': sberpay_name,
-                'icon': '💳',
+                'icon': _PREMIUM_CARD_ICON,
                 'description': f'через {sberpay_name}',
                 'callback': 'topup_antilopay_sberpay',
             }
@@ -589,7 +597,7 @@ def get_available_payment_methods() -> list[dict[str, str]]:
             {
                 'id': 'antilopay',
                 'name': antilopay_name,
-                'icon': '💳',
+                'icon': _PREMIUM_CARD_ICON,
                 'description': f'через {antilopay_name}',
                 'callback': 'topup_antilopay',
             }
@@ -600,7 +608,7 @@ def get_available_payment_methods() -> list[dict[str, str]]:
             {
                 'id': 'support',
                 'name': 'Через поддержку',
-                'icon': '🛠️',
+                'icon': _PREMIUM_SUPPORT_ICON,
                 'description': 'другие способы',
                 'callback': 'topup_support',
             }
@@ -621,9 +629,9 @@ def get_payment_methods_text(language: str, balance_kopeks: int | None = None) -
         return compact_payment_text(
             texts.t(
                 'PAYMENT_METHODS_NONE_AVAILABLE',
-                """💳 <b>Способы пополнения баланса</b>
+                f"""{_PREMIUM_CARD_ICON} <b>Способы пополнения баланса</b>
 
-⚠️ В данный момент способы оплаты временно недоступны.
+{_PREMIUM_WARNING_ICON} В данный момент способы оплаты временно недоступны.
 Попробуйте позже.""",
             )
         )
@@ -632,16 +640,19 @@ def get_payment_methods_text(language: str, balance_kopeks: int | None = None) -
         return compact_payment_text(
             texts.t(
                 'PAYMENT_METHODS_ONLY_SUPPORT',
-                """💳 <b>Способы пополнения баланса</b>
+                f"""{_PREMIUM_CARD_ICON} <b>Способы пополнения баланса</b>
 
-⚠️ В данный момент автоматические способы оплаты временно недоступны.
+{_PREMIUM_WARNING_ICON} В данный момент автоматические способы оплаты временно недоступны.
 Обратитесь в техподдержку для пополнения баланса.
 
 Выберите способ пополнения:""",
             )
         )
 
-    title = texts.t('PAYMENT_METHODS_TITLE', '💳 <b>Способы пополнения баланса</b>')
+    title = texts.t(
+        'PAYMENT_METHODS_TITLE',
+        f'{_PREMIUM_CARD_ICON} <b>Способы пополнения баланса</b>',
+    )
     if balance_kopeks is not None:
         title += f'\n{texts.t("NOTIFY_BALANCE_NOW", "Баланс")}: <b>{texts.format_price(balance_kopeks)}</b>'
     blocks = [title]

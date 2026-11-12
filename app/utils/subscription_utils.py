@@ -33,7 +33,7 @@ def resolve_tariff_cart_traffic(tariff, cart_data: dict) -> tuple[int | None, in
 async def cleanup_duplicate_subscriptions(db: AsyncSession) -> int:
     # В multi-tariff режиме несколько подписок у пользователя — это нормально
     if settings.is_multi_tariff_enabled():
-        logger.info('♻️ cleanup_duplicate_subscriptions пропущена: multi-tariff режим')
+        logger.info('cleanup_duplicate_subscriptions пропущена: multi-tariff режим')
         return 0
 
     result = await db.execute(
@@ -53,13 +53,13 @@ async def cleanup_duplicate_subscriptions(db: AsyncSession) -> int:
             await db.delete(old_subscription)
             total_deleted += 1
             logger.info(
-                '🗑️ Удалена дублирующаяся подписка',
+                'Удалена дублирующаяся подписка',
                 old_subscription_id=old_subscription.id,
                 user_id=user_id,
             )
 
     await db.commit()
-    logger.info('🧹 Очищено дублирующихся подписок', total_deleted=total_deleted)
+    logger.info('Очищено дублирующихся подписок', total_deleted=total_deleted)
 
     return total_deleted
 

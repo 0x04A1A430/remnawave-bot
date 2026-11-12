@@ -79,7 +79,7 @@ def get_effective_referral_commission_percent(user: User) -> int:
         user_id_display = (
             getattr(user, 'telegram_id', None) or getattr(user, 'email', None) or f'#{getattr(user, "id", "unknown")}'
         )
-        logger.error('❌ Некорректный процент комиссии', user_id_display=user_id_display, percent=percent)
+        logger.error('Некорректный процент комиссии', user_id_display=user_id_display, percent=percent)
         return max(0, min(100, settings.REFERRAL_COMMISSION_PERCENT))
 
     logger.debug(
@@ -104,7 +104,7 @@ async def mark_user_as_had_paid_subscription(db: AsyncSession, user: User) -> bo
                 .values(has_had_paid_subscription=True, updated_at=datetime.now(UTC))
             )
 
-        logger.info('✅ Пользователь отмечен как имевший платную подписку', user_id=user.id)
+        logger.info('Пользователь отмечен как имевший платную подписку', user_id=user.id)
         return True
 
     except Exception as e:
