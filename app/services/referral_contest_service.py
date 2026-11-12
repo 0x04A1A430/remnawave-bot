@@ -53,7 +53,7 @@ class ReferralContestService:
             return
 
         self._task = asyncio.create_task(self._run_loop())
-        logger.info('🏆 Сервис конкурсов запущен')
+        logger.info('Сервис конкурсов запущен')
 
     async def stop(self) -> None:
         if self._task and not self._task.done():
@@ -284,7 +284,7 @@ class ReferralContestService:
             return
 
         lines = [
-            '🏆 <b>Конкурс рефералов</b>',
+            '<b>Конкурс рефералов</b>',
             f'Название: <b>{html.escape(contest.title)}</b>',
             f'Статус: {"финал" if is_final else "дневная сводка"}',
             f'Временная зона: <code>{tz.key}</code>',
@@ -295,7 +295,7 @@ class ReferralContestService:
 
         if leaderboard:
             for idx, (name, score, _, is_virtual) in enumerate(leaderboard[:5], start=1):
-                virt_mark = ' 👻' if is_virtual else ''
+                virt_mark = ' <tg-emoji emoji-id="5897962422169243693">👻</tg-emoji>' if is_virtual else ''
                 lines.append(f'{idx}. {html.escape(name)}{virt_mark} — {score}')
         else:
             lines.append('Пока нет участников.')
@@ -340,8 +340,10 @@ class ReferralContestService:
             return
 
         lines = [
-            f'🏆 {html.escape(contest.title)}',
-            '🏁 Итоги конкурса' if is_final else '📊 Промежуточные итоги',
+            f'{html.escape(contest.title)}',
+            'Итоги конкурса'
+            if is_final
+            else '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> Промежуточные итоги',
             f'Время зоны: {tz.key}',
             f'Всего участников: <b>{len(leaderboard)}</b>',
             '',
@@ -380,9 +382,13 @@ class ReferralContestService:
         today_events: int,
         is_final: bool,
     ) -> str:
-        status_line = '🏁 Итоги конкурса' if is_final else '📊 Промежуточные итоги'
+        status_line = (
+            'Итоги конкурса'
+            if is_final
+            else '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> Промежуточные итоги'
+        )
         lines = [
-            f'🏆 {html.escape(contest.title)}',
+            f'{html.escape(contest.title)}',
             status_line,
             '',
             f'Ваше место: <b>{rank}</b>',

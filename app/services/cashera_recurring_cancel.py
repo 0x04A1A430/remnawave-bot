@@ -146,12 +146,21 @@ async def notify_cashera_recurring(db: AsyncSession, record: Any, kind: str, *, 
             return
         texts = get_texts(user.language)
         messages = {
-            'activated': texts.t('CASHERA_RECURRING_NOTIFY_ACTIVATED', '✅ Автопродление через Cashera подключено.'),
-            'confirmed': texts.t('CASHERA_RECURRING_NOTIFY_CONFIRMED', '✅ Подписка продлена автосписанием Cashera.'),
+            'activated': texts.t(
+                'CASHERA_RECURRING_NOTIFY_ACTIVATED',
+                '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Автопродление через Cashera подключено.',
+            ),
+            'confirmed': texts.t(
+                'CASHERA_RECURRING_NOTIFY_CONFIRMED',
+                '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Подписка продлена автосписанием Cashera.',
+            ),
             'failed': texts.t(
                 'CASHERA_RECURRING_NOTIFY_FAILED', '⚠️ Не удалось списать оплату по автопродлению Cashera.'
             ),
-            'cancelled': texts.t('CASHERA_RECURRING_NOTIFY_CANCELLED', 'ℹ️ Автопродление Cashera отменено.'),
+            'cancelled': texts.t(
+                'CASHERA_RECURRING_NOTIFY_CANCELLED',
+                '<tg-emoji emoji-id="5879785854284599288">ℹ️</tg-emoji> Автопродление Cashera отменено.',
+            ),
         }
         text = messages.get(kind)
         if text:

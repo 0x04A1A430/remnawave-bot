@@ -108,7 +108,9 @@ class ContestAttemptService:
             return AttemptResult(
                 success=True,
                 is_winner=True,
-                message=f'🎉 Победа! {prize_msg}' if prize_msg else '🎉 Победа!',
+                message=f'<tg-emoji emoji-id="5994502837327892086">🎉</tg-emoji> Победа! {prize_msg}'
+                if prize_msg
+                else '<tg-emoji emoji-id="5994502837327892086">🎉</tg-emoji> Победа!',
             )
 
         return AttemptResult(
@@ -195,7 +197,9 @@ class ContestAttemptService:
             return AttemptResult(
                 success=True,
                 is_winner=True,
-                message=f'🎉 Победа! {prize_msg}' if prize_msg else '🎉 Победа!',
+                message=f'<tg-emoji emoji-id="5994502837327892086">🎉</tg-emoji> Победа! {prize_msg}'
+                if prize_msg
+                else '<tg-emoji emoji-id="5994502837327892086">🎉</tg-emoji> Победа!',
             )
 
         return AttemptResult(
@@ -329,7 +333,7 @@ class ContestAttemptService:
                 )
 
         elif prize_type == PrizeType.CUSTOM.value:
-            return f'🎁 {prize_value}'
+            return f'<tg-emoji emoji-id="6032937473162614352">🎁</tg-emoji> {prize_value}'
 
         return ''
 

@@ -1527,13 +1527,16 @@ async def describe_active_levels(
 
     if personal_percent is not None:
         key, default = (
-            ('REFERRAL_TIER_PERSONAL_RATE', '💼 У вас индивидуальная ставка {percent}% — она действует на любом уровне')
+            (
+                'REFERRAL_TIER_PERSONAL_RATE',
+                '<tg-emoji emoji-id="5967389567781703494">💼</tg-emoji> У вас индивидуальная ставка {percent}% — она действует на любом уровне',
+            )
             if tier_mode
             # В цепочке личная ставка перебивает процент только на уровне 1:
             # глубже платят не за ваших приглашённых, и «на любом» было бы ложью.
             else (
                 'REFERRAL_LEVEL_PERSONAL_RATE',
-                '💼 У вас индивидуальная ставка {percent}% — она действует на первом уровне',
+                '<tg-emoji emoji-id="5967389567781703494">💼</tg-emoji> У вас индивидуальная ставка {percent}% — она действует на первом уровне',
             )
         )
         lines.append(texts.t(key, default).format(percent=personal_percent))
@@ -1706,9 +1709,9 @@ def format_tier_progress(progress: TierProgress | None, language: str | None = N
     lines: list[str] = []
 
     if progress.current_level is None:
-        lines.append(texts.t('REFERRAL_TIER_NONE', '🏅 Уровень пока не открыт'))
+        lines.append(texts.t('REFERRAL_TIER_NONE', 'Уровень пока не открыт'))
     else:
-        lines.append(texts.t('REFERRAL_TIER_CURRENT', '🏅 Ваш уровень: {level}').format(level=progress.current_level))
+        lines.append(texts.t('REFERRAL_TIER_CURRENT', 'Ваш уровень: {level}').format(level=progress.current_level))
 
     if progress.next_level is not None:
         lines.append(

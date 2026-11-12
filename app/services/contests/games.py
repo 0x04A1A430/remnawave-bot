@@ -157,7 +157,7 @@ class LockHackStrategy(BaseGameStrategy):
         for i in range(total):
             row.append(
                 types.InlineKeyboardButton(
-                    text='🔒',
+                    text='<tg-emoji emoji-id="5832546462478635761">🔒</tg-emoji>',
                     callback_data=f'contest_pick_{round_id}_locks_{i}',
                 )
             )
@@ -289,7 +289,9 @@ class BlitzReactionStrategy(BaseGameStrategy):
         )
 
         return GameRenderResult(
-            text=texts.t('CONTEST_BLITZ_PROMPT', '⚡️ Блиц! Нажми «Я здесь!»'),
+            text=texts.t(
+                'CONTEST_BLITZ_PROMPT', '<tg-emoji emoji-id="5843553939672274145">⚡️</tg-emoji> Блиц! Нажми «Я здесь!»'
+            ),
             keyboard=keyboard,
         )
 

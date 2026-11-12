@@ -260,11 +260,11 @@ class VersionService:
     def format_version_display(self, version_info: VersionInfo) -> str:
         status_icon = ''
         if version_info.prerelease:
-            status_icon = '🧪'
+            status_icon = '<tg-emoji emoji-id="5897607722295103204">🧪</tg-emoji>'
         elif version_info.is_dev:
             status_icon = '🔧'
         else:
-            status_icon = '📦'
+            status_icon = '<tg-emoji emoji-id="5924720918826848520">📦</tg-emoji>'
 
         return f'{status_icon} {version_info.tag_name}'
 

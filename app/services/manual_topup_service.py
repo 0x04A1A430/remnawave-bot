@@ -186,7 +186,7 @@ async def credit_manual_topup(
     new_balance = locked.balance_kopeks
 
     logger.info(
-        '💰 Ручное пополнение баланса',
+        'Ручное пополнение баланса',
         user_id=user_pk,
         telegram_id=locked.telegram_id,
         amount_kopeks=amount_kopeks,
@@ -290,7 +290,7 @@ async def _notify_admins(
             user,
             transaction,
             old_balance,
-            topup_status='🧾 Ручное пополнение',
+            topup_status='Ручное пополнение',
             referrer_info=format_referrer_info(user),
             subscription=getattr(user, 'subscription', None),
             promo_group=user.get_primary_promo_group(),
@@ -325,10 +325,10 @@ async def _notify_user(
                 user.telegram_id,
                 texts.t(
                     'MANUAL_TOPUP_SUCCESS',
-                    '✅ <b>Баланс пополнен</b>\n\n'
-                    '💰 Сумма: {amount}\n'
-                    '💳 Текущий баланс: {balance}\n'
-                    '🆔 Транзакция: {transaction_id}',
+                    '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> <b>Баланс пополнен</b>\n\n'
+                    '<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> Сумма: {amount}\n'
+                    '<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> Текущий баланс: {balance}\n'
+                    'Транзакция: {transaction_id}',
                 ).format(
                     amount=settings.format_price(amount_kopeks),
                     balance=settings.format_price(user.balance_kopeks),

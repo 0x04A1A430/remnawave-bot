@@ -302,7 +302,7 @@ class PromoCodeService:
                 await mark_user_as_had_paid_subscription(db, user)
 
                 logger.info(
-                    '🎯 Пользователь получил платную подписку через промокод',
+                    'Пользователь получил платную подписку через промокод',
                     _format_user_log=self._format_user_log(user),
                     code=code,
                 )
@@ -324,7 +324,7 @@ class PromoCodeService:
                             )
 
                             logger.info(
-                                '🎯 Пользователю назначена промогруппа через промокод',
+                                'Пользователю назначена промогруппа через промокод',
                                 _format_user_log=self._format_user_log(user),
                                 promo_group_name=promo_group.name,
                                 priority=promo_group.priority,
@@ -332,7 +332,7 @@ class PromoCodeService:
                             )
 
                             # Add to result description
-                            result_description += f'\n🎁 Назначена промогруппа: {promo_group.name}'
+                            result_description += f'\n<tg-emoji emoji-id="6032937473162614352">🎁</tg-emoji> Назначена промогруппа: {promo_group.name}'
                         else:
                             logger.warning(
                                 '⚠️ Промогруппа ID не найдена для промокода',
@@ -341,13 +341,13 @@ class PromoCodeService:
                             )
                     else:
                         logger.info(
-                            'ℹ️ Пользователь уже состоит в промогруппе',
+                            'Пользователь уже состоит в промогруппе',
                             _format_user_log=self._format_user_log(user),
                             promo_group_id=promocode.promo_group_id,
                         )
                 except Exception as pg_error:
                     logger.error(
-                        '❌ Ошибка назначения промогруппы для пользователя при активации промокода',
+                        'Ошибка назначения промогруппы для пользователя при активации промокода',
                         _format_user_log=self._format_user_log(user),
                         code=code,
                         pg_error=pg_error,
@@ -402,7 +402,7 @@ class PromoCodeService:
                     except Exception as lava_error:
                         logger.warning('Failed to shift Lava next charge after promo', error=lava_error)
 
-            logger.info('✅ Пользователь активировал промокод', _format_user_log=self._format_user_log(user), code=code)
+            logger.info('Пользователь активировал промокод', _format_user_log=self._format_user_log(user), code=code)
 
             await db.refresh(promocode)
             promocode_data = {
@@ -555,16 +555,16 @@ class PromoCodeService:
             # Устанавливаем срок действия скидки
             if discount_hours > 0:
                 user.promo_offer_discount_expires_at = datetime.now(UTC) + timedelta(hours=discount_hours)
-                effects.append(f'💸 Получена скидка {discount_percent}% (действует {discount_hours} ч.)')
+                effects.append(f'Получена скидка {discount_percent}% (действует {discount_hours} ч.)')
             else:
                 # 0 часов = бессрочно до первой покупки
                 user.promo_offer_discount_expires_at = None
-                effects.append(f'💸 Получена скидка {discount_percent}% до первой покупки')
+                effects.append(f'Получена скидка {discount_percent}% до первой покупки')
 
             await db.flush()
 
             logger.info(
-                '✅ Пользователю назначена скидка по промокоду',
+                'Пользователю назначена скидка по промокоду',
                 _format_user_log=self._format_user_log(user),
                 discount_percent=discount_percent,
                 discount_hours=discount_hours,
@@ -604,9 +604,11 @@ class PromoCodeService:
             tariff_label = ''
             if settings.is_multi_tariff_enabled() and getattr(target_sub, 'tariff', None):
                 tariff_label = f' «{target_sub.tariff.name}»'
-            effects.append(f'⏰ Подписка{tariff_label} продлена на {promocode.subscription_days} дней')
+            effects.append(
+                f'<tg-emoji emoji-id="5985616167740379273">⏰</tg-emoji> Подписка{tariff_label} продлена на {promocode.subscription_days} дней'
+            )
             logger.info(
-                '✅ Подписка пользователя продлена на дней в RemnaWave',
+                'Подписка пользователя продлена на дней в RemnaWave',
                 _format_user_log=self._format_user_log(user),
                 subscription_days=promocode.subscription_days,
                 subscription_id=target_sub.id,
@@ -663,9 +665,11 @@ class PromoCodeService:
                     if panel_user_id and target_sub.status == SubscriptionStatus.ACTIVE.value:
                         await self.subscription_service.enable_remnawave_user(panel_user_id)
 
-                effects.append(f'📦 Трафик пополнен на {traffic_gb} ГБ')
+                effects.append(
+                    f'<tg-emoji emoji-id="5924720918826848520">📦</tg-emoji> Трафик пополнен на {traffic_gb} ГБ'
+                )
                 logger.info(
-                    '✅ Пользователю начислен трафик по промокоду',
+                    'Пользователю начислен трафик по промокоду',
                     _format_user_log=self._format_user_log(user),
                     traffic_gb=traffic_gb,
                     subscription_id=target_sub.id,
@@ -703,7 +707,9 @@ class PromoCodeService:
                 await add_user_balance(db, user, promocode.balance_bonus_kopeks, f'Бонус по промокоду {promocode.code}')
 
             balance_bonus_rubles = promocode.balance_bonus_kopeks / 100
-            effects.append(f'💰 Баланс пополнен на {balance_bonus_rubles}₽')
+            effects.append(
+                f'<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> Баланс пополнен на {balance_bonus_rubles}₽'
+            )
 
         if promocode.type == PromoCodeType.TRIAL_SUBSCRIPTION.value:
             from app.database.crud.subscription import create_trial_subscription
@@ -793,10 +799,10 @@ class PromoCodeService:
                 await self._refresh_after_panel_call(db, user, promocode, existing_same_tariff_sub, panel_result)
 
                 effects.append(
-                    f'⏰ Подписка «{trial_tariff.name if trial_tariff else ""}» продлена на {trial_days} дней'
+                    f'<tg-emoji emoji-id="5985616167740379273">⏰</tg-emoji> Подписка «{trial_tariff.name if trial_tariff else ""}» продлена на {trial_days} дней'
                 )
                 logger.info(
-                    '✅ Триал промокод: продлена существующая подписка',
+                    'Триал промокод: продлена существующая подписка',
                     _format_user_log=self._format_user_log(user),
                     trial_days=trial_days,
                     subscription_id=existing_same_tariff_sub.id,
@@ -831,7 +837,7 @@ class PromoCodeService:
                         raise ValueError('trial_provisioning_failed')
                     if trial_subscription.remnawave_id is None:
                         logger.error(
-                            '❌ Триал промокод: не удалось создать пользователя в RemnaWave — откатываем подписку',
+                            'Триал промокод: не удалось создать пользователя в RemnaWave — откатываем подписку',
                             _format_user_log=self._format_user_log(user),
                             subscription_id=trial_subscription.id,
                             code=promocode.code,
@@ -845,9 +851,11 @@ class PromoCodeService:
                         subscription_id=trial_subscription.id, user_id=user.id, action='update'
                     )
 
-                effects.append(f'🎁 Активирована тестовая подписка на {trial_days} дней')
+                effects.append(
+                    f'<tg-emoji emoji-id="6032937473162614352">🎁</tg-emoji> Активирована тестовая подписка на {trial_days} дней'
+                )
                 logger.info(
-                    '✅ Создана триал подписка для пользователя на дней',
+                    'Создана триал подписка для пользователя на дней',
                     _format_user_log=self._format_user_log(user),
                     trial_days=trial_days,
                     tariff_id=tariff_id_for_trial,
@@ -867,7 +875,11 @@ class PromoCodeService:
             # trial_subscription_exists выше).
             raise ValueError('traffic_not_applicable')
 
-        return '\n'.join(effects) if effects else '✅ Промокод активирован'
+        return (
+            '\n'.join(effects)
+            if effects
+            else '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Промокод активирован'
+        )
 
     async def deactivate_discount_promocode(
         self,

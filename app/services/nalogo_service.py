@@ -981,7 +981,7 @@ async def send_nalogo_receipt_notifications(
         texts = texts or user_texts
         keyboard = types.InlineKeyboardMarkup(
             inline_keyboard=[
-                [types.InlineKeyboardButton(text=texts.t('NALOGO_OPEN_RECEIPT', '🧾 Открыть чек'), url=receipt_url)]
+                [types.InlineKeyboardButton(text=texts.t('NALOGO_OPEN_RECEIPT', 'Открыть чек'), url=receipt_url)]
             ]
         )
         if receipt_file is not None:
@@ -1035,7 +1035,7 @@ async def send_nalogo_receipt_notifications(
                 telegram_user_id,
                 user_texts.t(
                     'NALOGO_USER_RECEIPT',
-                    '🧾 <b>Чек по вашему платежу сформирован</b>\n\n💰 Сумма: {amount}\n\nЧек зарегистрирован в ФНС через сервис «Мой налог».',
+                    '<b>Чек по вашему платежу сформирован</b>\n\n<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> Сумма: {amount}\n\nЧек зарегистрирован в ФНС через сервис «Мой налог».',
                 ).format(amount=amount_text),
             )
             # Ссылка вместо файла — для клиента под VPN это не доставка:
@@ -1128,41 +1128,51 @@ async def send_nalogo_receipt_notifications(
         recipient_lines: list[str] = []
         if telegram_user_id:
             recipient_lines.append(
-                admin_texts.t('NALOGO_RECIPIENT_ID', '🆔 Telegram ID: <code>{id}</code>').format(id=telegram_user_id)
+                admin_texts.t('NALOGO_RECIPIENT_ID', 'Telegram ID: <code>{id}</code>').format(id=telegram_user_id)
             )
             if recipient_data:
                 full_name = ' '.join(filter(None, [recipient_data['first_name'], recipient_data['last_name']])).strip()
                 if full_name:
                     recipient_lines.append(
-                        admin_texts.t('NALOGO_RECIPIENT_NAME', '📛 Имя: <code>{name}</code>').format(
+                        admin_texts.t('NALOGO_RECIPIENT_NAME', 'Имя: <code>{name}</code>').format(
                             name=html_escape(full_name)
                         )
                     )
                 if recipient_data['username']:
                     recipient_lines.append(
-                        admin_texts.t('NALOGO_RECIPIENT_USERNAME', '👤 Username: @{username}').format(
-                            username=html_escape(recipient_data['username'])
-                        )
+                        admin_texts.t(
+                            'NALOGO_RECIPIENT_USERNAME',
+                            '<tg-emoji emoji-id="5771887475421090729">👤</tg-emoji> Username: @{username}',
+                        ).format(username=html_escape(recipient_data['username']))
                     )
                 if recipient_data['email']:
                     recipient_lines.append(
-                        admin_texts.t('NALOGO_RECIPIENT_EMAIL', '📧 Почта: <code>{email}</code>').format(
+                        admin_texts.t('NALOGO_RECIPIENT_EMAIL', 'Почта: <code>{email}</code>').format(
                             email=html_escape(recipient_data['email'])
                         )
                     )
         else:
-            recipient_lines.append(admin_texts.t('NALOGO_RECIPIENT_GUEST', '👤 Получатель: без Telegram (email/гость)'))
+            recipient_lines.append(
+                admin_texts.t(
+                    'NALOGO_RECIPIENT_GUEST',
+                    '<tg-emoji emoji-id="5771887475421090729">👤</tg-emoji> Получатель: без Telegram (email/гость)',
+                )
+            )
 
         recipient_block = '\n'.join(recipient_lines)
         if context_label == 'Источник: YooKassa':
             context_label = admin_texts.t('NALOGO_SOURCE_YOOKASSA', 'Источник: YooKassa')
-        context_line = f'\nℹ️ {html_escape(context_label)}' if context_label else ''
+        context_line = (
+            f'\n<tg-emoji emoji-id="5879785854284599288">ℹ️</tg-emoji> {html_escape(context_label)}'
+            if context_label
+            else ''
+        )
         try:
             await _deliver(
                 chat_id,
                 admin_texts.t(
                     'NALOGO_ADMIN_RECEIPT',
-                    '🧾 <b>Новый чек NaloGO создан</b>\n\n💰 Сумма: {amount}\n{recipient}{context}',
+                    '<b>Новый чек NaloGO создан</b>\n\n<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> Сумма: {amount}\n{recipient}{context}',
                 ).format(amount=amount_text, recipient=recipient_block, context=context_line),
                 thread_id=topic_id,
                 texts=admin_texts,

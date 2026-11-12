@@ -135,7 +135,7 @@ async def _deliver(user: User, group: PromoGroup, total_spent_kopeks: int) -> No
         'traffic_discount': discounts.traffic_percent,
         'device_discount': discounts.device_percent,
     }
-    close = InlineKeyboardButton(text=texts.get('WEBHOOK_CLOSE_BUTTON', '✖️ Закрыть'), callback_data='webhook:close')
+    close = InlineKeyboardButton(text=texts.get('WEBHOOK_CLOSE_BUTTON', 'Закрыть'), callback_data='webhook:close')
     markup = InlineKeyboardMarkup(inline_keyboard=[[close]])
 
     bot = create_bot(token=settings.BOT_TOKEN) if user.telegram_id and settings.BOT_TOKEN else None

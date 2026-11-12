@@ -73,7 +73,7 @@ class MaintenanceService:
             )
             return texts.t(
                 'MAINT_AUTO_MESSAGE',
-                '\n🔧 Технические работы!\n\nСервис временно недоступен из-за проблем с подключением к серверам.\n\n⏰ Мы работаем над восстановлением. Попробуйте через несколько минут.\n\n🔄 Последняя проверка: {time}\n',
+                '\nТехнические работы!\n\nСервис временно недоступен из-за проблем с подключением к серверам.\n\n<tg-emoji emoji-id="5985616167740379273">⏰</tg-emoji> Мы работаем над восстановлением. Попробуйте через несколько минут.\n\n<tg-emoji emoji-id="5839200986022812209">🔄</tg-emoji> Последняя проверка: {time}\n',
             ).format(time=last_check_display)
         message = settings.get_maintenance_message()
         default_message = type(settings).model_fields['MAINTENANCE_MESSAGE'].default
@@ -105,7 +105,8 @@ class MaintenanceService:
             texts = await notification_service._notification_texts()
             body = message(texts) if callable(message) else message
             formatted_message = texts.t(
-                'MAINT_ADMIN_WRAPPER', '{emoji} <b>ТЕХНИЧЕСКИЕ РАБОТЫ</b>\n\n{message}\n\n⏰ <i>{time}</i>'
+                'MAINT_ADMIN_WRAPPER',
+                '{emoji} <b>ТЕХНИЧЕСКИЕ РАБОТЫ</b>\n\n{message}\n\n<tg-emoji emoji-id="5985616167740379273">⏰</tg-emoji> <i>{time}</i>',
             ).format(emoji=emoji, message=body, time=timestamp)
 
             return await notification_service.send_admin_notification(
@@ -190,7 +191,7 @@ class MaintenanceService:
             def notification_msg(texts: Texts) -> str:
                 return texts.t(
                     'MAINT_NOTICE_149',
-                    'Режим технических работ ВКЛЮЧЕН\n\n📋 <b>Причина:</b> {value1}\n🤖 <b>Автоматически:</b> {value2}\n🕐 <b>Время:</b> {value3}\n\nОбычные пользователи временно не смогут использовать бота.',
+                    'Режим технических работ ВКЛЮЧЕН\n\n<b>Причина:</b> {value1}\n<tg-emoji emoji-id="5931415565955503486">🤖</tg-emoji> <b>Автоматически:</b> {value2}\n<b>Время:</b> {value3}\n\nОбычные пользователи временно не смогут использовать бота.',
                 ).format(
                     value1=_display_maintenance_reason(texts, notification_reason),
                     value2=texts.t('YES' if auto else 'NO', ''),
@@ -232,13 +233,13 @@ class MaintenanceService:
                 if hours > 0:
 
                     def duration_str(texts: Texts) -> str:
-                        return texts.t('MAINT_DURATION_190', '\n⏱️ <b>Длительность:</b> {value1}ч {value2}мин').format(
+                        return texts.t('MAINT_DURATION_190', '\n<b>Длительность:</b> {value1}ч {value2}мин').format(
                             value1=html.escape(str(hours)), value2=html.escape(str(minutes))
                         )
                 else:
 
                     def duration_str(texts: Texts) -> str:
-                        return texts.t('MAINT_DURATION_192', '\n⏱️ <b>Длительность:</b> {value1}мин').format(
+                        return texts.t('MAINT_DURATION_192', '\n<b>Длительность:</b> {value1}мин').format(
                             value1=html.escape(str(minutes))
                         )
 
@@ -247,7 +248,7 @@ class MaintenanceService:
             def notification_msg(texts: Texts) -> str:
                 return texts.t(
                     'MAINT_NOTICE_195',
-                    'Режим технических работ ВЫКЛЮЧЕН\n\n🤖 <b>Автоматически:</b> {value1}\n🕐 <b>Время:</b> {value2}\n{value3}\n\nСервис снова доступен для пользователей.',
+                    'Режим технических работ ВЫКЛЮЧЕН\n\n<tg-emoji emoji-id="5931415565955503486">🤖</tg-emoji> <b>Автоматически:</b> {value1}\n<b>Время:</b> {value2}\n{value3}\n\nСервис снова доступен для пользователей.',
                 ).format(
                     value1=texts.t('YES' if was_auto else 'NO', ''),
                     value2=html.escape(str(notification_time)),
@@ -304,7 +305,7 @@ class MaintenanceService:
             await self._notify_admins(
                 lambda texts: texts.t('MAINT_NOTICE_250', 'Мониторинг технических работ остановлен'), 'info'
             )
-            logger.info('ℹ️ Мониторинг API остановлен')
+            logger.info('Мониторинг API остановлен')
             return True
 
         except Exception as e:
@@ -365,7 +366,7 @@ class MaintenanceService:
                             await self._notify_admins(
                                 lambda texts: texts.t(
                                     'MAINT_NOTICE_309',
-                                    'API Remnawave восстановлено!\n\n✅ <b>Статус:</b> Доступно\n🕐 <b>Время восстановления:</b> {value1}\n🔄 <b>Неудачных попыток было:</b> {value2}\n\nAPI снова отвечает на запросы.',
+                                    'API Remnawave восстановлено!\n\n<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> <b>Статус:</b> Доступно\n<b>Время восстановления:</b> {value1}\n<tg-emoji emoji-id="5839200986022812209">🔄</tg-emoji> <b>Неудачных попыток было:</b> {value2}\n\nAPI снова отвечает на запросы.',
                                 ).format(
                                     value1=html.escape(str(recovery_time)),
                                     value2=html.escape(str(self._status.consecutive_failures)),
@@ -399,7 +400,7 @@ class MaintenanceService:
                     await self._notify_admins(
                         lambda texts: texts.t(
                             'MAINT_NOTICE_339',
-                            'API Remnawave недоступно!\n\n❌ <b>Статус:</b> Недоступно\n🕐 <b>Время обнаружения:</b> {value1}\n🔄 <b>Попытка:</b> {value2}\n\nНачалась серия неудачных проверок API.',
+                            'API Remnawave недоступно!\n\n<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> <b>Статус:</b> Недоступно\n<b>Время обнаружения:</b> {value1}\n<tg-emoji emoji-id="5839200986022812209">🔄</tg-emoji> <b>Попытка:</b> {value2}\n\nНачалась серия неудачных проверок API.',
                         ).format(
                             value1=html.escape(str(detection_time)),
                             value2=html.escape(str(self._status.consecutive_failures)),
@@ -430,7 +431,7 @@ class MaintenanceService:
                 await self._notify_admins(
                     lambda texts: texts.t(
                         'MAINT_NOTICE_369',
-                        'Ошибка при проверке API Remnawave\n\n❌ <b>Ошибка:</b> {value1}\n🕐 <b>Время:</b> {value2}\n\nНе удалось выполнить проверку доступности API.',
+                        'Ошибка при проверке API Remnawave\n\n<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> <b>Ошибка:</b> {value1}\n<b>Время:</b> {value2}\n\nНе удалось выполнить проверку доступности API.',
                     ).format(value1=escaped_error, value2=html.escape(str(error_time))),
                     'error',
                 )
@@ -561,12 +562,12 @@ class MaintenanceService:
         try:
             status_emojis = {'online': '🟢', 'offline': '🔴', 'warning': '🟡', 'error': '⚠️'}
 
-            emoji = status_emojis.get(status, 'ℹ️')
+            emoji = status_emojis.get(status, '<tg-emoji emoji-id="5879785854284599288">ℹ️</tg-emoji>')
 
             def message(texts: Texts) -> str:
                 return texts.t(
                     'MAINT_PANEL_STATUS',
-                    'Статус панели Remnawave изменился\n\n{value1} <b>Статус:</b> {value2}\n🔗 <b>URL:</b> {value3}\n{value4}',
+                    'Статус панели Remnawave изменился\n\n{value1} <b>Статус:</b> {value2}\n<tg-emoji emoji-id="5877465816030515018">🔗</tg-emoji> <b>URL:</b> {value3}\n{value4}',
                 ).format(
                     value1=html.escape(str(emoji)),
                     value2=html.escape(texts.t('MAINT_STATUS_' + status.upper(), status.upper())),

@@ -301,7 +301,7 @@ class MenuLayoutService:
                     if key == 'connect' or buttons[key].get('builtin_id') == 'connect':
                         actual_button_id = key
                         logger.info(
-                            '🔗 Найдена кнопка connect по ID', button_id=button_id, actual_button_id=actual_button_id
+                            'Найдена кнопка connect по ID', button_id=button_id, actual_button_id=actual_button_id
                         )
                         break
                 else:
@@ -313,7 +313,7 @@ class MenuLayoutService:
                         ):
                             actual_button_id = key
                             logger.info(
-                                '🔗 Найдена кнопка connect по builtin_id',
+                                'Найдена кнопка connect по builtin_id',
                                 button_id=button_id,
                                 actual_button_id=actual_button_id,
                             )
@@ -329,7 +329,7 @@ class MenuLayoutService:
         # Логирование для отладки
         if 'connect' in actual_button_id.lower() or button.get('builtin_id') == 'connect':
             logger.info(
-                '🔗 Обновление кнопки connect (ID: ): open_mode=, action=, webapp_url',
+                'Обновление кнопки connect (ID: ): open_mode=, action=, webapp_url',
                 actual_button_id=actual_button_id,
                 get=updates.get('open_mode'),
                 get_2=updates.get('action'),
@@ -1038,7 +1038,7 @@ class MenuLayoutService:
 
         if is_connect_button:
             logger.info(
-                '🔗 Построение кнопки connect: button_id=, type=, open_mode=, action=, webapp_url',
+                'Построение кнопки connect: button_id=, type=, open_mode=, action=, webapp_url',
                 effective_button_id=effective_button_id,
                 button_type=button_type,
                 open_mode=open_mode,
@@ -1088,23 +1088,23 @@ class MenuLayoutService:
                     subscription_url = get_display_subscription_link(context.subscription)
                     if subscription_url:
                         url = subscription_url
-                        logger.info('🔗 Кнопка connect: получен URL из подписки: ...', url=url[:50])
+                        logger.info('Кнопка connect: получен URL из подписки: ...', url=url[:50])
                 # Если все еще нет URL, пробуем использовать настройку MINIAPP_CUSTOM_URL
                 if not url or not (url.startswith('http://') or url.startswith('https://')):
                     if settings.MINIAPP_CUSTOM_URL:
                         url = settings.MINIAPP_CUSTOM_URL
-                        logger.info('🔗 Кнопка connect: использован MINIAPP_CUSTOM_URL: ...', url=url[:50])
+                        logger.info('Кнопка connect: использован MINIAPP_CUSTOM_URL: ...', url=url[:50])
 
             # Проверяем, что это действительно URL
             if url and (url.startswith('http://') or url.startswith('https://')):
-                logger.info('🔗 Кнопка connect: open_mode=direct, используем URL: ...', url=url[:50])
+                logger.info('Кнопка connect: open_mode=direct, используем URL: ...', url=url[:50])
                 return InlineKeyboardButton(
                     text=text,
                     web_app=types.WebAppInfo(url=url),
                     icon_custom_emoji_id=custom_emoji_id,
                 )
             logger.warning(
-                '🔗 Кнопка connect: open_mode=direct, но URL не найден. webapp_url=, action=, subscription_url',
+                'Кнопка connect: open_mode=direct, но URL не найден. webapp_url=, action=, subscription_url',
                 webapp_url=webapp_url,
                 action=action,
                 value='есть' if context.subscription else 'нет',

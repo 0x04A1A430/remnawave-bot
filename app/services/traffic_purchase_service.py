@@ -85,7 +85,7 @@ async def add_subscription_traffic(
         await db.refresh(subscription)
 
     logger.info(
-        '📈 К подписке пользователя добавлено ГБ трафика (истекает )',
+        'К подписке пользователя добавлено ГБ трафика (истекает )',
         user_id=subscription.user_id,
         gb=gb,
         new_expires_at=new_expires_at.strftime('%d.%m.%Y'),

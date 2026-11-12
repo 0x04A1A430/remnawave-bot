@@ -199,7 +199,11 @@ class TributeService:
                 promo_group = user.get_primary_promo_group()
                 subscription = getattr(user, 'subscription', None)
                 referrer_info = format_referrer_info(user)
-                topup_status = '🆕 Первое пополнение' if was_first_topup else '🔄 Пополнение'
+                topup_status = (
+                    '<tg-emoji emoji-id="5886306834410640699">🆕</tg-emoji> Первое пополнение'
+                    if was_first_topup
+                    else '<tg-emoji emoji-id="5839200986022812209">🔄</tg-emoji> Пополнение'
+                )
 
                 # транзакция (flush в create_unique_tribute_transaction) и зачисление — одним коммитом
                 await session.commit()
@@ -229,13 +233,13 @@ class TributeService:
                 await session.refresh(user)
 
                 logger.info(
-                    '✅ Баланс пользователя обновлен: коп (+)',
+                    'Баланс пользователя обновлен: коп (+)',
                     user_telegram_id=user_telegram_id,
                     old_balance=old_balance,
                     balance_kopeks=user.balance_kopeks,
                     amount_kopeks=amount_kopeks,
                 )
-                logger.info('✅ Создана транзакция', transaction_id=transaction.id)
+                logger.info('Создана транзакция', transaction_id=transaction.id)
 
                 if was_first_topup:
                     logger.info('Отмечен первый топап для пользователя', user_telegram_id=user_telegram_id)
@@ -261,7 +265,7 @@ class TributeService:
                 await self._send_success_notification(user_telegram_id, amount_kopeks)
 
                 logger.info(
-                    '🎉 Успешно обработан Tribute платеж: ₽ для пользователя',
+                    'Успешно обработан Tribute платеж: ₽ для пользователя',
                     amount_kopeks=amount_kopeks / 100,
                     user_telegram_id=user_telegram_id,
                 )
@@ -381,7 +385,7 @@ class TributeService:
 
                 text = texts.t(
                     'TRIBUTE_SUCCESS_NOTICE',
-                    '✅ **Платеж успешно получен!**\n\n💰 Сумма: {amount} ₽\n💳 Способ оплаты: Tribute\n🎉 Средства зачислены на баланс!\n\nСпасибо за оплату! 🙏',
+                    '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> **Платеж успешно получен!**\n\n<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> Сумма: {amount} ₽\n<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> Способ оплаты: Tribute\n<tg-emoji emoji-id="5994502837327892086">🎉</tg-emoji> Средства зачислены на баланс!\n\nСпасибо за оплату! ',
                 ).format(amount=int(amount_rubles))
 
                 await self.bot.send_message(user_id, text, reply_markup=keyboard, parse_mode='Markdown')
@@ -415,12 +419,20 @@ class TributeService:
                 inline_keyboard=[
                     [
                         InlineKeyboardButton(
-                            text=texts.t('TRIBUTE_RETRY_BUTTON', '🔄 Попробовать снова'), callback_data='menu_balance'
+                            text=texts.t(
+                                'TRIBUTE_RETRY_BUTTON',
+                                '<tg-emoji emoji-id="5839200986022812209">🔄</tg-emoji> Попробовать снова',
+                            ),
+                            callback_data='menu_balance',
                         )
                     ],
                     [
                         InlineKeyboardButton(
-                            text=texts.t('TRIBUTE_SUPPORT_BUTTON', '💬 Поддержка'), callback_data='menu_support'
+                            text=texts.t(
+                                'TRIBUTE_SUPPORT_BUTTON',
+                                '<tg-emoji emoji-id="5886666250158870040">💬</tg-emoji> Поддержка',
+                            ),
+                            callback_data='menu_support',
                         )
                     ],
                 ]
@@ -446,19 +458,27 @@ class TributeService:
 
             text = texts.t(
                 'TRIBUTE_REFUND_NOTICE',
-                '🔄 **Возврат средств**\n\n💰 Сумма возврата: {amount} ₽\n💳 Способ: Tribute\n\nСредства будут возвращены на вашу карту в течение 3-5 рабочих дней.\n\nЕсли у вас есть вопросы, обратитесь в поддержку.',
+                '<tg-emoji emoji-id="5839200986022812209">🔄</tg-emoji> **Возврат средств**\n\n<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> Сумма возврата: {amount} ₽\n<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> Способ: Tribute\n\nСредства будут возвращены на вашу карту в течение 3-5 рабочих дней.\n\nЕсли у вас есть вопросы, обратитесь в поддержку.',
             ).format(amount=int(amount_rubles))
 
             keyboard = InlineKeyboardMarkup(
                 inline_keyboard=[
                     [
                         InlineKeyboardButton(
-                            text=texts.t('TRIBUTE_SUPPORT_BUTTON', '💬 Поддержка'), callback_data='menu_support'
+                            text=texts.t(
+                                'TRIBUTE_SUPPORT_BUTTON',
+                                '<tg-emoji emoji-id="5886666250158870040">💬</tg-emoji> Поддержка',
+                            ),
+                            callback_data='menu_support',
                         )
                     ],
                     [
                         InlineKeyboardButton(
-                            text=texts.t('TRIBUTE_MENU_BUTTON', '🏠 Главное меню'), callback_data='back_to_menu'
+                            text=texts.t(
+                                'TRIBUTE_MENU_BUTTON',
+                                '<tg-emoji emoji-id="5967822972931542886">🏠</tg-emoji> Главное меню',
+                            ),
+                            callback_data='back_to_menu',
                         )
                     ],
                 ]
@@ -478,7 +498,7 @@ class TributeService:
     ) -> bool:
         try:
             logger.info(
-                '🔧 ПРИНУДИТЕЛЬНАЯ ОБРАБОТКА платежа',
+                'ПРИНУДИТЕЛЬНАЯ ОБРАБОТКА платежа',
                 payment_id=payment_id,
                 user_id=user_id,
                 amount_kopeks=amount_kopeks,
@@ -515,12 +535,12 @@ class TributeService:
                 await session.commit()
 
                 logger.info(
-                    '💰 ПРИНУДИТЕЛЬНО обновлён баланс', old_balance=old_balance, balance_kopeks=user.balance_kopeks
+                    'ПРИНУДИТЕЛЬНО обновлён баланс', old_balance=old_balance, balance_kopeks=user.balance_kopeks
                 )
 
                 await self._send_success_notification(user_id, amount_kopeks)
 
-                logger.info('✅ Принудительно обработан платеж', payment_id=payment_id)
+                logger.info('Принудительно обработан платеж', payment_id=payment_id)
                 return True
 
         except Exception as e:

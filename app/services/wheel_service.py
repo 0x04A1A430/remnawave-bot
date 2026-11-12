@@ -48,7 +48,7 @@ class SpinResult:
     prize_type: str | None = None
     prize_value: int = 0
     prize_display_name: str = ''
-    emoji: str = '🎁'
+    emoji: str = '<tg-emoji emoji-id="6032937473162614352">🎁</tg-emoji>'
     color: str = '#3B82F6'
     rotation_degrees: float = 0.0
     message: str = ''
@@ -333,7 +333,7 @@ class FortuneWheelService:
         # Списываем с баланса
         user.balance_kopeks -= kopeks
         logger.info(
-            '💫 Списано ₽ (⭐) с баланса user_id',
+            'Списано ₽ () с баланса user_id',
             kopeks=round(kopeks / 100, 2),
             spin_cost_stars=config.spin_cost_stars,
             user_id=user.id,
@@ -371,7 +371,7 @@ class FortuneWheelService:
         daily_price = price_30_days / 30
         kopeks = int(daily_price * config.spin_cost_days)
 
-        logger.info('📅 Списано дней подписки у user_id', spin_cost_days=config.spin_cost_days, user_id=user.id)
+        logger.info('Списано дней подписки у user_id', spin_cost_days=config.spin_cost_days, user_id=user.id)
 
         return kopeks
 
@@ -431,7 +431,7 @@ class FortuneWheelService:
         prize_type = prize.prize_type
 
         if prize_type == WheelPrizeType.NOTHING.value:
-            logger.info('🎰 Пустой приз для user_id', user_id=user.id)
+            logger.info('Пустой приз для user_id', user_id=user.id)
             return None
 
         if prize_type == WheelPrizeType.BALANCE_BONUS.value:
@@ -444,9 +444,7 @@ class FortuneWheelService:
                 create_transaction=True,
                 commit=False,
             )
-            logger.info(
-                '💰 Начислено ₽ на баланс user_id', prize_value=round(prize.prize_value / 100, 2), user_id=user.id
-            )
+            logger.info('Начислено ₽ на баланс user_id', prize_value=round(prize.prize_value / 100, 2), user_id=user.id)
             return None
 
         if prize_type == WheelPrizeType.SUBSCRIPTION_DAYS.value:
@@ -492,7 +490,7 @@ class FortuneWheelService:
                             commit=False,
                         )
                         logger.info(
-                            '💰 Суточный тариф: дней конвертированы в ₽ для user_id',
+                            'Суточный тариф: дней конвертированы в ₽ для user_id',
                             prize_value=prize.prize_value,
                             balance_bonus=round(balance_bonus / 100, 2),
                             user_id=user.id,
@@ -507,7 +505,7 @@ class FortuneWheelService:
                             create_transaction=True,
                             commit=False,
                         )
-                        logger.info('💰 Дни конвертированы в баланс для user_id', user_id=user.id)
+                        logger.info('Дни конвертированы в баланс для user_id', user_id=user.id)
                 else:
                     # Оверлей грейса, осевший в подписке (v4.10–4.11), — не её срок: вернуть до расчёта.
                     from app.services.grace_access_echo import undo_grace_overlay_echo
@@ -520,7 +518,7 @@ class FortuneWheelService:
                     from app.database.crud.subscription import reconcile_tariff_traffic_limit
 
                     await reconcile_tariff_traffic_limit(db, subscription)
-                    logger.info('📅 Начислено дней подписки user_id', prize_value=prize.prize_value, user_id=user.id)
+                    logger.info('Начислено дней подписки user_id', prize_value=prize.prize_value, user_id=user.id)
 
             else:
                 # Если нет подписки - начисляем на баланс эквивалент
@@ -532,7 +530,7 @@ class FortuneWheelService:
                     create_transaction=True,
                     commit=False,
                 )
-                logger.info('💰 Дни конвертированы в баланс для user_id', user_id=user.id)
+                logger.info('Дни конвертированы в баланс для user_id', user_id=user.id)
             return None
 
         if prize_type == WheelPrizeType.TRAFFIC_GB.value:
@@ -558,7 +556,7 @@ class FortuneWheelService:
             if subscription and subscription.traffic_limit_gb > 0:
                 subscription.traffic_limit_gb += prize.prize_value
                 subscription.updated_at = datetime.now(UTC)
-                logger.info('📊 Начислено трафика user_id', prize_value=prize.prize_value, user_id=user.id)
+                logger.info('Начислено трафика user_id', prize_value=prize.prize_value, user_id=user.id)
 
             else:
                 # Если безлимит или нет подписки - на баланс
@@ -575,7 +573,7 @@ class FortuneWheelService:
         if prize_type == WheelPrizeType.PROMOCODE.value:
             # Генерация промокода
             promocode = await self._generate_prize_promocode(db, user, prize, config)
-            logger.info('🎟️ Сгенерирован промокод для user_id', code=promocode.code, user_id=user.id)
+            logger.info('Сгенерирован промокод для user_id', code=promocode.code, user_id=user.id)
             return promocode.code
 
         return None

@@ -152,7 +152,7 @@ class ContestRotationService:
         await self._ensure_default_templates()
 
         self._task = asyncio.create_task(self._loop())
-        logger.info('🎲 Сервис ротационных конкурсов запущен')
+        logger.info('Сервис ротационных конкурсов запущен')
 
     async def stop(self) -> None:
         if self._task and not self._task.done():
@@ -281,11 +281,11 @@ class ContestRotationService:
                 prize_display = prize_value
 
             return (
-                f'🎲 {texts.t("CONTEST_START_ANNOUNCEMENT", "Стартует игра")}: <b>{html.escape(tpl.name)}</b>\n'
+                f'<tg-emoji emoji-id="5960608239623082921">🎲</tg-emoji> {texts.t("CONTEST_START_ANNOUNCEMENT", "Стартует игра")}: <b>{html.escape(tpl.name)}</b>\n'
                 f'{texts.t("CONTEST_PRIZE", "Приз")}: {prize_display} • {texts.t("CONTEST_WINNERS", "Победителей")}: {tpl.max_winners}\n'
                 f'{texts.t("CONTEST_ATTEMPTS", "Попыток/польз")}: {tpl.attempts_per_user}\n\n'
                 f'{texts.t("CONTEST_ELIGIBILITY", "Участвовать могут только с активной или триальной подпиской")}.\n'
-                f'💡 <b>{texts.t("REMINDER", "Напоминание")}:</b> {texts.t("CONTEST_REMINDER_TEXT", "Не забудьте участвовать в конкурсах для получения бонусов")}!'
+                f'<b>{texts.t("REMINDER", "Напоминание")}:</b> {texts.t("CONTEST_REMINDER_TEXT", "Не забудьте участвовать в конкурсах для получения бонусов")}!'
             )
 
         await asyncio.gather(
@@ -322,7 +322,9 @@ class ContestRotationService:
                 inline_keyboard=[
                     [
                         InlineKeyboardButton(
-                            text=get_texts(settings.DEFAULT_LANGUAGE).t('CONTEST_PLAY_BUTTON', '🎲 Играть'),
+                            text=get_texts(settings.DEFAULT_LANGUAGE).t(
+                                'CONTEST_PLAY_BUTTON', '<tg-emoji emoji-id="5960608239623082921">🎲</tg-emoji> Играть'
+                            ),
                             url=f'https://t.me/{bot_username}?start=contests',
                         )
                     ]
@@ -374,7 +376,11 @@ class ContestRotationService:
                         inline_keyboard=[
                             [
                                 InlineKeyboardButton(
-                                    text=texts.t('CONTEST_PLAY_BUTTON', '🎲 Играть'), callback_data='contests_menu'
+                                    text=texts.t(
+                                        'CONTEST_PLAY_BUTTON',
+                                        '<tg-emoji emoji-id="5960608239623082921">🎲</tg-emoji> Играть',
+                                    ),
+                                    callback_data='contests_menu',
                                 )
                             ]
                         ]

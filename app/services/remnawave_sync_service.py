@@ -164,7 +164,7 @@ class RemnaWaveAutoSyncService:
                 self._last_user_stats = None
                 self._last_server_stats = None
                 self._last_run_finished_at = datetime.now(UTC)
-                logger.error('❌ Автосинхронизация RemnaWave', message=message)
+                logger.error('Автосинхронизация RemnaWave', message=message)
                 return {
                     'started': True,
                     'success': False,
@@ -179,7 +179,7 @@ class RemnaWaveAutoSyncService:
                 self._last_user_stats = None
                 self._last_server_stats = None
                 self._last_run_finished_at = datetime.now(UTC)
-                logger.exception('❌ Ошибка автосинхронизации RemnaWave', error=error)
+                logger.exception('Ошибка автосинхронизации RemnaWave', error=error)
                 return {
                     'started': True,
                     'success': False,
