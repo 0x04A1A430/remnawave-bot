@@ -541,12 +541,16 @@ async def update_user(db: AsyncSession, user: User, **kwargs) -> User:
     return user
 
 
-async def lock_user_for_update(db: AsyncSession, user: User) -> User:
+async def lock_user_for_update(db: AsyncSession, user: User, *, missing_ok: bool = False) -> User | None:
     """Lock user row with SELECT FOR UPDATE to prevent concurrent balance modifications.
 
     Returns the refreshed user object with current DB values.
     Must be called within an active transaction before modifying balance_kopeks.
     Eagerly loads key relationships to avoid MissingGreenlet in async context.
+
+    ``missing_ok=True`` returns ``None`` when the row disappeared between the
+    initial lookup and the lock (e.g. a concurrent merge/deletion), instead of
+    raising ``NoResultFound``. Callers that depend on the user must handle it.
     """
     result = await db.execute(
         select(User)
@@ -560,6 +564,8 @@ async def lock_user_for_update(db: AsyncSession, user: User) -> User:
         .with_for_update()
         .execution_options(populate_existing=True)
     )
+    if missing_ok:
+        return result.scalar_one_or_none()
     return result.scalar_one()
 
 
@@ -1529,11 +1535,19 @@ async def get_users_for_promo_segment(db: AsyncSession, segment: str) -> list[Us
     return users
 
 
-async def get_inactive_users(db: AsyncSession, months: int = 3, *, include_deleted: bool = False) -> list[User]:
+async def get_inactive_users(
+    db: AsyncSession,
+    months: int = 3,
+    *,
+    include_deleted: bool = False,
+    without_subscriptions: bool = False,
+) -> list[User]:
     """Пользователи без активности дольше ``months`` месяцев.
 
     ``include_deleted`` добавляет уже мягко удалённых: их нужно вычищать из БД
     и панели той же кнопкой, иначе они копятся со статусом «удалён».
+    ``without_subscriptions`` оставляет только тех, у кого в боте вообще нет
+    подписки — такие аккаунты безопасно удалять пачкой.
     """
     threshold_date = datetime.now(UTC) - timedelta(days=months * 30)
 
@@ -1542,6 +1556,17 @@ async def get_inactive_users(db: AsyncSession, months: int = 3, *, include_delet
     users_with_recent_subs = (
         select(Subscription.user_id).where(Subscription.end_date >= threshold_date).distinct().scalar_subquery()
     )
+    conditions = [
+        User.last_activity < threshold_date,
+        User.status.in_(
+            [UserStatus.ACTIVE.value, UserStatus.DELETED.value]
+            if include_deleted
+            else [UserStatus.ACTIVE.value]
+        ),
+        User.id.not_in(users_with_recent_subs),
+    ]
+    if without_subscriptions:
+        conditions.append(User.id.not_in(select(Subscription.user_id).distinct().scalar_subquery()))
 
     result = await db.execute(
         select(User)
@@ -1551,17 +1576,7 @@ async def get_inactive_users(db: AsyncSession, months: int = 3, *, include_delet
             selectinload(User.referrer),
             selectinload(User.promo_group),
         )
-        .where(
-            and_(
-                User.last_activity < threshold_date,
-                User.status.in_(
-                    [UserStatus.ACTIVE.value, UserStatus.DELETED.value]
-                    if include_deleted
-                    else [UserStatus.ACTIVE.value]
-                ),
-                User.id.not_in(users_with_recent_subs),
-            )
-        )
+        .where(and_(*conditions))
     )
     users = result.scalars().all()
 

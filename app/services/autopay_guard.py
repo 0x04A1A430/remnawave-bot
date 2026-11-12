@@ -18,6 +18,7 @@ async def lock_autopay_target(
     *,
     expected_end_date: datetime,
     expired_only: bool = False,
+    allow_without_autopay: bool = False,
 ) -> tuple[User, Subscription] | None:
     """Hold User then Subscription until caller commits the whole renewal.
 
@@ -37,9 +38,16 @@ async def lock_autopay_target(
     now = datetime.now(UTC)
     if subscription is not None:
         tariff = subscription.tariff
+        # Обычный autopay требует явного согласия. Для истёкшей подписки с
+        # балансом разрешаем продлить и без него, если глобальная настройка включена.
+        autopay_ok = subscription.autopay_enabled is True
+        if allow_without_autopay and settings.AUTO_RENEW_EXPIRED_FROM_BALANCE:
+            autopay_ok = autopay_ok or (
+                subscription.status == 'expired' and now >= subscription.end_date
+            )
         allowed = (
             user.status == 'active'
-            and subscription.autopay_enabled is True
+            and autopay_ok
             and subscription.is_trial is False
             and subscription.end_date == expected_end_date
             and not subscription.is_daily_paused
@@ -54,11 +62,16 @@ async def lock_autopay_target(
                 and (now - subscription.end_date).days <= 30
             )
         else:
+            expired_window = timedelta(
+                hours=max(1, int(settings.AUTO_RENEW_EXPIRED_WINDOW_HOURS))
+                if allow_without_autopay
+                else 2
+            )
             allowed = (
                 allowed
                 and (
                     subscription.status == 'active'
-                    or (subscription.status == 'expired' and subscription.end_date >= now - timedelta(hours=2))
+                    or (subscription.status == 'expired' and subscription.end_date >= now - expired_window)
                 )
                 and ends_within_days(subscription.end_date, min(subscription.autopay_days_before or 3, 3), now)
             )
