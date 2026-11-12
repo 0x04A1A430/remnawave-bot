@@ -7,6 +7,7 @@ the intended default label must be rendered without breaking callback_data or UR
 
 from __future__ import annotations
 
+import re
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -46,6 +47,10 @@ def simulate_missing_gift_keys(monkeypatch):
     monkeypatch.setattr(Texts, '_get_value', fake_get_value)
 
 
+def _plain(value: str) -> str:
+    return re.sub(r'<tg-emoji[^>]*>(.*?)</tg-emoji>', r'\1', value)
+
+
 class TestGiftButtonFallbacks:
     """Test that all gift buttons have non-empty default fallbacks."""
 
@@ -82,10 +87,10 @@ class TestGiftButtonFallbacks:
         assert tariff_btn.text == 'Standard'
 
         enter_code_btn = next(b for b in buttons if b.callback_data == 'gift_enter_code')
-        assert enter_code_btn.text == '🎁 Активировать код'
+        assert _plain(enter_code_btn.text) == '🎁 Активировать код'
 
         cancel_btn = next(b for b in buttons if b.callback_data == 'gift_cancel')
-        assert cancel_btn.text == '❌ Отмена'
+        assert _plain(cancel_btn.text) == '❌ Отмена'
 
     def test_gift_period_selection_buttons_fallback(self, mock_user):
         """Test period choice, discount, back to tariffs, and cancel fallbacks in _render_period_selection."""
@@ -117,7 +122,7 @@ class TestGiftButtonFallbacks:
         assert back_btn.text == '← К тарифам'
 
         cancel_btn = next(b for b in buttons if b.callback_data == 'gift_cancel')
-        assert cancel_btn.text == '❌ Отмена'
+        assert _plain(cancel_btn.text) == '❌ Отмена'
 
     def test_gift_confirmation_summary_buttons_fallback(self, mock_user):
         """Test confirm, back to periods, and cancel fallbacks in _render_confirmation_summary."""
@@ -126,13 +131,13 @@ class TestGiftButtonFallbacks:
         buttons = [b for row in kb.inline_keyboard for b in row]
 
         confirm_btn = next(b for b in buttons if b.callback_data == 'gift_confirm')
-        assert confirm_btn.text == '✅ Подтвердить покупку'
+        assert _plain(confirm_btn.text) == '✅ Подтвердить покупку'
 
         back_btn = next(b for b in buttons if b.callback_data == 'gift_back_periods')
         assert back_btn.text == '← К периодам'
 
         cancel_btn = next(b for b in buttons if b.callback_data == 'gift_cancel')
-        assert cancel_btn.text == '❌ Отмена'
+        assert _plain(cancel_btn.text) == '❌ Отмена'
 
     def test_gift_history_buttons_fallback(self, mock_user):
         """Test history list and pagination fallbacks in _render_history_list."""
@@ -161,10 +166,10 @@ class TestGiftButtonFallbacks:
         assert 'Basic — 30 дн.' in item_btn.text
 
         prev_btn = next(b for b in buttons if b.callback_data == 'gift_my_page:1')
-        assert prev_btn.text == '⬅️ Предыдущая'
+        assert _plain(prev_btn.text) == '⬅️ Предыдущая'
 
         next_btn = next(b for b in buttons if b.callback_data == 'gift_my_page:3')
-        assert next_btn.text == 'Следующая ➡️'
+        assert _plain(next_btn.text) == 'Следующая ➡️'
 
         back_btn = next(b for b in buttons if b.callback_data == 'gift_back_tariffs')
         assert back_btn.text == '← Назад'

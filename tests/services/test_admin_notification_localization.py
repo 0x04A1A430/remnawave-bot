@@ -217,7 +217,7 @@ async def test_purchase_event_metadata_stays_original_while_message_is_localized
         id=9, amount_kopeks=-12345, payment_method='yookassa', completed_at=now, created_at=now
     )
     assert await service.send_subscription_purchase_notification(object(), user, subscription, transaction, 30)
-    assert record.await_args.kwargs['extra']['payment_method'] == '¤ YooKassa (карта)'
+    assert record.await_args.kwargs['extra']['payment_method'] == '₽ YooKassa (карта)'
     assert record.await_args.kwargs['amount_kopeks'] == 12345
     message = service.bot.send_message.await_args.kwargs['text']
     assert get_texts('fa').t('ADMIN_NOTIFY_026') in message

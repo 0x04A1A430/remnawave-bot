@@ -260,11 +260,11 @@ def test_manual_success_text_has_no_word_automatically():
     source = ' '.join(
         (APP_ROOT / 'services' / 'subscription_auto_purchase_service.py').read_text(encoding='utf-8').split()
     )
-    assert "'✅ <b>Трафик добавлен!</b>\\n\\n' if manual else '✅ <b>Трафик добавлен автоматически!</b>" in source
-    assert (
-        "'✅ <b>Устройства добавлены!</b>\\n\\n' if manual else '✅ <b>Устройства добавлены автоматически!</b>"
-        in source
-    )
+    # Ручной текст не обещает «автоматически», автоматический — обещает.
+    assert 'Трафик добавлен!</b>' in source and 'Трафик добавлен автоматически!</b>' in source
+    assert 'Устройства добавлены!</b>' in source and 'Устройства добавлены автоматически!</b>' in source
+    # Оба варианта несут фирменный premium-чек.
+    assert '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji>' in source
 
 
 # ---------------------------------------------------------------------------

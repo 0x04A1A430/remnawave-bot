@@ -64,7 +64,7 @@ class TelegramStarsMixin:
 
             invoice_link = await self.bot.create_invoice_link(
                 title=texts.t('STARS_INVOICE_TITLE', 'Пополнение баланса VPN'),
-                description=f'{description} (≈{stars_amount})',
+                description=f'{description} (≈{stars_amount} ★)',
                 payload=payload or f'balance_topup_{amount_kopeks}',
                 provider_token='',
                 currency='XTR',

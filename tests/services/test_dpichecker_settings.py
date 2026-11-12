@@ -20,7 +20,7 @@ def test_roles_with_bscheker_get_dpichecker_too():
 
 
 def test_settings_live_in_own_category():
-    assert BotConfigurationService.CATEGORY_TITLES['DPICHECKER'] == '🧱 DPI//CHECKER'
+    assert BotConfigurationService.CATEGORY_TITLES['DPICHECKER'] == 'DPI//CHECKER'
     assert BotConfigurationService.CATEGORY_PREFIX_OVERRIDES['DPICHECKER_'] == 'DPICHECKER'
     assert 'DPICHECKER' in BotConfigurationService.CATEGORY_DESCRIPTIONS
 
