@@ -237,3 +237,15 @@ def test_operator_phrase_stands_in_a_case_neutral_slot(language, key):
     template = json.loads((Path('app/localization/locales') / f'{language}.json').read_text(encoding='utf-8'))[key]
 
     assert re.search(r'[:：]\s*\{allowed\}', template), f'{language}.{key}: {{allowed}} должен стоять после двоеточия'
+
+
+@pytest.mark.asyncio
+async def test_grace_message_has_subscription_menu_button(lab):
+    """Во время grace человек не должен оставаться без входа в меню подписки."""
+    await _seed(lab.maker)
+
+    await notify.announce_grace_event(lab.bot, 10, 'granted')
+
+    markup = lab.user.await_args.kwargs['telegram_markup']
+    callbacks = [button.callback_data for row in markup.inline_keyboard for button in row]
+    assert 'my_subscriptions' in callbacks

@@ -938,8 +938,15 @@ def _calculate_subscription_flags(subscription):
 
     actual_status = getattr(subscription, 'actual_status', None)
     # 'limited' subscriptions are still active (traffic exhausted, but subscription not expired)
-    has_active_subscription = actual_status in {'active', 'trial', 'limited'}
-    subscription_is_active = bool(getattr(subscription, 'is_active', False)) or actual_status == 'limited'
+    # Grace-доступ оставляет панельный аккаунт активным, поэтому меню подписки
+    # должно оставаться доступным, даже если billing-статус уже expired.
+    grace_active = getattr(subscription, 'grace_session_open', False) is True
+    has_active_subscription = actual_status in {'active', 'trial', 'limited'} or grace_active
+    subscription_is_active = (
+        bool(getattr(subscription, 'is_active', False))
+        or actual_status == 'limited'
+        or grace_active
+    )
 
     return has_active_subscription, subscription_is_active
 

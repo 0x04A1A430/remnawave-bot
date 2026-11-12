@@ -7196,5 +7196,6 @@
   "ADMIN_USERS_CLEANUP_BACKUP_FAILED": "<b>حذف لغو شد</b>\n\nایجاد نسخه پشتیبان ممکن نشد. هیچ کاربری تغییر نکرد.",
   "ADMIN_USERS_CLEANUP_BACKUP_FILE": "\nپشتیبان: <code>{value1}</code>",
   "ADMIN_USERS_CLEANUP_SUBSCRIPTION_RULE": "اشتراک وجود ندارد یا بیش از {value1} روز پیش منقضی شده است.\n",
-  "AUTO_RENEW_EXPIRED_INSUFFICIENT": "<tg-emoji emoji-id=\"5881702736843511327\">⚠</tg-emoji> <b>موجودی کافی برای تمدید نیست</b>\n\nاشتراک به پایان رسیده، اما موجودی برای تمدید خودکار کافی نیست.\n\nموجودی: {balance}\nمورد نیاز: {required}\n\nموجودی را افزایش دهید تا اشتراک به‌صورت خودکار تمدید شود."
+  "AUTO_RENEW_EXPIRED_INSUFFICIENT": "<tg-emoji emoji-id=\"5881702736843511327\">⚠</tg-emoji> <b>موجودی کافی برای تمدید نیست</b>\n\nاشتراک به پایان رسیده، اما موجودی برای تمدید خودکار کافی نیست.\n\nموجودی: {balance}\nمورد نیاز: {required}\n\nموجودی را افزایش دهید تا اشتراک به‌صورت خودکار تمدید شود.",
+  "SUB_STATUS_GRACE": "دسترسی موقت\n{end_date}"
 }

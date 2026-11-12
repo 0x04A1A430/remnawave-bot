@@ -50,6 +50,10 @@ async def get_main_menu_keyboard_async(
     Если MENU_LAYOUT_ENABLED=True, использует конфигурацию из БД.
     Иначе делегирует в синхронную версию.
     """
+    if getattr(subscription, 'grace_session_open', False) is True:
+        has_active_subscription = True
+        subscription_is_active = True
+
     if settings.MENU_LAYOUT_ENABLED:
         from app.services.menu_layout_service import MenuContext, MenuLayoutService
 
@@ -594,6 +598,12 @@ def get_main_menu_keyboard(
     custom_buttons: list[InlineKeyboardButton] | None = None,
 ) -> InlineKeyboardMarkup:
     texts = get_texts(language)
+
+    # Grace-доступ: billing-статус уже expired, но панельный аккаунт активен.
+    # Без этого пользователь терял кнопку «Подписка» ровно на время grace.
+    if getattr(subscription, 'grace_session_open', False) is True:
+        has_active_subscription = True
+        subscription_is_active = True
 
     if settings.is_cabinet_mode():
         return _build_cabinet_main_menu_keyboard(

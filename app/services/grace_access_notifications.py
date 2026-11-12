@@ -140,7 +140,10 @@ async def _notify_admins(bot: Any, event: GraceEvent, subscription: Subscription
 async def _notify_user(bot: Any, event: GraceEvent, subscription: Subscription, details: _GraceDetails) -> None:
     from app.localization.texts import get_texts
     from app.services.notification_delivery_service import notification_delivery_service
-    from app.utils.miniapp_buttons import build_subscription_extend_button
+    from app.utils.miniapp_buttons import (
+        build_miniapp_or_callback_button,
+        build_subscription_extend_button,
+    )
     from app.utils.timezone import format_local_datetime
 
     if event == 'ended' and details.completion_reason not in _USER_ENDED_REASONS:
@@ -200,13 +203,26 @@ async def _notify_user(bot: Any, event: GraceEvent, subscription: Subscription, 
         style='danger',
         icon_custom_emoji_id=notification_card.ICONS.get('❌'),
     )
+    if settings.is_multi_tariff_enabled():
+        sub_text = texts.get('MY_SUBSCRIPTIONS_BUTTON', 'Мои подписки')
+        sub_callback = 'my_subscriptions'
+    else:
+        sub_text = texts.get('MY_SUBSCRIPTION_BUTTON', 'Моя подписка')
+        sub_callback = 'menu_subscription'
+    open_subscription = build_miniapp_or_callback_button(
+        text=sub_text,
+        callback_data=sub_callback,
+        style='primary',
+    )
     await notification_delivery_service.send_notification(
         user=user,
         notification_type=notification_type,
         context=email_context,
         bot=bot,
         telegram_message=message,
-        telegram_markup=InlineKeyboardMarkup(inline_keyboard=[[renew], [close]]),
+        telegram_markup=InlineKeyboardMarkup(
+            inline_keyboard=[[renew], [open_subscription], [close]]
+        ),
     )
 
 
