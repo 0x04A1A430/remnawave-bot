@@ -219,7 +219,7 @@ async def _build_notification_preview_message(language: str, notification_type: 
     if notification_type == 'trial_channel_unsubscribed':
         check_button = texts.t('CHANNEL_CHECK_BUTTON', 'Я подписался')
         message = card(
-            emoji='',
+            emoji='🔒',
             title=texts.t('NOTIFY_TRIAL_UNSUB_TITLE', 'Доступ приостановлен'),
             lines=[
                 texts.t('NOTIFY_TRIAL_UNSUB_LINE_1', 'Не нашли подписку на наш канал.'),
@@ -232,12 +232,12 @@ async def _build_notification_preview_message(language: str, notification_type: 
             link = channel.get('channel_link')
             if link:
                 title = channel.get('title') or texts.t('CHANNEL_SUBSCRIBE_BUTTON', 'Подписаться')
-                rows.append([button(title, '', url=link, style='primary')])
-        rows.append([button(check_button, '', callback_data='sub_channel_check', style='success')])
+                rows.append([button(title, '💬', url=link, style='primary')])
+        rows.append([button(check_button, '✅', callback_data='sub_channel_check', style='success')])
         keyboard = InlineKeyboardMarkup(inline_keyboard=rows)
     elif notification_type == 'expired_1d':
         message = card(
-            emoji='',
+            emoji='⏰',
             title=texts.t('NOTIFY_EXPIRED_TITLE', 'Подписка закончилась'),
             lines=[
                 (
@@ -254,7 +254,7 @@ async def _build_notification_preview_message(language: str, notification_type: 
                 [
                     button(
                         texts.t('SUBSCRIPTION_EXTEND', 'Продлить подписку'),
-                        '',
+                        '💳',
                         callback_data='subscription_extend',
                         style='success',
                     )
@@ -262,12 +262,12 @@ async def _build_notification_preview_message(language: str, notification_type: 
                 [
                     button(
                         texts.t('BALANCE_TOPUP', 'Пополнить баланс'),
-                        '',
+                        '💰',
                         callback_data='balance_topup',
                         style='primary',
                     )
                 ],
-                [button(texts.t('SUPPORT_BUTTON', 'Поддержка'), '', callback_data='menu_support', style='danger')],
+                [button(texts.t('SUPPORT_BUTTON', 'Поддержка'), '💬', callback_data='menu_support', style='danger')],
             ]
         )
     elif notification_type == 'expired_2d':
@@ -275,7 +275,7 @@ async def _build_notification_preview_message(language: str, notification_type: 
         valid_hours = NotificationSettingsService.get_second_wave_valid_hours()
         expires_at = (now + timedelta(hours=valid_hours)).strftime('%d.%m.%Y %H:%M')
         message = card(
-            emoji='',
+            emoji='🎁',
             title=texts.t('NOTIFY_WAVE2_TITLE', 'Скидка {percent}% на возвращение').format(percent=percent),
             lines=[
                 texts.t('NOTIFY_WAVE_LINE', 'Суммируется с вашей промогруппой.'),
@@ -288,7 +288,7 @@ async def _build_notification_preview_message(language: str, notification_type: 
                 [
                     button(
                         texts.t('NOTIFY_CLAIM_DISCOUNT', 'Забрать скидку'),
-                        '',
+                        '🎁',
                         callback_data='claim_discount_preview',
                         style='success',
                     )
@@ -296,12 +296,12 @@ async def _build_notification_preview_message(language: str, notification_type: 
                 [
                     button(
                         texts.t('SUBSCRIPTION_EXTEND', 'Продлить подписку'),
-                        '',
+                        '🔥',
                         callback_data='subscription_extend',
                         style='primary',
                     )
                 ],
-                [button(texts.t('SUPPORT_BUTTON', 'Поддержка'), '', callback_data='menu_support', style='danger')],
+                [button(texts.t('SUPPORT_BUTTON', 'Поддержка'), '💬', callback_data='menu_support', style='danger')],
             ]
         )
     elif notification_type == 'expired_nd':
@@ -310,7 +310,7 @@ async def _build_notification_preview_message(language: str, notification_type: 
         trigger_days = NotificationSettingsService.get_third_wave_trigger_days()
         expires_at = (now + timedelta(hours=valid_hours)).strftime('%d.%m.%Y %H:%M')
         message = card(
-            emoji='',
+            emoji='💎',
             title=texts.t('NOTIFY_WAVE3_TITLE', 'Индивидуальная скидка {percent}%').format(percent=percent),
             lines=[
                 texts.t('NOTIFY_WAVE3_LINE', 'Прошло {days} дней без подписки — возвращайтесь.').format(
@@ -325,7 +325,7 @@ async def _build_notification_preview_message(language: str, notification_type: 
                 [
                     button(
                         texts.t('NOTIFY_CLAIM_DISCOUNT', 'Забрать скидку'),
-                        '',
+                        '🎁',
                         callback_data='claim_discount_preview',
                         style='success',
                     )
@@ -333,12 +333,12 @@ async def _build_notification_preview_message(language: str, notification_type: 
                 [
                     button(
                         texts.t('SUBSCRIPTION_EXTEND', 'Продлить подписку'),
-                        '',
+                        '🔥',
                         callback_data='subscription_extend',
                         style='primary',
                     )
                 ],
-                [button(texts.t('SUPPORT_BUTTON', 'Поддержка'), '', callback_data='menu_support', style='danger')],
+                [button(texts.t('SUPPORT_BUTTON', 'Поддержка'), '💬', callback_data='menu_support', style='danger')],
             ]
         )
     else:
@@ -349,7 +349,7 @@ async def _build_notification_preview_message(language: str, notification_type: 
         'NOTIFY_PREVIEW_FOOTER',
         '\n\n<i>Сообщение отправлено только вам для проверки оформления.</i>',
     )
-    return compact_text(header + message.lstrip() + footer), keyboard
+    return compact_text(header + message + footer), keyboard
 
 
 async def _send_notification_preview(bot, chat_id: int, language: str, notification_type: str) -> None:
