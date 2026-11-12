@@ -3624,7 +3624,7 @@ def format_tariff_switch_list_text(
                 )
 
         lines.append(
-            f'<b>{html.escape(tariff.name)}</b> — {traffic} / {tariff.device_limit} <tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> {price_text}'
+            f'<b>{html.escape(tariff.name)}</b> — {traffic} / {tariff.device_limit} {texts.t('TARIFF_DEVICES_SHORT', 'устр.')} {price_text}'
         )
 
         if tariff.description:
@@ -4950,7 +4950,7 @@ def format_instant_switch_list_text(
             )
 
         lines.append(
-            f'<b>{html.escape(tariff.name)}</b> — {traffic} / {tariff.device_limit} <tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> {cost_text}'
+            f'<b>{html.escape(tariff.name)}</b> — {traffic} / {tariff.device_limit} {texts.t('TARIFF_DEVICES_SHORT', 'устр.')} {cost_text}'
         )
 
         if tariff.description:

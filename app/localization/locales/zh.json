@@ -7197,5 +7197,6 @@
   "ADMIN_USERS_CLEANUP_BACKUP_FILE": "\n备份：<code>{value1}</code>",
   "ADMIN_USERS_CLEANUP_SUBSCRIPTION_RULE": "无订阅，或订阅已过期超过 {value1} 天。\n",
   "AUTO_RENEW_EXPIRED_INSUFFICIENT": "<tg-emoji emoji-id=\"5881702736843511327\">⚠</tg-emoji> <b>余额不足以续订</b>\n\n订阅已到期，但余额不足以自动续订。\n\n余额：{balance}\n需要：{required}\n\n请充值，订阅将自动续订。",
-  "SUB_STATUS_GRACE": "临时访问\n{end_date}"
+  "SUB_STATUS_GRACE": "临时访问\n{end_date}",
+  "TARIFF_DEVICES_SHORT": "台"
 }

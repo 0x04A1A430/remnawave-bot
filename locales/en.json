@@ -1781,5 +1781,6 @@
   "AUTO_RENEW_EXPIRED_INSUFFICIENT": "<tg-emoji emoji-id=\"5881702736843511327\">⚠</tg-emoji> <b>Not enough funds to renew</b>\n\nYour subscription has ended, but your balance is too low to renew it automatically.\n\nBalance: {balance}\nRequired: {required}\n\nTop up your balance and the subscription will renew automatically.",
   "SUB_STATUS_GRACE": "Temporary access\n{end_date}",
   "CHANGE_TARIFF_BUTTON": "<tg-emoji emoji-id=\"5924720918826848520\">📦</tg-emoji> Change plan",
-  "SUBSCRIPTION_UI_BUY": "<tg-emoji emoji-id=\"5974217466270716579\">💵</tg-emoji> Buy a subscription"
+  "SUBSCRIPTION_UI_BUY": "<tg-emoji emoji-id=\"5974217466270716579\">💵</tg-emoji> Buy a subscription",
+  "TARIFF_DEVICES_SHORT": "dev."
 }
