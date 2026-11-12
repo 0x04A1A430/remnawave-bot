@@ -947,10 +947,10 @@ async def handle_device_management(
     if subscription is None:
         return
 
-    # Если пользователь открыл экран устройств из главного меню, «Назад» должен
-    # вести туда же, а не в настройки подписки.
-    is_from_main_menu = callback.data == 'subscription_manage_devices_menu'
-    back_callback = 'back_to_menu' if is_from_main_menu else _default_devices_back_callback(sub_id)
+    # «Назад» ведёт в меню, из которого открыли экран устройств. Старые
+    # клавиатуры присылают голый subscription_manage_devices — для них
+    # возвращаемся в карточку подписки, а настройки передают свой origin явно.
+    back_callback = _devices_back_callback_from_callback(callback.data, sub_id)
     if state is not None:
         await state.update_data(devices_back_callback=back_callback)
 
@@ -1023,10 +1023,22 @@ async def handle_device_management(
     await callback.answer()
 
 
+def _devices_back_callback_from_callback(data: str | None, sub_id: int | None) -> str:
+    """Куда вернуть «Назад» из экрана устройств по callback входа."""
+    raw = data or ''
+    if raw == 'subscription_manage_devices_menu':
+        return 'back_to_menu'
+    if ':' in raw:
+        return raw.split(':', 1)[1] or 'menu_subscription'
+    return 'menu_subscription'
+
+
 def _default_devices_back_callback(sub_id: int | None) -> str:
     if settings.is_multi_tariff_enabled() and sub_id:
         return f'sm:{sub_id}'
-    return 'subscription_settings'
+    # По умолчанию — карточка подписки, а не настройки: иначе старые
+    # клавиатуры зацикливали «Назад» на настройках.
+    return 'menu_subscription'
 
 
 async def _devices_back_callback_from_state(state: FSMContext | None, sub_id: int | None) -> str:

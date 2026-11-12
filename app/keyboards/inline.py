@@ -3996,7 +3996,7 @@ def get_updated_subscription_settings_keyboard(
         [
             make_button(
                 text=texts.t('MANAGE_DEVICES_BUTTON', 'Управление устройствами'),
-                callback_data='subscription_manage_devices',
+                callback_data='subscription_manage_devices:subscription_settings',
                 style='primary',
             )
         ]
