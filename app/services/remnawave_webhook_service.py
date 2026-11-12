@@ -136,8 +136,8 @@ _ADMIN_SERVICE_EVENTS: dict[str, str] = {
     'service.login_attempt_success': f'{premium("✅")} Успешный вход в панель',
     'service.subpage_config_changed': f'{premium("📄")} Конфиг страницы подписки изменён',
     # 2.8.0: новые события жизненного цикла API-токена панели (security-релевантно)
-    'service.api_token_created': f'{premium("🔑")} Создан API-токен панели',
-    'service.api_token_deleted': f'{premium("🗑")} Удалён API-токен панели',
+    'service.api_token_created': f'{premium("🔒")} Создан API-токен панели',
+    'service.api_token_deleted': f'{premium("❌")} Удалён API-токен панели',
 }
 
 _ADMIN_CRM_EVENTS: dict[str, str] = {
