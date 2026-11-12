@@ -622,6 +622,9 @@ class Settings(BaseSettings):
     # mass-deleting returning users; cabinet auto-revival makes the cost of
     # raising this low. See `app/services/user_revival_service.py`.
     INACTIVE_USER_DELETE_MONTHS: int = 12
+    # Удалять неактивных можно и с истёкшей подпиской, но только если она
+    # закончилась больше N дней назад. Действующие подписки не трогаем.
+    INACTIVE_USER_SUBSCRIPTION_EXPIRE_DAYS: int = 14
 
     MAINTENANCE_MODE: bool = False
     MAINTENANCE_CHECK_INTERVAL: int = 30

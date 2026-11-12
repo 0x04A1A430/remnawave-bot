@@ -1659,13 +1659,14 @@
   "ADMIN_USERS_CLEANUP_INACTIVE": "清理不活跃用户",
   "ADMIN_USERS_CLEANUP_TITLE": "<b>清理不活跃用户</b>",
   "ADMIN_USERS_CLEANUP_BODY": "超过 {value1} 个月未活动：<b>{value2}</b>\n将从机器人和 Remnawave 面板删除：<b>{value3}</b>",
-  "ADMIN_USERS_CLEANUP_SKIPPED": "已跳过（有订阅或面板中为活跃）：{value1}",
-  "ADMIN_USERS_CLEANUP_WARNING": "此操作不可撤销：机器人资料和面板账户将被删除。有订阅或面板状态为 ACTIVE 的用户不会被删除。",
+  "ADMIN_USERS_CLEANUP_SKIPPED": "已跳过（有效订阅或面板中为活跃）：{value1}",
+  "ADMIN_USERS_CLEANUP_WARNING": "此操作不可撤销：机器人资料和面板账户将被删除。有效订阅和面板状态为 ACTIVE 的用户不会被删除。",
   "ADMIN_USERS_CLEANUP_CONFIRM_BUTTON": "全部删除",
   "ADMIN_USERS_CLEANUP_RUNNING": "<b>正在清理不活跃用户...</b>",
   "ADMIN_USERS_CLEANUP_DONE": "<b>清理完成</b>\n\n已从机器人和 Remnawave 面板删除：<b>{value1}</b>",
-  "ADMIN_USERS_CLEANUP_DONE_SKIPPED": "\n已跳过（有订阅或面板中为活跃）：{value1}",
+  "ADMIN_USERS_CLEANUP_DONE_SKIPPED": "\n已跳过（有效订阅或面板中为活跃）：{value1}",
   "ADMIN_USERS_CLEANUP_BACKUP_RUNNING": "<b>正在创建备份...</b>",
   "ADMIN_USERS_CLEANUP_BACKUP_FAILED": "<b>删除已取消</b>\n\n无法创建备份。未改动任何用户。",
-  "ADMIN_USERS_CLEANUP_BACKUP_FILE": "\n备份：<code>{value1}</code>"
+  "ADMIN_USERS_CLEANUP_BACKUP_FILE": "\n备份：<code>{value1}</code>",
+  "ADMIN_USERS_CLEANUP_SUBSCRIPTION_RULE": "无订阅，或订阅已过期超过 {value1} 天。\n"
 }

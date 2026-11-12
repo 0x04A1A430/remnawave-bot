@@ -2932,8 +2932,12 @@ async def _load_inactive_users_for_cleanup(db: AsyncSession) -> tuple[int, list[
     from app.database.crud.user import get_inactive_users
 
     months = max(1, settings.INACTIVE_USER_DELETE_MONTHS)
+    expired_days = max(1, int(settings.INACTIVE_USER_SUBSCRIPTION_EXPIRE_DAYS))
     inactive_users = await get_inactive_users(
-        db, months, include_deleted=True, without_subscriptions=True
+        db,
+        months,
+        include_deleted=True,
+        expired_subscriptions_before_days=expired_days,
     )
     with_active_sub = sum(
         1 for user in inactive_users if any(sub.is_active for sub in (getattr(user, 'subscriptions', None) or []))
@@ -2965,6 +2969,10 @@ async def show_inactive_users(callback: types.CallbackQuery, db_user: User, db: 
     text += texts.t('ADMIN_USERS_RESTRICTIONS_003', 'Без активности более {value1} месяцев: {value2}\n').format(
         value1=months, value2=len(inactive_users)
     )
+    text += texts.t(
+        'ADMIN_USERS_CLEANUP_SUBSCRIPTION_RULE',
+        'Подписка отсутствует или истекла более {value1} дней назад.\n',
+    ).format(value1=max(1, int(settings.INACTIVE_USER_SUBSCRIPTION_EXPIRE_DAYS)))
     if with_active_sub > 0:
         text += texts.t('ADMIN_USERS_RESTRICTIONS_013', 'С активной подпиской (не будут удалены): {value1}\n').format(
             value1=with_active_sub
@@ -3031,6 +3039,10 @@ async def prepare_cleanup_inactive_users(callback: types.CallbackQuery, db_user:
         'ADMIN_USERS_CLEANUP_BODY',
         'Без активности более {value1} мес.: <b>{value2}</b>\nБудет удалено из бота и панели Remnawave: <b>{value3}</b>',
     ).format(value1=months, value2=len(inactive_users), value3=will_delete)
+    text += '\n' + texts.t(
+        'ADMIN_USERS_CLEANUP_SUBSCRIPTION_RULE',
+        'Подписка отсутствует или истекла более {value1} дней назад.\n',
+    ).format(value1=max(1, int(settings.INACTIVE_USER_SUBSCRIPTION_EXPIRE_DAYS)))
     if with_active_sub > 0:
         text += '\n' + texts.t('ADMIN_USERS_CLEANUP_SKIPPED', 'С активной подпиской (пропущено): {value1}').format(
             value1=with_active_sub
