@@ -181,7 +181,12 @@ async def build_main_menu_keyboard(db_user: User, db: AsyncSession):
     # Multi-tariff aware: check if user has ANY active subscription
     # 'limited' (traffic exhausted) subscriptions are still active for UI purposes
     _subs = getattr(db_user, 'subscriptions', None) or []
-    has_active_subscription = any(sub.is_active or getattr(sub, 'actual_status', None) == 'limited' for sub in _subs)
+    has_active_subscription = any(
+        sub.is_active
+        or getattr(sub, 'actual_status', None) == 'limited'
+        or getattr(sub, 'grace_session_open', False) is True
+        for sub in _subs
+    )
     subscription_is_active = has_active_subscription
 
     draft_exists = await has_subscription_checkout_draft(db_user.id)
@@ -1257,6 +1262,13 @@ def _get_subscription_status(user: User, texts, is_daily_tariff: bool = False) -
 
     if actual_status == 'limited':
         return texts.t('SUB_STATUS_LIMITED', 'Трафик исчерпан')
+
+    if getattr(subscription, 'grace_session_open', False) is True:
+        grace_until = getattr(subscription, 'grace_overlay_expire_at', None) or end_date
+        grace_until_text = format_local_datetime(grace_until, '%d.%m.%Y') if grace_until else end_date_text
+        return texts.t('SUB_STATUS_GRACE', 'Временный доступ\n{end_date}').format(
+            end_date=grace_until_text or '—'
+        )
 
     if actual_status == 'expired':
         return texts.t(

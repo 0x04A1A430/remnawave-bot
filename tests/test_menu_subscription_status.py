@@ -49,3 +49,15 @@ def test_get_subscription_status_keeps_days_below_threshold():
 
     assert '(25000 дн.)' in status_text
     assert 'навсегда' not in status_text
+
+
+def test_get_subscription_status_shows_temporary_access_during_grace():
+    texts = DummyTexts()
+    user = _build_user_with_subscription(actual_status='expired', is_trial=False, days_left=-1)
+    user.subscription.grace_session_open = True
+    user.subscription.grace_overlay_expire_at = None
+
+    status_text = _get_subscription_status(user, texts)
+
+    assert 'Временный доступ' in status_text
+    assert 'Истекла' not in status_text
