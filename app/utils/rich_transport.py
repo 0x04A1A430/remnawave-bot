@@ -224,7 +224,7 @@ def _normalize_parse_mode(parse_mode: object) -> str:
 
 def _newlines_to_br(text: str) -> str:
     # Одна пустая строка — нормальный разделитель, две и больше — «дыры» в экране.
-    text = re.sub(r'\n{2,}', '\n', text)
+    text = re.sub(r'\n{3,}', '\n\n', text)
     parts = _PRE_BLOCK_RE.split(text)
     for index in range(0, len(parts), 2):  # even indexes — outside <pre>
         parts[index] = parts[index].replace('\r\n', '\n').replace('\n', '<br/>')

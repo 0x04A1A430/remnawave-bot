@@ -10,7 +10,7 @@
 import re
 
 
-_EXCESS_NEWLINES_RE = re.compile(r'\n{2,}')
+_EXCESS_NEWLINES_RE = re.compile(r'\n{3,}')
 _TRAILING_SPACES_RE = re.compile(r'[ \t]+$', re.MULTILINE)
 
 
@@ -25,5 +25,5 @@ def compact_text(text: str) -> str:
 
     normalized = text.replace('\r\n', '\n').replace('\r', '\n')
     normalized = _TRAILING_SPACES_RE.sub('', normalized)
-    normalized = _EXCESS_NEWLINES_RE.sub('\n', normalized)
+    normalized = _EXCESS_NEWLINES_RE.sub('\n\n', normalized)
     return normalized.strip()

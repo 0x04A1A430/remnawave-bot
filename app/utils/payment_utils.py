@@ -4,7 +4,7 @@ from app.config import settings
 from app.localization.texts import get_texts
 
 
-_BLANK_LINE_RUN = re.compile(r'\n{2,}')
+_BLANK_LINE_RUN = re.compile(r'\n{3,}')
 
 
 def compact_payment_text(text: str) -> str:
@@ -15,7 +15,7 @@ def compact_payment_text(text: str) -> str:
     собственными переводами строки. Серии из трёх и более переводов строки
     схлопываем в один перевод строки, а ведущие и хвостовые пустые строки срезаем.
     """
-    return _BLANK_LINE_RUN.sub('\n', text).strip()
+    return _BLANK_LINE_RUN.sub('\n\n', text).strip()
 
 
 def format_payment_text(
@@ -678,7 +678,7 @@ def get_payment_methods_text(language: str, balance_kopeks: int | None = None) -
     if method_lines:
         blocks.append('<blockquote>' + '\n'.join(method_lines) + '</blockquote>')
 
-    return compact_payment_text('\n'.join(block for block in blocks if block.strip()))
+    return compact_payment_text('\n\n'.join(block for block in blocks if block.strip()))
 
 
 def is_payment_method_available(method_id: str) -> bool:

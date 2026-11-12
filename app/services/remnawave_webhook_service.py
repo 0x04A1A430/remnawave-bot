@@ -119,42 +119,42 @@ _EXPIRATION_HOURS_TO_TEXT_KEY: dict[int, str] = {
 
 # Admin event display names for notification messages
 _ADMIN_NODE_EVENTS: dict[str, str] = {
-    'node.created': '🟢 Нода создана',
-    'node.modified': '🔧 Нода изменена',
-    'node.disabled': '🔴 Нода отключена',
-    'node.enabled': '🟢 Нода включена',
-    'node.deleted': '🗑️ Нода удалена',
-    'node.connection_lost': '🚨 Потеряно соединение с нодой',
-    'node.connection_restored': '✅ Соединение с нодой восстановлено',
-    'node.traffic_notify': '📊 Уведомление о трафике ноды',
+    'node.created': '● Нода создана',
+    'node.modified': '⚙ Нода изменена',
+    'node.disabled': '○ Нода отключена',
+    'node.enabled': '● Нода включена',
+    'node.deleted': '× Нода удалена',
+    'node.connection_lost': '! Потеряно соединение с нодой',
+    'node.connection_restored': '✓ Соединение с нодой восстановлено',
+    'node.traffic_notify': '≡ Уведомление о трафике ноды',
 }
 
 _ADMIN_SERVICE_EVENTS: dict[str, str] = {
-    'service.panel_started': '🚀 Панель RemnaWave запущена',
-    'service.login_attempt_failed': '🔐 Неудачная попытка входа в панель',
-    'service.login_attempt_success': '🔓 Успешный вход в панель',
-    'service.subpage_config_changed': '📄 Конфиг страницы подписки изменён',
+    'service.panel_started': '↗ Панель RemnaWave запущена',
+    'service.login_attempt_failed': '⚿ Неудачная попытка входа в панель',
+    'service.login_attempt_success': '⚿ Успешный вход в панель',
+    'service.subpage_config_changed': '▤ Конфиг страницы подписки изменён',
     # 2.8.0: новые события жизненного цикла API-токена панели (security-релевантно)
-    'service.api_token_created': '🔑 Создан API-токен панели',
-    'service.api_token_deleted': '🗝️ Удалён API-токен панели',
+    'service.api_token_created': '⚿ Создан API-токен панели',
+    'service.api_token_deleted': ' Удалён API-токен панели',
 }
 
 _ADMIN_CRM_EVENTS: dict[str, str] = {
-    'crm.infra_billing_node_payment_in_7_days': '💳 Оплата ноды через 7 дней',
-    'crm.infra_billing_node_payment_in_48hrs': '💳 Оплата ноды через 48 часов',
-    'crm.infra_billing_node_payment_in_24hrs': '⚠️ Оплата ноды через 24 часа',
-    'crm.infra_billing_node_payment_due_today': '🔴 Оплата ноды сегодня',
-    'crm.infra_billing_node_payment_overdue_24hrs': '❗ Просрочка оплаты ноды: 24 часа',
-    'crm.infra_billing_node_payment_overdue_48hrs': '❗ Просрочка оплаты ноды: 48 часов',
-    'crm.infra_billing_node_payment_overdue_7_days': '🚨 Просрочка оплаты ноды: 7 дней',
+    'crm.infra_billing_node_payment_in_7_days': '¤ Оплата ноды через 7 дней',
+    'crm.infra_billing_node_payment_in_48hrs': '¤ Оплата ноды через 48 часов',
+    'crm.infra_billing_node_payment_in_24hrs': ' Оплата ноды через 24 часа',
+    'crm.infra_billing_node_payment_due_today': '○ Оплата ноды сегодня',
+    'crm.infra_billing_node_payment_overdue_24hrs': '! Просрочка оплаты ноды: 24 часа',
+    'crm.infra_billing_node_payment_overdue_48hrs': '! Просрочка оплаты ноды: 48 часов',
+    'crm.infra_billing_node_payment_overdue_7_days': '! Просрочка оплаты ноды: 7 дней',
 }
 
 _ADMIN_ERROR_EVENTS: dict[str, str] = {
-    'errors.bandwidth_usage_threshold_reached_max_notifications': '⚠️ Достигнут лимит уведомлений о трафике',
+    'errors.bandwidth_usage_threshold_reached_max_notifications': ' Достигнут лимит уведомлений о трафике',
 }
 
 _ADMIN_TORRENT_BLOCKER_EVENTS: dict[str, str] = {
-    'torrent_blocker.report': '🚫 Торрент-блокировщик: обнаружен торрент',
+    'torrent_blocker.report': '✗ Торрент-блокировщик: обнаружен торрент',
 }
 
 _ADMIN_NODE_CONNECTION_EVENTS = frozenset({'node.connection_lost', 'node.connection_restored'})
@@ -585,7 +585,7 @@ class RemnaWaveWebhookService:
         title = self._admin_handlers.get(event_name, event_name)
 
         # Build message from event data (escape all untrusted values to prevent HTML injection)
-        lines = [f'<b>{title}</b>']
+        fields: list[str] = []
 
         # Extract common fields. 2.8.0 service.api_token_* events nest the token
         # name under data.apiToken.name (see service.event.interface.ts).
@@ -594,70 +594,70 @@ class RemnaWaveWebhookService:
             data.get('name') or data.get('nodeName') or data.get('username') or api_token.get('name') or ''
         )
         if name:
-            lines.append(f'Имя: <code>{name}</code>')
+            fields.append(f'• Имя: <code>{name}</code>')
 
         address = html.escape(data.get('address') or data.get('ip') or '')
         if address:
-            lines.append(f'Адрес: <code>{address}</code>')
+            fields.append(f'• Адрес: <code>{address}</code>')
 
         port = data.get('port')
         if port:
-            lines.append(f'Порт: <code>{html.escape(str(port))}</code>')
+            fields.append(f'• Порт: <code>{html.escape(str(port))}</code>')
 
         version = html.escape(data.get('version') or data.get('panelVersion') or '')
         if version:
-            lines.append(f'Версия: <code>{version}</code>')
+            fields.append(f'• Версия: <code>{version}</code>')
 
         # CRM billing fields
         provider_name = html.escape(data.get('providerName') or '')
         if provider_name:
-            lines.append(f'Провайдер: <code>{provider_name}</code>')
+            fields.append(f'• Провайдер: <code>{provider_name}</code>')
 
         amount = html.escape(str(data.get('amount') or data.get('price') or ''))
         if amount:
-            lines.append(f'Сумма: <code>{amount}</code>')
+            fields.append(f'• Сумма: <code>{amount}</code>')
 
         due_date = html.escape(data.get('dueDate') or data.get('paymentDate') or data.get('nextBillingAt') or '')
         if due_date:
-            lines.append(f'Дата: <code>{due_date}</code>')
+            fields.append(f'• Дата: <code>{due_date}</code>')
 
         login_url = data.get('loginUrl') or ''
         if login_url and self._is_valid_url(login_url):
-            lines.append(f'Панель: {html.escape(login_url)}')
+            fields.append(f'• Панель: {html.escape(login_url)}')
 
         # Login attempt fields
         login_data = data.get('loginAttempt')
         if isinstance(login_data, dict):
             login_user = html.escape(login_data.get('username') or '')
             if login_user:
-                lines.append(f'Пользователь: <code>{login_user}</code>')
+                fields.append(f'• Пользователь: <code>{login_user}</code>')
             login_ip = html.escape(login_data.get('ip') or '')
             if login_ip:
-                lines.append(f'IP: <code>{login_ip}</code>')
+                fields.append(f'• IP: <code>{login_ip}</code>')
             login_ua = html.escape(login_data.get('userAgent') or '')
             if login_ua:
-                lines.append(f'User-Agent: <code>{login_ua[:100]}</code>')
+                fields.append(f'• User-Agent: <code>{login_ua[:100]}</code>')
             login_desc = html.escape(login_data.get('description') or '')
             if login_desc:
-                lines.append(f'Описание: {login_desc}')
+                fields.append(f'• Описание: {login_desc}')
         else:
             ip_addr = html.escape(data.get('ipAddress') or data.get('ip') or '')
             if ip_addr and not address:
-                lines.append(f'IP: <code>{ip_addr}</code>')
+                fields.append(f'• IP: <code>{ip_addr}</code>')
 
         message = html.escape(data.get('message') or data.get('description') or '')
         if message:
-            lines.append(f'Сообщение: {message}')
+            fields.append(f'• Сообщение: {message}')
 
         # Subpage config fields
         subpage = data.get('subpageConfig')
         if isinstance(subpage, dict):
             action = subpage.get('action', '')
             action_labels = {'CREATED': 'Создан', 'UPDATED': 'Обновлён', 'DELETED': 'Удалён'}
-            lines.append(f'Действие: {action_labels.get(action, html.escape(str(action)))}')
+            fields.append(f'• Действие: {action_labels.get(action, html.escape(str(action)))}')
             sub_uuid = subpage.get('uuid', '')
             if sub_uuid:
-                lines.append(f'UUID: <code>{html.escape(str(sub_uuid))}</code>')
+                fields.append(f'• UUID: <code>{html.escape(str(sub_uuid))}</code>')
 
         # Torrent blocker fields
         if event_name == 'torrent_blocker.report':
@@ -666,20 +666,24 @@ class RemnaWaveWebhookService:
             if isinstance(node_data, dict):
                 node_name = html.escape(node_data.get('name') or '')
                 if node_name:
-                    lines.append(f'Нода: <code>{node_name}</code>')
+                    fields.append(f'• Нода: <code>{node_name}</code>')
                 node_addr = html.escape(node_data.get('address') or '')
                 if node_addr:
-                    lines.append(f'Адрес: <code>{node_addr}</code>')
+                    fields.append(f'• Адрес: <code>{node_addr}</code>')
             if isinstance(user_data, dict):
                 username = html.escape(user_data.get('username') or '')
                 if username:
-                    lines.append(f'Пользователь: <code>{username}</code>')
+                    fields.append(f'• Пользователь: <code>{username}</code>')
                 user_status = html.escape(user_data.get('status') or '')
                 if user_status:
-                    lines.append(f'Статус: <code>{user_status}</code>')
+                    fields.append(f'• Статус: <code>{user_status}</code>')
+
+        message_text = f'<b>{title}</b>'
+        if fields:
+            message_text += '\n<blockquote>' + '\n'.join(fields) + '</blockquote>'
 
         try:
-            await self._admin_service.send_webhook_notification('\n'.join(lines))
+            await self._admin_service.send_webhook_notification(message_text)
             return True
         except Exception:
             logger.exception('Failed to send admin notification for event', event_name=event_name)

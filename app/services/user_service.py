@@ -174,14 +174,14 @@ class UserService:
         # Начисление/списание баланса — не повод звать продлевать: ведём в меню,
         # откуда человек сам выберет, что делать дальше.
         from app.utils.button_emoji import make_button
+        from app.utils.notification_card import premium
 
         keyboard_rows.append(
             [
                 make_button(
-                    '🏠 На главную',
+                    f"{premium('🏠')} На главную",
                     callback_data='back_to_menu',
                     style='primary',
-                    icon_custom_emoji_id='5967822972931542886',
                 )
             ]
         )

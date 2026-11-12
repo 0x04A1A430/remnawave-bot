@@ -74,7 +74,7 @@ async def test_referral_screen_has_no_extra_blank_lines(monkeypatch, levels_sche
     assert '\n\n\n' not in text
     assert not text.endswith('\n')
     # Каждый блок отделён ровно одной пустой строкой, без склейки заголовков.
-    assert '</blockquote>\n<b>Ссылка на бота:</b>' in text
-    assert '<b>Ссылка на бота:</b>\nhttps://t.me/bot?start=X\n<b>Ссылка на кабинет:</b>' in text
-    assert '<b>Ссылка на кабинет:</b>\nhttps://cab.example/?ref=X\n<b>Последние начисления:</b>' in text
-    assert 'от GetCakeDieYoung</blockquote>\n<b>Доходы по типам:</b>' in text
+    assert '</blockquote>\n\n<b>Ссылка на бота:</b>' in text
+    assert '<b>Ссылка на бота:</b>\nhttps://t.me/bot?start=X\n\n<b>Ссылка на кабинет:</b>' in text
+    assert '<b>Ссылка на кабинет:</b>\nhttps://cab.example/?ref=X\n\n<b>Последние начисления:</b>' in text
+    assert 'от GetCakeDieYoung</blockquote>\n\n<b>Доходы по типам:</b>' in text
