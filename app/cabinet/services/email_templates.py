@@ -243,11 +243,11 @@ class EmailNotificationTemplates:
         }
         attachment = {lang: line if has_attachment else '' for lang, line in attachment_lines.items()}
         bodies = {
-            'ru': f'<h2>🧾 Чек по вашему платежу сформирован</h2><div class="highlight"><p>💰 Сумма: <strong>{amount}</strong></p><p>Чек зарегистрирован в ФНС через сервис «Мой налог».</p>{attachment["ru"]}</div><p><a href="{receipt_url}">Открыть чек на сайте ФНС</a> (ссылка может не открываться при включённом VPN или из-за рубежа).</p>',
-            'en': f'<h2>🧾 Your payment receipt is ready</h2><div class="highlight"><p>💰 Amount: <strong>{amount}</strong></p><p>The receipt is registered with the Russian tax service (“Moy Nalog”).</p>{attachment["en"]}</div><p><a href="{receipt_url}">Open the receipt on the tax service website</a> (the link may not open with VPN on or from abroad).</p>',
-            'zh': f'<h2>🧾 您的付款收据已生成</h2><div class="highlight"><p>💰 金额：<strong>{amount}</strong></p><p>收据已通过“Мой налог”服务在俄罗斯税务局登记。</p>{attachment["zh"]}</div><p><a href="{receipt_url}">在税务局网站打开收据</a>（开启 VPN 或在境外时链接可能无法打开）。</p>',
-            'ua': f'<h2>🧾 Чек за вашим платежем сформовано</h2><div class="highlight"><p>💰 Сума: <strong>{amount}</strong></p><p>Чек зареєстровано у ФНС через сервіс «Мой налог».</p>{attachment["ua"]}</div><p><a href="{receipt_url}">Відкрити чек на сайті ФНС</a> (посилання може не відкриватися з увімкненим VPN або з-за кордону).</p>',
-            'fa': f"""<h2>🧾 رسید پرداخت شما آماده است</h2><div class="highlight"><p>💰 مبلغ: <strong>{amount}</strong></p><p>رسید در سامانه مالیاتی روسیه («Мой налог») ثبت شده است.</p>{attachment['fa']}</div><p><a href="{receipt_url}">مشاهده رسید در وب\u200cسایت سازمان مالیاتی</a> (ممکن است پیوند با VPN روشن یا از خارج از روسیه باز نشود).</p>""",
+            'ru': f'<h2>Чек по вашему платежу сформирован</h2><div class="highlight"><p>Сумма: <strong>{amount}</strong></p><p>Чек зарегистрирован в ФНС через сервис «Мой налог».</p>{attachment["ru"]}</div><p><a href="{receipt_url}">Открыть чек на сайте ФНС</a> (ссылка может не открываться при включённом VPN или из-за рубежа).</p>',
+            'en': f'<h2>Your payment receipt is ready</h2><div class="highlight"><p>Amount: <strong>{amount}</strong></p><p>The receipt is registered with the Russian tax service (“Moy Nalog”).</p>{attachment["en"]}</div><p><a href="{receipt_url}">Open the receipt on the tax service website</a> (the link may not open with VPN on or from abroad).</p>',
+            'zh': f'<h2>您的付款收据已生成</h2><div class="highlight"><p>金额：<strong>{amount}</strong></p><p>收据已通过“Мой налог”服务在俄罗斯税务局登记。</p>{attachment["zh"]}</div><p><a href="{receipt_url}">在税务局网站打开收据</a>（开启 VPN 或在境外时链接可能无法打开）。</p>',
+            'ua': f'<h2>Чек за вашим платежем сформовано</h2><div class="highlight"><p>Сума: <strong>{amount}</strong></p><p>Чек зареєстровано у ФНС через сервіс «Мой налог».</p>{attachment["ua"]}</div><p><a href="{receipt_url}">Відкрити чек на сайті ФНС</a> (посилання може не відкриватися з увімкненим VPN або з-за кордону).</p>',
+            'fa': f"""<h2>رسید پرداخت شما آماده است</h2><div class="highlight"><p>مبلغ: <strong>{amount}</strong></p><p>رسید در سامانه مالیاتی روسیه («Мой налог») ثبت شده است.</p>{attachment['fa']}</div><p><a href="{receipt_url}">مشاهده رسید در وب\u200cسایت سازمان مالیاتی</a> (ممکن است پیوند با VPN روشن یا از خارج از روسیه باز نشود).</p>""",
         }
         return {
             'subject': subjects.get(language, subjects['ru']),
@@ -293,11 +293,11 @@ class EmailNotificationTemplates:
         }
         link = f'<p><a href="{claim_url_html}">{claim_url_html}</a></p>'
         bodies = {
-            'ru': f'<h2>🎁 Спасибо за покупку подарка!</h2><div class="highlight">{details["ru"]}<p>Перешлите эту ссылку тому, кому предназначен подарок, — он активирует его сам:</p>{link}</div>{self._link_button(claim_url, language, button)}',
-            'en': f'<h2>🎁 Thanks for your gift purchase!</h2><div class="highlight">{details["en"]}<p>Forward this link to the person the gift is for — they activate it themselves:</p>{link}</div>{self._link_button(claim_url, language, button)}',
-            'zh': f'<h2>🎁 感谢您购买礼物！</h2><div class="highlight">{details["zh"]}<p>请将此链接转发给收礼人，由其自行激活：</p>{link}</div>{self._link_button(claim_url, language, button)}',
-            'ua': f'<h2>🎁 Дякуємо за покупку подарунка!</h2><div class="highlight">{details["ua"]}<p>Перешліть це посилання тому, кому призначено подарунок, — він активує його сам:</p>{link}</div>{self._link_button(claim_url, language, button)}',
-            'fa': f"""<h2>🎁 از خرید هدیه سپاسگزاریم!</h2><div class="highlight">{details['fa']}<p>این پیوند را برای گیرنده هدیه بفرستید تا خودش آن را فعال کند:</p>{link}</div>{self._link_button(claim_url, language, button)}""",
+            'ru': f'<h2>Спасибо за покупку подарка!</h2><div class="highlight">{details["ru"]}<p>Перешлите эту ссылку тому, кому предназначен подарок, — он активирует его сам:</p>{link}</div>{self._link_button(claim_url, language, button)}',
+            'en': f'<h2>Thanks for your gift purchase!</h2><div class="highlight">{details["en"]}<p>Forward this link to the person the gift is for — they activate it themselves:</p>{link}</div>{self._link_button(claim_url, language, button)}',
+            'zh': f'<h2>感谢您购买礼物！</h2><div class="highlight">{details["zh"]}<p>请将此链接转发给收礼人，由其自行激活：</p>{link}</div>{self._link_button(claim_url, language, button)}',
+            'ua': f'<h2>Дякуємо за покупку подарунка!</h2><div class="highlight">{details["ua"]}<p>Перешліть це посилання тому, кому призначено подарунок, — він активує його сам:</p>{link}</div>{self._link_button(claim_url, language, button)}',
+            'fa': f"""<h2>از خرید هدیه سپاسگزاریم!</h2><div class="highlight">{details['fa']}<p>این پیوند را برای گیرنده هدیه بفرستید تا خودش آن را فعال کند:</p>{link}</div>{self._link_button(claim_url, language, button)}""",
         }
         return {
             'subject': subjects.get(language, subjects['ru']),
@@ -1563,19 +1563,19 @@ class EmailNotificationTemplates:
 
         if discount_percent > 0:
             subjects = {
-                'ru': f'🎁 Персональное предложение: скидка {discount_percent}%',
-                'en': f'🎁 Personal offer: {discount_percent}% off',
-                'zh': f'🎁 专属优惠：{discount_percent}% 折扣',
-                'ua': f'🎁 Персональна пропозиція: знижка {discount_percent}%',
-                'fa': f'🎁 پیشنهاد ویژه: {discount_percent}٪ تخفیف',
+                'ru': f'Персональное предложение: скидка {discount_percent}%',
+                'en': f'Personal offer: {discount_percent}% off',
+                'zh': f'专属优惠：{discount_percent}% 折扣',
+                'ua': f'Персональна пропозиція: знижка {discount_percent}%',
+                'fa': f'پیشنهاد ویژه: {discount_percent}٪ تخفیف',
             }
         else:
             subjects = {
-                'ru': '🎁 Персональное предложение',
-                'en': '🎁 Personal offer',
-                'zh': '🎁 专属优惠',
-                'ua': '🎁 Персональна пропозиція',
-                'fa': '🎁 پیشنهاد ویژه شما',
+                'ru': 'Персональное предложение',
+                'en': 'Personal offer',
+                'zh': '专属优惠',
+                'ua': 'Персональна пропозиція',
+                'fa': 'پیشنهاد ویژه شما',
             }
 
         valid_lines = {

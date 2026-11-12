@@ -23,11 +23,11 @@ logger = structlog.get_logger(__name__)
 router = APIRouter(prefix='/info', tags=['Cabinet Info'])
 
 _LANGUAGE_META: dict[str, tuple[str, str]] = {
-    'ru': ('Русский', '🇷🇺'),
-    'en': ('English', '🇬🇧'),
-    'ua': ('Українська', '🇺🇦'),
-    'zh': ('中文', '🇨🇳'),
-    'fa': ('فارسی', '🇮🇷'),
+    'ru': ('Русский', ''),
+    'en': ('English', ''),
+    'ua': ('Українська', ''),
+    'zh': ('中文', ''),
+    'fa': ('فارسی', ''),
 }
 
 
@@ -360,8 +360,8 @@ async def get_available_languages():
         'languages': [
             {
                 'code': code,
-                'name': _LANGUAGE_META.get(code, (code.upper(), '🌐'))[0],
-                'flag': _LANGUAGE_META.get(code, (code.upper(), '🌐'))[1],
+                'name': _LANGUAGE_META.get(code, (code.upper(), ''))[0],
+                'flag': _LANGUAGE_META.get(code, (code.upper(), ''))[1],
             }
             for code in codes
         ],

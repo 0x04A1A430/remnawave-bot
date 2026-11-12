@@ -194,22 +194,22 @@ async def get_happ_downloads(
     platforms = {
         'ios': {
             'name': 'iOS (iPhone/iPad)',
-            'icon': '🍎',
+            'icon': '',
             'link': settings.get_happ_download_link('ios'),
         },
         'android': {
             'name': 'Android',
-            'icon': '🤖',
+            'icon': '',
             'link': settings.get_happ_download_link('android'),
         },
         'macos': {
             'name': 'macOS',
-            'icon': '🖥️',
+            'icon': '',
             'link': settings.get_happ_download_link('macos'),
         },
         'windows': {
             'name': 'Windows',
-            'icon': '💻',
+            'icon': '',
             'link': settings.get_happ_download_link('windows'),
         },
     }

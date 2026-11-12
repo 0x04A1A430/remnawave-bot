@@ -263,7 +263,7 @@ async def _build_tariff_response(
 
     texts = get_texts(language)
     traffic_label = (
-        f'♾️ {texts.t("TRAFFIC_UNLIMITED_SHORT")}'
+        texts.t('TRAFFIC_UNLIMITED_SHORT')
         if tariff.traffic_limit_gb == 0
         else texts.t('TARIFF_PURCHASE_TRAFFIC_GB').format(traffic=tariff.traffic_limit_gb)
     )
