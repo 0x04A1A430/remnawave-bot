@@ -1013,6 +1013,10 @@ def _users_list_conditions(
 
     if status:
         conditions.append(User.status == status.value)
+    else:
+        # Удалённые пользователи не мозолят глаза в общих списках и поиске:
+        # они остаются доступны только через явный фильтр по статусу.
+        conditions.append(User.status != UserStatus.DELETED.value)
 
     if subscription_status or tariff_ids:
         sub_conditions = []
@@ -1525,7 +1529,12 @@ async def get_users_for_promo_segment(db: AsyncSession, segment: str) -> list[Us
     return users
 
 
-async def get_inactive_users(db: AsyncSession, months: int = 3) -> list[User]:
+async def get_inactive_users(db: AsyncSession, months: int = 3, *, include_deleted: bool = False) -> list[User]:
+    """Пользователи без активности дольше ``months`` месяцев.
+
+    ``include_deleted`` добавляет уже мягко удалённых: их нужно вычищать из БД
+    и панели той же кнопкой, иначе они копятся со статусом «удалён».
+    """
     threshold_date = datetime.now(UTC) - timedelta(days=months * 30)
 
     # Подзапрос: пользователи, у которых есть подписка с end_date >= threshold
@@ -1545,7 +1554,11 @@ async def get_inactive_users(db: AsyncSession, months: int = 3) -> list[User]:
         .where(
             and_(
                 User.last_activity < threshold_date,
-                User.status == UserStatus.ACTIVE.value,
+                User.status.in_(
+                    [UserStatus.ACTIVE.value, UserStatus.DELETED.value]
+                    if include_deleted
+                    else [UserStatus.ACTIVE.value]
+                ),
                 User.id.not_in(users_with_recent_subs),
             )
         )
@@ -1572,7 +1585,9 @@ async def delete_user(db: AsyncSession, user: User) -> bool:
 
 
 async def get_users_statistics(db: AsyncSession) -> dict:
-    total_result = await db.execute(select(func.count(User.id)))
+    # Удалённые аккаунты не показываем и не считаем в «всего»: они остаются
+    # только отдельной служебной цифрой для кабинета.
+    total_result = await db.execute(select(func.count(User.id)).where(User.status != UserStatus.DELETED.value))
     total_users = total_result.scalar()
 
     active_result = await db.execute(select(func.count(User.id)).where(User.status == UserStatus.ACTIVE.value))

@@ -1500,8 +1500,21 @@ class UserService:
                 'new_month': 0,
             }
 
-    async def cleanup_inactive_users(self, db: AsyncSession, months: int = None) -> tuple[int, int]:
+    async def cleanup_inactive_users(
+        self,
+        db: AsyncSession,
+        months: int = None,
+        *,
+        admin_id: int = 0,
+        force_panel_delete: bool = False,
+    ) -> tuple[int, int]:
         """Clean up inactive users, skipping those with active subscriptions.
+
+        Args:
+            months: inactivity horizon, defaults to INACTIVE_USER_DELETE_MONTHS.
+            admin_id: admin performing the cleanup (audit log only).
+            force_panel_delete: physically delete the panel account instead of the
+                configured deactivate/delete mode.
 
         Returns:
             Tuple of (deleted_count, skipped_active_sub_count).
@@ -1510,7 +1523,7 @@ class UserService:
             if months is None:
                 months = settings.INACTIVE_USER_DELETE_MONTHS
 
-            inactive_users = await get_inactive_users(db, months)
+            inactive_users = await get_inactive_users(db, months, include_deleted=True)
             deleted_count = 0
             skipped_active_sub = 0
 
@@ -1520,7 +1533,12 @@ class UserService:
                     skipped_active_sub += 1
                     continue
 
-                delete_result = await self.delete_user_account(db, user.id, 0)
+                delete_result = await self.delete_user_account(
+                    db,
+                    user.id,
+                    admin_id,
+                    force_panel_delete=force_panel_delete,
+                )
                 if delete_result.bot_deleted:
                     deleted_count += 1
 

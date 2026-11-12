@@ -7182,5 +7182,14 @@
   "NOTIFY_WAVE_LINE": "Суммируется с вашей промогруппой.",
   "NOTIFY_WAVE_VALID_UNTIL": "Действует до",
   "PAYMENT_UI_CART_AFTER_TOPUP_TITLE": "Баланс пополнен",
-  "PAYMENT_UI_CART_SAVED": "Сохранённая корзина на {value3}"
+  "PAYMENT_UI_CART_SAVED": "Сохранённая корзина на {value3}",
+  "ADMIN_USERS_CLEANUP_INACTIVE": "Очистити неактивних",
+  "ADMIN_USERS_CLEANUP_TITLE": "<b>Очищення неактивних користувачів</b>",
+  "ADMIN_USERS_CLEANUP_BODY": "Без активності понад {value1} міс.: <b>{value2}</b>\nБуде видалено з бота та панелі Remnawave: <b>{value3}</b>",
+  "ADMIN_USERS_CLEANUP_SKIPPED": "З активною підпискою (пропущено): {value1}",
+  "ADMIN_USERS_CLEANUP_WARNING": "Видалення незворотне: профіль у боті, підписки та акаунт у панелі зникнуть.",
+  "ADMIN_USERS_CLEANUP_CONFIRM_BUTTON": "Видалити всюди",
+  "ADMIN_USERS_CLEANUP_RUNNING": "<b>Очищення неактивних...</b>",
+  "ADMIN_USERS_CLEANUP_DONE": "<b>Очищення завершено</b>\n\nВидалено з бота та панелі Remnawave: <b>{value1}</b>",
+  "ADMIN_USERS_CLEANUP_DONE_SKIPPED": "\nПропущено (активна підписка): {value1}"
 }

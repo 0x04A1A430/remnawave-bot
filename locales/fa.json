@@ -1779,5 +1779,14 @@
   "WEBHOOK_USER_NOT_CONNECTED": "<b>هنوز متصل نشده‌اید</b>\n\nاشتراک{tariff_label} شما فعال است اما هنوز اتصال VPN برقرار نشده. برای شروع استفاده متصل شوید.",
   "WEBHOOK_DEVICE_ADDED": "<b>دستگاه جدید</b>\n\nدستگاه جدیدی به اشتراک{tariff_label} شما اضافه شد: <code>{device}</code>",
   "WEBHOOK_DEVICE_DELETED": "<b>دستگاه حذف شد</b>\n\nدستگاهی از اشتراک{tariff_label} شما حذف شد: <code>{device}</code>",
-  "WEBHOOK_CLOSE_BUTTON": "بستن"
+  "WEBHOOK_CLOSE_BUTTON": "بستن",
+  "ADMIN_USERS_CLEANUP_INACTIVE": "پاک‌سازی کاربران غیرفعال",
+  "ADMIN_USERS_CLEANUP_TITLE": "<b>پاک‌سازی کاربران غیرفعال</b>",
+  "ADMIN_USERS_CLEANUP_BODY": "بدون فعالیت بیش از {value1} ماه: <b>{value2}</b>\nاز ربات و پنل Remnawave حذف می‌شود: <b>{value3}</b>",
+  "ADMIN_USERS_CLEANUP_SKIPPED": "با اشتراک فعال (رد شد): {value1}",
+  "ADMIN_USERS_CLEANUP_WARNING": "این عمل بازگشت‌ناپذیر است: پروفایل ربات، اشتراک‌ها و حساب پنل حذف می‌شوند.",
+  "ADMIN_USERS_CLEANUP_CONFIRM_BUTTON": "حذف از همه‌جا",
+  "ADMIN_USERS_CLEANUP_RUNNING": "<b>در حال پاک‌سازی کاربران غیرفعال...</b>",
+  "ADMIN_USERS_CLEANUP_DONE": "<b>پاک‌سازی کامل شد</b>\n\nاز ربات و پنل Remnawave حذف شد: <b>{value1}</b>",
+  "ADMIN_USERS_CLEANUP_DONE_SKIPPED": "\nرد شد (اشتراک فعال): {value1}"
 }

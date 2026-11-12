@@ -7182,5 +7182,14 @@
   "NOTIFY_WAVE_LINE": "Суммируется с вашей промогруппой.",
   "NOTIFY_WAVE_VALID_UNTIL": "Действует до",
   "PAYMENT_UI_CART_AFTER_TOPUP_TITLE": "Баланс пополнен",
-  "PAYMENT_UI_CART_SAVED": "Сохранённая корзина на {value3}"
+  "PAYMENT_UI_CART_SAVED": "Сохранённая корзина на {value3}",
+  "ADMIN_USERS_CLEANUP_INACTIVE": "پاک‌سازی کاربران غیرفعال",
+  "ADMIN_USERS_CLEANUP_TITLE": "<b>پاک‌سازی کاربران غیرفعال</b>",
+  "ADMIN_USERS_CLEANUP_BODY": "بدون فعالیت بیش از {value1} ماه: <b>{value2}</b>\nاز ربات و پنل Remnawave حذف می‌شود: <b>{value3}</b>",
+  "ADMIN_USERS_CLEANUP_SKIPPED": "با اشتراک فعال (رد شد): {value1}",
+  "ADMIN_USERS_CLEANUP_WARNING": "این عمل بازگشت‌ناپذیر است: پروفایل ربات، اشتراک‌ها و حساب پنل حذف می‌شوند.",
+  "ADMIN_USERS_CLEANUP_CONFIRM_BUTTON": "حذف از همه‌جا",
+  "ADMIN_USERS_CLEANUP_RUNNING": "<b>در حال پاک‌سازی کاربران غیرفعال...</b>",
+  "ADMIN_USERS_CLEANUP_DONE": "<b>پاک‌سازی کامل شد</b>\n\nاز ربات و پنل Remnawave حذف شد: <b>{value1}</b>",
+  "ADMIN_USERS_CLEANUP_DONE_SKIPPED": "\nرد شد (اشتراک فعال): {value1}"
 }

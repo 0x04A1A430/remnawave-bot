@@ -2926,57 +2926,62 @@ async def clear_user_restrictions(callback: types.CallbackQuery, db_user: User, 
     await show_user_restrictions(callback, db_user, db)
 
 
+async def _load_inactive_users_for_cleanup(db: AsyncSession) -> tuple[int, list[User], int]:
+    """Неактивные пользователи и число тех, кого нельзя удалять из-за подписки."""
+    from app.database.crud.user import get_inactive_users
+
+    months = max(1, settings.INACTIVE_USER_DELETE_MONTHS)
+    inactive_users = await get_inactive_users(db, months, include_deleted=True)
+    with_active_sub = sum(
+        1 for user in inactive_users if any(sub.is_active for sub in (getattr(user, 'subscriptions', None) or []))
+    )
+    return months, inactive_users, with_active_sub
+
+
 @admin_required
 @error_handler
 async def show_inactive_users(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
     texts = get_texts(db_user.language)
-    UserService()
-
-    from app.database.crud.user import get_inactive_users
-
-    inactive_users = await get_inactive_users(db, settings.INACTIVE_USER_DELETE_MONTHS)
+    months, inactive_users, with_active_sub = await _load_inactive_users_for_cleanup(db)
 
     if not inactive_users:
         await callback.message.edit_text(
             texts.t(
-                'ADMIN_USERS_RESTRICTIONS_031', ' Неактивных пользователей (более {value1} месяцев) не найдено'
-            ).format(value1=settings.INACTIVE_USER_DELETE_MONTHS),
+                'ADMIN_USERS_RESTRICTIONS_031', 'Неактивных пользователей (более {value1} месяцев) не найдено'
+            ).format(value1=months),
             reply_markup=types.InlineKeyboardMarkup(
-                inline_keyboard=[[types.InlineKeyboardButton(text=' Назад', callback_data='admin_users')]]
+                inline_keyboard=[[types.InlineKeyboardButton(text=texts.BACK, callback_data='admin_users')]]
             ),
         )
         await callback.answer()
         return
 
-    with_active_sub = sum(
-        1 for u in inactive_users if any(s.is_active for s in (getattr(u, 'subscriptions', None) or []))
-    )
     will_delete = len(inactive_users) - with_active_sub
 
-    text = texts.t('ADMIN_USERS_RESTRICTIONS_002', ' <b>Неактивные пользователи</b>\n')
+    text = texts.t('ADMIN_USERS_RESTRICTIONS_002', '<b>Неактивные пользователи</b>\n')
     text += texts.t('ADMIN_USERS_RESTRICTIONS_003', 'Без активности более {value1} месяцев: {value2}\n').format(
-        value1=settings.INACTIVE_USER_DELETE_MONTHS, value2=len(inactive_users)
+        value1=months, value2=len(inactive_users)
     )
     if with_active_sub > 0:
-        text += texts.t('ADMIN_USERS_RESTRICTIONS_013', ' С активной подпиской (не будут удалены): {value1}\n').format(
+        text += texts.t('ADMIN_USERS_RESTRICTIONS_013', 'С активной подпиской (не будут удалены): {value1}\n').format(
             value1=with_active_sub
         )
-        text += texts.t('ADMIN_USERS_RESTRICTIONS_014', ' Будет удалено: {value1}\n').format(value1=will_delete)
+        text += texts.t('ADMIN_USERS_RESTRICTIONS_014', 'Будет удалено: {value1}\n').format(value1=will_delete)
     text += '\n'
 
     for user in inactive_users[:10]:
         user_link = user_html_link(user)
         user_id_display = user.telegram_id or user.email or f'#{user.id}'
         has_active = any(s.is_active for s in (getattr(user, 'subscriptions', None) or []))
-        sub_badge = ' ' if has_active else ''
-        text += f' {user_link}{sub_badge}\n'
-        text += f' <code>{user_id_display}</code>\n'
+        sub_badge = ' *' if has_active else ''
+        text += f'{user_link}{sub_badge}\n'
+        text += f'<code>{user_id_display}</code>\n'
         last_activity_display = (
             format_time_ago(user.last_activity, db_user.language)
             if user.last_activity
             else texts.t('ADMIN_USERS_RESTRICTIONS_021', 'Никогда')
         )
-        text += f' {last_activity_display}\n\n'
+        text += f'{last_activity_display}\n\n'
 
     if len(inactive_users) > 10:
         text += texts.t('ADMIN_USERS_RESTRICTIONS_015', '... и еще {value1} пользователей').format(
@@ -2984,8 +2989,62 @@ async def show_inactive_users(callback: types.CallbackQuery, db_user: User, db: 
         )
 
     keyboard = [
-        [types.InlineKeyboardButton(text=' Очистить всех', callback_data='admin_cleanup_inactive')],
-        [types.InlineKeyboardButton(text=' Назад', callback_data='admin_users')],
+        [
+            types.InlineKeyboardButton(
+                text=texts.t('ADMIN_USERS_CLEANUP_INACTIVE', 'Очистить неактивных'),
+                callback_data='admin_cleanup_inactive',
+            )
+        ],
+        [types.InlineKeyboardButton(text=texts.BACK, callback_data='admin_users')],
+    ]
+
+    await callback.message.edit_text(
+        compact_text(text), reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard)
+    )
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def prepare_cleanup_inactive_users(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+    texts = get_texts(db_user.language)
+    months, inactive_users, with_active_sub = await _load_inactive_users_for_cleanup(db)
+
+    if not inactive_users:
+        await callback.message.edit_text(
+            texts.t(
+                'ADMIN_USERS_RESTRICTIONS_031', 'Неактивных пользователей (более {value1} месяцев) не найдено'
+            ).format(value1=months),
+            reply_markup=types.InlineKeyboardMarkup(
+                inline_keyboard=[[types.InlineKeyboardButton(text=texts.BACK, callback_data='admin_users')]]
+            ),
+        )
+        await callback.answer()
+        return
+
+    will_delete = len(inactive_users) - with_active_sub
+    text = texts.t('ADMIN_USERS_CLEANUP_TITLE', '<b>Очистка неактивных пользователей</b>')
+    text += '\n\n' + texts.t(
+        'ADMIN_USERS_CLEANUP_BODY',
+        'Без активности более {value1} мес.: <b>{value2}</b>\nБудет удалено из бота и панели Remnawave: <b>{value3}</b>',
+    ).format(value1=months, value2=len(inactive_users), value3=will_delete)
+    if with_active_sub > 0:
+        text += '\n' + texts.t('ADMIN_USERS_CLEANUP_SKIPPED', 'С активной подпиской (пропущено): {value1}').format(
+            value1=with_active_sub
+        )
+    text += '\n\n' + texts.t(
+        'ADMIN_USERS_CLEANUP_WARNING',
+        'Удаление необратимо: профиль в боте, подписки и аккаунт в панели исчезнут.',
+    )
+
+    keyboard = [
+        [
+            types.InlineKeyboardButton(
+                text=texts.t('ADMIN_USERS_CLEANUP_CONFIRM_BUTTON', 'Удалить везде'),
+                callback_data='admin_cleanup_inactive_confirm',
+            )
+        ],
+        [types.InlineKeyboardButton(text=texts.BACK, callback_data='admin_users')],
     ]
 
     await callback.message.edit_text(
@@ -5206,24 +5265,34 @@ async def _calculate_subscription_period_price(
 @error_handler
 async def cleanup_inactive_users(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
     texts = get_texts(getattr(db_user, 'language', None))
+    months = max(1, settings.INACTIVE_USER_DELETE_MONTHS)
+
+    await callback.message.edit_text(texts.t('ADMIN_USERS_CLEANUP_RUNNING', '<b>Очистка неактивных...</b>'))
+    await callback.answer()
+
     user_service = UserService()
-    deleted_count, skipped_count = await user_service.cleanup_inactive_users(db)
+    deleted_count, skipped_count = await user_service.cleanup_inactive_users(
+        db,
+        months,
+        admin_id=db_user.id,
+        force_panel_delete=True,
+    )
 
     text = texts.t(
-        'ADMIN_USERS_PURCHASE_000', ' Очистка завершена\n\nУдалено неактивных пользователей: {value1}'
+        'ADMIN_USERS_CLEANUP_DONE',
+        '<b>Очистка завершена</b>\n\nУдалено из бота и панели Remnawave: <b>{value1}</b>',
     ).format(value1=deleted_count)
     if skipped_count > 0:
-        text += texts.t('ADMIN_USERS_PURCHASE_036', '\n Пропущено (активная подписка): {value1}').format(
+        text += texts.t('ADMIN_USERS_CLEANUP_DONE_SKIPPED', '\nПропущено (активная подписка): {value1}').format(
             value1=skipped_count
         )
 
     await callback.message.edit_text(
-        text,
+        compact_text(text),
         reply_markup=types.InlineKeyboardMarkup(
-            inline_keyboard=[[types.InlineKeyboardButton(text=' Назад', callback_data='admin_users')]]
+            inline_keyboard=[[types.InlineKeyboardButton(text=texts.BACK, callback_data='admin_users')]]
         ),
     )
-    await callback.answer()
 
 
 @admin_required
@@ -7373,7 +7442,8 @@ def register_handlers(dp: Dispatcher):
 
     dp.callback_query.register(show_inactive_users, F.data == 'admin_users_inactive')
 
-    dp.callback_query.register(cleanup_inactive_users, F.data == 'admin_cleanup_inactive')
+    dp.callback_query.register(prepare_cleanup_inactive_users, F.data == 'admin_cleanup_inactive')
+    dp.callback_query.register(cleanup_inactive_users, F.data == 'admin_cleanup_inactive_confirm')
 
     dp.callback_query.register(
         extend_user_subscription,
