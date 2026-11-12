@@ -782,16 +782,16 @@ class TrafficMonitoringServiceV2:
                     db_user = await get_user_by_remnawave_id(db, violation.user_id)
                     if db_user:
                         user_id_display = db_user.telegram_id or db_user.email or f'#{db_user.id}'
-                        user_info = f'👤 <b>{html.escape(db_user.full_name or texts.t("TRAFFIC_NOTICE_UNNAMED", "Без имени"))}</b>\n🆔 ID: <code>{html.escape(str(user_id_display))}</code>\n'
+                        user_info = f'<tg-emoji emoji-id="5771887475421090729">👤</tg-emoji> <b>{html.escape(db_user.full_name or texts.t("TRAFFIC_NOTICE_UNNAMED", "Без имени"))}</b>\nID: <code>{html.escape(str(user_id_display))}</code>\n'
                         if db_user.username:
                             user_info += f'Username: @{html.escape(db_user.username)}\n'
 
                 if violation.check_type == 'fast':
-                    check_type_emoji = '⚡'
+                    check_type_emoji = '<tg-emoji emoji-id="5843553939672274145">⚡</tg-emoji>'
                     check_type_name = texts.t('TRAFFIC_NOTICE_FAST', 'Быстрая проверка')
                     traffic_label = texts.t('TRAFFIC_NOTICE_INTERVAL', 'За интервал')
                 elif violation.check_type == 'daily':
-                    check_type_emoji = '📅'
+                    check_type_emoji = '<tg-emoji emoji-id="5967412305338568701">📅</tg-emoji>'
                     check_type_name = texts.t('TRAFFIC_NOTICE_DAILY', 'Суточная проверка')
                     traffic_label = texts.t('TRAFFIC_NOTICE_24H', 'За 24 часа')
                 else:
@@ -801,7 +801,7 @@ class TrafficMonitoringServiceV2:
 
                 message = texts.t(
                     'TRAFFIC_NOTICE_BODY',
-                    '⚠️ <b>Превышение трафика</b>\n\n{user_info}🔑 ID в панели: <code>{panel_id}</code>\n\n{emoji} <b>{check_type}</b>\n📊 {label}: <b>{used} ГБ</b>\n📈 Порог: <b>{threshold} ГБ</b>\n🚨 Превышение: <b>{excess:.2f} ГБ</b>\n',
+                    '⚠️ <b>Превышение трафика</b>\n\n{user_info}<tg-emoji emoji-id="6005570495603282482">🔑</tg-emoji> ID в панели: <code>{panel_id}</code>\n\n{emoji} <b>{check_type}</b>\n<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> {label}: <b>{used} ГБ</b>\n<tg-emoji emoji-id="5776219138917668486">📈</tg-emoji> Порог: <b>{threshold} ГБ</b>\nПревышение: <b>{excess:.2f} ГБ</b>\n',
                 ).format(
                     user_info=user_info,
                     panel_id=violation.user_id,
@@ -815,13 +815,13 @@ class TrafficMonitoringServiceV2:
 
                 # Показываем название ноды и UUID
                 if violation.last_node_name:
-                    message += texts.t('TRAFFIC_NOTICE_NODE', '\n🖥 Сервер: <b>{name}</b>').format(
+                    message += texts.t('TRAFFIC_NOTICE_NODE', '\nСервер: <b>{name}</b>').format(
                         name=html.escape(violation.last_node_name)
                     )
                     if violation.last_node_uuid:
                         message += f'\n   <code>{html.escape(violation.last_node_uuid)}</code>'
                 elif violation.last_node_uuid:
-                    message += texts.t('TRAFFIC_NOTICE_NODE_ID', '\n🖥 Сервер: <code>{id}</code>').format(
+                    message += texts.t('TRAFFIC_NOTICE_NODE_ID', '\nСервер: <code>{id}</code>').format(
                         id=html.escape(violation.last_node_uuid)
                     )
 

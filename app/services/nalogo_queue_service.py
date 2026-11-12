@@ -344,8 +344,8 @@ class NalogoQueueService:
                 message = (
                     f'<b>⚠️ Проблема с отправкой чеков NaloGO</b>\n\n'
                     f'Сервис nalog.ru временно недоступен.\n\n'
-                    f'📋 <b>В очереди:</b> {remaining} чек(ов)\n'
-                    f'💰 <b>На сумму:</b> {total_queued_amount:,.2f} ₽\n\n'
+                    f'<b>В очереди:</b> {remaining} чек(ов)\n'
+                    f'<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> <b>На сумму:</b> {total_queued_amount:,.2f} ₽\n\n'
                     f'Чеки будут отправлены автоматически когда сервис восстановится.'
                 )
                 await self._send_admin_notification(
@@ -358,10 +358,10 @@ class NalogoQueueService:
         elif remaining == 0 and self._had_pending_receipts and processed > 0:
             self._had_pending_receipts = False
             message = (
-                f'<b>✅ Очередь чеков NaloGO разгружена</b>\n\n'
+                f'<b><tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Очередь чеков NaloGO разгружена</b>\n\n'
                 f'Все отложенные чеки успешно отправлены!\n\n'
-                f'📋 <b>Отправлено:</b> {processed} чек(ов)\n'
-                f'💰 <b>На сумму:</b> {total_processed_amount:,.2f} ₽'
+                f'<b>Отправлено:</b> {processed} чек(ов)\n'
+                f'<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> <b>На сумму:</b> {total_processed_amount:,.2f} ₽'
             )
             await self._send_admin_notification(
                 message,

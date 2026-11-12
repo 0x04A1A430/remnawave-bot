@@ -186,7 +186,7 @@ async def _notify_user(bot: Any, event: GraceEvent, subscription: Subscription, 
         'tariff_name': tariff_name,
     }
     renew = build_subscription_extend_button(texts.get('WEBHOOK_RENEW_BUTTON', 'Renew subscription'), subscription.id)
-    close = InlineKeyboardButton(text=texts.get('WEBHOOK_CLOSE_BUTTON', '✖️ Закрыть'), callback_data='webhook:close')
+    close = InlineKeyboardButton(text=texts.get('WEBHOOK_CLOSE_BUTTON', 'Закрыть'), callback_data='webhook:close')
     await notification_delivery_service.send_notification(
         user=user,
         notification_type=notification_type,

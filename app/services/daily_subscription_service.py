@@ -251,7 +251,7 @@ class DailySubscriptionService:
 
             user_id_display = user.telegram_id or user.email or f'#{user.id}'
             logger.info(
-                '✅ Суточное списание: подписка сумма коп., пользователь',
+                'Суточное списание: подписка сумма коп., пользователь',
                 subscription_id=subscription.id,
                 daily_price=daily_price,
                 user_id_display=user_id_display,
@@ -392,14 +392,14 @@ class DailySubscriptionService:
         if settings.is_multi_tariff_enabled() and hasattr(subscription, 'tariff') and subscription.tariff:
             tariff_label = (
                 get_texts(getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE)
-                .t('PAYMENT_NOTICE_010', '\n📦 Тариф: «{v0}»')
+                .t('PAYMENT_NOTICE_010', '\n<tg-emoji emoji-id="5924720918826848520">📦</tg-emoji> Тариф: «{v0}»')
                 .format(v0=subscription.tariff.name)
             )
         message = (
             get_texts(getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE)
             .t(
                 'DAILY_NOTICE_000',
-                '💳 <b>Суточное списание</b>\n\nСписано: {v0:.2f} ₽\nОстаток баланса: {v1:.2f} ₽{v2}\n\nСледующее списание через 24 часа.',
+                '<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> <b>Суточное списание</b>\n\nСписано: {v0:.2f} ₽\nОстаток баланса: {v1:.2f} ₽{v2}\n\nСледующее списание через 24 часа.',
             )
             .format(v0=amount_rubles, v1=balance_rubles, v2=tariff_label)
         )
@@ -441,7 +441,7 @@ class DailySubscriptionService:
                 [
                     InlineKeyboardButton(
                         text=get_texts(getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE).t(
-                            'BALANCE_TOPUP', '💳 Пополнить баланс'
+                            'BALANCE_TOPUP', '<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> Пополнить баланс'
                         ),
                         callback_data='menu_balance',
                     )
@@ -449,7 +449,8 @@ class DailySubscriptionService:
                 [
                     InlineKeyboardButton(
                         text=get_texts(getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE).t(
-                            'MY_SUBSCRIPTION_BUTTON', '📱 Моя подписка'
+                            'MY_SUBSCRIPTION_BUTTON',
+                            '<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> Моя подписка',
                         ),
                         callback_data='menu_subscription',
                     )
@@ -660,7 +661,7 @@ class DailySubscriptionService:
         # страховкой-clamp ниже.)
         if not managed and await self._should_defer_limit_drop(db, subscription, new_limit, expired_purchases):
             logger.info(
-                '⏸️ Понижение лимита докупки отложено: ждём периодический сброс used панелью',
+                'Понижение лимита докупки отложено: ждём периодический сброс used панелью',
                 subscription_id=subscription.id,
                 user_id=subscription.user_id,
                 new_limit_gb=new_limit,
@@ -699,7 +700,7 @@ class DailySubscriptionService:
         await db.commit()
 
         logger.info(
-            '🔄 Сброс истекших докупок трафика',
+            'Сброс истекших докупок трафика',
             subscription_id=subscription.id,
             old_limit=old_limit,
             base_limit=base_limit,
@@ -834,14 +835,14 @@ class DailySubscriptionService:
         if settings.is_multi_tariff_enabled() and hasattr(subscription, 'tariff') and subscription.tariff:
             tariff_label = (
                 get_texts(getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE)
-                .t('PAYMENT_NOTICE_010', '\n📦 Тариф: «{v0}»')
+                .t('PAYMENT_NOTICE_010', '\n<tg-emoji emoji-id="5924720918826848520">📦</tg-emoji> Тариф: «{v0}»')
                 .format(v0=subscription.tariff.name)
             )
         message = (
             get_texts(getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE)
             .t(
                 'DAILY_NOTICE_002',
-                'ℹ️ <b>Сброс докупленного трафика</b>\n\nВаш докупленный трафик ({v0} ГБ) был сброшен, так как прошло 30 дней с момента первой докупки.{v1}\n\nТекущий лимит трафика: {v2} ГБ\n\nВы можете докупить трафик снова в любое время.',
+                '<tg-emoji emoji-id="5879785854284599288">ℹ️</tg-emoji> <b>Сброс докупленного трафика</b>\n\nВаш докупленный трафик ({v0} ГБ) был сброшен, так как прошло 30 дней с момента первой докупки.{v1}\n\nТекущий лимит трафика: {v2} ГБ\n\nВы можете докупить трафик снова в любое время.',
             )
             .format(v0=reset_gb, v1=tariff_label, v2=subscription.traffic_limit_gb)
         )
@@ -897,7 +898,7 @@ class DailySubscriptionService:
                             subscription = await self._reload_daily_subscription(db, _sub_id)
 
                             logger.info(
-                                '✅ Суточная подписка возобновлена (DISABLED→ACTIVE, баланс пополнен)',
+                                'Суточная подписка возобновлена (DISABLED→ACTIVE, баланс пополнен)',
                                 subscription_id=subscription.id,
                                 user_id=subscription.user_id,
                             )
@@ -931,7 +932,7 @@ class DailySubscriptionService:
                             subscription = await self._reload_daily_subscription(db, _sub_id)
 
                             logger.warning(
-                                '🔄 Суточная подписка восстановлена (EXPIRED→ACTIVE, ошибочный expire)',
+                                'Суточная подписка восстановлена (EXPIRED→ACTIVE, ошибочный expire)',
                                 subscription_id=subscription.id,
                                 user_id=subscription.user_id,
                             )
@@ -972,7 +973,7 @@ class DailySubscriptionService:
                             subscription = await self._reload_daily_subscription(db, _sub_id)
 
                             logger.info(
-                                '🔄 Суточная подписка возвращена из лимита трафика (LIMITED→ACTIVE)',
+                                'Суточная подписка возвращена из лимита трафика (LIMITED→ACTIVE)',
                                 subscription_id=subscription.id,
                                 user_id=subscription.user_id,
                             )
@@ -1005,7 +1006,7 @@ class DailySubscriptionService:
         self._running = True
         interval_minutes = self.get_check_interval_minutes()
 
-        logger.info('🔄 Запуск сервиса суточных подписок', interval_minutes=interval_minutes)
+        logger.info('Запуск сервиса суточных подписок', interval_minutes=interval_minutes)
 
         while self._running:
             try:
@@ -1013,7 +1014,7 @@ class DailySubscriptionService:
                 resume_stats = await self.process_auto_resume()
                 if resume_stats['resumed'] > 0 or resume_stats['recovered'] > 0 or resume_stats['limit_recovered'] > 0:
                     logger.info(
-                        '📊 Авто-возобновление завершено',
+                        'Авто-возобновление завершено',
                         resumed=resume_stats['resumed'],
                         recovered=resume_stats['recovered'],
                         limit_recovered=resume_stats['limit_recovered'],
@@ -1025,7 +1026,7 @@ class DailySubscriptionService:
 
                 if stats['charged'] > 0 or stats['suspended'] > 0:
                     logger.info(
-                        '📊 Суточные списания завершены',
+                        'Суточные списания завершены',
                         stats=stats['checked'],
                         stats_2=stats['charged'],
                         stats_3=stats['suspended'],
@@ -1036,7 +1037,7 @@ class DailySubscriptionService:
                 traffic_stats = await self.process_traffic_resets()
                 if traffic_stats['reset'] > 0:
                     logger.info(
-                        '📊 Сброс трафика завершён',
+                        'Сброс трафика завершён',
                         traffic_stats=traffic_stats['checked'],
                         traffic_stats_2=traffic_stats['reset'],
                         traffic_stats_3=traffic_stats['errors'],
@@ -1059,7 +1060,7 @@ class DailySubscriptionService:
         self._running = True
         interval_minutes = self.get_check_interval_minutes()
         logger.info(
-            '🔄 Запуск сброса докупок трафика (суточные тарифы выключены)',
+            'Запуск сброса докупок трафика (суточные тарифы выключены)',
             interval_minutes=interval_minutes,
         )
 
@@ -1068,7 +1069,7 @@ class DailySubscriptionService:
                 traffic_stats = await self.process_traffic_resets()
                 if traffic_stats['reset'] > 0:
                     logger.info(
-                        '📊 Сброс трафика завершён',
+                        'Сброс трафика завершён',
                         traffic_stats=traffic_stats['checked'],
                         traffic_stats_2=traffic_stats['reset'],
                         traffic_stats_3=traffic_stats['errors'],

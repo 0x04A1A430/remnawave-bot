@@ -26,7 +26,11 @@ def monitor_run_text(action: Any, monitor: dict[str, Any], view: dict[str, Any],
     )
     lines = [f'{head} <b>DPI//CHECKER</b> · монитор «{escape(action.label or "")}»', f'Откуда: {escape(country)}']
     for res in view.get('resources', [])[:MAX_RESOURCES_IN_TEXT]:
-        mark = '✅' if res['total'] and res['ok_count'] == res['total'] else ('❌' if res['ok_count'] == 0 else '⚠️')
+        mark = (
+            '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji>'
+            if res['total'] and res['ok_count'] == res['total']
+            else ('<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji>' if res['ok_count'] == 0 else '⚠️')
+        )
         lines.append(f'{mark} {escape(res["name"])}: {res["ok_count"]} из {res["total"]} точек доступно')
     hidden = len(view.get('resources', [])) - MAX_RESOURCES_IN_TEXT
     if hidden > 0:

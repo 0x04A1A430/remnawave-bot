@@ -633,21 +633,23 @@ class ReferralWithdrawalService:
         """Форматирует статистику баланса для пользователя."""
         text = ''
         text += (
-            texts.t('REFERRAL_WITHDRAWAL_STATS_EARNED', '📈 Всего заработано с рефералов: <b>{amount}</b>').format(
-                amount=texts.format_price(stats['total_earned'])
-            )
+            texts.t(
+                'REFERRAL_WITHDRAWAL_STATS_EARNED',
+                '<tg-emoji emoji-id="5776219138917668486">📈</tg-emoji> Всего заработано с рефералов: <b>{amount}</b>',
+            ).format(amount=texts.format_price(stats['total_earned']))
             + '\n'
         )
 
         text += (
-            texts.t('REFERRAL_WITHDRAWAL_STATS_SPENT', '💳 Потрачено на подписки: <b>{amount}</b>').format(
-                amount=texts.format_price(stats['referral_spent'])
-            )
+            texts.t(
+                'REFERRAL_WITHDRAWAL_STATS_SPENT',
+                '<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> Потрачено на подписки: <b>{amount}</b>',
+            ).format(amount=texts.format_price(stats['referral_spent']))
             + '\n'
         )
 
         text += (
-            texts.t('REFERRAL_WITHDRAWAL_STATS_WITHDRAWN', '💸 Выведено: <b>{amount}</b>').format(
+            texts.t('REFERRAL_WITHDRAWAL_STATS_WITHDRAWN', 'Выведено: <b>{amount}</b>').format(
                 amount=texts.format_price(stats['withdrawn'])
             )
             + '\n'
@@ -655,7 +657,7 @@ class ReferralWithdrawalService:
 
         if stats['pending'] > 0:
             text += (
-                texts.t('REFERRAL_WITHDRAWAL_STATS_PENDING', '⏳ На рассмотрении: <b>{amount}</b>').format(
+                texts.t('REFERRAL_WITHDRAWAL_STATS_PENDING', 'На рассмотрении: <b>{amount}</b>').format(
                     amount=texts.format_price(stats['pending'])
                 )
                 + '\n'
@@ -663,15 +665,20 @@ class ReferralWithdrawalService:
 
         text += '\n'
         text += (
-            texts.t('REFERRAL_WITHDRAWAL_STATS_AVAILABLE', '✅ <b>Доступно к выводу: {amount}</b>').format(
-                amount=texts.format_price(stats['available_total'])
-            )
+            texts.t(
+                'REFERRAL_WITHDRAWAL_STATS_AVAILABLE',
+                '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> <b>Доступно к выводу: {amount}</b>',
+            ).format(amount=texts.format_price(stats['available_total']))
             + '\n'
         )
 
         if stats['only_referral_mode']:
             text += (
-                texts.t('REFERRAL_WITHDRAWAL_ONLY_REF_MODE', '<i>ℹ️ Выводить можно только реферальный баланс</i>') + '\n'
+                texts.t(
+                    'REFERRAL_WITHDRAWAL_ONLY_REF_MODE',
+                    '<i><tg-emoji emoji-id="5879785854284599288">ℹ️</tg-emoji> Выводить можно только реферальный баланс</i>',
+                )
+                + '\n'
             )
 
         return text
@@ -684,7 +691,7 @@ class ReferralWithdrawalService:
             get_texts(language)
             .t(
                 'ADMIN_WITHDRAWAL_UI_000',
-                '\n🔍 <b>Анализ на подозрительную активность</b>\n\n{v0} Уровень риска: <b>{v1}</b>\n📊 Оценка риска: <b>{v2}/100</b>\n{v3}\n',
+                '\n<b>Анализ на подозрительную активность</b>\n\n{v0} Уровень риска: <b>{v1}</b>\n<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> Оценка риска: <b>{v2}/100</b>\n{v3}\n',
             )
             .format(
                 v0=risk_emoji.get(analysis['risk_level'], '⚪'),
@@ -704,7 +711,9 @@ class ReferralWithdrawalService:
         # Статистика баланса
         if 'balance_stats' in details:
             bs = details['balance_stats']
-            text += get_texts(language).t('ADMIN_WITHDRAWAL_UI_002', '\n💰 <b>Баланс:</b>\n')
+            text += get_texts(language).t(
+                'ADMIN_WITHDRAWAL_UI_002', '\n<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> <b>Баланс:</b>\n'
+            )
             text += (
                 get_texts(language)
                 .t('ADMIN_WITHDRAWAL_UI_003', '• Заработано с рефералов: {v0:.0f}₽\n')
@@ -729,7 +738,9 @@ class ReferralWithdrawalService:
         # Статистика по рефералам
         if 'referral_deposits' in details:
             rd = details['referral_deposits']
-            text += get_texts(language).t('ADMIN_WITHDRAWAL_UI_007', '\n👥 <b>Рефералы:</b>\n')
+            text += get_texts(language).t(
+                'ADMIN_WITHDRAWAL_UI_007', '\n<tg-emoji emoji-id="5915556996215476302">👥</tg-emoji> <b>Рефералы:</b>\n'
+            )
             text += (
                 get_texts(language)
                 .t('ADMIN_WITHDRAWAL_UI_008', '• Всего: {v0}\n')
@@ -746,7 +757,7 @@ class ReferralWithdrawalService:
 
         # Подозрительные рефералы
         if details.get('suspicious_referrals'):
-            text += get_texts(language).t('ADMIN_WITHDRAWAL_UI_011', '\n🚨 <b>Подозрительные рефералы:</b>\n')
+            text += get_texts(language).t('ADMIN_WITHDRAWAL_UI_011', '\n<b>Подозрительные рефералы:</b>\n')
             for sr in details['suspicious_referrals'][:5]:
                 text += (
                     get_texts(language)
@@ -761,7 +772,10 @@ class ReferralWithdrawalService:
 
         # Источники дохода
         if 'earnings_by_reason' in details:
-            text += get_texts(language).t('ADMIN_WITHDRAWAL_UI_012', '\n📊 <b>Источники дохода:</b>\n')
+            text += get_texts(language).t(
+                'ADMIN_WITHDRAWAL_UI_012',
+                '\n<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> <b>Источники дохода:</b>\n',
+            )
             reason_names = {
                 'referral_first_topup': get_texts(language).t('ADMIN_WITHDRAWAL_UI_015', 'Бонус за 1-е пополнение'),
                 'referral_commission_topup': get_texts(language).t('ADMIN_WITHDRAWAL_UI_016', 'Комиссия с пополнений'),

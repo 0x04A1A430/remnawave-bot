@@ -119,18 +119,18 @@ async def _run_with_own_session(reason: str) -> RecalculationResult:
 def build_summary_text(result: RecalculationResult) -> str:
     """Одна сводка админам за весь проход."""
     lines = [
-        '🏷 <b>ПЕРЕСЧЁТ ПРОМОГРУПП</b>',
+        '<tg-emoji emoji-id="5854776233950188167">🏷</tg-emoji> <b>ПЕРЕСЧЁТ ПРОМОГРУПП</b>',
         '',
-        f'📝 Причина: {html.escape(result.reason)}',
-        f'👥 Проверено: {result.checked}',
-        f'🔁 Переназначено: {result.changed}',
+        f'<tg-emoji emoji-id="5886330010054168711">📝</tg-emoji> Причина: {html.escape(result.reason)}',
+        f'<tg-emoji emoji-id="5915556996215476302">👥</tg-emoji> Проверено: {result.checked}',
+        f'<tg-emoji emoji-id="6005843436479975944">🔁</tg-emoji> Переназначено: {result.changed}',
     ]
     if result.failed:
         lines.append(f'⚠️ Не удалось: {result.failed}')
     if result.error:
-        lines.append(f'❌ Ошибка: {html.escape(result.error)}')
+        lines.append(f'<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Ошибка: {html.escape(result.error)}')
     if result.started_at and result.finished_at:
-        lines.append(f'⏱ {(result.finished_at - result.started_at).total_seconds():.1f} с')
+        lines.append(f'{(result.finished_at - result.started_at).total_seconds():.1f} с')
     return '\n'.join(lines)
 
 

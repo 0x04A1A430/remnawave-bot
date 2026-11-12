@@ -48,7 +48,9 @@ def get_delete_keyboard(language: str | None = None) -> InlineKeyboardMarkup:
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text=get_texts(language or settings.DEFAULT_LANGUAGE).t('BAN_NOTICE_016', '🗑 Удалить'),
+                    text=get_texts(language or settings.DEFAULT_LANGUAGE).t(
+                        'BAN_NOTICE_016', '<tg-emoji emoji-id="5879896690210639947">🗑</tg-emoji> Удалить'
+                    ),
                     callback_data='ban_notify:delete',
                     style='danger',
                 )
@@ -138,9 +140,7 @@ class BanNotificationService:
 
         # Формируем информацию о ноде (заметно выделяем)
         node_info = (
-            get_texts(language)
-            .t('BAN_NOTICE_000', '🖥 <b>Нода:</b> <code>{v0}</code>')
-            .format(v0=html.escape(node_name))
+            get_texts(language).t('BAN_NOTICE_000', '<b>Нода:</b> <code>{v0}</code>').format(v0=html.escape(node_name))
             if node_name
             else ''
         )
@@ -157,7 +157,7 @@ class BanNotificationService:
             template,
             get_texts(language).t(
                 'BAN_NOTICE_001',
-                '🚫 <b>АККАУНТ ЗАБЛОКИРОВАН</b>\n\n{node_info}\n📱 Устройств: <b>{ip_count}</b> из <b>{limit}</b>\n⏱ Ограничение: <b>{ban_minutes} мин</b>',
+                '<tg-emoji emoji-id="5872829476143894491">🚫</tg-emoji> <b>АККАУНТ ЗАБЛОКИРОВАН</b>\n\n{node_info}\n<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> Устройств: <b>{ip_count}</b> из <b>{limit}</b>\nОграничение: <b>{ban_minutes} мин</b>',
             ),
             **format_vars,
         )
@@ -367,14 +367,14 @@ class BanNotificationService:
 
         # Формируем сообщение из настроек (заметно выделяем)
         network_info = (
-            get_texts(language).t('BAN_NOTICE_004', '├ 🌐 Сеть: <b>{v0}</b>\n').format(v0=html.escape(network_type))
+            get_texts(language)
+            .t('BAN_NOTICE_004', '├ <tg-emoji emoji-id="5879585266426973039">🌐</tg-emoji> Сеть: <b>{v0}</b>\n')
+            .format(v0=html.escape(network_type))
             if network_type
             else ''
         )
         node_info = (
-            get_texts(language)
-            .t('BAN_NOTICE_000', '🖥 <b>Нода:</b> <code>{v0}</code>')
-            .format(v0=html.escape(node_name))
+            get_texts(language).t('BAN_NOTICE_000', '<b>Нода:</b> <code>{v0}</code>').format(v0=html.escape(node_name))
             if node_name
             else ''
         )
@@ -387,7 +387,7 @@ class BanNotificationService:
             _get_notification_template('BAN_MSG_WIFI', language),
             get_texts(language).t(
                 'BAN_NOTICE_005',
-                '🚫 <b>Блокировка за WiFi</b>\n\n{node_info}\n{network_info}⏱ Время блокировки: <b>{ban_minutes} мин</b>',
+                '<tg-emoji emoji-id="5872829476143894491">🚫</tg-emoji> <b>Блокировка за WiFi</b>\n\n{node_info}\n{network_info} Время блокировки: <b>{ban_minutes} мин</b>',
             ),
             **format_vars,
         )
@@ -465,14 +465,14 @@ class BanNotificationService:
 
         # Формируем сообщение из настроек (заметно выделяем)
         network_info = (
-            get_texts(language).t('BAN_NOTICE_004', '├ 🌐 Сеть: <b>{v0}</b>\n').format(v0=html.escape(network_type))
+            get_texts(language)
+            .t('BAN_NOTICE_004', '├ <tg-emoji emoji-id="5879585266426973039">🌐</tg-emoji> Сеть: <b>{v0}</b>\n')
+            .format(v0=html.escape(network_type))
             if network_type
             else ''
         )
         node_info = (
-            get_texts(language)
-            .t('BAN_NOTICE_000', '🖥 <b>Нода:</b> <code>{v0}</code>')
-            .format(v0=html.escape(node_name))
+            get_texts(language).t('BAN_NOTICE_000', '<b>Нода:</b> <code>{v0}</code>').format(v0=html.escape(node_name))
             if node_name
             else ''
         )
@@ -483,7 +483,7 @@ class BanNotificationService:
             _get_notification_template('BAN_MSG_MOBILE', language),
             get_texts(language).t(
                 'BAN_NOTICE_007',
-                '🚫 <b>Блокировка за мобильную сеть</b>\n\n{node_info}\n{network_info}⏱ Время блокировки: <b>{ban_minutes} мин</b>',
+                '<tg-emoji emoji-id="5872829476143894491">🚫</tg-emoji> <b>Блокировка за мобильную сеть</b>\n\n{node_info}\n{network_info} Время блокировки: <b>{ban_minutes} мин</b>',
             ),
             **format_vars,
         )
@@ -573,9 +573,7 @@ class BanNotificationService:
         template = _get_notification_template(template_name, language)
         safe_reason = html.escape(reason or get_texts(language).t('BAN_NOTICE_014', 'Детали нарушения не указаны'))
         node_info = (
-            get_texts(language)
-            .t('BAN_NOTICE_000', '🖥 <b>Нода:</b> <code>{v0}</code>')
-            .format(v0=html.escape(node_name))
+            get_texts(language).t('BAN_NOTICE_000', '<b>Нода:</b> <code>{v0}</code>').format(v0=html.escape(node_name))
             if node_name
             else ''
         )
@@ -583,7 +581,7 @@ class BanNotificationService:
             template,
             get_texts(language).t(
                 'BAN_NOTICE_009',
-                '🚫 <b>АККАУНТ ЗАБЛОКИРОВАН</b>\n\n{node_info}\n📝 <b>Детали:</b> {reason}\n⏱ <b>Время блокировки:</b> {ban_minutes} мин\n\n🔄 Доступ восстановится автоматически после окончания блокировки.',
+                '<tg-emoji emoji-id="5872829476143894491">🚫</tg-emoji> <b>АККАУНТ ЗАБЛОКИРОВАН</b>\n\n{node_info}\n<tg-emoji emoji-id="5886330010054168711">📝</tg-emoji> <b>Детали:</b> {reason}\n<b>Время блокировки:</b> {ban_minutes} мин\n\n<tg-emoji emoji-id="5839200986022812209">🔄</tg-emoji> Доступ восстановится автоматически после окончания блокировки.',
             ),
             ban_minutes=ban_minutes,
             reason=safe_reason,

@@ -1188,9 +1188,10 @@ async def _send_telegram_gift_notification(
         )
         tariff_text = f'{safe_tariff} — {period_text}' if safe_tariff else period_text
 
-        text = texts.t('REFERRAL_GIFT_UI_030', '🎁 <b>Вам подарили VPN подписку!</b>\n{value1}{value2}{value3}').format(
-            value1=tariff_text, value2=gift_from, value3=gift_msg
-        )
+        text = texts.t(
+            'REFERRAL_GIFT_UI_030',
+            '<tg-emoji emoji-id="6032937473162614352">🎁</tg-emoji> <b>Вам подарили VPN подписку!</b>\n{value1}{value2}{value3}',
+        ).format(value1=tariff_text, value2=gift_from, value3=gift_msg)
 
         keyboard = None
         if is_pending_activation:

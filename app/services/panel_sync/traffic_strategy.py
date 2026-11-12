@@ -36,7 +36,7 @@ def get_traffic_reset_strategy(tariff=None) -> TrafficLimitStrategy:
         if tariff_mode is not None:
             mapped_strategy = _STRATEGY_BY_MODE.get(tariff_mode.upper(), 'NO_RESET')
             logger.info(
-                '🔄 Стратегия сброса трафика из тарифа',
+                'Стратегия сброса трафика из тарифа',
                 value=getattr(tariff, 'name', 'N/A'),
                 tariff_mode=tariff_mode,
                 mapped_strategy=mapped_strategy,
@@ -45,5 +45,5 @@ def get_traffic_reset_strategy(tariff=None) -> TrafficLimitStrategy:
 
     strategy = settings.DEFAULT_TRAFFIC_RESET_STRATEGY.upper()
     mapped_strategy = _STRATEGY_BY_MODE.get(strategy, 'NO_RESET')
-    logger.info('🔄 Стратегия сброса трафика из конфига', strategy=strategy, mapped_strategy=mapped_strategy)
+    logger.info('Стратегия сброса трафика из конфига', strategy=strategy, mapped_strategy=mapped_strategy)
     return getattr(TrafficLimitStrategy, mapped_strategy)

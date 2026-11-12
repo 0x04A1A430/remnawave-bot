@@ -187,7 +187,7 @@ async def push_all_subscriptions(
         # фиксировать нечего — прежний коммит на общей сессии падал по обрыву
         # соединения и засчитывал всю пачку ошибками.
         logger.info(
-            '📦 Обработана партия подписок',
+            'Обработана партия подписок',
             offset=offset + len(subscriptions),
             created=created,
             updated=updated,
