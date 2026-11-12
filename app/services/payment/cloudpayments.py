@@ -522,7 +522,14 @@ class CloudPaymentsPaymentMixin:
 
         from app.bot_factory import create_bot
 
-        text = get_texts(language).t('PAYMENT_NOTICE_020', '❌ <b>Оплата не прошла</b>\n\n{v0}').format(v0=message)
+        text = (
+            get_texts(language)
+            .t(
+                'PAYMENT_NOTICE_020',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> <b>Оплата не прошла</b>\n\n{v0}',
+            )
+            .format(v0=message)
+        )
 
         async with create_bot() as bot:
             try:

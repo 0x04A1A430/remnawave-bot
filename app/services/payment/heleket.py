@@ -433,7 +433,7 @@ class HeleketPaymentMixin:
                     exchange_rate_value = updated_payment.exchange_rate or 0
                     rate_text = (
                         get_texts(getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE)
-                        .t('PAYMENT_NOTICE_001', '💱 Курс: 1 RUB = {v0:.4f} {v1}')
+                        .t('PAYMENT_NOTICE_001', 'Курс: 1 RUB = {v0:.4f} {v1}')
                         .format(v0=1 / exchange_rate_value, v1=updated_payment.payer_currency)
                         if exchange_rate_value and updated_payment.payer_currency
                         else None
@@ -441,19 +441,24 @@ class HeleketPaymentMixin:
 
                     message_lines = [
                         get_texts(getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE).t(
-                            'PAYMENT_NOTICE_002', '✅ <b>Пополнение успешно!</b>'
+                            'PAYMENT_NOTICE_002',
+                            '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> <b>Пополнение успешно!</b>',
                         ),
                         get_texts(getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE)
-                        .t('PAYMENT_NOTICE_003', '💰 Сумма: {v0}')
+                        .t('PAYMENT_NOTICE_003', '<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> Сумма: {v0}')
                         .format(v0=settings.format_price(amount_kopeks)),
                         get_texts(getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE).t(
-                            'PAYMENT_NOTICE_004', '💳 Способ: Heleket'
+                            'PAYMENT_NOTICE_004',
+                            '<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> Способ: Heleket',
                         ),
                     ]
                     if updated_payment.payer_amount and updated_payment.payer_currency:
                         message_lines.append(
                             get_texts(getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE)
-                            .t('PAYMENT_NOTICE_005', '🪙 Оплата: {v0} {v1}')
+                            .t(
+                                'PAYMENT_NOTICE_005',
+                                '<tg-emoji emoji-id="5992430854909989581">🪙</tg-emoji> Оплата: {v0} {v1}',
+                            )
                             .format(v0=updated_payment.payer_amount, v1=updated_payment.payer_currency)
                         )
                     if rate_text:

@@ -57,7 +57,15 @@ def _build_extend_keyboard(texts, subscription_id: int | None = None) -> InlineK
     """Клавиатура с кнопкой продления подписки для уведомлений."""
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [build_subscription_extend_button(texts.t('SUBSCRIPTION_EXTEND', '💎 Продлить подписку'), subscription_id)],
+            [
+                build_subscription_extend_button(
+                    texts.t(
+                        'SUBSCRIPTION_EXTEND',
+                        '<tg-emoji emoji-id="5963312935148195483">💎</tg-emoji> Продлить подписку',
+                    ),
+                    subscription_id,
+                )
+            ],
         ]
     )
 
@@ -391,12 +399,15 @@ async def _process_single_subscription(
                     keyboard = _build_extend_keyboard(texts, subscription.id)
                     msg = texts.t(
                         'RECURRENT_TOPUP_SUCCESS',
-                        '✅ <b>Автоплатёж выполнен</b>\n\nБаланс пополнен на {amount} для продления подписки.',
+                        '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> <b>Автоплатёж выполнен</b>\n\nБаланс пополнен на {amount} для продления подписки.',
                     ).format(amount=settings.format_price(topup_amount_kopeks))
                     if settings.is_multi_tariff_enabled() and hasattr(subscription, 'tariff') and subscription.tariff:
                         msg += (
                             get_texts(getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE)
-                            .t('PAYMENT_NOTICE_010', '\n📦 Тариф: «{v0}»')
+                            .t(
+                                'PAYMENT_NOTICE_010',
+                                '\n<tg-emoji emoji-id="5924720918826848520">📦</tg-emoji> Тариф: «{v0}»',
+                            )
                             .format(v0=subscription.tariff.name)
                         )
                     await bot.send_message(
@@ -448,12 +459,12 @@ async def _process_single_subscription(
             keyboard = _build_extend_keyboard(texts, subscription.id)
             msg = texts.t(
                 'RECURRENT_TOPUP_FAILED',
-                '❌ <b>Автоплатёж не удался</b>\n\nНе удалось списать {amount} ни с одной сохранённой карты для продления подписки.\n\nПополните баланс вручную, чтобы подписка не прервалась.',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> <b>Автоплатёж не удался</b>\n\nНе удалось списать {amount} ни с одной сохранённой карты для продления подписки.\n\nПополните баланс вручную, чтобы подписка не прервалась.',
             ).format(amount=settings.format_price(topup_amount_kopeks))
             if settings.is_multi_tariff_enabled() and hasattr(subscription, 'tariff') and subscription.tariff:
                 msg += (
                     get_texts(getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE)
-                    .t('PAYMENT_NOTICE_010', '\n📦 Тариф: «{v0}»')
+                    .t('PAYMENT_NOTICE_010', '\n<tg-emoji emoji-id="5924720918826848520">📦</tg-emoji> Тариф: «{v0}»')
                     .format(v0=subscription.tariff.name)
                 )
             await bot.send_message(

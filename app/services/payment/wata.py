@@ -584,7 +584,7 @@ class WataPaymentMixin:
                         get_texts(getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE)
                         .t(
                             'PAYMENT_NOTICE_006',
-                            '✅ <b>Пополнение успешно!</b>\n\n💰 Сумма: {v0}\n🦊 Способ: WATA\n🆔 Транзакция: {v1}\n\nБаланс пополнен автоматически!',
+                            '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> <b>Пополнение успешно!</b>\n\n<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> Сумма: {v0}\nСпособ: WATA\nТранзакция: {v1}\n\nБаланс пополнен автоматически!',
                         )
                         .format(v0=settings.format_price(payment.amount_kopeks), v1=transaction.id)
                     ),

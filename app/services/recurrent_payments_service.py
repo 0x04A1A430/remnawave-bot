@@ -83,7 +83,7 @@ class RecurrentPaymentsService:
     ) -> RecurrentPayments:
         lang = cls._normalize_language(language)
         document = await upsert_recurrent_payments(db, lang, content, enable_if_new=True)
-        logger.info('✅ Документ о рекуррентных платежах обновлён для языка', lang=lang)
+        logger.info('Документ о рекуррентных платежах обновлён для языка', lang=lang)
         return document
 
     @classmethod
