@@ -1711,16 +1711,7 @@ async def return_to_saved_cart(callback: types.CallbackQuery, state: FSMContext,
             )
         return
 
-    countries = await _get_available_countries(db_user.promo_group_id, language=db_user.language)
-    selected_countries_names = []
-
     period_display = format_period_description(prepared_cart_data['period_days'], db_user.language)
-
-    # Проверяем наличие ключа 'countries' в данных корзины
-    cart_countries = prepared_cart_data.get('countries', [])
-    for country in countries:
-        if country['uuid'] in cart_countries:
-            selected_countries_names.append(country['name'])
 
     if settings.is_traffic_fixed():
         traffic_value = prepared_cart_data.get('traffic_gb')
@@ -1752,9 +1743,6 @@ async def return_to_saved_cart(callback: types.CallbackQuery, state: FSMContext,
         texts.t(
             'SUBSCRIPTION_UI_TRAFFIC_VALUE', '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> Трафик: {traffic}'
         ).format(traffic=traffic_display),
-        texts.t('SUBSCRIPTION_UI_COUNTRIES_VALUE', 'Страны: {countries}').format(
-            countries=', '.join(selected_countries_names)
-        ),
     ]
 
     if settings.is_devices_selection_enabled():
@@ -3375,7 +3363,6 @@ async def handle_subscription_settings(callback: types.CallbackQuery, db_user: U
         (
             '<tg-emoji emoji-id="5877260593903177342">⚙️</tg-emoji> <b>Настройки подписки</b>\n\n'
             '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> <b>Текущие параметры:</b>\n'
-            '<tg-emoji emoji-id="5879585266426973039">🌐</tg-emoji> Стран: {countries_count}\n'
             '<tg-emoji emoji-id="5776219138917668486">📈</tg-emoji> Трафик: {traffic_used} / {traffic_limit}\n'
             '<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> Устройства: {devices_used} / {devices_limit}'
         ),

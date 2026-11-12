@@ -13,7 +13,7 @@ from app.utils.subscription_utils import get_display_subscription_link
 from app.utils.timezone import format_local_datetime
 
 from .common import compact_blank_lines, logger
-from .countries import _get_available_countries, _get_countries_info
+from .countries import _get_countries_info
 from .devices import get_current_devices_count
 from .promo import _build_promo_group_discount_text, _get_promo_offer_hint
 
@@ -152,13 +152,6 @@ async def _prepare_subscription_summary(
             amount=summary_data.get('traffic_gb', 0)
         )
 
-    # Resolve country display names (still needed for the summary text)
-    countries = await _get_available_countries(db_user.promo_group_id, language=db_user.language)
-    selected_country_ids = set(connected_squads)
-    selected_countries_names: list[str] = [
-        html.escape(country['name']) for country in countries if country['uuid'] in selected_country_ids
-    ]
-
     details_lines = []
 
     # Добавляем строку базового периода только если цена не равна 0
@@ -239,9 +232,6 @@ async def _prepare_subscription_summary(
             'SUBSCRIPTION_UI_SUMMARY_TRAFFIC_VALUE',
             '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> <b>Трафик:</b> {traffic}',
         ).format(traffic=traffic_display),
-        texts.t('SUBSCRIPTION_UI_SUMMARY_COUNTRIES', '<b>Страны:</b> {countries}').format(
-            countries=', '.join(selected_countries_names)
-        ),
     ]
 
     if devices_selection_enabled:
