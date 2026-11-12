@@ -179,7 +179,7 @@ async def get_spin_history(
     items = []
     for spin in spins:
         # Получаем emoji и color из приза, если он есть
-        emoji = '🎁'
+        emoji = ''
         color = '#3B82F6'
         if spin.prize:
             emoji = spin.prize.emoji
@@ -294,7 +294,7 @@ async def create_stars_invoice(
             texts = get_texts(getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE)
             invoice_url = await bot.create_invoice_link(
                 title=texts.t('STARS_WHEEL_TITLE', 'Колесо удачи'),
-                description=texts.t('STARS_WHEEL_DESCRIPTION', 'Спин колеса удачи ({stars} ⭐)').format(
+                description=texts.t('STARS_WHEEL_DESCRIPTION', 'Спин колеса удачи ({stars})').format(
                     stars=stars_amount
                 ),
                 payload=payload,

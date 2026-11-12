@@ -184,10 +184,8 @@ async def get_payment_methods(
                 # Add descriptions based on method and option
                 if method_id in ('yookassa', 'pal24', 'cloudpayments', 'freekassa'):
                     if opt_id == 'card':
-                        opt_name = f'💳 {opt_name}'
                         description = 'Банковская карта'
                     elif opt_id == 'sbp':
-                        opt_name = f'🏦 {opt_name}'
                         description = 'Система быстрых платежей'
                 elif method_id == 'platega':
                     # Platega options already have descriptions from config
@@ -282,7 +280,7 @@ async def create_stars_invoice(
             invoice_url = await bot.create_invoice_link(
                 title=texts.t('STARS_INVOICE_TITLE', 'Пополнение баланса VPN'),
                 description=texts.t(
-                    'STARS_BALANCE_DESCRIPTION', 'Пополнение баланса на {amount:.2f} ₽ ({stars} ⭐)'
+                    'STARS_BALANCE_DESCRIPTION', 'Пополнение баланса на {amount:.2f} ₽ ({stars})'
                 ).format(amount=normalized_kopeks / 100, stars=stars_amount),
                 payload=payload,
                 provider_token='',
@@ -1260,232 +1258,232 @@ def _get_status_info(record: PendingPayment) -> tuple[str, str]:
     if (record.method == PaymentMethod.ANORE and bool(getattr(record.payment, 'is_test', False))) or (
         record.method == PaymentMethod.CISPAY and bool(getattr(record.payment, 'is_sandbox', False))
     ):
-        return '🧪', 'Тестовый платёж — баланс не пополнен'
+        return 'TEST', 'Тестовый платёж — баланс не пополнен'
 
     if record.is_paid:
-        return '✅', 'Оплачено'
+        return '✓', 'Оплачено'
 
     if record.method == PaymentMethod.PAL24:
         mapping = {
-            'new': ('⏳', 'Ожидает оплаты'),
-            'process': ('⌛', 'Обрабатывается'),
-            'success': ('✅', 'Оплачено'),
-            'fail': ('❌', 'Ошибка'),
-            'canceled': ('❌', 'Отменено'),
+            'new': ('○', 'Ожидает оплаты'),
+            'process': ('•', 'Обрабатывается'),
+            'success': ('✓', 'Оплачено'),
+            'fail': ('✗', 'Ошибка'),
+            'canceled': ('✗', 'Отменено'),
         }
-        return mapping.get(status, ('❓', 'Неизвестно'))
+        return mapping.get(status, ('?', 'Неизвестно'))
 
     if record.method == PaymentMethod.MULENPAY:
         mapping = {
-            'created': ('⏳', 'Ожидает оплаты'),
-            'processing': ('⌛', 'Обрабатывается'),
-            'hold': ('🔒', 'На удержании'),
-            'success': ('✅', 'Оплачено'),
-            'canceled': ('❌', 'Отменено'),
-            'error': ('❌', 'Ошибка'),
+            'created': ('○', 'Ожидает оплаты'),
+            'processing': ('•', 'Обрабатывается'),
+            'hold': ('•', 'На удержании'),
+            'success': ('✓', 'Оплачено'),
+            'canceled': ('✗', 'Отменено'),
+            'error': ('✗', 'Ошибка'),
         }
-        return mapping.get(status, ('❓', 'Неизвестно'))
+        return mapping.get(status, ('?', 'Неизвестно'))
 
     if record.method == PaymentMethod.WATA:
         mapping = {
-            'opened': ('⏳', 'Ожидает оплаты'),
-            'pending': ('⏳', 'Ожидает оплаты'),
-            'processing': ('⌛', 'Обрабатывается'),
-            'paid': ('✅', 'Оплачено'),
-            'closed': ('✅', 'Оплачено'),
-            'declined': ('❌', 'Отклонено'),
-            'canceled': ('❌', 'Отменено'),
-            'expired': ('⌛', 'Истёк'),
+            'opened': ('○', 'Ожидает оплаты'),
+            'pending': ('○', 'Ожидает оплаты'),
+            'processing': ('•', 'Обрабатывается'),
+            'paid': ('✓', 'Оплачено'),
+            'closed': ('✓', 'Оплачено'),
+            'declined': ('✗', 'Отклонено'),
+            'canceled': ('✗', 'Отменено'),
+            'expired': ('•', 'Истёк'),
         }
-        return mapping.get(status, ('❓', 'Неизвестно'))
+        return mapping.get(status, ('?', 'Неизвестно'))
 
     if record.method == PaymentMethod.PLATEGA:
         mapping = {
-            'pending': ('⏳', 'Ожидает оплаты'),
-            'inprogress': ('⌛', 'Обрабатывается'),
-            'confirmed': ('✅', 'Оплачено'),
-            'failed': ('❌', 'Ошибка'),
-            'canceled': ('❌', 'Отменено'),
-            'expired': ('⌛', 'Истёк'),
+            'pending': ('○', 'Ожидает оплаты'),
+            'inprogress': ('•', 'Обрабатывается'),
+            'confirmed': ('✓', 'Оплачено'),
+            'failed': ('✗', 'Ошибка'),
+            'canceled': ('✗', 'Отменено'),
+            'expired': ('•', 'Истёк'),
         }
-        return mapping.get(status, ('❓', 'Неизвестно'))
+        return mapping.get(status, ('?', 'Неизвестно'))
 
     if record.method == PaymentMethod.HELEKET:
         if status in {'pending', 'created', 'waiting', 'check', 'processing'}:
             return '⏳', 'Ожидает оплаты'
         if status in {'paid', 'paid_over'}:
-            return '✅', 'Оплачено'
+            return '✓', 'Оплачено'
         if status in {'cancel', 'canceled', 'fail', 'failed', 'expired'}:
-            return '❌', 'Отменено'
-        return '❓', 'Неизвестно'
+            return '✗', 'Отменено'
+        return '?', 'Неизвестно'
 
     if record.method == PaymentMethod.YOOKASSA:
         mapping = {
-            'pending': ('⏳', 'Ожидает оплаты'),
-            'waiting_for_capture': ('⌛', 'Обрабатывается'),
-            'succeeded': ('✅', 'Оплачено'),
-            'canceled': ('❌', 'Отменено'),
+            'pending': ('○', 'Ожидает оплаты'),
+            'waiting_for_capture': ('•', 'Обрабатывается'),
+            'succeeded': ('✓', 'Оплачено'),
+            'canceled': ('✗', 'Отменено'),
         }
-        return mapping.get(status, ('❓', 'Неизвестно'))
+        return mapping.get(status, ('?', 'Неизвестно'))
 
     if record.method == PaymentMethod.CRYPTOBOT:
         mapping = {
-            'active': ('⏳', 'Ожидает оплаты'),
-            'paid': ('✅', 'Оплачено'),
-            'expired': ('⌛', 'Истёк'),
+            'active': ('○', 'Ожидает оплаты'),
+            'paid': ('✓', 'Оплачено'),
+            'expired': ('•', 'Истёк'),
         }
-        return mapping.get(status, ('❓', 'Неизвестно'))
+        return mapping.get(status, ('?', 'Неизвестно'))
 
     if record.method == PaymentMethod.CLOUDPAYMENTS:
         mapping = {
-            'pending': ('⏳', 'Ожидает оплаты'),
-            'authorized': ('⌛', 'Авторизовано'),
-            'completed': ('✅', 'Оплачено'),
-            'failed': ('❌', 'Ошибка'),
+            'pending': ('○', 'Ожидает оплаты'),
+            'authorized': ('•', 'Авторизовано'),
+            'completed': ('✓', 'Оплачено'),
+            'failed': ('✗', 'Ошибка'),
         }
-        return mapping.get(status, ('❓', 'Неизвестно'))
+        return mapping.get(status, ('?', 'Неизвестно'))
 
     if record.method == PaymentMethod.FREEKASSA:
         mapping = {
-            'pending': ('⏳', 'Ожидает оплаты'),
-            'success': ('✅', 'Оплачено'),
-            'paid': ('✅', 'Оплачено'),
-            'canceled': ('❌', 'Отменено'),
-            'error': ('❌', 'Ошибка'),
+            'pending': ('○', 'Ожидает оплаты'),
+            'success': ('✓', 'Оплачено'),
+            'paid': ('✓', 'Оплачено'),
+            'canceled': ('✗', 'Отменено'),
+            'error': ('✗', 'Ошибка'),
         }
-        return mapping.get(status, ('❓', 'Неизвестно'))
+        return mapping.get(status, ('?', 'Неизвестно'))
 
     if record.method == PaymentMethod.KASSA_AI:
         mapping = {
-            'pending': ('⏳', 'Ожидает оплаты'),
-            'success': ('✅', 'Оплачено'),
-            'paid': ('✅', 'Оплачено'),
-            'canceled': ('❌', 'Отменено'),
-            'failed': ('❌', 'Ошибка'),
-            'expired': ('⌛', 'Истёк'),
+            'pending': ('○', 'Ожидает оплаты'),
+            'success': ('✓', 'Оплачено'),
+            'paid': ('✓', 'Оплачено'),
+            'canceled': ('✗', 'Отменено'),
+            'failed': ('✗', 'Ошибка'),
+            'expired': ('•', 'Истёк'),
         }
-        return mapping.get(status, ('❓', 'Неизвестно'))
+        return mapping.get(status, ('?', 'Неизвестно'))
 
     if record.method == PaymentMethod.RIOPAY:
         mapping = {
-            'pending': ('⏳', 'Ожидает оплаты'),
-            'success': ('✅', 'Оплачено'),
-            'failed': ('❌', 'Ошибка'),
-            'canceled': ('❌', 'Отменено'),
-            'expired': ('⌛', 'Истёк'),
+            'pending': ('○', 'Ожидает оплаты'),
+            'success': ('✓', 'Оплачено'),
+            'failed': ('✗', 'Ошибка'),
+            'canceled': ('✗', 'Отменено'),
+            'expired': ('•', 'Истёк'),
             'amount_mismatch': ('⚠️', 'Несовпадение суммы'),
         }
-        return mapping.get(status, ('❓', 'Неизвестно'))
+        return mapping.get(status, ('?', 'Неизвестно'))
 
     if record.method == PaymentMethod.JUPITER:
         mapping = {
-            'pending': ('⏳', 'Ожидает оплаты'),
-            'processing': ('⌛', 'Обрабатывается'),
-            'success': ('✅', 'Оплачено'),
-            'cancelled': ('❌', 'Отменено'),
-            'declined': ('❌', 'Отклонено'),
-            'error': ('❌', 'Ошибка'),
+            'pending': ('○', 'Ожидает оплаты'),
+            'processing': ('•', 'Обрабатывается'),
+            'success': ('✓', 'Оплачено'),
+            'cancelled': ('✗', 'Отменено'),
+            'declined': ('✗', 'Отклонено'),
+            'error': ('✗', 'Ошибка'),
             'amount_mismatch': ('⚠️', 'Несовпадение суммы'),
         }
-        return mapping.get(status, ('❓', 'Неизвестно'))
+        return mapping.get(status, ('?', 'Неизвестно'))
 
     if record.method == PaymentMethod.DONUT:
         mapping = {
-            'pending': ('⏳', 'Ожидает оплаты'),
-            'created': ('⏳', 'Создано'),
-            'processing': ('⌛', 'Обрабатывается'),
-            'success': ('✅', 'Оплачено'),
-            'cancelled': ('❌', 'Отменено'),
-            'error': ('❌', 'Ошибка'),
+            'pending': ('○', 'Ожидает оплаты'),
+            'created': ('○', 'Создано'),
+            'processing': ('•', 'Обрабатывается'),
+            'success': ('✓', 'Оплачено'),
+            'cancelled': ('✗', 'Отменено'),
+            'error': ('✗', 'Ошибка'),
             'amount_mismatch': ('⚠️', 'Несовпадение суммы'),
         }
-        return mapping.get(status, ('❓', 'Неизвестно'))
+        return mapping.get(status, ('?', 'Неизвестно'))
 
     if record.method == PaymentMethod.LAVA:
         mapping = {
-            'pending': ('⏳', 'Ожидает оплаты'),
-            'created': ('⏳', 'Создано'),
-            'processing': ('⌛', 'Обрабатывается'),
-            'success': ('✅', 'Оплачено'),
-            'cancel': ('❌', 'Отменено'),
-            'cancelled': ('❌', 'Отменено'),
-            'expired': ('⌛', 'Истёк'),
-            'failed': ('❌', 'Ошибка'),
-            'error': ('❌', 'Ошибка'),
+            'pending': ('○', 'Ожидает оплаты'),
+            'created': ('○', 'Создано'),
+            'processing': ('•', 'Обрабатывается'),
+            'success': ('✓', 'Оплачено'),
+            'cancel': ('✗', 'Отменено'),
+            'cancelled': ('✗', 'Отменено'),
+            'expired': ('•', 'Истёк'),
+            'failed': ('✗', 'Ошибка'),
+            'error': ('✗', 'Ошибка'),
             'amount_mismatch': ('⚠️', 'Несовпадение суммы'),
         }
-        return mapping.get(status, ('❓', 'Неизвестно'))
+        return mapping.get(status, ('?', 'Неизвестно'))
 
     if record.method == PaymentMethod.CASHERA:
         mapping = {
-            'pending': ('⏳', 'Ожидает оплаты'),
-            'success': ('✅', 'Оплачено'),
-            'failed': ('❌', 'Оплата не прошла'),
-            'expired': ('⌛', 'Истёк'),
-            'refunded': ('↩️', 'Возвращён'),
-            'chargeback': ('↩️', 'Чарджбэк'),
-            'error': ('❌', 'Ошибка'),
+            'pending': ('○', 'Ожидает оплаты'),
+            'success': ('✓', 'Оплачено'),
+            'failed': ('✗', 'Оплата не прошла'),
+            'expired': ('•', 'Истёк'),
+            'refunded': ('↩', 'Возвращён'),
+            'chargeback': ('↩', 'Чарджбэк'),
+            'error': ('✗', 'Ошибка'),
             'amount_mismatch': ('⚠️', 'Несовпадение суммы'),
         }
-        return mapping.get(status, ('❓', 'Неизвестно'))
+        return mapping.get(status, ('?', 'Неизвестно'))
 
     if record.method == PaymentMethod.CISPAY:
         mapping = {
-            'pending': ('⏳', 'Ожидает оплаты'),
-            'success': ('✅', 'Оплачено'),
-            'declined': ('❌', 'Отклонено'),
-            'expired': ('⌛', 'Истёк'),
-            'refunded': ('↩️', 'Возвращён'),
-            'error': ('❌', 'Ошибка'),
+            'pending': ('○', 'Ожидает оплаты'),
+            'success': ('✓', 'Оплачено'),
+            'declined': ('✗', 'Отклонено'),
+            'expired': ('•', 'Истёк'),
+            'refunded': ('↩', 'Возвращён'),
+            'error': ('✗', 'Ошибка'),
             'amount_mismatch': ('⚠️', 'Несовпадение суммы'),
         }
-        return mapping.get(status, ('❓', 'Неизвестно'))
+        return mapping.get(status, ('?', 'Неизвестно'))
 
     if record.method == PaymentMethod.PARITYPAY:
         mapping = {
-            'pending': ('⏳', 'Ожидает оплаты'),
-            'success': ('✅', 'Оплачено'),
-            'declined': ('❌', 'Ошибка оплаты'),
-            'expired': ('⌛', 'Истёк'),
-            'refunded': ('↩️', 'Возвращён'),
-            'error': ('❌', 'Ошибка'),
+            'pending': ('○', 'Ожидает оплаты'),
+            'success': ('✓', 'Оплачено'),
+            'declined': ('✗', 'Ошибка оплаты'),
+            'expired': ('•', 'Истёк'),
+            'refunded': ('↩', 'Возвращён'),
+            'error': ('✗', 'Ошибка'),
             'amount_mismatch': ('⚠️', 'Несовпадение суммы'),
         }
-        return mapping.get(status, ('❓', 'Неизвестно'))
+        return mapping.get(status, ('?', 'Неизвестно'))
 
     if record.method == PaymentMethod.ANTILOPAY:
         mapping = {
-            'pending': ('⏳', 'Ожидает оплаты'),
-            'success': ('✅', 'Оплачено'),
-            'failed': ('❌', 'Ошибка оплаты'),
-            'cancelled': ('❌', 'Отменено'),
-            'expired': ('⌛', 'Истёк'),
-            'chargeback': ('↩️', 'Возвращён'),
-            'reversed': ('↩️', 'Возвращён'),
+            'pending': ('○', 'Ожидает оплаты'),
+            'success': ('✓', 'Оплачено'),
+            'failed': ('✗', 'Ошибка оплаты'),
+            'cancelled': ('✗', 'Отменено'),
+            'expired': ('•', 'Истёк'),
+            'chargeback': ('↩', 'Возвращён'),
+            'reversed': ('↩', 'Возвращён'),
             'amount_mismatch': ('⚠️', 'Несовпадение суммы'),
         }
-        return mapping.get(status, ('❓', 'Неизвестно'))
+        return mapping.get(status, ('?', 'Неизвестно'))
 
     if record.method == PaymentMethod.ANORE:
-        return {'new': ('⏳', 'Ожидает оплаты'), 'paid': ('✅', 'Оплачено'), 'expired': ('⌛', 'Истёк')}.get(
-            status, ('⏳', 'Ожидает проверки')
+        return {'new': ('○', 'Ожидает оплаты'), 'paid': ('✓', 'Оплачено'), 'expired': ('•', 'Истёк')}.get(
+            status, ('○', 'Ожидает проверки')
         )
 
     if record.method == PaymentMethod.TABPAY:
         mapping = {
-            'pending': ('⏳', 'Ожидает оплаты'),
-            'processing': ('⌛', 'Оплачивается'),
-            'success': ('✅', 'Оплачено'),
-            'declined': ('❌', 'Отклонено'),
-            'expired': ('⌛', 'Истёк'),
-            'refunded': ('↩️', 'Возвращён'),
-            'canceled': ('❌', 'Отменён'),
-            'error': ('❌', 'Ошибка'),
+            'pending': ('○', 'Ожидает оплаты'),
+            'processing': ('•', 'Оплачивается'),
+            'success': ('✓', 'Оплачено'),
+            'declined': ('✗', 'Отклонено'),
+            'expired': ('•', 'Истёк'),
+            'refunded': ('↩', 'Возвращён'),
+            'canceled': ('✗', 'Отменён'),
+            'error': ('✗', 'Ошибка'),
             'amount_mismatch': ('⚠️', 'Несовпадение суммы'),
         }
-        return mapping.get(status, ('❓', 'Неизвестно'))
+        return mapping.get(status, ('?', 'Неизвестно'))
 
-    return '❓', 'Неизвестно'
+    return '?', 'Неизвестно'
 
 
 def _is_checkable(record: PendingPayment) -> bool:
@@ -1567,7 +1565,9 @@ def _record_to_response(record: PendingPayment) -> PendingPaymentResponse:
     sandbox = (record.method == PaymentMethod.ANORE and bool(getattr(record.payment, 'is_test', False))) or (
         record.method == PaymentMethod.CISPAY and bool(getattr(record.payment, 'is_sandbox', False))
     )
-    status_emoji, status_text = ('🧪', 'Тестовый платёж — баланс не пополнен') if sandbox else _get_status_info(record)
+    status_emoji, status_text = (
+        ('TEST', 'Тестовый платёж — баланс не пополнен') if sandbox else _get_status_info(record)
+    )
     return PendingPaymentResponse(
         id=record.local_id,
         method=record.method.value,

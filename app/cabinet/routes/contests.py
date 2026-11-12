@@ -129,7 +129,7 @@ async def _award_prize(db: AsyncSession, user_id: int, prize_type: str, prize_va
         await db.commit()
         await db.refresh(subscription)
 
-        logger.info('🎁 Extended subscription for user by days (contest prize)', user_id=user_id, days=days)
+        logger.info('Extended subscription for user by days (contest prize)', user_id=user_id, days=days)
         return f'Subscription extended by {days} days'
 
     if prize_type == 'balance':
@@ -151,7 +151,7 @@ async def _award_prize(db: AsyncSession, user_id: int, prize_type: str, prize_va
         await db.commit()
         await db.refresh(user)
 
-        logger.info('🎁 Added to balance for user (contest prize)', amount=amount, user_id=user_id)
+        logger.info('Added to balance for user (contest prize)', amount=amount, user_id=user_id)
         return f'Balance increased by {amount}'
 
     logger.warning('Unknown prize type', prize_type=prize_type)
@@ -327,7 +327,7 @@ async def get_contest_game(
         instructions = 'Decrypt the cipher and enter the answer!'
 
     elif game_type == GAME_EMOJI:
-        question = round_obj.payload.get('question', '🤔')
+        question = round_obj.payload.get('question', '')
         emoji_list = question.split()
         random.shuffle(emoji_list)
         game_data = {
@@ -433,7 +433,7 @@ async def submit_contest_answer(
         prize_text = await _award_prize(db, user.id, tpl.prize_type, tpl.prize_value)
         return ContestResult(
             is_winner=True,
-            message=f'🎉 Congratulations! You won! {prize_text}',
+            message=f'Congratulations! You won! {prize_text}',
             prize_type=tpl.prize_type,
             prize_value=tpl.prize_value,
         )
