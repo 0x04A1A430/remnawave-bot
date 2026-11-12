@@ -58,7 +58,6 @@ from app.services.trial_activation_service import (
 )
 from app.services.user_cart_service import user_cart_service
 from app.utils.decorators import error_handler
-from app.utils.device_display import format_device_label
 from app.utils.legacy_subscription import is_legacy_subscription as _legacy_subscription
 
 
@@ -381,24 +380,14 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
 
                 # Формируем блок информации о тарифе
                 is_daily = getattr(tariff, 'is_daily', False)
-                tariff_type_str = (
-                    texts.t(
-                        'SUBSCRIPTION_UI_DAILY_TYPE', '<tg-emoji emoji-id="5839200986022812209">🔄</tg-emoji> Суточный'
-                    )
-                    if is_daily
-                    else texts.t(
-                        'SUBSCRIPTION_UI_PERIOD_TYPE',
-                        '<tg-emoji emoji-id="5967412305338568701">📅</tg-emoji> Периодный',
-                    )
-                )
 
+                # Реальные параметры подписки, а не прайс-лист тарифа: тип не нужен,
+                # трафик — фактический лимит подписки.
+                real_traffic = subscription.traffic_limit_gb or 0
                 tariff_info_lines = [
                     f'<b>{html.escape(tariff.name)}</b>',
-                    texts.t('SUBSCRIPTION_UI_TYPE_VALUE', 'Тип: {type}').format(type=tariff_type_str),
-                    texts.t('SUBSCRIPTION_UI_TRAFFIC_GB_PLAIN', 'Трафик: {traffic} ГБ').format(
-                        traffic=tariff.traffic_limit_gb
-                    )
-                    if tariff.traffic_limit_gb > 0
+                    texts.t('SUBSCRIPTION_UI_TRAFFIC_GB_PLAIN', 'Трафик: {traffic} ГБ').format(traffic=real_traffic)
+                    if real_traffic > 0
                     else texts.t('SUBSCRIPTION_UI_UNLIMITED_TRAFFIC_PLAIN', 'Трафик: ∞ Безлимит'),
                     texts.t('SUBSCRIPTION_UI_DEVICES_PLAIN', 'Устройства: {devices}').format(
                         devices=Texts.format_device_limit(subscription.device_limit)
@@ -535,23 +524,6 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
         devices_used=devices_used_str,
         device_limit=device_limit_display,
     )
-
-    if show_devices and devices_list:
-        message += '\n' + texts.t(
-            'SUBSCRIPTION_CONNECTED_DEVICES_TITLE',
-            '<blockquote><tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> <b>Подключенные устройства:</b>\n',
-        )
-        for device in devices_list[:5]:
-            platform = device.get('platform', 'Unknown')
-            device_info = format_device_label(
-                platform,
-                device.get('deviceModel') or device.get('model') or '',
-                os_version=device.get('osVersion') or device.get('os_version') or '',
-                app_version=device.get('appVersion') or device.get('app_version') or '',
-            )
-
-            message += f'• {html.escape(device_info)}\n'
-        message += texts.t('SUBSCRIPTION_CONNECTED_DEVICES_FOOTER', '</blockquote>')
 
     # Отображаем докупленный трафик
     if subscription.traffic_limit_gb > 0:  # Только для лимитированных тарифов
