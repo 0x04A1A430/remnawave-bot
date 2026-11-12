@@ -20,8 +20,6 @@ from app.database.models import (
     Subscription,
     SubscriptionConversion,
     SubscriptionStatus,
-    Ticket,
-    TicketStatus,
     Transaction,
     TransactionType,
     User,
@@ -81,11 +79,14 @@ class ReportingService:
 
         send_time = settings.get_reports_send_time()
         if not send_time:
-            logger.warning('Сервис отчетов не запущен: не указано время ежедневной отправки')
+            logger.warning('Сервис отчетов не запущен: не указано время еженедельной отправки')
             return
 
-        self._task = asyncio.create_task(self._auto_daily_loop(send_time))
-        logger.info('Сервис отчетов запущен: ежедневная отправка в по МСК', send_time=send_time.strftime('%H:%M'))
+        self._task = asyncio.create_task(self._auto_weekly_loop(send_time))
+        logger.info(
+            'Сервис отчетов запущен: еженедельная отправка по понедельникам по МСК',
+            send_time=send_time.strftime('%H:%M'),
+        )
 
     async def stop(self) -> None:
         if self._task and not self._task.done():
@@ -112,9 +113,9 @@ class ReportingService:
 
         return report_text
 
-    async def _auto_daily_loop(self, send_time: datetime_time) -> None:
+    async def _auto_weekly_loop(self, send_time: datetime_time) -> None:
         try:
-            next_run_utc, report_date = self._calculate_next_run(send_time)
+            next_run_utc, report_date = self._calculate_next_weekly_run(send_time)
 
             while True:
                 now_utc = datetime.now(UTC)
@@ -125,7 +126,7 @@ class ReportingService:
 
                 try:
                     await self.send_report(
-                        ReportPeriod.DAILY,
+                        ReportPeriod.WEEKLY,
                         report_date=report_date,
                         send_to_topic=True,
                     )
@@ -135,13 +136,33 @@ class ReportingService:
                 except Exception as exc:
                     logger.error('Ошибка автоматической отправки отчета', exc=exc)
 
-                next_run_utc, report_date = self._calculate_next_run(send_time)
+                next_run_utc, report_date = self._calculate_next_weekly_run(send_time)
 
         except asyncio.CancelledError:
             logger.info('Сервис отчетов остановлен')
             raise
         except Exception as exc:
             logger.error('Критическая ошибка в сервисе отчетов', exc=exc)
+
+    def _calculate_next_weekly_run(
+        self,
+        send_time: datetime_time,
+    ) -> tuple[datetime, date]:
+        """Ближайший понедельник в заданное время МСК.
+
+        Еженедельный отчёт покрывает предыдущие 7 дней и уходит раз в неделю,
+        а не каждый день.
+        """
+        now_msk = datetime.now(self._moscow_tz)
+        days_ahead = (0 - now_msk.weekday()) % 7  # 0 = Monday
+        candidate = datetime.combine(
+            now_msk.date() + timedelta(days=days_ahead),
+            send_time,
+            tzinfo=self._moscow_tz,
+        )
+        if candidate <= now_msk:
+            candidate += timedelta(days=7)
+        return candidate.astimezone(UTC), candidate.date()
 
     def _calculate_next_run(
         self,
@@ -326,14 +347,6 @@ class ReportingService:
             '',
         ]
 
-        # Поддержка
-        lines += [
-            texts.t('ADMIN_REPORT_UI_019', '<b>Поддержка</b>'),
-            texts.t('ADMIN_REPORT_UI_020', '• Новых тикетов: {value1}').format(value1=stats['new_tickets']),
-            texts.t('ADMIN_REPORT_UI_021', '• Активных тикетов сейчас: {value1}').format(value1=totals['open_tickets']),
-            '',
-        ]
-
         # Активность пользователей
         lines += [
             texts.t('ADMIN_REPORT_UI_022', '<b>Активность пользователей</b>'),
@@ -390,22 +403,9 @@ class ReportingService:
 
     async def _collect_current_totals(self, session) -> dict:
         stats = await get_subscriptions_statistics(session)
-        open_tickets_result = await session.execute(
-            select(func.count(Ticket.id)).where(
-                Ticket.status.in_(
-                    [
-                        TicketStatus.OPEN.value,
-                        TicketStatus.ANSWERED.value,
-                        TicketStatus.PENDING.value,
-                    ]
-                )
-            )
-        )
-        open_tickets = int(open_tickets_result.scalar() or 0)
         return {
             'active_trials': stats.get('trial_subscriptions', 0) or 0,
             'active_paid': stats.get('paid_subscriptions', 0) or 0,
-            'open_tickets': open_tickets,
         }
 
     async def _collect_period_stats(
@@ -478,18 +478,6 @@ class ReportingService:
             await session.execute(self._deposit_query_excluding_referrals(start_utc, end_utc))
         ).one()
 
-        new_tickets = int(
-            (
-                await session.execute(
-                    select(func.count(Ticket.id)).where(
-                        Ticket.created_at >= start_utc,
-                        Ticket.created_at < end_utc,
-                    )
-                )
-            ).scalar()
-            or 0
-        )
-
         return {
             'new_users': new_users,
             'new_trials': new_trials,
@@ -499,7 +487,6 @@ class ReportingService:
             'subscription_payments_amount': int(subscription_payments_amount or 0),
             'deposits_count': int(deposits_count or 0),
             'deposits_amount': int(deposits_amount or 0),
-            'new_tickets': new_tickets,
         }
 
     def _txn_query_base(self, txn_type: str, start_utc: datetime, end_utc: datetime):
