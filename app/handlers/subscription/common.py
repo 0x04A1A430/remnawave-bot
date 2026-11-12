@@ -49,7 +49,7 @@ async def resolve_subscription_from_context(
     3. Single active subscription (auto-select)
     4. Legacy: db_user.subscription (single-tariff mode)
 
-    ⚠️ FOOTGUN (issue #3012): priority #1 trusts the LAST colon-segment as a
+    FOOTGUN (issue #3012): priority #1 trusts the LAST colon-segment as a
     subscription_id. A handler reached by a callback shaped ``prefix:<int>`` where
     that trailing int is NOT a subscription_id (a period, GB amount, device count,
     days, tariff_id, page…) will resolve the WRONG subscription whenever that number
@@ -185,7 +185,7 @@ def update_traffic_prices():
     from app.config import refresh_traffic_prices
 
     refresh_traffic_prices()
-    logger.info('🔄 TRAFFIC_PRICES обновлены из конфигурации')
+    logger.info('TRAFFIC_PRICES обновлены из конфигурации')
 
 
 def format_traffic_display(traffic_gb: int, is_fixed_mode: bool = None, language: str | None = None) -> str:
@@ -317,13 +317,13 @@ def get_device_name(device_type: str, language: str = 'ru') -> str:
 # ── Remnawave async config loader ──
 
 _PLATFORM_DISPLAY = {
-    'ios': {'name': 'iPhone/iPad', 'emoji': '📱'},
-    'android': {'name': 'Android', 'emoji': '🤖'},
-    'windows': {'name': 'Windows', 'emoji': '💻'},
-    'macos': {'name': 'macOS', 'emoji': '🎯'},
-    'linux': {'name': 'Linux', 'emoji': '🐧'},
-    'androidTV': {'name': 'Android TV', 'emoji': '📺'},
-    'appleTV': {'name': 'Apple TV', 'emoji': '📺'},
+    'ios': {'name': 'iPhone/iPad', 'emoji': '<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji>'},
+    'android': {'name': 'Android', 'emoji': '<tg-emoji emoji-id="5931415565955503486">🤖</tg-emoji>'},
+    'windows': {'name': 'Windows', 'emoji': '<tg-emoji emoji-id="5877318502947229960">💻</tg-emoji>'},
+    'macos': {'name': 'macOS', 'emoji': ''},
+    'linux': {'name': 'Linux', 'emoji': ''},
+    'androidTV': {'name': 'Android TV', 'emoji': '<tg-emoji emoji-id="5836749569014109509">📺</tg-emoji>'},
+    'appleTV': {'name': 'Apple TV', 'emoji': '<tg-emoji emoji-id="5836749569014109509">📺</tg-emoji>'},
 }
 
 # Map callback device_type keys to Remnawave platform keys
@@ -488,7 +488,9 @@ def get_platforms_list(config: dict[str, Any]) -> list[dict[str, Any]]:
         if not isinstance(pd, dict) or not pd.get('apps'):
             continue
 
-        display = _PLATFORM_DISPLAY.get(pk, {'name': pk, 'emoji': '📱'})
+        display = _PLATFORM_DISPLAY.get(
+            pk, {'name': pk, 'emoji': '<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji>'}
+        )
 
         # Get displayName from Remnawave or fallback
         display_name_data = pd.get('displayName', display['name'])
@@ -509,12 +511,14 @@ def get_platforms_list(config: dict[str, Any]) -> list[dict[str, Any]]:
         if not isinstance(pd, dict) or not pd.get('apps'):
             continue
 
-        display = _PLATFORM_DISPLAY.get(pk, {'name': pk, 'emoji': '📱'})
+        display = _PLATFORM_DISPLAY.get(
+            pk, {'name': pk, 'emoji': '<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji>'}
+        )
         result.append(
             {
                 'key': pk,
                 'displayName': display.get('name', pk),
-                'icon_emoji': display.get('emoji', '📱'),
+                'icon_emoji': display.get('emoji', '<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji>'),
                 'device_type': _PLATFORM_TO_DEVICE.get(pk, pk),
             }
         )
@@ -588,13 +592,19 @@ def get_reset_devices_confirm_keyboard(
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text=texts.t('SUBSCRIPTION_UI_RESET_ALL_DEVICES_CONFIRM', '✅ Да, сбросить все устройства'),
+                    text=texts.t(
+                        'SUBSCRIPTION_UI_RESET_ALL_DEVICES_CONFIRM',
+                        '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Да, сбросить все устройства',
+                    ),
                     callback_data='confirm_reset_devices',
                 )
             ],
             [
                 InlineKeyboardButton(
-                    text=texts.t('SUBSCRIPTION_UI_CANCEL_CROSS', '❌ Отмена'), callback_data=back_callback
+                    text=texts.t(
+                        'SUBSCRIPTION_UI_CANCEL_CROSS', '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Отмена'
+                    ),
+                    callback_data=back_callback,
                 )
             ],
         ]
@@ -656,11 +666,11 @@ def get_traffic_switch_keyboard(
 
         # Сравниваем с базовым трафиком (без докупленного)
         if gb == base_traffic_gb:
-            emoji = '✅'
+            emoji = '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji>'
             action_text = texts.t('SUBSCRIPTION_UI_CURRENT_SUFFIX', ' (текущий)')
             price_text = ''
         elif total_price_diff > 0:
-            emoji = '⬆️'
+            emoji = '<tg-emoji emoji-id="6005807101056651268">⬆️</tg-emoji>'
             action_text = ''
             price_text = f' (+{total_price_diff // 100}₽{period_text})'
             if discount_percent > 0:
@@ -670,11 +680,11 @@ def get_traffic_switch_keyboard(
                         'SUBSCRIPTION_UI_BREAKDOWN_DISCOUNT', ' (скидка {percent}%: -{amount}₽)'
                     ).format(percent=discount_percent, amount=discount_total // 100)
         elif total_price_diff < 0:
-            emoji = '⬇️'
+            emoji = '<tg-emoji emoji-id="5886451926995833684">⬇️</tg-emoji>'
             action_text = ''
             price_text = texts.t('SUBSCRIPTION_UI_NO_REFUND_SUFFIX', ' (без возврата)')
         else:
-            emoji = '🔄'
+            emoji = '<tg-emoji emoji-id="5839200986022812209">🔄</tg-emoji>'
             action_text = ''
             price_text = texts.t('SUBSCRIPTION_UI_FREE_SUFFIX', ' (бесплатно)')
 
@@ -691,7 +701,11 @@ def get_traffic_switch_keyboard(
     buttons.append(
         [
             InlineKeyboardButton(
-                text=texts.t('SUBSCRIPTION_UI_BACK_ARROW', '⬅️ Назад') if language_code in {'ru', 'fa'} else '⬅️ Back',
+                text=texts.t(
+                    'SUBSCRIPTION_UI_BACK_ARROW', '<tg-emoji emoji-id="5875082500023258804">⬅️</tg-emoji> Назад'
+                )
+                if language_code in {'ru', 'fa'}
+                else '<tg-emoji emoji-id="5875082500023258804">⬅️</tg-emoji> Back',
                 callback_data=back_callback,
             )
         ]
@@ -708,13 +722,19 @@ def get_confirm_switch_traffic_keyboard(
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text=texts.t('SUBSCRIPTION_UI_CONFIRM_SWITCH', '✅ Подтвердить переключение'),
+                    text=texts.t(
+                        'SUBSCRIPTION_UI_CONFIRM_SWITCH',
+                        '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Подтвердить переключение',
+                    ),
                     callback_data=f'confirm_switch_traffic_{new_traffic_gb}_{price_difference}',
                 )
             ],
             [
                 InlineKeyboardButton(
-                    text=texts.t('SUBSCRIPTION_UI_CANCEL_CROSS', '❌ Отмена'), callback_data=back_callback
+                    text=texts.t(
+                        'SUBSCRIPTION_UI_CANCEL_CROSS', '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Отмена'
+                    ),
+                    callback_data=back_callback,
                 )
             ],
         ]

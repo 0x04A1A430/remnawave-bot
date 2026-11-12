@@ -110,7 +110,7 @@ def _render_tariff_catalog(db_user: User, offers: list[GiftTariffOffer]) -> tupl
     texts = get_texts(db_user.language)
     text = texts.t(
         'GIFT_CATALOG_TITLE',
-        '🎁 <b>Подарить подписку</b>\n\nВыберите тариф для подарка:',
+        '<tg-emoji emoji-id="6032937473162614352">🎁</tg-emoji> <b>Подарить подписку</b>\n\nВыберите тариф для подарка:',
     )
 
     buttons: list[list[InlineKeyboardButton]] = []
@@ -121,7 +121,7 @@ def _render_tariff_catalog(db_user: User, offers: list[GiftTariffOffer]) -> tupl
     buttons.append(
         [
             InlineKeyboardButton(
-                text=texts.t('GIFT_MY_BUTTON', '🎁 Мои подарки'),
+                text=texts.t('GIFT_MY_BUTTON', '<tg-emoji emoji-id="6032937473162614352">🎁</tg-emoji> Мои подарки'),
                 callback_data='gift_my',
             )
         ]
@@ -129,12 +129,21 @@ def _render_tariff_catalog(db_user: User, offers: list[GiftTariffOffer]) -> tupl
     buttons.append(
         [
             InlineKeyboardButton(
-                text=texts.t('GIFT_ENTER_CODE_BUTTON', '🎁 Активировать код'),
+                text=texts.t(
+                    'GIFT_ENTER_CODE_BUTTON', '<tg-emoji emoji-id="6032937473162614352">🎁</tg-emoji> Активировать код'
+                ),
                 callback_data='gift_enter_code',
             )
         ]
     )
-    buttons.append([InlineKeyboardButton(text=texts.t('GIFT_CANCEL_BUTTON', '❌ Отмена'), callback_data='gift_cancel')])
+    buttons.append(
+        [
+            InlineKeyboardButton(
+                text=texts.t('GIFT_CANCEL_BUTTON', '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Отмена'),
+                callback_data='gift_cancel',
+            )
+        ]
+    )
 
     return compact_blank_lines(text), InlineKeyboardMarkup(inline_keyboard=buttons)
 
@@ -150,12 +159,15 @@ def _render_history_list(
     if not items or total_count == 0:
         text = texts.t(
             'GIFT_MY_EMPTY_TEXT',
-            '🎁 <b>Мои подарки</b>\n\nУ вас пока нет оформленных подарков.',
+            '<tg-emoji emoji-id="6032937473162614352">🎁</tg-emoji> <b>Мои подарки</b>\n\nУ вас пока нет оформленных подарков.',
         )
         buttons = [
             [
                 InlineKeyboardButton(
-                    text=texts.t('GIFT_ENTER_CODE_BUTTON', '🎁 Активировать код'),
+                    text=texts.t(
+                        'GIFT_ENTER_CODE_BUTTON',
+                        '<tg-emoji emoji-id="6032937473162614352">🎁</tg-emoji> Активировать код',
+                    ),
                     callback_data='gift_enter_code',
                 )
             ],
@@ -172,21 +184,21 @@ def _render_history_list(
     if total_pages > 1:
         text = texts.t(
             'GIFT_MY_TITLE_PAGED',
-            '🎁 <b>Мои подарки</b> (стр. {page}/{total_pages})\n\nВыберите подарок для просмотра деталей:',
+            '<tg-emoji emoji-id="6032937473162614352">🎁</tg-emoji> <b>Мои подарки</b> (стр. {page}/{total_pages})\n\nВыберите подарок для просмотра деталей:',
         ).format(page=page, total_pages=total_pages)
     else:
         text = texts.t(
             'GIFT_MY_TITLE',
-            '🎁 <b>Мои подарки</b>\n\nВыберите подарок для просмотра деталей:',
+            '<tg-emoji emoji-id="6032937473162614352">🎁</tg-emoji> <b>Мои подарки</b>\n\nВыберите подарок для просмотра деталей:',
         )
 
     buttons: list[list[InlineKeyboardButton]] = []
     for item in items:
-        status_emoji = '✅' if item.is_delivered else '⏳'
+        status_emoji = '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> ' if item.is_delivered else ''
         raw_name = item.tariff_name or texts.t('GIFT_TARIFF_DELETED', 'Архивный тариф')
         item_label = texts.t(
             'GIFT_MY_ITEM_BUTTON',
-            '{status_emoji} {tariff_name} — {period_days} дн.',
+            '{status_emoji}{tariff_name} — {period_days} дн.',
         ).format(
             status_emoji=status_emoji,
             tariff_name=raw_name,
@@ -198,14 +210,18 @@ def _render_history_list(
     if page > 1:
         nav_row.append(
             InlineKeyboardButton(
-                text=texts.t('GIFT_MY_PREV_PAGE_BUTTON', '⬅️ Предыдущая'),
+                text=texts.t(
+                    'GIFT_MY_PREV_PAGE_BUTTON', '<tg-emoji emoji-id="5875082500023258804">⬅️</tg-emoji> Предыдущая'
+                ),
                 callback_data=f'gift_my_page:{page - 1}',
             )
         )
     if page < total_pages:
         nav_row.append(
             InlineKeyboardButton(
-                text=texts.t('GIFT_MY_NEXT_PAGE_BUTTON', 'Следующая ➡️'),
+                text=texts.t(
+                    'GIFT_MY_NEXT_PAGE_BUTTON', 'Следующая <tg-emoji emoji-id="5877468380125990242">➡️</tg-emoji>'
+                ),
                 callback_data=f'gift_my_page:{page + 1}',
             )
         )
@@ -238,7 +254,7 @@ def _render_period_selection(db_user: User, offer: GiftTariffOffer) -> tuple[str
 
     text = texts.t(
         'GIFT_SELECT_PERIOD_TITLE',
-        '🎁 <b>Подарок: {tariff_name}</b>\n\n{description}📊 Трафик: <b>{traffic}</b>\n📱 Устройства: <b>{devices}</b>\n\nВыберите период:',
+        '<tg-emoji emoji-id="6032937473162614352">🎁</tg-emoji> <b>Подарок: {tariff_name}</b>\n\n{description}<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> Трафик: <b>{traffic}</b>\n<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> Устройства: <b>{devices}</b>\n\nВыберите период:',
     ).format(
         tariff_name=escaped_name,
         description=escaped_desc,
@@ -268,7 +284,7 @@ def _render_period_selection(db_user: User, offer: GiftTariffOffer) -> tuple[str
             callback_data='gift_back_tariffs',
         ),
         InlineKeyboardButton(
-            text=texts.t('GIFT_CANCEL_BUTTON', '❌ Отмена'),
+            text=texts.t('GIFT_CANCEL_BUTTON', '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Отмена'),
             callback_data='gift_cancel',
         ),
     ]
@@ -294,17 +310,22 @@ def _render_confirmation_summary(db_user: User, quote: GiftQuote) -> tuple[str, 
     if quote.total_discount_kopeks > 0:
         orig_price_str = texts.format_price(quote.original_price_kopeks)
         disc_str = texts.format_price(quote.total_discount_kopeks)
-        price_details += texts.t('GIFT_PRICE_ORIGINAL_LINE', '💵 Исходная цена: <s>{original_price}</s>\n').format(
-            original_price=orig_price_str
-        )
-        price_details += texts.t('GIFT_PRICE_DISCOUNT_LINE', '🏷 Скидка: <b>-{discount}</b>\n').format(discount=disc_str)
-    price_details += texts.t('GIFT_PRICE_FINAL_LINE', '💰 Итого к оплате: <b>{final_price}</b>\n').format(
-        final_price=final_price_str
-    )
+        price_details += texts.t(
+            'GIFT_PRICE_ORIGINAL_LINE',
+            '<tg-emoji emoji-id="5967390100357648692">💵</tg-emoji> Исходная цена: <s>{original_price}</s>\n',
+        ).format(original_price=orig_price_str)
+        price_details += texts.t(
+            'GIFT_PRICE_DISCOUNT_LINE',
+            '<tg-emoji emoji-id="5854776233950188167">🏷</tg-emoji> Скидка: <b>-{discount}</b>\n',
+        ).format(discount=disc_str)
+    price_details += texts.t(
+        'GIFT_PRICE_FINAL_LINE',
+        '<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> Итого к оплате: <b>{final_price}</b>\n',
+    ).format(final_price=final_price_str)
 
     text = texts.t(
         'GIFT_SUMMARY_TITLE',
-        '🎁 <b>Подтверждение подарка</b>\n\n📦 Тариф: <b>{tariff_name}</b>\n📅 Период: <b>{period_days} дн.</b>\n📊 Трафик: <b>{traffic}</b>\n📱 Устройства: <b>{devices}</b>\n\n{price_details}💳 Ваш баланс: <b>{balance}</b>\n\nПосле подтверждения с вашего баланса будет списана указанная сумма и создана ссылка на подарок.',
+        '<tg-emoji emoji-id="6032937473162614352">🎁</tg-emoji> <b>Подтверждение подарка</b>\n\n<tg-emoji emoji-id="5924720918826848520">📦</tg-emoji> Тариф: <b>{tariff_name}</b>\n<tg-emoji emoji-id="5967412305338568701">📅</tg-emoji> Период: <b>{period_days} дн.</b>\n<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> Трафик: <b>{traffic}</b>\n<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> Устройства: <b>{devices}</b>\n\n{price_details}<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> Ваш баланс: <b>{balance}</b>\n\nПосле подтверждения с вашего баланса будет списана указанная сумма и создана ссылка на подарок.',
     ).format(
         tariff_name=escaped_name,
         period_days=quote.period_days,
@@ -317,7 +338,10 @@ def _render_confirmation_summary(db_user: User, quote: GiftQuote) -> tuple[str, 
     buttons = [
         [
             InlineKeyboardButton(
-                text=texts.t('GIFT_CONFIRM_PURCHASE_BUTTON', '✅ Подтвердить покупку'),
+                text=texts.t(
+                    'GIFT_CONFIRM_PURCHASE_BUTTON',
+                    '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Подтвердить покупку',
+                ),
                 callback_data='gift_confirm',
             )
         ],
@@ -327,7 +351,7 @@ def _render_confirmation_summary(db_user: User, quote: GiftQuote) -> tuple[str, 
                 callback_data='gift_back_periods',
             ),
             InlineKeyboardButton(
-                text=texts.t('GIFT_CANCEL_BUTTON', '❌ Отмена'),
+                text=texts.t('GIFT_CANCEL_BUTTON', '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Отмена'),
                 callback_data='gift_cancel',
             ),
         ],
@@ -366,25 +390,32 @@ async def handle_gift_catalog(
         if has_history:
             text = texts.t(
                 'GIFT_FEATURE_DISABLED_WITH_HISTORY',
-                '🎁 <b>Подарки</b>\n\nПокупка новых подарков временно недоступна, но вы можете просмотреть свои подарки или активировать код.',
+                '<tg-emoji emoji-id="6032937473162614352">🎁</tg-emoji> <b>Подарки</b>\n\nПокупка новых подарков временно недоступна, но вы можете просмотреть свои подарки или активировать код.',
             )
             back_kb = InlineKeyboardMarkup(
                 inline_keyboard=[
                     [
                         InlineKeyboardButton(
-                            text=texts.t('GIFT_MY_BUTTON', '🎁 Мои подарки'),
+                            text=texts.t(
+                                'GIFT_MY_BUTTON', '<tg-emoji emoji-id="6032937473162614352">🎁</tg-emoji> Мои подарки'
+                            ),
                             callback_data='gift_my',
                         )
                     ],
                     [
                         InlineKeyboardButton(
-                            text=texts.t('GIFT_ENTER_CODE_BUTTON', '🎁 Активировать код'),
+                            text=texts.t(
+                                'GIFT_ENTER_CODE_BUTTON',
+                                '<tg-emoji emoji-id="6032937473162614352">🎁</tg-emoji> Активировать код',
+                            ),
                             callback_data='gift_enter_code',
                         )
                     ],
                     [
                         InlineKeyboardButton(
-                            text=texts.t('GIFT_CANCEL_BUTTON', '❌ Отмена'),
+                            text=texts.t(
+                                'GIFT_CANCEL_BUTTON', '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Отмена'
+                            ),
                             callback_data='gift_cancel',
                         )
                     ],
@@ -398,19 +429,24 @@ async def handle_gift_catalog(
 
         text = texts.t(
             'GIFT_FEATURE_DISABLED_NO_HISTORY',
-            '🎁 <b>Подарки</b>\n\nПокупка новых подарков временно недоступна, но вы можете активировать полученный подарочный код.',
+            '<tg-emoji emoji-id="6032937473162614352">🎁</tg-emoji> <b>Подарки</b>\n\nПокупка новых подарков временно недоступна, но вы можете активировать полученный подарочный код.',
         )
         back_kb = InlineKeyboardMarkup(
             inline_keyboard=[
                 [
                     InlineKeyboardButton(
-                        text=texts.t('GIFT_ENTER_CODE_BUTTON', '🎁 Активировать код'),
+                        text=texts.t(
+                            'GIFT_ENTER_CODE_BUTTON',
+                            '<tg-emoji emoji-id="6032937473162614352">🎁</tg-emoji> Активировать код',
+                        ),
                         callback_data='gift_enter_code',
                     )
                 ],
                 [
                     InlineKeyboardButton(
-                        text=texts.t('GIFT_CANCEL_BUTTON', '❌ Отмена'),
+                        text=texts.t(
+                            'GIFT_CANCEL_BUTTON', '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Отмена'
+                        ),
                         callback_data='gift_cancel',
                     )
                 ],
@@ -431,19 +467,26 @@ async def handle_gift_catalog(
             inline_keyboard=[
                 [
                     InlineKeyboardButton(
-                        text=texts.t('GIFT_MY_BUTTON', '🎁 Мои подарки'),
+                        text=texts.t(
+                            'GIFT_MY_BUTTON', '<tg-emoji emoji-id="6032937473162614352">🎁</tg-emoji> Мои подарки'
+                        ),
                         callback_data='gift_my',
                     )
                 ],
                 [
                     InlineKeyboardButton(
-                        text=texts.t('GIFT_ENTER_CODE_BUTTON', '🎁 Активировать код'),
+                        text=texts.t(
+                            'GIFT_ENTER_CODE_BUTTON',
+                            '<tg-emoji emoji-id="6032937473162614352">🎁</tg-emoji> Активировать код',
+                        ),
                         callback_data='gift_enter_code',
                     )
                 ],
                 [
                     InlineKeyboardButton(
-                        text=texts.t('GIFT_CANCEL_BUTTON', '❌ Отмена'),
+                        text=texts.t(
+                            'GIFT_CANCEL_BUTTON', '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Отмена'
+                        ),
                         callback_data='gift_cancel',
                     )
                 ],
@@ -695,7 +738,10 @@ async def handle_gift_period_select(
             )
         if not retired:
             await callback.answer(
-                texts.t('GIFT_SELECTION_EXPIRED', '❌ Этот выбор устарел. Откройте подарок заново.'),
+                texts.t(
+                    'GIFT_SELECTION_EXPIRED',
+                    '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Этот выбор устарел. Откройте подарок заново.',
+                ),
                 show_alert=True,
             )
             return
@@ -781,7 +827,10 @@ async def handle_gift_cancel(
     selection_state = await state.get_state()
     if callback.data != _gift_action_callback('gift_cancel', data, selection_state):
         await callback.answer(
-            get_texts(db_user.language).t('GIFT_SELECTION_EXPIRED', '❌ Этот выбор устарел. Откройте подарок заново.'),
+            get_texts(db_user.language).t(
+                'GIFT_SELECTION_EXPIRED',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Этот выбор устарел. Откройте подарок заново.',
+            ),
             show_alert=True,
         )
         return
@@ -823,7 +872,10 @@ async def handle_gift_confirm(
     selection_state = await state.get_state()
     if callback.data != _gift_action_callback('gift_confirm', data, selection_state):
         await callback.answer(
-            texts.t('GIFT_SELECTION_EXPIRED', '❌ Этот выбор устарел. Откройте подарок заново.'),
+            texts.t(
+                'GIFT_SELECTION_EXPIRED',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Этот выбор устарел. Откройте подарок заново.',
+            ),
             show_alert=True,
         )
         return
@@ -861,7 +913,7 @@ async def handle_gift_confirm(
         await callback.answer(
             texts.t(
                 'GIFT_NO_CLAIM_CHANNEL_ERROR',
-                '❌ Сервис подарков временно недоступен: не настроен канал выдачи ссылки.',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Сервис подарков временно недоступен: не настроен канал выдачи ссылки.',
             ),
             show_alert=True,
         )
@@ -897,7 +949,7 @@ async def handle_gift_confirm(
         await callback.answer(
             texts.t(
                 'GIFT_PRICE_CHANGED_ERROR',
-                '⚠️ Цена на выбранный тариф изменилась. Пожалуйста, подтвердите покупку заново.',
+                '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> Цена на выбранный тариф изменилась. Пожалуйста, подтвердите покупку заново.',
             ),
             show_alert=True,
         )
@@ -924,7 +976,7 @@ async def handle_gift_confirm(
             avail_str = texts.format_price(err.available_kopeks)
             msg = texts.t(
                 'GIFT_INSUFFICIENT_BALANCE_ERROR',
-                '❌ Недостаточно средств на балансе. Требуется: {required}, доступно: {available}.',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Недостаточно средств на балансе. Требуется: {required}, доступно: {available}.',
             ).format(required=req_str, available=avail_str)
             await callback.answer(msg, show_alert=True)
             return
@@ -956,7 +1008,10 @@ async def handle_gift_confirm(
             await callback.answer()
             return
         await callback.answer(
-            texts.t('GIFT_PURCHASE_RESTRICTED_ERROR', '❌ Покупка подписок недоступна для вашего аккаунта.'),
+            texts.t(
+                'GIFT_PURCHASE_RESTRICTED_ERROR',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Покупка подписок недоступна для вашего аккаунта.',
+            ),
             show_alert=True,
         )
         return
@@ -977,7 +1032,9 @@ async def handle_gift_confirm(
             inline_keyboard=[
                 [
                     InlineKeyboardButton(
-                        text=texts.t('GIFT_CANCEL_BUTTON', '❌ Отмена'),
+                        text=texts.t(
+                            'GIFT_CANCEL_BUTTON', '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Отмена'
+                        ),
                         callback_data='gift_cancel',
                     )
                 ]
@@ -1061,7 +1118,10 @@ async def handle_return_to_gift_cart(
     cart_data = await user_cart_service.get_user_cart(db_user.id)
     if not cart_data:
         await callback.answer(
-            texts.t('GIFT_CART_EXPIRED', '❌ Срок действия сохраненной корзины подарка истек.'),
+            texts.t(
+                'GIFT_CART_EXPIRED',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Срок действия сохраненной корзины подарка истек.',
+            ),
             show_alert=True,
         )
         return
@@ -1072,7 +1132,10 @@ async def handle_return_to_gift_cart(
         if cart_data.get('cart_mode') == 'gift_purchase':
             await user_cart_service.delete_processed_cart(db_user.id, cart_data)
         await callback.answer(
-            texts.t('GIFT_CART_INVALID', '❌ Сохраненный подарок недоступен или некорректен.'),
+            texts.t(
+                'GIFT_CART_INVALID',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Сохраненный подарок недоступен или некорректен.',
+            ),
             show_alert=True,
         )
         return
@@ -1085,7 +1148,10 @@ async def handle_return_to_gift_cart(
     if not tariff_id or not period_days:
         await user_cart_service.delete_processed_cart(db_user.id, cart_data)
         await callback.answer(
-            texts.t('GIFT_CART_INVALID', '❌ Сохраненный подарок недоступен или некорректен.'),
+            texts.t(
+                'GIFT_CART_INVALID',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Сохраненный подарок недоступен или некорректен.',
+            ),
             show_alert=True,
         )
         return
@@ -1147,7 +1213,9 @@ async def handle_return_to_gift_cart(
             inline_keyboard=[
                 [
                     InlineKeyboardButton(
-                        text=texts.t('GIFT_CANCEL_BUTTON', '❌ Отмена'),
+                        text=texts.t(
+                            'GIFT_CANCEL_BUTTON', '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Отмена'
+                        ),
                         callback_data='gift_cancel',
                     )
                 ]
@@ -1186,7 +1254,10 @@ async def handle_return_to_gift_cart(
             await callback.answer()
             return
         await callback.answer(
-            texts.t('GIFT_PURCHASE_RESTRICTED_ERROR', '❌ Покупка подписок недоступна для вашего аккаунта.'),
+            texts.t(
+                'GIFT_PURCHASE_RESTRICTED_ERROR',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Покупка подписок недоступна для вашего аккаунта.',
+            ),
             show_alert=True,
         )
         return
@@ -1217,7 +1288,10 @@ async def handle_return_to_gift_cart(
         )
         if not updated:
             await callback.answer(
-                texts.t('GIFT_CART_EXPIRED', '❌ Срок действия сохраненной корзины подарка истек.'),
+                texts.t(
+                    'GIFT_CART_EXPIRED',
+                    '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Срок действия сохраненной корзины подарка истек.',
+                ),
                 show_alert=True,
             )
             return
@@ -1256,7 +1330,7 @@ async def handle_return_to_gift_cart(
                 await callback.answer(
                     texts.t(
                         'GIFT_PRICE_CHANGED_ERROR',
-                        '⚠️ Цена на выбранный тариф изменилась. Пожалуйста, подтвердите покупку заново.',
+                        '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> Цена на выбранный тариф изменилась. Пожалуйста, подтвердите покупку заново.',
                     ),
                     show_alert=True,
                 )
@@ -1291,7 +1365,10 @@ async def handle_return_to_gift_cart(
     # that was read before the quote, not a checkout replaced while awaiting it.
     if await user_cart_service.get_user_cart(db_user.id) != cart_data:
         await callback.answer(
-            texts.t('GIFT_CART_EXPIRED', '❌ Срок действия сохраненной корзины подарка истек.'),
+            texts.t(
+                'GIFT_CART_EXPIRED',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Срок действия сохраненной корзины подарка истек.',
+            ),
             show_alert=True,
         )
         return
@@ -1329,7 +1406,7 @@ async def handle_return_to_gift_cart(
         await callback.answer(
             texts.t(
                 'GIFT_PRICE_CHANGED_ERROR',
-                '⚠️ Цена на выбранный тариф изменилась. Пожалуйста, подтвердите покупку заново.',
+                '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> Цена на выбранный тариф изменилась. Пожалуйста, подтвердите покупку заново.',
             ),
             show_alert=True,
         )
@@ -1353,13 +1430,15 @@ async def handle_gift_enter_code(
 
     text = texts.t(
         'GIFT_ENTER_CODE_PROMPT',
-        '🎁 <b>Активация подарка</b>\n\nОтправьте код подарка или полученную ссылку:',
+        '<tg-emoji emoji-id="6032937473162614352">🎁</tg-emoji> <b>Активация подарка</b>\n\nОтправьте код подарка или полученную ссылку:',
     )
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text=texts.t('GIFT_ACTIVATION_CANCEL_BUTTON', '❌ Отмена'),
+                    text=texts.t(
+                        'GIFT_ACTIVATION_CANCEL_BUTTON', '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Отмена'
+                    ),
                     callback_data='gift_activation_cancel',
                 )
             ]
@@ -1399,7 +1478,9 @@ async def handle_gift_code_input(
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text=texts.t('GIFT_ACTIVATION_CANCEL_BUTTON', '❌ Отмена'),
+                    text=texts.t(
+                        'GIFT_ACTIVATION_CANCEL_BUTTON', '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Отмена'
+                    ),
                     callback_data='gift_activation_cancel',
                 )
             ]
@@ -1410,7 +1491,7 @@ async def handle_gift_code_input(
         await message.answer(
             texts.t(
                 'GIFT_ACTIVATION_NON_TEXT_ERROR',
-                '⚠️ Пожалуйста, отправьте текстовый код или ссылку на подарок.',
+                '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> Пожалуйста, отправьте текстовый код или ссылку на подарок.',
             ),
             reply_markup=cancel_kb,
             parse_mode='HTML',
@@ -1440,7 +1521,7 @@ async def handle_gift_code_input(
         await message.answer(
             texts.t(
                 'GIFT_ACTIVATION_SELF_CLAIM_ERROR',
-                '⚠️ Нельзя активировать свой собственный подарок.\nОтправьте код другу!',
+                '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> Нельзя активировать свой собственный подарок.\nОтправьте код другу!',
             ),
             reply_markup=cancel_kb,
             parse_mode='HTML',
@@ -1450,7 +1531,7 @@ async def handle_gift_code_input(
         await message.answer(
             texts.t(
                 'GIFT_ACTIVATION_ALREADY_OWNED_ERROR',
-                'ℹ️ Этот подарок уже был активирован.',
+                '<tg-emoji emoji-id="5879785854284599288">ℹ️</tg-emoji> Этот подарок уже был активирован.',
             ),
             reply_markup=cancel_kb,
             parse_mode='HTML',
@@ -1460,7 +1541,7 @@ async def handle_gift_code_input(
         await message.answer(
             texts.t(
                 'GIFT_ACTIVATION_NOT_ACTIVATABLE_ERROR',
-                '❌ Этот подарок невозможно активировать.',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Этот подарок невозможно активировать.',
             ),
             reply_markup=cancel_kb,
             parse_mode='HTML',
@@ -1475,7 +1556,7 @@ async def handle_gift_code_input(
         if exc.status_code >= 500:
             msg_text = texts.t(
                 'GIFT_ACTIVATION_GENERIC_ERROR',
-                '❌ Произошла ошибка при активации подарка. Попробуйте активировать через личный кабинет.',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Произошла ошибка при активации подарка. Попробуйте активировать через личный кабинет.',
             )
         else:
             msg_text = texts.t(
@@ -1492,7 +1573,7 @@ async def handle_gift_code_input(
         await message.answer(
             texts.t(
                 'GIFT_ACTIVATION_GENERIC_ERROR',
-                '❌ Произошла ошибка при активации подарка. Попробуйте активировать через личный кабинет.',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Произошла ошибка при активации подарка. Попробуйте активировать через личный кабинет.',
             ),
             reply_markup=cancel_kb,
             parse_mode='HTML',
@@ -1505,7 +1586,7 @@ async def handle_gift_code_input(
     period_days = purchase.period_days or 0
     success_text = texts.t(
         'GIFT_ACTIVATION_SUCCESS_TEXT',
-        '🎁 <b>Подарок активирован!</b>\n{tariff_name} — {period_days} дн.\n\nВаша подписка обновлена.',
+        '<tg-emoji emoji-id="6032937473162614352">🎁</tg-emoji> <b>Подарок активирован!</b>\n{tariff_name} — {period_days} дн.\n\nВаша подписка обновлена.',
     ).format(tariff_name=tariff_name, period_days=period_days)
 
     success_kb = InlineKeyboardMarkup(
@@ -1516,7 +1597,10 @@ async def handle_gift_code_input(
                     callback_data='menu_subscription',
                 ),
                 InlineKeyboardButton(
-                    text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '⬅️ В главное меню'),
+                    text=texts.t(
+                        'BACK_TO_MAIN_MENU_BUTTON',
+                        '<tg-emoji emoji-id="5875082500023258804">⬅️</tg-emoji> В главное меню',
+                    ),
                     callback_data='back_to_menu',
                 ),
             ]
@@ -1754,7 +1838,7 @@ async def handle_gift_my_qr(
 
     caption = texts.t(
         'GIFT_QR_CAPTION',
-        '📱 <b>QR-код подарка</b>\n\nПокажите его получателю — камера откроет активацию.\n\n🔑 Код: <code>{public_code}</code>',
+        '<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> <b>QR-код подарка</b>\n\nПокажите его получателю — камера откроет активацию.\n\n<tg-emoji emoji-id="6005570495603282482">🔑</tg-emoji> Код: <code>{public_code}</code>',
     ).format(public_code=html.escape(artifacts.public_code))
     keyboard = _gift_back_keyboard(texts, item.purchase_id)
     photo = FSInputFile(file_path)
@@ -1805,7 +1889,7 @@ async def handle_gift_my_text(
 
     body = texts.t(
         'GIFT_COPY_TEXT_BODY',
-        '🎁 Дарю тебе подписку {tariff_name} на {period_days} дн.\n\n'
+        '<tg-emoji emoji-id="6032937473162614352">🎁</tg-emoji> Дарю тебе подписку {tariff_name} на {period_days} дн.\n\n'
         'Активировать: {claim_link}\n\n'
         'Если ссылка не открывается, введи код в боте: {public_code}',
     ).format(
@@ -1816,7 +1900,7 @@ async def handle_gift_my_text(
     )
 
     text = (
-        f'{texts.t("GIFT_COPY_TEXT_TITLE", "📋 <b>Текст для отправки</b>")}\n\n'
+        f'{texts.t("GIFT_COPY_TEXT_TITLE", "<b>Текст для отправки</b>")}\n\n'
         f'{texts.t("GIFT_COPY_TEXT_HINT", "Нажмите на текст ниже — он скопируется целиком.")}\n\n'
         # Экранируется ВСЁ содержимое: имя тарифа задаёт человек, и угловая
         # скобка в нём иначе оборвала бы разметку сообщения.

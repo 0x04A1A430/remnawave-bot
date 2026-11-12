@@ -43,7 +43,10 @@ def _build_revoke_confirm_keyboard(
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text=texts.t('SUBSCRIPTION_REVOKE_CONFIRM_BTN', '✅ Подтвердить'),
+                    text=texts.t(
+                        'SUBSCRIPTION_REVOKE_CONFIRM_BTN',
+                        '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Подтвердить',
+                    ),
                     callback_data='subscription_revoke_confirm',
                 ),
             ],
@@ -68,7 +71,10 @@ def _build_revoke_success_keyboard(
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text=texts.t('SUBSCRIPTION_REVOKE_CONNECT_BTN', '🔗 Подключиться'),
+                    text=texts.t(
+                        'SUBSCRIPTION_REVOKE_CONNECT_BTN',
+                        '<tg-emoji emoji-id="5877465816030515018">🔗</tg-emoji> Подключиться',
+                    ),
                     callback_data='subscription_connect',
                 ),
             ],
@@ -136,7 +142,7 @@ async def start_subscription_revoke(
         texts.t(
             'SUBSCRIPTION_REVOKE_WARNING',
             (
-                '⚠️ <b>Перевыпуск подписки</b>\n\n'
+                '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> <b>Перевыпуск подписки</b>\n\n'
                 'Это действие:\n'
                 '• Сгенерирует новую ссылку подключения\n'
                 '• Сбросит все подключённые устройства\n'
@@ -217,7 +223,7 @@ async def confirm_subscription_revoke(
         await callback.answer(
             texts.t(
                 'SUBSCRIPTION_REVOKE_COOLDOWN',
-                '⏱ Перевыпуск будет доступен через {minutes} мин. {seconds} сек.',
+                'Перевыпуск будет доступен через {minutes} мин. {seconds} сек.',
             ).format(minutes=minutes, seconds=seconds),
             show_alert=True,
         )
@@ -232,7 +238,10 @@ async def confirm_subscription_revoke(
 
     if not result:
         await callback.message.edit_text(
-            texts.t('SUBSCRIPTION_REVOKE_ERROR', '❌ Ошибка при перевыпуске подписки. Попробуйте позже.'),
+            texts.t(
+                'SUBSCRIPTION_REVOKE_ERROR',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Ошибка при перевыпуске подписки. Попробуйте позже.',
+            ),
             reply_markup=InlineKeyboardMarkup(
                 inline_keyboard=[
                     [InlineKeyboardButton(text=texts.BACK, callback_data='menu_subscription')],
@@ -261,7 +270,7 @@ async def confirm_subscription_revoke(
         texts.t(
             'SUBSCRIPTION_REVOKE_SUCCESS',
             (
-                '✅ <b>Подписка перевыпущена!</b>\n\n'
+                '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> <b>Подписка перевыпущена!</b>\n\n'
                 'Новая ссылка подключения готова. '
                 'Старая ссылка больше не действительна.\n\n'
                 'Все устройства были отключены.'
@@ -348,7 +357,7 @@ async def start_multi_revoke(
         await callback.answer(
             texts.t(
                 'SUBSCRIPTION_REVOKE_COOLDOWN',
-                '⏱ Перевыпуск будет доступен через {minutes} мин. {seconds} сек.',
+                'Перевыпуск будет доступен через {minutes} мин. {seconds} сек.',
             ).format(minutes=minutes, seconds=seconds),
             show_alert=True,
         )
@@ -363,7 +372,7 @@ async def start_multi_revoke(
         texts.t(
             'SUBSCRIPTION_REVOKE_WARNING',
             (
-                '⚠️ <b>Перевыпуск подписки</b>\n\n'
+                '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> <b>Перевыпуск подписки</b>\n\n'
                 'Это действие:\n'
                 '• Сгенерирует новую ссылку подключения\n'
                 '• Сбросит все подключённые устройства\n'

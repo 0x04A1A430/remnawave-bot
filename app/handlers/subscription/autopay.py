@@ -73,7 +73,7 @@ async def _cashera_recurring_rows(db: AsyncSession, subscription, texts) -> list
         return [
             [
                 types.InlineKeyboardButton(
-                    text=texts.t('CASHERA_RECURRING_CANCEL_BUTTON', '🛑 Отключить автопродление Cashera'),
+                    text=texts.t('CASHERA_RECURRING_CANCEL_BUTTON', 'Отключить автопродление Cashera'),
                     callback_data='cashera_recurring_cancel',
                 )
             ]
@@ -82,7 +82,10 @@ async def _cashera_recurring_rows(db: AsyncSession, subscription, texts) -> list
         return [
             [
                 types.InlineKeyboardButton(
-                    text=texts.t('CASHERA_RECURRING_MENU_BUTTON', '⚡ Автопродление через Cashera'),
+                    text=texts.t(
+                        'CASHERA_RECURRING_MENU_BUTTON',
+                        '<tg-emoji emoji-id="5843553939672274145">⚡</tg-emoji> Автопродление через Cashera',
+                    ),
                     callback_data='cashera_recurring_enable',
                 )
             ]
@@ -95,7 +98,10 @@ async def handle_autopay_menu(callback: types.CallbackQuery, db_user: User, db: 
     subscription, sub_id = await _resolve_subscription(callback, db_user, db, state)
     if not subscription:
         await callback.answer(
-            texts.t('SUBSCRIPTION_ACTIVE_REQUIRED', '⚠️ У вас нет активной подписки!'),
+            texts.t(
+                'SUBSCRIPTION_ACTIVE_REQUIRED',
+                '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> У вас нет активной подписки!',
+            ),
             show_alert=True,
         )
         return
@@ -114,7 +120,10 @@ async def handle_autopay_menu(callback: types.CallbackQuery, db_user: User, db: 
             daily_keyboard_rows.append(
                 [
                     types.InlineKeyboardButton(
-                        text=texts.t('SBP_RECURRING_MENU_BUTTON', '⚡ Автопродление через СБП'),
+                        text=texts.t(
+                            'SBP_RECURRING_MENU_BUTTON',
+                            '<tg-emoji emoji-id="5843553939672274145">⚡</tg-emoji> Автопродление через СБП',
+                        ),
                         callback_data='sbp_recurring_menu',
                     )
                 ]
@@ -152,10 +161,10 @@ async def handle_autopay_menu(callback: types.CallbackQuery, db_user: User, db: 
     text = texts.t(
         'AUTOPAY_MENU_TEXT',
         (
-            '💳 <b>Автоплатеж</b>\n\n'
-            '📊 <b>Статус:</b> {status}\n'
-            '⏰ <b>Списание за:</b> {days} дн. до окончания\n'
-            '📅 <b>Период продления:</b> {period}'
+            '<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> <b>Автоплатеж</b>\n\n'
+            '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> <b>Статус:</b> {status}\n'
+            '<tg-emoji emoji-id="5985616167740379273">⏰</tg-emoji> <b>Списание за:</b> {days} дн. до окончания\n'
+            '<tg-emoji emoji-id="5967412305338568701">📅</tg-emoji> <b>Период продления:</b> {period}'
         ),
     ).format(status=status, days=days, period=period_text)
 
@@ -167,7 +176,10 @@ async def handle_autopay_menu(callback: types.CallbackQuery, db_user: User, db: 
             -1,
             [
                 types.InlineKeyboardButton(
-                    text=texts.t('SBP_RECURRING_MENU_BUTTON', '⚡ Автопродление через СБП'),
+                    text=texts.t(
+                        'SBP_RECURRING_MENU_BUTTON',
+                        '<tg-emoji emoji-id="5843553939672274145">⚡</tg-emoji> Автопродление через СБП',
+                    ),
                     callback_data='sbp_recurring_menu',
                 )
             ],
@@ -278,7 +290,11 @@ async def toggle_autopay(callback: types.CallbackQuery, db_user: User, db: Async
         await cancel_cashera_recurring_for_subscription_safe(db, subscription.id)
     texts = get_texts(db_user.language)
     status = texts.t('AUTOPAY_STATUS_ENABLED', 'включен') if enable else texts.t('AUTOPAY_STATUS_DISABLED', 'выключен')
-    await callback.answer(texts.t('AUTOPAY_TOGGLE_SUCCESS', '✅ Автоплатеж {status}!').format(status=status))
+    await callback.answer(
+        texts.t(
+            'AUTOPAY_TOGGLE_SUCCESS', '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Автоплатеж {status}!'
+        ).format(status=status)
+    )
 
     try:
         await handle_autopay_menu(callback, db_user, db, state)
@@ -294,7 +310,7 @@ async def show_autopay_days(callback: types.CallbackQuery, db_user: User):
     await callback.message.edit_text(
         texts.t(
             'AUTOPAY_SELECT_DAYS_PROMPT',
-            '⏰ Выберите за сколько дней до окончания списывать средства:',
+            '<tg-emoji emoji-id="5985616167740379273">⏰</tg-emoji> Выберите за сколько дней до окончания списывать средства:',
         ),
         reply_markup=get_autopay_days_keyboard(db_user.language),
     )
@@ -311,7 +327,11 @@ async def set_autopay_days(callback: types.CallbackQuery, db_user: User, db: Asy
     await update_subscription_autopay(db, subscription, subscription.autopay_enabled, days)
 
     texts = get_texts(db_user.language)
-    await callback.answer(texts.t('AUTOPAY_DAYS_SET', '✅ Установлено {days} дней!').format(days=days))
+    await callback.answer(
+        texts.t(
+            'AUTOPAY_DAYS_SET', '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Установлено {days} дней!'
+        ).format(days=days)
+    )
 
     await handle_autopay_menu(callback, db_user, db, state)
 
@@ -344,7 +364,7 @@ async def show_autopay_period(callback: types.CallbackQuery, db_user: User, db: 
     await callback.message.edit_text(
         texts.t(
             'AUTOPAY_SELECT_PERIOD_PROMPT',
-            '📅 Выберите период, на который автоплатёж будет продлевать подписку:',
+            '<tg-emoji emoji-id="5967412305338568701">📅</tg-emoji> Выберите период, на который автоплатёж будет продлевать подписку:',
         ),
         reply_markup=get_autopay_period_keyboard(periods, current, db_user.language),
     )
@@ -365,7 +385,12 @@ async def set_autopay_period(callback: types.CallbackQuery, db_user: User, db: A
 
     if suffix == 'default':
         await _update_autopay(db, subscription, subscription.autopay_enabled, period_days=None)
-        await callback.answer(texts.t('AUTOPAY_PERIOD_SET_DEFAULT', '✅ Используется период по умолчанию.'))
+        await callback.answer(
+            texts.t(
+                'AUTOPAY_PERIOD_SET_DEFAULT',
+                '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Используется период по умолчанию.',
+            )
+        )
     else:
         try:
             days = int(suffix)
@@ -383,14 +408,19 @@ async def set_autopay_period(callback: types.CallbackQuery, db_user: User, db: A
             await callback.answer(
                 texts.t(
                     'AUTOPAY_PERIOD_NOT_AVAILABLE',
-                    '❌ Этот период недоступен для данной подписки.',
+                    '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Этот период недоступен для данной подписки.',
                 ),
                 show_alert=True,
             )
             return
 
         await _update_autopay(db, subscription, subscription.autopay_enabled, period_days=days)
-        await callback.answer(texts.t('AUTOPAY_PERIOD_SET', '✅ Период автоплатежа: {days} дн.').format(days=days))
+        await callback.answer(
+            texts.t(
+                'AUTOPAY_PERIOD_SET',
+                '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Период автоплатежа: {days} дн.',
+            ).format(days=days)
+        )
 
     await handle_autopay_menu(callback, db_user, db, state)
 
@@ -443,7 +473,10 @@ async def handle_sbp_recurring_menu(
 
     if not settings.is_platega_recurrent_enabled():
         await callback.answer(
-            texts.t('SBP_RECURRING_UNAVAILABLE', '⚠️ Автопродление через СБП сейчас недоступно'),
+            texts.t(
+                'SBP_RECURRING_UNAVAILABLE',
+                '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> Автопродление через СБП сейчас недоступно',
+            ),
             show_alert=True,
         )
         return
@@ -451,7 +484,10 @@ async def handle_sbp_recurring_menu(
     subscription, sub_id = await _resolve_subscription(callback, db_user, db, state)
     if not subscription:
         await callback.answer(
-            texts.t('SUBSCRIPTION_ACTIVE_REQUIRED', '⚠️ У вас нет активной подписки!'),
+            texts.t(
+                'SUBSCRIPTION_ACTIVE_REQUIRED',
+                '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> У вас нет активной подписки!',
+            ),
             show_alert=True,
         )
         return
@@ -463,19 +499,24 @@ async def handle_sbp_recurring_menu(
 
     text = texts.t(
         'SBP_RECURRING_MENU_TEXT',
-        '⚡ <b>Автопродление через СБП</b>\n\n📊 <b>Статус:</b> {status}',
+        '<tg-emoji emoji-id="5843553939672274145">⚡</tg-emoji> <b>Автопродление через СБП</b>\n\n<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> <b>Статус:</b> {status}',
     ).format(status=status_text)
 
     if record is not None:
         # get_active_platega_subscription_by_subscription уже фильтрует по
         # PENDING/ACTIVE/PAST_DUE — любая непустая запись «активна» для целей UI.
         action_button = types.InlineKeyboardButton(
-            text=texts.t('SBP_RECURRING_CANCEL_BUTTON', '❌ Отменить автооплату'),
+            text=texts.t(
+                'SBP_RECURRING_CANCEL_BUTTON',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Отменить автооплату',
+            ),
             callback_data='sbp_recurring_cancel',
         )
     else:
         action_button = types.InlineKeyboardButton(
-            text=texts.t('SBP_RECURRING_ENABLE_BUTTON', '✅ Подключить'),
+            text=texts.t(
+                'SBP_RECURRING_ENABLE_BUTTON', '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Подключить'
+            ),
             callback_data='sbp_recurring_enable',
         )
 
@@ -499,7 +540,10 @@ async def handle_sbp_recurring_enable(
 
     if not settings.is_platega_recurrent_enabled():
         await callback.answer(
-            texts.t('SBP_RECURRING_UNAVAILABLE', '⚠️ Автопродление через СБП сейчас недоступно'),
+            texts.t(
+                'SBP_RECURRING_UNAVAILABLE',
+                '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> Автопродление через СБП сейчас недоступно',
+            ),
             show_alert=True,
         )
         return
@@ -507,7 +551,10 @@ async def handle_sbp_recurring_enable(
     subscription, sub_id = await _resolve_subscription(callback, db_user, db, state)
     if not subscription:
         await callback.answer(
-            texts.t('SUBSCRIPTION_ACTIVE_REQUIRED', '⚠️ У вас нет активной подписки!'),
+            texts.t(
+                'SUBSCRIPTION_ACTIVE_REQUIRED',
+                '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> У вас нет активной подписки!',
+            ),
             show_alert=True,
         )
         return
@@ -539,7 +586,7 @@ async def handle_sbp_recurring_enable(
         await callback.answer(
             texts.t(
                 'SBP_RECURRING_NO_TARIFF',
-                '⚠️ Автопродление через СБП доступно только для подписок с тарифом.',
+                '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> Автопродление через СБП доступно только для подписок с тарифом.',
             ),
             show_alert=True,
         )
@@ -558,7 +605,7 @@ async def handle_sbp_recurring_enable(
         await callback.answer(
             texts.t(
                 'SBP_RECURRING_ENABLE_ERROR',
-                '❌ Не удалось подключить автопродление через СБП. Попробуйте позже.',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Не удалось подключить автопродление через СБП. Попробуйте позже.',
             ),
             show_alert=True,
         )
@@ -577,7 +624,7 @@ async def handle_sbp_recurring_enable(
         inline_keyboard=[
             [
                 types.InlineKeyboardButton(
-                    text=texts.t('SBP_RECURRING_CONFIRM_BUTTON', '🏦 Подтвердить в банке'),
+                    text=texts.t('SBP_RECURRING_CONFIRM_BUTTON', 'Подтвердить в банке'),
                     url=redirect_url,
                 )
             ],
@@ -588,7 +635,7 @@ async def handle_sbp_recurring_enable(
     await callback.message.edit_text(
         texts.t(
             'SBP_RECURRING_ENABLE_SUCCESS',
-            '⚡ <b>Автопродление через СБП</b>\n\n'
+            '<tg-emoji emoji-id="5843553939672274145">⚡</tg-emoji> <b>Автопродление через СБП</b>\n\n'
             'Подтвердите подключение в банковском приложении по кнопке ниже.\n'
             'После подтверждения автопродление станет активным.',
         ),
@@ -613,7 +660,10 @@ async def handle_sbp_recurring_cancel(
     subscription, sub_id = await _resolve_subscription(callback, db_user, db, state)
     if not subscription:
         await callback.answer(
-            texts.t('SUBSCRIPTION_ACTIVE_REQUIRED', '⚠️ У вас нет активной подписки!'),
+            texts.t(
+                'SUBSCRIPTION_ACTIVE_REQUIRED',
+                '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> У вас нет активной подписки!',
+            ),
             show_alert=True,
         )
         return
@@ -623,7 +673,12 @@ async def handle_sbp_recurring_cancel(
     from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
 
     await cancel_platega_recurring_for_subscription_safe(db, subscription.id)
-    await callback.answer(texts.t('SBP_RECURRING_CANCELLED', '✅ Автопродление через СБП отменено'))
+    await callback.answer(
+        texts.t(
+            'SBP_RECURRING_CANCELLED',
+            '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Автопродление через СБП отменено',
+        )
+    )
     # Меню гейтится флагом — при выключенной фиче не дёргаем его, чтобы после
     # успешной отмены юзер не получил второй алерт «недоступно».
     if settings.is_platega_recurrent_enabled():
@@ -638,7 +693,7 @@ async def handle_saved_cards_list(callback: types.CallbackQuery, db_user: User, 
         await callback.message.edit_text(
             texts.t(
                 'SAVED_CARDS_EMPTY',
-                '💳 <b>Привязанные карты</b>\n\nНет привязанных карт.\n'
+                '<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> <b>Привязанные карты</b>\n\nНет привязанных карт.\n'
                 'Карта привяжется автоматически при следующем пополнении баланса.',
             ),
             reply_markup=get_saved_cards_keyboard([], db_user.language),
@@ -648,7 +703,7 @@ async def handle_saved_cards_list(callback: types.CallbackQuery, db_user: User, 
         await callback.message.edit_text(
             texts.t(
                 'SAVED_CARDS_TITLE',
-                '💳 <b>Привязанные карты</b>\n\nВыберите карту для отвязки:',
+                '<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> <b>Привязанные карты</b>\n\nВыберите карту для отвязки:',
             ),
             reply_markup=get_saved_cards_keyboard(cards, db_user.language),
             parse_mode='HTML',
@@ -669,7 +724,10 @@ async def handle_unlink_card(callback: types.CallbackQuery, db_user: User, db: A
 
     if not card:
         await callback.answer(
-            texts.t('SAVED_CARDS_UNLINK_ERROR', '❌ Не удалось отвязать карту'),
+            texts.t(
+                'SAVED_CARDS_UNLINK_ERROR',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Не удалось отвязать карту',
+            ),
             show_alert=True,
         )
         return
@@ -684,7 +742,7 @@ async def handle_unlink_card(callback: types.CallbackQuery, db_user: User, db: A
     if len(cards) == 1:
         text += texts.t(
             'SAVED_CARDS_LAST_CARD_WARNING',
-            '\n\n⚠️ <b>Внимание:</b> это ваша последняя привязанная карта. '
+            '\n\n<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> <b>Внимание:</b> это ваша последняя привязанная карта. '
             'После отвязки автоплатеж не сможет списывать средства.',
         )
 
@@ -708,11 +766,14 @@ async def handle_confirm_unlink(callback: types.CallbackQuery, db_user: User, db
 
     if success:
         await callback.answer(
-            texts.t('SAVED_CARDS_UNLINKED', '✅ Карта отвязана'),
+            texts.t('SAVED_CARDS_UNLINKED', '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Карта отвязана'),
         )
     else:
         await callback.answer(
-            texts.t('SAVED_CARDS_UNLINK_ERROR', '❌ Не удалось отвязать карту'),
+            texts.t(
+                'SAVED_CARDS_UNLINK_ERROR',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Не удалось отвязать карту',
+            ),
             show_alert=True,
         )
         return
@@ -810,7 +871,10 @@ async def handle_subscription_cancel(callback: types.CallbackQuery, state: FSMCo
     await show_main_menu(callback, db_user, db)
 
     await callback.answer(
-        get_texts(getattr(db_user, 'language', None)).t('SUBSCRIPTION_UI_PURCHASE_CANCELLED', '❌ Покупка отменена')
+        get_texts(getattr(db_user, 'language', None)).t(
+            'SUBSCRIPTION_UI_PURCHASE_CANCELLED',
+            '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Покупка отменена',
+        )
     )
 
 
@@ -865,7 +929,11 @@ async def handle_cashera_recurring_enable(
     subscription, _sub_id = await _resolve_subscription(callback, db_user, db, state)
     if not subscription:
         await callback.answer(
-            texts.t('SUBSCRIPTION_ACTIVE_REQUIRED', '⚠️ У вас нет активной подписки!'), show_alert=True
+            texts.t(
+                'SUBSCRIPTION_ACTIVE_REQUIRED',
+                '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> У вас нет активной подписки!',
+            ),
+            show_alert=True,
         )
         return
     try:
@@ -885,7 +953,8 @@ async def handle_cashera_recurring_enable(
     except Exception:
         await callback.answer(
             texts.t(
-                'CASHERA_RECURRING_ENABLE_ERROR', '❌ Не удалось подключить автопродление Cashera. Попробуйте позже.'
+                'CASHERA_RECURRING_ENABLE_ERROR',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Не удалось подключить автопродление Cashera. Попробуйте позже.',
             ),
             show_alert=True,
         )
@@ -896,7 +965,11 @@ async def handle_cashera_recurring_enable(
         buttons.append(
             [
                 types.InlineKeyboardButton(
-                    text=texts.t('CASHERA_RECURRING_PAY_BUTTON', '💳 Подтвердить'), url=result['redirect_url']
+                    text=texts.t(
+                        'CASHERA_RECURRING_PAY_BUTTON',
+                        '<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> Подтвердить',
+                    ),
+                    url=result['redirect_url'],
                 )
             ]
         )
@@ -904,7 +977,7 @@ async def handle_cashera_recurring_enable(
     await callback.message.edit_text(
         texts.t(
             'CASHERA_RECURRING_ENABLE_SUCCESS',
-            '⚡ <b>Автопродление Cashera</b>\n\nПодтвердите автосписания по кнопке ниже.\n'
+            '<tg-emoji emoji-id="5843553939672274145">⚡</tg-emoji> <b>Автопродление Cashera</b>\n\nПодтвердите автосписания по кнопке ниже.\n'
             'После подтверждения и первого списания подписка продлится автоматически.',
         ),
         reply_markup=types.InlineKeyboardMarkup(inline_keyboard=buttons),
@@ -924,14 +997,23 @@ async def handle_cashera_recurring_cancel(
     subscription, _sub_id = await _resolve_subscription(callback, db_user, db, state)
     if not subscription:
         await callback.answer(
-            texts.t('SUBSCRIPTION_ACTIVE_REQUIRED', '⚠️ У вас нет активной подписки!'), show_alert=True
+            texts.t(
+                'SUBSCRIPTION_ACTIVE_REQUIRED',
+                '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> У вас нет активной подписки!',
+            ),
+            show_alert=True,
         )
         return
 
     from app.services.cashera_recurring_cancel import cancel_cashera_recurring_for_subscription_safe
 
     await cancel_cashera_recurring_for_subscription_safe(db, subscription.id)
-    await callback.answer(texts.t('CASHERA_RECURRING_CANCELLED', '✅ Автопродление Cashera отключено'))
+    await callback.answer(
+        texts.t(
+            'CASHERA_RECURRING_CANCELLED',
+            '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Автопродление Cashera отключено',
+        )
+    )
     try:
         await handle_autopay_menu(callback, db_user, db, state)
     except TelegramBadRequest:

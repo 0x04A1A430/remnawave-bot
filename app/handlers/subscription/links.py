@@ -60,16 +60,20 @@ async def handle_connect_subscription(
                 keyboard.append(
                     [
                         types.InlineKeyboardButton(
-                            text=texts.t('SUBSCRIPTION_UI_CONNECT_DAYS', '🔗 {name} ({days}д.)').format(
-                                name=tariff_name, days=days_left
-                            ),
+                            text=texts.t(
+                                'SUBSCRIPTION_UI_CONNECT_DAYS',
+                                '<tg-emoji emoji-id="5877465816030515018">🔗</tg-emoji> {name} ({days}д.)',
+                            ).format(name=tariff_name, days=days_left),
                             callback_data=f'sl:{sub.id}',
                         )
                     ]
                 )
             keyboard.append([types.InlineKeyboardButton(text='← Назад', callback_data='back_to_menu')])
             await callback.message.edit_text(
-                texts.t('SUBSCRIPTION_UI_CONNECT_SELECT', '🔗 <b>Подключиться</b>\n\nВыберите подписку:'),
+                texts.t(
+                    'SUBSCRIPTION_UI_CONNECT_SELECT',
+                    '<tg-emoji emoji-id="5877465816030515018">🔗</tg-emoji> <b>Подключиться</b>\n\nВыберите подписку:',
+                ),
                 reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
             )
             await callback.answer()
@@ -86,7 +90,7 @@ async def handle_connect_subscription(
         await callback.answer(
             texts.t(
                 'SUBSCRIPTION_NO_ACTIVE_LINK',
-                '⚠ У вас нет активной подписки или ссылка еще генерируется',
+                '<tg-emoji emoji-id="5881702736843511327">⚠</tg-emoji> У вас нет активной подписки или ссылка еще генерируется',
             ),
             show_alert=True,
         )
@@ -99,7 +103,9 @@ async def handle_connect_subscription(
             inline_keyboard=[
                 [
                     InlineKeyboardButton(
-                        text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'),
+                        text=texts.t(
+                            'CONNECT_BUTTON', '<tg-emoji emoji-id="5877465816030515018">🔗</tg-emoji> Подключиться'
+                        ),
                         web_app=types.WebAppInfo(url=subscription_link),
                     )
                 ],
@@ -110,9 +116,9 @@ async def handle_connect_subscription(
         await callback.message.edit_text(
             texts.t(
                 'SUBSCRIPTION_CONNECT_MINIAPP_MESSAGE',
-                """📱 <b>Подключить подписку</b>
+                """<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> <b>Подключить подписку</b>
 
-🚀 Нажмите кнопку ниже, чтобы открыть подписку в мини-приложении Telegram:""",
+Нажмите кнопку ниже, чтобы открыть подписку в мини-приложении Telegram:""",
             ),
             reply_markup=keyboard,
             parse_mode='HTML',
@@ -123,7 +129,7 @@ async def handle_connect_subscription(
             await callback.answer(
                 texts.t(
                     'CUSTOM_MINIAPP_URL_NOT_SET',
-                    '⚠ Кастомная ссылка для мини-приложения не настроена',
+                    '<tg-emoji emoji-id="5881702736843511327">⚠</tg-emoji> Кастомная ссылка для мини-приложения не настроена',
                 ),
                 show_alert=True,
             )
@@ -133,7 +139,9 @@ async def handle_connect_subscription(
             inline_keyboard=[
                 [
                     InlineKeyboardButton(
-                        text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'),
+                        text=texts.t(
+                            'CONNECT_BUTTON', '<tg-emoji emoji-id="5877465816030515018">🔗</tg-emoji> Подключиться'
+                        ),
                         web_app=types.WebAppInfo(url=settings.MINIAPP_CUSTOM_URL),
                     )
                 ],
@@ -144,16 +152,25 @@ async def handle_connect_subscription(
         await callback.message.edit_text(
             texts.t(
                 'SUBSCRIPTION_CONNECT_CUSTOM_MESSAGE',
-                """🚀 <b>Подключить подписку</b>
+                """<b>Подключить подписку</b>
 
-📱 Нажмите кнопку ниже, чтобы открыть приложение:""",
+<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> Нажмите кнопку ниже, чтобы открыть приложение:""",
             ),
             reply_markup=keyboard,
             parse_mode='HTML',
         )
 
     elif connect_mode == 'link':
-        rows = [[InlineKeyboardButton(text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'), url=subscription_link)]]
+        rows = [
+            [
+                InlineKeyboardButton(
+                    text=texts.t(
+                        'CONNECT_BUTTON', '<tg-emoji emoji-id="5877465816030515018">🔗</tg-emoji> Подключиться'
+                    ),
+                    url=subscription_link,
+                )
+            ]
+        ]
         happ_row = get_happ_download_button_row(texts)
         if happ_row:
             rows.append(happ_row)
@@ -164,9 +181,9 @@ async def handle_connect_subscription(
         await callback.message.edit_text(
             texts.t(
                 'SUBSCRIPTION_CONNECT_LINK_MESSAGE',
-                """🚀 <b>Подключить подписку</b>",
+                """<b>Подключить подписку</b>",
 
-🔗 Нажмите кнопку ниже, чтобы открыть ссылку подписки:""",
+<tg-emoji emoji-id="5877465816030515018">🔗</tg-emoji> Нажмите кнопку ниже, чтобы открыть ссылку подписки:""",
             ),
             reply_markup=keyboard,
             parse_mode='HTML',
@@ -175,7 +192,9 @@ async def handle_connect_subscription(
         rows = [
             [
                 InlineKeyboardButton(
-                    text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'),
+                    text=texts.t(
+                        'CONNECT_BUTTON', '<tg-emoji emoji-id="5877465816030515018">🔗</tg-emoji> Подключиться'
+                    ),
                     callback_data=f'open_subscription_link:{sub_id}'
                     if settings.is_multi_tariff_enabled()
                     else 'open_subscription_link',
@@ -192,9 +211,9 @@ async def handle_connect_subscription(
         await callback.message.edit_text(
             texts.t(
                 'SUBSCRIPTION_CONNECT_LINK_MESSAGE',
-                """🚀 <b>Подключить подписку</b>",
+                """<b>Подключить подписку</b>",
 
-🔗 Нажмите кнопку ниже, чтобы открыть ссылку подписки:""",
+<tg-emoji emoji-id="5877465816030515018">🔗</tg-emoji> Нажмите кнопку ниже, чтобы открыть ссылку подписки:""",
             ),
             reply_markup=keyboard,
             parse_mode='HTML',
@@ -213,7 +232,7 @@ async def handle_connect_subscription(
             await callback.message.edit_text(
                 texts.t(
                     'GUIDE_CONFIG_NOT_SET',
-                    '⚠️ <b>Конфигурация не настроена</b>\n\n'
+                    '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> <b>Конфигурация не настроена</b>\n\n'
                     'Администратор ещё не настроил конфигурацию приложений.\n'
                     'Обратитесь к администратору.',
                 ),
@@ -230,21 +249,21 @@ async def handle_connect_subscription(
         if hide_subscription_link:
             device_text = texts.t(
                 'SUBSCRIPTION_CONNECT_DEVICE_MESSAGE_HIDDEN',
-                """📱 <b>Подключить подписку</b>
+                """<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> <b>Подключить подписку</b>
 
-ℹ️ Ссылка подписки доступна по кнопкам ниже или в разделе "Моя подписка".
+<tg-emoji emoji-id="5879785854284599288">ℹ️</tg-emoji> Ссылка подписки доступна по кнопкам ниже или в разделе "Моя подписка".
 
-💡 <b>Выберите ваше устройство</b> для получения подробной инструкции по настройке:""",
+<b>Выберите ваше устройство</b> для получения подробной инструкции по настройке:""",
             )
         else:
             device_text = texts.t(
                 'SUBSCRIPTION_CONNECT_DEVICE_MESSAGE',
-                """📱 <b>Подключить подписку</b>
+                """<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> <b>Подключить подписку</b>
 
-🔗 <b>Ссылка подписки:</b>
+<tg-emoji emoji-id="5877465816030515018">🔗</tg-emoji> <b>Ссылка подписки:</b>
 <code>{subscription_url}</code>
 
-💡 <b>Выберите ваше устройство</b> для получения подробной инструкции по настройке:""",
+<b>Выберите ваше устройство</b> для получения подробной инструкции по настройке:""",
             ).format(subscription_url=subscription_link)
 
         await callback.message.edit_text(
@@ -268,7 +287,10 @@ async def handle_open_subscription_link(
 
     if not subscription_link:
         await callback.answer(
-            texts.t('SUBSCRIPTION_LINK_UNAVAILABLE', '❌ Ссылка подписки недоступна'),
+            texts.t(
+                'SUBSCRIPTION_LINK_UNAVAILABLE',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Ссылка подписки недоступна',
+            ),
             show_alert=True,
         )
         return
@@ -279,24 +301,24 @@ async def handle_open_subscription_link(
         happ_message = (
             texts.t(
                 'SUBSCRIPTION_HAPP_OPEN_TITLE',
-                '🔗 <b>Подключение через Happ</b>',
+                '<tg-emoji emoji-id="5877465816030515018">🔗</tg-emoji> <b>Подключение через Happ</b>',
             )
             + '\n\n'
             + texts.t(
                 'SUBSCRIPTION_HAPP_OPEN_LINK',
-                '<a href="{subscription_link}">🔓 Открыть ссылку в Happ</a>',
+                '<a href="{subscription_link}"><tg-emoji emoji-id="6034962180875490251">🔓</tg-emoji> Открыть ссылку в Happ</a>',
             ).format(subscription_link=happ_scheme_link)
             + '\n\n'
             + texts.t(
                 'SUBSCRIPTION_HAPP_OPEN_HINT',
-                '💡 Если ссылка не открывается автоматически, скопируйте её вручную:',
+                'Если ссылка не открывается автоматически, скопируйте её вручную:',
             )
         )
 
         if redirect_link:
             happ_message += '\n\n' + texts.t(
                 'SUBSCRIPTION_HAPP_OPEN_BUTTON_HINT',
-                '▶️ Нажмите кнопку "Подключиться" ниже, чтобы открыть Happ и добавить подписку автоматически.',
+                'Нажмите кнопку "Подключиться" ниже, чтобы открыть Happ и добавить подписку автоматически.',
             )
 
         happ_message += '\n\n' + texts.t(
@@ -320,7 +342,10 @@ async def handle_open_subscription_link(
         return
 
     link_text = (
-        texts.t('SUBSCRIPTION_DEVICE_LINK_TITLE', '🔗 <b>Ссылка подписки:</b>')
+        texts.t(
+            'SUBSCRIPTION_DEVICE_LINK_TITLE',
+            '<tg-emoji emoji-id="5877465816030515018">🔗</tg-emoji> <b>Ссылка подписки:</b>',
+        )
         + '\n\n'
         + f'<code>{subscription_link}</code>'
     )
@@ -331,7 +356,9 @@ async def handle_open_subscription_link(
             inline_keyboard=[
                 [
                     InlineKeyboardButton(
-                        text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'),
+                        text=texts.t(
+                            'CONNECT_BUTTON', '<tg-emoji emoji-id="5877465816030515018">🔗</tg-emoji> Подключиться'
+                        ),
                         callback_data=f'subscription_connect:{sub_id}'
                         if settings.is_multi_tariff_enabled()
                         else 'subscription_connect',

@@ -47,7 +47,7 @@ async def handle_add_countries(callback: types.CallbackQuery, db_user: User, db:
         await callback.answer(
             texts.t(
                 'COUNTRY_MANAGEMENT_UNAVAILABLE',
-                'ℹ️ Управление серверами недоступно - доступен только один сервер',
+                '<tg-emoji emoji-id="5879785854284599288">ℹ️</tg-emoji> Управление серверами недоступно - доступен только один сервер',
             ),
             show_alert=True,
         )
@@ -60,7 +60,10 @@ async def handle_add_countries(callback: types.CallbackQuery, db_user: User, db:
 
     if not subscription or subscription.is_trial:
         await callback.answer(
-            texts.t('PAID_FEATURE_ONLY', '⚠ Эта функция доступна только для платных подписок'),
+            texts.t(
+                'PAID_FEATURE_ONLY',
+                '<tg-emoji emoji-id="5881702736843511327">⚠</tg-emoji> Эта функция доступна только для платных подписок',
+            ),
             show_alert=True,
         )
         return
@@ -90,15 +93,15 @@ async def handle_add_countries(callback: types.CallbackQuery, db_user: User, db:
         texts.t(
             'COUNTRY_MANAGEMENT_PROMPT',
             (
-                '🌍 <b>Управление странами подписки</b>\n\n'
-                '📋 <b>Текущие страны ({current_count}):</b>\n'
+                '<b>Управление странами подписки</b>\n\n'
+                '<b>Текущие страны ({current_count}):</b>\n'
                 '{current_list}\n\n'
-                '💡 <b>Инструкция:</b>\n'
-                '✅ - страна подключена\n'
-                '➕ - будет добавлена (платно)\n'
-                '➖ - будет отключена (бесплатно)\n'
-                '⚪ - не выбрана\n\n'
-                '⚠️ <b>Важно:</b> Повторное подключение отключенных стран будет платным!'
+                '<b>Инструкция:</b>\n'
+                '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> - страна подключена\n'
+                '<tg-emoji emoji-id="5877219383691972108">➕</tg-emoji> - будет добавлена (платно)\n'
+                '- будет отключена (бесплатно)\n'
+                '- не выбрана\n\n'
+                '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> <b>Важно:</b> Повторное подключение отключенных стран будет платным!'
             ),
         ).format(
             current_count=len(current_countries),
@@ -166,7 +169,7 @@ async def get_countries_price_by_uuids_fallback(
 
 
 async def handle_manage_country(callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext):
-    logger.info('🔍 Управление страной', callback_data=callback.data)
+    logger.info('Управление страной', callback_data=callback.data)
 
     country_uuid = callback.data.split('_')[2]
 
@@ -176,7 +179,10 @@ async def handle_manage_country(callback: types.CallbackQuery, db_user: User, db
     if not subscription or subscription.is_trial:
         texts = get_texts(db_user.language)
         await callback.answer(
-            texts.t('PAID_FEATURE_ONLY_SHORT', '⚠ Только для платных подписок'),
+            texts.t(
+                'PAID_FEATURE_ONLY_SHORT',
+                '<tg-emoji emoji-id="5881702736843511327">⚠</tg-emoji> Только для платных подписок',
+            ),
             show_alert=True,
         )
         return
@@ -192,7 +198,7 @@ async def handle_manage_country(callback: types.CallbackQuery, db_user: User, db
         await callback.answer(
             texts.t(
                 'COUNTRY_NOT_AVAILABLE_PROMOGROUP',
-                '❌ Сервер недоступен для вашей промогруппы',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Сервер недоступен для вашей промогруппы',
             ),
             show_alert=True,
         )
@@ -205,7 +211,7 @@ async def handle_manage_country(callback: types.CallbackQuery, db_user: User, db
         current_selected.append(country_uuid)
         action = 'added'
 
-    logger.info('🔍 Страна', country_uuid=country_uuid, action=action)
+    logger.info('Страна', country_uuid=country_uuid, action=action)
 
     await state.update_data(countries=current_selected)
 
@@ -228,16 +234,16 @@ async def handle_manage_country(callback: types.CallbackQuery, db_user: User, db
                 sub_id=sub_id,
             )
         )
-        logger.info('✅ Клавиатура обновлена')
+        logger.info('Клавиатура обновлена')
 
     except Exception as e:
-        logger.error('⚠ Ошибка обновления клавиатуры', error=e)
+        logger.error('Ошибка обновления клавиатуры', error=e)
 
     await callback.answer()
 
 
 async def apply_countries_changes(callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext):
-    logger.info('🔧 Применение изменений стран')
+    logger.info('Применение изменений стран')
 
     data = await state.get_data()
     texts = get_texts(db_user.language)
@@ -261,12 +267,15 @@ async def apply_countries_changes(callback: types.CallbackQuery, db_user: User, 
 
     if not added and not removed:
         await callback.answer(
-            texts.t('COUNTRY_CHANGES_NOT_FOUND', '⚠️ Изменения не обнаружены'),
+            texts.t(
+                'COUNTRY_CHANGES_NOT_FOUND',
+                '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> Изменения не обнаружены',
+            ),
             show_alert=True,
         )
         return
 
-    logger.info('🔧 Добавлено: Удалено', added=added, removed=removed)
+    logger.info('Добавлено: Удалено', added=added, removed=removed)
 
     now = datetime.now(UTC)
     days_to_pay = max(1, math.ceil((subscription.end_date - now).total_seconds() / 86400))
@@ -341,7 +350,7 @@ async def apply_countries_changes(callback: types.CallbackQuery, db_user: User, 
         message_text = texts.t(
             'ADDON_INSUFFICIENT_FUNDS_MESSAGE',
             (
-                '⚠️ <b>Недостаточно средств</b>\n\n'
+                '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> <b>Недостаточно средств</b>\n\n'
                 'Стоимость услуги: {required}\n'
                 'На балансе: {balance}\n'
                 'Не хватает: {missing}\n\n'
@@ -370,7 +379,7 @@ async def apply_countries_changes(callback: types.CallbackQuery, db_user: User, 
         await callback.answer(
             texts.t(
                 'COUNTRIES_MINIMUM_REQUIRED',
-                '❌ Нельзя отключить все страны. Должна быть подключена хотя бы одна страна.',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Нельзя отключить все страны. Должна быть подключена хотя бы одна страна.',
             ),
             show_alert=True,
         )
@@ -383,7 +392,10 @@ async def apply_countries_changes(callback: types.CallbackQuery, db_user: User, 
             )
             if not success:
                 await callback.answer(
-                    texts.t('PAYMENT_CHARGE_ERROR', '⚠️ Ошибка списания средств'),
+                    texts.t(
+                        'PAYMENT_CHARGE_ERROR',
+                        '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> Ошибка списания средств',
+                    ),
                     show_alert=True,
                 )
                 return
@@ -407,7 +419,7 @@ async def apply_countries_changes(callback: types.CallbackQuery, db_user: User, 
                 await add_user_to_servers(db, added_server_ids)
 
                 logger.info(
-                    '📊 Добавлены серверы с ценами за дн.',
+                    'Добавлены серверы с ценами за дн.',
                     charged_days=charged_days,
                     value=list(zip(added_server_ids, added_server_prices, strict=False)),
                 )
@@ -444,19 +456,19 @@ async def apply_countries_changes(callback: types.CallbackQuery, db_user: User, 
 
         success_text = texts.t(
             'COUNTRY_CHANGES_SUCCESS_HEADER',
-            '✅ <b>Страны успешно обновлены!</b>\n\n',
+            '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> <b>Страны успешно обновлены!</b>\n\n',
         )
 
         if added_names:
             success_text += texts.t(
                 'COUNTRY_CHANGES_ADDED_HEADER',
-                '➕ <b>Добавлены страны:</b>\n',
+                '<tg-emoji emoji-id="5877219383691972108">➕</tg-emoji> <b>Добавлены страны:</b>\n',
             )
             success_text += '\n'.join(f'• {name}' for name in added_names)
             if total_cost > 0:
                 success_text += '\n' + texts.t(
                     'COUNTRY_CHANGES_CHARGED',
-                    '💰 Списано: {amount} (за {days} дн.)',
+                    '<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> Списано: {amount} (за {days} дн.)',
                 ).format(
                     amount=texts.format_price(total_cost),
                     days=charged_days,
@@ -474,21 +486,21 @@ async def apply_countries_changes(callback: types.CallbackQuery, db_user: User, 
         if removed_names:
             success_text += '\n' + texts.t(
                 'COUNTRY_CHANGES_REMOVED_HEADER',
-                '➖ <b>Отключены страны:</b>\n',
+                '<b>Отключены страны:</b>\n',
             )
             success_text += '\n'.join(f'• {name}' for name in removed_names)
             success_text += (
                 '\n'
                 + texts.t(
                     'COUNTRY_CHANGES_REMOVED_WARNING',
-                    'ℹ️ Повторное подключение будет платным',
+                    '<tg-emoji emoji-id="5879785854284599288">ℹ️</tg-emoji> Повторное подключение будет платным',
                 )
                 + '\n'
             )
 
         success_text += '\n' + texts.t(
             'COUNTRY_CHANGES_ACTIVE_COUNT',
-            '🌐 <b>Активных стран:</b> {count}',
+            '<tg-emoji emoji-id="5879585266426973039">🌐</tg-emoji> <b>Активных стран:</b> {count}',
         ).format(count=len(selected_countries))
 
         await callback.message.edit_text(
@@ -497,7 +509,7 @@ async def apply_countries_changes(callback: types.CallbackQuery, db_user: User, 
 
         await state.clear()
         logger.info(
-            '✅ Пользователь обновил страны. Добавлено: удалено: заплатил: ₽',
+            'Пользователь обновил страны. Добавлено: удалено: заплатил: ₽',
             telegram_id=db_user.telegram_id,
             added_count=len(added),
             removed_count=len(removed),
@@ -505,7 +517,7 @@ async def apply_countries_changes(callback: types.CallbackQuery, db_user: User, 
         )
 
     except Exception as e:
-        logger.error('⚠️ Ошибка применения изменений', error=e)
+        logger.error('Ошибка применения изменений', error=e)
         await callback.message.edit_text(texts.ERROR, reply_markup=get_back_keyboard(db_user.language))
 
     await callback.answer()
@@ -518,7 +530,10 @@ async def select_country(callback: types.CallbackQuery, state: FSMContext, db_us
 
     if 'period_days' not in data:
         await callback.answer(
-            texts.t('SUBSCRIPTION_UI_CHECKOUT_STALE', '❌ Данные подписки устарели. Начните оформление заново.'),
+            texts.t(
+                'SUBSCRIPTION_UI_CHECKOUT_STALE',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Данные подписки устарели. Начните оформление заново.',
+            ),
             show_alert=True,
         )
         return
@@ -534,7 +549,10 @@ async def select_country(callback: types.CallbackQuery, state: FSMContext, db_us
 
     if country_uuid not in allowed_country_ids and country_uuid not in selected_countries:
         await callback.answer(
-            texts.t('SUBSCRIPTION_UI_SERVER_GROUP_UNAVAILABLE', '❌ Сервер недоступен для вашей промогруппы'),
+            texts.t(
+                'SUBSCRIPTION_UI_SERVER_GROUP_UNAVAILABLE',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Сервер недоступен для вашей промогруппы',
+            ),
             show_alert=True,
         )
         return
@@ -565,7 +583,10 @@ async def countries_continue(callback: types.CallbackQuery, state: FSMContext, d
 
     if not data.get('countries'):
         await callback.answer(
-            texts.t('SUBSCRIPTION_UI_SELECT_COUNTRY', '⚠️ Выберите хотя бы одну страну!'),
+            texts.t(
+                'SUBSCRIPTION_UI_SELECT_COUNTRY',
+                '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> Выберите хотя бы одну страну!',
+            ),
             show_alert=True,
         )
         return
@@ -588,7 +609,7 @@ async def countries_continue(callback: types.CallbackQuery, state: FSMContext, d
 def _localize_fallback_countries(countries: list[dict], language: str | None) -> list[dict]:
     """Localize only our synthetic fallback; keep cached/operator names intact."""
     return [
-        {**country, 'name': get_texts(language).t('SUBSCRIPTION_UI_FREE_SERVER', '🆓 Бесплатный сервер')}
+        {**country, 'name': get_texts(language).t('SUBSCRIPTION_UI_FREE_SERVER', 'Бесплатный сервер')}
         if country.get('uuid') == 'default-free'
         else country
         for country in countries
@@ -630,7 +651,7 @@ async def _get_available_countries(promo_group_id: int | None = None, language: 
             )
 
         if not countries:
-            logger.info('🔄 Серверов в БД нет, получаем из RemnaWave...')
+            logger.info('Серверов в БД нет, получаем из RemnaWave...')
             from app.services.remnawave_service import RemnaWaveService
 
             service = RemnaWaveService()
@@ -643,14 +664,23 @@ async def _get_available_countries(promo_group_id: int | None = None, language: 
                     flag in squad_name for flag in ['🇳🇱', '🇩🇪', '🇺🇸', '🇫🇷', '🇬🇧', '🇮🇹', '🇪🇸', '🇨🇦', '🇯🇵', '🇸🇬', '🇦🇺']
                 ):
                     name_lower = squad_name.lower()
-                    if 'netherlands' in name_lower or 'нидерланды' in name_lower or 'nl' in name_lower:
-                        squad_name = f'🇳🇱 {squad_name}'
-                    elif 'germany' in name_lower or 'германия' in name_lower or 'de' in name_lower:
-                        squad_name = f'🇩🇪 {squad_name}'
-                    elif 'usa' in name_lower or 'сша' in name_lower or 'america' in name_lower or 'us' in name_lower:
-                        squad_name = f'🇺🇸 {squad_name}'
-                    else:
-                        squad_name = f'🌐 {squad_name}'
+                    known_country = any(
+                        key in name_lower
+                        for key in (
+                            'netherlands',
+                            'нидерланды',
+                            'nl',
+                            'germany',
+                            'германия',
+                            'de',
+                            'usa',
+                            'сша',
+                            'america',
+                            'us',
+                        )
+                    )
+                    if not known_country:
+                        squad_name = f'<tg-emoji emoji-id="5879585266426973039">🌐</tg-emoji> {squad_name}'
 
                 countries.append(
                     {
@@ -670,7 +700,7 @@ async def _get_available_countries(promo_group_id: int | None = None, language: 
         fallback_countries = [
             {
                 'uuid': 'default-free',
-                'name': '🆓 Бесплатный сервер',
+                'name': 'Бесплатный сервер',
                 'price_kopeks': 0,
                 'is_available': True,
                 'description': '',
@@ -715,15 +745,15 @@ def _build_countries_selection_text(countries: list[dict], base_text: str) -> st
 async def handle_add_country_to_subscription(
     callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext
 ):
-    logger.info('🔍 handle_add_country_to_subscription вызван для', telegram_id=db_user.telegram_id)
-    logger.info('🔍 Callback data', callback_data=callback.data)
+    logger.info('handle_add_country_to_subscription вызван для', telegram_id=db_user.telegram_id)
+    logger.info('Callback data', callback_data=callback.data)
 
     current_state = await state.get_state()
-    logger.info('🔍 Текущее состояние', current_state=current_state)
+    logger.info('Текущее состояние', current_state=current_state)
 
     country_uuid = callback.data.split('_')[1]
     data = await state.get_data()
-    logger.info('🔍 Данные состояния', data=data)
+    logger.info('Данные состояния', data=data)
 
     selected_countries = data.get('countries', [])
     countries = await _get_available_countries(db_user.promo_group_id, language=db_user.language)
@@ -732,7 +762,8 @@ async def handle_add_country_to_subscription(
     if country_uuid not in allowed_country_ids and country_uuid not in selected_countries:
         await callback.answer(
             get_texts(getattr(db_user, 'language', None)).t(
-                'SUBSCRIPTION_UI_SERVER_GROUP_UNAVAILABLE', '❌ Сервер недоступен для вашей промогруппы'
+                'SUBSCRIPTION_UI_SERVER_GROUP_UNAVAILABLE',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Сервер недоступен для вашей промогруппы',
             ),
             show_alert=True,
         )
@@ -740,10 +771,10 @@ async def handle_add_country_to_subscription(
 
     if country_uuid in selected_countries:
         selected_countries.remove(country_uuid)
-        logger.info('🔍 Удалена страна', country_uuid=country_uuid)
+        logger.info('Удалена страна', country_uuid=country_uuid)
     else:
         selected_countries.append(country_uuid)
-        logger.info('🔍 Добавлена страна', country_uuid=country_uuid)
+        logger.info('Добавлена страна', country_uuid=country_uuid)
 
     total_price = 0
     subscription, sub_id = await _resolve_subscription(callback, db_user, db, state)
@@ -775,8 +806,8 @@ async def handle_add_country_to_subscription(
     data['total_price'] = total_price
     await state.set_data(data)
 
-    logger.info('🔍 Новые выбранные страны', selected_countries=selected_countries)
-    logger.info('🔍 Общая стоимость', total_price=total_price)
+    logger.info('Новые выбранные страны', selected_countries=selected_countries)
+    logger.info('Общая стоимость', total_price=total_price)
 
     try:
         from app.keyboards.inline import get_manage_countries_keyboard
@@ -792,9 +823,9 @@ async def handle_add_country_to_subscription(
                 sub_id=sub_id,
             )
         )
-        logger.info('✅ Клавиатура обновлена')
+        logger.info('Клавиатура обновлена')
     except Exception as e:
-        logger.error('❌ Ошибка обновления клавиатуры', error=e)
+        logger.error('Ошибка обновления клавиатуры', error=e)
 
     await callback.answer()
 
@@ -855,7 +886,10 @@ async def confirm_add_countries_to_subscription(
 
     if not new_countries and not removed_countries:
         await callback.answer(
-            texts.t('SUBSCRIPTION_UI_NO_CHANGES', '⚠️ Изменения не обнаружены'),
+            texts.t(
+                'SUBSCRIPTION_UI_NO_CHANGES',
+                '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> Изменения не обнаружены',
+            ),
             show_alert=True,
         )
         return
@@ -910,7 +944,7 @@ async def confirm_add_countries_to_subscription(
         message_text = texts.t(
             'ADDON_INSUFFICIENT_FUNDS_MESSAGE',
             (
-                '⚠️ <b>Недостаточно средств</b>\n\n'
+                '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> <b>Недостаточно средств</b>\n\n'
                 'Стоимость услуги: {required}\n'
                 'На балансе: {balance}\n'
                 'Не хватает: {missing}\n\n'
@@ -940,7 +974,7 @@ async def confirm_add_countries_to_subscription(
             await callback.answer(
                 texts.t(
                     'COUNTRIES_MINIMUM_REQUIRED',
-                    '❌ Нельзя отключить все страны. Должна быть подключена хотя бы одна страна.',
+                    '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Нельзя отключить все страны. Должна быть подключена хотя бы одна страна.',
                 ),
                 show_alert=True,
             )
@@ -953,7 +987,10 @@ async def confirm_add_countries_to_subscription(
 
             if not success:
                 await callback.answer(
-                    texts.t('SUBSCRIPTION_UI_DEBIT_FAILED', '❌ Ошибка списания средств'),
+                    texts.t(
+                        'SUBSCRIPTION_UI_DEBIT_FAILED',
+                        '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Ошибка списания средств',
+                    ),
                     show_alert=True,
                 )
                 return
@@ -976,16 +1013,21 @@ async def confirm_add_countries_to_subscription(
         await db.refresh(db_user)
         await db.refresh(subscription)
 
-        success_text = texts.t('SUBSCRIPTION_UI_COUNTRIES_UPDATED', '✅ Страны успешно обновлены!\n\n')
+        success_text = texts.t(
+            'SUBSCRIPTION_UI_COUNTRIES_UPDATED',
+            '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Страны успешно обновлены!\n\n',
+        )
 
         if new_countries_names:
-            success_text += texts.t('SUBSCRIPTION_UI_COUNTRIES_ADDED', '➕ Добавлены страны:\n{countries}\n').format(
-                countries=chr(10).join(f'• {name}' for name in new_countries_names)
-            )
+            success_text += texts.t(
+                'SUBSCRIPTION_UI_COUNTRIES_ADDED',
+                '<tg-emoji emoji-id="5877219383691972108">➕</tg-emoji> Добавлены страны:\n{countries}\n',
+            ).format(countries=chr(10).join(f'• {name}' for name in new_countries_names))
             if total_price > 0:
-                success_text += texts.t('SUBSCRIPTION_UI_CHARGED_AMOUNT', '💰 Списано: {amount}').format(
-                    amount=texts.format_price(total_price)
-                )
+                success_text += texts.t(
+                    'SUBSCRIPTION_UI_CHARGED_AMOUNT',
+                    '<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> Списано: {amount}',
+                ).format(amount=texts.format_price(total_price))
                 if total_discount_value > 0:
                     success_text += texts.t(
                         'SUBSCRIPTION_UI_DISCOUNT_SUFFIX', ' (скидка {percent}%: -{amount})'
@@ -993,12 +1035,15 @@ async def confirm_add_countries_to_subscription(
                 success_text += '\n'
 
         if removed_countries_names:
+            success_text += texts.t('SUBSCRIPTION_UI_COUNTRIES_REMOVED', '\nОтключены страны:\n{countries}\n').format(
+                countries=chr(10).join(f'• {name}' for name in removed_countries_names)
+            )
             success_text += texts.t(
-                'SUBSCRIPTION_UI_COUNTRIES_REMOVED', '\n➖ Отключены страны:\n{countries}\n'
-            ).format(countries=chr(10).join(f'• {name}' for name in removed_countries_names))
-            success_text += texts.t('SUBSCRIPTION_UI_RECONNECT_PAID', 'ℹ️ Повторное подключение будет платным\n')
+                'SUBSCRIPTION_UI_RECONNECT_PAID',
+                '<tg-emoji emoji-id="5879785854284599288">ℹ️</tg-emoji> Повторное подключение будет платным\n',
+            )
 
-        success_text += texts.t('SUBSCRIPTION_UI_COUNTRIES_ACTIVE', '\n🌍 Активных стран: {count}').format(
+        success_text += texts.t('SUBSCRIPTION_UI_COUNTRIES_ACTIVE', '\nАктивных стран: {count}').format(
             count=len(selected_countries)
         )
 
@@ -1007,7 +1052,7 @@ async def confirm_add_countries_to_subscription(
         )
 
         logger.info(
-            '✅ Пользователь обновил страны подписки. Добавлено: убрано',
+            'Пользователь обновил страны подписки. Добавлено: убрано',
             telegram_id=db_user.telegram_id,
             new_countries_count=len(new_countries),
             removed_countries_count=len(removed_countries),

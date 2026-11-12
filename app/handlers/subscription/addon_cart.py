@@ -65,13 +65,15 @@ async def resume_addon_cart_from_button(
     # и чистит корзину; здесь — только короткий ответ на нажатие.
     succeeded = await resume_addon_cart(db, db_user, cart_data, bot=callback.bot)
     if succeeded:
-        await callback.answer(texts.t('ADDON_CART_COMPLETED', '✅ Готово!'))
+        await callback.answer(
+            texts.t('ADDON_CART_COMPLETED', '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Готово!')
+        )
         return
 
     await callback.answer(
         texts.t(
             'ADDON_CART_FAILED',
-            '❌ Не удалось завершить покупку. Попробуйте ещё раз или напишите в поддержку.',
+            '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Не удалось завершить покупку. Попробуйте ещё раз или напишите в поддержку.',
         ),
         show_alert=True,
     )

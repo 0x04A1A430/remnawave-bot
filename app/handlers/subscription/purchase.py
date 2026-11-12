@@ -286,16 +286,22 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
             warning_text = ''
         elif days_left == 1:
             time_left_text = texts.t('SUBSCRIPTION_TIME_LEFT_DAYS', '{days} дн.').format(days=days_left)
-            warning_text = texts.t('SUBSCRIPTION_WARNING_TOMORROW', '\n⚠️ истекает завтра!')
+            warning_text = texts.t(
+                'SUBSCRIPTION_WARNING_TOMORROW',
+                '\n<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> истекает завтра!',
+            )
         elif hours_left > 0:
             time_left_text = texts.t('SUBSCRIPTION_TIME_LEFT_HOURS', '{hours} ч.').format(hours=hours_left)
-            warning_text = texts.t('SUBSCRIPTION_WARNING_TODAY', '\n⚠️ истекает сегодня!')
+            warning_text = texts.t(
+                'SUBSCRIPTION_WARNING_TODAY',
+                '\n<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> истекает сегодня!',
+            )
         else:
             minutes_left = (delta.seconds % 3600) // 60
             time_left_text = texts.t('SUBSCRIPTION_TIME_LEFT_MINUTES', '{minutes} мин.').format(minutes=minutes_left)
             warning_text = texts.t(
                 'SUBSCRIPTION_WARNING_MINUTES',
-                '\n🔴 истекает через несколько минут!',
+                '\n<tg-emoji emoji-id="5967333011652350314">🔴</tg-emoji> истекает через несколько минут!',
             )
 
     subscription_type = (
@@ -376,9 +382,14 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
                 # Формируем блок информации о тарифе
                 is_daily = getattr(tariff, 'is_daily', False)
                 tariff_type_str = (
-                    texts.t('SUBSCRIPTION_UI_DAILY_TYPE', '🔄 Суточный')
+                    texts.t(
+                        'SUBSCRIPTION_UI_DAILY_TYPE', '<tg-emoji emoji-id="5839200986022812209">🔄</tg-emoji> Суточный'
+                    )
                     if is_daily
-                    else texts.t('SUBSCRIPTION_UI_PERIOD_TYPE', '📅 Периодный')
+                    else texts.t(
+                        'SUBSCRIPTION_UI_PERIOD_TYPE',
+                        '<tg-emoji emoji-id="5967412305338568701">📅</tg-emoji> Периодный',
+                    )
                 )
 
                 tariff_info_lines = [
@@ -410,7 +421,7 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
                     if is_paused:
                         tariff_info_lines.append('')
                         tariff_info_lines.append(
-                            texts.t('SUBSCRIPTION_UI_PAUSED_TITLE', '⏸️ <b>Подписка приостановлена</b>')
+                            texts.t('SUBSCRIPTION_UI_PAUSED_TITLE', '<b>Подписка приостановлена</b>')
                         )
                         # Показываем оставшееся время даже при паузе
                         if last_charge:
@@ -422,11 +433,14 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
                                 minutes_left = (time_until.seconds % 3600) // 60
                                 tariff_info_lines.append(
                                     texts.t(
-                                        'SUBSCRIPTION_UI_HOURS_MINUTES_LEFT', '⏳ Осталось: {hours}ч {minutes}мин'
+                                        'SUBSCRIPTION_UI_HOURS_MINUTES_LEFT', 'Осталось: {hours}ч {minutes}мин'
                                     ).format(hours=hours_left, minutes=minutes_left)
                                 )
                                 tariff_info_lines.append(
-                                    texts.t('SUBSCRIPTION_UI_CHARGING_PAUSED', '💤 Списание приостановлено')
+                                    texts.t(
+                                        'SUBSCRIPTION_UI_CHARGING_PAUSED',
+                                        '<tg-emoji emoji-id="5886366951067883092">💤</tg-emoji> Списание приостановлено',
+                                    )
                                 )
                     elif last_charge:
                         next_charge = last_charge + timedelta(hours=24)
@@ -451,15 +465,13 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
                             tariff_info_lines.append('')
                             tariff_info_lines.append(
                                 texts.t(
-                                    'SUBSCRIPTION_UI_HOURS_MINUTES_CHARGE', '⏳ До списания: {hours}ч {minutes}мин'
+                                    'SUBSCRIPTION_UI_HOURS_MINUTES_CHARGE', 'До списания: {hours}ч {minutes}мин'
                                 ).format(hours=hours_left, minutes=minutes_left)
                             )
                             tariff_info_lines.append(f'[{progress_bar}] {percent:.0f}%')
                     else:
                         tariff_info_lines.append('')
-                        tariff_info_lines.append(
-                            texts.t('SUBSCRIPTION_UI_FIRST_CHARGE_SOON', '⏳ Первое списание скоро')
-                        )
+                        tariff_info_lines.append(texts.t('SUBSCRIPTION_UI_FIRST_CHARGE_SOON', 'Первое списание скоро'))
 
                 tariff_info_block = '\n<blockquote expandable>' + '\n'.join(tariff_info_lines) + '</blockquote>'
 
@@ -527,7 +539,7 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
     if show_devices and devices_list:
         message += '\n' + texts.t(
             'SUBSCRIPTION_CONNECTED_DEVICES_TITLE',
-            '<blockquote>📱 <b>Подключенные устройства:</b>\n',
+            '<blockquote><tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> <b>Подключенные устройства:</b>\n',
         )
         for device in devices_list[:5]:
             platform = device.get('platform', 'Unknown')
@@ -560,7 +572,7 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
         if purchases:
             message += '\n' + texts.t(
                 'SUBSCRIPTION_PURCHASED_TRAFFIC_TITLE',
-                '<blockquote>📦 <b>Докупленный трафик:</b>\n',
+                '<blockquote><tg-emoji emoji-id="5924720918826848520">📦</tg-emoji> <b>Докупленный трафик:</b>\n',
             )
 
             for purchase in purchases:
@@ -618,7 +630,7 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
 
         message += '\n' + texts.t(
             'SUBSCRIPTION_CONNECT_LINK_SECTION',
-            '🔗 <b>Ссылка для подключения:</b>\n{subscription_url}',
+            '<tg-emoji emoji-id="5877465816030515018">🔗</tg-emoji> <b>Ссылка для подключения:</b>\n{subscription_url}',
         ).format(subscription_url=subscription_link_display)
 
     from app.services.cispay_recurrent_guard import has_live_cispay
@@ -676,7 +688,7 @@ async def show_trial_offer(callback: types.CallbackQuery, db_user: User, db: Asy
     trial_traffic = settings.TRIAL_TRAFFIC_LIMIT_GB
     trial_device_limit = settings.TRIAL_DEVICE_LIMIT
     trial_tariff = None
-    trial_server_name = texts.t('TRIAL_SERVER_DEFAULT_NAME', '🎯 Тестовый сервер')
+    trial_server_name = texts.t('TRIAL_SERVER_DEFAULT_NAME', 'Тестовый сервер')
 
     # Проверяем триальный тариф
     if settings.is_tariffs_mode():
@@ -713,7 +725,7 @@ async def show_trial_offer(callback: types.CallbackQuery, db_user: User, db: Asy
                 else:
                     trial_server_name = texts.t(
                         'TRIAL_SERVER_RANDOM_POOL',
-                        '🎲 Случайный из {count} серверов',
+                        '<tg-emoji emoji-id="5960608239623082921">🎲</tg-emoji> Случайный из {count} серверов',
                     ).format(count=len(tariff_squads))
         else:
             trial_squads = await get_trial_eligible_server_squads(db, include_unavailable=True)
@@ -723,7 +735,7 @@ async def show_trial_offer(callback: types.CallbackQuery, db_user: User, db: Asy
                 else:
                     trial_server_name = texts.t(
                         'TRIAL_SERVER_RANDOM_POOL',
-                        '🎲 Случайный из {count} серверов',
+                        '<tg-emoji emoji-id="5960608239623082921">🎲</tg-emoji> Случайный из {count} серверов',
                     ).format(count=len(trial_squads))
             else:
                 logger.warning('Не настроены сквады для выдачи триалов')
@@ -740,7 +752,7 @@ async def show_trial_offer(callback: types.CallbackQuery, db_user: User, db: Asy
     if settings.is_devices_selection_enabled() or trial_tariff:
         devices_line_template = texts.t(
             'TRIAL_AVAILABLE_DEVICES_LINE',
-            '\n📱 <b>Устройства:</b> {devices} шт.',
+            '\n<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> <b>Устройства:</b> {devices} шт.',
         )
         devices_line = devices_line_template.format(
             devices=trial_device_limit,
@@ -752,7 +764,7 @@ async def show_trial_offer(callback: types.CallbackQuery, db_user: User, db: Asy
         if trial_price > 0:
             price_line = texts.t(
                 'TRIAL_PAYMENT_PRICE_LINE',
-                '\n💳 <b>Стоимость активации:</b> {price}',
+                '\n<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> <b>Стоимость активации:</b> {price}',
             ).format(price=settings.format_price(trial_price))
 
     trial_text = texts.TRIAL_AVAILABLE.format(
@@ -778,7 +790,10 @@ def _get_trial_payment_keyboard(language: str, can_pay_from_balance: bool = Fals
         keyboard.append(
             [
                 types.InlineKeyboardButton(
-                    text=texts.t('SUBSCRIPTION_UI_PAY_BALANCE', '✅ Оплатить с баланса'),
+                    text=texts.t(
+                        'SUBSCRIPTION_UI_PAY_BALANCE',
+                        '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Оплатить с баланса',
+                    ),
                     callback_data='trial_pay_with_balance',
                 )
             ]
@@ -786,20 +801,30 @@ def _get_trial_payment_keyboard(language: str, can_pay_from_balance: bool = Fals
 
     # Добавляем доступные методы оплаты
     if settings.TELEGRAM_STARS_ENABLED:
-        keyboard.append([types.InlineKeyboardButton(text='⭐ Telegram Stars', callback_data='trial_payment_stars')])
+        keyboard.append(
+            [
+                types.InlineKeyboardButton(
+                    text='<tg-emoji emoji-id="5958376256788502078">⭐</tg-emoji> Telegram Stars',
+                    callback_data='trial_payment_stars',
+                )
+            ]
+        )
 
     if settings.is_yookassa_enabled():
         yookassa_methods = []
         if settings.YOOKASSA_SBP_ENABLED:
             yookassa_methods.append(
                 types.InlineKeyboardButton(
-                    text=texts.t('SUBSCRIPTION_UI_YOOKASSA_SBP', '🏦 YooKassa (СБП)'),
+                    text=texts.t('SUBSCRIPTION_UI_YOOKASSA_SBP', 'YooKassa (СБП)'),
                     callback_data='trial_payment_yookassa_sbp',
                 )
             )
         yookassa_methods.append(
             types.InlineKeyboardButton(
-                text=texts.t('SUBSCRIPTION_UI_YOOKASSA_CARD', '💳 YooKassa (Карта)'),
+                text=texts.t(
+                    'SUBSCRIPTION_UI_YOOKASSA_CARD',
+                    '<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> YooKassa (Карта)',
+                ),
                 callback_data='trial_payment_yookassa',
             )
         )
@@ -807,38 +832,79 @@ def _get_trial_payment_keyboard(language: str, can_pay_from_balance: bool = Fals
             keyboard.append(yookassa_methods)
 
     if settings.is_cryptobot_enabled():
-        keyboard.append([types.InlineKeyboardButton(text='🪙 CryptoBot', callback_data='trial_payment_cryptobot')])
+        keyboard.append(
+            [
+                types.InlineKeyboardButton(
+                    text='<tg-emoji emoji-id="5992430854909989581">🪙</tg-emoji> CryptoBot',
+                    callback_data='trial_payment_cryptobot',
+                )
+            ]
+        )
 
     if settings.is_heleket_enabled():
-        keyboard.append([types.InlineKeyboardButton(text='🪙 Heleket', callback_data='trial_payment_heleket')])
+        keyboard.append(
+            [
+                types.InlineKeyboardButton(
+                    text='<tg-emoji emoji-id="5992430854909989581">🪙</tg-emoji> Heleket',
+                    callback_data='trial_payment_heleket',
+                )
+            ]
+        )
 
     if settings.is_mulenpay_enabled():
         mulenpay_name = settings.get_mulenpay_display_name()
         keyboard.append(
-            [types.InlineKeyboardButton(text=f'💳 {mulenpay_name}', callback_data='trial_payment_mulenpay')]
+            [
+                types.InlineKeyboardButton(
+                    text=f'<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> {mulenpay_name}',
+                    callback_data='trial_payment_mulenpay',
+                )
+            ]
         )
 
     if settings.is_pal24_enabled():
-        keyboard.append([types.InlineKeyboardButton(text='💳 PayPalych', callback_data='trial_payment_pal24')])
+        keyboard.append(
+            [
+                types.InlineKeyboardButton(
+                    text='<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> PayPalych',
+                    callback_data='trial_payment_pal24',
+                )
+            ]
+        )
 
     if settings.is_anore_enabled():
         keyboard.append(
             [
                 types.InlineKeyboardButton(
-                    text=texts.t('SUBSCRIPTION_UI_TOPUP_PROVIDER', '💳 Пополнить баланс: {provider}').format(
-                        provider=settings.get_anore_display_name()
-                    ),
+                    text=texts.t(
+                        'SUBSCRIPTION_UI_TOPUP_PROVIDER',
+                        '<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> Пополнить баланс: {provider}',
+                    ).format(provider=settings.get_anore_display_name()),
                     callback_data='topup_anore',
                 )
             ]
         )
 
     if settings.is_wata_enabled():
-        keyboard.append([types.InlineKeyboardButton(text='💳 WATA', callback_data='trial_payment_wata')])
+        keyboard.append(
+            [
+                types.InlineKeyboardButton(
+                    text='<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> WATA',
+                    callback_data='trial_payment_wata',
+                )
+            ]
+        )
 
     if settings.is_platega_enabled():
         platega_name = settings.get_platega_display_name()
-        keyboard.append([types.InlineKeyboardButton(text=f'💳 {platega_name}', callback_data='trial_payment_platega')])
+        keyboard.append(
+            [
+                types.InlineKeyboardButton(
+                    text=f'<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> {platega_name}',
+                    callback_data='trial_payment_platega',
+                )
+            ]
+        )
 
     # Кнопка назад
     keyboard.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='menu_trial', style='danger')])
@@ -866,7 +932,7 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
         await callback.message.edit_text(
             texts.t(
                 'SUBSCRIPTION_UI_ACTIVATION_RESTRICTED_REASON',
-                '🚫 <b>Активация подписки ограничена</b>\n\n{reason}\n\nЕсли вы считаете это ошибкой, вы можете обжаловать решение.',
+                '<tg-emoji emoji-id="5872829476143894491">🚫</tg-emoji> <b>Активация подписки ограничена</b>\n\n{reason}\n\nЕсли вы считаете это ошибкой, вы можете обжаловать решение.',
             ).format(reason=reason),
             reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
         )
@@ -930,14 +996,16 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
         )
 
         message_lines = [
-            texts.t('PAID_TRIAL_HEADER', '⚡ <b>Пробная подписка</b>'),
+            texts.t(
+                'PAID_TRIAL_HEADER', '<tg-emoji emoji-id="5843553939672274145">⚡</tg-emoji> <b>Пробная подписка</b>'
+            ),
             '',
-            f'📅 {texts.t("PERIOD", "Период")}: {paid_trial_days} {texts.t("DAYS", "дней")}',
-            f'📊 {texts.t("TRAFFIC", "Трафик")}: {traffic_label}',
-            f'📱 {texts.t("DEVICES", "Устройства")}: {paid_trial_devices}',
+            f'<tg-emoji emoji-id="5967412305338568701">📅</tg-emoji> {texts.t("PERIOD", "Период")}: {paid_trial_days} {texts.t("DAYS", "дней")}',
+            f'<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> {texts.t("TRAFFIC", "Трафик")}: {traffic_label}',
+            f'<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> {texts.t("DEVICES", "Устройства")}: {paid_trial_devices}',
             '',
-            f'💰 {texts.t("PRICE", "Стоимость")}: {settings.format_price(trial_price_kopeks)}',
-            f'💳 {texts.t("YOUR_BALANCE", "Ваш баланс")}: {settings.format_price(user_balance_kopeks)}',
+            f'<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> {texts.t("PRICE", "Стоимость")}: {settings.format_price(trial_price_kopeks)}',
+            f'<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> {texts.t("YOUR_BALANCE", "Ваш баланс")}: {settings.format_price(user_balance_kopeks)}',
             '',
         ]
 
@@ -1064,7 +1132,7 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
             missing_label = settings.format_price(error.missing_amount, round_kopeks=False)
             message = texts.t(
                 'TRIAL_PAYMENT_INSUFFICIENT_FUNDS',
-                '⚠️ Недостаточно средств для активации триала.\n'
+                '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> Недостаточно средств для активации триала.\n'
                 'Необходимо: {required}\nНа балансе: {balance}\n'
                 'Не хватает: {missing}\n\nПополните баланс и попробуйте снова.',
             ).format(
@@ -1197,24 +1265,24 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
         if charged_amount > 0:
             payment_note = '\n\n' + texts.t(
                 'TRIAL_PAYMENT_CHARGED_NOTE',
-                '💳 С вашего баланса списано {amount}.',
+                '<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> С вашего баланса списано {amount}.',
             ).format(amount=settings.format_price(charged_amount))
 
         if remnawave_user and subscription_link:
             if settings.is_happ_cryptolink_mode():
                 trial_success_text = f'{texts.TRIAL_ACTIVATED}\n\n' + texts.t(
                     'SUBSCRIPTION_HAPP_LINK_PROMPT',
-                    '🔒 Ссылка на подписку создана. Нажмите кнопку "Подключиться" ниже, чтобы открыть её в Happ.',
+                    '<tg-emoji emoji-id="5832546462478635761">🔒</tg-emoji> Ссылка на подписку создана. Нажмите кнопку "Подключиться" ниже, чтобы открыть её в Happ.',
                 )
             elif hide_subscription_link:
                 trial_success_text = f'{texts.TRIAL_ACTIVATED}\n\n' + texts.t(
                     'SUBSCRIPTION_LINK_HIDDEN_NOTICE',
-                    'ℹ️ Ссылка подписки доступна по кнопкам ниже или в разделе "Моя подписка".',
+                    '<tg-emoji emoji-id="5879785854284599288">ℹ️</tg-emoji> Ссылка подписки доступна по кнопкам ниже или в разделе "Моя подписка".',
                 )
             else:
                 subscription_import_link = texts.t(
                     'SUBSCRIPTION_IMPORT_LINK_SECTION',
-                    '🔗 <b>Ваша ссылка для импорта в VPN приложение:</b>\n<code>{subscription_url}</code>',
+                    '<tg-emoji emoji-id="5877465816030515018">🔗</tg-emoji> <b>Ваша ссылка для импорта в VPN приложение:</b>\n<code>{subscription_url}</code>',
                 ).format(subscription_url=subscription_link)
 
                 trial_success_text = f'{texts.TRIAL_ACTIVATED}\n\n{subscription_import_link}'
@@ -1249,7 +1317,7 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
                     await callback.answer(
                         texts.t(
                             'CUSTOM_MINIAPP_URL_NOT_SET',
-                            '⚠ Кастомная ссылка для мини-приложения не настроена',
+                            '<tg-emoji emoji-id="5881702736843511327">⚠</tg-emoji> Кастомная ссылка для мини-приложения не настроена',
                         ),
                         show_alert=True,
                     )
@@ -1353,7 +1421,7 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
         else:
             trial_success_text = texts.t(
                 'SUBSCRIPTION_UI_LINK_GENERATING',
-                "{message}\n\n⚠️ Ссылка генерируется, попробуйте перейти в раздел 'Моя подписка' через несколько секунд.",
+                "{message}\n\n<tg-emoji emoji-id='5881702736843511327'>⚠️</tg-emoji> Ссылка генерируется, попробуйте перейти в раздел 'Моя подписка' через несколько секунд.",
             ).format(message=texts.TRIAL_ACTIVATED)
             trial_success_text += payment_note
             await callback.message.edit_text(
@@ -1361,7 +1429,7 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
                 reply_markup=get_back_keyboard(db_user.language),
             )
 
-        logger.info('✅ Активирована тестовая подписка для пользователя', telegram_id=db_user.telegram_id)
+        logger.info('Активирована тестовая подписка для пользователя', telegram_id=db_user.telegram_id)
 
     except Exception as e:
         logger.error('Ошибка активации триала', error=e)
@@ -1518,7 +1586,7 @@ async def save_cart_and_redirect_to_topup(
     await callback.message.edit_text(
         texts.t(
             'SUBSCRIPTION_UI_INSUFFICIENT_CART_SAVED',
-            '💰 Недостаточно средств для оформления подписки\n\nТребуется: {required}\nУ вас: {balance}\n\n🛒 Ваша корзина сохранена!\nПосле пополнения баланса вы сможете вернуться к оформлению подписки.\n\nВыберите способ пополнения:',
+            '<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> Недостаточно средств для оформления подписки\n\nТребуется: {required}\nУ вас: {balance}\n\nВаша корзина сохранена!\nПосле пополнения баланса вы сможете вернуться к оформлению подписки.\n\nВыберите способ пополнения:',
         ).format(
             required=texts.format_price(missing_amount, round_kopeks=False),
             balance=texts.format_price(db_user.balance_kopeks, round_kopeks=False),
@@ -1538,7 +1606,8 @@ async def return_to_saved_cart(callback: types.CallbackQuery, state: FSMContext,
     if not cart_data:
         await callback.answer(
             get_texts(getattr(db_user, 'language', None)).t(
-                'SUBSCRIPTION_UI_CART_NOT_FOUND', '❌ Сохраненная корзина не найдена'
+                'SUBSCRIPTION_UI_CART_NOT_FOUND',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Сохраненная корзина не найдена',
             ),
             show_alert=True,
         )
@@ -1574,7 +1643,10 @@ async def return_to_saved_cart(callback: types.CallbackQuery, state: FSMContext,
 
     if 'period_days' not in prepared_cart_data:
         await callback.answer(
-            texts.t('SUBSCRIPTION_UI_CART_INVALID', '❌ Корзина повреждена. Оформите подписку заново.'),
+            texts.t(
+                'SUBSCRIPTION_UI_CART_INVALID',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Корзина повреждена. Оформите подписку заново.',
+            ),
             show_alert=True,
         )
         # Multi-tariff safe: try per-subscription deletion to avoid nuking other carts
@@ -1649,7 +1721,7 @@ async def return_to_saved_cart(callback: types.CallbackQuery, state: FSMContext,
         )
         insufficient_text = texts.t(
             'SUBSCRIPTION_UI_STILL_INSUFFICIENT',
-            '❌ Все еще недостаточно средств\n\nТребуется: {required}\nУ вас: {balance}\nНе хватает: {missing}',
+            '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Все еще недостаточно средств\n\nТребуется: {required}\nУ вас: {balance}\nНе хватает: {missing}',
         ).format(
             required=texts.format_price(total_price, round_kopeks=False),
             balance=texts.format_price(db_user.balance_kopeks, round_kopeks=False),
@@ -1664,7 +1736,10 @@ async def return_to_saved_cart(callback: types.CallbackQuery, state: FSMContext,
             )
         else:
             await callback.answer(
-                texts.t('SUBSCRIPTION_UI_TOPUP_TO_FINISH', 'ℹ️ Пополните баланс, чтобы завершить оформление.')
+                texts.t(
+                    'SUBSCRIPTION_UI_TOPUP_TO_FINISH',
+                    '<tg-emoji emoji-id="5879785854284599288">ℹ️</tg-emoji> Пополните баланс, чтобы завершить оформление.',
+                )
             )
         return
 
@@ -1701,11 +1776,15 @@ async def return_to_saved_cart(callback: types.CallbackQuery, state: FSMContext,
         )
 
     summary_lines = [
-        texts.t('SUBSCRIPTION_UI_RESTORED_CART', '🛒 Восстановленная корзина'),
+        texts.t('SUBSCRIPTION_UI_RESTORED_CART', 'Восстановленная корзина'),
         '',
-        texts.t('SUBSCRIPTION_UI_PERIOD_VALUE', '📅 Период: {period}').format(period=period_display),
-        texts.t('SUBSCRIPTION_UI_TRAFFIC_VALUE', '📊 Трафик: {traffic}').format(traffic=traffic_display),
-        texts.t('SUBSCRIPTION_UI_COUNTRIES_VALUE', '🌍 Страны: {countries}').format(
+        texts.t(
+            'SUBSCRIPTION_UI_PERIOD_VALUE', '<tg-emoji emoji-id="5967412305338568701">📅</tg-emoji> Период: {period}'
+        ).format(period=period_display),
+        texts.t(
+            'SUBSCRIPTION_UI_TRAFFIC_VALUE', '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> Трафик: {traffic}'
+        ).format(traffic=traffic_display),
+        texts.t('SUBSCRIPTION_UI_COUNTRIES_VALUE', 'Страны: {countries}').format(
             countries=', '.join(selected_countries_names)
         ),
     ]
@@ -1716,15 +1795,19 @@ async def return_to_saved_cart(callback: types.CallbackQuery, state: FSMContext,
             devices_value = prepared_cart_data.get('device_limit')
         if devices_value is not None:
             summary_lines.append(
-                texts.t('SUBSCRIPTION_UI_DEVICES_VALUE', '📱 Устройства: {devices}').format(devices=devices_value)
+                texts.t(
+                    'SUBSCRIPTION_UI_DEVICES_VALUE',
+                    '<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> Устройства: {devices}',
+                ).format(devices=devices_value)
             )
 
     summary_lines.extend(
         [
             '',
-            texts.t('SUBSCRIPTION_UI_TOTAL_COST', '💎 Общая стоимость: {amount}').format(
-                amount=texts.format_price(total_price)
-            ),
+            texts.t(
+                'SUBSCRIPTION_UI_TOTAL_COST',
+                '<tg-emoji emoji-id="5963312935148195483">💎</tg-emoji> Общая стоимость: {amount}',
+            ).format(amount=texts.format_price(total_price)),
             '',
             texts.t('SUBSCRIPTION_UI_CONFIRM_PURCHASE_QUESTION', 'Подтверждаете покупку?'),
         ]
@@ -1741,7 +1824,12 @@ async def return_to_saved_cart(callback: types.CallbackQuery, state: FSMContext,
     if _message_needs_update(callback.message, summary_text, confirm_keyboard):
         await callback.message.edit_text(summary_text, reply_markup=confirm_keyboard, parse_mode='HTML')
 
-    await callback.answer(texts.t('SUBSCRIPTION_UI_CART_RESTORED', '✅ Корзина восстановлена!'))
+    await callback.answer(
+        texts.t(
+            'SUBSCRIPTION_UI_CART_RESTORED',
+            '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Корзина восстановлена!',
+        )
+    )
 
 
 async def handle_extend_subscription(
@@ -1768,14 +1856,14 @@ async def handle_extend_subscription(
         await callback.message.edit_text(
             texts.t(
                 'SUBSCRIPTION_UI_TRIAL_ENDING',
-                '🎯 <b>Пробный период заканчивается</b>\n\nЧтобы продолжить пользоваться VPN, выберите подходящий тариф.',
+                '<b>Пробный период заканчивается</b>\n\nЧтобы продолжить пользоваться VPN, выберите подходящий тариф.',
             ),
             reply_markup=types.InlineKeyboardMarkup(
                 inline_keyboard=[
                     [types.InlineKeyboardButton(text=texts.MENU_BUY_SUBSCRIPTION, callback_data='menu_buy')],
                     [
                         types.InlineKeyboardButton(
-                            text=texts.t('WEBHOOK_CLOSE_BUTTON', '✖️ Закрыть'),
+                            text=texts.t('WEBHOOK_CLOSE_BUTTON', 'Закрыть'),
                             callback_data='webhook:close',
                         )
                     ],
@@ -1821,14 +1909,14 @@ async def handle_extend_subscription(
         await callback.message.edit_text(
             texts.t(
                 'SUBSCRIPTION_UI_TRIAL_ENDING',
-                '🎯 <b>Пробный период заканчивается</b>\n\nЧтобы продолжить пользоваться VPN, выберите подходящий тариф.',
+                '<b>Пробный период заканчивается</b>\n\nЧтобы продолжить пользоваться VPN, выберите подходящий тариф.',
             ),
             reply_markup=types.InlineKeyboardMarkup(
                 inline_keyboard=[
                     [types.InlineKeyboardButton(text=texts.MENU_BUY_SUBSCRIPTION, callback_data='menu_buy')],
                     [
                         types.InlineKeyboardButton(
-                            text=texts.t('WEBHOOK_CLOSE_BUTTON', '✖️ Закрыть'),
+                            text=texts.t('WEBHOOK_CLOSE_BUTTON', 'Закрыть'),
                             callback_data='webhook:close',
                         )
                     ],
@@ -1863,7 +1951,7 @@ async def handle_extend_subscription(
         await callback.message.edit_text(
             texts.t(
                 'SUBSCRIPTION_UI_LEGACY_RENEW_PLAN',
-                '📦 <b>Выберите тариф для продления</b>\n\nВаша текущая подписка была создана до введения тарифов.\nДля продления необходимо выбрать один из доступных тарифов.\n\n⚠️ Ваша текущая подписка продолжит действовать до окончания срока.',
+                '<tg-emoji emoji-id="5924720918826848520">📦</tg-emoji> <b>Выберите тариф для продления</b>\n\nВаша текущая подписка была создана до введения тарифов.\nДля продления необходимо выбрать один из доступных тарифов.\n\n<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> Ваша текущая подписка продолжит действовать до окончания срока.',
             ),
             reply_markup=types.InlineKeyboardMarkup(
                 inline_keyboard=[
@@ -1909,7 +1997,10 @@ async def handle_extend_subscription(
 
     if not renewal_prices:
         await callback.answer(
-            texts.t('SUBSCRIPTION_UI_NO_RENEW_PERIODS', '⚠ Нет доступных периодов для продления'),
+            texts.t(
+                'SUBSCRIPTION_UI_NO_RENEW_PERIODS',
+                '<tg-emoji emoji-id="5881702736843511327">⚠</tg-emoji> Нет доступных периодов для продления',
+            ),
             show_alert=True,
         )
         return
@@ -1957,24 +2048,27 @@ async def handle_extend_subscription(
     )
 
     renewal_lines = [
-        texts.t('SUBSCRIPTION_UI_RENEW_TITLE', '⏰ Продление подписки'),
+        texts.t(
+            'SUBSCRIPTION_UI_RENEW_TITLE', '<tg-emoji emoji-id="5985616167740379273">⏰</tg-emoji> Продление подписки'
+        ),
         '',
         f'Осталось дней: {subscription.days_left}',
         '',
         texts.t('SUBSCRIPTION_UI_CURRENT_CONFIG', '<b>Ваша текущая конфигурация:</b>'),
-        texts.t('SUBSCRIPTION_UI_SERVERS_COUNT', '🌍 Серверов: {count}').format(
+        texts.t('SUBSCRIPTION_UI_SERVERS_COUNT', 'Серверов: {count}').format(
             count=len(subscription.connected_squads or [])
         ),
-        texts.t('SUBSCRIPTION_UI_TRAFFIC_VALUE', '📊 Трафик: {traffic}').format(
-            traffic=texts.format_traffic(subscription.traffic_limit_gb)
-        ),
+        texts.t(
+            'SUBSCRIPTION_UI_TRAFFIC_VALUE', '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> Трафик: {traffic}'
+        ).format(traffic=texts.format_traffic(subscription.traffic_limit_gb)),
     ]
 
     if settings.is_devices_selection_enabled():
         renewal_lines.append(
-            texts.t('SUBSCRIPTION_UI_DEVICES_COUNT', '📱 Устройств: {count}').format(
-                count=Texts.format_device_limit(subscription.device_limit)
-            )
+            texts.t(
+                'SUBSCRIPTION_UI_DEVICES_COUNT',
+                '<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> Устройств: {count}',
+            ).format(count=Texts.format_device_limit(subscription.device_limit))
         )
 
     from app.utils.subscription_deviation import (
@@ -2013,7 +2107,7 @@ async def handle_extend_subscription(
         message_text += f'{promo_offer_hint}\n\n'
 
     message_text += texts.t(
-        'SUBSCRIPTION_UI_PRICE_INCLUDES_CONFIG', '💡 <i>Цена включает все ваши текущие серверы и настройки</i>'
+        'SUBSCRIPTION_UI_PRICE_INCLUDES_CONFIG', '<i>Цена включает все ваши текущие серверы и настройки</i>'
     )
     message_text = compact_blank_lines(message_text)
 
@@ -2035,7 +2129,9 @@ async def confirm_extend_subscription(
 ):
     if not callback.data:
         await callback.answer(
-            get_texts(getattr(db_user, 'language', None)).t('SUBSCRIPTION_UI_DATA_ERROR', '⚠ Ошибка данных'),
+            get_texts(getattr(db_user, 'language', None)).t(
+                'SUBSCRIPTION_UI_DATA_ERROR', '<tg-emoji emoji-id="5881702736843511327">⚠</tg-emoji> Ошибка данных'
+            ),
             show_alert=True,
         )
         return
@@ -2045,7 +2141,10 @@ async def confirm_extend_subscription(
     # Block classic subscription renewal when tariff mode is active
     if settings.is_tariffs_mode():
         await callback.answer(
-            texts.t('TARIFF_MODE_RENEWAL_BLOCKED', '❌ Продление в этом режиме недоступно. Выберите тариф.'),
+            texts.t(
+                'TARIFF_MODE_RENEWAL_BLOCKED',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Продление в этом режиме недоступно. Выберите тариф.',
+            ),
             show_alert=True,
         )
         return
@@ -2054,7 +2153,11 @@ async def confirm_extend_subscription(
     available_renewal_periods = settings.get_available_renewal_periods()
     if days not in available_renewal_periods:
         await callback.answer(
-            texts.t('RENEWAL_PERIOD_NOT_AVAILABLE', '❌ Этот период больше недоступен для продления'), show_alert=True
+            texts.t(
+                'RENEWAL_PERIOD_NOT_AVAILABLE',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Этот период больше недоступен для продления',
+            ),
+            show_alert=True,
         )
         return
 
@@ -2077,7 +2180,10 @@ async def confirm_extend_subscription(
 
     if not subscription:
         await callback.answer(
-            texts.t('SUBSCRIPTION_UI_NO_ACTIVE_SUBSCRIPTION', '⚠ У вас нет активной подписки'),
+            texts.t(
+                'SUBSCRIPTION_UI_NO_ACTIVE_SUBSCRIPTION',
+                '<tg-emoji emoji-id="5881702736843511327">⚠</tg-emoji> У вас нет активной подписки',
+            ),
             show_alert=True,
         )
         return
@@ -2111,7 +2217,7 @@ async def confirm_extend_subscription(
         offer_pct = pricing.breakdown.get('offer_discount_pct', 0)
 
         logger.info(
-            '💰 Расчет продления подписки (PricingEngine)',
+            'Расчет продления подписки (PricingEngine)',
             subscription_id=subscription.id,
             days=days,
             months_in_period=months_in_period,
@@ -2123,12 +2229,15 @@ async def confirm_extend_subscription(
             offer_discount=pricing.promo_offer_discount,
             final_total=pricing.final_total,
         )
-        logger.info('💎 ИТОГО: ₽', price=price / 100)
+        logger.info('ИТОГО: ₽', price=price / 100)
 
     except Exception as e:
-        logger.error('⚠ ОШИБКА РАСЧЕТА ЦЕНЫ', error=e)
+        logger.error('ОШИБКА РАСЧЕТА ЦЕНЫ', error=e)
         await callback.answer(
-            texts.t('SUBSCRIPTION_UI_COST_CALCULATION_FAILED', '⚠ Ошибка расчета стоимости'),
+            texts.t(
+                'SUBSCRIPTION_UI_COST_CALCULATION_FAILED',
+                '<tg-emoji emoji-id="5881702736843511327">⚠</tg-emoji> Ошибка расчета стоимости',
+            ),
             show_alert=True,
         )
         return
@@ -2139,7 +2248,7 @@ async def confirm_extend_subscription(
         message_text = texts.t(
             'ADDON_INSUFFICIENT_FUNDS_MESSAGE',
             (
-                '⚠️ <b>Недостаточно средств</b>\n\n'
+                '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> <b>Недостаточно средств</b>\n\n'
                 'Стоимость услуги: {required}\n'
                 'На балансе: {balance}\n'
                 'Не хватает: {missing}\n\n'
@@ -2199,16 +2308,19 @@ async def confirm_extend_subscription(
         )
     except SubscriptionRenewalChargeError:
         await callback.answer(
-            texts.t('SUBSCRIPTION_UI_DEBIT_WARNING', '⚠ Ошибка списания средств'),
+            texts.t(
+                'SUBSCRIPTION_UI_DEBIT_WARNING',
+                '<tg-emoji emoji-id="5881702736843511327">⚠</tg-emoji> Ошибка списания средств',
+            ),
             show_alert=True,
         )
         return
     except Exception as e:
-        logger.error('⚠ КРИТИЧЕСКАЯ ОШИБКА ПРОДЛЕНИЯ', error=e)
+        logger.error('КРИТИЧЕСКАЯ ОШИБКА ПРОДЛЕНИЯ', error=e)
         await callback.message.edit_text(
             texts.t(
                 'SUBSCRIPTION_UI_RENEW_FAILED_SUPPORT',
-                '⚠ Произошла ошибка при продлении подписки. Обратитесь в поддержку.',
+                '<tg-emoji emoji-id="5881702736843511327">⚠</tg-emoji> Произошла ошибка при продлении подписки. Обратитесь в поддержку.',
             ),
             reply_markup=get_back_keyboard(db_user.language),
         )
@@ -2220,7 +2332,7 @@ async def confirm_extend_subscription(
 
     success_message = texts.t(
         'SUBSCRIPTION_UI_RENEW_SUCCESS_DETAILS',
-        '✅ Подписка успешно продлена!\n\n⏰ Добавлено: {days} дней\nДействует до: {date}\n\n💰 Списано: {amount}',
+        '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Подписка успешно продлена!\n\n<tg-emoji emoji-id="5985616167740379273">⏰</tg-emoji> Добавлено: {days} дней\nДействует до: {date}\n\n<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> Списано: {amount}',
     ).format(
         days=days,
         date=format_local_datetime(refreshed_end_date, '%d.%m.%Y %H:%M'),
@@ -2230,9 +2342,10 @@ async def confirm_extend_subscription(
     # Добавляем уведомление о сбросе трафика
     if settings.is_traffic_fixed() and result.subscription.traffic_limit_gb != old_traffic_gb:
         fixed_limit = settings.get_fixed_traffic_limit()
-        success_message += texts.t('SUBSCRIPTION_UI_RESET_TO_GB', '\n\n📊 Трафик сброшен до {traffic} ГБ').format(
-            traffic=fixed_limit
-        )
+        success_message += texts.t(
+            'SUBSCRIPTION_UI_RESET_TO_GB',
+            '\n\n<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> Трафик сброшен до {traffic} ГБ',
+        ).format(traffic=fixed_limit)
 
     if promo_offer_discount > 0:
         success_message += texts.t(
@@ -2242,7 +2355,7 @@ async def confirm_extend_subscription(
     await callback.message.edit_text(success_message, reply_markup=get_back_keyboard(db_user.language))
 
     logger.info(
-        '✅ Пользователь продлил подписку на дней за ₽',
+        'Пользователь продлил подписку на дней за ₽',
         telegram_id=db_user.telegram_id,
         days=days,
         price=price / 100,
@@ -2258,7 +2371,13 @@ async def select_period(callback: types.CallbackQuery, state: FSMContext, db_use
     # Валидация что период доступен
     available_periods = settings.get_available_subscription_periods()
     if period_days not in available_periods:
-        await callback.answer(texts.t('PERIOD_NOT_AVAILABLE', '❌ Этот период больше недоступен'), show_alert=True)
+        await callback.answer(
+            texts.t(
+                'PERIOD_NOT_AVAILABLE',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Этот период больше недоступен',
+            ),
+            show_alert=True,
+        )
         return
 
     data = await state.get_data()
@@ -2285,7 +2404,10 @@ async def select_period(callback: types.CallbackQuery, state: FSMContext, db_use
 
         if not available_packages:
             await callback.answer(
-                texts.t('SUBSCRIPTION_UI_TRAFFIC_NOT_CONFIGURED', '⚠️ Пакеты трафика не настроены'),
+                texts.t(
+                    'SUBSCRIPTION_UI_TRAFFIC_NOT_CONFIGURED',
+                    '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> Пакеты трафика не настроены',
+                ),
                 show_alert=True,
             )
             return
@@ -2338,19 +2460,33 @@ async def select_devices(callback: types.CallbackQuery, state: FSMContext, db_us
 
     if not settings.is_devices_selection_enabled():
         await callback.answer(
-            texts.t('DEVICES_SELECTION_DISABLED', '⚠️ Выбор количества устройств недоступен'),
+            texts.t(
+                'DEVICES_SELECTION_DISABLED',
+                '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> Выбор количества устройств недоступен',
+            ),
             show_alert=True,
         )
         return
 
     if not callback.data.startswith('devices_') or callback.data == 'devices_continue':
-        await callback.answer(texts.t('DEVICES_INVALID_REQUEST', '❌ Некорректный запрос'), show_alert=True)
+        await callback.answer(
+            texts.t(
+                'DEVICES_INVALID_REQUEST', '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Некорректный запрос'
+            ),
+            show_alert=True,
+        )
         return
 
     try:
         devices = int(callback.data.split('_')[1])
     except (ValueError, IndexError):
-        await callback.answer(texts.t('DEVICES_INVALID_COUNT', '❌ Некорректное количество устройств'), show_alert=True)
+        await callback.answer(
+            texts.t(
+                'DEVICES_INVALID_COUNT',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Некорректное количество устройств',
+            ),
+            show_alert=True,
+        )
         return
 
     data = await state.get_data()
@@ -2358,7 +2494,11 @@ async def select_devices(callback: types.CallbackQuery, state: FSMContext, db_us
     period_days = data.get('period_days')
     if not period_days:
         await callback.answer(
-            texts.t('PERIOD_NOT_AVAILABLE', '❌ Период больше недоступен, начните заново'), show_alert=True
+            texts.t(
+                'PERIOD_NOT_AVAILABLE',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Период больше недоступен, начните заново',
+            ),
+            show_alert=True,
         )
         return
 
@@ -2383,7 +2523,7 @@ async def select_devices(callback: types.CallbackQuery, state: FSMContext, db_us
             await callback.message.edit_reply_markup(reply_markup=get_devices_keyboard(devices, db_user.language))
         except TelegramBadRequest as error:
             if 'message is not modified' in str(error).lower():
-                logger.debug('ℹ️ Пропускаем обновление клавиатуры устройств: содержимое не изменилось')
+                logger.debug('Пропускаем обновление клавиатуры устройств: содержимое не изменилось')
             else:
                 raise
 
@@ -2393,7 +2533,10 @@ async def select_devices(callback: types.CallbackQuery, state: FSMContext, db_us
 async def devices_continue(callback: types.CallbackQuery, state: FSMContext, db_user: User, db: AsyncSession):
     if callback.data != 'devices_continue':
         await callback.answer(
-            get_texts(getattr(db_user, 'language', None)).t('SUBSCRIPTION_UI_INVALID_REQUEST', '⚠️ Некорректный запрос'),
+            get_texts(getattr(db_user, 'language', None)).t(
+                'SUBSCRIPTION_UI_INVALID_REQUEST',
+                '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> Некорректный запрос',
+            ),
             show_alert=True,
         )
         return
@@ -2422,7 +2565,7 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
             get_texts(getattr(db_user, 'language', None))
             .t(
                 'SUBSCRIPTION_UI_PURCHASE_RENEW_RESTRICTED_REASON',
-                '🚫 <b>Покупка/продление подписки ограничено</b>\n\n{reason}\n\nЕсли вы считаете это ошибкой, вы можете обжаловать решение.',
+                '<tg-emoji emoji-id="5872829476143894491">🚫</tg-emoji> <b>Покупка/продление подписки ограничено</b>\n\n{reason}\n\nЕсли вы считаете это ошибкой, вы можете обжаловать решение.',
             )
             .format(reason=reason),
             reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
@@ -2598,7 +2741,7 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
         message_text = texts.t(
             'ADDON_INSUFFICIENT_FUNDS_MESSAGE',
             (
-                '⚠️ <b>Недостаточно средств</b>\n\n'
+                '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> <b>Недостаточно средств</b>\n\n'
                 'Стоимость услуги: {required}\n'
                 'На балансе: {balance}\n'
                 'Не хватает: {missing}\n\n'
@@ -2654,7 +2797,7 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
             message_text = texts.t(
                 'ADDON_INSUFFICIENT_FUNDS_MESSAGE',
                 (
-                    '⚠️ <b>Недостаточно средств</b>\n\n'
+                    '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> <b>Недостаточно средств</b>\n\n'
                     'Стоимость услуги: {required}\n'
                     'На балансе: {balance}\n'
                     'Не хватает: {missing}\n\n'
@@ -2763,7 +2906,7 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
                 await callback.message.edit_text(
                     texts.t(
                         'COUNTRIES_MINIMUM_REQUIRED',
-                        '❌ Нельзя отключить все страны. Должна быть подключена хотя бы одна страна.',
+                        '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Нельзя отключить все страны. Должна быть подключена хотя бы одна страна.',
                     ),
                     reply_markup=get_back_keyboard(db_user.language),
                 )
@@ -2835,7 +2978,7 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
                 await callback.message.edit_text(
                     texts.t(
                         'COUNTRIES_MINIMUM_REQUIRED',
-                        '❌ Нельзя отключить все страны. Должна быть подключена хотя бы одна страна.',
+                        '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Нельзя отключить все страны. Должна быть подключена хотя бы одна страна.',
                     ),
                     reply_markup=get_back_keyboard(db_user.language),
                 )
@@ -2951,7 +3094,7 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
         if promo_offer_discount_value > 0:
             discount_note = texts.t(
                 'SUBSCRIPTION_PROMO_DISCOUNT_NOTE',
-                '⚡ Доп. скидка {percent}%: -{amount}',
+                '<tg-emoji emoji-id="5843553939672274145">⚡</tg-emoji> Доп. скидка {percent}%: -{amount}',
             ).format(
                 percent=promo_offer_discount_percent,
                 amount=texts.format_price(promo_offer_discount_value),
@@ -2961,17 +3104,17 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
             if settings.is_happ_cryptolink_mode():
                 success_text = f'{texts.SUBSCRIPTION_PURCHASED}\n\n' + texts.t(
                     'SUBSCRIPTION_HAPP_LINK_PROMPT',
-                    '🔒 Ссылка на подписку создана. Нажмите кнопку "Подключиться" ниже, чтобы открыть её в Happ.',
+                    '<tg-emoji emoji-id="5832546462478635761">🔒</tg-emoji> Ссылка на подписку создана. Нажмите кнопку "Подключиться" ниже, чтобы открыть её в Happ.',
                 )
             elif hide_subscription_link:
                 success_text = f'{texts.SUBSCRIPTION_PURCHASED}\n\n' + texts.t(
                     'SUBSCRIPTION_LINK_HIDDEN_NOTICE',
-                    'ℹ️ Ссылка подписки доступна по кнопкам ниже или в разделе "Моя подписка".',
+                    '<tg-emoji emoji-id="5879785854284599288">ℹ️</tg-emoji> Ссылка подписки доступна по кнопкам ниже или в разделе "Моя подписка".',
                 )
             else:
                 import_link_section = texts.t(
                     'SUBSCRIPTION_IMPORT_LINK_SECTION',
-                    '🔗 <b>Ваша ссылка для импорта в VPN приложение:</b>\\n<code>{subscription_url}</code>',
+                    '<tg-emoji emoji-id="5877465816030515018">🔗</tg-emoji> <b>Ваша ссылка для импорта в VPN приложение:</b>\\n<code>{subscription_url}</code>',
                 ).format(subscription_url=subscription_link)
 
                 success_text = f'{texts.SUBSCRIPTION_PURCHASED}\n\n{import_link_section}'
@@ -3007,7 +3150,7 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
                     await callback.answer(
                         texts.t(
                             'CUSTOM_MINIAPP_URL_NOT_SET',
-                            '⚠ Кастомная ссылка для мини-приложения не настроена',
+                            '<tg-emoji emoji-id="5881702736843511327">⚠</tg-emoji> Кастомная ссылка для мини-приложения не настроена',
                         ),
                         show_alert=True,
                     )
@@ -3210,7 +3353,7 @@ async def create_paid_subscription_with_traffic_mode(
     subscription = await create_paid_subscription(**create_kwargs)
 
     logger.info(
-        '📋 Создана подписка с трафиком: ГБ (режим: )',
+        'Создана подписка с трафиком: ГБ (режим: )',
         traffic_limit_gb=traffic_limit_gb,
         TRAFFIC_SELECTION_MODE=settings.TRAFFIC_SELECTION_MODE,
     )
@@ -3246,7 +3389,7 @@ async def handle_subscription_settings(callback: types.CallbackQuery, db_user: U
         await callback.answer(
             texts.t(
                 'SUBSCRIPTION_SETTINGS_PAID_ONLY',
-                '⚠️ Настройки доступны только для платных подписок',
+                '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> Настройки доступны только для платных подписок',
             ),
             show_alert=True,
         )
@@ -3262,11 +3405,11 @@ async def handle_subscription_settings(callback: types.CallbackQuery, db_user: U
     settings_template = texts.t(
         'SUBSCRIPTION_SETTINGS_OVERVIEW',
         (
-            '⚙️ <b>Настройки подписки</b>\n\n'
-            '📊 <b>Текущие параметры:</b>\n'
-            '🌐 Стран: {countries_count}\n'
-            '📈 Трафик: {traffic_used} / {traffic_limit}\n'
-            '📱 Устройства: {devices_used} / {devices_limit}'
+            '<tg-emoji emoji-id="5877260593903177342">⚙️</tg-emoji> <b>Настройки подписки</b>\n\n'
+            '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> <b>Текущие параметры:</b>\n'
+            '<tg-emoji emoji-id="5879585266426973039">🌐</tg-emoji> Стран: {countries_count}\n'
+            '<tg-emoji emoji-id="5776219138917668486">📈</tg-emoji> Трафик: {traffic_used} / {traffic_limit}\n'
+            '<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> Устройства: {devices_used} / {devices_limit}'
         ),
     )
 
@@ -3319,7 +3462,9 @@ async def clear_saved_cart(callback: types.CallbackQuery, state: FSMContext, db_
     await show_main_menu(callback, db_user, db)
 
     await callback.answer(
-        get_texts(getattr(db_user, 'language', None)).t('SUBSCRIPTION_UI_CART_CLEARED', '🗑️ Корзина очищена')
+        get_texts(getattr(db_user, 'language', None)).t(
+            'SUBSCRIPTION_UI_CART_CLEARED', '<tg-emoji emoji-id="5879896690210639947">🗑️</tg-emoji> Корзина очищена'
+        )
     )
 
 
@@ -3346,7 +3491,13 @@ async def handle_toggle_daily_subscription_pause(callback: types.CallbackQuery, 
     subscription = db_user.subscription
 
     if not subscription:
-        await callback.answer(texts.t('NO_SUBSCRIPTION_ERROR', '❌ У вас нет активной подписки'), show_alert=True)
+        await callback.answer(
+            texts.t(
+                'NO_SUBSCRIPTION_ERROR',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> У вас нет активной подписки',
+            ),
+            show_alert=True,
+        )
         return
 
     from app.database.crud.user import lock_user_for_pricing
@@ -3371,7 +3522,11 @@ async def handle_toggle_daily_subscription_pause(callback: types.CallbackQuery, 
 
     if not tariff or not getattr(tariff, 'is_daily', False):
         await callback.answer(
-            texts.t('NOT_DAILY_TARIFF_ERROR', '❌ Эта функция доступна только для суточных тарифов'), show_alert=True
+            texts.t(
+                'NOT_DAILY_TARIFF_ERROR',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Эта функция доступна только для суточных тарифов',
+            ),
+            show_alert=True,
         )
         return
 
@@ -3405,7 +3560,7 @@ async def handle_toggle_daily_subscription_pause(callback: types.CallbackQuery, 
                     'INSUFFICIENT_BALANCE_FOR_RESUME',
                     texts.t(
                         'SUBSCRIPTION_UI_RESUME_INSUFFICIENT',
-                        '❌ Недостаточно средств для возобновления. Требуется: {amount}',
+                        '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Недостаточно средств для возобновления. Требуется: {amount}',
                     ).format(amount=settings.format_price(daily_price)),
                 ),
                 show_alert=True,
@@ -3432,7 +3587,7 @@ async def handle_toggle_daily_subscription_pause(callback: types.CallbackQuery, 
                         'INSUFFICIENT_BALANCE_FOR_RESUME',
                         texts.t(
                             'SUBSCRIPTION_UI_RESUME_INSUFFICIENT',
-                            '❌ Недостаточно средств для возобновления. Требуется: {amount}',
+                            '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Недостаточно средств для возобновления. Требуется: {amount}',
                         ).format(amount=settings.format_price(daily_price)),
                     ),
                     show_alert=True,
@@ -3479,7 +3634,7 @@ async def handle_toggle_daily_subscription_pause(callback: types.CallbackQuery, 
                     type=TransactionType.SUBSCRIPTION_PAYMENT,
                     description=resume_transaction.description,
                 )
-        message = texts.t('DAILY_SUBSCRIPTION_RESUMED', '▶️ Подписка возобновлена!')
+        message = texts.t('DAILY_SUBSCRIPTION_RESUMED', 'Подписка возобновлена!')
         # Восстанавливаем connected_squads из тарифа, если очищены деактивацией
         try:
             if not subscription.connected_squads:
@@ -3560,7 +3715,7 @@ async def handle_toggle_daily_subscription_pause(callback: types.CallbackQuery, 
                     # PATCH сам по себе статус «трафик исчерпан» не снимает.
                     await lift_panel_traffic_limit(db, subscription, service=subscription_service)
             logger.info(
-                '✅ Синхронизировано с Remnawave после возобновления суточной подписки', subscription_id=subscription.id
+                'Синхронизировано с Remnawave после возобновления суточной подписки', subscription_id=subscription.id
             )
         except Exception as e:
             logger.error('Ошибка синхронизации с Remnawave при возобновлении', error=e)
@@ -3594,7 +3749,7 @@ async def handle_toggle_daily_subscription_pause(callback: types.CallbackQuery, 
     else:
         # Подписка активна, ставим на паузу
         subscription = await toggle_daily_subscription_pause(db, subscription)
-        message = texts.t('DAILY_SUBSCRIPTION_PAUSED', '⏸️ Подписка приостановлена!')
+        message = texts.t('DAILY_SUBSCRIPTION_PAUSED', 'Подписка приостановлена!')
 
     await callback.answer(message, show_alert=True)
 
@@ -3625,7 +3780,10 @@ async def handle_trial_pay_with_balance(callback: types.CallbackQuery, db_user: 
     trial_price_kopeks = get_trial_activation_charge_amount()
     if trial_price_kopeks <= 0:
         await callback.answer(
-            texts.t('SUBSCRIPTION_UI_TRIAL_FREE', '❌ Ошибка: триал бесплатный'),
+            texts.t(
+                'SUBSCRIPTION_UI_TRIAL_FREE',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Ошибка: триал бесплатный',
+            ),
             show_alert=True,
         )
         return
@@ -3636,7 +3794,7 @@ async def handle_trial_pay_with_balance(callback: types.CallbackQuery, db_user: 
         await callback.answer(
             texts.t(
                 'INSUFFICIENT_BALANCE',
-                '❌ Недостаточно средств на балансе. Пополните баланс на {amount} и попробуйте снова.',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Недостаточно средств на балансе. Пополните баланс на {amount} и попробуйте снова.',
             ).format(amount=settings.format_price(topup_needed_kopeks)),
             show_alert=True,
         )
@@ -3664,7 +3822,12 @@ async def handle_trial_pay_with_balance(callback: types.CallbackQuery, db_user: 
     )
 
     if not success:
-        await callback.answer(texts.t('PAYMENT_FAILED', '❌ Не удалось списать средства'), show_alert=True)
+        await callback.answer(
+            texts.t(
+                'PAYMENT_FAILED', '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Не удалось списать средства'
+            ),
+            show_alert=True,
+        )
         return
 
     # Создаём транзакцию для учёта списания за триал
@@ -3823,24 +3986,24 @@ async def handle_trial_pay_with_balance(callback: types.CallbackQuery, db_user: 
 
         payment_note = '\n\n' + texts.t(
             'TRIAL_PAYMENT_CHARGED_NOTE',
-            '💳 С вашего баланса списано {amount}.',
+            '<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> С вашего баланса списано {amount}.',
         ).format(amount=settings.format_price(trial_price_kopeks))
 
         if remnawave_user and subscription_link:
             if settings.is_happ_cryptolink_mode():
                 trial_success_text = f'{texts.TRIAL_ACTIVATED}\n\n' + texts.t(
                     'SUBSCRIPTION_HAPP_LINK_PROMPT',
-                    '🔒 Ссылка на подписку создана. Нажмите кнопку "Подключиться" ниже, чтобы открыть её в Happ.',
+                    '<tg-emoji emoji-id="5832546462478635761">🔒</tg-emoji> Ссылка на подписку создана. Нажмите кнопку "Подключиться" ниже, чтобы открыть её в Happ.',
                 )
             elif hide_subscription_link:
                 trial_success_text = f'{texts.TRIAL_ACTIVATED}\n\n' + texts.t(
                     'SUBSCRIPTION_LINK_HIDDEN_NOTICE',
-                    'ℹ️ Ссылка подписки доступна по кнопкам ниже или в разделе "Моя подписка".',
+                    '<tg-emoji emoji-id="5879785854284599288">ℹ️</tg-emoji> Ссылка подписки доступна по кнопкам ниже или в разделе "Моя подписка".',
                 )
             else:
                 subscription_import_link = texts.t(
                     'SUBSCRIPTION_IMPORT_LINK_SECTION',
-                    '🔗 <b>Ваша ссылка для импорта в VPN приложение:</b>\n<code>{subscription_url}</code>',
+                    '<tg-emoji emoji-id="5877465816030515018">🔗</tg-emoji> <b>Ваша ссылка для импорта в VPN приложение:</b>\n<code>{subscription_url}</code>',
                 ).format(subscription_url=subscription_link)
 
                 trial_success_text = f'{texts.TRIAL_ACTIVATED}\n\n{subscription_import_link}'
@@ -3858,7 +4021,7 @@ async def handle_trial_pay_with_balance(callback: types.CallbackQuery, db_user: 
         else:
             trial_success_text = texts.t(
                 'SUBSCRIPTION_UI_LINK_GENERATING',
-                "{message}\n\n⚠️ Ссылка генерируется, попробуйте перейти в раздел 'Моя подписка' через несколько секунд.",
+                "{message}\n\n<tg-emoji emoji-id='5881702736843511327'>⚠️</tg-emoji> Ссылка генерируется, попробуйте перейти в раздел 'Моя подписка' через несколько секунд.",
             ).format(message=texts.TRIAL_ACTIVATED)
             trial_success_text += payment_note
 
@@ -3900,7 +4063,7 @@ async def handle_trial_pay_with_balance(callback: types.CallbackQuery, db_user: 
         await callback.message.edit_text(
             texts.t(
                 'TRIAL_ACTIVATION_ERROR',
-                '❌ Произошла ошибка при активации триала. Средства возвращены на баланс.',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Произошла ошибка при активации триала. Средства возвращены на баланс.',
             ),
             reply_markup=get_back_keyboard(db_user.language),
         )
@@ -4042,7 +4205,10 @@ async def handle_trial_payment_method(callback: types.CallbackQuery, db_user: Us
     trial_price_kopeks = get_trial_activation_charge_amount()
     if trial_price_kopeks <= 0:
         await callback.answer(
-            texts.t('SUBSCRIPTION_UI_TRIAL_FREE', '❌ Ошибка: триал бесплатный'),
+            texts.t(
+                'SUBSCRIPTION_UI_TRIAL_FREE',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Ошибка: триал бесплатный',
+            ),
             show_alert=True,
         )
         return
@@ -4119,7 +4285,8 @@ async def handle_trial_payment_method(callback: types.CallbackQuery, db_user: Us
         if not pending_subscription:
             await callback.answer(
                 texts.t(
-                    'SUBSCRIPTION_UI_ORDER_PREPARATION_FAILED', '❌ Не удалось подготовить заказ. Попробуйте позже.'
+                    'SUBSCRIPTION_UI_ORDER_PREPARATION_FAILED',
+                    '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Не удалось подготовить заказ. Попробуйте позже.',
                 ),
                 show_alert=True,
             )
@@ -4156,7 +4323,7 @@ async def handle_trial_payment_method(callback: types.CallbackQuery, db_user: Us
             await callback.message.edit_text(
                 texts.t(
                     'PAID_TRIAL_STARS_WAITING',
-                    '⭐ Для оплаты пробной подписки нажмите кнопку оплаты в сообщении выше.\n\n'
+                    '<tg-emoji emoji-id="5958376256788502078">⭐</tg-emoji> Для оплаты пробной подписки нажмите кнопку оплаты в сообщении выше.\n\n'
                     'После успешной оплаты подписка будет активирована автоматически.',
                 ),
                 reply_markup=get_back_keyboard(db_user.language),
@@ -4181,7 +4348,10 @@ async def handle_trial_payment_method(callback: types.CallbackQuery, db_user: Us
 
             if not payment_result or not payment_result.get('confirmation_url'):
                 await callback.answer(
-                    texts.t('SUBSCRIPTION_UI_PAYMENT_FAILED_RETRY', '❌ Не удалось создать платеж. Попробуйте позже.'),
+                    texts.t(
+                        'SUBSCRIPTION_UI_PAYMENT_FAILED_RETRY',
+                        '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Не удалось создать платеж. Попробуйте позже.',
+                    ),
                     show_alert=True,
                 )
                 return
@@ -4191,9 +4361,9 @@ async def handle_trial_payment_method(callback: types.CallbackQuery, db_user: Us
             await callback.message.edit_text(
                 texts.t(
                     'PAID_TRIAL_YOOKASSA_SBP',
-                    '🏦 <b>Оплата через СБП</b>\n\n'
+                    '<b>Оплата через СБП</b>\n\n'
                     'Отсканируйте QR-код или перейдите по ссылке для оплаты.\n\n'
-                    '💰 Сумма: {amount}',
+                    '<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> Сумма: {amount}',
                 ).format(amount=settings.format_price(trial_price_kopeks)),
                 reply_markup=InlineKeyboardMarkup(
                     inline_keyboard=[
@@ -4222,7 +4392,10 @@ async def handle_trial_payment_method(callback: types.CallbackQuery, db_user: Us
 
             if not payment_result or not payment_result.get('confirmation_url'):
                 await callback.answer(
-                    texts.t('SUBSCRIPTION_UI_PAYMENT_FAILED_RETRY', '❌ Не удалось создать платеж. Попробуйте позже.'),
+                    texts.t(
+                        'SUBSCRIPTION_UI_PAYMENT_FAILED_RETRY',
+                        '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Не удалось создать платеж. Попробуйте позже.',
+                    ),
                     show_alert=True,
                 )
                 return
@@ -4230,7 +4403,7 @@ async def handle_trial_payment_method(callback: types.CallbackQuery, db_user: Us
             await callback.message.edit_text(
                 texts.t(
                     'PAID_TRIAL_YOOKASSA_CARD',
-                    '💳 <b>Оплата картой</b>\n\nНажмите кнопку ниже для перехода к оплате.\n\n💰 Сумма: {amount}',
+                    '<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> <b>Оплата картой</b>\n\nНажмите кнопку ниже для перехода к оплате.\n\n<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> Сумма: {amount}',
                 ).format(amount=settings.format_price(trial_price_kopeks)),
                 reply_markup=InlineKeyboardMarkup(
                     inline_keyboard=[
@@ -4280,7 +4453,10 @@ async def handle_trial_payment_method(callback: types.CallbackQuery, db_user: Us
 
             if not payment_result or not payment_url:
                 await callback.answer(
-                    texts.t('SUBSCRIPTION_UI_PAYMENT_FAILED_RETRY', '❌ Не удалось создать платеж. Попробуйте позже.'),
+                    texts.t(
+                        'SUBSCRIPTION_UI_PAYMENT_FAILED_RETRY',
+                        '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Не удалось создать платеж. Попробуйте позже.',
+                    ),
                     show_alert=True,
                 )
                 return
@@ -4288,21 +4464,27 @@ async def handle_trial_payment_method(callback: types.CallbackQuery, db_user: Us
             await callback.message.edit_text(
                 texts.t(
                     'PAID_TRIAL_CRYPTOBOT',
-                    '🪙 <b>Оплата криптовалютой</b>\n\n'
+                    '<tg-emoji emoji-id="5992430854909989581">🪙</tg-emoji> <b>Оплата криптовалютой</b>\n\n'
                     'Нажмите кнопку ниже для перехода к оплате.\n\n'
-                    '💰 Сумма: {amount}',
+                    '<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> Сумма: {amount}',
                 ).format(amount=settings.format_price(trial_price_kopeks)),
                 reply_markup=InlineKeyboardMarkup(
                     inline_keyboard=[
                         [
                             InlineKeyboardButton(
-                                text=texts.t('SUBSCRIPTION_UI_PAY_CRYPTO_BUTTON', '🪙 Оплатить'),
+                                text=texts.t(
+                                    'SUBSCRIPTION_UI_PAY_CRYPTO_BUTTON',
+                                    '<tg-emoji emoji-id="5992430854909989581">🪙</tg-emoji> Оплатить',
+                                ),
                                 url=payment_url,
                             )
                         ],
                         [
                             InlineKeyboardButton(
-                                text=texts.t('CHECK_PAYMENT', '🔄 Проверить оплату'),
+                                text=texts.t(
+                                    'CHECK_PAYMENT',
+                                    '<tg-emoji emoji-id="5839200986022812209">🔄</tg-emoji> Проверить оплату',
+                                ),
                                 callback_data=f'check_trial_cryptobot_{pending_subscription.id}',
                             )
                         ],
@@ -4326,7 +4508,10 @@ async def handle_trial_payment_method(callback: types.CallbackQuery, db_user: Us
 
             if not payment_result or not payment_result.get('payment_url'):
                 await callback.answer(
-                    texts.t('SUBSCRIPTION_UI_PAYMENT_FAILED_RETRY', '❌ Не удалось создать платеж. Попробуйте позже.'),
+                    texts.t(
+                        'SUBSCRIPTION_UI_PAYMENT_FAILED_RETRY',
+                        '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Не удалось создать платеж. Попробуйте позже.',
+                    ),
                     show_alert=True,
                 )
                 return
@@ -4334,21 +4519,27 @@ async def handle_trial_payment_method(callback: types.CallbackQuery, db_user: Us
             await callback.message.edit_text(
                 texts.t(
                     'PAID_TRIAL_HELEKET',
-                    '🪙 <b>Оплата криптовалютой (Heleket)</b>\n\n'
+                    '<tg-emoji emoji-id="5992430854909989581">🪙</tg-emoji> <b>Оплата криптовалютой (Heleket)</b>\n\n'
                     'Нажмите кнопку ниже для перехода к оплате.\n\n'
-                    '💰 Сумма: {amount}',
+                    '<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> Сумма: {amount}',
                 ).format(amount=settings.format_price(trial_price_kopeks)),
                 reply_markup=InlineKeyboardMarkup(
                     inline_keyboard=[
                         [
                             InlineKeyboardButton(
-                                text=texts.t('SUBSCRIPTION_UI_PAY_CRYPTO_BUTTON', '🪙 Оплатить'),
+                                text=texts.t(
+                                    'SUBSCRIPTION_UI_PAY_CRYPTO_BUTTON',
+                                    '<tg-emoji emoji-id="5992430854909989581">🪙</tg-emoji> Оплатить',
+                                ),
                                 url=payment_result['payment_url'],
                             )
                         ],
                         [
                             InlineKeyboardButton(
-                                text=texts.t('CHECK_PAYMENT', '🔄 Проверить оплату'),
+                                text=texts.t(
+                                    'CHECK_PAYMENT',
+                                    '<tg-emoji emoji-id="5839200986022812209">🔄</tg-emoji> Проверить оплату',
+                                ),
                                 callback_data=f'check_trial_heleket_{pending_subscription.id}',
                             )
                         ],
@@ -4372,7 +4563,10 @@ async def handle_trial_payment_method(callback: types.CallbackQuery, db_user: Us
 
             if not payment_result or not payment_result.get('payment_url'):
                 await callback.answer(
-                    texts.t('SUBSCRIPTION_UI_PAYMENT_FAILED_RETRY', '❌ Не удалось создать платеж. Попробуйте позже.'),
+                    texts.t(
+                        'SUBSCRIPTION_UI_PAYMENT_FAILED_RETRY',
+                        '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Не удалось создать платеж. Попробуйте позже.',
+                    ),
                     show_alert=True,
                 )
                 return
@@ -4381,19 +4575,25 @@ async def handle_trial_payment_method(callback: types.CallbackQuery, db_user: Us
             await callback.message.edit_text(
                 texts.t(
                     'PAID_TRIAL_MULENPAY',
-                    '💳 <b>Оплата через {name}</b>\n\nНажмите кнопку ниже для перехода к оплате.\n\n💰 Сумма: {amount}',
+                    '<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> <b>Оплата через {name}</b>\n\nНажмите кнопку ниже для перехода к оплате.\n\n<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> Сумма: {amount}',
                 ).format(name=mulenpay_name, amount=settings.format_price(trial_price_kopeks)),
                 reply_markup=InlineKeyboardMarkup(
                     inline_keyboard=[
                         [
                             InlineKeyboardButton(
-                                text=texts.t('SUBSCRIPTION_UI_PAY_CARD_BUTTON', '💳 Оплатить'),
+                                text=texts.t(
+                                    'SUBSCRIPTION_UI_PAY_CARD_BUTTON',
+                                    '<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> Оплатить',
+                                ),
                                 url=payment_result['payment_url'],
                             )
                         ],
                         [
                             InlineKeyboardButton(
-                                text=texts.t('CHECK_PAYMENT', '🔄 Проверить оплату'),
+                                text=texts.t(
+                                    'CHECK_PAYMENT',
+                                    '<tg-emoji emoji-id="5839200986022812209">🔄</tg-emoji> Проверить оплату',
+                                ),
                                 callback_data=f'check_trial_mulenpay_{pending_subscription.id}',
                             )
                         ],
@@ -4417,7 +4617,10 @@ async def handle_trial_payment_method(callback: types.CallbackQuery, db_user: Us
 
             if not payment_result or not payment_result.get('payment_url'):
                 await callback.answer(
-                    texts.t('SUBSCRIPTION_UI_PAYMENT_FAILED_RETRY', '❌ Не удалось создать платеж. Попробуйте позже.'),
+                    texts.t(
+                        'SUBSCRIPTION_UI_PAYMENT_FAILED_RETRY',
+                        '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Не удалось создать платеж. Попробуйте позже.',
+                    ),
                     show_alert=True,
                 )
                 return
@@ -4425,21 +4628,27 @@ async def handle_trial_payment_method(callback: types.CallbackQuery, db_user: Us
             await callback.message.edit_text(
                 texts.t(
                     'PAID_TRIAL_PAL24',
-                    '💳 <b>Оплата через PayPalych</b>\n\n'
+                    '<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> <b>Оплата через PayPalych</b>\n\n'
                     'Нажмите кнопку ниже для перехода к оплате.\n\n'
-                    '💰 Сумма: {amount}',
+                    '<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> Сумма: {amount}',
                 ).format(amount=settings.format_price(trial_price_kopeks)),
                 reply_markup=InlineKeyboardMarkup(
                     inline_keyboard=[
                         [
                             InlineKeyboardButton(
-                                text=texts.t('SUBSCRIPTION_UI_PAY_CARD_BUTTON', '💳 Оплатить'),
+                                text=texts.t(
+                                    'SUBSCRIPTION_UI_PAY_CARD_BUTTON',
+                                    '<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> Оплатить',
+                                ),
                                 url=payment_result['payment_url'],
                             )
                         ],
                         [
                             InlineKeyboardButton(
-                                text=texts.t('CHECK_PAYMENT', '🔄 Проверить оплату'),
+                                text=texts.t(
+                                    'CHECK_PAYMENT',
+                                    '<tg-emoji emoji-id="5839200986022812209">🔄</tg-emoji> Проверить оплату',
+                                ),
                                 callback_data=f'check_trial_pal24_{pending_subscription.id}',
                             )
                         ],
@@ -4463,7 +4672,10 @@ async def handle_trial_payment_method(callback: types.CallbackQuery, db_user: Us
 
             if not payment_result or not payment_result.get('payment_url'):
                 await callback.answer(
-                    texts.t('SUBSCRIPTION_UI_PAYMENT_FAILED_RETRY', '❌ Не удалось создать платеж. Попробуйте позже.'),
+                    texts.t(
+                        'SUBSCRIPTION_UI_PAYMENT_FAILED_RETRY',
+                        '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Не удалось создать платеж. Попробуйте позже.',
+                    ),
                     show_alert=True,
                 )
                 return
@@ -4471,19 +4683,25 @@ async def handle_trial_payment_method(callback: types.CallbackQuery, db_user: Us
             await callback.message.edit_text(
                 texts.t(
                     'PAID_TRIAL_WATA',
-                    '💳 <b>Оплата через WATA</b>\n\nНажмите кнопку ниже для перехода к оплате.\n\n💰 Сумма: {amount}',
+                    '<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> <b>Оплата через WATA</b>\n\nНажмите кнопку ниже для перехода к оплате.\n\n<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> Сумма: {amount}',
                 ).format(amount=settings.format_price(trial_price_kopeks)),
                 reply_markup=InlineKeyboardMarkup(
                     inline_keyboard=[
                         [
                             InlineKeyboardButton(
-                                text=texts.t('SUBSCRIPTION_UI_PAY_CARD_BUTTON', '💳 Оплатить'),
+                                text=texts.t(
+                                    'SUBSCRIPTION_UI_PAY_CARD_BUTTON',
+                                    '<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> Оплатить',
+                                ),
                                 url=payment_result['payment_url'],
                             )
                         ],
                         [
                             InlineKeyboardButton(
-                                text=texts.t('CHECK_PAYMENT', '🔄 Проверить оплату'),
+                                text=texts.t(
+                                    'CHECK_PAYMENT',
+                                    '<tg-emoji emoji-id="5839200986022812209">🔄</tg-emoji> Проверить оплату',
+                                ),
                                 callback_data=f'check_trial_wata_{pending_subscription.id}',
                             )
                         ],
@@ -4498,7 +4716,10 @@ async def handle_trial_payment_method(callback: types.CallbackQuery, db_user: Us
             active_methods = settings.get_platega_active_methods()
             if not active_methods:
                 await callback.answer(
-                    texts.t('SUBSCRIPTION_UI_PLATEGA_NOT_CONFIGURED', '❌ Platega не настроена'),
+                    texts.t(
+                        'SUBSCRIPTION_UI_PLATEGA_NOT_CONFIGURED',
+                        '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Platega не настроена',
+                    ),
                     show_alert=True,
                 )
                 return
@@ -4519,7 +4740,10 @@ async def handle_trial_payment_method(callback: types.CallbackQuery, db_user: Us
 
             if not payment_result or not payment_result.get('redirect_url'):
                 await callback.answer(
-                    texts.t('SUBSCRIPTION_UI_PAYMENT_FAILED_RETRY', '❌ Не удалось создать платеж. Попробуйте позже.'),
+                    texts.t(
+                        'SUBSCRIPTION_UI_PAYMENT_FAILED_RETRY',
+                        '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Не удалось создать платеж. Попробуйте позже.',
+                    ),
                     show_alert=True,
                 )
                 return
@@ -4528,21 +4752,27 @@ async def handle_trial_payment_method(callback: types.CallbackQuery, db_user: Us
             await callback.message.edit_text(
                 texts.t(
                     'PAID_TRIAL_PLATEGA',
-                    '💳 <b>Оплата через {provider}</b>\n\n'
+                    '<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> <b>Оплата через {provider}</b>\n\n'
                     'Нажмите кнопку ниже для перехода к оплате.\n\n'
-                    '💰 Сумма: {amount}',
+                    '<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> Сумма: {amount}',
                 ).format(provider=platega_name, amount=settings.format_price(trial_price_kopeks)),
                 reply_markup=InlineKeyboardMarkup(
                     inline_keyboard=[
                         [
                             InlineKeyboardButton(
-                                text=texts.t('SUBSCRIPTION_UI_PAY_CARD_BUTTON', '💳 Оплатить'),
+                                text=texts.t(
+                                    'SUBSCRIPTION_UI_PAY_CARD_BUTTON',
+                                    '<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> Оплатить',
+                                ),
                                 url=payment_result['redirect_url'],
                             )
                         ],
                         [
                             InlineKeyboardButton(
-                                text=texts.t('CHECK_PAYMENT', '🔄 Проверить оплату'),
+                                text=texts.t(
+                                    'CHECK_PAYMENT',
+                                    '<tg-emoji emoji-id="5839200986022812209">🔄</tg-emoji> Проверить оплату',
+                                ),
                                 callback_data=f'check_trial_platega_{pending_subscription.id}',
                             )
                         ],
@@ -4554,9 +4784,10 @@ async def handle_trial_payment_method(callback: types.CallbackQuery, db_user: Us
 
         else:
             await callback.answer(
-                texts.t('SUBSCRIPTION_UI_UNKNOWN_METHOD_VALUE', '❌ Неизвестный метод оплаты: {method}').format(
-                    method=payment_method
-                ),
+                texts.t(
+                    'SUBSCRIPTION_UI_UNKNOWN_METHOD_VALUE',
+                    '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Неизвестный метод оплаты: {method}',
+                ).format(method=payment_method),
                 show_alert=True,
             )
             return
@@ -4567,7 +4798,8 @@ async def handle_trial_payment_method(callback: types.CallbackQuery, db_user: Us
         logger.error('Error processing trial payment method', payment_method=payment_method, error=error)
         await callback.answer(
             texts.t(
-                'SUBSCRIPTION_UI_PAYMENT_ERROR_RETRY', '❌ Произошла ошибка при создании платежа. Попробуйте позже.'
+                'SUBSCRIPTION_UI_PAYMENT_ERROR_RETRY',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Произошла ошибка при создании платежа. Попробуйте позже.',
             ),
             show_alert=True,
         )
@@ -4805,7 +5037,10 @@ async def handle_simple_subscription_purchase(
 
     if not settings.SIMPLE_SUBSCRIPTION_ENABLED:
         await callback.answer(
-            texts.t('SUBSCRIPTION_UI_SIMPLE_UNAVAILABLE', '❌ Простая покупка подписки временно недоступна'),
+            texts.t(
+                'SUBSCRIPTION_UI_SIMPLE_UNAVAILABLE',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Простая покупка подписки временно недоступна',
+            ),
             show_alert=True,
         )
         return
@@ -4903,35 +5138,45 @@ async def handle_simple_subscription_purchase(
     if user_balance_kopeks >= price_kopeks:
         # Если баланс достаточный, предлагаем оплатить с баланса
         simple_lines = [
-            texts.t('SUBSCRIPTION_UI_SIMPLE_TITLE', '⚡ <b>Простая покупка подписки</b>'),
-            '',
-            texts.t('SUBSCRIPTION_UI_PERIOD_DAYS', '📅 Период: {days} дней').format(
-                days=subscription_params['period_days']
+            texts.t(
+                'SUBSCRIPTION_UI_SIMPLE_TITLE',
+                '<tg-emoji emoji-id="5843553939672274145">⚡</tg-emoji> <b>Простая покупка подписки</b>',
             ),
+            '',
+            texts.t(
+                'SUBSCRIPTION_UI_PERIOD_DAYS',
+                '<tg-emoji emoji-id="5967412305338568701">📅</tg-emoji> Период: {days} дней',
+            ).format(days=subscription_params['period_days']),
         ]
 
         if settings.is_devices_selection_enabled():
             simple_lines.append(
-                texts.t('SUBSCRIPTION_UI_DEVICES_VALUE', '📱 Устройства: {devices}').format(
-                    devices=subscription_params['device_limit']
-                )
+                texts.t(
+                    'SUBSCRIPTION_UI_DEVICES_VALUE',
+                    '<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> Устройства: {devices}',
+                ).format(devices=subscription_params['device_limit'])
             )
 
         simple_lines.extend(
             [
-                texts.t('SUBSCRIPTION_UI_TRAFFIC_VALUE', '📊 Трафик: {traffic}').format(traffic=traffic_text),
-                texts.t('SUBSCRIPTION_UI_SERVER_VALUE', '🌍 Сервер: {server}').format(
+                texts.t(
+                    'SUBSCRIPTION_UI_TRAFFIC_VALUE',
+                    '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> Трафик: {traffic}',
+                ).format(traffic=traffic_text),
+                texts.t('SUBSCRIPTION_UI_SERVER_VALUE', 'Сервер: {server}').format(
                     server=texts.t('SUBSCRIPTION_UI_ANY_SERVER', 'Любой доступный')
                     if not subscription_params['squad_uuid']
                     else texts.t('SUBSCRIPTION_UI_SELECTED_SERVER', 'Выбранный')
                 ),
                 '',
-                texts.t('SUBSCRIPTION_UI_COST_VALUE', '💰 Стоимость: {amount}').format(
-                    amount=settings.format_price(price_kopeks)
-                ),
-                texts.t('SUBSCRIPTION_UI_BALANCE_VALUE', '💳 Ваш баланс: {amount}').format(
-                    amount=settings.format_price(user_balance_kopeks)
-                ),
+                texts.t(
+                    'SUBSCRIPTION_UI_COST_VALUE',
+                    '<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> Стоимость: {amount}',
+                ).format(amount=settings.format_price(price_kopeks)),
+                texts.t(
+                    'SUBSCRIPTION_UI_BALANCE_VALUE',
+                    '<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> Ваш баланс: {amount}',
+                ).format(amount=settings.format_price(user_balance_kopeks)),
                 '',
                 texts.t(
                     'SUBSCRIPTION_UI_BALANCE_OR_METHOD',
@@ -4946,13 +5191,19 @@ async def handle_simple_subscription_purchase(
             inline_keyboard=[
                 [
                     types.InlineKeyboardButton(
-                        text=texts.t('SUBSCRIPTION_UI_PAY_BALANCE', '✅ Оплатить с баланса'),
+                        text=texts.t(
+                            'SUBSCRIPTION_UI_PAY_BALANCE',
+                            '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Оплатить с баланса',
+                        ),
                         callback_data='simple_subscription_pay_with_balance',
                     )
                 ],
                 [
                     types.InlineKeyboardButton(
-                        text=texts.t('SUBSCRIPTION_UI_OTHER_PAYMENT_METHODS', '💳 Другие способы оплаты'),
+                        text=texts.t(
+                            'SUBSCRIPTION_UI_OTHER_PAYMENT_METHODS',
+                            '<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> Другие способы оплаты',
+                        ),
                         callback_data='simple_subscription_other_payment_methods',
                     )
                 ],
@@ -4962,35 +5213,45 @@ async def handle_simple_subscription_purchase(
     else:
         # Если баланс недостаточный, предлагаем внешние способы оплаты
         simple_lines = [
-            texts.t('SUBSCRIPTION_UI_SIMPLE_TITLE', '⚡ <b>Простая покупка подписки</b>'),
-            '',
-            texts.t('SUBSCRIPTION_UI_PERIOD_DAYS', '📅 Период: {days} дней').format(
-                days=subscription_params['period_days']
+            texts.t(
+                'SUBSCRIPTION_UI_SIMPLE_TITLE',
+                '<tg-emoji emoji-id="5843553939672274145">⚡</tg-emoji> <b>Простая покупка подписки</b>',
             ),
+            '',
+            texts.t(
+                'SUBSCRIPTION_UI_PERIOD_DAYS',
+                '<tg-emoji emoji-id="5967412305338568701">📅</tg-emoji> Период: {days} дней',
+            ).format(days=subscription_params['period_days']),
         ]
 
         if settings.is_devices_selection_enabled():
             simple_lines.append(
-                texts.t('SUBSCRIPTION_UI_DEVICES_VALUE', '📱 Устройства: {devices}').format(
-                    devices=subscription_params['device_limit']
-                )
+                texts.t(
+                    'SUBSCRIPTION_UI_DEVICES_VALUE',
+                    '<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> Устройства: {devices}',
+                ).format(devices=subscription_params['device_limit'])
             )
 
         simple_lines.extend(
             [
-                texts.t('SUBSCRIPTION_UI_TRAFFIC_VALUE', '📊 Трафик: {traffic}').format(traffic=traffic_text),
-                texts.t('SUBSCRIPTION_UI_SERVER_VALUE', '🌍 Сервер: {server}').format(
+                texts.t(
+                    'SUBSCRIPTION_UI_TRAFFIC_VALUE',
+                    '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> Трафик: {traffic}',
+                ).format(traffic=traffic_text),
+                texts.t('SUBSCRIPTION_UI_SERVER_VALUE', 'Сервер: {server}').format(
                     server=texts.t('SUBSCRIPTION_UI_ANY_SERVER', 'Любой доступный')
                     if not subscription_params['squad_uuid']
                     else texts.t('SUBSCRIPTION_UI_SELECTED_SERVER', 'Выбранный')
                 ),
                 '',
-                texts.t('SUBSCRIPTION_UI_COST_VALUE', '💰 Стоимость: {amount}').format(
-                    amount=settings.format_price(price_kopeks)
-                ),
-                texts.t('SUBSCRIPTION_UI_BALANCE_VALUE', '💳 Ваш баланс: {amount}').format(
-                    amount=settings.format_price(user_balance_kopeks)
-                ),
+                texts.t(
+                    'SUBSCRIPTION_UI_COST_VALUE',
+                    '<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> Стоимость: {amount}',
+                ).format(amount=settings.format_price(price_kopeks)),
+                texts.t(
+                    'SUBSCRIPTION_UI_BALANCE_VALUE',
+                    '<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> Ваш баланс: {amount}',
+                ).format(amount=settings.format_price(user_balance_kopeks)),
                 '',
                 texts.t('SUBSCRIPTION_UI_CHOOSE_PAYMENT_METHOD', 'Выберите способ оплаты:'),
             ]
@@ -5080,7 +5341,7 @@ async def _extend_simple_tariff_subscription(
         await user_cart_service.save_user_cart(user_id, cart)
         message = texts.t(
             'ADDON_INSUFFICIENT_FUNDS_MESSAGE',
-            '⚠️ <b>Недостаточно средств</b>\n\nСтоимость услуги: {required}\n'
+            '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> <b>Недостаточно средств</b>\n\nСтоимость услуги: {required}\n'
             'На балансе: {balance}\nНе хватает: {missing}\n\nВыберите способ пополнения.',
         ).format(
             required=texts.format_price(price), balance=texts.format_price(balance), missing=texts.format_price(missing)
@@ -5099,14 +5360,17 @@ async def _extend_simple_tariff_subscription(
         )
     except SubscriptionRenewalChargeError:
         await callback.answer(
-            texts.t('SUBSCRIPTION_UI_DEBIT_WARNING', '⚠ Ошибка списания средств'),
+            texts.t(
+                'SUBSCRIPTION_UI_DEBIT_WARNING',
+                '<tg-emoji emoji-id="5881702736843511327">⚠</tg-emoji> Ошибка списания средств',
+            ),
             show_alert=True,
         )
         return
     await callback.message.edit_text(
         texts.t(
             'SUBSCRIPTION_UI_RENEW_SUCCESS_DETAILS',
-            '✅ Подписка успешно продлена!\n\n⏰ Добавлено: {days} дней\nДействует до: {date}\n\n💰 Списано: {amount}',
+            '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Подписка успешно продлена!\n\n<tg-emoji emoji-id="5985616167740379273">⏰</tg-emoji> Добавлено: {days} дней\nДействует до: {date}\n\n<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> Списано: {amount}',
         ).format(
             days=period_days,
             date=format_local_datetime(result.subscription.end_date, '%d.%m.%Y %H:%M'),
@@ -5173,7 +5437,7 @@ async def _extend_existing_subscription(
         message_text = texts.t(
             'ADDON_INSUFFICIENT_FUNDS_MESSAGE',
             (
-                '⚠️ <b>Недостаточно средств</b>\n\n'
+                '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> <b>Недостаточно средств</b>\n\n'
                 'Стоимость услуги: {required}\n'
                 'На балансе: {balance}\n'
                 'Не хватает: {missing}\n\n'
@@ -5231,7 +5495,10 @@ async def _extend_existing_subscription(
 
     if not success:
         await callback.answer(
-            texts.t('SUBSCRIPTION_UI_DEBIT_WARNING', '⚠ Ошибка списания средств'),
+            texts.t(
+                'SUBSCRIPTION_UI_DEBIT_WARNING',
+                '<tg-emoji emoji-id="5881702736843511327">⚠</tg-emoji> Ошибка списания средств',
+            ),
             show_alert=True,
         )
         return
@@ -5302,7 +5569,10 @@ async def _extend_existing_subscription(
                 refund_error=refund_error,
             )
         await callback.answer(
-            texts.t('SUBSCRIPTION_UI_RENEW_FAILED', '⚠ Ошибка продления подписки'),
+            texts.t(
+                'SUBSCRIPTION_UI_RENEW_FAILED',
+                '<tg-emoji emoji-id="5881702736843511327">⚠</tg-emoji> Ошибка продления подписки',
+            ),
             show_alert=True,
         )
         return
@@ -5319,11 +5589,11 @@ async def _extend_existing_subscription(
             reset_reason='продление подписки',
         )
         if remnawave_result:
-            logger.info('✅ RemnaWave обновлен успешно')
+            logger.info('RemnaWave обновлен успешно')
         else:
-            logger.error('⚠ ОШИБКА ОБНОВЛЕНИЯ REMNAWAVE')
+            logger.error('ОШИБКА ОБНОВЛЕНИЯ REMNAWAVE')
     except Exception as e:
-        logger.error('⚠ ИСКЛЮЧЕНИЕ ПРИ ОБНОВЛЕНИИ REMNAWAVE', error=e)
+        logger.error('ИСКЛЮЧЕНИЕ ПРИ ОБНОВЛЕНИИ REMNAWAVE', error=e)
         from app.services.remnawave_retry_queue import remnawave_retry_queue
 
         remnawave_retry_queue.enqueue(
@@ -5360,7 +5630,7 @@ async def _extend_existing_subscription(
     # Отправляем сообщение пользователю
     success_message = texts.t(
         'SUBSCRIPTION_UI_RENEW_SUCCESS_DETAILS',
-        '✅ Подписка успешно продлена!\n\n⏰ Добавлено: {days} дней\nДействует до: {date}\n\n💰 Списано: {amount}',
+        '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Подписка успешно продлена!\n\n<tg-emoji emoji-id="5985616167740379273">⏰</tg-emoji> Добавлено: {days} дней\nДействует до: {date}\n\n<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> Списано: {amount}',
     ).format(
         days=period_days,
         date=format_local_datetime(new_end_date, '%d.%m.%Y %H:%M'),
@@ -5369,12 +5639,12 @@ async def _extend_existing_subscription(
 
     # Если это была триальная подписка, добавляем информацию о преобразовании
     if current_subscription.is_trial:
-        success_message += texts.t('SUBSCRIPTION_UI_TRIAL_CONVERTED', '\n🎯 Триальная подписка преобразована в платную')
+        success_message += texts.t('SUBSCRIPTION_UI_TRIAL_CONVERTED', '\nТриальная подписка преобразована в платную')
 
     await callback.message.edit_text(success_message, reply_markup=get_back_keyboard(db_user.language))
 
     logger.info(
-        '✅ Пользователь продлил подписку на дней за ₽',
+        'Пользователь продлил подписку на дней за ₽',
         telegram_id=db_user.telegram_id,
         period_days=period_days,
         price_kopeks=price_kopeks / 100,

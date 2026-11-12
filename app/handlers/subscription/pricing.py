@@ -229,31 +229,42 @@ async def _prepare_subscription_summary(
     details_text = '\n'.join(details_lines)
 
     summary_lines = [
-        texts.t('SUBSCRIPTION_UI_ORDER_SUMMARY_TITLE', '📋 <b>Сводка заказа</b>'),
+        texts.t('SUBSCRIPTION_UI_ORDER_SUMMARY_TITLE', '<b>Сводка заказа</b>'),
         '',
-        texts.t('SUBSCRIPTION_UI_SUMMARY_PERIOD', '📅 <b>Период:</b> {period}').format(period=period_display),
-        texts.t('SUBSCRIPTION_UI_SUMMARY_TRAFFIC_VALUE', '📊 <b>Трафик:</b> {traffic}').format(traffic=traffic_display),
-        texts.t('SUBSCRIPTION_UI_SUMMARY_COUNTRIES', '🌍 <b>Страны:</b> {countries}').format(
+        texts.t(
+            'SUBSCRIPTION_UI_SUMMARY_PERIOD',
+            '<tg-emoji emoji-id="5967412305338568701">📅</tg-emoji> <b>Период:</b> {period}',
+        ).format(period=period_display),
+        texts.t(
+            'SUBSCRIPTION_UI_SUMMARY_TRAFFIC_VALUE',
+            '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> <b>Трафик:</b> {traffic}',
+        ).format(traffic=traffic_display),
+        texts.t('SUBSCRIPTION_UI_SUMMARY_COUNTRIES', '<b>Страны:</b> {countries}').format(
             countries=', '.join(selected_countries_names)
         ),
     ]
 
     if devices_selection_enabled:
         summary_lines.append(
-            texts.t('SUBSCRIPTION_UI_SUMMARY_DEVICES_VALUE', '📱 <b>Устройства:</b> {devices}').format(
-                devices=devices_selected
-            )
+            texts.t(
+                'SUBSCRIPTION_UI_SUMMARY_DEVICES_VALUE',
+                '<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> <b>Устройства:</b> {devices}',
+            ).format(devices=devices_selected)
         )
 
     summary_lines.extend(
         [
             '',
-            texts.t('SUBSCRIPTION_UI_COST_BREAKDOWN_TITLE', '💰 <b>Детализация стоимости:</b>'),
+            texts.t(
+                'SUBSCRIPTION_UI_COST_BREAKDOWN_TITLE',
+                '<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> <b>Детализация стоимости:</b>',
+            ),
             details_text,
             '',
-            texts.t('SUBSCRIPTION_UI_SUMMARY_TOTAL', '💎 <b>Общая стоимость:</b> {amount}').format(
-                amount=texts.format_price(total_price)
-            ),
+            texts.t(
+                'SUBSCRIPTION_UI_SUMMARY_TOTAL',
+                '<tg-emoji emoji-id="5963312935148195483">💎</tg-emoji> <b>Общая стоимость:</b> {amount}',
+            ).format(amount=texts.format_price(total_price)),
             '',
             texts.t('SUBSCRIPTION_UI_CONFIRM_PURCHASE_QUESTION', 'Подтверждаете покупку?'),
         ]
@@ -325,13 +336,17 @@ async def get_subscription_info_text(subscription, texts, db_user, db: AsyncSess
     subscription_url = get_display_subscription_link(subscription)
 
     if subscription.is_trial:
-        status_text = texts.t('SUBSCRIPTION_UI_TRIAL_GIFT_STATUS', '🎁 Тестовая')
+        status_text = texts.t(
+            'SUBSCRIPTION_UI_TRIAL_GIFT_STATUS', '<tg-emoji emoji-id="6032937473162614352">🎁</tg-emoji> Тестовая'
+        )
         type_text = texts.t('SUBSCRIPTION_UI_TRIAL_LABEL', 'Триал')
     else:
         if subscription.is_active:
-            status_text = texts.t('SUBSCRIPTION_UI_PAID_STATUS', '✅ Оплачена')
+            status_text = texts.t(
+                'SUBSCRIPTION_UI_PAID_STATUS', '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Оплачена'
+            )
         else:
-            status_text = texts.t('SUBSCRIPTION_UI_EXPIRED_STATUS', '⌛ Истекла')
+            status_text = texts.t('SUBSCRIPTION_UI_EXPIRED_STATUS', 'Истекла')
         type_text = texts.t('SUBSCRIPTION_UI_PAID_SUBSCRIPTION_LABEL', 'Платная подписка')
 
     traffic_limit = subscription.traffic_limit_gb or 0
@@ -368,15 +383,18 @@ async def get_subscription_info_text(subscription, texts, db_user, db: AsyncSess
         countries_count=len(subscription.connected_squads or []),
         devices_used=devices_used,
         devices_limit=subscription.device_limit,
-        autopay_status=texts.t('SUBSCRIPTION_UI_ENABLED_STATUS', '✅ Включен')
+        autopay_status=texts.t(
+            'SUBSCRIPTION_UI_ENABLED_STATUS', '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Включен'
+        )
         if subscription.autopay_enabled
-        else texts.t('SUBSCRIPTION_UI_DISABLED_STATUS', '⌛ Выключен'),
+        else texts.t('SUBSCRIPTION_UI_DISABLED_STATUS', 'Выключен'),
     )
     info_text = info_text.strip()
 
     if subscription_cost > 0:
         info_text += texts.t(
-            'SUBSCRIPTION_UI_SUMMARY_MONTHLY', '\n💰 <b>Стоимость подписки в месяц:</b> {amount}'
+            'SUBSCRIPTION_UI_SUMMARY_MONTHLY',
+            '\n<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> <b>Стоимость подписки в месяц:</b> {amount}',
         ).format(amount=texts.format_price(subscription_cost))
 
     # Отображаем докупленный трафик
@@ -396,7 +414,10 @@ async def get_subscription_info_text(subscription, texts, db_user, db: AsyncSess
         purchases = purchases_result.scalars().all()
 
         if purchases:
-            info_text += texts.t('SUBSCRIPTION_UI_EXTRA_TRAFFIC_TITLE', '\n\n📦 <b>Докупленный трафик:</b>')
+            info_text += texts.t(
+                'SUBSCRIPTION_UI_EXTRA_TRAFFIC_TITLE',
+                '\n\n<tg-emoji emoji-id="5924720918826848520">📦</tg-emoji> <b>Докупленный трафик:</b>',
+            )
 
             for purchase in purchases:
                 time_remaining = purchase.expires_at - now
@@ -441,7 +462,7 @@ async def get_subscription_info_text(subscription, texts, db_user, db: AsyncSess
     if subscription_url and not settings.should_hide_subscription_link():
         info_text += texts.t(
             'SUBSCRIPTION_UI_IMPORT_LINK',
-            '\n\n🔗 <b>Ваша ссылка для импорта в VPN приложениe:</b>\n<code>{link}</code>',
+            '\n\n<tg-emoji emoji-id="5877465816030515018">🔗</tg-emoji> <b>Ваша ссылка для импорта в VPN приложениe:</b>\n<code>{link}</code>',
         ).format(link=html.escape(subscription_url))
 
     return compact_blank_lines(info_text)
