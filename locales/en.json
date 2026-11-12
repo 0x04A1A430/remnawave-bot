@@ -1777,5 +1777,6 @@
   "ADMIN_USERS_CLEANUP_BACKUP_RUNNING": "<b>Creating a backup...</b>",
   "ADMIN_USERS_CLEANUP_BACKUP_FAILED": "<b>Deletion cancelled</b>\n\nCould not create a backup. No users were touched.",
   "ADMIN_USERS_CLEANUP_BACKUP_FILE": "\nBackup: <code>{value1}</code>",
-  "ADMIN_USERS_CLEANUP_SUBSCRIPTION_RULE": "No subscription, or it expired more than {value1} days ago.\n"
+  "ADMIN_USERS_CLEANUP_SUBSCRIPTION_RULE": "No subscription, or it expired more than {value1} days ago.\n",
+  "AUTO_RENEW_EXPIRED_INSUFFICIENT": "<tg-emoji emoji-id=\"5881702736843511327\">⚠</tg-emoji> <b>Not enough funds to renew</b>\n\nYour subscription has ended, but your balance is too low to renew it automatically.\n\nBalance: {balance}\nRequired: {required}\n\nTop up your balance and the subscription will renew automatically."
 }
