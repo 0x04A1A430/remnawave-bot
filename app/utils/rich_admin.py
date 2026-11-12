@@ -173,12 +173,23 @@ def classic_admin_html_to_rich(text: str, *, footer_label: str | None = None) ->
     header = ''
     match = _LEADING_TITLE_RE.match(rich)
     if match and '<b>' in match.group('title'):
-        header = f'<h6>{match.group("title").strip()}</h6><hr/>'
+        from app.utils.notification_card import premium
+
+        title = match.group('title').strip()
+        # фирменная иконка перед заголовком, если он ещё не начинается с иконки
+        plain_title = re.sub(r'<[^>]+>', '', title).strip()
+        if plain_title and plain_title[0].isalnum():
+            title = f'{premium("⚙")} {title}'
+        header = f'<h6>{title}</h6><hr/>'
         rich = rich[match.end() :]
 
     body = _inline_newlines_to_rich(rich)
+    # Детали — в цитате, если уведомление ещё не разбито на блоки: так карточка
+    # читается как остальные сообщения бота, а не как простыня строк.
+    if body.strip() and '<blockquote' not in body and '<table' not in body and '<pre' not in body:
+        body = f'<blockquote>{body}</blockquote>'
 
-    footer = rich_footer_now(footer_label) if footer_label else rich_footer_now()
+    footer = rich_footer_now(footer_label or '@x1lagent · админка')
     return f'{header}{body}<hr/>{footer}'
 
 
