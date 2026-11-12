@@ -2135,16 +2135,19 @@ class BackupService:
             if not settings.is_admin_notifications_enabled():
                 return
 
-            icons = {'success': '', 'error': '', 'restore_success': '', 'restore_error': ''}
+            from app.utils.notification_card import card
 
-            icon = icons.get(event_type, '')
+            emoji = '✅' if 'success' in event_type else '⚠'
             safe_message = html_lib.escape(message) if 'error' in event_type else message
-            notification_text = f'{icon} <b>СИСТЕМА БЕКАПОВ</b>\n\n{safe_message}'
-
+            lines = [safe_message]
             if file_path:
-                notification_text += f'\n<code>{Path(file_path).name}</code>'
-
-            notification_text += f'\n\n<i>{datetime.now(UTC).strftime("%d.%m.%Y %H:%M:%S")}</i>'
+                lines.append(f'▣ <code>{html_lib.escape(Path(file_path).name)}</code>')
+            notification_text = card(
+                emoji=emoji,
+                title='Система бекапов',
+                lines=lines,
+                note=datetime.now(UTC).strftime('%d.%m.%Y %H:%M:%S'),
+            )
 
             try:
                 from app.services.admin_notification_service import AdminNotificationService, NotificationCategory
@@ -2186,28 +2189,45 @@ class BackupService:
                     file_to_send = temp_zip_path
 
             file_name = filename or Path(file_to_send).name
-            caption_lines = [
-                '<blockquote>',
-                f'Файл: <code>{html_lib.escape(file_name)}</code>',
-                f'Таблиц: {tables_count}',
-                f'Записей: {total_records:,}'.replace(',', ' '),
-                f'Размер: {size_mb:.2f} MB',
-                '</blockquote>',
-                f'<i>{datetime.now(UTC).strftime("%d.%m.%Y %H:%M:%S")}</i>',
-            ]
-            caption = '\n'.join(caption_lines)
+            from aiogram.types import InlineKeyboardMarkup
+
+            from app.utils.button_emoji import make_button
+            from app.utils.notification_card import card
+
+            caption = card(
+                emoji='🗂',
+                title='@x1lagent · backup',
+                lines=[
+                    f'▣ <b>Файл:</b> <code>{html_lib.escape(file_name)}</code>',
+                    f'≡ <b>Таблиц:</b> {tables_count}',
+                    f'↑ <b>Записей:</b> {f"{total_records:,}".replace(",", " ")}',
+                    f'≡ <b>Размер:</b> {size_mb:.2f} MB',
+                ],
+                note=datetime.now(UTC).strftime('%d.%m.%Y %H:%M:%S'),
+            )
 
             send_kwargs = {
                 'chat_id': chat_id,
                 'document': FSInputFile(file_to_send),
                 'caption': caption,
                 'parse_mode': 'HTML',
+                'reply_markup': InlineKeyboardMarkup(
+                    inline_keyboard=[[make_button('@x1lagent', url='https://t.me/x1lagent', style='primary')]]
+                ),
             }
 
             if settings.BACKUP_SEND_TOPIC_ID:
                 send_kwargs['message_thread_id'] = settings.BACKUP_SEND_TOPIC_ID
 
-            await self.bot.send_document(**send_kwargs)
+            try:
+                await self.bot.send_document(**send_kwargs)
+            except Exception as send_error:
+                # закрытый/удалённый топик — шлём в общий чат
+                if 'topic_closed' in str(send_error).lower() or 'thread' in str(send_error).lower():
+                    send_kwargs.pop('message_thread_id', None)
+                    await self.bot.send_document(**send_kwargs)
+                else:
+                    raise
             logger.info('Бекап отправлен в чат', chat_id=chat_id)
 
             if temp_zip_path and await asyncio.to_thread(Path(temp_zip_path).exists):

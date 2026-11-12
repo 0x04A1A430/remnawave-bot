@@ -2,6 +2,11 @@ services:
   postgres:
     image: postgres:18-alpine
     container_name: remnawave_bot_db
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-remnawave_bot}
@@ -36,6 +41,11 @@ services:
   redis:
     image: redis:7-alpine
     container_name: remnawave_bot_redis
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
     restart: unless-stopped
     command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
     volumes:
@@ -51,6 +61,11 @@ services:
   bot:
     build: .
     container_name: remnawave_bot
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
     restart: unless-stopped
     depends_on:
       postgres:

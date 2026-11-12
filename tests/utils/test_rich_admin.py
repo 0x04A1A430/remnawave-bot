@@ -53,7 +53,7 @@ def test_classic_html_emoji_before_bold_becomes_header():
 def test_classic_html_without_bold_header_kept_as_is():
     rich = rich_admin.classic_admin_html_to_rich('просто текст уведомления')
     assert '<h6>' not in rich
-    assert rich.startswith('<p>просто текст уведомления</p>')
+    assert rich.startswith('<blockquote><p>просто текст уведомления</p></blockquote>')
     assert '<footer>' in rich
 
 
