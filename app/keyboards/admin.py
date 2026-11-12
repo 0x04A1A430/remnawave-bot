@@ -525,6 +525,17 @@ def get_admin_users_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                 make_button(
                     text=_t(
                         texts,
+                        'ADMIN_USERS_CLEANUP_INACTIVE',
+                        'Очистить неактивных',
+                    ),
+                    callback_data='admin_cleanup_inactive',
+                    style='danger',
+                )
+            ],
+            [
+                make_button(
+                    text=_t(
+                        texts,
                         'ADMIN_USERS_FILTERS',
                         'Фильтры',
                     ),

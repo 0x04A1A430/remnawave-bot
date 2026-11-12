@@ -1650,5 +1650,14 @@
   "WEBHOOK_USER_NOT_CONNECTED": "<b>Ви ще не підключились</b>\n\nВаша підписка{tariff_label} активна, але VPN-з'єднання не було встановлено. Підключіться, щоб почати користуватися.",
   "WEBHOOK_DEVICE_ADDED": "<b>Новий пристрій</b>\n\nДо підписки{tariff_label} підключено новий пристрій: <code>{device}</code>",
   "WEBHOOK_DEVICE_DELETED": "<b>Пристрій видалено</b>\n\nПристрій відключено від підписки{tariff_label}: <code>{device}</code>",
-  "WEBHOOK_CLOSE_BUTTON": "Закрити"
+  "WEBHOOK_CLOSE_BUTTON": "Закрити",
+  "ADMIN_USERS_CLEANUP_INACTIVE": "Очистити неактивних",
+  "ADMIN_USERS_CLEANUP_TITLE": "<b>Очищення неактивних користувачів</b>",
+  "ADMIN_USERS_CLEANUP_BODY": "Без активності понад {value1} міс.: <b>{value2}</b>\nБуде видалено з бота та панелі Remnawave: <b>{value3}</b>",
+  "ADMIN_USERS_CLEANUP_SKIPPED": "З активною підпискою (пропущено): {value1}",
+  "ADMIN_USERS_CLEANUP_WARNING": "Видалення незворотне: профіль у боті, підписки та акаунт у панелі зникнуть.",
+  "ADMIN_USERS_CLEANUP_CONFIRM_BUTTON": "Видалити всюди",
+  "ADMIN_USERS_CLEANUP_RUNNING": "<b>Очищення неактивних...</b>",
+  "ADMIN_USERS_CLEANUP_DONE": "<b>Очищення завершено</b>\n\nВидалено з бота та панелі Remnawave: <b>{value1}</b>",
+  "ADMIN_USERS_CLEANUP_DONE_SKIPPED": "\nПропущено (активна підписка): {value1}"
 }

@@ -41,7 +41,7 @@ async def test_blocked_counts_only_the_blocked_status(monkeypatch) -> None:
         await db.commit()
         stats = await get_users_statistics(db)
 
-    assert stats['total_users'] == 9
+    assert stats['total_users'] == 5, 'удалённые не входят в «всего»'
     assert stats['active_users'] == 3
     assert stats['blocked_users'] == 2, 'удалённые — не заблокированные'
     assert stats['deleted_users'] == 4
