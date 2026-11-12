@@ -346,7 +346,6 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
 
                     if isinstance(devices_info, dict):
                         devices_count = devices_info.get('total', 0)
-                        devices_list = devices_info.get('devices', [])
                         devices_used_str = str(devices_count)
                         logger.info(
                             'Найдено устройств для пользователя',
