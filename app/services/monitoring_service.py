@@ -2753,16 +2753,26 @@ class MonitoringService:
             if now.hour != 3:
                 return
 
-            inactive_users = await get_inactive_users(db, settings.INACTIVE_USER_DELETE_MONTHS)
+            from app.services.user_service import UserService
+
+            inactive_users = await get_inactive_users(
+                db,
+                settings.INACTIVE_USER_DELETE_MONTHS,
+                without_subscriptions=True,
+            )
+            user_service = UserService()
             deleted_count = 0
 
             for user in inactive_users:
-                # Check if user has ANY active subscription (multi-tariff aware)
-                has_active = any(sub.is_active for sub in (getattr(user, 'subscriptions', None) or []))
-                if not has_active:
-                    success = await delete_user(db, user)
-                    if success:
-                        deleted_count += 1
+                # Никакие подписки (даже истёкшие) и активные в панели аккаунты
+                # автоматически не помечаем удалёнными.
+                if getattr(user, 'subscriptions', None):
+                    continue
+                if await user_service._panel_user_is_active(user) is not False:
+                    continue
+                success = await delete_user(db, user)
+                if success:
+                    deleted_count += 1
 
             if deleted_count > 0:
                 await self._log_monitoring_event(
