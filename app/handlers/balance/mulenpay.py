@@ -45,7 +45,7 @@ async def start_mulenpay_payment(
         await callback.message.edit_text(
             texts.t(
                 'USER_RESTRICTION_TOPUP_BLOCKED',
-                '🚫 <b>Пополнение ограничено</b>\n\n{reason}\n\nЕсли вы считаете это ошибкой, вы можете обжаловать решение.',
+                '<tg-emoji emoji-id="5872829476143894491">🚫</tg-emoji> <b>Пополнение ограничено</b>\n\n{reason}\n\nЕсли вы считаете это ошибкой, вы можете обжаловать решение.',
             ).format(reason=reason),
             reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
         )
@@ -57,9 +57,10 @@ async def start_mulenpay_payment(
 
     if not settings.is_mulenpay_enabled():
         await callback.answer(
-            texts.t('PAYMENT_UI_PROVIDER_UNAVAILABLE', '❌ Оплата через {value1} временно недоступна').format(
-                value1=mulenpay_name
-            ),
+            texts.t(
+                'PAYMENT_UI_PROVIDER_UNAVAILABLE',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Оплата через {value1} временно недоступна',
+            ).format(value1=mulenpay_name),
             show_alert=True,
         )
         return
@@ -67,7 +68,7 @@ async def start_mulenpay_payment(
     message_template = texts.t(
         'MULENPAY_TOPUP_PROMPT',
         (
-            '💳 <b>Оплата через {mulenpay_name_html}</b>\n\n'
+            '<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> <b>Оплата через {mulenpay_name_html}</b>\n\n'
             'Введите сумму для пополнения от 100 до 100 000 ₽.\n'
             'Оплата происходит через защищенную платформу {mulenpay_name}.'
         ),
@@ -120,7 +121,7 @@ async def process_mulenpay_payment_amount(
         await message.answer(
             texts.t(
                 'USER_RESTRICTION_TOPUP_BLOCKED',
-                '🚫 <b>Пополнение ограничено</b>\n\n{reason}\n\nЕсли вы считаете это ошибкой, вы можете обжаловать решение.',
+                '<tg-emoji emoji-id="5872829476143894491">🚫</tg-emoji> <b>Пополнение ограничено</b>\n\n{reason}\n\nЕсли вы считаете это ошибкой, вы можете обжаловать решение.',
             ).format(reason=reason),
             reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
             parse_mode='HTML',
@@ -133,9 +134,10 @@ async def process_mulenpay_payment_amount(
 
     if not settings.is_mulenpay_enabled():
         await message.answer(
-            texts.t('PAYMENT_UI_PROVIDER_UNAVAILABLE', '❌ Оплата через {value1} временно недоступна').format(
-                value1=mulenpay_name
-            )
+            texts.t(
+                'PAYMENT_UI_PROVIDER_UNAVAILABLE',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Оплата через {value1} временно недоступна',
+            ).format(value1=mulenpay_name)
         )
         return
 
@@ -191,7 +193,7 @@ async def process_mulenpay_payment_amount(
             await message.answer(
                 texts.t(
                     'MULENPAY_PAYMENT_ERROR',
-                    '❌ Ошибка создания платежа {mulenpay_name}. Попробуйте позже или обратитесь в поддержку.',
+                    '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Ошибка создания платежа {mulenpay_name}. Попробуйте позже или обратитесь в поддержку.',
                 ).format(mulenpay_name=mulenpay_name)
             )
             await state.clear()
@@ -207,7 +209,7 @@ async def process_mulenpay_payment_amount(
                     types.InlineKeyboardButton(
                         text=texts.t(
                             'MULENPAY_PAY_BUTTON',
-                            '💳 Оплатить через {mulenpay_name}',
+                            '<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> Оплатить через {mulenpay_name}',
                         ).format(mulenpay_name=mulenpay_name, amount=settings.format_price(amount_kopeks)),
                         url=payment_url,
                         style='success',
@@ -215,7 +217,10 @@ async def process_mulenpay_payment_amount(
                 ],
                 [
                     types.InlineKeyboardButton(
-                        text=texts.t('CHECK_STATUS_BUTTON', '📊 Проверить статус'),
+                        text=texts.t(
+                            'CHECK_STATUS_BUTTON',
+                            '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> Проверить статус',
+                        ),
                         callback_data=f'check_mulenpay_{local_payment_id}',
                         style='primary',
                     )
@@ -229,15 +234,15 @@ async def process_mulenpay_payment_amount(
         message_template = texts.t(
             'MULENPAY_PAYMENT_INSTRUCTIONS',
             (
-                '💳 <b>Оплата через {mulenpay_name_html}</b>\n\n'
-                '💰 Сумма: {amount}\n'
-                '🆔 ID платежа: {payment_id}\n\n'
-                '📱 <b>Инструкция:</b>\n'
+                '<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> <b>Оплата через {mulenpay_name_html}</b>\n\n'
+                '<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> Сумма: {amount}\n'
+                'ID платежа: {payment_id}\n\n'
+                '<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> <b>Инструкция:</b>\n'
                 "1. Нажмите кнопку 'Оплатить через {mulenpay_name}'\n"
                 '2. Следуйте подсказкам платежной системы\n'
                 '3. Подтвердите перевод\n'
                 '4. Средства зачислятся автоматически\n\n'
-                '❓ Если возникнут проблемы, обратитесь в {support}'
+                '<tg-emoji emoji-id="5873121512445187130">❓</tg-emoji> Если возникнут проблемы, обратитесь в {support}'
             ),
         )
 
@@ -294,7 +299,7 @@ async def process_mulenpay_payment_amount(
         await message.answer(
             texts.t(
                 'MULENPAY_PAYMENT_ERROR',
-                '❌ Ошибка создания платежа {mulenpay_name}. Попробуйте позже или обратитесь в поддержку.',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Ошибка создания платежа {mulenpay_name}. Попробуйте позже или обратитесь в поддержку.',
             ).format(mulenpay_name=mulenpay_name)
         )
         await state.clear()
@@ -308,7 +313,10 @@ async def check_mulenpay_payment_status(callback: types.CallbackQuery, db: Async
         or DEFAULT_LANGUAGE
     )
     if db_user is None:
-        await callback.answer(texts.t('PAYMENT_UI_NOT_FOUND', '❌ Платеж не найден'), show_alert=True)
+        await callback.answer(
+            texts.t('PAYMENT_UI_NOT_FOUND', '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Платеж не найден'),
+            show_alert=True,
+        )
         return
     try:
         local_payment_id = int(callback.data.split('_')[-1])
@@ -316,14 +324,24 @@ async def check_mulenpay_payment_status(callback: types.CallbackQuery, db: Async
 
         payment = await get_mulenpay_payment_by_local_id(db, local_payment_id)
         if not payment or payment.user_id != db_user.id:
-            await callback.answer(texts.t('PAYMENT_UI_NOT_FOUND', '❌ Платеж не найден'), show_alert=True)
+            await callback.answer(
+                texts.t(
+                    'PAYMENT_UI_NOT_FOUND', '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Платеж не найден'
+                ),
+                show_alert=True,
+            )
             return
 
         payment_service = PaymentService(callback.bot)
         status_info = await payment_service.get_mulenpay_payment_status(db, local_payment_id)
 
         if not status_info:
-            await callback.answer(texts.t('PAYMENT_UI_NOT_FOUND', '❌ Платеж не найден'), show_alert=True)
+            await callback.answer(
+                texts.t(
+                    'PAYMENT_UI_NOT_FOUND', '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Платеж не найден'
+                ),
+                show_alert=True,
+            )
             return
 
         payment = status_info['payment']
@@ -331,27 +349,51 @@ async def check_mulenpay_payment_status(callback: types.CallbackQuery, db: Async
         status_labels = {
             'created': ('⏳', texts.t('WATA_STATUS_OPENED', 'Ожидает оплаты')),
             'processing': ('⌛', texts.t('WATA_STATUS_CLOSED', 'Обрабатывается')),
-            'success': ('✅', texts.t('WATA_STATUS_PAID', 'Оплачен')),
-            'canceled': ('❌', texts.t('PAYMENT_UI_STATUS_CANCELLED', 'Отменен')),
-            'error': ('⚠️', texts.t('ADMIN_PAYMENT_STATUS_FAILED', 'Ошибка')),
-            'hold': ('🔒', texts.t('PAYMENT_UI_STATUS_HOLD', 'Холд')),
-            'unknown': ('❓', texts.t('WATA_STATUS_UNKNOWN', 'Неизвестно')),
+            'success': (
+                '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji>',
+                texts.t('WATA_STATUS_PAID', 'Оплачен'),
+            ),
+            'canceled': (
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji>',
+                texts.t('PAYMENT_UI_STATUS_CANCELLED', 'Отменен'),
+            ),
+            'error': (
+                '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji>',
+                texts.t('ADMIN_PAYMENT_STATUS_FAILED', 'Ошибка'),
+            ),
+            'hold': (
+                '<tg-emoji emoji-id="5832546462478635761">🔒</tg-emoji>',
+                texts.t('PAYMENT_UI_STATUS_HOLD', 'Холд'),
+            ),
+            'unknown': (
+                '<tg-emoji emoji-id="5873121512445187130">❓</tg-emoji>',
+                texts.t('WATA_STATUS_UNKNOWN', 'Неизвестно'),
+            ),
         }
 
-        emoji, status_text = status_labels.get(payment.status, ('❓', texts.t('WATA_STATUS_UNKNOWN', 'Неизвестно')))
+        emoji, status_text = status_labels.get(
+            payment.status,
+            ('<tg-emoji emoji-id="5873121512445187130">❓</tg-emoji>', texts.t('WATA_STATUS_UNKNOWN', 'Неизвестно')),
+        )
 
         mulenpay_name = settings.get_mulenpay_display_name()
         message_lines = [
-            texts.t('PAYMENT_UI_NAMED_STATUS_TITLE', '💳 Статус платежа {value1}:\n\n').format(value1=mulenpay_name),
-            f'🆔 ID: {payment.mulen_payment_id or payment.id}\n',
-            f'💰 Сумма: {settings.format_price(payment.amount_kopeks)}\n',
-            f'📊 Статус: {emoji} {status_text}\n',
-            f'📅 Создан: {format_local_datetime(payment.created_at, "%d.%m.%Y %H:%M")}\n',
+            texts.t(
+                'PAYMENT_UI_NAMED_STATUS_TITLE',
+                '<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> Статус платежа {value1}:\n\n',
+            ).format(value1=mulenpay_name),
+            f'ID: {payment.mulen_payment_id or payment.id}\n',
+            f'<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> Сумма: {settings.format_price(payment.amount_kopeks)}\n',
+            f'<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> Статус: {emoji} {status_text}\n',
+            f'<tg-emoji emoji-id="5967412305338568701">📅</tg-emoji> Создан: {format_local_datetime(payment.created_at, "%d.%m.%Y %H:%M")}\n',
         ]
 
         if payment.is_paid:
             message_lines.append(
-                texts.t('PAYMENT_UI_SUCCESS_CREDITED_SHORT', '\n✅ Платеж успешно завершен! Средства уже на балансе.')
+                texts.t(
+                    'PAYMENT_UI_SUCCESS_CREDITED_SHORT',
+                    '\n<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Платеж успешно завершен! Средства уже на балансе.',
+                )
             )
         elif payment.status in {'created', 'processing'}:
             message_lines.append(
@@ -362,15 +404,16 @@ async def check_mulenpay_payment_status(callback: types.CallbackQuery, db: Async
             )
             if payment.payment_url:
                 message_lines.append(
-                    texts.t('PAYMENT_UI_PAYMENT_LINK', '\n🔗 Ссылка на оплату: {value1}').format(
-                        value1=payment.payment_url
-                    )
+                    texts.t(
+                        'PAYMENT_UI_PAYMENT_LINK',
+                        '\n<tg-emoji emoji-id="5877465816030515018">🔗</tg-emoji> Ссылка на оплату: {value1}',
+                    ).format(value1=payment.payment_url)
                 )
         elif payment.status in {'canceled', 'error'}:
             message_lines.append(
                 texts.t(
                     'PAYMENT_UI_FAILED_NEW_PAYMENT',
-                    '\n❌ Платеж не был завершен. Попробуйте создать новый платеж или обратитесь в {value1}',
+                    '\n<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Платеж не был завершен. Попробуйте создать новый платеж или обратитесь в {value1}',
                 ).format(value1=settings.get_support_contact_display())
             )
 
@@ -379,11 +422,21 @@ async def check_mulenpay_payment_status(callback: types.CallbackQuery, db: Async
         if len(message_text) > 190:
             await callback.message.answer(message_text)
             await callback.answer(
-                texts.t('PAYMENT_UI_STATUS_SENT', 'ℹ️ Статус платежа отправлен в чат'), show_alert=True
+                texts.t(
+                    'PAYMENT_UI_STATUS_SENT',
+                    '<tg-emoji emoji-id="5879785854284599288">ℹ️</tg-emoji> Статус платежа отправлен в чат',
+                ),
+                show_alert=True,
             )
         else:
             await callback.answer(message_text, show_alert=True)
 
     except Exception as e:
         logger.error('Ошибка проверки статуса', get_mulenpay_display_name=settings.get_mulenpay_display_name(), error=e)
-        await callback.answer(texts.t('PAYMENT_UI_STATUS_ERROR', '❌ Ошибка проверки статуса'), show_alert=True)
+        await callback.answer(
+            texts.t(
+                'PAYMENT_UI_STATUS_ERROR',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Ошибка проверки статуса',
+            ),
+            show_alert=True,
+        )

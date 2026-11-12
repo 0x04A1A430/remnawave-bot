@@ -65,9 +65,10 @@ async def _check_topup_restriction(callback: types.CallbackQuery, db_user: User)
         keyboard.append([InlineKeyboardButton(text='Обжаловать', url=support_url)])
     keyboard.append([InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance', style='danger')])
     await callback.message.edit_text(
-        texts.t('USER_RESTRICTION_TOPUP_BLOCKED_SHORT', '🚫 <b>Пополнение ограничено</b>\n\n{reason}').format(
-            reason=reason
-        ),
+        texts.t(
+            'USER_RESTRICTION_TOPUP_BLOCKED_SHORT',
+            '<tg-emoji emoji-id="5872829476143894491">🚫</tg-emoji> <b>Пополнение ограничено</b>\n\n{reason}',
+        ).format(reason=reason),
         parse_mode='HTML',
         reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard),
     )
@@ -136,7 +137,7 @@ async def _create_kassa_ai_payment_and_respond(
                 InlineKeyboardButton(
                     text=texts.t(
                         'PAY_BUTTON',
-                        '💳 Оплатить {amount}₽',
+                        '<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> Оплатить {amount}₽',
                     ).format(amount=f'{amount_rub:.0f}'),
                     url=payment_url,
                     style='success',
@@ -154,7 +155,7 @@ async def _create_kassa_ai_payment_and_respond(
 
     response_text = texts.t(
         'KASSA_AI_PAYMENT_CREATED',
-        '💳 <b>Оплата через {name}</b>\n\n'
+        '<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> <b>Оплата через {name}</b>\n\n'
         'Сумма: <b>{amount}₽</b>\n\n'
         'Нажмите кнопку ниже для оплаты.\n'
         'После успешной оплаты баланс будет пополнен автоматически.',
@@ -203,9 +204,10 @@ async def process_kassa_ai_payment_amount(
         keyboard.append([InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance', style='danger')])
 
         await message.answer(
-            texts.t('USER_RESTRICTION_TOPUP_BLOCKED_SHORT', '🚫 <b>Пополнение ограничено</b>\n\n{reason}').format(
-                reason=reason
-            ),
+            texts.t(
+                'USER_RESTRICTION_TOPUP_BLOCKED_SHORT',
+                '<tg-emoji emoji-id="5872829476143894491">🚫</tg-emoji> <b>Пополнение ограничено</b>\n\n{reason}',
+            ).format(reason=reason),
             parse_mode='HTML',
             reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard),
         )
@@ -275,7 +277,7 @@ async def _start_kassa_ai_sub_topup(
     await callback.message.edit_text(
         texts.t(
             'KASSA_AI_ENTER_AMOUNT',
-            '💳 <b>Пополнение через {name}</b>\n\n'
+            '<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> <b>Пополнение через {name}</b>\n\n'
             'Введите сумму пополнения в рублях.\n\n'
             'Минимум: {min_amount}₽\n'
             'Максимум: {max_amount}₽',

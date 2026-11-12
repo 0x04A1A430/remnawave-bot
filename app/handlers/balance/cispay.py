@@ -170,9 +170,10 @@ async def process_cispay_payment_amount(
             or texts.t('USER_RESTRICTION_DEFAULT_REASON', 'Действие ограничено администратором')
         )
         await message.answer(
-            texts.t('USER_RESTRICTION_TOPUP_BLOCKED_SHORT', '🚫 <b>Пополнение ограничено</b>\n\n{reason}').format(
-                reason=reason
-            ),
+            texts.t(
+                'USER_RESTRICTION_TOPUP_BLOCKED_SHORT',
+                '<tg-emoji emoji-id="5872829476143894491">🚫</tg-emoji> <b>Пополнение ограничено</b>\n\n{reason}',
+            ).format(reason=reason),
             parse_mode='HTML',
             reply_markup=restriction_kb,
         )
@@ -244,9 +245,10 @@ async def _start_cispay_topup_impl(
             or texts.t('USER_RESTRICTION_DEFAULT_REASON', 'Действие ограничено администратором')
         )
         await callback.message.edit_text(
-            texts.t('USER_RESTRICTION_TOPUP_BLOCKED_SHORT', '🚫 <b>Пополнение ограничено</b>\n\n{reason}').format(
-                reason=reason
-            ),
+            texts.t(
+                'USER_RESTRICTION_TOPUP_BLOCKED_SHORT',
+                '<tg-emoji emoji-id="5872829476143894491">🚫</tg-emoji> <b>Пополнение ограничено</b>\n\n{reason}',
+            ).format(reason=reason),
             parse_mode='HTML',
             reply_markup=restriction_kb,
         )

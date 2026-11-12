@@ -72,7 +72,9 @@ async def _prompt_amount(
 
     prompt_template = texts.t(
         'PLATEGA_TOPUP_PROMPT',
-        (f'💳 <b>Оплата через Platega ({{method_name}})</b>\n\n{default_prompt_body}Оплата происходит через Platega.'),
+        (
+            f'<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> <b>Оплата через Platega ({{method_name}})</b>\n\n{default_prompt_body}Оплата происходит через Platega.'
+        ),
     )
 
     keyboard = await get_topup_amount_keyboard('platega', db_user.language, back_callback='back_to_menu')
@@ -119,7 +121,7 @@ async def start_platega_payment(
         await callback.message.edit_text(
             texts.t(
                 'USER_RESTRICTION_TOPUP_BLOCKED',
-                '🚫 <b>Пополнение ограничено</b>\n\n{reason}\n\nЕсли вы считаете это ошибкой, вы можете обжаловать решение.',
+                '<tg-emoji emoji-id="5872829476143894491">🚫</tg-emoji> <b>Пополнение ограничено</b>\n\n{reason}\n\nЕсли вы считаете это ошибкой, вы можете обжаловать решение.',
             ).format(reason=reason),
             reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
         )
@@ -130,7 +132,7 @@ async def start_platega_payment(
         await callback.answer(
             texts.t(
                 'PLATEGA_TEMPORARILY_UNAVAILABLE',
-                '❌ Оплата через Platega временно недоступна',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Оплата через Platega временно недоступна',
             ),
             show_alert=True,
         )
@@ -141,7 +143,7 @@ async def start_platega_payment(
         await callback.answer(
             texts.t(
                 'PLATEGA_METHODS_NOT_CONFIGURED',
-                '⚠️ На стороне Platega нет доступных методов оплаты',
+                '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> На стороне Platega нет доступных методов оплаты',
             ),
             show_alert=True,
         )
@@ -192,12 +194,22 @@ async def handle_platega_method_selection(
     try:
         method_code = int(callback.data.rsplit('_', 1)[-1])
     except ValueError:
-        await callback.answer(texts.t('PAYMENT_UI_INVALID_METHOD', '❌ Некорректный способ оплаты'), show_alert=True)
+        await callback.answer(
+            texts.t(
+                'PAYMENT_UI_INVALID_METHOD',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Некорректный способ оплаты',
+            ),
+            show_alert=True,
+        )
         return
 
     if method_code not in _get_active_methods():
         await callback.answer(
-            texts.t('PAYMENT_UI_METHOD_UNAVAILABLE', '⚠️ Этот способ сейчас недоступен'), show_alert=True
+            texts.t(
+                'PAYMENT_UI_METHOD_UNAVAILABLE',
+                '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> Этот способ сейчас недоступен',
+            ),
+            show_alert=True,
         )
         return
 
@@ -217,7 +229,13 @@ async def start_platega_direct_method(
     try:
         method_code = int(callback.data.removeprefix('topup_platega_m'))
     except (ValueError, IndexError):
-        await callback.answer(texts.t('PAYMENT_UI_INVALID_METHOD', '❌ Некорректный способ оплаты'), show_alert=True)
+        await callback.answer(
+            texts.t(
+                'PAYMENT_UI_INVALID_METHOD',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Некорректный способ оплаты',
+            ),
+            show_alert=True,
+        )
         return
 
     if getattr(db_user, 'restriction_topup', False):
@@ -234,7 +252,7 @@ async def start_platega_direct_method(
         await callback.message.edit_text(
             texts.t(
                 'USER_RESTRICTION_TOPUP_BLOCKED',
-                '🚫 <b>Пополнение ограничено</b>\n\n{reason}\n\nЕсли вы считаете это ошибкой, вы можете обжаловать решение.',
+                '<tg-emoji emoji-id="5872829476143894491">🚫</tg-emoji> <b>Пополнение ограничено</b>\n\n{reason}\n\nЕсли вы считаете это ошибкой, вы можете обжаловать решение.',
             ).format(reason=reason),
             reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
         )
@@ -245,7 +263,7 @@ async def start_platega_direct_method(
         await callback.answer(
             texts.t(
                 'PLATEGA_TEMPORARILY_UNAVAILABLE',
-                '❌ Оплата через Platega временно недоступна',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Оплата через Platega временно недоступна',
             ),
             show_alert=True,
         )
@@ -253,7 +271,11 @@ async def start_platega_direct_method(
 
     if method_code not in _get_active_methods():
         await callback.answer(
-            texts.t('PAYMENT_UI_METHOD_UNAVAILABLE', '⚠️ Этот способ сейчас недоступен'), show_alert=True
+            texts.t(
+                'PAYMENT_UI_METHOD_UNAVAILABLE',
+                '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> Этот способ сейчас недоступен',
+            ),
+            show_alert=True,
         )
         return
 
@@ -286,7 +308,7 @@ async def process_platega_payment_amount(
         await message.answer(
             texts.t(
                 'USER_RESTRICTION_TOPUP_BLOCKED',
-                '🚫 <b>Пополнение ограничено</b>\n\n{reason}\n\nЕсли вы считаете это ошибкой, вы можете обжаловать решение.',
+                '<tg-emoji emoji-id="5872829476143894491">🚫</tg-emoji> <b>Пополнение ограничено</b>\n\n{reason}\n\nЕсли вы считаете это ошибкой, вы можете обжаловать решение.',
             ).format(reason=reason),
             reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
             parse_mode='HTML',
@@ -298,7 +320,7 @@ async def process_platega_payment_amount(
         await message.answer(
             texts.t(
                 'PLATEGA_TEMPORARILY_UNAVAILABLE',
-                '❌ Оплата через Platega временно недоступна',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Оплата через Platega временно недоступна',
             )
         )
         return
@@ -309,7 +331,7 @@ async def process_platega_payment_amount(
         await message.answer(
             texts.t(
                 'PLATEGA_METHOD_SELECTION_REQUIRED',
-                '⚠️ Выберите способ оплаты Platega перед вводом суммы',
+                '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> Выберите способ оплаты Platega перед вводом суммы',
             )
         )
         await state.set_state(BalanceStates.waiting_for_platega_method)
@@ -353,7 +375,7 @@ async def process_platega_payment_amount(
         await message.answer(
             texts.t(
                 'PLATEGA_PAYMENT_ERROR',
-                '❌ Ошибка создания платежа Platega. Попробуйте позже или обратитесь в поддержку.',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Ошибка создания платежа Platega. Попробуйте позже или обратитесь в поддержку.',
             )
         )
         await state.clear()
@@ -463,13 +485,20 @@ async def check_platega_payment_status(
         or DEFAULT_LANGUAGE
     )
     if db_user is None:
-        await callback.answer(texts.t('PAYMENT_UI_NOT_FOUND', '❌ Платеж не найден'), show_alert=True)
+        await callback.answer(
+            texts.t('PAYMENT_UI_NOT_FOUND', '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Платеж не найден'),
+            show_alert=True,
+        )
         return
     try:
         local_payment_id = int(callback.data.split('_')[-1])
     except ValueError:
         await callback.answer(
-            texts.t('PAYMENT_UI_INVALID_ID', '❌ Некорректный идентификатор платежа'), show_alert=True
+            texts.t(
+                'PAYMENT_UI_INVALID_ID',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Некорректный идентификатор платежа',
+            ),
+            show_alert=True,
         )
         return
 
@@ -477,7 +506,10 @@ async def check_platega_payment_status(
 
     payment = await get_platega_payment_by_id(db, local_payment_id)
     if not payment or payment.user_id != db_user.id:
-        await callback.answer(texts.t('PAYMENT_UI_NOT_FOUND', '❌ Платеж не найден'), show_alert=True)
+        await callback.answer(
+            texts.t('PAYMENT_UI_NOT_FOUND', '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Платеж не найден'),
+            show_alert=True,
+        )
         return
 
     payment_service = PaymentService(callback.bot)
@@ -486,18 +518,35 @@ async def check_platega_payment_status(
         status_info = await payment_service.get_platega_payment_status(db, local_payment_id)
     except Exception as error:
         logger.exception('Ошибка проверки статуса Platega', error=error)
-        await callback.answer(texts.t('PAYMENT_UI_STATUS_ERROR_WARNING', '⚠️ Ошибка проверки статуса'), show_alert=True)
+        await callback.answer(
+            texts.t(
+                'PAYMENT_UI_STATUS_ERROR_WARNING',
+                '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> Ошибка проверки статуса',
+            ),
+            show_alert=True,
+        )
         return
 
     if not status_info:
-        await callback.answer(texts.t('PAYMENT_UI_NOT_FOUND_WARNING', '⚠️ Платёж не найден'), show_alert=True)
+        await callback.answer(
+            texts.t(
+                'PAYMENT_UI_NOT_FOUND_WARNING', '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> Платёж не найден'
+            ),
+            show_alert=True,
+        )
         return
 
     status = status_info.get('status')
     is_paid = status_info.get('is_paid')
 
     if is_paid:
-        await callback.answer(texts.t('PLATEGA_PAYMENT_ALREADY_CONFIRMED', '✅ Платёж уже зачислен'), show_alert=True)
+        await callback.answer(
+            texts.t(
+                'PLATEGA_PAYMENT_ALREADY_CONFIRMED',
+                '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Платёж уже зачислен',
+            ),
+            show_alert=True,
+        )
     else:
         await callback.answer(
             texts.t('PLATEGA_PAYMENT_STATUS', 'Текущий статус платежа: {status}').format(status=status),

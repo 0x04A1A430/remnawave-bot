@@ -94,7 +94,7 @@ async def _create_severpay_payment_and_respond(
                 InlineKeyboardButton(
                     text=texts.t(
                         'PAY_BUTTON',
-                        '💳 Оплатить {amount}₽',
+                        '<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> Оплатить {amount}₽',
                     ).format(amount=f'{amount_rub:.0f}'),
                     url=payment_url,
                     style='success',
@@ -112,7 +112,7 @@ async def _create_severpay_payment_and_respond(
 
     response_text = texts.t(
         'SEVERPAY_PAYMENT_CREATED',
-        '💳 <b>Оплата через {name}</b>\n\n'
+        '<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> <b>Оплата через {name}</b>\n\n'
         'Сумма: <b>{amount}₽</b>\n\n'
         'Нажмите кнопку ниже для оплаты.\n'
         'После успешной оплаты баланс будет пополнен автоматически.',
@@ -156,9 +156,10 @@ async def process_severpay_payment_amount(
             or texts.t('USER_RESTRICTION_DEFAULT_REASON', 'Действие ограничено администратором')
         )
         await message.answer(
-            texts.t('USER_RESTRICTION_TOPUP_BLOCKED_SHORT', '🚫 <b>Пополнение ограничено</b>\n\n{reason}').format(
-                reason=reason
-            ),
+            texts.t(
+                'USER_RESTRICTION_TOPUP_BLOCKED_SHORT',
+                '<tg-emoji emoji-id="5872829476143894491">🚫</tg-emoji> <b>Пополнение ограничено</b>\n\n{reason}',
+            ).format(reason=reason),
             parse_mode='HTML',
             reply_markup=restriction_kb,
         )
@@ -213,9 +214,10 @@ async def start_severpay_topup(
             or texts.t('USER_RESTRICTION_DEFAULT_REASON', 'Действие ограничено администратором')
         )
         await callback.message.edit_text(
-            texts.t('USER_RESTRICTION_TOPUP_BLOCKED_SHORT', '🚫 <b>Пополнение ограничено</b>\n\n{reason}').format(
-                reason=reason
-            ),
+            texts.t(
+                'USER_RESTRICTION_TOPUP_BLOCKED_SHORT',
+                '<tg-emoji emoji-id="5872829476143894491">🚫</tg-emoji> <b>Пополнение ограничено</b>\n\n{reason}',
+            ).format(reason=reason),
             parse_mode='HTML',
             reply_markup=restriction_kb,
         )
@@ -233,7 +235,7 @@ async def start_severpay_topup(
     await callback.message.edit_text(
         texts.t(
             'SEVERPAY_ENTER_AMOUNT',
-            '💳 <b>Пополнение через {name}</b>\n\n'
+            '<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> <b>Пополнение через {name}</b>\n\n'
             'Введите сумму пополнения в рублях.\n\n'
             'Минимум: {min_amount}₽\n'
             'Максимум: {max_amount}₽',

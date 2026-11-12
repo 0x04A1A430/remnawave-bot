@@ -35,11 +35,7 @@ def _restriction_keyboard(texts) -> types.InlineKeyboardMarkup:
     support_url = settings.get_support_contact_url()
     if support_url:
         keyboard.append(
-            [
-                types.InlineKeyboardButton(
-                    text=texts.t('USER_RESTRICTION_APPEAL_BUTTON', '🆘 Обжаловать'), url=support_url
-                )
-            ]
+            [types.InlineKeyboardButton(text=texts.t('USER_RESTRICTION_APPEAL_BUTTON', 'Обжаловать'), url=support_url)]
         )
     keyboard.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance')])
     return types.InlineKeyboardMarkup(inline_keyboard=keyboard)
@@ -80,7 +76,7 @@ async def _prompt_amount(message: types.Message, db_user: User, state: FSMContex
     await message.edit_text(
         texts.t(
             'CASHERA_ENTER_AMOUNT',
-            '💳 <b>Оплата через {name} ({method})</b>\n\nВведите сумму для пополнения от {min_amount} до {max_amount}.',
+            '<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> <b>Оплата через {name} ({method})</b>\n\nВведите сумму для пополнения от {min_amount} до {max_amount}.',
         ).format(
             name=settings.get_cashera_display_name_html(),
             method=method_name,
@@ -104,7 +100,10 @@ async def _guard(callback: types.CallbackQuery, db_user: User) -> bool:
         return False
     if not settings.is_cashera_enabled():
         await callback.answer(
-            texts.t('CASHERA_TEMPORARILY_UNAVAILABLE', '❌ Оплата через Cashera временно недоступна'),
+            texts.t(
+                'CASHERA_TEMPORARILY_UNAVAILABLE',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Оплата через Cashera временно недоступна',
+            ),
             show_alert=True,
         )
         return False
@@ -157,7 +156,11 @@ async def handle_cashera_method_selection(callback: types.CallbackQuery, db_user
     method_code = callback.data.removeprefix(METHOD_CALLBACK_PREFIX)
     if method_code not in _get_active_methods():
         await callback.answer(
-            texts.t('PAYMENT_UI_METHOD_UNAVAILABLE', '⚠️ Этот способ сейчас недоступен'), show_alert=True
+            texts.t(
+                'PAYMENT_UI_METHOD_UNAVAILABLE',
+                '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> Этот способ сейчас недоступен',
+            ),
+            show_alert=True,
         )
         return
     await _prompt_amount(callback.message, db_user, state, method_code)
@@ -173,7 +176,11 @@ async def start_cashera_direct_method(callback: types.CallbackQuery, db_user: Us
         return
     if method_code not in _get_active_methods():
         await callback.answer(
-            texts.t('PAYMENT_UI_METHOD_UNAVAILABLE', '⚠️ Этот способ сейчас недоступен'), show_alert=True
+            texts.t(
+                'PAYMENT_UI_METHOD_UNAVAILABLE',
+                '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> Этот способ сейчас недоступен',
+            ),
+            show_alert=True,
         )
         return
     await _prompt_amount(callback.message, db_user, state, method_code)
@@ -200,14 +207,22 @@ async def process_cashera_payment_amount(
         return
 
     if not settings.is_cashera_enabled():
-        await message.answer(texts.t('CASHERA_TEMPORARILY_UNAVAILABLE', '❌ Оплата через Cashera временно недоступна'))
+        await message.answer(
+            texts.t(
+                'CASHERA_TEMPORARILY_UNAVAILABLE',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Оплата через Cashera временно недоступна',
+            )
+        )
         return
 
     data = await state.get_data()
     method_code = str(data.get('cashera_method') or '')
     if method_code not in _get_active_methods():
         await message.answer(
-            texts.t('CASHERA_METHOD_SELECTION_REQUIRED', '⚠️ Выберите способ оплаты перед вводом суммы')
+            texts.t(
+                'CASHERA_METHOD_SELECTION_REQUIRED',
+                '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> Выберите способ оплаты перед вводом суммы',
+            )
         )
         await state.set_state(BalanceStates.waiting_for_cashera_method)
         return
@@ -250,7 +265,7 @@ async def process_cashera_payment_amount(
         await message.answer(
             texts.t(
                 'CASHERA_PAYMENT_ERROR',
-                '❌ Ошибка создания платежа Cashera. Попробуйте позже или обратитесь в поддержку.',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Ошибка создания платежа Cashera. Попробуйте позже или обратитесь в поддержку.',
             )
         )
         await state.clear()
@@ -262,13 +277,18 @@ async def process_cashera_payment_amount(
         inline_keyboard=[
             [
                 types.InlineKeyboardButton(
-                    text=texts.t('CASHERA_PAY_BUTTON', '💳 Оплатить через {method}').format(method=method_title),
+                    text=texts.t(
+                        'CASHERA_PAY_BUTTON',
+                        '<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> Оплатить через {method}',
+                    ).format(method=method_title),
                     url=result['payment_url'],
                 )
             ],
             [
                 types.InlineKeyboardButton(
-                    text=texts.t('CHECK_STATUS_BUTTON', '📊 Проверить статус'),
+                    text=texts.t(
+                        'CHECK_STATUS_BUTTON', '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> Проверить статус'
+                    ),
                     callback_data=f'check_cashera_{local_payment_id}',
                 )
             ],
@@ -290,7 +310,7 @@ async def process_cashera_payment_amount(
 
     caption = texts.t(
         'CASHERA_PAYMENT_CREATED',
-        '💳 <b>Оплата через {name} ({method})</b>\n\n'
+        '<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> <b>Оплата через {name} ({method})</b>\n\n'
         'Сумма: <b>{amount}</b>\n\n'
         'Нажмите кнопку ниже для оплаты.\n'
         'После успешной оплаты баланс будет пополнен автоматически.',
@@ -322,7 +342,7 @@ async def process_cashera_payment_amount(
         compact_payment_text(
             texts.t(
                 'CASHERA_PAYMENT_CREATED',
-                '💳 <b>Оплата через {name} ({method})</b>\n\n'
+                '<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> <b>Оплата через {name} ({method})</b>\n\n'
                 'Сумма: <b>{amount}</b>\n\n'
                 'Нажмите кнопку ниже для оплаты.\n'
                 'После успешной оплаты баланс будет пополнен автоматически.',
@@ -365,13 +385,20 @@ async def check_cashera_payment_status(callback: types.CallbackQuery, db: AsyncS
         or DEFAULT_LANGUAGE
     )
     if db_user is None:
-        await callback.answer(texts.t('PAYMENT_UI_NOT_FOUND', '❌ Платеж не найден'), show_alert=True)
+        await callback.answer(
+            texts.t('PAYMENT_UI_NOT_FOUND', '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Платеж не найден'),
+            show_alert=True,
+        )
         return
     try:
         local_payment_id = int(callback.data.rsplit('_', 1)[-1])
     except ValueError:
         await callback.answer(
-            texts.t('PAYMENT_UI_INVALID_ID', '❌ Некорректный идентификатор платежа'), show_alert=True
+            texts.t(
+                'PAYMENT_UI_INVALID_ID',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Некорректный идентификатор платежа',
+            ),
+            show_alert=True,
         )
         return
 
@@ -380,29 +407,53 @@ async def check_cashera_payment_status(callback: types.CallbackQuery, db: AsyncS
 
         payment = await get_cashera_payment_by_id(db, local_payment_id)
         if not payment or payment.user_id != db_user.id:
-            await callback.answer(texts.t('PAYMENT_UI_NOT_FOUND', '❌ Платеж не найден'), show_alert=True)
+            await callback.answer(
+                texts.t(
+                    'PAYMENT_UI_NOT_FOUND', '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Платеж не найден'
+                ),
+                show_alert=True,
+            )
             return
 
         status_info = await PaymentService(callback.bot).get_cashera_payment_status(db, local_payment_id)
     except Exception as error:
         logger.exception('Ошибка проверки статуса Cashera', error=error)
-        await callback.answer(texts.t('PAYMENT_UI_STATUS_ERROR_WARNING', '⚠️ Ошибка проверки статуса'), show_alert=True)
+        await callback.answer(
+            texts.t(
+                'PAYMENT_UI_STATUS_ERROR_WARNING',
+                '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> Ошибка проверки статуса',
+            ),
+            show_alert=True,
+        )
         return
 
     if not status_info:
-        await callback.answer(texts.t('PAYMENT_UI_NOT_FOUND_WARNING', '⚠️ Платёж не найден'), show_alert=True)
+        await callback.answer(
+            texts.t(
+                'PAYMENT_UI_NOT_FOUND_WARNING', '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> Платёж не найден'
+            ),
+            show_alert=True,
+        )
         return
 
     if status_info.get('is_paid'):
-        await callback.answer(texts.t('CASHERA_PAYMENT_ALREADY_CONFIRMED', '✅ Платёж уже зачислен'), show_alert=True)
+        await callback.answer(
+            texts.t(
+                'CASHERA_PAYMENT_ALREADY_CONFIRMED',
+                '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Платёж уже зачислен',
+            ),
+            show_alert=True,
+        )
         return
 
     status_labels = {
         'pending': texts.t('CASHERA_STATUS_PENDING', '⏳ Ожидает оплаты'),
-        'failed': texts.t('CASHERA_STATUS_FAILED', '❌ Оплата не прошла'),
+        'failed': texts.t(
+            'CASHERA_STATUS_FAILED', '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Оплата не прошла'
+        ),
         'expired': texts.t('CASHERA_STATUS_EXPIRED', '⌛ Срок оплаты истёк'),
-        'refunded': texts.t('CASHERA_STATUS_REFUNDED', '↩️ Возврат'),
-        'chargeback': texts.t('CASHERA_STATUS_REFUNDED', '↩️ Возврат'),
+        'refunded': texts.t('CASHERA_STATUS_REFUNDED', 'Возврат'),
+        'chargeback': texts.t('CASHERA_STATUS_REFUNDED', 'Возврат'),
     }
     status = status_info.get('status') or 'pending'
     await callback.answer(status_labels.get(status, status), show_alert=True)

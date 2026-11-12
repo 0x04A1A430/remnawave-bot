@@ -48,7 +48,7 @@ def _check_topup_restriction(db_user: User, texts) -> InlineKeyboardMarkup | Non
     support_url = settings.get_support_contact_url()
     if support_url:
         keyboard.append(
-            [InlineKeyboardButton(text=texts.t('USER_RESTRICTION_APPEAL_BUTTON', '🆘 Обжаловать'), url=support_url)]
+            [InlineKeyboardButton(text=texts.t('USER_RESTRICTION_APPEAL_BUTTON', 'Обжаловать'), url=support_url)]
         )
     keyboard.append([InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance')])
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
@@ -119,7 +119,7 @@ async def _create_anore_payment_and_respond(
             [InlineKeyboardButton(text=pay_button_text, url=payment_url)],
             [
                 InlineKeyboardButton(
-                    text=texts.t('BACK_BUTTON', '◀️ Назад'),
+                    text=texts.t('BACK_BUTTON', '<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Назад'),
                     callback_data='menu_balance',
                 )
             ],
@@ -162,9 +162,10 @@ async def process_anore_payment_amount(
             or texts.t('USER_RESTRICTION_DEFAULT_REASON', 'Действие ограничено администратором')
         )
         await message.answer(
-            texts.t('USER_RESTRICTION_TOPUP_BLOCKED_SHORT', '🚫 <b>Пополнение ограничено</b>\n\n{reason}').format(
-                reason=reason
-            ),
+            texts.t(
+                'USER_RESTRICTION_TOPUP_BLOCKED_SHORT',
+                '<tg-emoji emoji-id="5872829476143894491">🚫</tg-emoji> <b>Пополнение ограничено</b>\n\n{reason}',
+            ).format(reason=reason),
             parse_mode='HTML',
             reply_markup=restriction_kb,
         )
@@ -234,9 +235,10 @@ async def _start_anore_topup_impl(
             or texts.t('USER_RESTRICTION_DEFAULT_REASON', 'Действие ограничено администратором')
         )
         await callback.message.edit_text(
-            texts.t('USER_RESTRICTION_TOPUP_BLOCKED_SHORT', '🚫 <b>Пополнение ограничено</b>\n\n{reason}').format(
-                reason=reason
-            ),
+            texts.t(
+                'USER_RESTRICTION_TOPUP_BLOCKED_SHORT',
+                '<tg-emoji emoji-id="5872829476143894491">🚫</tg-emoji> <b>Пополнение ограничено</b>\n\n{reason}',
+            ).format(reason=reason),
             parse_mode='HTML',
             reply_markup=restriction_kb,
         )

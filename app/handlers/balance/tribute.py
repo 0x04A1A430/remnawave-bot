@@ -35,7 +35,7 @@ async def start_tribute_payment(
         await callback.message.edit_text(
             texts.t(
                 'USER_RESTRICTION_TOPUP_BLOCKED',
-                '🚫 <b>Пополнение ограничено</b>\n\n{reason}\n\nЕсли вы считаете это ошибкой, вы можете обжаловать решение.',
+                '<tg-emoji emoji-id="5872829476143894491">🚫</tg-emoji> <b>Пополнение ограничено</b>\n\n{reason}\n\nЕсли вы считаете это ошибкой, вы можете обжаловать решение.',
             ).format(reason=reason),
             reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
         )
@@ -44,7 +44,11 @@ async def start_tribute_payment(
 
     if not settings.TRIBUTE_ENABLED:
         await callback.answer(
-            texts.t('PAYMENT_UI_CARD_UNAVAILABLE', '❌ Оплата картой временно недоступна'), show_alert=True
+            texts.t(
+                'PAYMENT_UI_CARD_UNAVAILABLE',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Оплата картой временно недоступна',
+            ),
+            show_alert=True,
         )
         return
 
@@ -60,7 +64,11 @@ async def start_tribute_payment(
 
         if not payment_url:
             await callback.answer(
-                texts.t('SUBSCRIPTION_UI_PAYMENT_CREATION_FAILED', '❌ Ошибка создания платежа'), show_alert=True
+                texts.t(
+                    'SUBSCRIPTION_UI_PAYMENT_CREATION_FAILED',
+                    '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Ошибка создания платежа',
+                ),
+                show_alert=True,
             )
             return
 
@@ -73,7 +81,7 @@ async def start_tribute_payment(
 
         message_text = texts.t(
             'PAYMENT_UI_TRIBUTE_INSTRUCTIONS',
-            '💳 <b>Пополнение банковской картой</b>\n\n• Введите любую сумму от 100₽\n• Безопасная оплата через Tribute\n• Мгновенное зачисление на баланс\n• Принимаем карты Visa, MasterCard, МИР\n\n• 🚨 НЕ ОТПРАВЛЯТЬ ПЛАТЕЖ АНОНИМНО!\n\nНажмите кнопку для перехода к оплате:',
+            '<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> <b>Пополнение банковской картой</b>\n\n• Введите любую сумму от 100₽\n• Безопасная оплата через Tribute\n• Мгновенное зачисление на баланс\n• Принимаем карты Visa, MasterCard, МИР\n\n• НЕ ОТПРАВЛЯТЬ ПЛАТЕЖ АНОНИМНО!\n\nНажмите кнопку для перехода к оплате:',
         )
         message_text = compact_payment_text(message_text)
 
@@ -92,7 +100,11 @@ async def start_tribute_payment(
     except Exception as e:
         logger.error('Ошибка создания Tribute платежа', error=e)
         await callback.answer(
-            texts.t('SUBSCRIPTION_UI_PAYMENT_CREATION_FAILED', '❌ Ошибка создания платежа'), show_alert=True
+            texts.t(
+                'SUBSCRIPTION_UI_PAYMENT_CREATION_FAILED',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Ошибка создания платежа',
+            ),
+            show_alert=True,
         )
 
     await callback.answer()
