@@ -173,13 +173,7 @@ def classic_admin_html_to_rich(text: str, *, footer_label: str | None = None) ->
     header = ''
     match = _LEADING_TITLE_RE.match(rich)
     if match and '<b>' in match.group('title'):
-        from app.utils.notification_card import premium
-
         title = match.group('title').strip()
-        # фирменная иконка перед заголовком, если он ещё не начинается с иконки
-        plain_title = re.sub(r'<[^>]+>', '', title).strip()
-        if plain_title and plain_title[0].isalnum():
-            title = f'{premium("⚙")} {title}'
         header = f'<h6>{title}</h6><hr/>'
         rich = rich[match.end() :]
 
