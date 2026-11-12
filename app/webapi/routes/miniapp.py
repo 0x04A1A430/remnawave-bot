@@ -7379,7 +7379,7 @@ async def switch_tariff_endpoint(
         # Для суточного тарифа end_date = сейчас + 1 день
         subscription.end_date = datetime.now(UTC) + timedelta(days=1)
         subscription.pending_panel_expire_at = subscription.end_date
-        logger.info('🔄 Смена на суточный тариф: установлены daily поля, end_date', end_date=subscription.end_date)
+        logger.info('↻ Смена на суточный тариф: установлены daily поля, end_date', end_date=subscription.end_date)
     elif old_is_daily and not new_is_daily:
         # Переход с суточного на обычный тариф - очищаем daily поля
         subscription.is_daily_paused = False
@@ -7394,7 +7394,7 @@ async def switch_tariff_endpoint(
                 new_period_days=new_period_days,
             )
         else:
-            logger.info('🔄 Смена с суточного на обычный тариф: очищены daily поля')
+            logger.info('↻ Смена с суточного на обычный тариф: очищены daily поля')
 
     if accounting_panel is not None:
         from app.services.traffic_accounting_service import change_managed_tariff_locked

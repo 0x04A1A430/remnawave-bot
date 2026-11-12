@@ -81,9 +81,9 @@ async def create_promocode(
     await db.refresh(promocode)
 
     if promo_group_id:
-        logger.info('✅ Создан промокод: с промогруппой ID', code=code, promo_group_id=promo_group_id)
+        logger.info('✓ Создан промокод: с промогруппой ID', code=code, promo_group_id=promo_group_id)
     else:
-        logger.info('✅ Создан промокод', code=code)
+        logger.info('✓ Создан промокод', code=code)
     return promocode
 
 
@@ -125,7 +125,7 @@ async def create_promocode_use(db: AsyncSession, promocode_id: int, user_id: int
         )
         return None
 
-    logger.info('📝 Записано использование промокода пользователем', promocode_id=promocode_id, user_id=user_id)
+    logger.info('▤ Записано использование промокода пользователем', promocode_id=promocode_id, user_id=user_id)
     return promocode_use
 
 
@@ -197,7 +197,7 @@ async def delete_promocode(db: AsyncSession, promocode: PromoCode) -> bool:
         await db.delete(promocode)
         await db.commit()
 
-        logger.info('🗑️ Удален промокод', code=promocode.code)
+        logger.info('× Удален промокод', code=promocode.code)
         return True
 
     except Exception as e:

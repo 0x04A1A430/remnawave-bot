@@ -470,9 +470,9 @@ class Settings(BaseSettings):
     REFERRAL_MAX_LEVEL_DEPTH: int = 3
     # Что означает номер уровня внутри многоуровневой схемы.
     # 'chain' — глубина в цепочке пригласивших: уровень 1 платит прямому, уровень 2 —
-    #   его пригласившему, и так далее. За одно событие платят несколько уровней.
+    # его пригласившему, и так далее. За одно событие платят несколько уровней.
     # 'tiers' — ранг самого партнёра: платят ТОЛЬКО прямому пригласившему, и применяется
-    #   ровно один уровень — старший из тех, чей порог required_referrals он набрал.
+    # ровно один уровень — старший из тех, чей порог required_referrals он набрал.
     # По умолчанию 'chain' — прежнее поведение схемы, чтобы обновление бота не
     # перекроило выплаты на установках, где уровни уже включены.
     REFERRAL_LEVELS_MODE: str = 'chain'
@@ -621,13 +621,13 @@ class Settings(BaseSettings):
     MAINTENANCE_AUTO_ENABLE: bool = True
     MAINTENANCE_MONITORING_ENABLED: bool = True
     MAINTENANCE_RETRY_ATTEMPTS: int = 1
-    MAINTENANCE_MESSAGE: str = '🔧 Ведутся технические работы. Сервис временно недоступен. Попробуйте позже.'
+    MAINTENANCE_MESSAGE: str = 'Ведутся технические работы. Сервис временно недоступен. Попробуйте позже.'
 
     TELEGRAM_STARS_ENABLED: bool = True
-    # ₽ per 1 ⭐. Matches Telegram's own cash-out rate (~0.95–1.0 ₽/⭐ as of
+    # ₽ per 1 star. Matches Telegram's own cash-out rate (~0.95–1.0 ₽/star as of
     # 2026-05) so an integer-ruble top-up round-trips losslessly:
-    # rubles_to_stars(150) → 150 ⭐ → stars_to_rubles(150) → 150 ₽.
-    # The previous 1.3 default undervalued stars by ~30% (bot quoted 115 ⭐
+    # rubles_to_stars(150) → 150 star → stars_to_rubles(150) → 150 ₽.
+    # The previous 1.3 default undervalued stars by ~30% (bot quoted 115 star
     # for a 150 ₽ top-up, credited only 149.50 ₽ back — a built-in
     # rounding loss visible on every payment).
     TELEGRAM_STARS_RATE_RUB: float = 1.0
@@ -1052,8 +1052,8 @@ class Settings(BaseSettings):
     ANTILOPAY_CARD_ENABLED: bool = False
     ANTILOPAY_CARD_DISPLAY_NAME: str = 'Карта (Antilopay)'
     # Antilopay требует подтвердить владение сайтом одним из двух способов:
-    #   (1) META-тегом `<meta name="apay-tag" content="...">` в <head> главной страницы;
-    #   (2) файлом `apay-meta-file.txt` в корне сайта.
+    # (1) META-тегом `<meta name="apay-tag" content="...">` в <head> главной страницы;
+    # (2) файлом `apay-meta-file.txt` в корне сайта.
     # Кабинет автоматически отрендерит meta-тег и отдаст текстовый файл, если
     # сюда положить выданное Antilopay значение (см. lk.antilopay.com → Проект →
     # Верификация). Пустая строка/None — фича отключена.
@@ -1233,8 +1233,8 @@ class Settings(BaseSettings):
     # на классический рендер до рестарта. В rich-режиме главное меню идёт без логотипа.
     MAIN_MENU_RICH_ENABLED: bool = False
     # Эффект сообщения при отправке rich-меню (только личные чаты). Известные id:
-    # 🎉 5046509860389126442, ❤️ 5044134455711629726, 🔥 5104841245755180586,
-    # 👍 5107584321108051014, 👎 5104858069142078462, 💩 5046589136895476101.
+    # 5046509860389126442, 5044134455711629726, 5104841245755180586,
+    # 5107584321108051014, 5104858069142078462, 5046589136895476101.
     # Пусто — без эффекта. При отказе сервера эффект отключается сам до рестарта.
     MAIN_MENU_RICH_EFFECT_ID: str = '5046509860389126442'
     # Сворачивать таблицу подписок в раскрываемый details-блок, когда у юзера
@@ -3332,11 +3332,20 @@ class Settings(BaseSettings):
     @staticmethod
     def get_cashera_method_definitions() -> dict[str, dict[str, str]]:
         return {
-            'sbp': {'name': 'СБП', 'title': '🏦 СБП'},
-            'card': {'name': 'Банковская карта', 'title': '💳 Банковская карта'},
-            'mastercard': {'name': 'Зарубежная карта', 'title': '🌍 Зарубежная карта'},
-            'crypto': {'name': 'Криптовалюта', 'title': '🪙 Криптовалюта'},
-            'cryptobot': {'name': 'CryptoBot', 'title': '🤖 CryptoBot'},
+            'sbp': {'name': 'СБП', 'title': 'СБП'},
+            'card': {
+                'name': 'Банковская карта',
+                'title': "<tg-emoji emoji-id='5967548335542767952'>💳</tg-emoji> Банковская карта",
+            },
+            'mastercard': {'name': 'Зарубежная карта', 'title': 'Зарубежная карта'},
+            'crypto': {
+                'name': 'Криптовалюта',
+                'title': "<tg-emoji emoji-id='5992430854909989581'>🪙</tg-emoji> Криптовалюта",
+            },
+            'cryptobot': {
+                'name': 'CryptoBot',
+                'title': "<tg-emoji emoji-id='5931415565955503486'>🤖</tg-emoji> CryptoBot",
+            },
         }
 
     def get_cashera_active_methods(self) -> list[str]:

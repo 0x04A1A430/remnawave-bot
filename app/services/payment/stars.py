@@ -227,14 +227,14 @@ class TelegramStarsMixin:
 
         candidate: str | None = None
         if len(parts) >= 2 and parts[1] == 'topup':
-            # `balance_topup_{kopeks}`               → kopeks at index 2
-            # `balance_topup_{uid}_{kopeks}_{ts}`    → kopeks at index 3
+            # `balance_topup_{kopeks}` → kopeks at index 2
+            # `balance_topup_{uid}_{kopeks}_{ts}` → kopeks at index 3
             if len(parts) == 3:
                 candidate = parts[2]
             elif len(parts) >= 4:
                 candidate = parts[3]
         elif len(parts) >= 3:
-            # `balance_{uid}_{kopeks}[_suffix]`      → kopeks at index 2
+            # `balance_{uid}_{kopeks}[_suffix]` → kopeks at index 2
             candidate = parts[2]
 
         if candidate is None:

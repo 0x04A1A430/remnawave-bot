@@ -666,7 +666,7 @@ class SubscriptionService:
             open_grace_ids = await lock_grace_sensitive_panel_updates(db, (subscription.id,))
             await db.flush((subscription, user))
             # The caller may have loaded these objects before waiting for the
-            # grace lock.  Re-read scalar billing/user state under that lock so
+            # grace lock. Re-read scalar billing/user state under that lock so
             # an older sync cannot overwrite a renewal that just completed.
             await db.refresh(subscription)
             await db.refresh(user)
@@ -838,7 +838,7 @@ class SubscriptionService:
 
         except asyncio.CancelledError:
             # ``CancelledError`` is not an Exception on supported Python
-            # versions.  Timeouts must still release advisory/SQLite locks.
+            # versions. Timeouts must still release advisory/SQLite locks.
             await db.rollback()
             raise
         except RemnaWaveAPIError as e:
@@ -1450,9 +1450,9 @@ class SubscriptionService:
                     return True
 
                 if foreign_short_uuid:
-                    logger.warning('⚠️ short_uuid ведёт на аккаунт другого пользователя — связь рвём')
+                    logger.warning('⚠ short_uuid ведёт на аккаунт другого пользователя — связь рвём')
                 else:
-                    logger.warning('⚠️ У подписки есть short_uuid, но панель его не знает')
+                    logger.warning('⚠ У подписки есть short_uuid, но панель его не знает')
                 needs_cleanup = True
 
             if needs_cleanup:
@@ -1472,7 +1472,7 @@ class SubscriptionService:
                     user.remnawave_id = None
                     user.remnawave_uuid = None
 
-                # Keep cleanup in the caller's transaction.  Committing here
+                # Keep cleanup in the caller's transaction. Committing here
                 # could burn a coupon/payment if the following panel create
                 # fails; create_remnawave_user commits only after API success.
                 await db.flush((subscription, user))

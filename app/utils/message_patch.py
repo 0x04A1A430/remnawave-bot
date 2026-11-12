@@ -51,9 +51,9 @@ _logo_path_valid = _validate_logo_path(LOGO_PATH)
 
 
 # Telegram photo limits (https://core.telegram.org/bots/api#sendphoto):
-#   - file size ≤ 10 MB
-#   - width + height ≤ 10000
-#   - ratio in [1/20, 20]
+# - file size ≤ 10 MB
+# - width + height ≤ 10000
+# - ratio in [1/20, 20]
 # In practice anything bigger than ~1280px on the longest side gets compressed
 # by Telegram anyway, so we resize down to that and re-encode to keep the file
 # under the limit (Telegram bug #339184 — Pillow's `convert+thumbnail` keeps

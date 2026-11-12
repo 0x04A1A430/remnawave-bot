@@ -3452,7 +3452,7 @@ async def handle_subscription_settings(callback: types.CallbackQuery, db_user: U
 async def clear_saved_cart(callback: types.CallbackQuery, state: FSMContext, db_user: User, db: AsyncSession):
     # Очищаем как FSM, так и Redis.
     # NOTE: Intentionally deletes ALL carts (global + per-subscription cascade)
-    # because this is an explicit user action ("clear my cart").  In multi-tariff
+    # because this is an explicit user action ("clear my cart"). In multi-tariff
     # mode the user expects a full reset, not per-subscription cleanup.
     await state.clear()
     await user_cart_service.delete_user_cart(db_user.id)

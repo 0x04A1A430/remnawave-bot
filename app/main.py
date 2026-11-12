@@ -181,9 +181,9 @@ async def main():
     )
 
     for insecure_default_warning in settings.collect_insecure_default_warnings():
-        logger.warning('⚠️ Insecure configuration default', detail=insecure_default_warning)
+        logger.warning('Insecure configuration default', detail=insecure_default_warning)
 
-    async with timeline.stage('Подготовка локализаций', '🗂️', success_message='Шаблоны локализаций готовы') as stage:
+    async with timeline.stage('Подготовка локализаций', success_message='Шаблоны локализаций готовы') as stage:
         try:
             ensure_locale_templates()
         except Exception as error:
@@ -220,7 +220,6 @@ async def main():
         if not skip_migration:
             async with timeline.stage(
                 'Миграция базы данных (Alembic)',
-                '🧬',
                 success_message='Миграция завершена успешно',
             ) as stage:
                 try:
@@ -235,14 +234,12 @@ async def main():
         else:
             timeline.add_manual_step(
                 'Миграция базы данных (Alembic)',
-                '⏭️',
                 'Пропущено',
                 'SKIP_MIGRATION=true',
             )
 
         async with timeline.stage(
             'Инициализация базы данных',
-            '🗄️',
             success_message='База данных готова',
         ) as stage:
             seq_ok = await sync_postgres_sequences()
@@ -254,7 +251,6 @@ async def main():
 
         async with timeline.stage(
             'RBAC bootstrap',
-            '🔐',
             success_message='RBAC roles and superadmins ready',
         ) as stage:
             try:
@@ -269,7 +265,6 @@ async def main():
 
         async with timeline.stage(
             'Синхронизация тарифов из конфига',
-            '💰',
             success_message='Тарифы синхронизированы',
         ) as stage:
             try:
@@ -280,11 +275,10 @@ async def main():
                     await ensure_tariffs_synced(db)
             except Exception as error:
                 stage.warning(f'Не удалось синхронизировать тарифы: {error}')
-                logger.error('❌ Не удалось синхронизировать тарифы', error=error)
+                logger.error('Не удалось синхронизировать тарифы', error=error)
 
         async with timeline.stage(
             'Синхронизация серверов из RemnaWave',
-            '🖥️',
             success_message='Серверы синхронизированы',
         ) as stage:
             try:
@@ -295,11 +289,10 @@ async def main():
                     await ensure_servers_synced(db)
             except Exception as error:
                 stage.warning(f'Не удалось синхронизировать серверы: {error}')
-                logger.error('❌ Не удалось синхронизировать серверы', error=error)
+                logger.error('Не удалось синхронизировать серверы', error=error)
 
         async with timeline.stage(
             'Инициализация платёжных методов',
-            '💳',
             success_message='Платёжные методы инициализированы',
         ) as stage:
             try:
@@ -316,18 +309,17 @@ async def main():
                     await refresh_display_name_overrides(db)
             except Exception as error:
                 stage.warning(f'Не удалось инициализировать платёжные методы: {error}')
-                logger.error('❌ Не удалось инициализировать платёжные методы', error=error)
+                logger.error('Не удалось инициализировать платёжные методы', error=error)
 
         async with timeline.stage(
             'Загрузка конфигурации из БД',
-            '⚙️',
             success_message='Конфигурация загружена',
         ) as stage:
             try:
                 await bot_configuration_service.initialize()
             except Exception as error:
                 stage.warning(f'Не удалось загрузить конфигурацию: {error}')
-                logger.error('❌ Не удалось загрузить конфигурацию', error=error)
+                logger.error('Не удалось загрузить конфигурацию', error=error)
             # Переключатели уведомлений истёкшим и настройки поддержки раньше жили в JSON-файлах
             # в data/ — один раз переносятся в базу, чтобы прежние значения операторов не пропали.
             try:
@@ -343,7 +335,7 @@ async def main():
                 if imported:
                     stage.log(f'Настройки перенесены из файлов в базу: {len(imported)}')
             except Exception as error:
-                logger.error('❌ Не удалось перенести настройки из файлов в базу', error=error)
+                logger.error('Не удалось перенести настройки из файлов в базу', error=error)
 
         bot_run_mode = settings.get_bot_run_mode()
         polling_enabled = bot_run_mode == 'polling'
@@ -353,7 +345,7 @@ async def main():
 
         bot = None
         dp = None
-        async with timeline.stage('Настройка бота', '🤖', success_message='Бот настроен') as stage:
+        async with timeline.stage('Настройка бота', success_message='Бот настроен') as stage:
             bot, dp = await setup_bot()
             stage.log('Кеш и FSM подготовлены')
 
@@ -404,7 +396,6 @@ async def main():
 
         async with timeline.stage(
             'Интеграция сервисов',
-            '🔗',
             success_message='Сервисы подключены',
         ) as stage:
             admin_notification_service = AdminNotificationService(bot)
@@ -417,7 +408,6 @@ async def main():
 
         async with timeline.stage(
             'Сервис бекапов',
-            '🗄️',
             success_message='Сервис бекапов инициализирован',
         ) as stage:
             try:
@@ -434,11 +424,10 @@ async def main():
                 stage.success('Сервис бекапов инициализирован')
             except Exception as e:
                 stage.warning(f'Ошибка инициализации сервиса бекапов: {e}')
-                logger.error('❌ Ошибка инициализации сервиса бекапов', error=e)
+                logger.error('Ошибка инициализации сервиса бекапов', error=e)
 
         async with timeline.stage(
             'Сервис отчетов',
-            '📊',
             success_message='Сервис отчетов готов',
         ) as stage:
             try:
@@ -446,11 +435,10 @@ async def main():
                 await reporting_service.start()
             except Exception as e:
                 stage.warning(f'Ошибка запуска сервиса отчетов: {e}')
-                logger.error('❌ Ошибка запуска сервиса отчетов', error=e)
+                logger.error('Ошибка запуска сервиса отчетов', error=e)
 
         async with timeline.stage(
             'Реферальные конкурсы',
-            '🏆',
             success_message='Сервис конкурсов готов',
         ) as stage:
             try:
@@ -461,11 +449,10 @@ async def main():
                     stage.skip('Сервис конкурсов выключен настройками')
             except Exception as e:
                 stage.warning(f'Ошибка запуска сервиса конкурсов: {e}')
-                logger.error('❌ Ошибка запуска сервиса конкурсов', error=e)
+                logger.error('Ошибка запуска сервиса конкурсов', error=e)
 
         async with timeline.stage(
             'Ротация игр',
-            '🎲',
             success_message='Мини-игры готовы',
         ) as stage:
             try:
@@ -477,12 +464,11 @@ async def main():
                     stage.skip('Ротация игр выключена настройками')
             except Exception as e:
                 stage.warning(f'Ошибка запуска ротации игр: {e}')
-                logger.error('❌ Ошибка запуска ротации игр', error=e)
+                logger.error('Ошибка запуска ротации игр', error=e)
 
         if settings.is_log_rotation_enabled():
             async with timeline.stage(
                 'Ротация логов',
-                '📋',
                 success_message='Сервис ротации логов готов',
             ) as stage:
                 try:
@@ -498,11 +484,10 @@ async def main():
                         stage.log(f'Следующая ротация: {next_dt.strftime("%d.%m.%Y %H:%M")}')
                 except Exception as e:
                     stage.warning(f'Ошибка запуска сервиса ротации логов: {e}')
-                    logger.error('❌ Ошибка запуска сервиса ротации логов', error=e)
+                    logger.error('Ошибка запуска сервиса ротации логов', error=e)
 
         async with timeline.stage(
             'Автосинхронизация RemnaWave',
-            '🔄',
             success_message='Сервис автосинхронизации готов',
         ) as stage:
             try:
@@ -519,11 +504,10 @@ async def main():
                     stage.log('Автосинхронизация отключена настройками')
             except Exception as e:
                 stage.warning(f'Ошибка запуска автосинхронизации: {e}')
-                logger.error('❌ Ошибка запуска автосинхронизации RemnaWave', error=e)
+                logger.error('Ошибка запуска автосинхронизации RemnaWave', error=e)
 
         async with timeline.stage(
             'Grace-доступ для продления',
-            '🛟',
             success_message='Сервис grace-доступа готов',
         ) as stage:
             try:
@@ -560,7 +544,6 @@ async def main():
         auto_verification_active = False
         async with timeline.stage(
             'Сервис проверки пополнений',
-            '💳',
             success_message='Ручная проверка активна',
         ) as stage:
             for method in SUPPORTED_MANUAL_CHECK_METHODS:
@@ -603,7 +586,6 @@ async def main():
 
         async with timeline.stage(
             'Очередь чеков NaloGO',
-            '🧾',
             success_message='Сервис очереди чеков запущен',
         ) as stage:
             if settings.is_nalogo_enabled():
@@ -618,7 +600,7 @@ async def main():
                         stage.skip('Сервис не запущен')
                 except Exception as e:
                     stage.warning(f'Ошибка запуска очереди чеков: {e}')
-                    logger.error('❌ Ошибка запуска очереди чеков NaloGO', error=e)
+                    logger.error('Ошибка запуска очереди чеков NaloGO', error=e)
             else:
                 stage.skip('NaloGO отключен настройками')
 
@@ -637,7 +619,6 @@ async def main():
 
         async with timeline.stage(
             'Единый веб-сервер',
-            '🌐',
             success_message='Веб-сервер запущен',
         ) as stage:
             should_start_web_app = (
@@ -679,7 +660,6 @@ async def main():
 
         async with timeline.stage(
             'Telegram webhook',
-            '🤖',
             success_message='Telegram webhook настроен',
         ) as stage:
             if telegram_webhook_enabled:
@@ -703,7 +683,6 @@ async def main():
 
         async with timeline.stage(
             'Служба мониторинга',
-            '📈',
             success_message='Служба мониторинга запущена',
         ) as stage:
             monitoring_task = asyncio.create_task(monitoring_service.start_monitoring())
@@ -711,7 +690,6 @@ async def main():
 
         async with timeline.stage(
             'Доступность из РФ (bschekbot)',
-            '📶',
             success_message='Обходчик задач проверки запущен',
         ) as stage:
             reachability_enabled = settings.is_bschek_enabled() and settings.is_bschek_configured()
@@ -723,7 +701,6 @@ async def main():
 
         async with timeline.stage(
             'DPI//CHECKER',
-            '🧱',
             success_message='Обходчик мониторов запущен',
         ) as stage:
             dpichecker_notify = _dpichecker_notifier(bot)
@@ -736,7 +713,6 @@ async def main():
 
         async with timeline.stage(
             'Служба техработ',
-            '🛡️',
             success_message='Служба техработ запущена',
         ) as stage:
             if not settings.is_maintenance_monitoring_enabled():
@@ -752,7 +728,6 @@ async def main():
 
         async with timeline.stage(
             'Мониторинг трафика',
-            '📊',
             success_message='Мониторинг трафика запущен',
         ) as stage:
             if traffic_monitoring_scheduler.is_enabled():
@@ -766,7 +741,6 @@ async def main():
 
         async with timeline.stage(
             'Суточные подписки',
-            '💳',
             success_message='Сервис суточных подписок запущен',
         ) as stage:
             if daily_subscription_service.is_enabled():
@@ -784,7 +758,6 @@ async def main():
 
         async with timeline.stage(
             'Сервис проверки версий',
-            '📄',
             success_message='Проверка версий запущена',
         ) as stage:
             if settings.is_version_check_enabled():
@@ -796,7 +769,6 @@ async def main():
 
         async with timeline.stage(
             'Запуск polling',
-            '🤖',
             success_message='Aiogram polling запущен',
         ) as stage:
             if polling_enabled:
@@ -850,7 +822,7 @@ async def main():
         timeline.log_section(
             'Активные webhook endpoints',
             webhook_lines or ['Нет активных endpoints'],
-            icon='🎯',
+            icon='',
         )
 
         services_lines = [
@@ -866,7 +838,7 @@ async def main():
             'Автопроверка пополнений: '
             + ('Включена' if auto_payment_verification_service.is_running() else 'Отключена')
         )
-        timeline.log_section('Активные фоновые сервисы', services_lines, icon='📄')
+        timeline.log_section('Активные фоновые сервисы', services_lines, icon='')
 
         timeline.log_summary()
         summary_logged = True
@@ -909,7 +881,7 @@ async def main():
                     if exception:
                         logger.error('Сервис проверки версий завершился с ошибкой', error=exception)
                         if settings.is_version_check_enabled():
-                            logger.info('🔄 Перезапуск сервиса проверки версий...')
+                            logger.info('Перезапуск сервиса проверки версий...')
                             version_check_task = asyncio.create_task(version_service.start_periodic_check())
 
                 if traffic_monitoring_task and traffic_monitoring_task.done():
@@ -917,7 +889,7 @@ async def main():
                     if exception:
                         logger.error('Мониторинг трафика завершился с ошибкой', error=exception)
                         if traffic_monitoring_scheduler.is_enabled():
-                            logger.info('🔄 Перезапуск мониторинга трафика...')
+                            logger.info('Перезапуск мониторинга трафика...')
                             traffic_monitoring_task = asyncio.create_task(
                                 traffic_monitoring_scheduler.start_monitoring()
                             )
@@ -927,12 +899,12 @@ async def main():
                     if exception:
                         if daily_subscription_service.is_enabled():
                             logger.error('Сервис суточных подписок завершился с ошибкой', error=exception)
-                            logger.info('🔄 Перезапуск сервиса суточных подписок...')
+                            logger.info('Перезапуск сервиса суточных подписок...')
                             daily_subscription_task = asyncio.create_task(daily_subscription_service.start_monitoring())
                         else:
                             # Суточные выключены — крутился только сброс докупок трафика (#630055).
                             logger.error('Цикл сброса докупок трафика завершился с ошибкой', error=exception)
-                            logger.info('🔄 Перезапуск сброса докупок трафика...')
+                            logger.info('Перезапуск сброса докупок трафика...')
                             daily_subscription_task = asyncio.create_task(
                                 daily_subscription_service.start_traffic_reset_monitoring()
                             )
@@ -962,7 +934,7 @@ async def main():
             shutdown_error, shutdown_source = e, 'main_loop'
 
     except Exception as e:
-        logger.error('❌ Критическая ошибка при запуске', error=e)
+        logger.error('Критическая ошибка при запуске', error=e)
         raise
 
     finally:
@@ -985,32 +957,32 @@ async def main():
             except Exception as shutdown_notify_error:
                 logger.warning('Не удалось отправить уведомление об остановке', error=shutdown_notify_error)
 
-        logger.info('ℹ️ Остановка сервиса автопроверки пополнений...')
+        logger.info('ℹ Остановка сервиса автопроверки пополнений...')
         try:
             await auto_payment_verification_service.stop()
         except Exception as error:
             logger.error('Ошибка остановки сервиса автопроверки пополнений', error=error)
 
         if monitoring_task and not monitoring_task.done():
-            logger.info('ℹ️ Остановка службы мониторинга...')
+            logger.info('ℹ Остановка службы мониторинга...')
             monitoring_service.stop_monitoring()
             monitoring_task.cancel()
             await asyncio.wait([monitoring_task])
 
-        logger.info('ℹ️ Остановка обходчика мониторов DPI//CHECKER...')
+        logger.info('ℹ Остановка обходчика мониторов DPI//CHECKER...')
         try:
             await dpichecker_service.stop_background()
         except Exception as error:
             logger.warning('Не удалось остановить обходчик мониторов DPI//CHECKER', error=error)
 
-        logger.info('ℹ️ Остановка обходчика задач проверки доступности...')
+        logger.info('ℹ Остановка обходчика задач проверки доступности...')
         try:
             await reachability_service.stop_background()
         except Exception as error:
             logger.warning('Не удалось остановить обходчик задач проверки', error=error)
 
         if maintenance_task and not maintenance_task.done():
-            logger.info('ℹ️ Остановка службы техработ...')
+            logger.info('ℹ Остановка службы техработ...')
             await maintenance_service.stop_monitoring()
             maintenance_task.cancel()
             try:
@@ -1019,7 +991,7 @@ async def main():
                 pass
 
         if version_check_task and not version_check_task.done():
-            logger.info('ℹ️ Остановка сервиса проверки версий...')
+            logger.info('ℹ Остановка сервиса проверки версий...')
             version_check_task.cancel()
             try:
                 await version_check_task
@@ -1027,7 +999,7 @@ async def main():
                 pass
 
         if traffic_monitoring_task and not traffic_monitoring_task.done():
-            logger.info('ℹ️ Остановка мониторинга трафика...')
+            logger.info('ℹ Остановка мониторинга трафика...')
             traffic_monitoring_scheduler.stop_monitoring()
             traffic_monitoring_task.cancel()
             try:
@@ -1036,7 +1008,7 @@ async def main():
                 pass
 
         if daily_subscription_task and not daily_subscription_task.done():
-            logger.info('ℹ️ Остановка сервиса суточных подписок...')
+            logger.info('ℹ Остановка сервиса суточных подписок...')
             daily_subscription_service.stop_monitoring()
             daily_subscription_task.cancel()
             try:
@@ -1044,13 +1016,13 @@ async def main():
             except asyncio.CancelledError:
                 pass
 
-        logger.info('ℹ️ Остановка сервиса отчетов...')
+        logger.info('ℹ Остановка сервиса отчетов...')
         try:
             await reporting_service.stop()
         except Exception as e:
             logger.error('Ошибка остановки сервиса отчетов', error=e)
 
-        logger.info('ℹ️ Остановка сервиса конкурсов...')
+        logger.info('ℹ Остановка сервиса конкурсов...')
         try:
             await referral_contest_service.stop()
         except Exception as e:
@@ -1065,32 +1037,32 @@ async def main():
             command_menu_task.cancel()
             await asyncio.gather(command_menu_task, return_exceptions=True)
 
-        logger.info('ℹ️ Остановка сервиса grace-доступа...')
+        logger.info('ℹ Остановка сервиса grace-доступа...')
         try:
             await grace_access_runtime.stop()
         except Exception as e:
             logger.error('Ошибка остановки grace-доступа', error=e)
 
-        logger.info('ℹ️ Остановка сервиса автосинхронизации RemnaWave...')
+        logger.info('ℹ Остановка сервиса автосинхронизации RemnaWave...')
         try:
             await remnawave_sync_service.stop()
         except Exception as e:
             logger.error('Ошибка остановки автосинхронизации RemnaWave', error=e)
 
-        logger.info('ℹ️ Остановка ротации игр...')
+        logger.info('ℹ Остановка ротации игр...')
         try:
             await contest_rotation_service.stop()
         except Exception as e:
             logger.error('Ошибка остановки ротации игр', error=e)
 
         if settings.is_log_rotation_enabled():
-            logger.info('ℹ️ Остановка сервиса ротации логов...')
+            logger.info('ℹ Остановка сервиса ротации логов...')
             try:
                 await log_rotation_service.stop()
             except Exception as e:
                 logger.error('Ошибка остановки сервиса ротации логов', error=e)
 
-        logger.info('ℹ️ Остановка очереди повторной отправки писем...')
+        logger.info('ℹ Остановка очереди повторной отправки писем...')
         try:
             from app.services.email_retry_service import email_retry_service
 
@@ -1098,7 +1070,7 @@ async def main():
         except Exception as e:
             logger.warning('Ошибка остановки очереди повторной отправки писем', error=e)
 
-        logger.info('ℹ️ Остановка журнала системных ошибок...')
+        logger.info('ℹ Остановка журнала системных ошибок...')
         try:
             from app.services.system_error_log_service import system_error_log_service
 
@@ -1107,20 +1079,20 @@ async def main():
             # warning: error отсюда ушёл бы в тот же конвейер, который мы гасим
             logger.warning('Ошибка остановки журнала системных ошибок', error=e)
 
-        logger.info('ℹ️ Остановка очереди чеков NaloGO...')
+        logger.info('ℹ Остановка очереди чеков NaloGO...')
         try:
             await nalogo_queue_service.stop()
         except Exception as e:
             logger.error('Ошибка остановки очереди чеков NaloGO', error=e)
 
-        logger.info('ℹ️ Остановка сервиса бекапов...')
+        logger.info('ℹ Остановка сервиса бекапов...')
         try:
             await backup_service.stop_auto_backup()
         except Exception as e:
             logger.error('Ошибка остановки сервиса бекапов', error=e)
 
         if polling_task and not polling_task.done():
-            logger.info('ℹ️ Остановка polling...')
+            logger.info('ℹ Остановка polling...')
             polling_task.cancel()
             try:
                 await polling_task
@@ -1128,17 +1100,17 @@ async def main():
                 pass
 
         if telegram_webhook_enabled and 'bot' in locals():
-            logger.info('ℹ️ Снятие Telegram webhook...')
+            logger.info('ℹ Снятие Telegram webhook...')
             try:
                 await bot.delete_webhook(drop_pending_updates=False)
-                logger.info('✅ Telegram webhook удалён')
+                logger.info('Telegram webhook удалён')
             except Exception as error:
                 logger.error('Ошибка удаления Telegram webhook', error=error)
 
         if web_api_server:
             try:
                 await web_api_server.stop()
-                logger.info('✅ Административное веб-API остановлено')
+                logger.info('Административное веб-API остановлено')
             except Exception as error:
                 logger.error('Ошибка остановки веб-API', error=error)
 
@@ -1150,11 +1122,11 @@ async def main():
         if 'bot' in locals():
             try:
                 await bot.session.close()
-                logger.info('✅ Сессия бота закрыта')
+                logger.info('Сессия бота закрыта')
             except Exception as e:
                 logger.error('Ошибка закрытия сессии бота', error=e)
 
-        logger.info('✅ Завершение работы бота завершено')
+        logger.info('Завершение работы бота завершено')
 
 
 async def _send_crash_notification_on_error(error: Exception) -> None:
@@ -1177,16 +1149,16 @@ async def _send_crash_notification_on_error(error: Exception) -> None:
         finally:
             await bot.session.close()
     except Exception as notify_error:
-        print(f'⚠️ Не удалось отправить уведомление о падении: {notify_error}')
+        print(f'Не удалось отправить уведомление о падении: {notify_error}')
 
 
 if __name__ == '__main__':
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        print('\n🛑 Бот остановлен пользователем')
+        print('\n Бот остановлен пользователем')
     except Exception as e:
-        print(f'❌ Критическая ошибка: {e}')
+        print(f'Критическая ошибка: {e}')
         import traceback
 
         traceback.print_exc()

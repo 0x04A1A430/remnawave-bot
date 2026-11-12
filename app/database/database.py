@@ -76,7 +76,7 @@ _pg_connect_args = {
 }
 _sqlite_connect_args = {
     # Grace-safe panel writes deliberately hold a SQLite writer transaction
-    # across one HTTP request.  Let competing local work wait instead of
+    # across one HTTP request. Let competing local work wait instead of
     # failing with a short default "database is locked" timeout.
     'timeout': 60,
 }
@@ -213,15 +213,15 @@ if settings.DEBUG:
     @event.listens_for(Engine, 'before_cursor_execute')
     def before_cursor_execute(conn, cursor, statement, parameters, context, executemany):
         conn.info.setdefault('query_start_time', []).append(time.time())
-        logger.debug('🔍 Executing query: ...', statement=statement[:100])
+        logger.debug('⌕ Executing query: ...', statement=statement[:100])
 
     @event.listens_for(Engine, 'after_cursor_execute')
     def after_cursor_execute(conn, cursor, statement, parameters, context, executemany):
         total = time.time() - conn.info['query_start_time'].pop(-1)
         if total > 0.1:  # Логируем медленные запросы > 100ms
-            logger.warning('🐌 Slow query (s): ...', total=round(total, 3), statement=statement[:100])
+            logger.warning('Slow query (s): ...', total=round(total, 3), statement=statement[:100])
         else:
-            logger.debug('⚡ Query executed in', total=round(total, 3))
+            logger.debug('◷ Query executed in', total=round(total, 3))
 
 # ============================================================================
 # ADVANCED SESSION MANAGER WITH READ REPLICAS

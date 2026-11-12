@@ -41,7 +41,7 @@ async def upsert_privacy_policy(
     await db.commit()
     await db.refresh(policy)
 
-    logger.info('✅ Политика конфиденциальности обновлена', language=language, policy_id=policy.id)
+    logger.info('✓ Политика конфиденциальности обновлена', language=language, policy_id=policy.id)
 
     return policy
 

@@ -2797,7 +2797,7 @@ class Subscription(Base):
         elapsed = (datetime.now(UTC) - _aware(self.last_revoke_at)).total_seconds()
         return max(0, int(cooldown_seconds - elapsed))
 
-    # Grace-access ingress marker.  Only trusted status transitions set the
+    # Grace-access ingress marker. Only trusted status transitions set the
     # candidate timestamp; generic updated_at/webhooks must not resurrect old
     # expired subscriptions when the feature is enabled.
     grace_candidate_reason = Column(String(16), nullable=True)

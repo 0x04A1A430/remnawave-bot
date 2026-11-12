@@ -1640,10 +1640,10 @@ class MonitoringService:
                     user_identifier = user.telegram_id or f'email:{user.id}'
 
                     # Период продления выбирается с такой иерархией:
-                    #   1. subscription.autopay_period_days — выбор пользователя/админа
-                    #   2. settings.DEFAULT_AUTOPAY_PERIOD_DAYS — глобальный дефолт из .env
-                    #   3. tariff.get_shortest_period() — самый дешёвый период тарифа (legacy)
-                    #   4. 30 — финальный fallback, если тарифа нет
+                    # 1. subscription.autopay_period_days — выбор пользователя/админа
+                    # 2. settings.DEFAULT_AUTOPAY_PERIOD_DAYS — глобальный дефолт из .env
+                    # 3. tariff.get_shortest_period() — самый дешёвый период тарифа (legacy)
+                    # 4. 30 — финальный fallback, если тарифа нет
                     # resolve_autopay_period_candidate работает fail-closed: пропускает только
                     # значения из tariff.get_available_periods() или (для классических подписок
                     # без тарифа) settings.get_available_renewal_periods().

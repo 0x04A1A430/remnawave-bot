@@ -268,7 +268,7 @@ async def push_subscription(
     panel_user_id = identity.user_id
     if panel_user_id is not None:
         if reset_devices and not await api.reset_user_devices(panel_user_id):
-            logger.error('⚠️ Не удалось сбросить HWID', panel_user_id=panel_user_id)
+            logger.error('⚠ Не удалось сбросить HWID', panel_user_id=panel_user_id)
         update_kwargs = payload.update_kwargs(
             user_id=panel_user_id,
             panel_current=identity.expire_at,

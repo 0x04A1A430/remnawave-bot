@@ -469,7 +469,7 @@ def _apply_extension_updates(context: AutoExtendContext) -> None:
     # Обновляем лимиты для триальной подписки
     if subscription.is_trial:
         # НЕ удаляем триал здесь! Это будет сделано после успешного extend_subscription()
-        # subscription.is_trial = False  # УДАЛЕНО: преждевременное удаление триала
+        # subscription.is_trial = False # УДАЛЕНО: преждевременное удаление триала
         if context.traffic_limit_gb is not None:
             subscription.traffic_limit_gb = context.traffic_limit_gb
         # При конвертации триала device_limit должен быть не ниже DEFAULT_DEVICE_LIMIT
@@ -2035,7 +2035,7 @@ async def _auto_add_devices(
             amount_kopeks=price_kopeks,
         )
     except Exception as ws_error:
-        logger.warning('⚠️ Автопокупка устройств: не удалось отправить WebSocket уведомление', ws_error=ws_error)
+        logger.warning('⚠ Автопокупка устройств: не удалось отправить WebSocket уведомление', ws_error=ws_error)
 
     # Уведомление пользователю
     if bot and user.telegram_id and settings.is_notifications_enabled():
@@ -2108,7 +2108,7 @@ async def _auto_add_devices(
                 price_kopeks,
             )
         except Exception as error:
-            logger.warning('⚠️ Автопокупка устройств: не удалось уведомить админов', error=error)
+            logger.warning('⚠ Автопокупка устройств: не удалось уведомить админов', error=error)
 
     return True
 
@@ -2387,7 +2387,7 @@ async def _auto_add_traffic(
             amount_kopeks=price_kopeks,
         )
     except Exception as ws_error:
-        logger.warning('⚠️ Автопокупка трафика: не удалось отправить WebSocket уведомление', ws_error=ws_error)
+        logger.warning('⚠ Автопокупка трафика: не удалось отправить WebSocket уведомление', ws_error=ws_error)
 
     # User notification
     if bot and user.telegram_id and settings.is_notifications_enabled():
@@ -2460,7 +2460,7 @@ async def _auto_add_traffic(
                 price_kopeks,
             )
         except Exception as error:
-            logger.warning('⚠️ Автопокупка трафика: не удалось уведомить админов', error=error)
+            logger.warning('⚠ Автопокупка трафика: не удалось уведомить админов', error=error)
 
     return True
 
@@ -3717,7 +3717,7 @@ async def auto_purchase_saved_cart_after_topup(
         carts_to_process.append(cart)
 
     # 2. Global cart (backward compat): only add if its subscription_id
-    #    is not already covered by a per-subscription cart.
+    # is not already covered by a per-subscription cart.
     if global_cart:
         global_sub_id = _safe_int(global_cart.get('subscription_id'))
         if global_sub_id and global_sub_id in seen_subscription_ids:

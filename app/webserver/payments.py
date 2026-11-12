@@ -219,7 +219,7 @@ def _build_verified_mulenpay_callback_payload(
     if mapped_status == 'unknown':
         return None
 
-    # Do not trust or require webhook/remote UUID here.  The provider payment ID
+    # Do not trust or require webhook/remote UUID here. The provider payment ID
     # was persisted when the payment was created, and is the stable lookup key;
     # the authenticated provider response is the source of truth for status.
     return {
@@ -630,7 +630,7 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
 
             signature = request.headers.get('Signature') or request.headers.get('X-YooKassa-Signature')
             if signature:
-                logger.info('ℹ️ Получена подпись YooKassa', signature=signature)
+                logger.info('ℹ Получена подпись YooKassa', signature=signature)
 
             try:
                 webhook_data = json.loads(body)

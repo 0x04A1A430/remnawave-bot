@@ -83,5 +83,5 @@ class MaintenanceMiddleware(BaseMiddleware):
         except Exception as e:
             logger.error('Ошибка отправки сообщения о техработах пользователю', user_id=user.id, error=e)
 
-        logger.info('🔧 Пользователь заблокирован во время техработ', user_id=user.id)
+        logger.info('⚙ Пользователь заблокирован во время техработ', user_id=user.id)
         return None
