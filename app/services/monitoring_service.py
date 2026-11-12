@@ -672,9 +672,26 @@ class MonitoringService:
         if user and self.bot:
             from app.utils.notification_prefs import is_subscription_expiry_enabled
 
+            # Если grace уже оставил доступ, «подписка истекла, продлите» только
+            # противоречит карточке grace. Рантайм сам пришлёт нужное уведомление.
+            grace_kept_access = False
+            try:
+                from app.services.grace_access_runtime import grace_access_runtime
+                from app.services.grace_access_service import GraceReason, grace_keeps_access
+
+                grace_result = await grace_access_runtime.consider_candidate(
+                    subscription.id,
+                    GraceReason.EXPIRED,
+                    source='monitoring',
+                )
+                grace_kept_access = grace_keeps_access(grace_result)
+            except Exception:
+                logger.exception('Не удалось проверить grace при истечении подписки', subscription_id=subscription.id)
+
             # Skip notification if user has another ACTIVE subscription (multi-tariff)
             skip_notify = (
-                not NotificationSettingsService.are_notifications_globally_enabled()
+                grace_kept_access
+                or not NotificationSettingsService.are_notifications_globally_enabled()
                 or not is_subscription_expiry_enabled(user)
             )
             if settings.is_multi_tariff_enabled():

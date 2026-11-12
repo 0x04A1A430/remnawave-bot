@@ -45,7 +45,7 @@ from app.external.remnawave_api import RemnaWaveAPIError, RemnaWaveInvalidUserId
 from app.localization.texts import get_texts
 from app.services.admin_notification_service import AdminNotificationService
 from app.services.grace_access_runtime import get_open_grace_subscription_ids, grace_access_runtime
-from app.services.grace_access_service import GraceReason, GraceStartDecision
+from app.services.grace_access_service import GraceReason, grace_keeps_access
 from app.services.notification_delivery_service import NotificationType, notification_delivery_service
 from app.services.panel_sync import WEBHOOK, panel_date_behind_paid_renewal, project_onto_subscription, read_panel_user
 from app.utils.miniapp_buttons import build_miniapp_or_callback_button, build_subscription_extend_button
@@ -53,20 +53,6 @@ from app.utils.notification_card import premium
 
 
 logger = structlog.get_logger(__name__)
-
-#: Решения grace, при которых доступ уже оставлен и «продлите» слать не нужно.
-_GRACE_ACCESS_KEPT = frozenset(
-    {
-        GraceStartDecision.STARTED,
-        GraceStartDecision.RETRIED,
-        GraceStartDecision.ALREADY_ACTIVE,
-        GraceStartDecision.ALREADY_GRANTED,
-    }
-)
-
-
-def _grace_keeps_access(result: Any) -> bool:
-    return result is not None and result.decision in _GRACE_ACCESS_KEPT
 
 
 _PLATFORM_EMOJI: dict[str, str] = {
@@ -1365,7 +1351,7 @@ class RemnaWaveWebhookService:
 
         # Если доступ уже оставили — не шлём следом «подписка истекла, продлите»:
         # это противоречит только что выданному grace-уведомлению.
-        if not _grace_keeps_access(grace_result):
+        if not grace_keeps_access(grace_result):
             await self._notify_user(
                 user,
                 'WEBHOOK_SUB_EXPIRED',
@@ -1527,7 +1513,7 @@ class RemnaWaveWebhookService:
             source='webhook',
         )
 
-        if not _grace_keeps_access(grace_result):
+        if not grace_keeps_access(grace_result):
             await self._notify_user(
                 user, 'WEBHOOK_SUB_LIMITED', reply_markup=self._get_traffic_keyboard(user), subscription=subscription
             )

@@ -216,6 +216,22 @@ class GraceStartResult:
     session: GraceAccessSession | None = None
 
 
+#: Решения, при которых доступ уже оставлен: следом не нужно слать
+#: «подписка истекла/закончился трафик, продлите».
+ACCESS_KEEPING_DECISIONS = frozenset(
+    {
+        GraceStartDecision.STARTED,
+        GraceStartDecision.RETRIED,
+        GraceStartDecision.ALREADY_ACTIVE,
+        GraceStartDecision.ALREADY_GRANTED,
+    }
+)
+
+
+def grace_keeps_access(result: GraceStartResult | None) -> bool:
+    return result is not None and result.decision in ACCESS_KEEPING_DECISIONS
+
+
 @dataclass(frozen=True, slots=True)
 class GraceReconcileResult:
     inspected: int = 0
