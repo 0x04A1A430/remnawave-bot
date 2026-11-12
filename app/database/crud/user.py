@@ -306,7 +306,7 @@ async def _sync_users_sequence(db: AsyncSession) -> None:
     """Ensure the users.id sequence matches the current max ID."""
     await db.execute(text("SELECT setval('users_id_seq', COALESCE((SELECT MAX(id) FROM users), 0) + 1, false)"))
     await db.commit()
-    logger.warning('🔄 Последовательность users_id_seq была синхронизирована с текущим максимумом id')
+    logger.warning('↻ Последовательность users_id_seq была синхронизирована с текущим максимумом id')
 
 
 async def _get_or_create_default_promo_group(db: AsyncSession) -> PromoGroup:
@@ -770,7 +770,7 @@ async def subtract_user_balance(
                     log_context['percent'] = offer.discount_percent
 
     if user.balance_kopeks < amount_kopeks:
-        logger.error('   ❌ НЕДОСТАТОЧНО СРЕДСТВ!')
+        logger.error('✗ НЕДОСТАТОЧНО СРЕДСТВ!')
         return False
 
     try:
@@ -857,11 +857,11 @@ async def subtract_user_balance(
                         log_error=log_error,
                     )
 
-        logger.info('✅ Средства списаны', old_balance=old_balance, balance_kopeks=user.balance_kopeks)
+        logger.info('✓ Средства списаны', old_balance=old_balance, balance_kopeks=user.balance_kopeks)
         return True
 
     except Exception as e:
-        logger.error('❌ ОШИБКА СПИСАНИЯ', error=e)
+        logger.error('✗ ОШИБКА СПИСАНИЯ', error=e)
         if commit:
             await db.rollback()
             return False
@@ -1567,7 +1567,7 @@ async def delete_user(db: AsyncSession, user: User) -> bool:
 
     await db.commit()
     user_id_display = user.telegram_id or user.email or f'#{user.id}'
-    logger.info('🗑️ Пользователь помечен как удаленный', user_id_display=user_id_display)
+    logger.info('× Пользователь помечен как удаленный', user_id_display=user_id_display)
     return True
 
 
@@ -1693,7 +1693,7 @@ async def create_user_by_email(
     await db.refresh(user)
 
     user.promo_group = default_group
-    logger.info('✅ Создан email-пользователь с id', email=email, user_id=user.id)
+    logger.info('✓ Создан email-пользователь с id', email=email, user_id=user.id)
 
     # Emit event
     try:

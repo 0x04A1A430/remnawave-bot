@@ -21,8 +21,8 @@ logger = structlog.get_logger(__name__)
 # Теперь новый шлюз попадает в статистику автоматически.
 #
 # Исключаем только НЕ-шлюзовые значения enum:
-#   MANUAL  — админские пополнения (считаются отдельной строкой, не как доход шлюза);
-#   BALANCE — оплата с баланса (иначе двойной счёт: деньги уже учтены при пополнении).
+# MANUAL — админские пополнения (считаются отдельной строкой, не как доход шлюза);
+# BALANCE — оплата с баланса (иначе двойной счёт: деньги уже учтены при пополнении).
 # Все остальные значения PaymentMethod — реальные платёжные шлюзы.
 _NON_GATEWAY_METHODS = frozenset(
     {
@@ -363,7 +363,7 @@ async def complete_transaction(db: AsyncSession, transaction: Transaction) -> Tr
     await db.commit()
     await db.refresh(transaction)
 
-    logger.info('✅ Транзакция завершена', transaction_id=transaction.id)
+    logger.info('✓ Транзакция завершена', transaction_id=transaction.id)
 
     try:
         from app.services.promo_group_assignment import (
@@ -593,7 +593,7 @@ async def check_tribute_payment_duplicate(
     transaction = result.scalar_one_or_none()
 
     if transaction:
-        logger.info('🔍 Найден дубликат платежа в течение 24ч', transaction_id=transaction.id)
+        logger.info('⌕ Найден дубликат платежа в течение 24ч', transaction_id=transaction.id)
 
     return transaction
 

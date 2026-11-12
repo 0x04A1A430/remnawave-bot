@@ -16,9 +16,9 @@ _EMOJI_CHAR_CLASS = (
     r'←-⇿'  # Arrows
     r'⌀-⏿'  # Misc Technical (⌚ ⌨ ⏰ etc.)
     r'①-⓿'  # Enclosed Alphanumerics
-    r'■-⛿'  # Geometric Shapes + Misc Symbols (☀ ★ ✈ etc.)
-    r'✀-➿'  # Dingbats (✂ ✅ ✔ etc.)
-    r'⬀-⯿'  # Misc Symbols/Arrows (⬅ ⭐ etc.)
+    r'■-⛿'  # Geometric Shapes + Misc Symbols ( etc.)
+    r'✀-➿'  # Dingbats ( etc.)
+    r'⬀-⯿'  # Misc Symbols/Arrows ( etc.)
     r'〰-〽'  # CJK swung dash etc.
     r'㊗㊙'  # Japanese marks
     r'\U0001F000-\U0001FFFF'  # Все supplementary planes (emoticons, pictographs, transport, supp symbols)

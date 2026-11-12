@@ -41,7 +41,7 @@ async def upsert_recurrent_payments(
     await db.commit()
     await db.refresh(document)
 
-    logger.info('✅ Документ о рекуррентных платежах обновлён', language=language, document_id=document.id)
+    logger.info('✓ Документ о рекуррентных платежах обновлён', language=language, document_id=document.id)
 
     return document
 

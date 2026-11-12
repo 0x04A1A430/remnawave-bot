@@ -1428,7 +1428,7 @@ class UserService:
                                 if int_squad_ids:
                                     await remove_user_from_servers(db, int_squad_ids)
                             except Exception as sq_err:
-                                logger.warning('⚠️ Не удалось уменьшить счётчик серверов', error=sq_err)
+                                logger.warning('⚠ Не удалось уменьшить счётчик серверов', error=sq_err)
             except Exception as e:
                 logger.error('Ошибка удаления подписок', error=e)
 

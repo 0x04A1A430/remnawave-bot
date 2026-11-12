@@ -1453,15 +1453,15 @@ class YooKassaPaymentMixin:
         # payload must never be trusted on its own.
         #
         # Two modes:
-        #   * IP gate ON (default): the request already passed the YooKassa
-        #     IP allowlist, so this API call is best-effort. Tight 8s budget;
-        #     on timeout/error we fall back to the payload status. This avoids
-        #     the incident where a mandatory 30s call serialised webhook
-        #     processing on the YK executor during API degradation.
-        #   * IP gate OFF (YOOKASSA_SKIP_IP_CHECK): there is no IP barrier, so
-        #     the API confirmation becomes MANDATORY (fail-closed) — see the
-        #     guard below. Without it a forged ``payment.succeeded`` for a
-        #     non-existent id would credit an attacker via the restore path.
+        # * IP gate ON (default): the request already passed the YooKassa
+        # IP allowlist, so this API call is best-effort. Tight 8s budget;
+        # on timeout/error we fall back to the payload status. This avoids
+        # the incident where a mandatory 30s call serialised webhook
+        # processing on the YK executor during API degradation.
+        # * IP gate OFF (YOOKASSA_SKIP_IP_CHECK): there is no IP barrier, so
+        # the API confirmation becomes MANDATORY (fail-closed) — see the
+        # guard below. Without it a forged ``payment.succeeded`` for a
+        # non-existent id would credit an attacker via the restore path.
         remote_data: dict[str, Any] | None = None
         if getattr(self, 'yookassa_service', None):
             try:

@@ -122,7 +122,7 @@ class TelegramWebhookProcessor:
             if self._workers:
                 await asyncio.gather(*self._workers, return_exceptions=True)
             self._workers.clear()
-            logger.info('🛑 Telegram webhook processor остановлен')
+            logger.info('Telegram webhook processor остановлен')
 
     async def enqueue(self, update: Update) -> None:
         if not self._running:

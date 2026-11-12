@@ -181,7 +181,7 @@ class AdvertisingCampaignService:
             )
 
         if not campaign.is_active:
-            logger.warning('⚠️ Попытка выдать бонус по неактивной кампании', campaign_id=campaign.id)
+            logger.warning('⚠ Попытка выдать бонус по неактивной кампании', campaign_id=campaign.id)
             return CampaignBonusResult(success=False)
 
         # Prevent partner from being attributed to their own campaign
@@ -451,7 +451,7 @@ class AdvertisingCampaignService:
             return CampaignBonusResult(success=False)
 
         if not tariff.is_active:
-            logger.warning('⚠️ Тариф неактивен, бонус кампании пропущен', tariff_id=tariff.id, campaign_id=campaign.id)
+            logger.warning('⚠ Тариф неактивен, бонус кампании пропущен', tariff_id=tariff.id, campaign_id=campaign.id)
             return CampaignBonusResult(success=False)
 
         traffic_limit = tariff.traffic_limit_gb

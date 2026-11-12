@@ -201,7 +201,7 @@ async def update_welcome_text(
 async def delete_welcome_text(db: AsyncSession, welcome_text: WelcomeText) -> None:
     await db.delete(welcome_text)
     await db.commit()
-    logger.info('🗑️ Удален приветственный текст ID', welcome_text_id=welcome_text.id)
+    logger.info('× Удален приветственный текст ID', welcome_text_id=welcome_text.id)
 
 
 async def get_current_welcome_text_or_default() -> str:

@@ -399,13 +399,13 @@ def get_available_payment_methods() -> list[dict[str, str]]:
         if settings.CASHERA_INLINE_METHODS:
             for method_code in settings.get_cashera_active_methods():
                 info = settings.get_cashera_method_definitions().get(method_code, {})
+                title = info.get('title') or _PREMIUM_CARD_ICON
+                tag_match = re.match(r'(<tg-emoji\b[^>]*>.*?</tg-emoji>)', title)
                 methods.append(
                     {
                         'id': f'cashera_m_{method_code}',
                         'name': info.get('name', method_code),
-                        'icon': info.get('title', _PREMIUM_CARD_ICON).split(' ', 1)[0]
-                        if info.get('title')
-                        else _PREMIUM_CARD_ICON,
+                        'icon': tag_match.group(1) if tag_match else title.split(' ', 1)[0],
                         'description': f'через {cashera_name}',
                         'callback': f'topup_cashera_m_{method_code}',
                     }

@@ -98,7 +98,7 @@ async def create_referral_earning(
             tariff_id=tariff_id,
         )
     else:
-        logger.info('💰 Создан реферальный заработок', amount_kopeks=amount_kopeks / 100, level=level, user_id=user_id)
+        logger.info('₽ Создан реферальный заработок', amount_kopeks=amount_kopeks / 100, level=level, user_id=user_id)
     return earning
 
 

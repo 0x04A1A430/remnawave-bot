@@ -26,48 +26,48 @@ _LANGUAGE_ALIASES = {
 
 _DYNAMIC_LANGUAGE_CONFIGS = {
     'ru': {
-        'traffic_pattern': '📊 {size} ГБ - {price}',
-        'unlimited_pattern': '📊 Безлимит - {price}',
+        'traffic_pattern': '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> {size} ГБ - {price}',
+        'unlimited_pattern': '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> Безлимит - {price}',
         'support_info': (
-            '\n🛟 <b>Поддержка</b>\n\n'
+            '\n? <b>Поддержка</b>\n\n'
             'Это центр тикетов: создавайте обращения, просматривайте ответы и историю.\n\n'
-            '• 🎫 Создать тикет — опишите проблему или вопрос\n'
-            '• 📋 Мои тикеты — статус и переписка\n'
-            '• 💬 Связаться — написать напрямую (если нужно)\n\n'
+            '• ◆ Создать тикет — опишите проблему или вопрос\n'
+            '• ▤ Мои тикеты — статус и переписка\n'
+            '• <tg-emoji emoji-id="5886666250158870040">💬</tg-emoji> Связаться — написать напрямую (если нужно)\n\n'
             'Старайтесь использовать тикеты — так мы быстрее поможем и ничего не потеряется.\n'
         ),
     },
     'fa': {
-        'traffic_pattern': '📊 {size} گیگابایت - {price}',
-        'unlimited_pattern': '📊 نامحدود - {price}',
+        'traffic_pattern': '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> {size} گیگابایت - {price}',
+        'unlimited_pattern': '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> نامحدود - {price}',
         'support_info': (
-            '\n🛟 <b>پشتیبانی</b>\n\n'
+            '\n? <b>پشتیبانی</b>\n\n'
             'برای هرگونه سؤال به پشتیبانی پیام دهید:\n\n'
-            '👤 {support_username}\n\n'
-            '• 🎫 ایجاد تیکت\n'
-            '• 📋 تیکت‌های من\n'
-            '• 💬 تماس مستقیم\n'
+            '<tg-emoji emoji-id="5771887475421090729">👤</tg-emoji> {support_username}\n\n'
+            '• ◆ ایجاد تیکت\n'
+            '• ▤ تیکت‌های من\n'
+            '• <tg-emoji emoji-id="5886666250158870040">💬</tg-emoji> تماس مستقیم\n'
         ),
     },
     'en': {
-        'traffic_pattern': '📊 {size} GB - {price}',
-        'unlimited_pattern': '📊 Unlimited - {price}',
+        'traffic_pattern': '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> {size} GB - {price}',
+        'unlimited_pattern': '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> Unlimited - {price}',
         'support_info': (
-            '\n🛟 <b>RemnaWave Support</b>\n\n'
+            '\n? <b>RemnaWave Support</b>\n\n'
             'This is the ticket center: create requests, view replies and history.\n\n'
-            '• 🎫 Create ticket — describe your issue or question\n'
-            '• 📋 My tickets — status and conversation\n'
-            '• 💬 Contact — message directly if needed\n\n'
+            '• ◆ Create ticket — describe your issue or question\n'
+            '• ▤ My tickets — status and conversation\n'
+            '• <tg-emoji emoji-id="5886666250158870040">💬</tg-emoji> Contact — message directly if needed\n\n'
             'Prefer tickets — it helps us respond faster and keep context.\n'
         ),
     },
     'ua': {
-        'traffic_pattern': '📊 {size} ГБ - {price}',
-        'unlimited_pattern': '📊 Безліміт - {price}',
+        'traffic_pattern': '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> {size} ГБ - {price}',
+        'unlimited_pattern': '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> Безліміт - {price}',
         'support_info': (
-            '\n🛠️ <b>Технічна підтримка</b>\n\n'
+            '\n<tg-emoji emoji-id="5988023995125993550">🛠</tg-emoji> <b>Технічна підтримка</b>\n\n'
             'З усіх питань звертайтеся до нашої підтримки:\n\n'
-            '👤 {support_username}\n\n'
+            '<tg-emoji emoji-id="5771887475421090729">👤</tg-emoji> {support_username}\n\n'
             'Ми допоможемо з:\n'
             '• Налаштуванням підключення\n'
             '• Вирішенням технічних проблем\n'
@@ -77,12 +77,12 @@ _DYNAMIC_LANGUAGE_CONFIGS = {
         ),
     },
     'zh': {
-        'traffic_pattern': '📊{size}GB-{price}',
-        'unlimited_pattern': '📊无限-{price}',
+        'traffic_pattern': '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji>{size}GB-{price}',
+        'unlimited_pattern': '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji>无限-{price}',
         'support_info': (
-            '\n🛠️ <b>技术支持</b>\n\n'
+            '\n<tg-emoji emoji-id="5988023995125993550">🛠</tg-emoji> <b>技术支持</b>\n\n'
             '如有任何问题，请联系我们的支持团队：\n\n'
-            '👤 {support_username}\n\n'
+            '<tg-emoji emoji-id="5771887475421090729">👤</tg-emoji> {support_username}\n\n'
             '我们将帮助您：\n'
             '• 设置连接\n'
             '• 解决技术问题\n'
@@ -108,7 +108,7 @@ _BLANK_LINE_RUN = re.compile(r'\n{3,}')
 
 
 def _normalize_spacing(value: Any) -> Any:
-    """Пустые строки схлопываются в одиночный перевод строки; <pre> не трогаем."""
+    """Пустые строки схлопываются в одиночный перевод строки; <pre>не трогаем."""
     if isinstance(value, str) and '<pre' not in value:
         return _BLANK_LINE_RUN.sub('\n\n', value)
     return value
@@ -219,8 +219,8 @@ class Texts:
         """Format traffic value.
 
         Args:
-            gb: Traffic in gigabytes
-            is_limit: If True, 0 means unlimited. If False, 0 means zero used.
+        gb: Traffic in gigabytes
+        is_limit: If True, 0 means unlimited. If False, 0 means zero used.
         """
         if gb == 0:
             return (

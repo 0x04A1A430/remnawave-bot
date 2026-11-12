@@ -41,7 +41,7 @@ async def create_or_update_rules(
     await db.refresh(new_rules)
     await refresh_rules_cache(language)
 
-    logger.info('✅ Правила обновлены', language=language, new_rules_id=new_rules.id)
+    logger.info('✓ Правила обновлены', language=language, new_rules_id=new_rules.id)
     return new_rules
 
 
@@ -64,7 +64,7 @@ async def clear_all_rules(db: AsyncSession, language: str = 'ru') -> bool:
         return rows_affected > 0
 
     except Exception as e:
-        logger.error('❌ Ошибка при очистке правил для языка', language=language, error=e)
+        logger.error('✗ Ошибка при очистке правил для языка', language=language, error=e)
         await db.rollback()
         raise
 
@@ -147,7 +147,7 @@ async def restore_rules_version(db: AsyncSession, rule_id: int, language: str = 
         return restored_rule
 
     except Exception as e:
-        logger.error('❌ Ошибка при восстановлении правил ID', rule_id=rule_id, error=e)
+        logger.error('✗ Ошибка при восстановлении правил ID', rule_id=rule_id, error=e)
         await db.rollback()
         raise
 
@@ -180,5 +180,5 @@ async def get_rules_statistics(db: AsyncSession) -> dict:
         }
 
     except Exception as e:
-        logger.error('❌ Ошибка при получении статистики правил', error=e)
+        logger.error('✗ Ошибка при получении статистики правил', error=e)
         return {'total_active': 0, 'total_all_time': 0, 'languages': {}, 'total_languages': 0, 'error': str(e)}

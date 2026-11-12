@@ -627,7 +627,7 @@ async def send_referral_notification(
             if success:
                 logger.info('Email уведомление о реферале отправлено пользователю', user_id=user.id)
             else:
-                logger.warning('⚠️ Не удалось отправить email уведомление пользователю', user_id=user.id)
+                logger.warning('⚠ Не удалось отправить email уведомление пользователю', user_id=user.id)
         else:
             logger.debug('Пропуск уведомления: пользователь без telegram_id и без User object')
         return
@@ -666,13 +666,13 @@ async def process_referral_registration(db: AsyncSession, new_user_id: int, refe
         # guard in ``attach_referrer_if_missing`` is not enough on its
         # own. Two layers protect the audit row:
         #
-        #   1. Fast-path SELECT below — handles the common case
-        #      cheaply, no exception machinery.
-        #   2. Partial UNIQUE index ``uq_referral_earnings_registration_pending``
-        #      (Alembic 0085) — catches the sub-millisecond window
-        #      where both sessions pass the SELECT before either
-        #      INSERT commits. On collision the second INSERT raises
-        #      ``IntegrityError``, which we swallow as a duplicate.
+        # 1. Fast-path SELECT below — handles the common case
+        # cheaply, no exception machinery.
+        # 2. Partial UNIQUE index ``uq_referral_earnings_registration_pending``
+        # (Alembic 0085) — catches the sub-millisecond window
+        # where both sessions pass the SELECT before either
+        # INSERT commits. On collision the second INSERT raises
+        # ``IntegrityError``, which we swallow as a duplicate.
         #
         # Only the ``referral_registration_pending`` reason is deduped.
         # Bonus rows (``referral_first_topup_bonus``,

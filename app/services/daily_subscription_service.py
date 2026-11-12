@@ -1082,7 +1082,7 @@ class DailySubscriptionService:
     def stop_monitoring(self):
         """Останавливает периодическую проверку."""
         self._running = False
-        logger.info('⏹️ Сервис суточных подписок остановлен')
+        logger.info('⏹ Сервис суточных подписок остановлен')
 
 
 # Глобальный экземпляр сервиса

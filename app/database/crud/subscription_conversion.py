@@ -94,7 +94,7 @@ async def get_conversion_statistics(db: AsyncSession) -> dict:
     )
     month_conversions = month_conversions_result.scalar() or 0
 
-    logger.info('📊 Статистика конверсий:')
+    logger.info('▥ Статистика конверсий:')
     logger.info('Всего пользователей с подписками', total_users_with_subscriptions=total_users_with_subscriptions)
     logger.info('Оплативших подписку', users_with_paid=users_with_paid)
     logger.info('Рассчитанная конверсия', conversion_rate=conversion_rate)

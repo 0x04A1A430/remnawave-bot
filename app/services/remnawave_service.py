@@ -369,7 +369,7 @@ class RemnaWaveService:
             return utc_normalized
 
         except Exception as e:
-            logger.warning('⚠️ Не удалось распарсить дату . Используем дефолтную дату.', date_str=date_str, error=e)
+            logger.warning('⚠ Не удалось распарсить дату . Используем дефолтную дату.', date_str=date_str, error=e)
             return self._now_utc() + timedelta(days=30)
 
     def _safe_panel_expire_date(self, panel_user: dict[str, Any]) -> datetime:
@@ -1690,7 +1690,7 @@ class RemnaWaveService:
                         pass
                     # After rollback all ORM objects in the session are expired.
                     # Accessing their attributes triggers a lazy load which fails
-                    # in async context (greenlet_spawn error).  Break the loop to
+                    # in async context (greenlet_spawn error). Break the loop to
                     # prevent cascading failures for every remaining user.
                     logger.warning(
                         '⚠️ Сессия повреждена после rollback, прерываем обработку',
@@ -1842,7 +1842,7 @@ class RemnaWaveService:
                     hwid_api_cm = self.get_api_client()
                     await hwid_api_cm.__aenter__()
                 except Exception as api_init_error:
-                    logger.warning('⚠️ Не удалось создать API клиент для сброса HWID', api_init_error=api_init_error)
+                    logger.warning('⚠ Не удалось создать API клиент для сброса HWID', api_init_error=api_init_error)
                     hwid_api_cm = None
 
                 try:

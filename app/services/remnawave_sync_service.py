@@ -114,7 +114,7 @@ class RemnaWaveAutoSyncService:
 
             times = settings.get_remnawave_auto_sync_times()
             if not times:
-                logger.warning('⚠️ Автосинхронизация включена, но расписание пустое. Укажите время запуска.')
+                logger.warning('⚠ Автосинхронизация включена, но расписание пустое. Укажите время запуска.')
                 self._next_run = None
                 return
 
@@ -278,7 +278,7 @@ async def sync_servers_from_panel(session: AsyncSession, service: RemnaWaveServi
     squads = await service.get_all_squads()
 
     if not squads:
-        logger.warning('⚠️ Не удалось получить сквады из RemnaWave для синхронизации серверов')
+        logger.warning('⚠ Не удалось получить сквады из RemnaWave для синхронизации серверов')
         return {'created': 0, 'updated': 0, 'removed': 0, 'total': 0}
 
     created, updated, removed = await sync_with_remnawave(session, squads)
@@ -286,7 +286,7 @@ async def sync_servers_from_panel(session: AsyncSession, service: RemnaWaveServi
     try:
         await cache.delete_pattern('available_countries*')
     except Exception as error:
-        logger.warning('⚠️ Не удалось очистить кеш стран после синхронизации серверов', error=error)
+        logger.warning('⚠ Не удалось очистить кеш стран после синхронизации серверов', error=error)
 
     return {
         'created': created,
