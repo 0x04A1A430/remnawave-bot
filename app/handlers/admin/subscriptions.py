@@ -124,10 +124,11 @@ async def show_subscriptions_menu(callback: types.CallbackQuery, db_user: User, 
         ],
         [
             types.InlineKeyboardButton(
-                text=texts.t('ADMIN_SUBSCRIPTIONS_UI_032', '← Назад'), callback_data='admin_panel'
+                text=texts.t('ADMIN_SUBSCRIPTIONS_UI_032', '← Назад'),
+                callback_data='admin_panel',
+                style='danger',
             )
         ],
-        [types.InlineKeyboardButton(text=' Назад', callback_data='admin_panel')],
     ]
 
     await callback.message.edit_text(
