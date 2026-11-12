@@ -319,12 +319,16 @@ async def handle_ticket_message_input(message: types.Message, state: FSMContext,
         # Ограничим длину подтверждения чтобы не упереться в лимиты
         safe_title = html.escape(title if len(title) <= 200 else (title[:197] + '...'))
         creation_text = compact_blank_lines(
-            f'✅ <b>Тикет #{ticket.id} создан</b>\n\n'
-            f'📝 Заголовок: {safe_title}\n'
-            f'📊 Статус: {ticket.status_emoji} '
+            f'<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> <b>Тикет #{ticket.id} создан</b>\n\n'
+            f'<tg-emoji emoji-id="5886330010054168711">📝</tg-emoji> Заголовок: {safe_title}\n'
+            f'<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> Статус: {ticket.status_emoji} '
             f'{texts.t("TICKET_STATUS_OPEN", "Открыт")}\n'
-            f'📅 Создан: {format_local_datetime(ticket.created_at, "%d.%m.%Y %H:%M")}\n'
-            + (f'📎 Вложение: {"видео" if media_type == "video" else "фото"}\n' if media_file_id else '')
+            f'<tg-emoji emoji-id="5967412305338568701">📅</tg-emoji> Создан: {format_local_datetime(ticket.created_at, "%d.%m.%Y %H:%M")}\n'
+            + (
+                f'<tg-emoji emoji-id="5877495434124988415">📎</tg-emoji> Вложение: {"видео" if media_type == "video" else "фото"}\n'
+                if media_file_id
+                else ''
+            )
         )
 
         data_prompt = await state.get_data()
@@ -334,7 +338,10 @@ async def handle_ticket_message_input(message: types.Message, state: FSMContext,
             inline_keyboard=[
                 [
                     types.InlineKeyboardButton(
-                        text=texts.t('VIEW_TICKET', '👁️ Посмотреть тикет'), callback_data=f'view_ticket_{ticket.id}'
+                        text=texts.t(
+                            'VIEW_TICKET', '<tg-emoji emoji-id="5960714428394507968">👁</tg-emoji> Посмотреть тикет'
+                        ),
+                        callback_data=f'view_ticket_{ticket.id}',
                     )
                 ],
                 [
@@ -367,7 +374,10 @@ async def handle_ticket_message_input(message: types.Message, state: FSMContext,
         logger.error('Error creating ticket', error=e)
         texts = get_texts(db_user.language)
         await message.answer(
-            texts.t('TICKET_CREATE_ERROR', '❌ Произошла ошибка при создании тикета. Попробуйте позже.')
+            texts.t(
+                'TICKET_CREATE_ERROR',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Произошла ошибка при создании тикета. Попробуйте позже.',
+            )
         )
 
 
@@ -407,12 +417,12 @@ async def show_my_tickets(callback: types.CallbackQuery, db_user: User, db: Asyn
                 inline_keyboard=[
                     [
                         types.InlineKeyboardButton(
-                            text=texts.t('CREATE_TICKET_BUTTON', '🎫 Создать тикет'), callback_data='create_ticket'
+                            text=texts.t('CREATE_TICKET_BUTTON', 'Создать тикет'), callback_data='create_ticket'
                         )
                     ],
                     [
                         types.InlineKeyboardButton(
-                            text=texts.t('VIEW_CLOSED_TICKETS', '🟢 Закрытые тикеты'), callback_data='my_tickets_closed'
+                            text=texts.t('VIEW_CLOSED_TICKETS', 'Закрытые тикеты'), callback_data='my_tickets_closed'
                         )
                     ],
                     [types.InlineKeyboardButton(text=texts.BACK, callback_data='menu_support', style='danger')],
@@ -436,14 +446,14 @@ async def show_my_tickets(callback: types.CallbackQuery, db_user: User, db: Asyn
         0,
         [
             types.InlineKeyboardButton(
-                text=texts.t('VIEW_CLOSED_TICKETS', '🟢 Закрытые тикеты'), callback_data='my_tickets_closed'
+                text=texts.t('VIEW_CLOSED_TICKETS', 'Закрытые тикеты'), callback_data='my_tickets_closed'
             )
         ],
     )
     # Всегда используем фото-рендер с логотипом (утилита сама сделает фоллбек при необходимости)
     await edit_or_answer_photo(
         callback=callback,
-        caption=texts.t('MY_TICKETS_TITLE', '📋 Ваши тикеты:'),
+        caption=texts.t('MY_TICKETS_TITLE', 'Ваши тикеты:'),
         keyboard=keyboard,
         parse_mode='HTML',
     )
@@ -505,7 +515,7 @@ async def show_my_tickets_closed(callback: types.CallbackQuery, db_user: User, d
     )
     await edit_or_answer_photo(
         callback=callback,
-        caption=texts.t('CLOSED_TICKETS_TITLE', '🟢 Закрытые тикеты:'),
+        caption=texts.t('CLOSED_TICKETS_TITLE', 'Закрытые тикеты:'),
         keyboard=kb,
         parse_mode='HTML',
     )
@@ -547,20 +557,26 @@ async def view_ticket(callback: types.CallbackQuery, db_user: User, db: AsyncSes
     }.get(ticket.status, ticket.status)
 
     header = (
-        f'🎫 Тикет #{ticket.id}\n\n'
-        f'📝 Заголовок: {html.escape(ticket.title or "")}\n'
-        f'📊 Статус: {ticket.status_emoji} {status_text}\n'
-        f'📅 Создан: {format_local_datetime(ticket.created_at, "%d.%m.%Y %H:%M")}\n\n'
+        f'Тикет #{ticket.id}\n\n'
+        f'<tg-emoji emoji-id="5886330010054168711">📝</tg-emoji> Заголовок: {html.escape(ticket.title or "")}\n'
+        f'<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> Статус: {ticket.status_emoji} {status_text}\n'
+        f'<tg-emoji emoji-id="5967412305338568701">📅</tg-emoji> Создан: {format_local_datetime(ticket.created_at, "%d.%m.%Y %H:%M")}\n\n'
     )
     message_blocks: list[str] = []
     if ticket.messages:
-        message_blocks.append(f'💬 Сообщения ({len(ticket.messages)}):\n\n')
+        message_blocks.append(
+            f'<tg-emoji emoji-id="5886666250158870040">💬</tg-emoji> Сообщения ({len(ticket.messages)}):\n\n'
+        )
         for msg in ticket.messages:
-            sender = '👤 Вы' if msg.is_user_message else '🛠️ Поддержка'
+            sender = (
+                '<tg-emoji emoji-id="5771887475421090729">👤</tg-emoji> Вы'
+                if msg.is_user_message
+                else '<tg-emoji emoji-id="5988023995125993550">🛠</tg-emoji> Поддержка'
+            )
             block = f'{sender} ({format_local_datetime(msg.created_at, "%d.%m %H:%M")}):\n{html.escape(msg.message_text or "")}\n\n'
             for item in get_ticket_media(msg):
                 label = {'photo': 'фото', 'video': 'видео', 'document': 'файл'}[item['type']]
-                block += f'📎 Вложение: {label}\n\n'
+                block += f'<tg-emoji emoji-id="5877495434124988415">📎</tg-emoji> Вложение: {label}\n\n'
             message_blocks.append(block)
     pages = build_ticket_pages(header, message_blocks, max_len=TICKET_PAGE_MAX_LEN)
     total_pages = len(pages)
@@ -579,7 +595,9 @@ async def view_ticket(callback: types.CallbackQuery, db_user: User, db: AsyncSes
                 0,
                 [
                     types.InlineKeyboardButton(
-                        text=texts.t('TICKET_ATTACHMENTS', '📎 Вложения'),
+                        text=texts.t(
+                            'TICKET_ATTACHMENTS', '<tg-emoji emoji-id="5877495434124988415">📎</tg-emoji> Вложения'
+                        ),
                         callback_data=f'ticket_attachments_{ticket_id}',
                     )
                 ],
@@ -591,12 +609,18 @@ async def view_ticket(callback: types.CallbackQuery, db_user: User, db: AsyncSes
         nav_row = []
         if page > 1:
             nav_row.append(
-                types.InlineKeyboardButton(text='⬅️', callback_data=f'ticket_view_page_{ticket_id}_{page - 1}')
+                types.InlineKeyboardButton(
+                    text='<tg-emoji emoji-id="5875082500023258804">⬅</tg-emoji>',
+                    callback_data=f'ticket_view_page_{ticket_id}_{page - 1}',
+                )
             )
         nav_row.append(types.InlineKeyboardButton(text=f'{page}/{total_pages}', callback_data='noop'))
         if page < total_pages:
             nav_row.append(
-                types.InlineKeyboardButton(text='➡️', callback_data=f'ticket_view_page_{ticket_id}_{page + 1}')
+                types.InlineKeyboardButton(
+                    text='<tg-emoji emoji-id="5877468380125990242">➡</tg-emoji>',
+                    callback_data=f'ticket_view_page_{ticket_id}_{page + 1}',
+                )
             )
         if getattr(keyboard, 'inline_keyboard', None) is not None:
             keyboard.inline_keyboard.insert(0, nav_row)
@@ -609,7 +633,11 @@ async def view_ticket(callback: types.CallbackQuery, db_user: User, db: AsyncSes
 async def send_ticket_attachments(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
     texts = get_texts(db_user.language)
     try:
-        await callback.answer(texts.t('SENDING_ATTACHMENTS', '📎 Отправляю вложения...'))
+        await callback.answer(
+            texts.t(
+                'SENDING_ATTACHMENTS', '<tg-emoji emoji-id="5877495434124988415">📎</tg-emoji> Отправляю вложения...'
+            )
+        )
     except Exception:
         pass
     try:
@@ -657,7 +685,9 @@ async def send_ticket_attachments(callback: types.CallbackQuery, db_user: User, 
                 inline_keyboard=[
                     [
                         types.InlineKeyboardButton(
-                            text=texts.t('DELETE_MESSAGE', '🗑 Удалить'),
+                            text=texts.t(
+                                'DELETE_MESSAGE', '<tg-emoji emoji-id="5879896690210639947">🗑</tg-emoji> Удалить'
+                            ),
                             callback_data=f'user_delete_message_{last_group_message.message_id}',
                         )
                     ]
@@ -679,14 +709,14 @@ async def user_delete_message(callback: types.CallbackQuery):
     try:
         msg_id = int(callback.data.replace('user_delete_message_', ''))
     except ValueError:
-        await callback.answer('❌')
+        await callback.answer('<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji>')
         return
     try:
         await callback.message.bot.delete_message(chat_id=callback.from_user.id, message_id=msg_id)
         await callback.message.delete()
     except Exception:
         pass
-    await callback.answer('✅')
+    await callback.answer('<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji>')
 
 
 async def _edit_or_send(
@@ -834,12 +864,15 @@ async def handle_ticket_reply(message: types.Message, state: FSMContext, db_user
         if ticket.status == TicketStatus.CLOSED.value:
             texts = get_texts(db_user.language)
             await message.answer(
-                texts.t('TICKET_CLOSED', '✅ Тикет закрыт.'),
+                texts.t('TICKET_CLOSED', '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Тикет закрыт.'),
                 reply_markup=types.InlineKeyboardMarkup(
                     inline_keyboard=[
                         [
                             types.InlineKeyboardButton(
-                                text=texts.t('CLOSE_NOTIFICATION', '❌ Закрыть уведомление'),
+                                text=texts.t(
+                                    'CLOSE_NOTIFICATION',
+                                    '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Закрыть уведомление',
+                                ),
                                 callback_data=f'close_ticket_notification_{ticket.id}',
                             )
                         ]
@@ -853,12 +886,18 @@ async def handle_ticket_reply(message: types.Message, state: FSMContext, db_user
         if ticket.status == TicketStatus.CLOSED.value or ticket.is_user_reply_blocked:
             texts = get_texts(db_user.language)
             await message.answer(
-                texts.t('TICKET_CLOSED_NO_REPLY', '❌ Тикет закрыт, ответить невозможно.'),
+                texts.t(
+                    'TICKET_CLOSED_NO_REPLY',
+                    '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Тикет закрыт, ответить невозможно.',
+                ),
                 reply_markup=types.InlineKeyboardMarkup(
                     inline_keyboard=[
                         [
                             types.InlineKeyboardButton(
-                                text=texts.t('CLOSE_NOTIFICATION', '❌ Закрыть уведомление'),
+                                text=texts.t(
+                                    'CLOSE_NOTIFICATION',
+                                    '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Закрыть уведомление',
+                                ),
                                 callback_data=f'close_ticket_notification_{ticket.id}',
                             )
                         ]
@@ -883,12 +922,15 @@ async def handle_ticket_reply(message: types.Message, state: FSMContext, db_user
         texts = get_texts(db_user.language)
 
         await message.answer(
-            texts.t('TICKET_REPLY_SENT', '✅ Ваш ответ отправлен!'),
+            texts.t('TICKET_REPLY_SENT', '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Ваш ответ отправлен!'),
             reply_markup=types.InlineKeyboardMarkup(
                 inline_keyboard=[
                     [
                         types.InlineKeyboardButton(
-                            text=texts.t('VIEW_TICKET', '👁️ Посмотреть тикет'), callback_data=f'view_ticket_{ticket_id}'
+                            text=texts.t(
+                                'VIEW_TICKET', '<tg-emoji emoji-id="5960714428394507968">👁</tg-emoji> Посмотреть тикет'
+                            ),
+                            callback_data=f'view_ticket_{ticket_id}',
                         )
                     ],
                     [
@@ -914,7 +956,10 @@ async def handle_ticket_reply(message: types.Message, state: FSMContext, db_user
         logger.error('Error adding ticket reply', error=e)
         texts = get_texts(db_user.language)
         await message.answer(
-            texts.t('TICKET_REPLY_ERROR', '❌ Произошла ошибка при отправке ответа. Попробуйте позже.')
+            texts.t(
+                'TICKET_REPLY_ERROR',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Произошла ошибка при отправке ответа. Попробуйте позже.',
+            )
         )
 
 
@@ -935,7 +980,10 @@ async def close_ticket(callback: types.CallbackQuery, db_user: User, db: AsyncSe
 
         if success:
             texts = get_texts(db_user.language)
-            await callback.answer(texts.t('TICKET_CLOSED', '✅ Тикет закрыт.'), show_alert=True)
+            await callback.answer(
+                texts.t('TICKET_CLOSED', '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Тикет закрыт.'),
+                show_alert=True,
+            )
 
             # Обновляем inline-клавиатуру текущего сообщения (убираем кнопки)
             await callback.message.edit_reply_markup(
@@ -943,12 +991,24 @@ async def close_ticket(callback: types.CallbackQuery, db_user: User, db: AsyncSe
             )
         else:
             texts = get_texts(db_user.language)
-            await callback.answer(texts.t('TICKET_CLOSE_ERROR', '❌ Ошибка при закрытии тикета.'), show_alert=True)
+            await callback.answer(
+                texts.t(
+                    'TICKET_CLOSE_ERROR',
+                    '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Ошибка при закрытии тикета.',
+                ),
+                show_alert=True,
+            )
 
     except Exception as e:
         logger.error('Error closing ticket', error=e)
         texts = get_texts(db_user.language)
-        await callback.answer(texts.t('TICKET_CLOSE_ERROR', '❌ Ошибка при закрытии тикета.'), show_alert=True)
+        await callback.answer(
+            texts.t(
+                'TICKET_CLOSE_ERROR',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Ошибка при закрытии тикета.',
+            ),
+            show_alert=True,
+        )
 
 
 async def cancel_ticket_creation(callback: types.CallbackQuery, state: FSMContext, db_user: User):
@@ -963,7 +1023,10 @@ async def cancel_ticket_creation(callback: types.CallbackQuery, state: FSMContex
             inline_keyboard=[
                 [
                     types.InlineKeyboardButton(
-                        text=texts.t('BACK_TO_SUPPORT', '⬅️ К поддержке'), callback_data='menu_support'
+                        text=texts.t(
+                            'BACK_TO_SUPPORT', '<tg-emoji emoji-id="5875082500023258804">⬅</tg-emoji> К поддержке'
+                        ),
+                        callback_data='menu_support',
                     )
                 ]
             ]
@@ -982,7 +1045,14 @@ async def cancel_ticket_reply(callback: types.CallbackQuery, state: FSMContext, 
         texts.t('TICKET_REPLY_CANCELLED', 'Ответ отменен.'),
         reply_markup=types.InlineKeyboardMarkup(
             inline_keyboard=[
-                [types.InlineKeyboardButton(text=texts.t('BACK_TO_TICKETS', '⬅️ К тикетам'), callback_data='my_tickets')]
+                [
+                    types.InlineKeyboardButton(
+                        text=texts.t(
+                            'BACK_TO_TICKETS', '<tg-emoji emoji-id="5875082500023258804">⬅</tg-emoji> К тикетам'
+                        ),
+                        callback_data='my_tickets',
+                    )
+                ]
             ]
         ),
     )
@@ -1016,7 +1086,7 @@ def build_ticket_card_keyboard(ticket: Ticket, user: User | None, *, role: str):
     FSM-кнопок: «Ответить»/«Блок по времени» в общем чате не работают из-за
     privacy mode бота, остаются надёжные URL/callback-кнопки. Той же клавиатурой
     карточка перерисовывается после действий в группе (закрыть, блок, разблок) —
-    иначе туда попадал экран личной админки с мёртвыми кнопками и «⬅️ Назад».
+    иначе туда попадал экран личной админки с мёртвыми кнопками и «Назад».
     """
     from app.config import settings
 
@@ -1025,7 +1095,9 @@ def build_ticket_card_keyboard(ticket: Ticket, user: User | None, *, role: str):
     # cabinet-режим / кабинет не настроен / в группе нет зарегистрированного Mini App.
     cabinet_button = build_admin_ticket_cabinet_button(
         ticket.id,
-        text=get_texts(settings.DEFAULT_LANGUAGE).t('OPEN_TICKET_IN_CABINET', '🗂 Открыть в кабинете'),
+        text=get_texts(settings.DEFAULT_LANGUAGE).t(
+            'OPEN_TICKET_IN_CABINET', '<tg-emoji emoji-id="5883973610606956186">🗂</tg-emoji> Открыть в кабинете'
+        ),
         in_group=(role == 'group'),
     )
     return get_ticket_notification_keyboard(
@@ -1090,18 +1162,18 @@ async def notify_admins_about_new_ticket(ticket: Ticket, db: AsyncSession):
         safe_title = html.escape(title) if title else '—'
 
         notification_text = (
-            f'🎫 <b>НОВЫЙ ТИКЕТ</b>\n\n'
-            f'🆔 <b>ID:</b> <code>{ticket.id}</code>\n'
-            f'👤 <b>Пользователь:</b> {full_name}\n'
-            f'🆔 <b>ID:</b> <code>{telegram_id_display}</code>\n'
-            f'📱 <b>Username:</b> {username_display}\n'
-            f'📝 <b>Заголовок:</b> {safe_title}\n'
+            f'<b>НОВЫЙ ТИКЕТ</b>\n\n'
+            f'<b>ID:</b> <code>{ticket.id}</code>\n'
+            f'<tg-emoji emoji-id="5771887475421090729">👤</tg-emoji> <b>Пользователь:</b> {full_name}\n'
+            f'<b>ID:</b> <code>{telegram_id_display}</code>\n'
+            f'<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> <b>Username:</b> {username_display}\n'
+            f'<tg-emoji emoji-id="5886330010054168711">📝</tg-emoji> <b>Заголовок:</b> {safe_title}\n'
         )
 
         if message_preview:
-            notification_text += f'\n📩 <b>Сообщение:</b>\n{html.escape(message_preview)}\n'
+            notification_text += f'\n<b>Сообщение:</b>\n{html.escape(message_preview)}\n'
 
-        notification_text += f'\n📅 <b>Создан:</b> {format_local_datetime(ticket.created_at, "%d.%m.%Y %H:%M")}\n'
+        notification_text += f'\n<tg-emoji emoji-id="5967412305338568701">📅</tg-emoji> <b>Создан:</b> {format_local_datetime(ticket.created_at, "%d.%m.%Y %H:%M")}\n'
 
         from app.services.maintenance_service import maintenance_service
 
@@ -1156,13 +1228,13 @@ async def notify_admins_about_ticket_reply(
         safe_title = html.escape(title) if title else '—'
 
         notification_text = (
-            f'💬 <b>ОТВЕТ НА ТИКЕТ</b>\n\n'
-            f'🆔 <b>ID тикета:</b> <code>{ticket.id}</code>\n'
-            f'📝 <b>Заголовок:</b> {safe_title}\n'
-            f'👤 <b>Пользователь:</b> {full_name}\n'
-            f'🆔 <b>ID:</b> <code>{telegram_id_display}</code>\n'
-            f'📱 <b>Username:</b> {username_display}\n\n'
-            f'📩 <b>Сообщение:</b>\n{html.escape(reply_preview)}\n'
+            f'<tg-emoji emoji-id="5886666250158870040">💬</tg-emoji> <b>ОТВЕТ НА ТИКЕТ</b>\n\n'
+            f'<b>ID тикета:</b> <code>{ticket.id}</code>\n'
+            f'<tg-emoji emoji-id="5886330010054168711">📝</tg-emoji> <b>Заголовок:</b> {safe_title}\n'
+            f'<tg-emoji emoji-id="5771887475421090729">👤</tg-emoji> <b>Пользователь:</b> {full_name}\n'
+            f'<b>ID:</b> <code>{telegram_id_display}</code>\n'
+            f'<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> <b>Username:</b> {username_display}\n\n'
+            f'<b>Сообщение:</b>\n{html.escape(reply_preview)}\n'
         )
 
         from app.services.maintenance_service import maintenance_service

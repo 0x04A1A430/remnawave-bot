@@ -498,7 +498,11 @@ async def show_promo_groups_info(
 
     for group in sorted_groups:
         threshold = group.auto_assign_total_spent_kopeks or 0
-        status_icon = '✅' if total_spent_kopeks >= threshold else '🔒'
+        status_icon = (
+            '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji>'
+            if total_spent_kopeks >= threshold
+            else '<tg-emoji emoji-id="5832546462478635761">🔒</tg-emoji>'
+        )
         lines.append(
             texts.t(
                 'PROMO_GROUPS_INFO_LEVEL_LINE',

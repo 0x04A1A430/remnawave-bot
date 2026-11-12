@@ -40,7 +40,7 @@ async def _handle_wheel_spin_payment(
         # Если спин по этому charge_id уже есть — платёж уже обработан, второй приз не выдаём.
         if charge_id and await get_wheel_spin_by_charge_id(db, charge_id):
             logger.info(
-                '🎰 Stars wheel spin already processed (idempotent skip)',
+                'Stars wheel spin already processed (idempotent skip)',
                 user_id=user.id,
                 charge_id=charge_id,
             )
@@ -51,7 +51,8 @@ async def _handle_wheel_spin_payment(
         if not config.is_enabled:
             await message.answer(
                 texts.t(
-                    'STARS_WHEEL_UNAVAILABLE_REFUND', '❌ Колесо удачи временно недоступно. Звезды будут возвращены.'
+                    'STARS_WHEEL_UNAVAILABLE_REFUND',
+                    '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Колесо удачи временно недоступно. Звезды будут возвращены.',
                 ),
             )
             return False
@@ -87,7 +88,7 @@ async def _handle_wheel_spin_payment(
             await message.answer(
                 texts.t(
                     'STARS_WHEEL_SUBSCRIPTION_REFUND',
-                    '❌ Для использования колеса удачи необходима активная подписка.\n💰 {stars} Stars возвращены на баланс в виде {amount} ₽.',
+                    '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Для использования колеса удачи необходима активная подписка.\n<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> {stars} Stars возвращены на баланс в виде {amount} ₽.',
                 ).format(stars=stars_amount, amount=format(kopeks_fallback / 100, '.0f')),
             )
             logger.warning(
@@ -103,7 +104,10 @@ async def _handle_wheel_spin_payment(
 
         if not prizes:
             await message.answer(
-                texts.t('STARS_WHEEL_NO_PRIZES', '❌ Призы не настроены. Обратитесь в поддержку.'),
+                texts.t(
+                    'STARS_WHEEL_NO_PRIZES',
+                    '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Призы не настроены. Обратитесь в поддержку.',
+                ),
             )
             return False
 
@@ -129,7 +133,7 @@ async def _handle_wheel_spin_payment(
                 await message.answer(
                     texts.t(
                         'STARS_WHEEL_LIMIT_REFUND',
-                        '❌ Достигнут дневной лимит спинов.\n💰 {stars} Stars возвращены на баланс в виде {amount} ₽.',
+                        '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Достигнут дневной лимит спинов.\n<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> {stars} Stars возвращены на баланс в виде {amount} ₽.',
                     ).format(stars=stars_amount, amount=format(kopeks_fallback / 100, '.0f')),
                 )
                 logger.warning(
@@ -168,7 +172,7 @@ async def _handle_wheel_spin_payment(
                 promocode_id = row[0]
 
         logger.info(
-            '🎰 Creating wheel spin',
+            'Creating wheel spin',
             user_id=user.id,
             telegram_id=user.telegram_id,
             display_name=selected_prize.display_name,
@@ -196,13 +200,13 @@ async def _handle_wheel_spin_payment(
             # transaction — rolling back here undoes our duplicate grant entirely.
             await db.rollback()
             logger.info(
-                '🎰 Stars wheel spin duplicate charge id (idempotent skip)',
+                'Stars wheel spin duplicate charge id (idempotent skip)',
                 user_id=user.id,
                 charge_id=charge_id,
             )
             return True
 
-        logger.info('🎰 Wheel spin created', spin_id=spin.id, user_id=spin.user_id)
+        logger.info('Wheel spin created', spin_id=spin.id, user_id=spin.user_id)
 
         # Ensure all changes are committed (subscription days, traffic GB, etc.)
         await db.commit()
@@ -225,11 +229,11 @@ async def _handle_wheel_spin_payment(
             code=html.escape(generated_promocode or ''),
         )
 
-        emoji = selected_prize.emoji or '🎁'
+        emoji = selected_prize.emoji or '<tg-emoji emoji-id="6032937473162614352">🎁</tg-emoji>'
         await message.answer(
             texts.t(
                 'STARS_WHEEL_RESULT',
-                '🎰 <b>Колесо удачи!</b>\n\n{emoji} <b>{prize}</b>\n\n{message}\n\n⭐ Потрачено: {stars} Stars',
+                '<b>Колесо удачи!</b>\n\n{emoji} <b>{prize}</b>\n\n{message}\n\n<tg-emoji emoji-id="5958376256788502078">⭐</tg-emoji> Потрачено: {stars} Stars',
             ).format(
                 emoji=emoji, prize=html.escape(selected_prize.display_name), message=prize_message, stars=stars_amount
             ),
@@ -237,7 +241,7 @@ async def _handle_wheel_spin_payment(
         )
 
         logger.info(
-            '🎰 Wheel spin via Stars',
+            'Wheel spin via Stars',
             user_id=user.id,
             display_name=selected_prize.display_name,
             stars_amount=stars_amount,
@@ -247,7 +251,10 @@ async def _handle_wheel_spin_payment(
     except Exception as e:
         logger.error('Ошибка обработки wheel spin payment', error=e, exc_info=True)
         await message.answer(
-            texts.t('STARS_WHEEL_ERROR', '❌ Произошла ошибка при обработке спина. Обратитесь в поддержку.'),
+            texts.t(
+                'STARS_WHEEL_ERROR',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Произошла ошибка при обработке спина. Обратитесь в поддержку.',
+            ),
         )
         return False
 
@@ -273,7 +280,10 @@ async def _handle_trial_payment(
         if len(parts) < 2:
             logger.error('Невалидный trial payload', payload=payload)
             await message.answer(
-                texts.t('STARS_TRIAL_INVALID_PAYMENT', '❌ Ошибка: неверный формат платежа. Обратитесь в поддержку.'),
+                texts.t(
+                    'STARS_TRIAL_INVALID_PAYMENT',
+                    '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Ошибка: неверный формат платежа. Обратитесь в поддержку.',
+                ),
             )
             return False
 
@@ -282,7 +292,10 @@ async def _handle_trial_payment(
         except ValueError:
             logger.error('Невалидный subscription_id в trial payload', payload=payload)
             await message.answer(
-                texts.t('STARS_TRIAL_INVALID_SUBSCRIPTION', '❌ Ошибка: неверный ID подписки. Обратитесь в поддержку.'),
+                texts.t(
+                    'STARS_TRIAL_INVALID_SUBSCRIPTION',
+                    '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Ошибка: неверный ID подписки. Обратитесь в поддержку.',
+                ),
             )
             return False
 
@@ -296,7 +309,7 @@ async def _handle_trial_payment(
             user_id=user.id,
             type=TransactionType.SUBSCRIPTION_PAYMENT,
             amount_kopeks=amount_kopeks,
-            description=f'Оплата пробной подписки через Telegram Stars ({stars_amount} ⭐)',
+            description=f'Оплата пробной подписки через Telegram Stars ({stars_amount})',
             payment_method=PaymentMethod.TELEGRAM_STARS,
             external_id=f'trial_stars_{subscription_id}',
             is_completed=True,
@@ -328,7 +341,7 @@ async def _handle_trial_payment(
             await message.answer(
                 texts.t(
                     'STARS_TRIAL_ACTIVATION_REFUND',
-                    '❌ Не удалось активировать пробную подписку. Средства возвращены на баланс.',
+                    '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Не удалось активировать пробную подписку. Средства возвращены на баланс.',
                 ),
             )
             return False
@@ -368,7 +381,7 @@ async def _handle_trial_payment(
         await message.answer(
             texts.t(
                 'STARS_TRIAL_ACTIVATED',
-                '🎉 <b>Пробная подписка активирована!</b>\n\n⭐ Потрачено: {stars} Stars\n📅 Период: {days} дней\n📱 Устройств: {devices}\n\nИспользуйте меню для подключения к VPN.',
+                '<tg-emoji emoji-id="5994502837327892086">🎉</tg-emoji> <b>Пробная подписка активирована!</b>\n\n<tg-emoji emoji-id="5958376256788502078">⭐</tg-emoji> Потрачено: {stars} Stars\n<tg-emoji emoji-id="5967412305338568701">📅</tg-emoji> Период: {days} дней\n<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> Устройств: {devices}\n\nИспользуйте меню для подключения к VPN.',
             ).format(
                 stars=stars_amount,
                 days=settings.TRIAL_DURATION_DAYS,
@@ -378,7 +391,7 @@ async def _handle_trial_payment(
         )
 
         logger.info(
-            '✅ Платный триал активирован через Stars',
+            'Платный триал активирован через Stars',
             user_id=user.id,
             subscription_id=subscription.id,
             stars_amount=stars_amount,
@@ -390,7 +403,7 @@ async def _handle_trial_payment(
         await message.answer(
             texts.t(
                 'STARS_TRIAL_ACTIVATION_ERROR',
-                '❌ Произошла ошибка при активации пробной подписки. Обратитесь в поддержку.',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Произошла ошибка при активации пробной подписки. Обратитесь в поддержку.',
             ),
         )
         return False
@@ -417,7 +430,12 @@ async def _handle_guest_purchase_payment(
         purchase_token = payload[len('guest_purchase_') :]
         if not purchase_token or not _PURCHASE_TOKEN_RE.match(purchase_token):
             logger.error('Invalid purchase_token format in guest_purchase payload', payload=payload)
-            await message.answer(texts.t('STARS_GIFT_INVALID_PAYMENT', '❌ Ошибка: неверный формат платежа.'))
+            await message.answer(
+                texts.t(
+                    'STARS_GIFT_INVALID_PAYMENT',
+                    '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Ошибка: неверный формат платежа.',
+                )
+            )
             return
 
         # Verify Stars amount matches expected price (±5% tolerance for conversion rounding)
@@ -432,7 +450,12 @@ async def _handle_guest_purchase_payment(
                     expected_stars=expected_stars,
                     purchase_id=existing.id,
                 )
-                await message.answer(texts.t('STARS_GIFT_AMOUNT_MISMATCH', '❌ Сумма оплаты не совпадает с ожидаемой.'))
+                await message.answer(
+                    texts.t(
+                        'STARS_GIFT_AMOUNT_MISMATCH',
+                        '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Сумма оплаты не совпадает с ожидаемой.',
+                    )
+                )
                 return
 
         # Calculate kopeks from stars
@@ -458,12 +481,12 @@ async def _handle_guest_purchase_payment(
             await message.answer(
                 texts.t(
                     'STARS_GIFT_PAID',
-                    '🎁 <b>Подарочная подписка успешно оплачена!</b>\n\n⭐ Потрачено: {stars} Stars\n\nПодарок будет доставлен получателю.',
+                    '<tg-emoji emoji-id="6032937473162614352">🎁</tg-emoji> <b>Подарочная подписка успешно оплачена!</b>\n\n<tg-emoji emoji-id="5958376256788502078">⭐</tg-emoji> Потрачено: {stars} Stars\n\nПодарок будет доставлен получателю.',
                 ).format(stars=stars_amount),
                 parse_mode='HTML',
             )
             logger.info(
-                '✅ Guest purchase fulfilled via Stars',
+                'Guest purchase fulfilled via Stars',
                 user_id=user.id,
                 stars_amount=stars_amount,
                 purchase_id=existing.id if existing else None,
@@ -471,14 +494,18 @@ async def _handle_guest_purchase_payment(
         else:
             logger.error('try_fulfill_guest_purchase returned None for Stars gift', payload=payload)
             await message.answer(
-                texts.t('STARS_GIFT_PROCESSING_ERROR', '❌ Ошибка обработки платежа. Обратитесь в поддержку.')
+                texts.t(
+                    'STARS_GIFT_PROCESSING_ERROR',
+                    '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Ошибка обработки платежа. Обратитесь в поддержку.',
+                )
             )
 
     except Exception as e:
         logger.error('Error handling guest purchase Stars payment', error=e, exc_info=True)
         await message.answer(
             texts.t(
-                'STARS_GIFT_ERROR', '❌ Произошла ошибка при обработке подарочной подписки. Обратитесь в поддержку.'
+                'STARS_GIFT_ERROR',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Произошла ошибка при обработке подарочной подписки. Обратитесь в поддержку.',
             ),
         )
 
@@ -488,7 +515,7 @@ async def handle_pre_checkout_query(query: types.PreCheckoutQuery):
 
     try:
         logger.info(
-            '📋 Pre-checkout query',
+            'Pre-checkout query',
             from_user_id=query.from_user.id,
             total_amount=query.total_amount,
             invoice_payload=query.invoice_payload,
@@ -535,7 +562,7 @@ async def handle_pre_checkout_query(query: types.PreCheckoutQuery):
             return
 
         await query.answer(ok=True)
-        logger.info('✅ Pre-checkout одобрен для пользователя', from_user_id=query.from_user.id)
+        logger.info('Pre-checkout одобрен для пользователя', from_user_id=query.from_user.id)
 
     except Exception as e:
         logger.error('Ошибка в pre_checkout_query', error=e, exc_info=True)
@@ -556,7 +583,7 @@ async def handle_successful_payment(message: types.Message, db: AsyncSession, st
         user_id = message.from_user.id
 
         logger.info(
-            '💳 Успешный Stars платеж',
+            'Успешный Stars платеж',
             user_id=user_id,
             total_amount=payment.total_amount,
             invoice_payload=payment.invoice_payload,
@@ -571,7 +598,7 @@ async def handle_successful_payment(message: types.Message, db: AsyncSession, st
             await message.answer(
                 texts.t(
                     'STARS_PAYMENT_USER_NOT_FOUND',
-                    '❌ Ошибка: пользователь не найден. Обратитесь в поддержку.',
+                    '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Ошибка: пользователь не найден. Обратитесь в поддержку.',
                 )
             )
             return
@@ -675,7 +702,7 @@ async def handle_successful_payment(message: types.Message, db: AsyncSession, st
             )
 
             logger.info(
-                '✅ Stars платеж успешно обработан',
+                'Stars платеж успешно обработан',
                 user_id=user.id,
                 total_amount=payment.total_amount,
                 format_price=settings.format_price(amount_kopeks),
@@ -685,7 +712,7 @@ async def handle_successful_payment(message: types.Message, db: AsyncSession, st
             await message.answer(
                 texts.t(
                     'STARS_PAYMENT_ENROLLMENT_ERROR',
-                    '❌ Произошла ошибка при зачислении средств. '
+                    '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Произошла ошибка при зачислении средств. '
                     'Обратитесь в поддержку, платеж будет проверен вручную.',
                 )
             )
@@ -695,7 +722,7 @@ async def handle_successful_payment(message: types.Message, db: AsyncSession, st
         await message.answer(
             texts.t(
                 'STARS_PAYMENT_PROCESSING_ERROR',
-                '❌ Техническая ошибка при обработке платежа. Обратитесь в поддержку для решения проблемы.',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Техническая ошибка при обработке платежа. Обратитесь в поддержку для решения проблемы.',
             )
         )
 
@@ -705,4 +732,4 @@ def register_stars_handlers(dp: Dispatcher):
 
     dp.message.register(handle_successful_payment, F.successful_payment)
 
-    logger.info('🌟 Зарегистрированы обработчики Telegram Stars платежей')
+    logger.info('Зарегистрированы обработчики Telegram Stars платежей')

@@ -73,13 +73,16 @@ async def handle_gift_activate(callback: types.CallbackQuery, db_user: User | No
             await callback.message.edit_text(
                 texts.t(
                     'GIFT_ACTIVATION_SELF_CLAIM_ERROR',
-                    '⚠️ Нельзя активировать свой собственный подарок.\nОтправьте код другу!',
+                    '<tg-emoji emoji-id="5881702736843511327">⚠</tg-emoji> Нельзя активировать свой собственный подарок.\nОтправьте код другу!',
                 ),
             )
             return
         except GiftClaimNotActivatableError:
             await callback.message.edit_text(
-                texts.t('GIFT_ACTIVATION_NOT_ACTIVATABLE_ERROR', '❌ Этот подарок невозможно активировать.'),
+                texts.t(
+                    'GIFT_ACTIVATION_NOT_ACTIVATABLE_ERROR',
+                    '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Этот подарок невозможно активировать.',
+                ),
             )
             return
         except GuestPurchaseError as exc:
@@ -129,7 +132,7 @@ async def handle_gift_activate(callback: types.CallbackQuery, db_user: User | No
             compact_blank_lines(
                 texts.t(
                     'GIFT_ACTIVATION_CALLBACK_SUCCESS_TEXT',
-                    '✅ <b>Подарок активирован!</b>\n{tariff_text}\n\nВаша подписка обновлена.',
+                    '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> <b>Подарок активирован!</b>\n{tariff_text}\n\nВаша подписка обновлена.',
                 ).format(
                     tariff_text=tariff_text,
                 )

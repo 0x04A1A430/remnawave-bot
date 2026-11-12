@@ -119,7 +119,7 @@ async def _build_contests_menu_view(db: AsyncSession, db_user) -> tuple[str, typ
         buttons.append(
             [
                 types.InlineKeyboardButton(
-                    text=f'▶️ {title}',
+                    text=f'{title}',
                     callback_data=f'contest_play_{tpl_slug}_{rnd.id}',
                 )
             ]
@@ -138,7 +138,12 @@ async def _build_contests_menu_view(db: AsyncSession, db_user) -> tuple[str, typ
     buttons.append([make_button(text=texts.BACK, callback_data='back_to_menu', style='danger')])
 
     return (
-        compact_blank_lines(texts.t('CONTEST_MENU_TITLE', '🎲 <b>Игры/Конкурсы</b>\nВыберите игру:')),
+        compact_blank_lines(
+            texts.t(
+                'CONTEST_MENU_TITLE',
+                '<tg-emoji emoji-id="5960608239623082921">🎲</tg-emoji> <b>Игры/Конкурсы</b>\nВыберите игру:',
+            )
+        ),
         types.InlineKeyboardMarkup(inline_keyboard=buttons),
     )
 
