@@ -156,7 +156,7 @@ def test_legacy_subscription_settings_offer_no_classic_addons(monkeypatch):
     assert 'subscription_switch_traffic' not in cbs
     assert 'subscription_reset_traffic' not in cbs
     assert 'subscription_change_devices' not in cbs
-    assert 'subscription_manage_devices' in cbs, 'управление устройствами — не докупка, остаётся'
+    assert any(cb.startswith('subscription_manage_devices') for cb in cbs), 'управление устройствами — не докупка, остаётся'
 
 
 def test_classic_subscription_settings_keep_classic_addons(monkeypatch):
