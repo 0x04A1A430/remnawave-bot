@@ -21,4 +21,4 @@ def test_invite_only_settings_are_exposed_in_registration_access_category():
 
     assert enabled.category_key == 'REGISTRATION_ACCESS'
     assert gifts.category_key == 'REGISTRATION_ACCESS'
-    assert enabled.category_label == '🔐 Регистрация и доступ'
+    assert enabled.category_label == 'Регистрация и доступ'

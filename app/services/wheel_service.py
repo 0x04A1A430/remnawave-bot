@@ -333,7 +333,7 @@ class FortuneWheelService:
         # Списываем с баланса
         user.balance_kopeks -= kopeks
         logger.info(
-            'Списано ₽ () с баланса user_id',
+            'Списано с баланса',
             kopeks=round(kopeks / 100, 2),
             spin_cost_stars=config.spin_cost_stars,
             user_id=user.id,
