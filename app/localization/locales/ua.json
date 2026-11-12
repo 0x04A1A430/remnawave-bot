@@ -1711,7 +1711,7 @@
   "WEBHOOK_DEVICE_ADDED": "<b>Новий пристрій</b>\n\n<blockquote>До підписки{tariff_label} підключено новий пристрій:\n{platform} <code>{device}</code></blockquote>",
   "WEBHOOK_DEVICE_DELETED": "<b>Пристрій видалено</b>\n\nПристрій відключено від підписки{tariff_label}: <code>{device}</code>",
   "WEBHOOK_TORRENT_DETECTED": "<b>Виявлено торент</b>\n\nУ вашому підключенні{tariff_label} виявлено торент-трафік. Використання торентів може призвести до обмеження підписки.",
-  "WEBHOOK_CLOSE_BUTTON": "️ Закрити",
+  "WEBHOOK_CLOSE_BUTTON": "Закрити",
   "TRAFFIC_WARNING_ALERT": "<b>Попередження про трафік</b>\n\nВикористано: {used:.1f} / {limit} ГБ ({percent:.0f}%)\n\nВаш ліміт трафіку майже вичерпаний.",
   "LOW_BALANCE_ALERT": "<b>Низький баланс</b>\n\nВаш баланс: {balance} ₽\nПоріг сповіщення: {threshold} ₽\n\nПоповніть баланс, щоб автопродовження підписки пройшло успішно.",
   "SUBSCRIPTION_REVOKE_BTN": "Перевипустити підписку",
