@@ -1946,7 +1946,7 @@
   "WEBHOOK_DEVICE_ADDED": "<tg-emoji emoji-id='5877318502947229960'>💻</tg-emoji> <b>Новое устройство</b>\n\n<blockquote>К подписке{tariff_label} подключено новое устройство:\n{platform} <code>{device}</code></blockquote>",
   "WEBHOOK_DEVICE_DELETED": "<tg-emoji emoji-id=\"5985833664884250583\">📱</tg-emoji> <b>دستگاه حذف شد</b>\n\nدستگاهی از اشتراک{tariff_label} شما حذف شد: <code>{device}</code>",
   "WEBHOOK_TORRENT_DETECTED": "<tg-emoji emoji-id=\"5872829476143894491\">🚫</tg-emoji> <b>تورنت شناسایی شد</b>\n\nترافیک تورنت در اتصال{tariff_label} شما شناسایی شد. استفاده از تورنت ممکن است منجر به محدودیت اشتراک شود.",
-  "WEBHOOK_CLOSE_BUTTON": "✖️ بستن",
+  "WEBHOOK_CLOSE_BUTTON": "بستن",
   "TRAFFIC_WARNING_ALERT": "<tg-emoji emoji-id=\"5881702736843511327\">⚠️</tg-emoji> <b>هشدار ترافیک</b>\n\nاستفاده شده: {used:.1f} / {limit} گیگابایت ({percent:.0f}%)\n\nحد ترافیک شما تقریباً تمام شده است.",
   "LOW_BALANCE_ALERT": "<tg-emoji emoji-id=\"5881702736843511327\">⚠️</tg-emoji> <b>موجودی کم</b>\n\nموجودی شما: {balance} ₽\nآستانه اطلاع‌رسانی: {threshold} ₽\n\nموجودی خود را شارژ کنید تا تمدید خودکار اشتراک با موفقیت انجام شود.",
   "SUBSCRIPTION_REVOKE_BTN": "<tg-emoji emoji-id=\"5839200986022812209\">🔄</tg-emoji> صدور مجدد اشتراک",

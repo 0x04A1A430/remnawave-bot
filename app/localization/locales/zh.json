@@ -1707,7 +1707,7 @@
   "WEBHOOK_DEVICE_ADDED": "<tg-emoji emoji-id='5877318502947229960'>💻</tg-emoji> <b>新设备</b>\n\n<blockquote>订阅{tariff_label}已连接新设备：\n{platform} <code>{device}</code></blockquote>",
   "WEBHOOK_DEVICE_DELETED": "<b>设备已移除</b>\n\n设备已从订阅{tariff_label}中移除：<code>{device}</code>",
   "WEBHOOK_TORRENT_DETECTED": "<b>检测到种子下载</b>\n\n在您的连接{tariff_label}中检测到种子流量。使用种子可能导致订阅受限。",
-  "WEBHOOK_CLOSE_BUTTON": "️ 关闭",
+  "WEBHOOK_CLOSE_BUTTON": "关闭",
   "BALANCE_TOPPED_UP_CART_SUFFICIENT": "余额已充值 {amount}！\n\n当前余额：{balance}\n\n您有一个已保存的购物车，金额为 {cart_total}\n余额足够完成订购。",
   "BALANCE_TOPPED_UP_CART_INSUFFICIENT": "余额已充值 {amount}！\n\n当前余额：{balance}\n\n您有一个已保存的购物车，金额为 {cart_total}\n还差：{missing}",
   "TRAFFIC_WARNING_ALERT": "<b>流量警告</b>\n\n已使用：{used:.1f} / {limit} GB ({percent:.0f}%)\n\n您的流量限制即将用完。",
