@@ -283,7 +283,7 @@ class AutoPaymentVerificationService:
 
         self._task = asyncio.create_task(self._auto_check_loop())
         logger.info(
-            '🔄 Автопроверка пополнений запущена',
+            'Автопроверка пополнений запущена',
             interval_minutes=interval_minutes,
             display_names=display_names,
         )
@@ -339,7 +339,7 @@ class AutoPaymentVerificationService:
                     for method, count in sorted(counts.items(), key=lambda item: method_display_name(item[0]))
                 )
                 logger.info(
-                    '🔄 Автопроверка пополнений: найдено инвойсов', candidates_count=len(candidates), summary=summary
+                    'Автопроверка пополнений: найдено инвойсов', candidates_count=len(candidates), summary=summary
                 )
 
                 for record in candidates:
@@ -371,13 +371,13 @@ class AutoPaymentVerificationService:
 
                     if refreshed.is_paid and not record.is_paid:
                         logger.info(
-                            '✅ отмечен как оплаченный после автопроверки',
+                            'отмечен как оплаченный после автопроверки',
                             method_display_name=method_display_name(refreshed.method),
                             identifier=refreshed.identifier,
                         )
                     elif refreshed.status != record.status:
                         logger.info(
-                            'ℹ️ Статус платежа обновлён',
+                            'Статус платежа обновлён',
                             method_display_name=method_display_name(refreshed.method),
                             identifier=refreshed.identifier,
                             record_status=record.status or '—',

@@ -96,24 +96,35 @@ def _format_claim_link_and_action_buttons(
     buttons: list[list[InlineKeyboardButton]] = [
         [
             InlineKeyboardButton(
-                text=texts.t('GIFT_SEND_BUTTON', '🎁 Отправить подарок'),
+                text=texts.t(
+                    'GIFT_SEND_BUTTON', '<tg-emoji emoji-id="6032937473162614352">🎁</tg-emoji> Отправить подарок'
+                ),
                 url=share_url,
             )
         ]
     ]
 
     if artifacts.bot_claim_url and artifacts.cabinet_claim_url:
-        bot_label = texts.t('GIFT_BOT_CLAIM_LINK_LABEL', '🤖 В Telegram:')
-        cabinet_label = texts.t('GIFT_CABINET_CLAIM_LINK_LABEL', '🌐 В личном кабинете:')
+        bot_label = texts.t(
+            'GIFT_BOT_CLAIM_LINK_LABEL', '<tg-emoji emoji-id="5931415565955503486">🤖</tg-emoji> В Telegram:'
+        )
+        cabinet_label = texts.t(
+            'GIFT_CABINET_CLAIM_LINK_LABEL', '<tg-emoji emoji-id="5879585266426973039">🌐</tg-emoji> В личном кабинете:'
+        )
         claim_link_display = f'{bot_label}\n{artifacts.bot_claim_url}\n\n{cabinet_label}\n{artifacts.cabinet_claim_url}'
         buttons.append(
             [
                 InlineKeyboardButton(
-                    text=texts.t('GIFT_OPEN_BOT_BUTTON', '🤖 Открыть в боте'),
+                    text=texts.t(
+                        'GIFT_OPEN_BOT_BUTTON', '<tg-emoji emoji-id="5931415565955503486">🤖</tg-emoji> Открыть в боте'
+                    ),
                     url=artifacts.bot_claim_url,
                 ),
                 InlineKeyboardButton(
-                    text=texts.t('GIFT_OPEN_CABINET_BUTTON', '🌐 Открыть в кабинете'),
+                    text=texts.t(
+                        'GIFT_OPEN_CABINET_BUTTON',
+                        '<tg-emoji emoji-id="5879585266426973039">🌐</tg-emoji> Открыть в кабинете',
+                    ),
                     url=artifacts.cabinet_claim_url,
                 ),
             ]
@@ -123,7 +134,9 @@ def _format_claim_link_and_action_buttons(
         buttons.append(
             [
                 InlineKeyboardButton(
-                    text=texts.t('GIFT_OPEN_BUTTON', '🔗 Открыть подарок'),
+                    text=texts.t(
+                        'GIFT_OPEN_BUTTON', '<tg-emoji emoji-id="5877465816030515018">🔗</tg-emoji> Открыть подарок'
+                    ),
                     url=artifacts.bot_claim_url,
                 )
             ]
@@ -133,7 +146,9 @@ def _format_claim_link_and_action_buttons(
         buttons.append(
             [
                 InlineKeyboardButton(
-                    text=texts.t('GIFT_OPEN_BUTTON', '🔗 Открыть подарок'),
+                    text=texts.t(
+                        'GIFT_OPEN_BUTTON', '<tg-emoji emoji-id="5877465816030515018">🔗</tg-emoji> Открыть подарок'
+                    ),
                     url=artifacts.cabinet_claim_url,
                 )
             ]
@@ -174,7 +189,7 @@ def build_gift_result_presentation(
     # Localized share text for native Telegram chat-picker (NO financial details, NO standalone token)
     share_text = texts.t(
         'GIFT_SHARE_TEXT',
-        '🎁 Привет! Я дарю тебе подписку на {tariff_name} ({period_days} дн.). Нажми на ссылку, чтобы активировать!',
+        '<tg-emoji emoji-id="6032937473162614352">🎁</tg-emoji> Привет! Я дарю тебе подписку на {tariff_name} ({period_days} дн.). Нажми на ссылку, чтобы активировать!',
     ).format(
         tariff_name=quote.tariff_name,
         period_days=quote.period_days,
@@ -206,25 +221,25 @@ def build_gift_result_presentation(
     if purchase_result.is_idempotent_replay:
         body_template = texts.t(
             'GIFT_PURCHASE_REPLAY_TEXT',
-            '🎁 <b>Подарок уже был оформлен ранее</b>\n\n'
-            '📦 Тариф: <b>{tariff_name}</b>\n'
-            '📅 Период: <b>{period_days} дн.</b>\n'
-            '📊 Трафик: <b>{traffic}</b>\n'
-            '📱 Устройства: <b>{devices}</b>\n\n'
-            '🔑 Код подарка: <code>{public_code}</code>\n\n'
-            '🔗 Ссылка на подарок:\n{claim_link}\n\n'
+            '<tg-emoji emoji-id="6032937473162614352">🎁</tg-emoji> <b>Подарок уже был оформлен ранее</b>\n\n'
+            '<tg-emoji emoji-id="5924720918826848520">📦</tg-emoji> Тариф: <b>{tariff_name}</b>\n'
+            '<tg-emoji emoji-id="5967412305338568701">📅</tg-emoji> Период: <b>{period_days} дн.</b>\n'
+            '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> Трафик: <b>{traffic}</b>\n'
+            '<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> Устройства: <b>{devices}</b>\n\n'
+            '<tg-emoji emoji-id="6005570495603282482">🔑</tg-emoji> Код подарка: <code>{public_code}</code>\n\n'
+            '<tg-emoji emoji-id="5877465816030515018">🔗</tg-emoji> Ссылка на подарок:\n{claim_link}\n\n'
             'Отправьте эту ссылку получателю или воспользуйтесь кнопкой «Отправить подарок» ниже.',
         )
     else:
         body_template = texts.t(
             'GIFT_PURCHASE_SUCCESS_TEXT',
-            '🎁 <b>Подарок успешно оформлен!</b>\n\n'
-            '📦 Тариф: <b>{tariff_name}</b>\n'
-            '📅 Период: <b>{period_days} дн.</b>\n'
-            '📊 Трафик: <b>{traffic}</b>\n'
-            '📱 Устройства: <b>{devices}</b>\n\n'
-            '🔑 Код подарка: <code>{public_code}</code>\n\n'
-            '🔗 Ссылка на подарок:\n{claim_link}\n\n'
+            '<tg-emoji emoji-id="6032937473162614352">🎁</tg-emoji> <b>Подарок успешно оформлен!</b>\n\n'
+            '<tg-emoji emoji-id="5924720918826848520">📦</tg-emoji> Тариф: <b>{tariff_name}</b>\n'
+            '<tg-emoji emoji-id="5967412305338568701">📅</tg-emoji> Период: <b>{period_days} дн.</b>\n'
+            '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> Трафик: <b>{traffic}</b>\n'
+            '<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> Устройства: <b>{devices}</b>\n\n'
+            '<tg-emoji emoji-id="6005570495603282482">🔑</tg-emoji> Код подарка: <code>{public_code}</code>\n\n'
+            '<tg-emoji emoji-id="5877465816030515018">🔗</tg-emoji> Ссылка на подарок:\n{claim_link}\n\n'
             'Отправьте эту ссылку получателю или воспользуйтесь кнопкой «Отправить подарок» ниже. '
             'Получатель сможет активировать подписку в один клик.',
         )
@@ -247,7 +262,9 @@ def build_gift_result_presentation(
                 style='success',
             ),
             InlineKeyboardButton(
-                text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '⬅️ В главное меню'),
+                text=texts.t(
+                    'BACK_TO_MAIN_MENU_BUTTON', '<tg-emoji emoji-id="5875082500023258804">⬅️</tg-emoji> В главное меню'
+                ),
                 callback_data='back_to_menu',
                 style='danger',
             ),
@@ -294,7 +311,7 @@ def build_gift_history_detail_presentation(
     if item.is_claimable:
         share_text = texts.t(
             'GIFT_SHARE_TEXT',
-            '🎁 Привет! Я дарю тебе подписку на {tariff_name} ({period_days} дн.). Нажми на ссылку, чтобы активировать!',
+            '<tg-emoji emoji-id="6032937473162614352">🎁</tg-emoji> Привет! Я дарю тебе подписку на {tariff_name} ({period_days} дн.). Нажми на ссылку, чтобы активировать!',
         ).format(
             tariff_name=item.tariff_name or texts.t('GIFT_TARIFF_DEFAULT_NAME', 'VPN'),
             period_days=item.period_days,
@@ -317,15 +334,15 @@ def build_gift_history_detail_presentation(
 
         body_template = texts.t(
             'GIFT_MY_DETAIL_CLAIMABLE_TEXT',
-            '🎁 <b>Подарок</b>\n\n'
-            '📦 Тариф: <b>{tariff_name}</b>\n'
-            '📅 Период: <b>{period_days} дн.</b>\n'
-            '📊 Трафик: <b>{traffic}</b>\n'
-            '📱 Устройства: <b>{devices}</b>\n'
-            '📋 Статус: <b>{status_text}</b>\n'
-            '📅 Оформлен: <b>{created_at}</b>\n'
-            '🔑 Код подарка: <code>{public_code}</code>\n\n'
-            '🔗 Ссылка на подарок:\n{claim_link}\n\n'
+            '<tg-emoji emoji-id="6032937473162614352">🎁</tg-emoji> <b>Подарок</b>\n\n'
+            '<tg-emoji emoji-id="5924720918826848520">📦</tg-emoji> Тариф: <b>{tariff_name}</b>\n'
+            '<tg-emoji emoji-id="5967412305338568701">📅</tg-emoji> Период: <b>{period_days} дн.</b>\n'
+            '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> Трафик: <b>{traffic}</b>\n'
+            '<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> Устройства: <b>{devices}</b>\n'
+            'Статус: <b>{status_text}</b>\n'
+            '<tg-emoji emoji-id="5967412305338568701">📅</tg-emoji> Оформлен: <b>{created_at}</b>\n'
+            '<tg-emoji emoji-id="6005570495603282482">🔑</tg-emoji> Код подарка: <code>{public_code}</code>\n\n'
+            '<tg-emoji emoji-id="5877465816030515018">🔗</tg-emoji> Ссылка на подарок:\n{claim_link}\n\n'
             'Отправьте эту ссылку или код получателю для активации подписки.',
         )
 
@@ -347,12 +364,14 @@ def build_gift_history_detail_presentation(
             *action_buttons,
             [
                 InlineKeyboardButton(
-                    text=texts.t('GIFT_QR_BUTTON', '📱 QR-код подарка'),
+                    text=texts.t(
+                        'GIFT_QR_BUTTON', '<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> QR-код подарка'
+                    ),
                     callback_data=f'gift_my_qr:{item.purchase_id}',
                     style='primary',
                 ),
                 InlineKeyboardButton(
-                    text=texts.t('GIFT_COPY_TEXT_BUTTON', '📋 Текст для отправки'),
+                    text=texts.t('GIFT_COPY_TEXT_BUTTON', 'Текст для отправки'),
                     callback_data=f'gift_my_text:{item.purchase_id}',
                     style='primary',
                 ),
@@ -367,30 +386,32 @@ def build_gift_history_detail_presentation(
         return text, InlineKeyboardMarkup(inline_keyboard=buttons)
 
     # Delivered / other final state
-    status_text = texts.t('GIFT_STATUS_DELIVERED', '✅ Активирован')
+    status_text = texts.t('GIFT_STATUS_DELIVERED', '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Активирован')
     delivered_line = ''
     if item.delivered_at:
         deliv_str = item.delivered_at.strftime('%d.%m.%Y %H:%M')
-        delivered_line = texts.t('GIFT_MY_DELIVERED_AT_LINE', '🎉 Активирован: <b>{delivered_at}</b>\n').format(
-            delivered_at=deliv_str
-        )
+        delivered_line = texts.t(
+            'GIFT_MY_DELIVERED_AT_LINE',
+            '<tg-emoji emoji-id="5994502837327892086">🎉</tg-emoji> Активирован: <b>{delivered_at}</b>\n',
+        ).format(delivered_at=deliv_str)
 
     recipient_line = ''
     if item.recipient_display:
         escaped_recipient = html.escape(item.recipient_display)
-        recipient_line = texts.t('GIFT_MY_RECIPIENT_LINE', '👤 Получатель: <b>{recipient_display}</b>\n').format(
-            recipient_display=escaped_recipient
-        )
+        recipient_line = texts.t(
+            'GIFT_MY_RECIPIENT_LINE',
+            '<tg-emoji emoji-id="5771887475421090729">👤</tg-emoji> Получатель: <b>{recipient_display}</b>\n',
+        ).format(recipient_display=escaped_recipient)
 
     body_template = texts.t(
         'GIFT_MY_DETAIL_DELIVERED_TEXT',
-        '🎁 <b>Подарок</b>\n\n'
-        '📦 Тариф: <b>{tariff_name}</b>\n'
-        '📅 Период: <b>{period_days} дн.</b>\n'
-        '📊 Трафик: <b>{traffic}</b>\n'
-        '📱 Устройства: <b>{devices}</b>\n'
-        '📋 Статус: <b>{status_text}</b>\n'
-        '📅 Оформлен: <b>{created_at}</b>\n'
+        '<tg-emoji emoji-id="6032937473162614352">🎁</tg-emoji> <b>Подарок</b>\n\n'
+        '<tg-emoji emoji-id="5924720918826848520">📦</tg-emoji> Тариф: <b>{tariff_name}</b>\n'
+        '<tg-emoji emoji-id="5967412305338568701">📅</tg-emoji> Период: <b>{period_days} дн.</b>\n'
+        '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> Трафик: <b>{traffic}</b>\n'
+        '<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> Устройства: <b>{devices}</b>\n'
+        'Статус: <b>{status_text}</b>\n'
+        '<tg-emoji emoji-id="5967412305338568701">📅</tg-emoji> Оформлен: <b>{created_at}</b>\n'
         '{delivered_line}{recipient_line}',
     )
 

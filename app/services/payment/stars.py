@@ -64,7 +64,7 @@ class TelegramStarsMixin:
 
             invoice_link = await self.bot.create_invoice_link(
                 title=texts.t('STARS_INVOICE_TITLE', 'Пополнение баланса VPN'),
-                description=f'{description} (≈{stars_amount} ⭐)',
+                description=f'{description} (≈{stars_amount})',
                 payload=payload or f'balance_topup_{amount_kopeks}',
                 provider_token='',
                 currency='XTR',
@@ -146,9 +146,9 @@ class TelegramStarsMixin:
             )
 
             transaction_description = (
-                f'Оплата подписки через Telegram Stars ({stars_amount} ⭐)'
+                f'Оплата подписки через Telegram Stars ({stars_amount})'
                 if simple_payload
-                else f'Пополнение через Telegram Stars ({stars_amount} ⭐)'
+                else f'Пополнение через Telegram Stars ({stars_amount})'
             )
             transaction_type = TransactionType.SUBSCRIPTION_PAYMENT if simple_payload else TransactionType.DEPOSIT
 
@@ -476,7 +476,10 @@ class TelegramStarsMixin:
                         if _t:
                             tariff_line = (
                                 get_texts(getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE)
-                                .t('PAYMENT_NOTICE_010', '\n📦 Тариф: «{v0}»')
+                                .t(
+                                    'PAYMENT_NOTICE_010',
+                                    '\n<tg-emoji emoji-id="5924720918826848520">📦</tg-emoji> Тариф: «{v0}»',
+                                )
                                 .format(v0=_t.name)
                             )
                     except Exception:
@@ -485,7 +488,7 @@ class TelegramStarsMixin:
                     get_texts(getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE)
                     .t(
                         'PAYMENT_NOTICE_015',
-                        "✅ <b>Подписка успешно активирована!</b>\n\n📅 Период: {v0} дней\n📱 Устройства: {v1}\n📊 Трафик: {v2}\n⭐ Оплата: {v3} ⭐ ({v4}){v5}\n\n🔗 Для подключения перейдите в раздел 'Моя подписка'",
+                        "<tg-emoji emoji-id='5776375003280838798'>✅</tg-emoji> <b>Подписка успешно активирована!</b>\n\n<tg-emoji emoji-id='5967412305338568701'>📅</tg-emoji> Период: {v0} дней\n<tg-emoji emoji-id='5985833664884250583'>📱</tg-emoji> Устройства: {v1}\n<tg-emoji emoji-id='5877485980901971030'>📊</tg-emoji> Трафик: {v2}\n<tg-emoji emoji-id='5958376256788502078'>⭐</tg-emoji> Оплата: {v3} <tg-emoji emoji-id='5958376256788502078'>⭐</tg-emoji> ({v4}){v5}\n\n<tg-emoji emoji-id='5877465816030515018'>🔗</tg-emoji> Для подключения перейдите в раздел 'Моя подписка'",
                     )
                     .format(
                         v0=period_display,
@@ -502,7 +505,8 @@ class TelegramStarsMixin:
                         [
                             types.InlineKeyboardButton(
                                 text=get_texts(getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE).t(
-                                    'MY_SUBSCRIPTION_BUTTON', '📱 Моя подписка'
+                                    'MY_SUBSCRIPTION_BUTTON',
+                                    '<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> Моя подписка',
                                 ),
                                 callback_data='menu_subscription',
                             )
@@ -510,7 +514,8 @@ class TelegramStarsMixin:
                         [
                             types.InlineKeyboardButton(
                                 text=get_texts(getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE).t(
-                                    'MAIN_MENU_BUTTON', '🏠 Главное меню'
+                                    'MAIN_MENU_BUTTON',
+                                    '<tg-emoji emoji-id="5967822972931542886">🏠</tg-emoji> Главное меню',
                                 ),
                                 callback_data='back_to_menu',
                             )
@@ -525,7 +530,7 @@ class TelegramStarsMixin:
                     parse_mode='HTML',
                 )
                 logger.info(
-                    '✅ Пользователь получил уведомление об оплате подписки через Stars', telegram_id=user.telegram_id
+                    'Пользователь получил уведомление об оплате подписки через Stars', telegram_id=user.telegram_id
                 )
             except Exception as error:  # pragma: no cover - диагностический лог
                 from aiogram.exceptions import TelegramForbiddenError, TelegramNetworkError, TelegramServerError
@@ -575,7 +580,7 @@ class TelegramStarsMixin:
             logger.error('Ошибка реферального начисления при покупке подписки через Stars', ref_error=ref_error)
 
         logger.info(
-            '✅ Обработан Stars платеж как покупка подписки',
+            'Обработан Stars платеж как покупка подписки',
             user_id=user.id,
             stars_amount=stars_amount,
             format_price=settings.format_price(amount_kopeks),
@@ -627,8 +632,8 @@ class TelegramStarsMixin:
             description=transaction.description,
         )
 
-        description_for_referral = f'Пополнение Stars: {settings.format_price(amount_kopeks)} ({stars_amount} ⭐)'
-        logger.info('🔍 Проверка реферальной логики для описания', description_for_referral=description_for_referral)
+        description_for_referral = f'Пополнение Stars: {settings.format_price(amount_kopeks)} ({stars_amount})'
+        logger.info('Проверка реферальной логики для описания', description_for_referral=description_for_referral)
 
         lower_description = description_for_referral.lower()
         contains_allowed_keywords = any(
@@ -638,7 +643,7 @@ class TelegramStarsMixin:
         allow_referral = contains_allowed_keywords and not contains_forbidden_keywords
 
         if allow_referral:
-            logger.info('🔞 Вызов process_referral_topup для пользователя', user_id=user.id)
+            logger.info('Вызов process_referral_topup для пользователя', user_id=user.id)
             try:
                 from app.services.referral_service import process_referral_topup
 
@@ -652,7 +657,7 @@ class TelegramStarsMixin:
                 logger.error('Ошибка обработки реферального пополнения', error=error)
         else:
             logger.info(
-                '❌ Описание не подходит для реферальной логики', description_for_referral=description_for_referral
+                'Описание не подходит для реферальной логики', description_for_referral=description_for_referral
             )
 
         if was_first_topup and not user.has_made_first_topup and not user.referred_by_id:
@@ -662,7 +667,7 @@ class TelegramStarsMixin:
         await db.refresh(user)
 
         logger.info(
-            '💰 Баланс пользователя изменен: → (Δ +)',
+            'Баланс пользователя изменен: → (Δ +)',
             telegram_id=user.telegram_id,
             old_balance=old_balance,
             balance_kopeks=user.balance_kopeks,
@@ -698,7 +703,7 @@ class TelegramStarsMixin:
             )
 
         logger.info(
-            '✅ Обработан Stars платеж',
+            'Обработан Stars платеж',
             user_id=user.id,
             stars_amount=stars_amount,
             format_price=settings.format_price(amount_kopeks),

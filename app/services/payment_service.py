@@ -1591,7 +1591,7 @@ class PaymentService(
             try:
                 invoice_url = await self.bot.create_invoice_link(
                     title='Подарочная подписка VPN',
-                    description=f'{description} ({stars_amount} ⭐)',
+                    description=f'{description} ({stars_amount})',
                     payload=payload,
                     provider_token='',
                     currency='XTR',

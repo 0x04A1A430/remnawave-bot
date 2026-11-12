@@ -702,7 +702,7 @@ class YooKassaPaymentMixin:
                                                 get_texts(getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE)
                                                 .t(
                                                     'PAYMENT_NOTICE_012',
-                                                    '🎉 <b>Пробная подписка активирована!</b>\n\n💳 Оплачено: {v0}\n📅 Период: {v1} дней\n📱 Устройств: {v2}\n\nИспользуйте меню для подключения к VPN.',
+                                                    '<tg-emoji emoji-id="5994502837327892086">🎉</tg-emoji> <b>Пробная подписка активирована!</b>\n\n<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> Оплачено: {v0}\n<tg-emoji emoji-id="5967412305338568701">📅</tg-emoji> Период: {v1} дней\n<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> Устройств: {v2}\n\nИспользуйте меню для подключения к VPN.',
                                                 )
                                                 .format(
                                                     v0=settings.format_price(payment.amount_kopeks),
@@ -1018,7 +1018,10 @@ class YooKassaPaymentMixin:
                                         if _t:
                                             tariff_line = (
                                                 get_texts(getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE)
-                                                .t('PAYMENT_NOTICE_010', '\n📦 Тариф: «{v0}»')
+                                                .t(
+                                                    'PAYMENT_NOTICE_010',
+                                                    '\n<tg-emoji emoji-id="5924720918826848520">📦</tg-emoji> Тариф: «{v0}»',
+                                                )
                                                 .format(v0=_t.name)
                                             )
                                     except Exception:
@@ -1027,7 +1030,7 @@ class YooKassaPaymentMixin:
                                     get_texts(getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE)
                                     .t(
                                         'PAYMENT_NOTICE_009',
-                                        "✅ <b>Подписка успешно активирована!</b>\n\n📅 Период: {v0} дней\n📱 Устройства: 1\n📊 Трафик: Безлимит\n💳 Оплата: {v1} (YooKassa){v2}\n\n🔗 Для подключения перейдите в раздел 'Моя подписка'",
+                                        "<tg-emoji emoji-id='5776375003280838798'>✅</tg-emoji> <b>Подписка успешно активирована!</b>\n\n<tg-emoji emoji-id='5967412305338568701'>📅</tg-emoji> Период: {v0} дней\n<tg-emoji emoji-id='5985833664884250583'>📱</tg-emoji> Устройства: 1\n<tg-emoji emoji-id='5877485980901971030'>📊</tg-emoji> Трафик: Безлимит\n<tg-emoji emoji-id='5967548335542767952'>💳</tg-emoji> Оплата: {v1} (YooKassa){v2}\n\n<tg-emoji emoji-id='5877465816030515018'>🔗</tg-emoji> Для подключения перейдите в раздел 'Моя подписка'",
                                     )
                                     .format(
                                         v0=subscription_period,
@@ -1042,7 +1045,10 @@ class YooKassaPaymentMixin:
                                             types.InlineKeyboardButton(
                                                 text=get_texts(
                                                     getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE
-                                                ).t('MY_SUBSCRIPTION_BUTTON', '📱 Моя подписка'),
+                                                ).t(
+                                                    'MY_SUBSCRIPTION_BUTTON',
+                                                    '<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> Моя подписка',
+                                                ),
                                                 callback_data='menu_subscription',
                                             )
                                         ],
@@ -1050,7 +1056,10 @@ class YooKassaPaymentMixin:
                                             types.InlineKeyboardButton(
                                                 text=get_texts(
                                                     getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE
-                                                ).t('MAIN_MENU_BUTTON', '🏠 Главное меню'),
+                                                ).t(
+                                                    'MAIN_MENU_BUTTON',
+                                                    '<tg-emoji emoji-id="5967822972931542886">🏠</tg-emoji> Главное меню',
+                                                ),
                                                 callback_data='back_to_menu',
                                             )
                                         ],

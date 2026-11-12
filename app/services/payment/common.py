@@ -93,7 +93,7 @@ class PaymentCommonMixin:
                 get_texts(getattr(user_snapshot, 'language', None) or settings.DEFAULT_LANGUAGE)
                 .t(
                     'PAYMENT_NOTICE_018',
-                    '✅ <b>Платеж успешно завершен!</b>\n\n💰 Сумма: {v0}\n💳 Способ: {v1}\n\nСредства зачислены на ваш баланс!',
+                    '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> <b>Платеж успешно завершен!</b>\n\n<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> Сумма: {v0}\n<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> Способ: {v1}\n\nСредства зачислены на ваш баланс!',
                 )
                 .format(v0=settings.format_price(amount_kopeks), v1=payment_method)
             )

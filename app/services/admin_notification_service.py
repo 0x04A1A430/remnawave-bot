@@ -1579,7 +1579,10 @@ class AdminNotificationService:
 
         try:
             title = (
-                texts.t('ADMIN_NOTIFY_082', '⚙ АВТОМАТИЧЕСКАЯ СМЕНА ПРОМОГРУППЫ')
+                texts.t(
+                    'ADMIN_NOTIFY_082',
+                    '<tg-emoji emoji-id="5877260593903177342">⚙</tg-emoji> АВТОМАТИЧЕСКАЯ СМЕНА ПРОМОГРУППЫ',
+                )
                 if automatic
                 else texts.t('ADMIN_NOTIFY_083', 'СМЕНА ПРОМОГРУППЫ')
             )
@@ -1589,7 +1592,10 @@ class AdminNotificationService:
                     v0=html.escape(initiator.full_name), v1=initiator.telegram_id
                 )
             elif automatic:
-                initiator_line = texts.t('ADMIN_NOTIFY_133', '⚙ Автоматическое назначение')
+                initiator_line = texts.t(
+                    'ADMIN_NOTIFY_133',
+                    '<tg-emoji emoji-id="5877260593903177342">⚙</tg-emoji> Автоматическое назначение',
+                )
             user_display = self._get_user_display(user)
             user_id_label = self._get_user_identifier_label(user)
             user_id_display = self._get_user_identifier_display(user)
@@ -2072,7 +2078,9 @@ class AdminNotificationService:
             'anore': f'¤ {settings.get_anore_display_name()}',
             'tabpay': f'¤ {settings.get_tabpay_display_name()}',
             'paritypay': f'¤ {settings.get_paritypay_display_name()}',
-            'manual': texts.t('ADMIN_NOTIFY_031', '⚙ Вручную (админ)'),
+            'manual': texts.t(
+                'ADMIN_NOTIFY_031', '<tg-emoji emoji-id="5877260593903177342">⚙</tg-emoji> Вручную (админ)'
+            ),
             'balance': texts.t('ADMIN_NOTIFY_025', '¤ С баланса'),
         }
 
@@ -2128,7 +2136,7 @@ class AdminNotificationService:
                     icon = '⚠'
                     title = texts.t('ADMIN_NOTIFY_144', 'АВТОМАТИЧЕСКОЕ ВКЛЮЧЕНИЕ ТЕХРАБОТ')
                 else:
-                    icon = '⚙'
+                    icon = '<tg-emoji emoji-id="5877260593903177342">⚙</tg-emoji>'
                     title = texts.t('ADMIN_NOTIFY_145', 'ВКЛЮЧЕНИЕ ТЕХРАБОТ')
 
             elif event_type == 'disable':
@@ -2173,7 +2181,10 @@ class AdminNotificationService:
                     )
 
                 message_parts.append(
-                    texts.t('ADMIN_NOTIFY_147', '⚙ <b>Автоматически:</b> {v0}').format(
+                    texts.t(
+                        'ADMIN_NOTIFY_147',
+                        '<tg-emoji emoji-id="5877260593903177342">⚙</tg-emoji> <b>Автоматически:</b> {v0}',
+                    ).format(
                         v0=texts.t('ADMIN_BACKUP_UI_034', 'Да')
                         if details.get('auto_enabled', False)
                         else texts.t('ADMIN_BACKUP_UI_035', 'Нет')
@@ -2209,7 +2220,10 @@ class AdminNotificationService:
                         )
 
                 message_parts.append(
-                    texts.t('ADMIN_NOTIFY_189', '⚙ <b>Было автоматическим:</b> {v0}').format(
+                    texts.t(
+                        'ADMIN_NOTIFY_189',
+                        '<tg-emoji emoji-id="5877260593903177342">⚙</tg-emoji> <b>Было автоматическим:</b> {v0}',
+                    ).format(
                         v0=texts.t('ADMIN_BACKUP_UI_034', 'Да')
                         if details.get('was_auto', False)
                         else texts.t('ADMIN_BACKUP_UI_035', 'Нет')
@@ -2272,7 +2286,10 @@ class AdminNotificationService:
                             else texts.t('ADMIN_MAINTENANCE_044', 'Отключено')
                         )
                         message_parts.append(
-                            texts.t('ADMIN_NOTIFY_228', '⚙ <b>Автовключение:</b> {v0}').format(v0=auto_enable)
+                            texts.t(
+                                'ADMIN_NOTIFY_228',
+                                '<tg-emoji emoji-id="5877260593903177342">⚙</tg-emoji> <b>Автовключение:</b> {v0}',
+                            ).format(v0=auto_enable)
                         )
 
                     if details.get('max_failures'):
@@ -2322,7 +2339,7 @@ class AdminNotificationService:
                     'alert_type': 'warning',
                 },
                 'maintenance': {
-                    'icon': '⚙',
+                    'icon': '<tg-emoji emoji-id="5877260593903177342">⚙</tg-emoji>',
                     'title': texts.t('ADMIN_NOTIFY_152', 'ПАНЕЛЬ REMNAWAVE НА ОБСЛУЖИВАНИИ'),
                     'alert_type': 'info',
                 },
@@ -2399,9 +2416,10 @@ class AdminNotificationService:
             elif status == 'maintenance':
                 if details.get('maintenance_reason'):
                     message_parts.append(
-                        texts.t('ADMIN_NOTIFY_222', '⚙ <b>Причина:</b> {v0}').format(
-                            v0=html.escape(details['maintenance_reason'])
-                        )
+                        texts.t(
+                            'ADMIN_NOTIFY_222',
+                            '<tg-emoji emoji-id="5877260593903177342">⚙</tg-emoji> <b>Причина:</b> {v0}',
+                        ).format(v0=html.escape(details['maintenance_reason']))
                     )
 
                 if details.get('estimated_duration'):

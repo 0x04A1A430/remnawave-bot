@@ -725,11 +725,20 @@ class PlategaPaymentMixin:
 
             texts = get_texts(user.language)
             messages = {
-                'confirmed': texts.t('SBP_RECURRING_NOTIFY_CONFIRMED', '✅ Подписка продлена автосписанием через СБП.'),
+                'confirmed': texts.t(
+                    'SBP_RECURRING_NOTIFY_CONFIRMED',
+                    '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Подписка продлена автосписанием через СБП.',
+                ),
                 'failed': texts.t('SBP_RECURRING_NOTIFY_FAILED', '⚠️ Не удалось списать оплату по СБП-автопродлению.'),
                 'past_due': texts.t('SBP_RECURRING_NOTIFY_PAST_DUE', '⚠️ СБП-автопродление просрочено.'),
-                'cancelled': texts.t('SBP_RECURRING_NOTIFY_CANCELLED', 'ℹ️ СБП-автопродление отменено.'),
-                'activated': texts.t('SBP_RECURRING_NOTIFY_ACTIVATED', '✅ СБП-автопродление активировано.'),
+                'cancelled': texts.t(
+                    'SBP_RECURRING_NOTIFY_CANCELLED',
+                    '<tg-emoji emoji-id="5879785854284599288">ℹ️</tg-emoji> СБП-автопродление отменено.',
+                ),
+                'activated': texts.t(
+                    'SBP_RECURRING_NOTIFY_ACTIVATED',
+                    '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> СБП-автопродление активировано.',
+                ),
             }
             text = messages.get(kind)
             if text:
@@ -1094,7 +1103,7 @@ class PlategaPaymentMixin:
                         get_texts(getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE)
                         .t(
                             'PAYMENT_NOTICE_007',
-                            '✅ <b>Пополнение успешно!</b>\n\n💰 Сумма: {v0}\n🦊 Способ: {v1}\n🆔 Транзакция: {v2}\n\nБаланс пополнен автоматически!',
+                            '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> <b>Пополнение успешно!</b>\n\n<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> Сумма: {v0}\nСпособ: {v1}\nТранзакция: {v2}\n\nБаланс пополнен автоматически!',
                         )
                         .format(v0=settings.format_price(payment.amount_kopeks), v1=method_title, v2=transaction.id)
                     ),
@@ -1130,7 +1139,7 @@ class PlategaPaymentMixin:
         )
 
         logger.info(
-            '✅ Обработан Platega платеж для пользователя',
+            'Обработан Platega платеж для пользователя',
             correlation_id=payment.correlation_id,
             user_id=payment.user_id,
         )

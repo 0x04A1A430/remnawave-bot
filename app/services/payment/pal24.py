@@ -494,7 +494,7 @@ class Pal24PaymentMixin:
                         get_texts(getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE)
                         .t(
                             'PAYMENT_NOTICE_008',
-                            '✅ <b>Пополнение успешно!</b>\n\n💰 Сумма: {v0}\n🦊 Способ: PayPalych\n🆔 Транзакция: {v1}\n\nБаланс пополнен автоматически!',
+                            '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> <b>Пополнение успешно!</b>\n\n<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> Сумма: {v0}\nСпособ: PayPalych\nТранзакция: {v1}\n\nБаланс пополнен автоматически!',
                         )
                         .format(v0=settings.format_price(payment.amount_kopeks), v1=transaction.id)
                     ),
@@ -514,7 +514,7 @@ class Pal24PaymentMixin:
             )
 
         logger.info(
-            '✅ Обработан Pal24 платеж для пользователя',
+            'Обработан Pal24 платеж для пользователя',
             bill_id=payment.bill_id,
             user_id=payment.user_id,
             trigger=trigger,

@@ -161,7 +161,7 @@ async def _prepare_auto_purchase(
     period_days = int(cart_data.get('period_days') or 0)
     if period_days <= 0:
         logger.info(
-            '🔁 Автопокупка: у пользователя нет корректного периода в сохранённой корзине',
+            'Автопокупка: у пользователя нет корректного периода в сохранённой корзине',
             format_user_id=_format_user_id(user),
         )
         return None
@@ -178,7 +178,7 @@ async def _prepare_auto_purchase(
     period_config = context.period_map.get(f'days:{period_days}')
     if not period_config:
         logger.warning(
-            '🔁 Автопокупка: период дней недоступен для пользователя',
+            'Автопокупка: период дней недоступен для пользователя',
             period_days=period_days,
             format_user_id=_format_user_id(user),
         )
@@ -289,7 +289,7 @@ async def _prepare_auto_extend_context(
             parsed_sub_id = _safe_int(saved_subscription_id, subscription.id)
             if parsed_sub_id != subscription.id:
                 logger.warning(
-                    '🔁 Автопокупка: сохранённая подписка не совпадает с текущей у пользователя',
+                    'Автопокупка: сохранённая подписка не совпадает с текущей у пользователя',
                     saved_subscription_id=parsed_sub_id,
                     subscription_id=subscription.id,
                     format_user_id=_format_user_id(user),
@@ -298,7 +298,7 @@ async def _prepare_auto_extend_context(
 
     if subscription is None:
         logger.info(
-            '🔁 Автопокупка: у пользователя нет активной подписки для продления', format_user_id=_format_user_id(user)
+            'Автопокупка: у пользователя нет активной подписки для продления', format_user_id=_format_user_id(user)
         )
         return None
 
@@ -320,7 +320,7 @@ async def _prepare_auto_extend_context(
     # Block auto-renewal of classic subscriptions when tariff mode is enabled
     if settings.is_tariffs_mode() and not subscription.tariff_id:
         logger.info(
-            '🔁 Автопокупка: пропускаем классическую подписку без тарифа (режим тарифов включён)',
+            'Автопокупка: пропускаем классическую подписку без тарифа (режим тарифов включён)',
             format_user_id=_format_user_id(user),
             subscription_id=subscription.id,
         )
@@ -330,7 +330,7 @@ async def _prepare_auto_extend_context(
 
     if period_days <= 0:
         logger.warning(
-            '🔁 Автопокупка: некорректное количество дней продления у пользователя',
+            'Автопокупка: некорректное количество дней продления у пользователя',
             period_days=period_days,
             format_user_id=_format_user_id(user),
         )
@@ -352,7 +352,7 @@ async def _prepare_auto_extend_context(
         # Operator-deactivated target tariff must not silently keep billing — #595885
         if _tariff is not None and not _tariff.is_active:
             logger.warning(
-                '🔁 Автопокупка: целевой тариф отключён администратором — пропускаем',
+                'Автопокупка: целевой тариф отключён администратором — пропускаем',
                 tariff_id=tariff_id,
                 format_user_id=_format_user_id(user),
             )
@@ -361,7 +361,7 @@ async def _prepare_auto_extend_context(
             available_periods = [int(p) for p in _tariff.period_prices.keys()]
             if period_days not in available_periods:
                 logger.warning(
-                    '🔁 Автопокупка: period_days из корзины не входит в доступные периоды тарифа',
+                    'Автопокупка: period_days из корзины не входит в доступные периоды тарифа',
                     period_days=period_days,
                     available_periods=available_periods,
                     tariff_id=tariff_id,
@@ -374,7 +374,7 @@ async def _prepare_auto_extend_context(
         available_periods = _settings.get_available_renewal_periods()
         if period_days not in available_periods:
             logger.warning(
-                '🔁 Автопокупка: period_days из корзины не входит в доступные периоды продления',
+                'Автопокупка: period_days из корзины не входит в доступные периоды продления',
                 period_days=period_days,
                 available_periods=available_periods,
                 format_user_id=_format_user_id(user),
@@ -402,7 +402,7 @@ async def _prepare_auto_extend_context(
 
     if price_kopeks <= 0 and pricing.original_total <= 0:
         logger.warning(
-            '🔁 Автопокупка: некорректная цена продления у пользователя',
+            'Автопокупка: некорректная цена продления у пользователя',
             price_kopeks=price_kopeks,
             format_user_id=_format_user_id(user),
         )
@@ -555,7 +555,7 @@ async def _auto_extend_subscription(
         prepared = await _prepare_auto_extend_context(db, user, cart_data)
     except Exception as error:  # pragma: no cover - defensive logging
         logger.error(
-            '❌ Автопокупка: ошибка подготовки данных продления для пользователя',
+            'Автопокупка: ошибка подготовки данных продления для пользователя',
             format_user_id=_format_user_id(user),
             error=error,
             exc_info=True,
@@ -567,7 +567,7 @@ async def _auto_extend_subscription(
 
     if prepared.price_kopeks > 0 and user.balance_kopeks < prepared.price_kopeks:
         logger.info(
-            '🔁 Автопокупка: у пользователя недостаточно средств для продления (<)',
+            'Автопокупка: у пользователя недостаточно средств для продления (<)',
             format_user_id=_format_user_id(user),
             balance_kopeks=user.balance_kopeks,
             price_kopeks=prepared.price_kopeks,
@@ -723,12 +723,12 @@ async def _auto_extend_subscription(
         try:
             auto_message = texts.t(
                 'AUTO_PURCHASE_SUBSCRIPTION_EXTENDED',
-                '✅ Subscription automatically extended for {period}.',
+                '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Subscription automatically extended for {period}.',
             ).format(period=period_label)
             if settings.is_multi_tariff_enabled() and prepared.tariff_name:
                 auto_message += (
                     get_texts(getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE)
-                    .t('PAYMENT_NOTICE_010', '\n📦 Тариф: «{v0}»')
+                    .t('PAYMENT_NOTICE_010', '\n<tg-emoji emoji-id="5924720918826848520">📦</tg-emoji> Тариф: «{v0}»')
                     .format(v0=prepared.tariff_name)
                 )
             details_message = texts.t(
@@ -748,13 +748,19 @@ async def _auto_extend_subscription(
                 inline_keyboard=[
                     [
                         InlineKeyboardButton(
-                            text=texts.t('MY_SUBSCRIPTION_BUTTON', '📱 My subscription'),
+                            text=texts.t(
+                                'MY_SUBSCRIPTION_BUTTON',
+                                '<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> My subscription',
+                            ),
                             callback_data='menu_subscription',
                         )
                     ],
                     [
                         InlineKeyboardButton(
-                            text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '🏠 Main menu'),
+                            text=texts.t(
+                                'BACK_TO_MAIN_MENU_BUTTON',
+                                '<tg-emoji emoji-id="5967822972931542886">🏠</tg-emoji> Main menu',
+                            ),
                             callback_data='back_to_menu',
                             style='danger',
                         )
@@ -780,7 +786,7 @@ async def _auto_extend_subscription(
     await _notify_email_user_auto_purchase(user, updated_subscription, prepared.tariff_name, renewed=not was_trial)
 
     logger.info(
-        '✅ Автопокупка: подписка продлена на дней для пользователя',
+        'Автопокупка: подписка продлена на дней для пользователя',
         period_days=prepared.period_days,
         format_user_id=_format_user_id(user),
     )
@@ -845,7 +851,7 @@ async def _auto_purchase_tariff(
 
     if not tariff_id or period_days <= 0:
         logger.warning(
-            '🔁 Автопокупка тарифа: некорректные данные корзины для пользователя',
+            'Автопокупка тарифа: некорректные данные корзины для пользователя',
             format_user_id=_format_user_id(user),
             tariff_id=tariff_id,
             period_days=period_days,
@@ -857,7 +863,7 @@ async def _auto_purchase_tariff(
     tariff_name_for_label = tariff.name if tariff else None
     if not tariff or not tariff.is_active:
         logger.warning(
-            '🔁 Автопокупка тарифа: тариф недоступен для пользователя',
+            'Автопокупка тарифа: тариф недоступен для пользователя',
             tariff_id=tariff_id,
             format_user_id=_format_user_id(user),
         )
@@ -878,7 +884,7 @@ async def _auto_purchase_tariff(
         )
         if period_days not in available_periods and not custom_days_allowed:
             logger.warning(
-                '🔁 Автопокупка тарифа: period_days не входит в доступные периоды тарифа',
+                'Автопокупка тарифа: period_days не входит в доступные периоды тарифа',
                 tariff_id=tariff_id,
                 period_days=period_days,
                 available_periods=available_periods,
@@ -1046,7 +1052,7 @@ async def _auto_purchase_tariff(
 
     if final_price > 0 and user.balance_kopeks < final_price:
         logger.info(
-            '🔁 Автопокупка тарифа: у пользователя недостаточно средств (<)',
+            'Автопокупка тарифа: у пользователя недостаточно средств (<)',
             format_user_id=_format_user_id(user),
             balance_kopeks=user.balance_kopeks,
             final_price=final_price,
@@ -1089,7 +1095,7 @@ async def _auto_purchase_tariff(
         )
         if not success:
             logger.warning(
-                '❌ Автопокупка тарифа: не удалось списать баланс пользователя', format_user_id=_format_user_id(user)
+                'Автопокупка тарифа: не удалось списать баланс пользователя', format_user_id=_format_user_id(user)
             )
             return False
         transaction = await create_transaction(
@@ -1108,7 +1114,7 @@ async def _auto_purchase_tariff(
         transaction_id = transaction.id
     except Exception as error:
         logger.error(
-            '❌ Автопокупка тарифа: ошибка списания баланса пользователя',
+            'Автопокупка тарифа: ошибка списания баланса пользователя',
             user_id=purchase_user_id,
             error=error,
             exc_info=True,
@@ -1154,7 +1160,7 @@ async def _auto_purchase_tariff(
             was_trial_conversion = bool(getattr(subscription, '_converted_from_trial', False))
     except Exception as error:
         logger.error(
-            '❌ Автопокупка тарифа: ошибка создания подписки для пользователя',
+            'Автопокупка тарифа: ошибка создания подписки для пользователя',
             format_user_id=_format_user_id(user),
             error=error,
             exc_info=True,
@@ -1296,12 +1302,12 @@ async def _auto_purchase_tariff(
 
             message = texts.t(
                 'AUTO_PURCHASE_SUBSCRIPTION_SUCCESS',
-                '✅ Подписка на {period} автоматически оформлена после пополнения баланса.',
+                '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Подписка на {period} автоматически оформлена после пополнения баланса.',
             ).format(period=period_label)
             if settings.is_multi_tariff_enabled() and tariff_name_for_label:
                 message += (
                     get_texts(getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE)
-                    .t('PAYMENT_NOTICE_010', '\n📦 Тариф: «{v0}»')
+                    .t('PAYMENT_NOTICE_010', '\n<tg-emoji emoji-id="5924720918826848520">📦</tg-emoji> Тариф: «{v0}»')
                     .format(v0=tariff_name_for_label)
                 )
 
@@ -1314,13 +1320,19 @@ async def _auto_purchase_tariff(
                 inline_keyboard=[
                     [
                         InlineKeyboardButton(
-                            text=texts.t('MY_SUBSCRIPTION_BUTTON', '📱 Моя подписка'),
+                            text=texts.t(
+                                'MY_SUBSCRIPTION_BUTTON',
+                                '<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> Моя подписка',
+                            ),
                             callback_data='menu_subscription',
                         )
                     ],
                     [
                         InlineKeyboardButton(
-                            text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '🏠 Главное меню'),
+                            text=texts.t(
+                                'BACK_TO_MAIN_MENU_BUTTON',
+                                '<tg-emoji emoji-id="5967822972931542886">🏠</tg-emoji> Главное меню',
+                            ),
                             callback_data='back_to_menu',
                             style='danger',
                         )
@@ -1347,7 +1359,7 @@ async def _auto_purchase_tariff(
     )
 
     logger.info(
-        '✅ Автопокупка тарифа: подписка на тариф (дней) оформлена для пользователя',
+        'Автопокупка тарифа: подписка на тариф (дней) оформлена для пользователя',
         tariff_name=tariff.name,
         period_days=period_days,
         format_user_id=_format_user_id(user),
@@ -1405,7 +1417,7 @@ async def _auto_purchase_daily_tariff(
     tariff_id = _safe_int(cart_data.get('tariff_id'))
     if not tariff_id:
         logger.warning(
-            '🔁 Автопокупка суточного тарифа: нет tariff_id в корзине пользователя',
+            'Автопокупка суточного тарифа: нет tariff_id в корзине пользователя',
             format_user_id=_format_user_id(user),
         )
         return False
@@ -1413,7 +1425,7 @@ async def _auto_purchase_daily_tariff(
     tariff = await get_tariff_by_id(db, tariff_id)
     if not tariff or not tariff.is_active:
         logger.warning(
-            '🔁 Автопокупка суточного тарифа: тариф недоступен для пользователя',
+            'Автопокупка суточного тарифа: тариф недоступен для пользователя',
             tariff_id=tariff_id,
             format_user_id=_format_user_id(user),
         )
@@ -1421,7 +1433,7 @@ async def _auto_purchase_daily_tariff(
 
     if not getattr(tariff, 'is_daily', False):
         logger.warning(
-            '🔁 Автопокупка суточного тарифа: тариф не является суточным для пользователя',
+            'Автопокупка суточного тарифа: тариф не является суточным для пользователя',
             tariff_id=tariff_id,
             format_user_id=_format_user_id(user),
         )
@@ -1430,7 +1442,7 @@ async def _auto_purchase_daily_tariff(
     daily_price = getattr(tariff, 'daily_price_kopeks', 0)
     if daily_price <= 0:
         logger.warning(
-            '🔁 Автопокупка суточного тарифа: некорректная цена тарифа для пользователя',
+            'Автопокупка суточного тарифа: некорректная цена тарифа для пользователя',
             tariff_id=tariff_id,
             format_user_id=_format_user_id(user),
         )
@@ -1512,7 +1524,7 @@ async def _auto_purchase_daily_tariff(
 
     if final_price > 0 and user.balance_kopeks < final_price:
         logger.info(
-            '🔁 Автопокупка суточного тарифа: у пользователя недостаточно средств (<)',
+            'Автопокупка суточного тарифа: у пользователя недостаточно средств (<)',
             format_user_id=_format_user_id(user),
             balance_kopeks=user.balance_kopeks,
             final_price=final_price,
@@ -1662,7 +1674,7 @@ async def _auto_purchase_daily_tariff(
                 get_texts(getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE)
                 .t(
                     'DAILY_NOTICE_006',
-                    '✅ <b>Суточный тариф «{v0}» активирован!</b>\n\n💰 Списано: {v1:.0f} ₽ за первый день\n🔄 Средства будут списываться автоматически раз в сутки.\n\nℹ️ Вы можете приостановить подписку в любой момент.',
+                    '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> <b>Суточный тариф «{v0}» активирован!</b>\n\n<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> Списано: {v1:.0f} ₽ за первый день\n<tg-emoji emoji-id="5839200986022812209">🔄</tg-emoji> Средства будут списываться автоматически раз в сутки.\n\n<tg-emoji emoji-id="5879785854284599288">ℹ️</tg-emoji> Вы можете приостановить подписку в любой момент.',
                 )
                 .format(v0=html.escape(tariff.name), v1=final_price / 100)
             )
@@ -1671,13 +1683,19 @@ async def _auto_purchase_daily_tariff(
                 inline_keyboard=[
                     [
                         InlineKeyboardButton(
-                            text=texts.t('MY_SUBSCRIPTION_BUTTON', '📱 Моя подписка'),
+                            text=texts.t(
+                                'MY_SUBSCRIPTION_BUTTON',
+                                '<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> Моя подписка',
+                            ),
                             callback_data='menu_subscription',
                         )
                     ],
                     [
                         InlineKeyboardButton(
-                            text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '🏠 Главное меню'),
+                            text=texts.t(
+                                'BACK_TO_MAIN_MENU_BUTTON',
+                                '<tg-emoji emoji-id="5967822972931542886">🏠</tg-emoji> Главное меню',
+                            ),
                             callback_data='back_to_menu',
                             style='danger',
                         )
@@ -1704,7 +1722,7 @@ async def _auto_purchase_daily_tariff(
     )
 
     logger.info(
-        '✅ Автопокупка суточного тарифа: тариф активирован для пользователя',
+        'Автопокупка суточного тарифа: тариф активирован для пользователя',
         tariff_name=tariff.name,
         format_user_id=_format_user_id(user),
     )
@@ -1757,7 +1775,7 @@ async def _auto_add_devices(
 
     if devices_to_add <= 0 or cart_price_kopeks <= 0:
         logger.warning(
-            '🔁 Автопокупка устройств: некорректные данные корзины для пользователя',
+            'Автопокупка устройств: некорректные данные корзины для пользователя',
             format_user_id=_format_user_id(user),
             devices_to_add=devices_to_add,
             cart_price_kopeks=cart_price_kopeks,
@@ -1790,7 +1808,7 @@ async def _auto_add_devices(
         )
     subscription = locked_result.scalar_one_or_none()
     if not subscription:
-        logger.warning('🔁 Автопокупка устройств: у пользователя нет подписки', format_user_id=_format_user_id(user))
+        logger.warning('Автопокупка устройств: у пользователя нет подписки', format_user_id=_format_user_id(user))
         await _delete_cart_for_subscription(user.id, cart_data)
         return False
 
@@ -1800,7 +1818,7 @@ async def _auto_add_devices(
 
     if subscription.status not in ('active', 'trial', 'disabled', 'limited', 'ACTIVE', 'TRIAL', 'DISABLED', 'LIMITED'):
         logger.warning(
-            '🔁 Автопокупка устройств: подписка пользователя не активна',
+            'Автопокупка устройств: подписка пользователя не активна',
             format_user_id=_format_user_id(user),
             subscription_status=subscription.status,
         )
@@ -1824,7 +1842,7 @@ async def _auto_add_devices(
     # Block purchase if device price is 0 or negative (purchase unavailable for this tariff)
     if not tariff_device_price or tariff_device_price <= 0:
         logger.warning(
-            '🔁 Автопокупка устройств: докупка устройств недоступна для тарифа, корзина удалена',
+            'Автопокупка устройств: докупка устройств недоступна для тарифа, корзина удалена',
             format_user_id=_format_user_id(user),
             tariff_id=subscription.tariff_id,
             tariff_device_price=tariff_device_price,
@@ -1837,7 +1855,7 @@ async def _auto_add_devices(
     new_device_limit = old_device_limit + devices_to_add
     if tariff_max_device_limit and new_device_limit > tariff_max_device_limit:
         logger.warning(
-            '🔁 Автопокупка устройств: превышен лимит устройств',
+            'Автопокупка устройств: превышен лимит устройств',
             format_user_id=_format_user_id(user),
             current=old_device_limit,
             requested=new_device_limit,
@@ -1863,7 +1881,7 @@ async def _auto_add_devices(
 
     if price_kopeks != cart_price_kopeks:
         logger.warning(
-            '🔁 Автопокупка устройств: пересчитанная цена отличается от корзины',
+            'Автопокупка устройств: пересчитанная цена отличается от корзины',
             format_user_id=_format_user_id(user),
             cart_price_kopeks=cart_price_kopeks,
             recomputed_price_kopeks=price_kopeks,
@@ -1874,7 +1892,7 @@ async def _auto_add_devices(
     # Проверяем баланс (при 100% скидке — пропускаем)
     if price_kopeks > 0 and user.balance_kopeks < price_kopeks:
         logger.info(
-            '🔁 Автопокупка устройств: у пользователя недостаточно средств (<)',
+            'Автопокупка устройств: у пользователя недостаточно средств (<)',
             format_user_id=_format_user_id(user),
             balance_kopeks=user.balance_kopeks,
             price_kopeks=price_kopeks,
@@ -1895,12 +1913,12 @@ async def _auto_add_devices(
         )
         if not success:
             logger.warning(
-                '❌ Автопокупка устройств: не удалось списать баланс пользователя', format_user_id=_format_user_id(user)
+                'Автопокупка устройств: не удалось списать баланс пользователя', format_user_id=_format_user_id(user)
             )
             return False
     except Exception as error:
         logger.error(
-            '❌ Автопокупка устройств: ошибка списания баланса пользователя',
+            'Автопокупка устройств: ошибка списания баланса пользователя',
             format_user_id=_format_user_id(user),
             error=error,
             exc_info=True,
@@ -1940,7 +1958,7 @@ async def _auto_add_devices(
         )
         await db.commit()
         logger.warning(
-            '🔁 Автопокупка устройств: лимит превышен после оплаты, баланс возвращён',
+            'Автопокупка устройств: лимит превышен после оплаты, баланс возвращён',
             format_user_id=_format_user_id(user),
         )
         await _delete_cart_for_subscription(user.id, cart_data)
@@ -1954,7 +1972,7 @@ async def _auto_add_devices(
         await db.refresh(subscription)
     except Exception as error:
         logger.error(
-            '❌ Автопокупка устройств: ошибка сохранения подписки пользователя',
+            'Автопокупка устройств: ошибка сохранения подписки пользователя',
             format_user_id=_format_user_id(user),
             error=error,
             exc_info=True,
@@ -1998,7 +2016,7 @@ async def _auto_add_devices(
     await _delete_cart_for_subscription(user.id, cart_data)
 
     logger.info(
-        '✅ Автопокупка устройств: пользователь добавил устройства',
+        'Автопокупка устройств: пользователь добавил устройства',
         format_user_id=_format_user_id(user),
         devices_to_add=devices_to_add,
         old_device_limit=old_device_limit,
@@ -2027,13 +2045,13 @@ async def _auto_add_devices(
                 'ADDON_PURCHASE_DEVICES_SUCCESS' if manual else 'AUTO_PURCHASE_DEVICES_SUCCESS',
                 (
                     (
-                        '✅ <b>Устройства добавлены!</b>\n\n'
+                        '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> <b>Устройства добавлены!</b>\n\n'
                         if manual
-                        else '✅ <b>Устройства добавлены автоматически!</b>\n\n'
+                        else '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> <b>Устройства добавлены автоматически!</b>\n\n'
                     )
-                    + '📱 Добавлено: {devices_to_add} устройств\n'
-                    '📊 Новый лимит: {new_limit} устройств\n'
-                    '💰 Списано: {price}'
+                    + '<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> Добавлено: {devices_to_add} устройств\n'
+                    '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> Новый лимит: {new_limit} устройств\n'
+                    '<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> Списано: {price}'
                 ),
             ).format(
                 devices_to_add=devices_to_add,
@@ -2045,13 +2063,19 @@ async def _auto_add_devices(
                 inline_keyboard=[
                     [
                         InlineKeyboardButton(
-                            text=texts.t('MY_SUBSCRIPTION_BUTTON', '📱 Моя подписка'),
+                            text=texts.t(
+                                'MY_SUBSCRIPTION_BUTTON',
+                                '<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> Моя подписка',
+                            ),
                             callback_data='menu_subscription',
                         )
                     ],
                     [
                         InlineKeyboardButton(
-                            text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '🏠 Главное меню'),
+                            text=texts.t(
+                                'BACK_TO_MAIN_MENU_BUTTON',
+                                '<tg-emoji emoji-id="5967822972931542886">🏠</tg-emoji> Главное меню',
+                            ),
                             callback_data='back_to_menu',
                             style='danger',
                         )
@@ -2111,7 +2135,7 @@ async def _auto_add_traffic(
 
     if traffic_gb <= 0 or cart_price_kopeks <= 0:
         logger.warning(
-            '🔁 Автопокупка трафика: некорректные данные корзины для пользователя',
+            'Автопокупка трафика: некорректные данные корзины для пользователя',
             format_user_id=_format_user_id(user),
             traffic_gb=traffic_gb,
             cart_price_kopeks=cart_price_kopeks,
@@ -2149,13 +2173,13 @@ async def _auto_add_traffic(
     else:
         subscription = await get_subscription_by_user_id(db, user.id)
     if not subscription:
-        logger.warning('🔁 Автопокупка трафика: у пользователя нет подписки', format_user_id=_format_user_id(user))
+        logger.warning('Автопокупка трафика: у пользователя нет подписки', format_user_id=_format_user_id(user))
         await _delete_cart_for_subscription(user.id, cart_data)
         return False
 
     if subscription.status not in ('active', 'trial', 'disabled', 'limited', 'ACTIVE', 'TRIAL', 'DISABLED', 'LIMITED'):
         logger.warning(
-            '🔁 Автопокупка трафика: подписка пользователя не активна',
+            'Автопокупка трафика: подписка пользователя не активна',
             format_user_id=_format_user_id(user),
             subscription_status=subscription.status,
         )
@@ -2163,13 +2187,13 @@ async def _auto_add_traffic(
         return False
 
     if subscription.is_trial:
-        logger.warning('🔁 Автопокупка трафика: у пользователя пробная подписка', format_user_id=_format_user_id(user))
+        logger.warning('Автопокупка трафика: у пользователя пробная подписка', format_user_id=_format_user_id(user))
         await _delete_cart_for_subscription(user.id, cart_data)
         return False
 
     if subscription.traffic_limit_gb == 0:
         logger.warning(
-            '🔁 Автопокупка трафика: у пользователя уже безлимитный трафик', format_user_id=_format_user_id(user)
+            'Автопокупка трафика: у пользователя уже безлимитный трафик', format_user_id=_format_user_id(user)
         )
         await _delete_cart_for_subscription(user.id, cart_data)
         return False
@@ -2202,7 +2226,7 @@ async def _auto_add_traffic(
 
     if base_price <= 0 and traffic_gb != 0:
         logger.warning(
-            '🔁 Автопокупка трафика: цена пакета не настроена, корзина удалена',
+            'Автопокупка трафика: цена пакета не настроена, корзина удалена',
             format_user_id=_format_user_id(user),
             traffic_gb=traffic_gb,
         )
@@ -2232,7 +2256,7 @@ async def _auto_add_traffic(
 
     if cart_price_kopeks != price_kopeks:
         logger.warning(
-            '🔁 Автопокупка трафика: пересчитанная цена отличается от корзины',
+            'Автопокупка трафика: пересчитанная цена отличается от корзины',
             format_user_id=_format_user_id(user),
             cart_price_kopeks=cart_price_kopeks,
             recomputed_price_kopeks=price_kopeks,
@@ -2244,7 +2268,7 @@ async def _auto_add_traffic(
     # Verify balance (при 100% скидке — пропускаем)
     if price_kopeks > 0 and user.balance_kopeks < price_kopeks:
         logger.info(
-            '🔁 Автопокупка трафика: у пользователя недостаточно средств (<)',
+            'Автопокупка трафика: у пользователя недостаточно средств (<)',
             format_user_id=_format_user_id(user),
             balance_kopeks=user.balance_kopeks,
             price_kopeks=price_kopeks,
@@ -2266,12 +2290,12 @@ async def _auto_add_traffic(
         )
         if not success:
             logger.warning(
-                '❌ Автопокупка трафика: не удалось списать баланс пользователя', format_user_id=_format_user_id(user)
+                'Автопокупка трафика: не удалось списать баланс пользователя', format_user_id=_format_user_id(user)
             )
             return False
     except Exception as error:
         logger.error(
-            '❌ Автопокупка трафика: ошибка списания баланса пользователя',
+            'Автопокупка трафика: ошибка списания баланса пользователя',
             format_user_id=_format_user_id(user),
             error=error,
             exc_info=True,
@@ -2295,7 +2319,7 @@ async def _auto_add_traffic(
         await db.refresh(subscription)
     except Exception as error:
         logger.error(
-            '❌ Автопокупка трафика: ошибка добавления трафика пользователю',
+            'Автопокупка трафика: ошибка добавления трафика пользователю',
             format_user_id=_format_user_id(user),
             error=error,
             exc_info=True,
@@ -2344,7 +2368,7 @@ async def _auto_add_traffic(
     await _delete_cart_for_subscription(user.id, cart_data)
 
     logger.info(
-        '✅ Автопокупка трафика: пользователь добавил трафик',
+        'Автопокупка трафика: пользователь добавил трафик',
         format_user_id=_format_user_id(user),
         traffic_gb=traffic_gb,
         old_traffic_limit=old_traffic_limit,
@@ -2372,10 +2396,14 @@ async def _auto_add_traffic(
             message = texts.t(
                 'ADDON_PURCHASE_TRAFFIC_SUCCESS' if manual else 'AUTO_PURCHASE_TRAFFIC_SUCCESS',
                 (
-                    ('✅ <b>Трафик добавлен!</b>\n\n' if manual else '✅ <b>Трафик добавлен автоматически!</b>\n\n')
-                    + '📈 Добавлено: {traffic_gb} ГБ\n'
-                    '📊 Новый лимит: {new_limit} ГБ\n'
-                    '💰 Списано: {price}'
+                    (
+                        '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> <b>Трафик добавлен!</b>\n\n'
+                        if manual
+                        else '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> <b>Трафик добавлен автоматически!</b>\n\n'
+                    )
+                    + '<tg-emoji emoji-id="5776219138917668486">📈</tg-emoji> Добавлено: {traffic_gb} ГБ\n'
+                    '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> Новый лимит: {new_limit} ГБ\n'
+                    '<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> Списано: {price}'
                 ),
             ).format(
                 traffic_gb=traffic_gb,
@@ -2387,13 +2415,19 @@ async def _auto_add_traffic(
                 inline_keyboard=[
                     [
                         InlineKeyboardButton(
-                            text=texts.t('MY_SUBSCRIPTION_BUTTON', '📱 Моя подписка'),
+                            text=texts.t(
+                                'MY_SUBSCRIPTION_BUTTON',
+                                '<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> Моя подписка',
+                            ),
                             callback_data='menu_subscription',
                         )
                     ],
                     [
                         InlineKeyboardButton(
-                            text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '🏠 Главное меню'),
+                            text=texts.t(
+                                'BACK_TO_MAIN_MENU_BUTTON',
+                                '<tg-emoji emoji-id="5967822972931542886">🏠</tg-emoji> Главное меню',
+                            ),
                             callback_data='back_to_menu',
                             style='danger',
                         )
@@ -2487,7 +2521,7 @@ async def _try_auto_extend_expired_after_topup(
         subscription = await get_subscription_by_user_id(db, user.id)
     if subscription is None:
         logger.debug(
-            '🔄 Автопродление expired: у пользователя нет подписки',
+            'Автопродление expired: у пользователя нет подписки',
             format_user_id=_format_user_id(user),
         )
         return False
@@ -2509,7 +2543,7 @@ async def _try_auto_extend_expired_after_topup(
     # подписки — жалоба пользователя.
     if not bool(getattr(subscription, 'autopay_enabled', False)):
         logger.info(
-            '🔄 Автопродление expired: пропуск — автоплатёж пользователем не включён',
+            'Автопродление expired: пропуск — автоплатёж пользователем не включён',
             format_user_id=_format_user_id(user),
             subscription_id=getattr(subscription, 'id', None),
         )
@@ -2521,7 +2555,7 @@ async def _try_auto_extend_expired_after_topup(
     expired_delta = datetime.now(UTC) - subscription.end_date
     if expired_delta.days > 30:
         logger.info(
-            '🔄 Автопродление expired: подписка истекла более 30 дней назад',
+            'Автопродление expired: подписка истекла более 30 дней назад',
             format_user_id=_format_user_id(user),
             expired_days=expired_delta.days,
         )
@@ -2536,7 +2570,7 @@ async def _try_auto_extend_expired_after_topup(
     # (multi-tariff trial on tariff marked `Неактивен` was still being billed).
     if tariff is not None and not tariff.is_active:
         logger.info(
-            '🔄 Автопродление expired: тариф отключён администратором — пропускаем',
+            'Автопродление expired: тариф отключён администратором — пропускаем',
             format_user_id=_format_user_id(user),
             tariff_id=getattr(tariff, 'id', None),
             tariff_name=tariff_name_for_label,
@@ -2574,7 +2608,7 @@ async def _try_auto_extend_expired_after_topup(
         renewal_cost = pricing.final_total
     except Exception as error:
         logger.error(
-            '❌ Автопродление expired: ошибка расчёта стоимости',
+            'Автопродление expired: ошибка расчёта стоимости',
             format_user_id=_format_user_id(user),
             error=error,
             exc_info=True,
@@ -2593,7 +2627,7 @@ async def _try_auto_extend_expired_after_topup(
 
     if renewal_cost <= 0 and pricing.original_total <= 0:
         logger.warning(
-            '❌ Автопродление expired: некорректная стоимость',
+            'Автопродление expired: некорректная стоимость',
             format_user_id=_format_user_id(user),
             renewal_cost=renewal_cost,
         )
@@ -2603,7 +2637,7 @@ async def _try_auto_extend_expired_after_topup(
     # Check balance (skip for 100% discount)
     if renewal_cost > 0 and user.balance_kopeks < renewal_cost:
         logger.info(
-            '🔄 Автопродление expired: недостаточно средств',
+            'Автопродление expired: недостаточно средств',
             format_user_id=_format_user_id(user),
             balance_kopeks=user.balance_kopeks,
             renewal_cost=renewal_cost,
@@ -2730,12 +2764,12 @@ async def _try_auto_extend_expired_after_topup(
         try:
             auto_message = texts.t(
                 'AUTO_PURCHASE_SUBSCRIPTION_EXTENDED',
-                '✅ Subscription automatically extended for {period}.',
+                '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Subscription automatically extended for {period}.',
             ).format(period=period_label)
             if settings.is_multi_tariff_enabled() and tariff_name_for_label:
                 auto_message += (
                     get_texts(getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE)
-                    .t('PAYMENT_NOTICE_010', '\n📦 Тариф: «{v0}»')
+                    .t('PAYMENT_NOTICE_010', '\n<tg-emoji emoji-id="5924720918826848520">📦</tg-emoji> Тариф: «{v0}»')
                     .format(v0=tariff_name_for_label)
                 )
             details_message = texts.t(
@@ -2755,13 +2789,19 @@ async def _try_auto_extend_expired_after_topup(
                 inline_keyboard=[
                     [
                         InlineKeyboardButton(
-                            text=texts.t('MY_SUBSCRIPTION_BUTTON', '📱 My subscription'),
+                            text=texts.t(
+                                'MY_SUBSCRIPTION_BUTTON',
+                                '<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> My subscription',
+                            ),
                             callback_data='menu_subscription',
                         )
                     ],
                     [
                         InlineKeyboardButton(
-                            text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '🏠 Main menu'),
+                            text=texts.t(
+                                'BACK_TO_MAIN_MENU_BUTTON',
+                                '<tg-emoji emoji-id="5967822972931542886">🏠</tg-emoji> Main menu',
+                            ),
                             callback_data='back_to_menu',
                             style='danger',
                         )
@@ -2785,7 +2825,7 @@ async def _try_auto_extend_expired_after_topup(
     await _notify_email_user_auto_purchase(user, updated_subscription, tariff_name_for_label, renewed=True)
 
     logger.info(
-        '✅ Автопродление expired: подписка продлена для пользователя',
+        'Автопродление expired: подписка продлена для пользователя',
         period_days=period_days,
         renewal_cost=renewal_cost,
         format_user_id=_format_user_id(user),
@@ -2895,7 +2935,7 @@ async def try_resume_disabled_daily_after_topup(
         # обнуляет сама панель и снимет лимит без нас. Брать деньги и оставлять
         # человека в лимите нельзя — то же правило, что у планировщика.
         logger.info(
-            '🔄 Авто-возобновление daily: подписка в лимите трафика, списание счётчик не обнулит — пропуск',
+            'Авто-возобновление daily: подписка в лимите трафика, списание счётчик не обнулит — пропуск',
             format_user_id=_format_user_id(user),
             subscription_id=subscription.id,
         )
@@ -2909,7 +2949,7 @@ async def try_resume_disabled_daily_after_topup(
     # Check balance (при 100% скидке — пропускаем)
     if daily_price > 0 and user.balance_kopeks < daily_price:
         logger.info(
-            '🔄 Авто-возобновление daily: недостаточно средств',
+            'Авто-возобновление daily: недостаточно средств',
             format_user_id=_format_user_id(user),
             balance_kopeks=user.balance_kopeks,
             daily_price=daily_price,
@@ -2922,7 +2962,7 @@ async def try_resume_disabled_daily_after_topup(
         await db.refresh(subscription, attribute_names=['updated_at'])
         if subscription.updated_at and (datetime.now(UTC) - subscription.updated_at) < timedelta(seconds=60):
             logger.info(
-                '🔄 Авто-возобновление daily: пропуск — подписка обновлена секунд назад',
+                'Авто-возобновление daily: пропуск — подписка обновлена секунд назад',
                 format_user_id=_format_user_id(user),
                 subscription_id=subscription.id,
                 total_seconds=(datetime.now(UTC) - subscription.updated_at).total_seconds(),
@@ -2930,7 +2970,7 @@ async def try_resume_disabled_daily_after_topup(
             return False
     except Exception as check_error:
         logger.warning(
-            '🔄 Авто-возобновление daily: ошибка проверки updated_at подписки',
+            'Авто-возобновление daily: ошибка проверки updated_at подписки',
             format_user_id=_format_user_id(user),
             check_error=check_error,
         )
@@ -2984,7 +3024,7 @@ async def try_resume_disabled_daily_after_topup(
         if not isinstance(error, Exception):
             raise
         logger.error(
-            '❌ Авто-возобновление daily: ошибка оплаты и активации подписки',
+            'Авто-возобновление daily: ошибка оплаты и активации подписки',
             error=error,
             exc_info=True,
         )
@@ -3132,10 +3172,10 @@ async def try_resume_disabled_daily_after_topup(
 
             message = texts.t(
                 'DAILY_SUBSCRIPTION_RESUMED_AFTER_TOPUP',
-                '✅ <b>Подписка возобновлена!</b>\n\n'
+                '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> <b>Подписка возобновлена!</b>\n\n'
                 'Ваш суточный тариф «{tariff_name}» возобновлён после пополнения баланса.\n\n'
-                '💳 Списано: {amount}\n'
-                '💰 Остаток: {balance}',
+                '<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> Списано: {amount}\n'
+                '<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> Остаток: {balance}',
             ).format(
                 tariff_name=html.escape(tariff.name),
                 amount=settings.format_price(daily_price),
@@ -3146,13 +3186,19 @@ async def try_resume_disabled_daily_after_topup(
                 inline_keyboard=[
                     [
                         InlineKeyboardButton(
-                            text=texts.t('MY_SUBSCRIPTION_BUTTON', '📱 My subscription'),
+                            text=texts.t(
+                                'MY_SUBSCRIPTION_BUTTON',
+                                '<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> My subscription',
+                            ),
                             callback_data='menu_subscription',
                         )
                     ],
                     [
                         InlineKeyboardButton(
-                            text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '🏠 Main menu'),
+                            text=texts.t(
+                                'BACK_TO_MAIN_MENU_BUTTON',
+                                '<tg-emoji emoji-id="5967822972931542886">🏠</tg-emoji> Main menu',
+                            ),
                             callback_data='back_to_menu',
                             style='danger',
                         )
@@ -3176,7 +3222,7 @@ async def try_resume_disabled_daily_after_topup(
     await _notify_email_user_auto_purchase(user, subscription, tariff.name, renewed=True)
 
     logger.info(
-        '✅ Авто-возобновление daily: подписка возобновлена для пользователя',
+        'Авто-возобновление daily: подписка возобновлена для пользователя',
         format_user_id=_format_user_id(user),
         daily_price=daily_price,
         tariff_name=tariff.name,
@@ -3495,7 +3541,7 @@ async def _auto_purchase_gift(
             try:
                 err_msg = texts.t(
                     'GIFT_AUTO_PURCHASE_FAILED',
-                    '❌ Не удалось автоматически оформить подарок: выбранный тариф или услуга более недоступны.',
+                    '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Не удалось автоматически оформить подарок: выбранный тариф или услуга более недоступны.',
                 )
                 await bot.send_message(chat_id=user.telegram_id, text=err_msg)
             except Exception as notify_err:
@@ -3846,7 +3892,7 @@ async def _process_legacy_generic_cart(
                 )
                 auto_message = texts.t(
                     'AUTO_PURCHASE_SUBSCRIPTION_SUCCESS',
-                    '✅ Subscription purchased automatically after balance top-up ({period}).',
+                    '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Subscription purchased automatically after balance top-up ({period}).',
                 ).format(period=period_label)
                 if settings.is_multi_tariff_enabled() and subscription and getattr(subscription, 'tariff_id', None):
                     try:
@@ -3856,7 +3902,10 @@ async def _process_legacy_generic_cart(
                         if _t:
                             auto_message += (
                                 get_texts(getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE)
-                                .t('PAYMENT_NOTICE_010', '\n📦 Тариф: «{v0}»')
+                                .t(
+                                    'PAYMENT_NOTICE_010',
+                                    '\n<tg-emoji emoji-id="5924720918826848520">📦</tg-emoji> Тариф: «{v0}»',
+                                )
                                 .format(v0=_t.name)
                             )
                     except Exception:
@@ -3876,13 +3925,19 @@ async def _process_legacy_generic_cart(
                     inline_keyboard=[
                         [
                             InlineKeyboardButton(
-                                text=texts.t('MY_SUBSCRIPTION_BUTTON', '📱 My subscription'),
+                                text=texts.t(
+                                    'MY_SUBSCRIPTION_BUTTON',
+                                    '<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> My subscription',
+                                ),
                                 callback_data='menu_subscription',
                             )
                         ],
                         [
                             InlineKeyboardButton(
-                                text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '🏠 Main menu'),
+                                text=texts.t(
+                                    'BACK_TO_MAIN_MENU_BUTTON',
+                                    '<tg-emoji emoji-id="5967822972931542886">🏠</tg-emoji> Main menu',
+                                ),
                                 callback_data='back_to_menu',
                                 style='danger',
                             )

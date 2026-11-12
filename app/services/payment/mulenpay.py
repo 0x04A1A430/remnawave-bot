@@ -388,7 +388,7 @@ class MulenPayPaymentMixin:
                                 get_texts(getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE)
                                 .t(
                                     'PAYMENT_NOTICE_007',
-                                    '✅ <b>Пополнение успешно!</b>\n\n💰 Сумма: {v0}\n🦊 Способ: {v1}\n🆔 Транзакция: {v2}\n\nБаланс пополнен автоматически!',
+                                    '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> <b>Пополнение успешно!</b>\n\n<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> Сумма: {v0}\nСпособ: {v1}\nТранзакция: {v2}\n\nБаланс пополнен автоматически!',
                                 )
                                 .format(
                                     v0=settings.format_price(payment.amount_kopeks),
@@ -418,7 +418,7 @@ class MulenPayPaymentMixin:
                     )
 
                 logger.info(
-                    '✅ Обработан платеж для пользователя',
+                    'Обработан платеж для пользователя',
                     display_name=display_name,
                     uuid=payment.uuid,
                     user_id=payment.user_id,

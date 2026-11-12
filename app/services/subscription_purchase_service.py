@@ -1314,13 +1314,13 @@ class MiniAppSubscriptionPurchaseService:
 
         message = texts.t(
             'SUBSCRIPTION_PURCHASED',
-            '🎉 Subscription purchased successfully!',
+            '<tg-emoji emoji-id="5994502837327892086">🎉</tg-emoji> Subscription purchased successfully!',
         )
 
         if pricing.promo_discount_value:
             note = texts.t(
                 'SUBSCRIPTION_PROMO_DISCOUNT_NOTE',
-                '⚡ Extra discount {percent}%: -{amount}',
+                '<tg-emoji emoji-id="5843553939672274145">⚡</tg-emoji> Extra discount {percent}%: -{amount}',
             ).format(
                 percent=pricing.promo_discount_percent,
                 amount=texts.format_price(pricing.promo_discount_value),

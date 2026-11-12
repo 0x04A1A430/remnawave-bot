@@ -120,7 +120,7 @@ _EXPIRATION_HOURS_TO_TEXT_KEY: dict[int, str] = {
 # Admin event display names for notification messages
 _ADMIN_NODE_EVENTS: dict[str, str] = {
     'node.created': '● Нода создана',
-    'node.modified': '⚙ Нода изменена',
+    'node.modified': '<tg-emoji emoji-id="5877260593903177342">⚙</tg-emoji> Нода изменена',
     'node.disabled': '○ Нода отключена',
     'node.enabled': '● Нода включена',
     'node.deleted': '× Нода удалена',
@@ -131,11 +131,11 @@ _ADMIN_NODE_EVENTS: dict[str, str] = {
 
 _ADMIN_SERVICE_EVENTS: dict[str, str] = {
     'service.panel_started': '↗ Панель RemnaWave запущена',
-    'service.login_attempt_failed': '⚿ Неудачная попытка входа в панель',
-    'service.login_attempt_success': '⚿ Успешный вход в панель',
+    'service.login_attempt_failed': 'Неудачная попытка входа в панель',
+    'service.login_attempt_success': 'Успешный вход в панель',
     'service.subpage_config_changed': '▤ Конфиг страницы подписки изменён',
     # 2.8.0: новые события жизненного цикла API-токена панели (security-релевантно)
-    'service.api_token_created': '⚿ Создан API-токен панели',
+    'service.api_token_created': 'Создан API-токен панели',
     'service.api_token_deleted': ' Удалён API-токен панели',
 }
 
@@ -1249,7 +1249,7 @@ class RemnaWaveWebhookService:
                 return
 
         # Append "Close" button to every webhook notification keyboard
-        close_text = texts.get('WEBHOOK_CLOSE_BUTTON', '✖️ Закрыть')
+        close_text = texts.get('WEBHOOK_CLOSE_BUTTON', 'Закрыть')
         close_row = [InlineKeyboardButton(text=close_text, callback_data='webhook:close', style='danger')]
         if reply_markup:
             reply_markup = InlineKeyboardMarkup(

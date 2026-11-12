@@ -343,10 +343,10 @@ class SubscriptionService:
 
                 await db.commit()
 
-                logger.info('✅ Создан/обновлен RemnaWave пользователь для подписки', subscription_id=subscription.id)
-                logger.info('🔗 Ссылка на подписку', subscription_url=updated_user.subscription_url)
+                logger.info('Создан/обновлен RemnaWave пользователь для подписки', subscription_id=subscription.id)
+                logger.info('Ссылка на подписку', subscription_url=updated_user.subscription_url)
                 strategy_name = settings.DEFAULT_TRAFFIC_RESET_STRATEGY
-                logger.info('📊 Стратегия сброса трафика', strategy_name=strategy_name)
+                logger.info('Стратегия сброса трафика', strategy_name=strategy_name)
                 return updated_user
 
         except asyncio.CancelledError:
@@ -390,7 +390,7 @@ class SubscriptionService:
         if panel_user is None:
             return None
         logger.info(
-            '🔗 Панельный пользователь опознан по short_uuid — дубль не создаём',
+            'Панельный пользователь опознан по short_uuid — дубль не создаём',
             subscription_id=getattr(subscription, 'id', None),
             remnawave_id=panel_user.id,
         )
@@ -425,7 +425,7 @@ class SubscriptionService:
             return None
 
         logger.info(
-            '🔗 Панельный id восстановлен по short_uuid при обновлении',
+            'Панельный id восстановлен по short_uuid при обновлении',
             subscription_id=getattr(subscription, 'id', None),
             remnawave_id=adopted.id,
         )
@@ -828,12 +828,12 @@ class SubscriptionService:
 
                 status_text = 'активным' if is_actually_active else 'истёкшим'
                 logger.info(
-                    '✅ Обновлен RemnaWave пользователь со статусом',
+                    'Обновлен RemnaWave пользователь со статусом',
                     remnawave_id=remnawave_id,
                     status_text=status_text,
                 )
                 strategy_name = settings.DEFAULT_TRAFFIC_RESET_STRATEGY
-                logger.info('📊 Стратегия сброса трафика', strategy_name=strategy_name)
+                logger.info('Стратегия сброса трафика', strategy_name=strategy_name)
                 return updated_user
 
         except asyncio.CancelledError:
@@ -963,7 +963,7 @@ class SubscriptionService:
             await api.reset_user_traffic(panel_user_id)
             reason_text = f' ({reset_reason})' if reset_reason else ''
             logger.info(
-                '🔄 Сброшен трафик RemnaWave', _format_user_log=self._format_user_log(user), reason_text=reason_text
+                'Сброшен трафик RemnaWave', _format_user_log=self._format_user_log(user), reason_text=reason_text
             )
         except Exception as exc:
             logger.warning(
@@ -1025,14 +1025,14 @@ class SubscriptionService:
                     enabled=False,
                     db=db,
                 )
-                logger.info('✅ Отключен RemnaWave пользователь', panel_user_id=panel_user_id)
+                logger.info('Отключен RemnaWave пользователь', panel_user_id=panel_user_id)
                 return True
 
         except Exception as e:
             error_msg = str(e).lower()
             # "User already disabled" - считаем успехом
             if 'already disabled' in error_msg:
-                logger.info('✅ RemnaWave пользователь уже отключен', panel_user_id=panel_user_id)
+                logger.info('RemnaWave пользователь уже отключен', panel_user_id=panel_user_id)
                 return True
             logger.error('Ошибка отключения RemnaWave пользователя', error=e)
             return False
@@ -1053,13 +1053,13 @@ class SubscriptionService:
                 )
                 await checkpoint_managed_deletion(factory, api, panel_user_id)
                 await api.delete_user(panel_user_id)
-                logger.info('🗑 Удалён RemnaWave пользователь', panel_user_id=panel_user_id)
+                logger.info('Удалён RemnaWave пользователь', panel_user_id=panel_user_id)
                 return True
 
         except Exception as e:
             error_msg = str(e).lower()
             if 'not found' in error_msg or 'not exist' in error_msg:
-                logger.info('🗑 RemnaWave пользователь уже удалён', panel_user_id=panel_user_id)
+                logger.info('RemnaWave пользователь уже удалён', panel_user_id=panel_user_id)
                 return True
             logger.error('Ошибка удаления RemnaWave пользователя', error=e, panel_user_id=panel_user_id)
             return False
@@ -1089,14 +1089,14 @@ class SubscriptionService:
                     enabled=True,
                     db=db,
                 )
-                logger.info('✅ Включен RemnaWave пользователь', panel_user_id=panel_user_id)
+                logger.info('Включен RemnaWave пользователь', panel_user_id=panel_user_id)
                 return True
 
         except Exception as e:
             error_msg = str(e).lower()
             # "User already enabled" - считаем успехом
             if 'already enabled' in error_msg:
-                logger.info('✅ RemnaWave пользователь уже включен', panel_user_id=panel_user_id)
+                logger.info('RemnaWave пользователь уже включен', panel_user_id=panel_user_id)
                 return True
             logger.error('Ошибка включения RemnaWave пользователя', error=e)
             return False
@@ -1115,7 +1115,7 @@ class SubscriptionService:
                             'name': squad.name,
                         }
                     )
-                logger.info('✅ Получено серверов из RemnaWave', result_count=len(result))
+                logger.info('Получено серверов из RemnaWave', result_count=len(result))
                 return result
 
         except Exception as e:
@@ -1162,7 +1162,7 @@ class SubscriptionService:
                     logger.warning('Reissued link but failed to reset devices', error=str(reset_error))
                     devices_reset = False
 
-                logger.info('✅ Обновлена ссылка подписки', _format_user_log=self._format_user_log(user))
+                logger.info('Обновлена ссылка подписки', _format_user_log=self._format_user_log(user))
                 return SubscriptionReissueResult(updated_user.subscription_url, bool(devices_reset))
 
         except Exception as e:
@@ -1380,7 +1380,7 @@ class SubscriptionService:
                             )
                             needs_cleanup = True
                 except Exception as api_error:
-                    logger.error('❌ Ошибка проверки пользователя в панели', api_error=api_error)
+                    logger.error('Ошибка проверки пользователя в панели', api_error=api_error)
                     # A timeout/5xx is not proof that the panel user vanished.
                     # Preserve the panel id and abort so a retry cannot create a
                     # duplicate Remnawave account.
@@ -1403,7 +1403,7 @@ class SubscriptionService:
                         panel_user = await api.get_user_by_short_uuid(subscription.remnawave_short_uuid)
                 except Exception as api_error:
                     logger.error(
-                        '❌ Не удалось проверить short_uuid в панели — очистку не делаем',
+                        'Не удалось проверить short_uuid в панели — очистку не делаем',
                         subscription_id=subscription.id,
                         api_error=api_error,
                     )
@@ -1428,7 +1428,7 @@ class SubscriptionService:
 
                 if panel_user is not None:
                     logger.info(
-                        '🔗 Панельный пользователь опознан по short_uuid, проставляем remnawave_id',
+                        'Панельный пользователь опознан по short_uuid, проставляем remnawave_id',
                         subscription_id=subscription.id,
                         remnawave_id=panel_user.id,
                     )
@@ -1456,7 +1456,7 @@ class SubscriptionService:
                 needs_cleanup = True
 
             if needs_cleanup:
-                logger.info('🧹 Очищаем мусорные данные подписки', user_log=user_log)
+                logger.info('Очищаем мусорные данные подписки', user_log=user_log)
 
                 subscription.remnawave_short_uuid = None
                 subscription.remnawave_id = None
@@ -1476,12 +1476,12 @@ class SubscriptionService:
                 # could burn a coupon/payment if the following panel create
                 # fails; create_remnawave_user commits only after API success.
                 await db.flush((subscription, user))
-                logger.info('✅ Мусорные данные подготовлены к очистке', user_log=user_log)
+                logger.info('Мусорные данные подготовлены к очистке', user_log=user_log)
 
             return True
 
         except Exception as e:
-            logger.error('❌ Ошибка валидации подписки', _format_user_log=self._format_user_log(user), error=e)
+            logger.error('Ошибка валидации подписки', _format_user_log=self._format_user_log(user), error=e)
             await db.rollback()
             return False
 
@@ -1509,7 +1509,7 @@ class SubscriptionService:
                     price = server.price_kopeks
                     total_price += price
                     prices_list.append(price)
-                    logger.debug('🏷️ Страна ₽', display_name=server.display_name, price=price / 100)
+                    logger.debug('Страна ₽', display_name=server.display_name, price=price / 100)
                 else:
                     default_price = 0
                     total_price += default_price
@@ -1520,7 +1520,7 @@ class SubscriptionService:
                         default_price=default_price / 100,
                     )
 
-            logger.info('💰 Общая стоимость стран: ₽', total_price=total_price / 100)
+            logger.info('Общая стоимость стран: ₽', total_price=total_price / 100)
             return total_price, prices_list
 
         except Exception as e:
