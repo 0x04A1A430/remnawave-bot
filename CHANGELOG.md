@@ -1,5 +1,64 @@
 # Changelog
 
+## [5.4.0](https://github.com/0x04A1A430/remnawave-bot/compare/v5.3.0...v5.4.0) (2026-11-12)
+
+
+### New Features
+
+* **admin:** allow inactive cleanup after subscription expired for 14+ days ([258abba](https://github.com/0x04A1A430/remnawave-bot/commit/258abba67141c3c3bf9430759f88fbada53481dd))
+* **admin:** hide deleted users and add inactive cleanup button ([4f8fd7f](https://github.com/0x04A1A430/remnawave-bot/commit/4f8fd7fe54f063ebe95c81c4b46ccec5c460e0b7))
+* **autopay:** default to one day before expiry and honor user choice ([6bcdc07](https://github.com/0x04A1A430/remnawave-bot/commit/6bcdc071a2558048b38d286dd4fdea2b18f07bcd))
+* **autopay:** notify when balance is too low to renew an expired subscription ([b959136](https://github.com/0x04A1A430/remnawave-bot/commit/b9591364543cb8dbec42706e054fc47c784ff705))
+* backup before inactive cleanup and auto-renew expired balances ([5586438](https://github.com/0x04A1A430/remnawave-bot/commit/55864380c479c4877bbdf36100b2089f6e4f0be9))
+* **notify:** brand-styled user notifications ([c51e798](https://github.com/0x04A1A430/remnawave-bot/commit/c51e798f9698f40859472544b782694c0eb4a4bb))
+* **panel:** folder workflow for subscription templates ([7d763c2](https://github.com/0x04A1A430/remnawave-bot/commit/7d763c20174fd051bffaed7a52f504647bbc2029))
+* **reports:** send summary weekly and drop support ticket block ([45d52aa](https://github.com/0x04A1A430/remnawave-bot/commit/45d52aa3415c6966d476e977833af35075d47c8e))
+* **subscription:** move renew/traffic to settings and allow plan change for expired subs ([ff37e2e](https://github.com/0x04A1A430/remnawave-bot/commit/ff37e2ebfb9f6177159516ecd8aa17defb6cb649))
+* **ui:** brand pass over top-up flow and global text spacing ([0dcc7a4](https://github.com/0x04A1A430/remnawave-bot/commit/0dcc7a42be15bbaf2d4b2ca895ee33be8ac5e872))
+* **ui:** branded backup cards and admin notifications, log rotation ([0c29dd6](https://github.com/0x04A1A430/remnawave-bot/commit/0c29dd6adb7c14631a1c2688016302b89435dbdd))
+* **ui:** collapse any blank-line run in screens, not just 3+ ([7a4aa1c](https://github.com/0x04A1A430/remnawave-bot/commit/7a4aa1cfabc6768f4257e7c804fddaf999d2b718))
+
+
+### Bug Fixes
+
+* **admin:** compact final screen text and drop leftover emoji ([a69f6cf](https://github.com/0x04A1A430/remnawave-bot/commit/a69f6cf984fa0b987ad09d7c806a0d377d50234a))
+* **admin:** drop emoji from admin screens and notification previews ([cef708c](https://github.com/0x04A1A430/remnawave-bot/commit/cef708cb75fd2dd3c0ac496b2d21ce4afe788d06))
+* **admin:** keep premium emoji in user-notification previews ([4360cf2](https://github.com/0x04A1A430/remnawave-bot/commit/4360cf2790d0fabd020d3da7c9cb567bc39fe1e9))
+* **admin:** single back button in the subscriptions menu ([3ea8026](https://github.com/0x04A1A430/remnawave-bot/commit/3ea802698c036471feb81cc8967b5dcadb077637))
+* allow paid traffic top-ups during limited grace ([6912915](https://github.com/0x04A1A430/remnawave-bot/commit/69129155dd774655faf7a0ef691717bf91cddf15))
+* **balance:** premium money emoji and a single 'На главную' button ([565c3b1](https://github.com/0x04A1A430/remnawave-bot/commit/565c3b168b256516a6847641c1f1108cf572db7a))
+* **balance:** premium tg-emoji instead of plain emoji in topup screens ([e94b811](https://github.com/0x04A1A430/remnawave-bot/commit/e94b8110a0987214984e630a59d35cb29c16bf08))
+* **devices:** return to the menu that opened device management ([1dcbf2b](https://github.com/0x04A1A430/remnawave-bot/commit/1dcbf2bbee2cce942fdd6969a4fbfa794c5e5e9f))
+* **grace:** keep expiry notifications in sync with grace access ([45b06fd](https://github.com/0x04A1A430/remnawave-bot/commit/45b06fdf6ea84f40eab1224b8f07fb6d6f2c2716))
+* **grace:** keep subscription menu and show temporary access during grace ([56bd27b](https://github.com/0x04A1A430/remnawave-bot/commit/56bd27b44ae4c90c359b28154895304b5e179de3))
+* **grace:** recover safely after internal squad replacement ([c6ebe64](https://github.com/0x04A1A430/remnawave-bot/commit/c6ebe644b4f26e2b6aea8acce297d7fe3b6349fe))
+* **menu:** одна пустая строка между блоками экранов меню и /start ([4728c76](https://github.com/0x04A1A430/remnawave-bot/commit/4728c766be5b6c2c3f7136a4b839c368fc5d8d4e))
+* **monitoring:** keep subscribers and panel-active users out of inactive cleanup ([a632607](https://github.com/0x04A1A430/remnawave-bot/commit/a632607c8b5f566a3944b2a9ecfda1bd9547a98d))
+* **notify:** premium icons in RemnaWave infrastructure alerts ([357844a](https://github.com/0x04A1A430/remnawave-bot/commit/357844a72d5e4d12c839d046c4f095cc9d5fb8a0))
+* **payment:** убрать лишние пустые строки и пустые приглашения на экранах оплаты ([00eef66](https://github.com/0x04A1A430/remnawave-bot/commit/00eef66bdb82ba8cb890a6ab086ab4dc691a1b82))
+* **subscription:** hide country info from user screens ([4edb0ff](https://github.com/0x04A1A430/remnawave-bot/commit/4edb0ff51b75dbcb2e598fb3da8a53c0f9d89c49))
+* **subscription:** real subscription values, no tariff type, no device list ([e7edda6](https://github.com/0x04A1A430/remnawave-bot/commit/e7edda6ec939d4d207eeef274868a6f5bb30a621))
+* **subscription:** убрать лишние пустые строки на финальных экранах ([d7472f5](https://github.com/0x04A1A430/remnawave-bot/commit/d7472f505a56906280098eecc56a5c2136701000))
+* **topup:** premium icons in the top-up success buttons ([76e4e63](https://github.com/0x04A1A430/remnawave-bot/commit/76e4e63116f3d124020eee38c374d003b2f84467))
+* **ui:** clean stray variation selector from webhook close button ([e2ca1a6](https://github.com/0x04A1A430/remnawave-bot/commit/e2ca1a61af78211680ba2892872942d035c3c9e7))
+* **ui:** one blank line again (3+ rule), single premium emoji on menu button, admin webhook card ([a8fa039](https://github.com/0x04A1A430/remnawave-bot/commit/a8fa039647b5a9ca4a4d2bd59acc76ac42f03d1e))
+* **ui:** premium emoji in handlers, strip emoji from logs and non-premium fallbacks ([d96d5e1](https://github.com/0x04A1A430/remnawave-bot/commit/d96d5e1cc62d5ca3f1353464e9b45c3c9c56f308))
+* **ui:** premium emoji in keyboards and utils ([e8cfbbb](https://github.com/0x04A1A430/remnawave-bot/commit/e8cfbbb8dc2fb038ef4301205e8b6982bc3dc269))
+* **ui:** premium emoji in subscription handlers ([e1a98d1](https://github.com/0x04A1A430/remnawave-bot/commit/e1a98d131ec274a5c4dbf7e175d1c249dab9e031))
+* **ui:** premium emoji tags in services core, drop plain emoji from logs ([c962612](https://github.com/0x04A1A430/remnawave-bot/commit/c962612e1a9d9c3938d1eb94f5036ef0b503db52))
+* **ui:** premium icons for home and coin in balance notifications ([ca4b429](https://github.com/0x04A1A430/remnawave-bot/commit/ca4b4295ad859a6e1b9f477ce973ec6f2fff92a5))
+* **ui:** один пустой ряд на пользовательских экранах поддержки, тикетов и инфо ([2b87dce](https://github.com/0x04A1A430/remnawave-bot/commit/2b87dced26d2e1920de5c8c96a4c8fb5078f2dba))
+
+
+### Refactoring
+
+* **services:** premium emoji in payment/subscription/notification texts, strip from logs ([45c0eef](https://github.com/0x04A1A430/remnawave-bot/commit/45c0eefd4a32ac33b6310cd59b59dc32a0b8e342))
+
+
+### Documentation
+
+* **grace:** note that the internal squad needs a working inbound ([7f6b9f8](https://github.com/0x04A1A430/remnawave-bot/commit/7f6b9f86f81a706d6b85365f015c117f66d37dc5))
+
 ## [5.3.0](https://github.com/0x04A1A430/remnawave-bot/compare/v5.2.0...v5.3.0) (2026-11-11)
 
 
