@@ -86,13 +86,14 @@ def test_healthy_start_shows_every_section_and_no_warnings():
     assert '3 450 ₽' in text
     assert '24 012 ₽' in text, 'баланс — рублями целиком, а не «24.0K RUB»'
     assert '142 мс' in text
-    assert 'Режим продаж: мультитариф' in text
+    assert 'Режим продаж' not in text
     assert 'Требует внимания' not in text
 
 
-@pytest.mark.parametrize(('mode', 'label'), [('classic', 'классика'), ('tariffs', 'тарифы')])
-def test_sales_mode_is_named(mode, label):
-    assert f'Режим продаж: {label}' in render_startup_message(_stats(sales_mode=mode), timestamp='t')
+def test_sales_mode_and_open_tickets_are_not_shown():
+    text = render_startup_message(_stats(sales_mode='tariffs', open_tickets=5), timestamp='t')
+    assert 'Режим продаж' not in text
+    assert 'Тикетов открыто' not in text
 
 
 def test_problems_are_called_out_explicitly():
