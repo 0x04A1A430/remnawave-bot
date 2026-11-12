@@ -53,46 +53,74 @@ def _keyboard(sub) -> list[str]:
     return _callbacks(kb.get_subscription_keyboard('ru', has_subscription=True, is_trial=False, subscription=sub))
 
 
+def _main_callbacks(sub) -> list[str]:
+    return _callbacks(kb.get_subscription_keyboard('ru', has_subscription=True, is_trial=False, subscription=sub))
+
+
+def _settings_callbacks_for(sub) -> list[str]:
+    markup = kb.get_updated_subscription_settings_keyboard(
+        'ru',
+        show_countries_management=True,
+        tariff=None,
+        subscription=sub,
+        is_legacy_subscription=_is_legacy(sub),
+    )
+    return _callbacks(markup)
+
+
+def _is_legacy(sub) -> bool:
+    from app.utils.legacy_subscription import is_legacy_subscription
+
+    return is_legacy_subscription(sub)
+
+
 def test_legacy_subscription_offers_only_move_to_tariff(monkeypatch):
     _patch_mode(monkeypatch, tariffs=True)
 
-    cbs = _keyboard(_sub(tariff_id=None))
+    main = _main_callbacks(_sub(tariff_id=None))
+    assert 'subscription_settings' in main
+    assert 'subscription_extend' not in main
+    assert 'tariff_switch' not in main
 
-    assert cbs.count('tariff_switch') == 1
-    assert 'subscription_extend' not in cbs, 'продления у старой подписки нет'
-    assert 'subscription_autopay' not in cbs, 'автоплатёж старой подписке недоступен'
-    assert 'instant_switch' not in cbs, 'мгновенное переключение считает разницу с тарифом, которого нет'
+    settings = _settings_callbacks_for(_sub(tariff_id=None))
+    assert settings.count('tariff_switch') == 1
+    assert 'subscription_extend' not in settings
+    assert 'subscription_autopay' not in settings
 
 
 def test_expired_legacy_subscription_still_moves_to_tariff(monkeypatch):
-    """Истёкшая старая подписка тоже переводится на тариф той же строкой, а не покупкой с нуля."""
+    """Истёкшая старая подписка тоже переводится на тариф, а не покупкой с нуля."""
     _patch_mode(monkeypatch, tariffs=True)
 
-    cbs = _keyboard(_sub(tariff_id=None, actual_status='expired'))
+    sub = _sub(tariff_id=None, actual_status='expired')
+    assert 'menu_buy' not in _main_callbacks(sub)
 
-    assert cbs.count('tariff_switch') == 1
-    assert 'menu_buy' not in cbs
-    assert 'subscription_extend' not in cbs
+    settings = _settings_callbacks_for(sub)
+    assert settings.count('tariff_switch') == 1
+    assert 'subscription_extend' not in settings
 
 
-def test_subscription_with_tariff_keeps_renew_and_autopay(monkeypatch):
+def test_subscription_with_tariff_keeps_renew_in_settings(monkeypatch):
     _patch_mode(monkeypatch, tariffs=True)
 
-    cbs = _keyboard(_sub(tariff_id=7))
+    main = _main_callbacks(_sub(tariff_id=7))
+    assert 'subscription_settings' in main
+    assert 'subscription_extend' not in main
+    assert 'instant_switch' not in main
 
-    assert 'subscription_extend' in cbs
-    assert 'subscription_autopay' not in cbs  # removed by fork design
-    assert 'instant_switch' not in cbs  # removed by fork design
+    settings = _settings_callbacks_for(_sub(tariff_id=7))
+    assert 'subscription_extend' in settings
+    assert 'subscription_autopay' not in settings
 
 
-def test_classic_mode_subscription_keeps_renew(monkeypatch):
-    """В классическом режиме подписка без тарифа — обычная, продление на месте."""
+def test_classic_mode_subscription_keeps_renew_in_settings(monkeypatch):
+    """В классическом режиме подписка без тарифа — обычная, продление в настройках."""
     _patch_mode(monkeypatch, tariffs=False)
 
-    cbs = _keyboard(_sub(tariff_id=None))
+    settings = _settings_callbacks_for(_sub(tariff_id=None))
 
-    assert 'subscription_extend' in cbs
-    assert 'tariff_switch' not in cbs
+    assert 'subscription_extend' in settings
+    assert 'tariff_switch' not in settings
 
 
 def test_legacy_subscription_has_no_traffic_topup_even_if_classic_topup_is_on(monkeypatch):
@@ -103,10 +131,10 @@ def test_legacy_subscription_has_no_traffic_topup_even_if_classic_topup_is_on(mo
     sub = _sub(tariff_id=None)
     sub.traffic_limit_gb = 100
 
-    cbs = _keyboard(sub)
+    settings = _settings_callbacks_for(sub)
 
-    assert 'buy_traffic' not in cbs
-    assert cbs.count('tariff_switch') == 1
+    assert 'buy_traffic' not in settings
+    assert settings.count('tariff_switch') == 1
 
 
 def _settings_callbacks(sub, *, is_legacy: bool) -> list[str]:

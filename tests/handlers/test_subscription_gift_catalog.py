@@ -127,7 +127,7 @@ class TestSubscriptionGiftEntryVisibility:
         )
         callbacks = _callbacks(kb)
         assert 'subscription_gift' not in callbacks
-        assert 'subscription_extend' in callbacks
+        assert 'subscription_settings' in callbacks
         assert 'back_to_menu' in callbacks
 
     def test_single_mode_active_sub_with_gift_disabled(self):
@@ -137,7 +137,7 @@ class TestSubscriptionGiftEntryVisibility:
         )
         callbacks = _callbacks(kb)
         assert 'subscription_gift' not in callbacks
-        assert 'subscription_extend' in callbacks
+        assert 'subscription_settings' in callbacks
 
     def test_single_mode_trial_sub_has_no_gift_entry(self):
         sub = SimpleNamespace(id=2, is_trial=True, actual_status='trial_active', tariff_id=1, traffic_limit_gb=10)
@@ -155,7 +155,7 @@ class TestSubscriptionGiftEntryVisibility:
         )
         callbacks = _callbacks(kb)
         assert 'subscription_gift' not in callbacks
-        assert 'subscription_extend' in callbacks
+        assert 'subscription_settings' in callbacks
 
     def test_single_mode_no_sub_keyboard_has_no_gift_entry(self):
         kb = get_subscription_keyboard(language='ru', has_subscription=False, gift_enabled=True)

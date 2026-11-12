@@ -1405,7 +1405,7 @@
   "SUBSCRIPTION_PURCHASED": "订阅已成功购买！",
   "SUBSCRIPTION_REACTIVATED_CHANNEL_SUBSCRIBE": "您的订阅已恢复！\n\n感谢您订阅频道。VPN已重新激活。",
   "SUBSCRIPTION_REACTIVATED_CHANNEL_SUBSCRIBE_MULTI": "您的所有订阅已恢复！\n\n感谢您订阅频道。VPN已重新激活。",
-  "SUBSCRIPTION_SETTINGS_BUTTON": "订阅设置",
+  "SUBSCRIPTION_SETTINGS_BUTTON": "<tg-emoji emoji-id=\"5877260593903177342\">⚙</tg-emoji> 设置",
   "SUBSCRIPTION_SETTINGS_OVERVIEW": "<b>订阅设置</b>\n\n<blockquote><b>当前参数：</b>\n流量：{traffic_used}/{traffic_limit}\n设备：{devices_used}/{devices_limit}</blockquote>",
   "SUBSCRIPTION_SETTINGS_PAID_ONLY": "设置仅适用于付费订阅",
   "SUBSCRIPTION_SPECIFIC_APP_TITLE": "<b>{app_name}-{device_name}</b>",
@@ -1670,5 +1670,7 @@
   "ADMIN_USERS_CLEANUP_BACKUP_FILE": "\n备份：<code>{value1}</code>",
   "ADMIN_USERS_CLEANUP_SUBSCRIPTION_RULE": "无订阅，或订阅已过期超过 {value1} 天。\n",
   "AUTO_RENEW_EXPIRED_INSUFFICIENT": "<tg-emoji emoji-id=\"5881702736843511327\">⚠</tg-emoji> <b>余额不足以续订</b>\n\n订阅已到期，但余额不足以自动续订。\n\n余额：{balance}\n需要：{required}\n\n请充值，订阅将自动续订。",
-  "SUB_STATUS_GRACE": "临时访问\n{end_date}"
+  "SUB_STATUS_GRACE": "临时访问\n{end_date}",
+  "CHANGE_TARIFF_BUTTON": "<tg-emoji emoji-id=\"5924720918826848520\">📦</tg-emoji> 更换套餐",
+  "SUBSCRIPTION_UI_BUY": "<tg-emoji emoji-id=\"5974217466270716579\">💵</tg-emoji> 购买订阅"
 }

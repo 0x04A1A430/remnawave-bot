@@ -972,7 +972,7 @@
   "CHANGE_DEVICES_SUCCESS_DECREASE": "Количество устройств уменьшено!\n\nБыло: {old_count} → Стало: {new_count}\nВозврат средств не производится",
   "CHANGE_DEVICES_SUCCESS_INCREASE": "Количество устройств увеличено!\n\nБыло: {old_count} → Стало: {new_count}\nСписано: {amount}",
   "CHANGE_DEVICES_TITLE": "Изменение количества устройств",
-  "CHANGE_TARIFF_BUTTON": "Тариф",
+  "CHANGE_TARIFF_BUTTON": "<tg-emoji emoji-id=\"5924720918826848520\">📦</tg-emoji> Сменить тариф",
   "CHANNEL_CHECK_BUTTON": "Я подписался",
   "CHANNEL_CHECK_NOT_SUBSCRIBED": "Вы ещё не подписались на все каналы! Подпишитесь и попробуйте снова.",
   "CHANNEL_REQUIRED_TEXT": "Пожалуйста, подпишитесь на обязательные каналы и нажмите кнопку ниже.",
@@ -1499,7 +1499,7 @@
   "SUBSCRIPTION_PURCHASED": "Подписка успешно приобретена!",
   "SUBSCRIPTION_REACTIVATED_CHANNEL_SUBSCRIBE": "Ваша подписка восстановлена!\n\nСпасибо за подписку на каналы. VPN снова активен.",
   "SUBSCRIPTION_REACTIVATED_CHANNEL_SUBSCRIBE_MULTI": "Ваши подписки восстановлены!\n\nСпасибо за подписку на каналы. VPN снова активен.",
-  "SUBSCRIPTION_SETTINGS_BUTTON": "<tg-emoji emoji-id='5877260593903177342'>⚙</tg-emoji> Настройки",
+  "SUBSCRIPTION_SETTINGS_BUTTON": "<tg-emoji emoji-id=\"5877260593903177342\">⚙</tg-emoji> Настройки",
   "SUBSCRIPTION_SETTINGS_OVERVIEW": "<b>Настройки подписки</b>\n\n<blockquote><b>Текущие параметры:</b>\nТрафик: {traffic_used} / {traffic_limit}\nУстройства: {devices_used} / {devices_limit}</blockquote>",
   "SUBSCRIPTION_SETTINGS_PAID_ONLY": "Настройки доступны только для платных подписок",
   "SUBSCRIPTION_SPECIFIC_APP_TITLE": "<b>{app_name} - {device_name}</b>",
@@ -1856,5 +1856,6 @@
   "ADMIN_USERS_CLEANUP_BACKUP_FILE": "\nБекап: <code>{value1}</code>",
   "ADMIN_USERS_CLEANUP_SUBSCRIPTION_RULE": "Подписка отсутствует или истекла более {value1} дней назад.\n",
   "AUTO_RENEW_EXPIRED_INSUFFICIENT": "<tg-emoji emoji-id=\"5881702736843511327\">⚠</tg-emoji> <b>Недостаточно средств для продления</b>\n\nПодписка закончилась, но на балансе не хватает денег для автоматического продления.\n\nБаланс: {balance}\nТребуется: {required}\n\nПополните баланс — подписка продлится автоматически.",
-  "SUB_STATUS_GRACE": "Временный доступ\n{end_date}"
+  "SUB_STATUS_GRACE": "Временный доступ\n{end_date}",
+  "SUBSCRIPTION_UI_BUY": "<tg-emoji emoji-id=\"5974217466270716579\">💵</tg-emoji> Купить подписку"
 }
