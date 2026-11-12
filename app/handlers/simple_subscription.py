@@ -57,7 +57,10 @@ async def start_simple_subscription_purchase(
 
     if not settings.SIMPLE_SUBSCRIPTION_ENABLED:
         await callback.answer(
-            texts.t('SUBSCRIPTION_UI_SIMPLE_UNAVAILABLE', '❌ Простая покупка подписки временно недоступна'),
+            texts.t(
+                'SUBSCRIPTION_UI_SIMPLE_UNAVAILABLE',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Простая покупка подписки временно недоступна',
+            ),
             show_alert=True,
         )
         return
@@ -84,7 +87,7 @@ async def start_simple_subscription_purchase(
         await callback.message.edit_text(
             texts.t(
                 'SUBSCRIPTION_UI_RESTRICTION_REASON',
-                '🚫 <b>Покупка подписки ограничена</b>\n\n{reason}\n\nЕсли вы считаете это ошибкой, вы можете обжаловать решение.',
+                '<tg-emoji emoji-id="5872829476143894491">🚫</tg-emoji> <b>Покупка подписки ограничена</b>\n\n{reason}\n\nЕсли вы считаете это ошибкой, вы можете обжаловать решение.',
             ).format(reason=reason),
             reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
         )
@@ -179,7 +182,7 @@ async def start_simple_subscription_purchase(
             )
             trial_notice = texts.t(
                 key,
-                'ℹ️ У вас уже есть триальная подписка. Она истекает через {days} дн.',
+                '<tg-emoji emoji-id="5879785854284599288">ℹ</tg-emoji> У вас уже есть триальная подписка. Она истекает через {days} дн.',
             ).format(days=days_left)
 
     server_label = _get_simple_subscription_server_label(
@@ -190,18 +193,22 @@ async def start_simple_subscription_purchase(
     show_devices = settings.is_devices_selection_enabled()
 
     message_lines = [
-        texts.t('SUBSCRIPTION_UI_SIMPLE_TITLE', '⚡ <b>Простая покупка подписки</b>'),
-        '',
-        texts.t('SUBSCRIPTION_UI_PERIOD_DAYS', '📅 Период: {days} дней').format(
-            days=subscription_params['period_days']
+        texts.t(
+            'SUBSCRIPTION_UI_SIMPLE_TITLE',
+            '<tg-emoji emoji-id="5843553939672274145">⚡</tg-emoji> <b>Простая покупка подписки</b>',
         ),
+        '',
+        texts.t(
+            'SUBSCRIPTION_UI_PERIOD_DAYS', '<tg-emoji emoji-id="5967412305338568701">📅</tg-emoji> Период: {days} дней'
+        ).format(days=subscription_params['period_days']),
     ]
 
     if show_devices:
         message_lines.append(
-            texts.t('SUBSCRIPTION_UI_DEVICES_VALUE', '📱 Устройства: {devices}').format(
-                devices=subscription_params['device_limit']
-            )
+            texts.t(
+                'SUBSCRIPTION_UI_DEVICES_VALUE',
+                '<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> Устройства: {devices}',
+            ).format(devices=subscription_params['device_limit'])
         )
 
     traffic_limit_gb = subscription_params['traffic_limit_gb']
@@ -213,15 +220,20 @@ async def start_simple_subscription_purchase(
 
     message_lines.extend(
         [
-            texts.t('SUBSCRIPTION_UI_TRAFFIC_VALUE', '📊 Трафик: {traffic}').format(traffic=traffic_label),
-            texts.t('SUBSCRIPTION_UI_SERVER_VALUE', '🌍 Сервер: {server}').format(server=server_label),
+            texts.t(
+                'SUBSCRIPTION_UI_TRAFFIC_VALUE',
+                '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> Трафик: {traffic}',
+            ).format(traffic=traffic_label),
+            texts.t('SUBSCRIPTION_UI_SERVER_VALUE', 'Сервер: {server}').format(server=server_label),
             '',
-            texts.t('SUBSCRIPTION_UI_COST_VALUE', '💰 Стоимость: {amount}').format(
-                amount=settings.format_price(price_kopeks)
-            ),
-            texts.t('SUBSCRIPTION_UI_BALANCE_VALUE', '💳 Ваш баланс: {amount}').format(
-                amount=settings.format_price(user_balance_kopeks)
-            ),
+            texts.t(
+                'SUBSCRIPTION_UI_COST_VALUE',
+                '<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> Стоимость: {amount}',
+            ).format(amount=settings.format_price(price_kopeks)),
+            texts.t(
+                'SUBSCRIPTION_UI_BALANCE_VALUE',
+                '<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> Ваш баланс: {amount}',
+            ).format(amount=settings.format_price(user_balance_kopeks)),
             '',
         ]
     )
@@ -232,7 +244,7 @@ async def start_simple_subscription_purchase(
         message_lines.append(
             texts.t(
                 'SUBSCRIPTION_UI_ACTIVE_CHANGE_WARNING',
-                '⚠️ У вас уже есть активная платная подписка. Покупка простой подписки изменит параметры вашей текущей подписки. Требуется подтверждение.',
+                '<tg-emoji emoji-id="5881702736843511327">⚠</tg-emoji> У вас уже есть активная платная подписка. Покупка простой подписки изменит параметры вашей текущей подписки. Требуется подтверждение.',
             )
         )
         message_text = '\n'.join(message_lines)
@@ -241,7 +253,10 @@ async def start_simple_subscription_purchase(
         keyboard_rows = [
             [
                 types.InlineKeyboardButton(
-                    text=texts.t('SUBSCRIPTION_UI_CONFIRM_PURCHASE', '✅ Подтвердить покупку'),
+                    text=texts.t(
+                        'SUBSCRIPTION_UI_CONFIRM_PURCHASE',
+                        '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Подтвердить покупку',
+                    ),
                     callback_data='simple_subscription_confirm_purchase',
                 )
             ],
@@ -278,7 +293,10 @@ async def start_simple_subscription_purchase(
             keyboard_rows.append(
                 [
                     types.InlineKeyboardButton(
-                        text=texts.t('SUBSCRIPTION_UI_PAY_BALANCE', '✅ Оплатить с баланса'),
+                        text=texts.t(
+                            'SUBSCRIPTION_UI_PAY_BALANCE',
+                            '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Оплатить с баланса',
+                        ),
                         callback_data='simple_subscription_pay_with_balance',
                     )
                 ]
@@ -324,7 +342,12 @@ def _get_simple_subscription_payment_keyboard(language: str) -> types.InlineKeyb
     # Добавляем доступные методы оплаты
     if settings.TELEGRAM_STARS_ENABLED:
         keyboard.append(
-            [types.InlineKeyboardButton(text='⭐ Telegram Stars', callback_data='simple_subscription_stars')]
+            [
+                types.InlineKeyboardButton(
+                    text='<tg-emoji emoji-id="5958376256788502078">⭐</tg-emoji> Telegram Stars',
+                    callback_data='simple_subscription_stars',
+                )
+            ]
         )
 
     if settings.is_yookassa_enabled():
@@ -332,13 +355,16 @@ def _get_simple_subscription_payment_keyboard(language: str) -> types.InlineKeyb
         if settings.YOOKASSA_SBP_ENABLED:
             yookassa_methods.append(
                 types.InlineKeyboardButton(
-                    text=texts.t('SUBSCRIPTION_UI_YOOKASSA_SBP', '🏦 YooKassa (СБП)'),
+                    text=texts.t('SUBSCRIPTION_UI_YOOKASSA_SBP', 'YooKassa (СБП)'),
                     callback_data='simple_subscription_yookassa_sbp',
                 )
             )
         yookassa_methods.append(
             types.InlineKeyboardButton(
-                text=texts.t('SUBSCRIPTION_UI_YOOKASSA_CARD', '💳 YooKassa (Карта)'),
+                text=texts.t(
+                    'SUBSCRIPTION_UI_YOOKASSA_CARD',
+                    '<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> YooKassa (Карта)',
+                ),
                 callback_data='simple_subscription_yookassa',
             )
         )
@@ -347,35 +373,67 @@ def _get_simple_subscription_payment_keyboard(language: str) -> types.InlineKeyb
 
     if settings.is_cryptobot_enabled():
         keyboard.append(
-            [types.InlineKeyboardButton(text='🪙 CryptoBot', callback_data='simple_subscription_cryptobot')]
+            [
+                types.InlineKeyboardButton(
+                    text='<tg-emoji emoji-id="5992430854909989581">🪙</tg-emoji> CryptoBot',
+                    callback_data='simple_subscription_cryptobot',
+                )
+            ]
         )
 
     if settings.is_heleket_enabled():
-        keyboard.append([types.InlineKeyboardButton(text='🪙 Heleket', callback_data='simple_subscription_heleket')])
+        keyboard.append(
+            [
+                types.InlineKeyboardButton(
+                    text='<tg-emoji emoji-id="5992430854909989581">🪙</tg-emoji> Heleket',
+                    callback_data='simple_subscription_heleket',
+                )
+            ]
+        )
 
     if settings.is_mulenpay_enabled():
         mulenpay_name = settings.get_mulenpay_display_name()
         keyboard.append(
-            [types.InlineKeyboardButton(text=f'💳 {mulenpay_name}', callback_data='simple_subscription_mulenpay')]
+            [
+                types.InlineKeyboardButton(
+                    text=f'<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> {mulenpay_name}',
+                    callback_data='simple_subscription_mulenpay',
+                )
+            ]
         )
 
     if settings.is_pal24_enabled():
-        keyboard.append([types.InlineKeyboardButton(text='💳 PayPalych', callback_data='simple_subscription_pal24')])
+        keyboard.append(
+            [
+                types.InlineKeyboardButton(
+                    text='<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> PayPalych',
+                    callback_data='simple_subscription_pal24',
+                )
+            ]
+        )
 
     if settings.is_anore_enabled():
         keyboard.append(
             [
                 types.InlineKeyboardButton(
-                    text=texts.t('SUBSCRIPTION_UI_TOPUP_PROVIDER', '💳 Пополнить баланс: {provider}').format(
-                        provider=settings.get_anore_display_name()
-                    ),
+                    text=texts.t(
+                        'SUBSCRIPTION_UI_TOPUP_PROVIDER',
+                        '<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> Пополнить баланс: {provider}',
+                    ).format(provider=settings.get_anore_display_name()),
                     callback_data='topup_anore',
                 )
             ]
         )
 
     if settings.is_wata_enabled():
-        keyboard.append([types.InlineKeyboardButton(text='💳 WATA', callback_data='simple_subscription_wata')])
+        keyboard.append(
+            [
+                types.InlineKeyboardButton(
+                    text='<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> WATA',
+                    callback_data='simple_subscription_wata',
+                )
+            ]
+        )
 
     # Кнопка назад
     keyboard.append(
@@ -457,7 +515,10 @@ async def handle_simple_subscription_pay_with_balance(
 
     if not subscription_params:
         await callback.answer(
-            texts.t('SUBSCRIPTION_UI_STALE_DATA', '❌ Данные подписки устарели. Пожалуйста, начните сначала.'),
+            texts.t(
+                'SUBSCRIPTION_UI_STALE_DATA',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Данные подписки устарели. Пожалуйста, начните сначала.',
+            ),
             show_alert=True,
         )
         return
@@ -472,7 +533,7 @@ async def handle_simple_subscription_pay_with_balance(
         await callback.answer(
             texts.t(
                 'SUBSCRIPTION_UI_CONFIRM_ACTIVE',
-                '⚠️ У вас уже есть активная платная подписка. Пожалуйста, подтвердите покупку.',
+                '<tg-emoji emoji-id="5881702736843511327">⚠</tg-emoji> У вас уже есть активная платная подписка. Пожалуйста, подтвердите покупку.',
             ),
             show_alert=True,
         )
@@ -525,7 +586,8 @@ async def handle_simple_subscription_pay_with_balance(
     if total_required > 0 and user_balance_kopeks < total_required:
         await callback.answer(
             texts.t(
-                'SUBSCRIPTION_UI_INSUFFICIENT_SUBSCRIPTION', '❌ Недостаточно средств на балансе для оплаты подписки'
+                'SUBSCRIPTION_UI_INSUFFICIENT_SUBSCRIPTION',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Недостаточно средств на балансе для оплаты подписки',
             ),
             show_alert=True,
         )
@@ -551,7 +613,10 @@ async def handle_simple_subscription_pay_with_balance(
 
         if not success:
             await callback.answer(
-                texts.t('SUBSCRIPTION_UI_BALANCE_DEBIT_FAILED', '❌ Ошибка списания средств с баланса'),
+                texts.t(
+                    'SUBSCRIPTION_UI_BALANCE_DEBIT_FAILED',
+                    '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Ошибка списания средств с баланса',
+                ),
                 show_alert=True,
             )
             return
@@ -644,7 +709,8 @@ async def handle_simple_subscription_pay_with_balance(
             )
             await callback.answer(
                 texts.t(
-                    'SUBSCRIPTION_UI_CREATION_REFUNDED', '❌ Ошибка создания подписки. Средства возвращены на баланс.'
+                    'SUBSCRIPTION_UI_CREATION_REFUNDED',
+                    '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Ошибка создания подписки. Средства возвращены на баланс.',
                 ),
                 show_alert=True,
             )
@@ -688,18 +754,23 @@ async def handle_simple_subscription_pay_with_balance(
         show_devices = settings.is_devices_selection_enabled()
 
         success_lines = [
-            texts.t('SUBSCRIPTION_UI_ACTIVATED_TITLE', '✅ <b>Подписка успешно активирована!</b>'),
-            '',
-            texts.t('SUBSCRIPTION_UI_PERIOD_DAYS', '📅 Период: {days} дней').format(
-                days=subscription_params['period_days']
+            texts.t(
+                'SUBSCRIPTION_UI_ACTIVATED_TITLE',
+                '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> <b>Подписка успешно активирована!</b>',
             ),
+            '',
+            texts.t(
+                'SUBSCRIPTION_UI_PERIOD_DAYS',
+                '<tg-emoji emoji-id="5967412305338568701">📅</tg-emoji> Период: {days} дней',
+            ).format(days=subscription_params['period_days']),
         ]
 
         if show_devices:
             success_lines.append(
-                texts.t('SUBSCRIPTION_UI_DEVICES_VALUE', '📱 Устройства: {devices}').format(
-                    devices=subscription_params['device_limit']
-                )
+                texts.t(
+                    'SUBSCRIPTION_UI_DEVICES_VALUE',
+                    '<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> Устройства: {devices}',
+                ).format(devices=subscription_params['device_limit'])
             )
 
         success_traffic_gb = subscription_params['traffic_limit_gb']
@@ -711,17 +782,25 @@ async def handle_simple_subscription_pay_with_balance(
 
         success_lines.extend(
             [
-                texts.t('SUBSCRIPTION_UI_TRAFFIC_VALUE', '📊 Трафик: {traffic}').format(traffic=success_traffic_label),
-                texts.t('SUBSCRIPTION_UI_SERVER_VALUE', '🌍 Сервер: {server}').format(server=server_label),
+                texts.t(
+                    'SUBSCRIPTION_UI_TRAFFIC_VALUE',
+                    '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> Трафик: {traffic}',
+                ).format(traffic=success_traffic_label),
+                texts.t('SUBSCRIPTION_UI_SERVER_VALUE', 'Сервер: {server}').format(server=server_label),
                 '',
-                texts.t('SUBSCRIPTION_UI_DEBIT_VALUE', '💰 Списано с баланса: {amount}').format(
-                    amount=settings.format_price(price_kopeks)
-                ),
-                texts.t('SUBSCRIPTION_UI_BALANCE_VALUE', '💳 Ваш баланс: {amount}').format(
-                    amount=settings.format_price(db_user.balance_kopeks)
-                ),
+                texts.t(
+                    'SUBSCRIPTION_UI_DEBIT_VALUE',
+                    '<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> Списано с баланса: {amount}',
+                ).format(amount=settings.format_price(price_kopeks)),
+                texts.t(
+                    'SUBSCRIPTION_UI_BALANCE_VALUE',
+                    '<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> Ваш баланс: {amount}',
+                ).format(amount=settings.format_price(db_user.balance_kopeks)),
                 '',
-                texts.t('SUBSCRIPTION_UI_CONNECT_SECTION', "🔗 Для подключения перейдите в раздел 'Подключиться'"),
+                texts.t(
+                    'SUBSCRIPTION_UI_CONNECT_SECTION',
+                    "<tg-emoji emoji-id='5877465816030515018'>🔗</tg-emoji> Для подключения перейдите в раздел 'Подключиться'",
+                ),
             ]
         )
 
@@ -729,7 +808,9 @@ async def handle_simple_subscription_pay_with_balance(
 
         connect_mode = settings.CONNECT_BUTTON_MODE
         subscription_link = get_display_subscription_link(subscription)
-        connect_button_text = texts.t('CONNECT_BUTTON', '🔗 Подключиться')
+        connect_button_text = texts.t(
+            'CONNECT_BUTTON', '<tg-emoji emoji-id="5877465816030515018">🔗</tg-emoji> Подключиться'
+        )
 
         def _fallback_connect_button() -> types.InlineKeyboardButton:
             return types.InlineKeyboardButton(
@@ -832,7 +913,7 @@ async def handle_simple_subscription_pay_with_balance(
         await callback.answer(
             texts.t(
                 'SUBSCRIPTION_UI_PAYMENT_FAILED_SUPPORT',
-                '❌ Ошибка оплаты подписки. Попробуйте позже или обратитесь в поддержку.',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Ошибка оплаты подписки. Попробуйте позже или обратитесь в поддержку.',
             ),
             show_alert=True,
         )
@@ -850,7 +931,7 @@ async def handle_simple_subscription_pay_with_balance_disabled(
     await callback.answer(
         get_texts(getattr(db_user, 'language', None)).t(
             'SUBSCRIPTION_UI_INSUFFICIENT_TOPUP',
-            '❌ Недостаточно средств на балансе. Пополните баланс или выберите другой способ оплаты.',
+            '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Недостаточно средств на балансе. Пополните баланс или выберите другой способ оплаты.',
         ),
         show_alert=True,
     )
@@ -871,7 +952,10 @@ async def handle_simple_subscription_other_payment_methods(
 
     if not subscription_params:
         await callback.answer(
-            texts.t('SUBSCRIPTION_UI_STALE_DATA', '❌ Данные подписки устарели. Пожалуйста, начните сначала.'),
+            texts.t(
+                'SUBSCRIPTION_UI_STALE_DATA',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Данные подписки устарели. Пожалуйста, начните сначала.',
+            ),
             show_alert=True,
         )
         return
@@ -916,18 +1000,22 @@ async def handle_simple_subscription_other_payment_methods(
     show_devices = settings.is_devices_selection_enabled()
 
     message_lines = [
-        texts.t('SUBSCRIPTION_UI_PAYMENT_TITLE', '💳 <b>Оплата подписки</b>'),
-        '',
-        texts.t('SUBSCRIPTION_UI_PERIOD_DAYS', '📅 Период: {days} дней').format(
-            days=subscription_params['period_days']
+        texts.t(
+            'SUBSCRIPTION_UI_PAYMENT_TITLE',
+            '<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> <b>Оплата подписки</b>',
         ),
+        '',
+        texts.t(
+            'SUBSCRIPTION_UI_PERIOD_DAYS', '<tg-emoji emoji-id="5967412305338568701">📅</tg-emoji> Период: {days} дней'
+        ).format(days=subscription_params['period_days']),
     ]
 
     if show_devices:
         message_lines.append(
-            texts.t('SUBSCRIPTION_UI_DEVICES_VALUE', '📱 Устройства: {devices}').format(
-                devices=subscription_params['device_limit']
-            )
+            texts.t(
+                'SUBSCRIPTION_UI_DEVICES_VALUE',
+                '<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> Устройства: {devices}',
+            ).format(devices=subscription_params['device_limit'])
         )
 
     payment_traffic_gb = subscription_params['traffic_limit_gb']
@@ -939,12 +1027,16 @@ async def handle_simple_subscription_other_payment_methods(
 
     message_lines.extend(
         [
-            texts.t('SUBSCRIPTION_UI_TRAFFIC_VALUE', '📊 Трафик: {traffic}').format(traffic=payment_traffic_label),
-            texts.t('SUBSCRIPTION_UI_SERVER_VALUE', '🌍 Сервер: {server}').format(server=server_label),
+            texts.t(
+                'SUBSCRIPTION_UI_TRAFFIC_VALUE',
+                '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> Трафик: {traffic}',
+            ).format(traffic=payment_traffic_label),
+            texts.t('SUBSCRIPTION_UI_SERVER_VALUE', 'Сервер: {server}').format(server=server_label),
             '',
-            texts.t('SUBSCRIPTION_UI_COST_VALUE', '💰 Стоимость: {amount}').format(
-                amount=settings.format_price(price_kopeks)
-            ),
+            texts.t(
+                'SUBSCRIPTION_UI_COST_VALUE',
+                '<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> Стоимость: {amount}',
+            ).format(amount=settings.format_price(price_kopeks)),
             '',
             (
                 texts.t(
@@ -966,7 +1058,10 @@ async def handle_simple_subscription_other_payment_methods(
         keyboard_rows.append(
             [
                 types.InlineKeyboardButton(
-                    text=texts.t('SUBSCRIPTION_UI_PAY_BALANCE', '✅ Оплатить с баланса'),
+                    text=texts.t(
+                        'SUBSCRIPTION_UI_PAY_BALANCE',
+                        '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Оплатить с баланса',
+                    ),
                     callback_data='simple_subscription_pay_with_balance',
                 )
             ]
@@ -997,7 +1092,10 @@ async def handle_simple_subscription_payment_method(
 
     if not subscription_params:
         await callback.answer(
-            texts.t('SUBSCRIPTION_UI_STALE_DATA', '❌ Данные подписки устарели. Пожалуйста, начните сначала.'),
+            texts.t(
+                'SUBSCRIPTION_UI_STALE_DATA',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Данные подписки устарели. Пожалуйста, начните сначала.',
+            ),
             show_alert=True,
         )
         return
@@ -1012,7 +1110,7 @@ async def handle_simple_subscription_payment_method(
         await callback.answer(
             texts.t(
                 'SUBSCRIPTION_UI_CONFIRM_ACTIVE_MENU',
-                '⚠️ У вас уже есть активная платная подписка. Пожалуйста, подтвердите покупку через главное меню.',
+                '<tg-emoji emoji-id="5881702736843511327">⚠</tg-emoji> У вас уже есть активная платная подписка. Пожалуйста, подтвердите покупку через главное меню.',
             ),
             show_alert=True,
         )
@@ -1064,7 +1162,8 @@ async def handle_simple_subscription_payment_method(
             if not order:
                 await callback.answer(
                     texts.t(
-                        'SUBSCRIPTION_UI_ORDER_PREPARATION_FAILED', '❌ Не удалось подготовить заказ. Попробуйте позже.'
+                        'SUBSCRIPTION_UI_ORDER_PREPARATION_FAILED',
+                        '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Не удалось подготовить заказ. Попробуйте позже.',
                     ),
                     show_alert=True,
                 )
@@ -1107,14 +1206,20 @@ async def handle_simple_subscription_payment_method(
             # Оплата через YooKassa
             if not settings.is_yookassa_enabled():
                 await callback.answer(
-                    texts.t('SUBSCRIPTION_UI_YOOKASSA_UNAVAILABLE', '❌ Оплата через YooKassa временно недоступна'),
+                    texts.t(
+                        'SUBSCRIPTION_UI_YOOKASSA_UNAVAILABLE',
+                        '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Оплата через YooKassa временно недоступна',
+                    ),
                     show_alert=True,
                 )
                 return
 
             if payment_method == 'yookassa_sbp' and not settings.YOOKASSA_SBP_ENABLED:
                 await callback.answer(
-                    texts.t('SUBSCRIPTION_UI_SBP_UNAVAILABLE', '❌ Оплата через СБП временно недоступна'),
+                    texts.t(
+                        'SUBSCRIPTION_UI_SBP_UNAVAILABLE',
+                        '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Оплата через СБП временно недоступна',
+                    ),
                     show_alert=True,
                 )
                 return
@@ -1133,7 +1238,10 @@ async def handle_simple_subscription_payment_method(
 
             if not order:
                 await callback.answer(
-                    texts.t('SUBSCRIPTION_UI_ORDER_CREATION_FAILED', '❌ Ошибка создания заказа'),
+                    texts.t(
+                        'SUBSCRIPTION_UI_ORDER_CREATION_FAILED',
+                        '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Ошибка создания заказа',
+                    ),
                     show_alert=True,
                 )
                 return
@@ -1176,7 +1284,10 @@ async def handle_simple_subscription_payment_method(
 
             if not payment_result:
                 await callback.answer(
-                    texts.t('SUBSCRIPTION_UI_PAYMENT_CREATION_FAILED', '❌ Ошибка создания платежа'),
+                    texts.t(
+                        'SUBSCRIPTION_UI_PAYMENT_CREATION_FAILED',
+                        '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Ошибка создания платежа',
+                    ),
                     show_alert=True,
                 )
                 return
@@ -1187,7 +1298,10 @@ async def handle_simple_subscription_payment_method(
 
             if not confirmation_url and not qr_confirmation_data:
                 await callback.answer(
-                    texts.t('SUBSCRIPTION_UI_PAYMENT_DATA_FAILED', '❌ Ошибка получения данных для оплаты'),
+                    texts.t(
+                        'SUBSCRIPTION_UI_PAYMENT_DATA_FAILED',
+                        '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Ошибка получения данных для оплаты',
+                    ),
                     show_alert=True,
                 )
                 return
@@ -1231,7 +1345,10 @@ async def handle_simple_subscription_payment_method(
                 keyboard_buttons.append(
                     [
                         types.InlineKeyboardButton(
-                            text=texts.t('SUBSCRIPTION_UI_OPEN_PAYMENT', '🔗 Перейти к оплате'),
+                            text=texts.t(
+                                'SUBSCRIPTION_UI_OPEN_PAYMENT',
+                                '<tg-emoji emoji-id="5877465816030515018">🔗</tg-emoji> Перейти к оплате',
+                            ),
                             url=confirmation_url,
                         )
                     ]
@@ -1241,7 +1358,10 @@ async def handle_simple_subscription_payment_method(
                 keyboard_buttons.append(
                     [
                         types.InlineKeyboardButton(
-                            text=texts.t('SUBSCRIPTION_UI_BANK_APP_PAYMENT', '📱 Оплатить в приложении банка'),
+                            text=texts.t(
+                                'SUBSCRIPTION_UI_BANK_APP_PAYMENT',
+                                '<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> Оплатить в приложении банка',
+                            ),
                             callback_data='temp_disabled',
                         )
                     ]
@@ -1251,7 +1371,10 @@ async def handle_simple_subscription_payment_method(
             keyboard_buttons.append(
                 [
                     types.InlineKeyboardButton(
-                        text=texts.t('SUBSCRIPTION_UI_CHECK_STATUS', '📊 Проверить статус'),
+                        text=texts.t(
+                            'SUBSCRIPTION_UI_CHECK_STATUS',
+                            '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> Проверить статус',
+                        ),
                         callback_data=f'check_yookassa_{payment_result["local_payment_id"]}',
                     )
                 ]
@@ -1266,18 +1389,23 @@ async def handle_simple_subscription_payment_method(
             show_devices = settings.is_devices_selection_enabled()
 
             message_lines = [
-                texts.t('SUBSCRIPTION_UI_YOOKASSA_TITLE', '💳 <b>Оплата подписки через YooKassa</b>'),
-                '',
-                texts.t('SUBSCRIPTION_UI_PERIOD_DAYS', '📅 Период: {days} дней').format(
-                    days=subscription_params['period_days']
+                texts.t(
+                    'SUBSCRIPTION_UI_YOOKASSA_TITLE',
+                    '<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> <b>Оплата подписки через YooKassa</b>',
                 ),
+                '',
+                texts.t(
+                    'SUBSCRIPTION_UI_PERIOD_DAYS',
+                    '<tg-emoji emoji-id="5967412305338568701">📅</tg-emoji> Период: {days} дней',
+                ).format(days=subscription_params['period_days']),
             ]
 
             if show_devices:
                 message_lines.append(
-                    texts.t('SUBSCRIPTION_UI_DEVICES_VALUE', '📱 Устройства: {devices}').format(
-                        devices=subscription_params['device_limit']
-                    )
+                    texts.t(
+                        'SUBSCRIPTION_UI_DEVICES_VALUE',
+                        '<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> Устройства: {devices}',
+                    ).format(devices=subscription_params['device_limit'])
                 )
 
             yookassa_traffic_gb = subscription_params['traffic_limit_gb']
@@ -1289,13 +1417,15 @@ async def handle_simple_subscription_payment_method(
 
             message_lines.extend(
                 [
-                    texts.t('SUBSCRIPTION_UI_TRAFFIC_VALUE', '📊 Трафик: {traffic}').format(
-                        traffic=yookassa_traffic_label
-                    ),
-                    texts.t('SUBSCRIPTION_UI_AMOUNT_VALUE', '💰 Сумма: {amount}').format(
-                        amount=settings.format_price(price_kopeks)
-                    ),
-                    texts.t('SUBSCRIPTION_UI_PAYMENT_ID_SHORT', '🆔 ID платежа: {payment_id}...').format(
+                    texts.t(
+                        'SUBSCRIPTION_UI_TRAFFIC_VALUE',
+                        '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> Трафик: {traffic}',
+                    ).format(traffic=yookassa_traffic_label),
+                    texts.t(
+                        'SUBSCRIPTION_UI_AMOUNT_VALUE',
+                        '<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> Сумма: {amount}',
+                    ).format(amount=settings.format_price(price_kopeks)),
+                    texts.t('SUBSCRIPTION_UI_PAYMENT_ID_SHORT', 'ID платежа: {payment_id}...').format(
                         payment_id=payment_result['yookassa_payment_id'][:8]
                     ),
                     '',
@@ -1308,12 +1438,12 @@ async def handle_simple_subscription_payment_method(
             if not confirmation_url:
                 message_text += texts.t(
                     'SUBSCRIPTION_UI_BANK_INSTRUCTIONS',
-                    '📱 <b>Инструкция по оплате:</b>\n1. Откройте приложение вашего банка\n2. Найдите функцию оплаты по реквизитам или перевод по СБП\n3. Введите ID платежа: <code>{payment_id}</code>\n4. Подтвердите платеж в приложении банка\n5. Деньги поступят на баланс автоматически\n\n',
+                    '<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> <b>Инструкция по оплате:</b>\n1. Откройте приложение вашего банка\n2. Найдите функцию оплаты по реквизитам или перевод по СБП\n3. Введите ID платежа: <code>{payment_id}</code>\n4. Подтвердите платеж в приложении банка\n5. Деньги поступят на баланс автоматически\n\n',
                 ).format(payment_id=payment_result['yookassa_payment_id'])
 
             message_text += texts.t(
                 'SUBSCRIPTION_UI_YOOKASSA_FOOTER',
-                '🔒 Оплата происходит через защищенную систему YooKassa\n✅ Принимаем карты: Visa, MasterCard, МИР\n\n❓ Если возникнут проблемы, обратитесь в {support}',
+                '<tg-emoji emoji-id="5832546462478635761">🔒</tg-emoji> Оплата происходит через защищенную систему YooKassa\n<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Принимаем карты: Visa, MasterCard, МИР\n\n<tg-emoji emoji-id="5873121512445187130">❓</tg-emoji> Если возникнут проблемы, обратитесь в {support}',
             ).format(support=settings.get_support_contact_display_html())
 
             # Отправляем сообщение с инструкциями и клавиатурой
@@ -1349,7 +1479,10 @@ async def handle_simple_subscription_payment_method(
             # Оплата через CryptoBot
             if not settings.is_cryptobot_enabled():
                 await callback.answer(
-                    texts.t('SUBSCRIPTION_UI_CRYPTOBOT_UNAVAILABLE', '❌ Оплата через CryptoBot временно недоступна'),
+                    texts.t(
+                        'SUBSCRIPTION_UI_CRYPTOBOT_UNAVAILABLE',
+                        '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Оплата через CryptoBot временно недоступна',
+                    ),
                     show_alert=True,
                 )
                 return
@@ -1359,7 +1492,7 @@ async def handle_simple_subscription_payment_method(
                 await callback.answer(
                     texts.t(
                         'SUBSCRIPTION_UI_CRYPTOBOT_RUB_RANGE',
-                        '❌ Сумма должна быть от 100 до 100 000 ₽ для оплаты через CryptoBot',
+                        '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Сумма должна быть от 100 до 100 000 ₽ для оплаты через CryptoBot',
                     ),
                     show_alert=True,
                 )
@@ -1378,7 +1511,7 @@ async def handle_simple_subscription_payment_method(
                 await callback.answer(
                     texts.t(
                         'SUBSCRIPTION_UI_CRYPTOBOT_MIN',
-                        '❌ Минимальная сумма для оплаты через CryptoBot — примерно 1 USD',
+                        '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Минимальная сумма для оплаты через CryptoBot — примерно 1 USD',
                     ),
                     show_alert=True,
                 )
@@ -1386,7 +1519,8 @@ async def handle_simple_subscription_payment_method(
             if amount_usd > 1000:
                 await callback.answer(
                     texts.t(
-                        'SUBSCRIPTION_UI_CRYPTOBOT_MAX', '❌ Максимальная сумма для оплаты через CryptoBot — 1000 USD'
+                        'SUBSCRIPTION_UI_CRYPTOBOT_MAX',
+                        '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Максимальная сумма для оплаты через CryptoBot — 1000 USD',
                     ),
                     show_alert=True,
                 )
@@ -1409,7 +1543,7 @@ async def handle_simple_subscription_payment_method(
                 await callback.answer(
                     texts.t(
                         'SUBSCRIPTION_UI_CRYPTOBOT_CREATION_FAILED',
-                        '❌ Ошибка создания платежа через CryptoBot. Попробуйте позже или обратитесь в поддержку.',
+                        '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Ошибка создания платежа через CryptoBot. Попробуйте позже или обратитесь в поддержку.',
                     ),
                     show_alert=True,
                 )
@@ -1425,7 +1559,7 @@ async def handle_simple_subscription_payment_method(
                 await callback.answer(
                     texts.t(
                         'SUBSCRIPTION_UI_PAYMENT_LINK_FAILED',
-                        '❌ Не удалось получить ссылку для оплаты. Обратитесь в поддержку.',
+                        '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Не удалось получить ссылку для оплаты. Обратитесь в поддержку.',
                     ),
                     show_alert=True,
                 )
@@ -1435,13 +1569,19 @@ async def handle_simple_subscription_payment_method(
                 inline_keyboard=[
                     [
                         types.InlineKeyboardButton(
-                            text=texts.t('SUBSCRIPTION_UI_PAY_CRYPTOBOT', '🪙 Оплатить через CryptoBot'),
+                            text=texts.t(
+                                'SUBSCRIPTION_UI_PAY_CRYPTOBOT',
+                                '<tg-emoji emoji-id="5992430854909989581">🪙</tg-emoji> Оплатить через CryptoBot',
+                            ),
                             url=payment_url,
                         )
                     ],
                     [
                         types.InlineKeyboardButton(
-                            text=texts.t('CHECK_STATUS_BUTTON', '📊 Проверить статус'),
+                            text=texts.t(
+                                'CHECK_STATUS_BUTTON',
+                                '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> Проверить статус',
+                            ),
                             callback_data=f'check_simple_cryptobot_{crypto_result["local_payment_id"]}',
                         )
                     ],
@@ -1455,7 +1595,7 @@ async def handle_simple_subscription_payment_method(
 
             message_text = texts.t(
                 'SUBSCRIPTION_UI_CRYPTOBOT_DETAILS',
-                "🪙 <b>Оплата через CryptoBot</b>\n\n💰 Сумма к оплате: {rubles:.0f} ₽\n💵 В долларах: {dollars:.2f} USD\n🪙 Актив: {asset}\n💱 Курс: 1 USD ≈ {rate:.2f} ₽\n🆔 ID платежа: {invoice_id}...\n\n📱 <b>Инструкция:</b>\n1. Нажмите кнопку 'Оплатить через CryptoBot'\n2. Выберите актив и следуйте подсказкам\n3. Подтвердите перевод\n4. Средства зачислятся автоматически\n\n❓ Если возникнут проблемы, обратитесь в {support}",
+                "<tg-emoji emoji-id='5992430854909989581'>🪙</tg-emoji> <b>Оплата через CryptoBot</b>\n\n<tg-emoji emoji-id='5811989245761426317'>💰</tg-emoji> Сумма к оплате: {rubles:.0f} ₽\n<tg-emoji emoji-id='5967390100357648692'>💵</tg-emoji> В долларах: {dollars:.2f} USD\n<tg-emoji emoji-id='5992430854909989581'>🪙</tg-emoji> Актив: {asset}\nКурс: 1 USD ≈ {rate:.2f} ₽\nID платежа: {invoice_id}...\n\n<tg-emoji emoji-id='5985833664884250583'>📱</tg-emoji> <b>Инструкция:</b>\n1. Нажмите кнопку 'Оплатить через CryptoBot'\n2. Выберите актив и следуйте подсказкам\n3. Подтвердите перевод\n4. Средства зачислятся автоматически\n\n<tg-emoji emoji-id='5873121512445187130'>❓</tg-emoji> Если возникнут проблемы, обратитесь в {support}",
             ).format(
                 rubles=amount_rubles,
                 dollars=amount_usd,
@@ -1478,7 +1618,10 @@ async def handle_simple_subscription_payment_method(
         elif payment_method == 'heleket':
             if not settings.is_heleket_enabled():
                 await callback.answer(
-                    texts.t('SUBSCRIPTION_UI_HELEKET_UNAVAILABLE', '❌ Оплата через Heleket временно недоступна'),
+                    texts.t(
+                        'SUBSCRIPTION_UI_HELEKET_UNAVAILABLE',
+                        '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Оплата через Heleket временно недоступна',
+                    ),
                     show_alert=True,
                 )
                 return
@@ -1488,7 +1631,7 @@ async def handle_simple_subscription_payment_method(
                 await callback.answer(
                     texts.t(
                         'SUBSCRIPTION_UI_HELEKET_RUB_RANGE',
-                        '❌ Сумма должна быть от 100 до 100 000 ₽ для оплаты через Heleket',
+                        '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Сумма должна быть от 100 до 100 000 ₽ для оплаты через Heleket',
                     ),
                     show_alert=True,
                 )
@@ -1509,7 +1652,7 @@ async def handle_simple_subscription_payment_method(
                 await callback.answer(
                     texts.t(
                         'SUBSCRIPTION_UI_HELEKET_CREATION_FAILED',
-                        '❌ Ошибка создания платежа Heleket. Попробуйте позже или обратитесь в поддержку.',
+                        '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Ошибка создания платежа Heleket. Попробуйте позже или обратитесь в поддержку.',
                     ),
                     show_alert=True,
                 )
@@ -1520,7 +1663,7 @@ async def handle_simple_subscription_payment_method(
                 await callback.answer(
                     texts.t(
                         'SUBSCRIPTION_UI_HELEKET_LINK_FAILED',
-                        '❌ Не удалось получить ссылку для оплаты Heleket. Обратитесь в поддержку.',
+                        '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Не удалось получить ссылку для оплаты Heleket. Обратитесь в поддержку.',
                     ),
                     show_alert=True,
                 )
@@ -1542,13 +1685,19 @@ async def handle_simple_subscription_payment_method(
                 inline_keyboard=[
                     [
                         types.InlineKeyboardButton(
-                            text=texts.t('SUBSCRIPTION_UI_PAY_HELEKET', '🪙 Оплатить через Heleket'),
+                            text=texts.t(
+                                'SUBSCRIPTION_UI_PAY_HELEKET',
+                                '<tg-emoji emoji-id="5992430854909989581">🪙</tg-emoji> Оплатить через Heleket',
+                            ),
                             url=payment_url,
                         )
                     ],
                     [
                         types.InlineKeyboardButton(
-                            text=texts.t('CHECK_STATUS_BUTTON', '📊 Проверить статус'),
+                            text=texts.t(
+                                'CHECK_STATUS_BUTTON',
+                                '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> Проверить статус',
+                            ),
                             callback_data=f'check_simple_heleket_{local_payment_id}',
                         )
                     ],
@@ -1561,25 +1710,30 @@ async def handle_simple_subscription_payment_method(
             )
 
             message_lines = [
-                texts.t('SUBSCRIPTION_UI_HELEKET_TITLE', '🪙 <b>Оплата через Heleket</b>'),
-                '',
-                texts.t('SUBSCRIPTION_UI_AMOUNT_VALUE', '💰 Сумма: {amount}').format(
-                    amount=settings.format_price(price_kopeks)
+                texts.t(
+                    'SUBSCRIPTION_UI_HELEKET_TITLE',
+                    '<tg-emoji emoji-id="5992430854909989581">🪙</tg-emoji> <b>Оплата через Heleket</b>',
                 ),
+                '',
+                texts.t(
+                    'SUBSCRIPTION_UI_AMOUNT_VALUE',
+                    '<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> Сумма: {amount}',
+                ).format(amount=settings.format_price(price_kopeks)),
             ]
 
             if payer_amount and payer_currency:
                 message_lines.append(
-                    texts.t('SUBSCRIPTION_UI_CRYPTO_DUE', '🪙 К оплате: {amount} {currency}').format(
-                        amount=payer_amount, currency=payer_currency
-                    )
+                    texts.t(
+                        'SUBSCRIPTION_UI_CRYPTO_DUE',
+                        '<tg-emoji emoji-id="5992430854909989581">🪙</tg-emoji> К оплате: {amount} {currency}',
+                    ).format(amount=payer_amount, currency=payer_currency)
                 )
                 try:
                     payer_amount_float = float(payer_amount)
                     if payer_amount_float > 0:
                         rub_per_currency = amount_rubles / payer_amount_float
                         message_lines.append(
-                            texts.t('SUBSCRIPTION_UI_EXCHANGE_RATE', '💱 Курс: 1 {currency} ≈ {rate:.2f} ₽').format(
+                            texts.t('SUBSCRIPTION_UI_EXCHANGE_RATE', 'Курс: 1 {currency} ≈ {rate:.2f} ₽').format(
                                 currency=payer_currency, rate=rub_per_currency
                             )
                         )
@@ -1589,22 +1743,27 @@ async def handle_simple_subscription_payment_method(
             if markup_percent:
                 sign = '+' if markup_percent > 0 else ''
                 message_lines.append(
-                    texts.t('SUBSCRIPTION_UI_MARKUP', '📈 Наценка: {sign}{percent}%').format(
-                        sign=sign, percent=markup_percent
-                    )
+                    texts.t(
+                        'SUBSCRIPTION_UI_MARKUP',
+                        '<tg-emoji emoji-id="5776219138917668486">📈</tg-emoji> Наценка: {sign}{percent}%',
+                    ).format(sign=sign, percent=markup_percent)
                 )
 
             message_lines.extend(
                 [
                     '',
-                    texts.t('SUBSCRIPTION_UI_INSTRUCTIONS_TITLE', '📱 <b>Инструкция:</b>'),
+                    texts.t(
+                        'SUBSCRIPTION_UI_INSTRUCTIONS_TITLE',
+                        '<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> <b>Инструкция:</b>',
+                    ),
                     texts.t('SUBSCRIPTION_UI_HELEKET_STEP1', "1. Нажмите кнопку 'Оплатить через Heleket'"),
                     texts.t('SUBSCRIPTION_UI_HELEKET_STEP2', '2. Следуйте подсказкам на странице оплаты'),
                     texts.t('SUBSCRIPTION_UI_HELEKET_STEP3', '3. Подтвердите перевод'),
                     texts.t('SUBSCRIPTION_UI_HELEKET_STEP4', '4. Средства зачислятся автоматически'),
                     '',
                     texts.t(
-                        'SUBSCRIPTION_UI_CONTACT_SUPPORT', '❓ Если возникнут проблемы, обратитесь в {support}'
+                        'SUBSCRIPTION_UI_CONTACT_SUPPORT',
+                        '<tg-emoji emoji-id="5873121512445187130">❓</tg-emoji> Если возникнут проблемы, обратитесь в {support}',
                     ).format(support=settings.get_support_contact_display_html()),
                 ]
             )
@@ -1625,7 +1784,8 @@ async def handle_simple_subscription_payment_method(
             if not settings.is_mulenpay_enabled():
                 await callback.answer(
                     texts.t(
-                        'SUBSCRIPTION_UI_PROVIDER_UNAVAILABLE', '❌ Оплата через {provider} временно недоступна'
+                        'SUBSCRIPTION_UI_PROVIDER_UNAVAILABLE',
+                        '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Оплата через {provider} временно недоступна',
                     ).format(provider=mulenpay_name),
                     show_alert=True,
                 )
@@ -1635,7 +1795,7 @@ async def handle_simple_subscription_payment_method(
                 await callback.answer(
                     texts.t(
                         'SUBSCRIPTION_UI_MULENPAY_RANGE',
-                        '❌ Сумма для Mulen Pay должна быть в пределах от {minimum} до {maximum}',
+                        '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Сумма для Mulen Pay должна быть в пределах от {minimum} до {maximum}',
                     ).format(
                         minimum=settings.format_price(settings.MULENPAY_MIN_AMOUNT_KOPEKS),
                         maximum=settings.format_price(settings.MULENPAY_MAX_AMOUNT_KOPEKS),
@@ -1660,7 +1820,7 @@ async def handle_simple_subscription_payment_method(
                 await callback.answer(
                     texts.t(
                         'MULENPAY_PAYMENT_ERROR',
-                        '❌ Ошибка создания платежа Mulen Pay. Попробуйте позже или обратитесь в поддержку.',
+                        '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Ошибка создания платежа Mulen Pay. Попробуйте позже или обратитесь в поддержку.',
                     ),
                     show_alert=True,
                 )
@@ -1682,7 +1842,10 @@ async def handle_simple_subscription_payment_method(
                     ],
                     [
                         types.InlineKeyboardButton(
-                            text=texts.t('CHECK_STATUS_BUTTON', '📊 Проверить статус'),
+                            text=texts.t(
+                                'CHECK_STATUS_BUTTON',
+                                '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> Проверить статус',
+                            ),
                             callback_data=f'check_simple_mulenpay_{local_payment_id}',
                         )
                     ],
@@ -1697,15 +1860,15 @@ async def handle_simple_subscription_payment_method(
             message_template = texts.t(
                 'MULENPAY_PAYMENT_INSTRUCTIONS',
                 (
-                    '💳 <b>Оплата через {mulenpay_name_html}</b>\n\n'
-                    '💰 Сумма: {amount}\n'
-                    '🆔 ID платежа: {payment_id}\n\n'
-                    '📱 <b>Инструкция:</b>\n'
+                    '<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> <b>Оплата через {mulenpay_name_html}</b>\n\n'
+                    '<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> Сумма: {amount}\n'
+                    'ID платежа: {payment_id}\n\n'
+                    '<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> <b>Инструкция:</b>\n'
                     "1. Нажмите кнопку 'Оплатить через {mulenpay_name}'\n"
                     '2. Следуйте подсказкам платежной системы\n'
                     '3. Подтвердите перевод\n'
                     '4. Средства зачислятся автоматически\n\n'
-                    '❓ Если возникнут проблемы, обратитесь в {support}'
+                    '<tg-emoji emoji-id="5873121512445187130">❓</tg-emoji> Если возникнут проблемы, обратитесь в {support}'
                 ),
             )
 
@@ -1729,7 +1892,10 @@ async def handle_simple_subscription_payment_method(
             # Оплата через PayPalych
             if not settings.is_pal24_enabled():
                 await callback.answer(
-                    texts.t('SUBSCRIPTION_UI_PAL24_UNAVAILABLE', '❌ Оплата через PayPalych временно недоступна'),
+                    texts.t(
+                        'SUBSCRIPTION_UI_PAL24_UNAVAILABLE',
+                        '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Оплата через PayPalych временно недоступна',
+                    ),
                     show_alert=True,
                 )
                 return
@@ -1750,7 +1916,7 @@ async def handle_simple_subscription_payment_method(
                 await callback.answer(
                     texts.t(
                         'PAL24_PAYMENT_ERROR',
-                        '❌ Ошибка создания платежа PayPalych. Попробуйте позже или обратитесь в поддержку.',
+                        '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Ошибка создания платежа PayPalych. Попробуйте позже или обратитесь в поддержку.',
                     ),
                     show_alert=True,
                 )
@@ -1764,7 +1930,7 @@ async def handle_simple_subscription_payment_method(
                 await callback.answer(
                     texts.t(
                         'PAL24_PAYMENT_ERROR',
-                        '❌ Ошибка создания платежа PayPalych. Попробуйте позже или обратитесь в поддержку.',
+                        '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Ошибка создания платежа PayPalych. Попробуйте позже или обратитесь в поддержку.',
                     ),
                     show_alert=True,
                 )
@@ -1870,18 +2036,21 @@ async def handle_simple_subscription_payment_method(
             message_template = texts.t(
                 'PAL24_PAYMENT_INSTRUCTIONS',
                 (
-                    '🏦 <b>Оплата через PayPalych</b>\n\n'
-                    '💰 Сумма: {amount}\n'
-                    '🆔 ID счета: {bill_id}\n\n'
-                    '📱 <b>Инструкция:</b>\n{steps}\n\n'
-                    '❓ Если возникнут проблемы, обратитесь в {support}'
+                    '<b>Оплата через PayPalych</b>\n\n'
+                    '<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> Сумма: {amount}\n'
+                    'ID счета: {bill_id}\n\n'
+                    '<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> <b>Инструкция:</b>\n{steps}\n\n'
+                    '<tg-emoji emoji-id="5873121512445187130">❓</tg-emoji> Если возникнут проблемы, обратитесь в {support}'
                 ),
             )
 
             keyboard_rows = pay_buttons + [
                 [
                     types.InlineKeyboardButton(
-                        text=texts.t('CHECK_STATUS_BUTTON', '📊 Проверить статус'),
+                        text=texts.t(
+                            'CHECK_STATUS_BUTTON',
+                            '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> Проверить статус',
+                        ),
                         callback_data=f'check_simple_pal24_{local_payment_id}',
                     )
                 ],
@@ -1911,14 +2080,18 @@ async def handle_simple_subscription_payment_method(
             # Оплата через WATA
             if not settings.is_wata_enabled():
                 await callback.answer(
-                    texts.t('SUBSCRIPTION_UI_WATA_UNAVAILABLE', '❌ Оплата через WATA временно недоступна'),
+                    texts.t(
+                        'SUBSCRIPTION_UI_WATA_UNAVAILABLE',
+                        '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Оплата через WATA временно недоступна',
+                    ),
                     show_alert=True,
                 )
                 return
             if price_kopeks < settings.WATA_MIN_AMOUNT_KOPEKS or price_kopeks > settings.WATA_MAX_AMOUNT_KOPEKS:
                 await callback.answer(
                     texts.t(
-                        'SUBSCRIPTION_UI_WATA_RANGE', '❌ Сумма для WATA должна быть между {minimum} и {maximum}.'
+                        'SUBSCRIPTION_UI_WATA_RANGE',
+                        '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Сумма для WATA должна быть между {minimum} и {maximum}.',
                     ).format(
                         minimum=settings.format_price(settings.WATA_MIN_AMOUNT_KOPEKS),
                         maximum=settings.format_price(settings.WATA_MAX_AMOUNT_KOPEKS),
@@ -1947,7 +2120,7 @@ async def handle_simple_subscription_payment_method(
                 await callback.answer(
                     texts.t(
                         'WATA_PAYMENT_ERROR',
-                        '❌ Ошибка создания платежа WATA. Попробуйте позже или обратитесь в поддержку.',
+                        '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Ошибка создания платежа WATA. Попробуйте позже или обратитесь в поддержку.',
                     ),
                     show_alert=True,
                 )
@@ -1969,7 +2142,10 @@ async def handle_simple_subscription_payment_method(
                     ],
                     [
                         types.InlineKeyboardButton(
-                            text=texts.t('CHECK_STATUS_BUTTON', '📊 Проверить статус'),
+                            text=texts.t(
+                                'CHECK_STATUS_BUTTON',
+                                '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> Проверить статус',
+                            ),
                             callback_data=f'check_simple_wata_{local_payment_id}',
                         )
                     ],
@@ -1984,15 +2160,15 @@ async def handle_simple_subscription_payment_method(
             message_template = texts.t(
                 'WATA_PAYMENT_INSTRUCTIONS',
                 (
-                    '💳 <b>Оплата через WATA</b>\n\n'
-                    '💰 Сумма: {amount}\n'
-                    '🆔 ID платежа: {payment_id}\n\n'
-                    '📱 <b>Инструкция:</b>\n'
+                    '<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> <b>Оплата через WATA</b>\n\n'
+                    '<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> Сумма: {amount}\n'
+                    'ID платежа: {payment_id}\n\n'
+                    '<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> <b>Инструкция:</b>\n'
                     "1. Нажмите кнопку 'Оплатить через WATA'\n"
                     '2. Следуйте подсказкам платежной системы\n'
                     '3. Подтвердите перевод\n'
                     '4. Средства зачислятся автоматически\n\n'
-                    '❓ Если возникнут проблемы, обратитесь в {support}'
+                    '<tg-emoji emoji-id="5873121512445187130">❓</tg-emoji> Если возникнут проблемы, обратитесь в {support}'
                 ),
             )
 
@@ -2012,7 +2188,10 @@ async def handle_simple_subscription_payment_method(
 
         else:
             await callback.answer(
-                texts.t('SUBSCRIPTION_UI_UNKNOWN_PAYMENT_METHOD', '❌ Неизвестный способ оплаты'),
+                texts.t(
+                    'SUBSCRIPTION_UI_UNKNOWN_PAYMENT_METHOD',
+                    '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Неизвестный способ оплаты',
+                ),
                 show_alert=True,
             )
 
@@ -2021,7 +2200,7 @@ async def handle_simple_subscription_payment_method(
         await callback.answer(
             texts.t(
                 'SUBSCRIPTION_UI_REQUEST_FAILED_SUPPORT',
-                '❌ Ошибка обработки запроса. Попробуйте позже или обратитесь в поддержку.',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Ошибка обработки запроса. Попробуйте позже или обратитесь в поддержку.',
             ),
             show_alert=True,
         )
@@ -2036,7 +2215,10 @@ async def check_simple_pal24_payment_status(
 ):
     texts = get_texts(getattr(db_user, 'language', None))
     if db_user is None:
-        await callback.answer(texts.t('PAYMENT_UI_NOT_FOUND', '❌ Платеж не найден'), show_alert=True)
+        await callback.answer(
+            texts.t('PAYMENT_UI_NOT_FOUND', '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Платеж не найден'),
+            show_alert=True,
+        )
         return
     try:
         local_payment_id = int(callback.data.rsplit('_', 1)[-1])
@@ -2044,7 +2226,12 @@ async def check_simple_pal24_payment_status(
 
         payment = await get_pal24_payment_by_id(db, local_payment_id)
         if not payment or payment.user_id != db_user.id:
-            await callback.answer(texts.t('PAYMENT_UI_NOT_FOUND', '❌ Платеж не найден'), show_alert=True)
+            await callback.answer(
+                texts.t(
+                    'PAYMENT_UI_NOT_FOUND', '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Платеж не найден'
+                ),
+                show_alert=True,
+            )
             return
 
         payment_service = PaymentService(callback.bot)
@@ -2052,7 +2239,10 @@ async def check_simple_pal24_payment_status(
 
         if not status_info:
             await callback.answer(
-                texts.t('SUBSCRIPTION_UI_PAYMENT_NOT_FOUND', '❌ Платеж не найден'),
+                texts.t(
+                    'SUBSCRIPTION_UI_PAYMENT_NOT_FOUND',
+                    '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Платеж не найден',
+                ),
                 show_alert=True,
             )
             return
@@ -2069,26 +2259,29 @@ async def check_simple_pal24_payment_status(
                 texts.t('SUBSCRIPTION_UI_STATUS_PROCESSING', 'Обрабатывается'),
             ),
             'SUCCESS': (
-                '✅',
+                '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji>',
                 texts.t('SUBSCRIPTION_UI_STATUS_PAID', 'Оплачен'),
             ),
             'FAIL': (
-                '❌',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji>',
                 texts.t('SUBSCRIPTION_UI_STATUS_CANCELLED', 'Отменен'),
             ),
             'UNDERPAID': (
-                '⚠️',
+                '<tg-emoji emoji-id="5881702736843511327">⚠</tg-emoji>',
                 texts.t('SUBSCRIPTION_UI_STATUS_UNDERPAID', 'Недоплата'),
             ),
             'OVERPAID': (
-                '⚠️',
+                '<tg-emoji emoji-id="5881702736843511327">⚠</tg-emoji>',
                 texts.t('SUBSCRIPTION_UI_STATUS_OVERPAID', 'Переплата'),
             ),
         }
 
         emoji, status_text = status_labels.get(
             payment.status,
-            ('❓', texts.t('SUBSCRIPTION_UI_STATUS_UNKNOWN', 'Неизвестно')),
+            (
+                '<tg-emoji emoji-id="5873121512445187130">❓</tg-emoji>',
+                texts.t('SUBSCRIPTION_UI_STATUS_UNKNOWN', 'Неизвестно'),
+            ),
         )
 
         metadata = payment.metadata_json or {}
@@ -2103,24 +2296,28 @@ async def check_simple_pal24_payment_status(
             card_link = payment.link_page_url
 
         message_lines = [
-            texts.t('SUBSCRIPTION_UI_STATUS_PAL24_TITLE', '🏦 Статус платежа PayPalych:'),
+            texts.t('SUBSCRIPTION_UI_STATUS_PAL24_TITLE', 'Статус платежа PayPalych:'),
             '',
-            texts.t('SUBSCRIPTION_UI_BILL_ID', '🆔 ID счета: {bill_id}').format(bill_id=payment.bill_id),
-            texts.t('SUBSCRIPTION_UI_AMOUNT_VALUE', '💰 Сумма: {amount}').format(
-                amount=settings.format_price(payment.amount_kopeks)
-            ),
-            texts.t('SUBSCRIPTION_UI_STATUS_VALUE', '📊 Статус: {emoji} {status}').format(
-                emoji=emoji, status=status_text
-            ),
-            texts.t('SUBSCRIPTION_UI_CREATED_VALUE', '📅 Создан: {date}').format(
-                date=format_local_datetime(payment.created_at, '%d.%m.%Y %H:%M')
-            ),
+            texts.t('SUBSCRIPTION_UI_BILL_ID', 'ID счета: {bill_id}').format(bill_id=payment.bill_id),
+            texts.t(
+                'SUBSCRIPTION_UI_AMOUNT_VALUE', '<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> Сумма: {amount}'
+            ).format(amount=settings.format_price(payment.amount_kopeks)),
+            texts.t(
+                'SUBSCRIPTION_UI_STATUS_VALUE',
+                '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> Статус: {emoji} {status}',
+            ).format(emoji=emoji, status=status_text),
+            texts.t(
+                'SUBSCRIPTION_UI_CREATED_VALUE', '<tg-emoji emoji-id="5967412305338568701">📅</tg-emoji> Создан: {date}'
+            ).format(date=format_local_datetime(payment.created_at, '%d.%m.%Y %H:%M')),
         ]
 
         if payment.is_paid:
             message_lines += [
                 '',
-                texts.t('SUBSCRIPTION_UI_PAYMENT_COMPLETE', '✅ Платеж успешно завершен! Средства уже зачислены.'),
+                texts.t(
+                    'SUBSCRIPTION_UI_PAYMENT_COMPLETE',
+                    '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Платеж успешно завершен! Средства уже зачислены.',
+                ),
             ]
         elif payment.status in {'NEW', 'PROCESS'}:
             message_lines += [
@@ -2130,15 +2327,20 @@ async def check_simple_pal24_payment_status(
                 ),
             ]
             if sbp_link:
-                message_lines += ['', texts.t('SUBSCRIPTION_UI_SBP_LINK', '🏦 СБП: {link}').format(link=sbp_link)]
+                message_lines += ['', texts.t('SUBSCRIPTION_UI_SBP_LINK', 'СБП: {link}').format(link=sbp_link)]
             if card_link and card_link != sbp_link:
-                message_lines.append(texts.t('SUBSCRIPTION_UI_CARD_LINK', '💳 Карта: {link}').format(link=card_link))
+                message_lines.append(
+                    texts.t(
+                        'SUBSCRIPTION_UI_CARD_LINK',
+                        '<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> Карта: {link}',
+                    ).format(link=card_link)
+                )
         elif payment.status in {'FAIL', 'UNDERPAID', 'OVERPAID'}:
             message_lines += [
                 '',
                 texts.t(
                     'SUBSCRIPTION_UI_PAYMENT_INCOMPLETE_SUPPORT',
-                    '❌ Платеж не завершен корректно. Обратитесь в {support}',
+                    '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Платеж не завершен корректно. Обратитесь в {support}',
                 ).format(support=settings.get_support_contact_display()),
             ]
 
@@ -2187,7 +2389,10 @@ async def check_simple_pal24_payment_status(
             + [
                 [
                     types.InlineKeyboardButton(
-                        text=texts.t('CHECK_STATUS_BUTTON', '📊 Проверить статус'),
+                        text=texts.t(
+                            'CHECK_STATUS_BUTTON',
+                            '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> Проверить статус',
+                        ),
                         callback_data=f'check_simple_pal24_{local_payment_id}',
                     )
                 ],
@@ -2211,7 +2416,10 @@ async def check_simple_pal24_payment_status(
     except Exception as error:
         logger.error('Ошибка проверки статуса PayPalych для простой подписки', error=error)
         await callback.answer(
-            texts.t('SUBSCRIPTION_UI_STATUS_CHECK_FAILED', '❌ Ошибка проверки статуса'),
+            texts.t(
+                'SUBSCRIPTION_UI_STATUS_CHECK_FAILED',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Ошибка проверки статуса',
+            ),
             show_alert=True,
         )
 
@@ -2225,13 +2433,19 @@ async def check_simple_mulenpay_payment_status(
     texts = get_texts(getattr(db_user, 'language', None))
     _ui_texts = texts
     if db_user is None:
-        await callback.answer(texts.t('PAYMENT_UI_NOT_FOUND', '❌ Платеж не найден'), show_alert=True)
+        await callback.answer(
+            texts.t('PAYMENT_UI_NOT_FOUND', '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Платеж не найден'),
+            show_alert=True,
+        )
         return
     try:
         local_payment_id = int(callback.data.rsplit('_', 1)[-1])
     except (ValueError, IndexError):
         await callback.answer(
-            _ui_texts.t('SUBSCRIPTION_UI_INVALID_PAYMENT_ID', '❌ Некорректный идентификатор платежа'),
+            _ui_texts.t(
+                'SUBSCRIPTION_UI_INVALID_PAYMENT_ID',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Некорректный идентификатор платежа',
+            ),
             show_alert=True,
         )
         return
@@ -2240,7 +2454,10 @@ async def check_simple_mulenpay_payment_status(
 
     payment = await get_mulenpay_payment_by_local_id(db, local_payment_id)
     if not payment or payment.user_id != db_user.id:
-        await callback.answer(texts.t('PAYMENT_UI_NOT_FOUND', '❌ Платеж не найден'), show_alert=True)
+        await callback.answer(
+            texts.t('PAYMENT_UI_NOT_FOUND', '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Платеж не найден'),
+            show_alert=True,
+        )
         return
 
     payment_service = PaymentService(callback.bot)
@@ -2248,7 +2465,10 @@ async def check_simple_mulenpay_payment_status(
 
     if not status_info:
         await callback.answer(
-            _ui_texts.t('SUBSCRIPTION_UI_PAYMENT_NOT_FOUND', '❌ Платеж не найден'),
+            _ui_texts.t(
+                'SUBSCRIPTION_UI_PAYMENT_NOT_FOUND',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Платеж не найден',
+            ),
             show_alert=True,
         )
         return
@@ -2275,41 +2495,60 @@ async def check_simple_mulenpay_payment_status(
             '⌛',
             _ui_texts.t('SUBSCRIPTION_UI_STATUS_PROCESSING', 'Обрабатывается'),
         ),
-        'success': ('✅', _ui_texts.t('SUBSCRIPTION_UI_STATUS_PAID', 'Оплачен')),
+        'success': (
+            '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji>',
+            _ui_texts.t('SUBSCRIPTION_UI_STATUS_PAID', 'Оплачен'),
+        ),
         'canceled': (
-            '❌',
+            '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji>',
             _ui_texts.t('SUBSCRIPTION_UI_STATUS_CANCELLED', 'Отменен'),
         ),
-        'error': ('⚠️', _ui_texts.t('SUBSCRIPTION_UI_STATUS_ERROR', 'Ошибка')),
-        'hold': ('🔒', _ui_texts.t('SUBSCRIPTION_UI_STATUS_HOLD', 'Холд')),
+        'error': (
+            '<tg-emoji emoji-id="5881702736843511327">⚠</tg-emoji>',
+            _ui_texts.t('SUBSCRIPTION_UI_STATUS_ERROR', 'Ошибка'),
+        ),
+        'hold': (
+            '<tg-emoji emoji-id="5832546462478635761">🔒</tg-emoji>',
+            _ui_texts.t('SUBSCRIPTION_UI_STATUS_HOLD', 'Холд'),
+        ),
         'unknown': (
-            '❓',
+            '<tg-emoji emoji-id="5873121512445187130">❓</tg-emoji>',
             _ui_texts.t('SUBSCRIPTION_UI_STATUS_UNKNOWN', 'Неизвестно'),
         ),
     }
 
     emoji, status_text = status_labels.get(
         payment.status,
-        ('❓', _ui_texts.t('SUBSCRIPTION_UI_STATUS_UNKNOWN', 'Неизвестно')),
+        (
+            '<tg-emoji emoji-id="5873121512445187130">❓</tg-emoji>',
+            _ui_texts.t('SUBSCRIPTION_UI_STATUS_UNKNOWN', 'Неизвестно'),
+        ),
     )
 
     message_lines = [
-        _ui_texts.t('SUBSCRIPTION_UI_STATUS_MULENPAY_TITLE', '💳 Статус платежа Mulen Pay:'),
+        _ui_texts.t(
+            'SUBSCRIPTION_UI_STATUS_MULENPAY_TITLE',
+            '<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> Статус платежа Mulen Pay:',
+        ),
         '',
-        f'🆔 ID: {payment.mulen_payment_id or payment.id}',
-        texts.t('SUBSCRIPTION_UI_AMOUNT_VALUE', '💰 Сумма: {amount}').format(
-            amount=settings.format_price(payment.amount_kopeks)
-        ),
-        texts.t('SUBSCRIPTION_UI_STATUS_VALUE', '📊 Статус: {emoji} {status}').format(emoji=emoji, status=status_text),
-        texts.t('SUBSCRIPTION_UI_CREATED_VALUE', '📅 Создан: {date}').format(
-            date=format_local_datetime(payment.created_at, '%d.%m.%Y %H:%M') if payment.created_at else '—'
-        ),
+        f'ID: {payment.mulen_payment_id or payment.id}',
+        texts.t(
+            'SUBSCRIPTION_UI_AMOUNT_VALUE', '<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> Сумма: {amount}'
+        ).format(amount=settings.format_price(payment.amount_kopeks)),
+        texts.t(
+            'SUBSCRIPTION_UI_STATUS_VALUE',
+            '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> Статус: {emoji} {status}',
+        ).format(emoji=emoji, status=status_text),
+        texts.t(
+            'SUBSCRIPTION_UI_CREATED_VALUE', '<tg-emoji emoji-id="5967412305338568701">📅</tg-emoji> Создан: {date}'
+        ).format(date=format_local_datetime(payment.created_at, '%d.%m.%Y %H:%M') if payment.created_at else '—'),
     ]
 
     if payment.is_paid:
         message_lines.append(
             _ui_texts.t(
-                'SUBSCRIPTION_UI_PAYMENT_COMPLETE_LINE', '\n✅ Платеж успешно завершен! Средства уже зачислены.'
+                'SUBSCRIPTION_UI_PAYMENT_COMPLETE_LINE',
+                '\n<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Платеж успешно завершен! Средства уже зачислены.',
             )
         )
     elif payment.status in {'created', 'processing'}:
@@ -2324,7 +2563,9 @@ async def check_simple_mulenpay_payment_status(
         inline_keyboard=[
             [
                 types.InlineKeyboardButton(
-                    text=texts.t('CHECK_STATUS_BUTTON', '📊 Проверить статус'),
+                    text=texts.t(
+                        'CHECK_STATUS_BUTTON', '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> Проверить статус'
+                    ),
                     callback_data=f'check_simple_mulenpay_{local_payment_id}',
                 )
             ],
@@ -2349,13 +2590,19 @@ async def check_simple_cryptobot_payment_status(
     texts = get_texts(getattr(db_user, 'language', None))
     _ui_texts = texts
     if db_user is None:
-        await callback.answer(texts.t('PAYMENT_UI_NOT_FOUND', '❌ Платеж не найден'), show_alert=True)
+        await callback.answer(
+            texts.t('PAYMENT_UI_NOT_FOUND', '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Платеж не найден'),
+            show_alert=True,
+        )
         return
     try:
         local_payment_id = int(callback.data.rsplit('_', 1)[-1])
     except (ValueError, IndexError):
         await callback.answer(
-            _ui_texts.t('SUBSCRIPTION_UI_INVALID_PAYMENT_ID', '❌ Некорректный идентификатор платежа'),
+            _ui_texts.t(
+                'SUBSCRIPTION_UI_INVALID_PAYMENT_ID',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Некорректный идентификатор платежа',
+            ),
             show_alert=True,
         )
         return
@@ -2364,7 +2611,10 @@ async def check_simple_cryptobot_payment_status(
 
     payment = await get_cryptobot_payment_by_id(db, local_payment_id)
     if not payment or payment.user_id != db_user.id:
-        await callback.answer(texts.t('PAYMENT_UI_NOT_FOUND', '❌ Платеж не найден'), show_alert=True)
+        await callback.answer(
+            texts.t('PAYMENT_UI_NOT_FOUND', '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Платеж не найден'),
+            show_alert=True,
+        )
         return
 
     status_labels = {
@@ -2372,12 +2622,21 @@ async def check_simple_cryptobot_payment_status(
             '⏳',
             _ui_texts.t('SUBSCRIPTION_UI_STATUS_PENDING', 'Ожидает оплаты'),
         ),
-        'paid': ('✅', _ui_texts.t('SUBSCRIPTION_UI_STATUS_PAID', 'Оплачен')),
-        'expired': ('❌', _ui_texts.t('SUBSCRIPTION_UI_STATUS_EXPIRED', 'Истек')),
+        'paid': (
+            '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji>',
+            _ui_texts.t('SUBSCRIPTION_UI_STATUS_PAID', 'Оплачен'),
+        ),
+        'expired': (
+            '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji>',
+            _ui_texts.t('SUBSCRIPTION_UI_STATUS_EXPIRED', 'Истек'),
+        ),
     }
     emoji, status_text = status_labels.get(
         payment.status,
-        ('❓', _ui_texts.t('SUBSCRIPTION_UI_STATUS_UNKNOWN', 'Неизвестно')),
+        (
+            '<tg-emoji emoji-id="5873121512445187130">❓</tg-emoji>',
+            _ui_texts.t('SUBSCRIPTION_UI_STATUS_UNKNOWN', 'Неизвестно'),
+        ),
     )
 
     language = settings.DEFAULT_LANGUAGE
@@ -2392,21 +2651,31 @@ async def check_simple_cryptobot_payment_status(
 
     texts = get_texts(getattr(db_user, 'language', None) or language)
     message_lines = [
-        _ui_texts.t('SUBSCRIPTION_UI_STATUS_CRYPTOBOT_TITLE', '🪙 <b>Статус платежа CryptoBot</b>'),
+        _ui_texts.t(
+            'SUBSCRIPTION_UI_STATUS_CRYPTOBOT_TITLE',
+            '<tg-emoji emoji-id="5992430854909989581">🪙</tg-emoji> <b>Статус платежа CryptoBot</b>',
+        ),
         '',
-        f'🆔 ID: {payment.invoice_id}',
-        texts.t('SUBSCRIPTION_UI_CURRENCY_AMOUNT', '💰 Сумма: {amount} {currency}').format(
-            amount=payment.amount, currency=payment.asset
-        ),
-        texts.t('SUBSCRIPTION_UI_STATUS_VALUE', '📊 Статус: {emoji} {status}').format(emoji=emoji, status=status_text),
-        texts.t('SUBSCRIPTION_UI_CREATED_VALUE', '📅 Создан: {date}').format(
-            date=format_local_datetime(payment.created_at, '%d.%m.%Y %H:%M') if payment.created_at else '—'
-        ),
+        f'ID: {payment.invoice_id}',
+        texts.t(
+            'SUBSCRIPTION_UI_CURRENCY_AMOUNT',
+            '<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> Сумма: {amount} {currency}',
+        ).format(amount=payment.amount, currency=payment.asset),
+        texts.t(
+            'SUBSCRIPTION_UI_STATUS_VALUE',
+            '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> Статус: {emoji} {status}',
+        ).format(emoji=emoji, status=status_text),
+        texts.t(
+            'SUBSCRIPTION_UI_CREATED_VALUE', '<tg-emoji emoji-id="5967412305338568701">📅</tg-emoji> Создан: {date}'
+        ).format(date=format_local_datetime(payment.created_at, '%d.%m.%Y %H:%M') if payment.created_at else '—'),
     ]
 
     if payment.status == 'paid':
         message_lines.append(
-            _ui_texts.t('SUBSCRIPTION_UI_PAYMENT_CONFIRMED_LINE', '\n✅ Платеж подтвержден. Средства уже зачислены.')
+            _ui_texts.t(
+                'SUBSCRIPTION_UI_PAYMENT_CONFIRMED_LINE',
+                '\n<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Платеж подтвержден. Средства уже зачислены.',
+            )
         )
     elif payment.status == 'active':
         message_lines.append(
@@ -2420,7 +2689,9 @@ async def check_simple_cryptobot_payment_status(
         inline_keyboard=[
             [
                 types.InlineKeyboardButton(
-                    text=texts.t('CHECK_STATUS_BUTTON', '📊 Проверить статус'),
+                    text=texts.t(
+                        'CHECK_STATUS_BUTTON', '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> Проверить статус'
+                    ),
                     callback_data=f'check_simple_cryptobot_{local_payment_id}',
                 )
             ],
@@ -2445,13 +2716,19 @@ async def check_simple_heleket_payment_status(
     texts = get_texts(getattr(db_user, 'language', None))
     _ui_texts = texts
     if db_user is None:
-        await callback.answer(texts.t('PAYMENT_UI_NOT_FOUND', '❌ Платеж не найден'), show_alert=True)
+        await callback.answer(
+            texts.t('PAYMENT_UI_NOT_FOUND', '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Платеж не найден'),
+            show_alert=True,
+        )
         return
     try:
         local_payment_id = int(callback.data.rsplit('_', 1)[-1])
     except (ValueError, IndexError):
         await callback.answer(
-            _ui_texts.t('SUBSCRIPTION_UI_INVALID_PAYMENT_ID', '❌ Некорректный идентификатор платежа'),
+            _ui_texts.t(
+                'SUBSCRIPTION_UI_INVALID_PAYMENT_ID',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Некорректный идентификатор платежа',
+            ),
             show_alert=True,
         )
         return
@@ -2460,7 +2737,10 @@ async def check_simple_heleket_payment_status(
 
     payment = await get_heleket_payment_by_id(db, local_payment_id)
     if not payment or payment.user_id != db_user.id:
-        await callback.answer(texts.t('PAYMENT_UI_NOT_FOUND', '❌ Платеж не найден'), show_alert=True)
+        await callback.answer(
+            texts.t('PAYMENT_UI_NOT_FOUND', '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Платеж не найден'),
+            show_alert=True,
+        )
         return
 
     status_labels = {
@@ -2468,20 +2748,26 @@ async def check_simple_heleket_payment_status(
             '⏳',
             _ui_texts.t('SUBSCRIPTION_UI_STATUS_PENDING', 'Ожидает оплаты'),
         ),
-        'paid': ('✅', _ui_texts.t('SUBSCRIPTION_UI_STATUS_PAID', 'Оплачен')),
+        'paid': (
+            '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji>',
+            _ui_texts.t('SUBSCRIPTION_UI_STATUS_PAID', 'Оплачен'),
+        ),
         'paid_over': (
-            '✅',
+            '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji>',
             _ui_texts.t('SUBSCRIPTION_UI_STATUS_OVERPAID_PAID', 'Оплачен (переплата)'),
         ),
         'wrong_amount': (
-            '⚠️',
+            '<tg-emoji emoji-id="5881702736843511327">⚠</tg-emoji>',
             _ui_texts.t('SUBSCRIPTION_UI_STATUS_WRONG_AMOUNT', 'Неверная сумма'),
         ),
         'cancel': (
-            '❌',
+            '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji>',
             _ui_texts.t('SUBSCRIPTION_UI_STATUS_CANCELLED', 'Отменен'),
         ),
-        'fail': ('❌', _ui_texts.t('SUBSCRIPTION_UI_STATUS_ERROR', 'Ошибка')),
+        'fail': (
+            '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji>',
+            _ui_texts.t('SUBSCRIPTION_UI_STATUS_ERROR', 'Ошибка'),
+        ),
         'process': (
             '⌛',
             _ui_texts.t('SUBSCRIPTION_UI_STATUS_PROCESSING', 'Обрабатывается'),
@@ -2494,7 +2780,10 @@ async def check_simple_heleket_payment_status(
 
     emoji, status_text = status_labels.get(
         payment.status,
-        ('❓', _ui_texts.t('SUBSCRIPTION_UI_STATUS_UNKNOWN', 'Неизвестно')),
+        (
+            '<tg-emoji emoji-id="5873121512445187130">❓</tg-emoji>',
+            _ui_texts.t('SUBSCRIPTION_UI_STATUS_UNKNOWN', 'Неизвестно'),
+        ),
     )
 
     language = settings.DEFAULT_LANGUAGE
@@ -2510,29 +2799,37 @@ async def check_simple_heleket_payment_status(
     texts = get_texts(getattr(db_user, 'language', None) or language)
 
     message_lines = [
-        _ui_texts.t('SUBSCRIPTION_UI_STATUS_HELEKET_TITLE', '🪙 Статус платежа Heleket:'),
+        _ui_texts.t(
+            'SUBSCRIPTION_UI_STATUS_HELEKET_TITLE',
+            '<tg-emoji emoji-id="5992430854909989581">🪙</tg-emoji> Статус платежа Heleket:',
+        ),
         '',
-        f'🆔 UUID: {payment.uuid[:8]}...',
-        texts.t('SUBSCRIPTION_UI_AMOUNT_VALUE', '💰 Сумма: {amount}').format(
-            amount=settings.format_price(payment.amount_kopeks)
-        ),
-        texts.t('SUBSCRIPTION_UI_STATUS_VALUE', '📊 Статус: {emoji} {status}').format(emoji=emoji, status=status_text),
-        texts.t('SUBSCRIPTION_UI_CREATED_VALUE', '📅 Создан: {date}').format(
-            date=format_local_datetime(payment.created_at, '%d.%m.%Y %H:%M') if payment.created_at else '—'
-        ),
+        f'UUID: {payment.uuid[:8]}...',
+        texts.t(
+            'SUBSCRIPTION_UI_AMOUNT_VALUE', '<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> Сумма: {amount}'
+        ).format(amount=settings.format_price(payment.amount_kopeks)),
+        texts.t(
+            'SUBSCRIPTION_UI_STATUS_VALUE',
+            '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> Статус: {emoji} {status}',
+        ).format(emoji=emoji, status=status_text),
+        texts.t(
+            'SUBSCRIPTION_UI_CREATED_VALUE', '<tg-emoji emoji-id="5967412305338568701">📅</tg-emoji> Создан: {date}'
+        ).format(date=format_local_datetime(payment.created_at, '%d.%m.%Y %H:%M') if payment.created_at else '—'),
     ]
 
     if payment.payer_amount and payment.payer_currency:
         message_lines.append(
-            texts.t('SUBSCRIPTION_UI_CRYPTO_PAYMENT', '🪙 Оплата: {amount} {currency}').format(
-                amount=payment.payer_amount, currency=payment.payer_currency
-            )
+            texts.t(
+                'SUBSCRIPTION_UI_CRYPTO_PAYMENT',
+                '<tg-emoji emoji-id="5992430854909989581">🪙</tg-emoji> Оплата: {amount} {currency}',
+            ).format(amount=payment.payer_amount, currency=payment.payer_currency)
         )
 
     if payment.is_paid:
         message_lines.append(
             _ui_texts.t(
-                'SUBSCRIPTION_UI_PAYMENT_COMPLETE_LINE', '\n✅ Платеж успешно завершен! Средства уже зачислены.'
+                'SUBSCRIPTION_UI_PAYMENT_COMPLETE_LINE',
+                '\n<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Платеж успешно завершен! Средства уже зачислены.',
             )
         )
     elif payment.status in {'check', 'process', 'confirm_check'}:
@@ -2544,15 +2841,16 @@ async def check_simple_heleket_payment_status(
         )
         if payment.payment_url:
             message_lines.append(
-                texts.t('SUBSCRIPTION_UI_PAYMENT_LINK', '\n🔗 Ссылка на оплату: {link}').format(
-                    link=payment.payment_url
-                )
+                texts.t(
+                    'SUBSCRIPTION_UI_PAYMENT_LINK',
+                    '\n<tg-emoji emoji-id="5877465816030515018">🔗</tg-emoji> Ссылка на оплату: {link}',
+                ).format(link=payment.payment_url)
             )
     elif payment.status in {'fail', 'cancel', 'wrong_amount'}:
         message_lines.append(
             texts.t(
                 'SUBSCRIPTION_UI_PAYMENT_INCOMPLETE_SUPPORT_LINE',
-                '\n❌ Платеж не завершен корректно. Обратитесь в {support}',
+                '\n<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Платеж не завершен корректно. Обратитесь в {support}',
             ).format(support=settings.get_support_contact_display())
         )
 
@@ -2560,7 +2858,9 @@ async def check_simple_heleket_payment_status(
         inline_keyboard=[
             [
                 types.InlineKeyboardButton(
-                    text=texts.t('CHECK_STATUS_BUTTON', '📊 Проверить статус'),
+                    text=texts.t(
+                        'CHECK_STATUS_BUTTON', '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> Проверить статус'
+                    ),
                     callback_data=f'check_simple_heleket_{local_payment_id}',
                 )
             ],
@@ -2584,13 +2884,19 @@ async def check_simple_wata_payment_status(
 ):
     texts = get_texts(getattr(db_user, 'language', None))
     if db_user is None:
-        await callback.answer(texts.t('PAYMENT_UI_NOT_FOUND', '❌ Платеж не найден'), show_alert=True)
+        await callback.answer(
+            texts.t('PAYMENT_UI_NOT_FOUND', '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Платеж не найден'),
+            show_alert=True,
+        )
         return
     try:
         local_payment_id = int(callback.data.rsplit('_', 1)[-1])
     except (ValueError, IndexError):
         await callback.answer(
-            texts.t('SUBSCRIPTION_UI_INVALID_PAYMENT_ID', '❌ Некорректный идентификатор платежа'),
+            texts.t(
+                'SUBSCRIPTION_UI_INVALID_PAYMENT_ID',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Некорректный идентификатор платежа',
+            ),
             show_alert=True,
         )
         return
@@ -2599,7 +2905,10 @@ async def check_simple_wata_payment_status(
 
     payment = await get_wata_payment_by_id(db, local_payment_id)
     if not payment or payment.user_id != db_user.id:
-        await callback.answer(texts.t('PAYMENT_UI_NOT_FOUND', '❌ Платеж не найден'), show_alert=True)
+        await callback.answer(
+            texts.t('PAYMENT_UI_NOT_FOUND', '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Платеж не найден'),
+            show_alert=True,
+        )
         return
 
     payment_service = PaymentService(callback.bot)
@@ -2607,7 +2916,10 @@ async def check_simple_wata_payment_status(
 
     if not status_info:
         await callback.answer(
-            texts.t('SUBSCRIPTION_UI_PAYMENT_NOT_FOUND', '❌ Платеж не найден'),
+            texts.t(
+                'SUBSCRIPTION_UI_PAYMENT_NOT_FOUND',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Платеж не найден',
+            ),
             show_alert=True,
         )
         return
@@ -2617,27 +2929,41 @@ async def check_simple_wata_payment_status(
     status_labels = {
         'Opened': ('⏳', texts.t('WATA_STATUS_OPENED', 'Ожидает оплаты')),
         'Closed': ('⌛', texts.t('WATA_STATUS_CLOSED', 'Обрабатывается')),
-        'Paid': ('✅', texts.t('WATA_STATUS_PAID', 'Оплачен')),
-        'Declined': ('❌', texts.t('WATA_STATUS_DECLINED', 'Отклонен')),
+        'Paid': ('<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji>', texts.t('WATA_STATUS_PAID', 'Оплачен')),
+        'Declined': (
+            '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji>',
+            texts.t('WATA_STATUS_DECLINED', 'Отклонен'),
+        ),
     }
-    emoji, status_text = status_labels.get(payment.status, ('❓', texts.t('WATA_STATUS_UNKNOWN', 'Неизвестно')))
+    emoji, status_text = status_labels.get(
+        payment.status,
+        ('<tg-emoji emoji-id="5873121512445187130">❓</tg-emoji>', texts.t('WATA_STATUS_UNKNOWN', 'Неизвестно')),
+    )
 
     message_lines = [
-        texts.t('WATA_STATUS_TITLE', '💳 <b>Статус платежа WATA</b>'),
+        texts.t(
+            'WATA_STATUS_TITLE', '<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> <b>Статус платежа WATA</b>'
+        ),
         '',
-        f'🆔 ID: {payment.payment_link_id}',
-        texts.t('SUBSCRIPTION_UI_AMOUNT_VALUE', '💰 Сумма: {amount}').format(
-            amount=settings.format_price(payment.amount_kopeks)
-        ),
-        texts.t('SUBSCRIPTION_UI_STATUS_VALUE', '📊 Статус: {emoji} {status}').format(emoji=emoji, status=status_text),
-        texts.t('SUBSCRIPTION_UI_CREATED_VALUE', '📅 Создан: {date}').format(
-            date=format_local_datetime(payment.created_at, '%d.%m.%Y %H:%M') if payment.created_at else '—'
-        ),
+        f'ID: {payment.payment_link_id}',
+        texts.t(
+            'SUBSCRIPTION_UI_AMOUNT_VALUE', '<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> Сумма: {amount}'
+        ).format(amount=settings.format_price(payment.amount_kopeks)),
+        texts.t(
+            'SUBSCRIPTION_UI_STATUS_VALUE',
+            '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> Статус: {emoji} {status}',
+        ).format(emoji=emoji, status=status_text),
+        texts.t(
+            'SUBSCRIPTION_UI_CREATED_VALUE', '<tg-emoji emoji-id="5967412305338568701">📅</tg-emoji> Создан: {date}'
+        ).format(date=format_local_datetime(payment.created_at, '%d.%m.%Y %H:%M') if payment.created_at else '—'),
     ]
 
     if payment.is_paid:
         message_lines.append(
-            texts.t('SUBSCRIPTION_UI_PAYMENT_COMPLETE_LINE', '\n✅ Платеж успешно завершен! Средства уже зачислены.')
+            texts.t(
+                'SUBSCRIPTION_UI_PAYMENT_COMPLETE_LINE',
+                '\n<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Платеж успешно завершен! Средства уже зачислены.',
+            )
         )
     elif payment.status in {'Opened', 'Closed'}:
         message_lines.append(
@@ -2651,7 +2977,9 @@ async def check_simple_wata_payment_status(
         inline_keyboard=[
             [
                 types.InlineKeyboardButton(
-                    text=texts.t('CHECK_STATUS_BUTTON', '📊 Проверить статус'),
+                    text=texts.t(
+                        'CHECK_STATUS_BUTTON', '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> Проверить статус'
+                    ),
                     callback_data=f'check_simple_wata_{local_payment_id}',
                 )
             ],
@@ -2684,7 +3012,10 @@ async def confirm_simple_subscription_purchase(
 
     if not subscription_params:
         await callback.answer(
-            texts.t('SUBSCRIPTION_UI_STALE_DATA', '❌ Данные подписки устарели. Пожалуйста, начните сначала.'),
+            texts.t(
+                'SUBSCRIPTION_UI_STALE_DATA',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Данные подписки устарели. Пожалуйста, начните сначала.',
+            ),
             show_alert=True,
         )
         return
@@ -2736,7 +3067,8 @@ async def confirm_simple_subscription_purchase(
     if total_required > 0 and user_balance_kopeks < total_required:
         await callback.answer(
             texts.t(
-                'SUBSCRIPTION_UI_INSUFFICIENT_SUBSCRIPTION', '❌ Недостаточно средств на балансе для оплаты подписки'
+                'SUBSCRIPTION_UI_INSUFFICIENT_SUBSCRIPTION',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Недостаточно средств на балансе для оплаты подписки',
             ),
             show_alert=True,
         )
@@ -2762,7 +3094,10 @@ async def confirm_simple_subscription_purchase(
 
         if not success:
             await callback.answer(
-                texts.t('SUBSCRIPTION_UI_BALANCE_DEBIT_FAILED', '❌ Ошибка списания средств с баланса'),
+                texts.t(
+                    'SUBSCRIPTION_UI_BALANCE_DEBIT_FAILED',
+                    '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Ошибка списания средств с баланса',
+                ),
                 show_alert=True,
             )
             return
@@ -2855,7 +3190,8 @@ async def confirm_simple_subscription_purchase(
             )
             await callback.answer(
                 texts.t(
-                    'SUBSCRIPTION_UI_CREATION_REFUNDED', '❌ Ошибка создания подписки. Средства возвращены на баланс.'
+                    'SUBSCRIPTION_UI_CREATION_REFUNDED',
+                    '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Ошибка создания подписки. Средства возвращены на баланс.',
                 ),
                 show_alert=True,
             )
@@ -2899,18 +3235,23 @@ async def confirm_simple_subscription_purchase(
         show_devices = settings.is_devices_selection_enabled()
 
         success_lines = [
-            texts.t('SUBSCRIPTION_UI_ACTIVATED_TITLE', '✅ <b>Подписка успешно активирована!</b>'),
-            '',
-            texts.t('SUBSCRIPTION_UI_PERIOD_DAYS', '📅 Период: {days} дней').format(
-                days=subscription_params['period_days']
+            texts.t(
+                'SUBSCRIPTION_UI_ACTIVATED_TITLE',
+                '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> <b>Подписка успешно активирована!</b>',
             ),
+            '',
+            texts.t(
+                'SUBSCRIPTION_UI_PERIOD_DAYS',
+                '<tg-emoji emoji-id="5967412305338568701">📅</tg-emoji> Период: {days} дней',
+            ).format(days=subscription_params['period_days']),
         ]
 
         if show_devices:
             success_lines.append(
-                texts.t('SUBSCRIPTION_UI_DEVICES_VALUE', '📱 Устройства: {devices}').format(
-                    devices=subscription_params['device_limit']
-                )
+                texts.t(
+                    'SUBSCRIPTION_UI_DEVICES_VALUE',
+                    '<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> Устройства: {devices}',
+                ).format(devices=subscription_params['device_limit'])
             )
 
         success_traffic_gb = subscription_params['traffic_limit_gb']
@@ -2922,17 +3263,25 @@ async def confirm_simple_subscription_purchase(
 
         success_lines.extend(
             [
-                texts.t('SUBSCRIPTION_UI_TRAFFIC_VALUE', '📊 Трафик: {traffic}').format(traffic=success_traffic_label),
-                texts.t('SUBSCRIPTION_UI_SERVER_VALUE', '🌍 Сервер: {server}').format(server=server_label),
+                texts.t(
+                    'SUBSCRIPTION_UI_TRAFFIC_VALUE',
+                    '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> Трафик: {traffic}',
+                ).format(traffic=success_traffic_label),
+                texts.t('SUBSCRIPTION_UI_SERVER_VALUE', 'Сервер: {server}').format(server=server_label),
                 '',
-                texts.t('SUBSCRIPTION_UI_DEBIT_VALUE', '💰 Списано с баланса: {amount}').format(
-                    amount=settings.format_price(price_kopeks)
-                ),
-                texts.t('SUBSCRIPTION_UI_BALANCE_VALUE', '💳 Ваш баланс: {amount}').format(
-                    amount=settings.format_price(db_user.balance_kopeks)
-                ),
+                texts.t(
+                    'SUBSCRIPTION_UI_DEBIT_VALUE',
+                    '<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> Списано с баланса: {amount}',
+                ).format(amount=settings.format_price(price_kopeks)),
+                texts.t(
+                    'SUBSCRIPTION_UI_BALANCE_VALUE',
+                    '<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> Ваш баланс: {amount}',
+                ).format(amount=settings.format_price(db_user.balance_kopeks)),
                 '',
-                texts.t('SUBSCRIPTION_UI_CONNECT_SECTION', "🔗 Для подключения перейдите в раздел 'Подключиться'"),
+                texts.t(
+                    'SUBSCRIPTION_UI_CONNECT_SECTION',
+                    "<tg-emoji emoji-id='5877465816030515018'>🔗</tg-emoji> Для подключения перейдите в раздел 'Подключиться'",
+                ),
             ]
         )
 
@@ -2940,7 +3289,9 @@ async def confirm_simple_subscription_purchase(
 
         connect_mode = settings.CONNECT_BUTTON_MODE
         subscription_link = get_display_subscription_link(subscription)
-        connect_button_text = texts.t('CONNECT_BUTTON', '🔗 Подключиться')
+        connect_button_text = texts.t(
+            'CONNECT_BUTTON', '<tg-emoji emoji-id="5877465816030515018">🔗</tg-emoji> Подключиться'
+        )
 
         def _fallback_connect_button() -> types.InlineKeyboardButton:
             return types.InlineKeyboardButton(
@@ -3043,7 +3394,7 @@ async def confirm_simple_subscription_purchase(
         await callback.answer(
             texts.t(
                 'SUBSCRIPTION_UI_PAYMENT_FAILED_SUPPORT',
-                '❌ Ошибка оплаты подписки. Попробуйте позже или обратитесь в поддержку.',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Ошибка оплаты подписки. Попробуйте позже или обратитесь в поддержку.',
             ),
             show_alert=True,
         )

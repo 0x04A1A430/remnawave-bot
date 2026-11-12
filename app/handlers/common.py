@@ -50,7 +50,7 @@ async def handle_unknown_callback(callback: types.CallbackQuery, db_user: User):
     await callback.answer(
         texts.t(
             'UNKNOWN_CALLBACK_ALERT',
-            '❓ Неизвестная команда. Попробуйте ещё раз.',
+            '<tg-emoji emoji-id="5873121512445187130">❓</tg-emoji> Неизвестная команда. Попробуйте ещё раз.',
         ),
         show_alert=True,
     )
@@ -91,7 +91,7 @@ async def handle_unknown_message(
     await message.answer(
         texts.t(
             'UNKNOWN_COMMAND_MESSAGE',
-            '❓ Не понимаю эту команду. Используйте кнопки меню.',
+            '<tg-emoji emoji-id="5873121512445187130">❓</tg-emoji> Не понимаю эту команду. Используйте кнопки меню.',
         ),
         reply_markup=get_back_keyboard(db_user.language if db_user else 'ru'),
     )

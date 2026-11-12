@@ -40,7 +40,7 @@ async def _render_question_text(
         current=current_index,
         total=total,
     )
-    lines = [f'🗳️ <b>{html.escape(poll_title)}</b>', '', header, '', html.escape(question.text)]
+    lines = [f'<b>{html.escape(poll_title)}</b>', '', header, '', html.escape(question.text)]
     return '\n'.join(lines)
 
 
@@ -221,7 +221,7 @@ async def handle_poll_answer(
 
     reward_amount = await reward_user_for_poll(db, response)
 
-    thanks_lines = [texts.t('POLL_COMPLETED', '🙏 Спасибо за участие в опросе!')]
+    thanks_lines = [texts.t('POLL_COMPLETED', 'Спасибо за участие в опросе!')]
     if reward_amount:
         thanks_lines.append(
             texts.t(
@@ -234,7 +234,7 @@ async def handle_poll_answer(
         callback.message,
         '\n\n'.join(thanks_lines),
     ):
-        await callback.answer(texts.t('POLL_COMPLETED', '🙏 Спасибо за участие в опросе!'))
+        await callback.answer(texts.t('POLL_COMPLETED', 'Спасибо за участие в опросе!'))
         return
     asyncio.create_task(_delete_message_later(callback.bot, callback.message.chat.id, callback.message.message_id))
     await callback.answer()

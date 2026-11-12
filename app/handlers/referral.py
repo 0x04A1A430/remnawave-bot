@@ -77,7 +77,10 @@ async def show_referral_info(callback: types.CallbackQuery, db_user: User, db: A
     cabinet_referral_link = settings.get_cabinet_referral_link(db_user.referral_code)
 
     blocks = [
-        texts.t('REFERRAL_PROGRAM_TITLE', '👥 <b>Реферальная программа</b>'),
+        texts.t(
+            'REFERRAL_PROGRAM_TITLE',
+            '<tg-emoji emoji-id="5915556996215476302">👥</tg-emoji> <b>Реферальная программа</b>',
+        ),
         '<blockquote>'
         + '\n'.join(
             [
@@ -174,13 +177,19 @@ async def show_referral_info(callback: types.CallbackQuery, db_user: User, db: A
         blocks.append('<blockquote>\n' + reward_content + '\n</blockquote>')
 
     blocks.append(
-        texts.t('REFERRAL_BOT_LINK_TITLE', '🤖 <b>Ссылка на бота:</b>') + f'\n{html_escape(bot_referral_link)}'
+        texts.t(
+            'REFERRAL_BOT_LINK_TITLE', '<tg-emoji emoji-id="5931415565955503486">🤖</tg-emoji> <b>Ссылка на бота:</b>'
+        )
+        + f'\n{html_escape(bot_referral_link)}'
     )
 
     # Show cabinet link if configured
     if cabinet_referral_link:
         blocks.append(
-            texts.t('REFERRAL_CABINET_LINK_TITLE', '🌐 <b>Ссылка на кабинет:</b>')
+            texts.t(
+                'REFERRAL_CABINET_LINK_TITLE',
+                '<tg-emoji emoji-id="5879585266426973039">🌐</tg-emoji> <b>Ссылка на кабинет:</b>',
+            )
             + f'\n{html_escape(cabinet_referral_link)}'
         )
 
@@ -200,27 +209,27 @@ async def show_referral_info(callback: types.CallbackQuery, db_user: User, db: A
                 reason_text = {
                     'referral_first_topup': texts.t(
                         'REFERRAL_EARNING_REASON_FIRST_TOPUP',
-                        '🎉 Первое пополнение',
+                        '<tg-emoji emoji-id="5994502837327892086">🎉</tg-emoji> Первое пополнение',
                     ),
                     'referral_commission_topup': texts.t(
                         'REFERRAL_EARNING_REASON_COMMISSION_TOPUP',
-                        '💰 Комиссия с пополнения',
+                        '<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> Комиссия с пополнения',
                     ),
                     'referral_commission': texts.t(
                         'REFERRAL_EARNING_REASON_COMMISSION_PURCHASE',
-                        '💰 Комиссия с покупки',
+                        '<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> Комиссия с покупки',
                     ),
                     'referral_registration_reward': texts.t(
                         'REFERRAL_EARNING_REASON_REGISTRATION',
-                        '👥 Награда за регистрацию',
+                        '<tg-emoji emoji-id="5915556996215476302">👥</tg-emoji> Награда за регистрацию',
                     ),
                     'referral_days_reward': texts.t(
                         'REFERRAL_EARNING_REASON_DAYS',
-                        '📅 Дни подписки',
+                        '<tg-emoji emoji-id="5967412305338568701">📅</tg-emoji> Дни подписки',
                     ),
                     'referral_days_bonus': texts.t(
                         'REFERRAL_EARNING_REASON_DAYS_BONUS',
-                        '🎁 Бонусные дни',
+                        '<tg-emoji emoji-id="6032937473162614352">🎁</tg-emoji> Бонусные дни',
                     ),
                 }.get(earning['reason'], earning['reason'])
 
@@ -341,14 +350,14 @@ async def show_referral_qr(
 
     caption = texts.t(
         'REFERRAL_QR_BOT_LINK',
-        '🤖 Ссылка на бота:\n{link}',
+        '<tg-emoji emoji-id="5931415565955503486">🤖</tg-emoji> Ссылка на бота:\n{link}',
     ).format(link=bot_referral_link)
 
     cabinet_referral_link = settings.get_cabinet_referral_link(db_user.referral_code)
     if cabinet_referral_link:
         caption += '\n\n' + texts.t(
             'REFERRAL_QR_CABINET_LINK',
-            '🌐 Ссылка на кабинет:\n{link}',
+            '<tg-emoji emoji-id="5879585266426973039">🌐</tg-emoji> Ссылка на кабинет:\n{link}',
         ).format(link=cabinet_referral_link)
     caption = compact_blank_lines(caption)
 
@@ -390,7 +399,7 @@ async def show_detailed_referral_list(callback: types.CallbackQuery, db_user: Us
             compact_blank_lines(
                 texts.t(
                     'REFERRAL_LIST_EMPTY',
-                    '📋 У вас пока нет рефералов.\n\nПоделитесь своей реферальной ссылкой, чтобы начать зарабатывать!',
+                    'У вас пока нет рефералов.\n\nПоделитесь своей реферальной ссылкой, чтобы начать зарабатывать!',
                 )
             ),
             types.InlineKeyboardMarkup(
@@ -547,7 +556,13 @@ async def show_referral_analytics(callback: types.CallbackQuery, db_user: User, 
 
     analytics = await get_referral_analytics(db, db_user.id)
 
-    text = texts.t('REFERRAL_ANALYTICS_TITLE', '📊 <b>Аналитика рефералов</b>') + '\n\n'
+    text = (
+        texts.t(
+            'REFERRAL_ANALYTICS_TITLE',
+            '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> <b>Аналитика рефералов</b>',
+        )
+        + '\n\n'
+    )
 
     ep = analytics['earnings_by_period']
     text += (
@@ -622,12 +637,12 @@ async def create_invite_message(callback: types.CallbackQuery, db_user: User, db
         if referee_bonus:
             bonus_block = '\n\n' + texts.t(
                 'REFERRAL_INVITE_BONUS_LEVELS',
-                '💎 Твой бонус за регистрацию по ссылке: {bonus}',
+                '<tg-emoji emoji-id="5963312935148195483">💎</tg-emoji> Твой бонус за регистрацию по ссылке: {bonus}',
             ).format(bonus=referee_bonus)
     elif settings.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS > 0:
         bonus_block = '\n\n' + texts.t(
             'REFERRAL_INVITE_BONUS',
-            '💎 При первом пополнении от {minimum} ты получишь {bonus} бонусом на баланс!',
+            '<tg-emoji emoji-id="5963312935148195483">💎</tg-emoji> При первом пополнении от {minimum} ты получишь {bonus} бонусом на баланс!',
         ).format(
             minimum=texts.format_price(settings.REFERRAL_MINIMUM_TOPUP_KOPEKS),
             bonus=texts.format_price(settings.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS),
@@ -640,15 +655,15 @@ async def create_invite_message(callback: types.CallbackQuery, db_user: User, db
     # html_escape-им всю собранную строку (иначе экранировались бы и теги <code>).
     cabinet_block = ''
     if cabinet_referral_link:
-        cabinet_block = f'\n\n🌐 <code>{html_escape(cabinet_referral_link)}</code>'
+        cabinet_block = f'\n\n<tg-emoji emoji-id="5879585266426973039">🌐</tg-emoji> <code>{html_escape(cabinet_referral_link)}</code>'
 
     invite_template = texts.t(
         'REFERRAL_INVITE_TEXT',
-        '🎉 Присоединяйся к VPN сервису!{bonus_block}\n\n'
-        '🚀 Быстрое подключение\n'
-        '🌍 Серверы по всему миру\n'
-        '🔒 Надежная защита\n\n'
-        '👇 Переходи по ссылке:\n'
+        '<tg-emoji emoji-id="5994502837327892086">🎉</tg-emoji> Присоединяйся к VPN сервису!{bonus_block}\n\n'
+        'Быстрое подключение\n'
+        'Серверы по всему миру\n'
+        '<tg-emoji emoji-id="5832546462478635761">🔒</tg-emoji> Надежная защита\n\n'
+        'Переходи по ссылке:\n'
         '{link}{cabinet_block}',
     )
     invite_html = html_escape(invite_template).format(
@@ -666,7 +681,10 @@ async def create_invite_message(callback: types.CallbackQuery, db_user: User, db
     await edit_or_answer_photo(
         callback,
         compact_blank_lines(
-            texts.t('REFERRAL_INVITE_CREATED_TITLE', '📝 <b>Приглашение создано!</b>')
+            texts.t(
+                'REFERRAL_INVITE_CREATED_TITLE',
+                '<tg-emoji emoji-id="5886330010054168711">📝</tg-emoji> <b>Приглашение создано!</b>',
+            )
             + '\n\n'
             + texts.t(
                 'REFERRAL_INVITE_CREATED_INSTRUCTION',
@@ -696,16 +714,17 @@ async def show_withdrawal_info(callback: types.CallbackQuery, db_user: User, db:
     # Проверяем возможность вывода
     can_request, reason, _stats = await referral_withdrawal_service.can_request_withdrawal(db, db_user.id)
 
-    text = texts.t('REFERRAL_WITHDRAWAL_TITLE', '💸 <b>Вывод реферального баланса</b>') + '\n\n'
+    text = texts.t('REFERRAL_WITHDRAWAL_TITLE', '<b>Вывод реферального баланса</b>') + '\n\n'
 
     # Показываем детальную статистику
     text += referral_withdrawal_service.format_balance_stats_for_user(stats, texts)
     text += '\n'
 
     text += (
-        texts.t('REFERRAL_WITHDRAWAL_MIN_AMOUNT', '📊 Минимальная сумма: <b>{amount}</b>').format(
-            amount=texts.format_price(min_amount)
-        )
+        texts.t(
+            'REFERRAL_WITHDRAWAL_MIN_AMOUNT',
+            '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> Минимальная сумма: <b>{amount}</b>',
+        ).format(amount=texts.format_price(min_amount))
         + '\n'
     )
     text += (
@@ -716,17 +735,26 @@ async def show_withdrawal_info(callback: types.CallbackQuery, db_user: User, db:
     keyboard = []
 
     if can_request:
-        text += texts.t('REFERRAL_WITHDRAWAL_READY', '✅ Вы можете запросить вывод средств') + '\n'
+        text += (
+            texts.t(
+                'REFERRAL_WITHDRAWAL_READY',
+                '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Вы можете запросить вывод средств',
+            )
+            + '\n'
+        )
         keyboard.append(
             [
                 types.InlineKeyboardButton(
-                    text=texts.t('REFERRAL_WITHDRAWAL_REQUEST_BUTTON', '📝 Оформить заявку'),
+                    text=texts.t(
+                        'REFERRAL_WITHDRAWAL_REQUEST_BUTTON',
+                        '<tg-emoji emoji-id="5886330010054168711">📝</tg-emoji> Оформить заявку',
+                    ),
                     callback_data='referral_withdrawal_start',
                 )
             ]
         )
     else:
-        text += f'❌ {html_escape(str(reason))}\n'
+        text += f'<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> {html_escape(str(reason))}\n'
 
     keyboard.append([make_button(text=texts.BACK, callback_data='menu_referrals', style='danger')])
 
@@ -753,7 +781,7 @@ async def start_withdrawal_request(callback: types.CallbackQuery, db_user: User,
     await state.set_state(ReferralWithdrawalStates.waiting_for_amount)
 
     text = texts.t(
-        'REFERRAL_WITHDRAWAL_ENTER_AMOUNT', '💸 Введите сумму для вывода в рублях\n\nДоступно: <b>{amount}</b>'
+        'REFERRAL_WITHDRAWAL_ENTER_AMOUNT', 'Введите сумму для вывода в рублях\n\nДоступно: <b>{amount}</b>'
     ).format(amount=texts.format_price(available))
 
     keyboard = types.InlineKeyboardMarkup(
@@ -766,7 +794,8 @@ async def start_withdrawal_request(callback: types.CallbackQuery, db_user: User,
             ],
             [
                 types.InlineKeyboardButton(
-                    text=texts.t('CANCEL', '❌ Отмена'), callback_data='referral_withdrawal_cancel'
+                    text=texts.t('CANCEL', '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Отмена'),
+                    callback_data='referral_withdrawal_cancel',
                 )
             ],
         ]
@@ -789,23 +818,30 @@ async def process_withdrawal_amount(message: types.Message, db_user: User, db: A
         amount_kopeks = int(amount_rubles * 100)
 
         if amount_kopeks <= 0:
-            await message.answer(texts.t('REFERRAL_WITHDRAWAL_INVALID_AMOUNT', '❌ Введите положительную сумму'))
+            await message.answer(
+                texts.t(
+                    'REFERRAL_WITHDRAWAL_INVALID_AMOUNT',
+                    '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Введите положительную сумму',
+                )
+            )
             return
 
         min_amount = settings.REFERRAL_WITHDRAWAL_MIN_AMOUNT_KOPEKS
         if amount_kopeks < min_amount:
             await message.answer(
-                texts.t('REFERRAL_WITHDRAWAL_MIN_ERROR', '❌ Минимальная сумма: {amount}').format(
-                    amount=texts.format_price(min_amount)
-                )
+                texts.t(
+                    'REFERRAL_WITHDRAWAL_MIN_ERROR',
+                    '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Минимальная сумма: {amount}',
+                ).format(amount=texts.format_price(min_amount))
             )
             return
 
         if amount_kopeks > available:
             await message.answer(
-                texts.t('REFERRAL_WITHDRAWAL_INSUFFICIENT', '❌ Недостаточно средств. Доступно: {amount}').format(
-                    amount=texts.format_price(available)
-                )
+                texts.t(
+                    'REFERRAL_WITHDRAWAL_INSUFFICIENT',
+                    '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Недостаточно средств. Доступно: {amount}',
+                ).format(amount=texts.format_price(available))
             )
             return
 
@@ -815,14 +851,15 @@ async def process_withdrawal_amount(message: types.Message, db_user: User, db: A
 
         text = texts.t(
             'REFERRAL_WITHDRAWAL_ENTER_DETAILS',
-            '💳 Введите реквизиты для перевода:\n\nНапример:\n• СБП: +7 999 123-45-67 (Сбербанк)',
+            '<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> Введите реквизиты для перевода:\n\nНапример:\n• СБП: +7 999 123-45-67 (Сбербанк)',
         )
 
         keyboard = types.InlineKeyboardMarkup(
             inline_keyboard=[
                 [
                     types.InlineKeyboardButton(
-                        text=texts.t('CANCEL', '❌ Отмена'), callback_data='referral_withdrawal_cancel'
+                        text=texts.t('CANCEL', '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Отмена'),
+                        callback_data='referral_withdrawal_cancel',
                     )
                 ]
             ]
@@ -831,7 +868,12 @@ async def process_withdrawal_amount(message: types.Message, db_user: User, db: A
         await message.answer(text, reply_markup=keyboard)
 
     except ValueError:
-        await message.answer(texts.t('REFERRAL_WITHDRAWAL_INVALID_AMOUNT', '❌ Введите корректную сумму'))
+        await message.answer(
+            texts.t(
+                'REFERRAL_WITHDRAWAL_INVALID_AMOUNT',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Введите корректную сумму',
+            )
+        )
 
 
 async def process_withdrawal_amount_callback(
@@ -849,14 +891,15 @@ async def process_withdrawal_amount_callback(
 
     text = texts.t(
         'REFERRAL_WITHDRAWAL_ENTER_DETAILS',
-        '💳 Введите реквизиты для перевода:\n\nНапример:\n• СБП: +7 999 123-45-67 (Сбербанк)',
+        '<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> Введите реквизиты для перевода:\n\nНапример:\n• СБП: +7 999 123-45-67 (Сбербанк)',
     )
 
     keyboard = types.InlineKeyboardMarkup(
         inline_keyboard=[
             [
                 types.InlineKeyboardButton(
-                    text=texts.t('CANCEL', '❌ Отмена'), callback_data='referral_withdrawal_cancel'
+                    text=texts.t('CANCEL', '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Отмена'),
+                    callback_data='referral_withdrawal_cancel',
                 )
             ]
         ]
@@ -874,39 +917,53 @@ async def process_payment_details(message: types.Message, db_user: User, db: Asy
     payment_details = message.text.strip()
 
     if len(payment_details) < 10:
-        await message.answer(texts.t('REFERRAL_WITHDRAWAL_DETAILS_TOO_SHORT', '❌ Реквизиты слишком короткие'))
+        await message.answer(
+            texts.t(
+                'REFERRAL_WITHDRAWAL_DETAILS_TOO_SHORT',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Реквизиты слишком короткие',
+            )
+        )
         return
 
     # Сохраняем реквизиты
     await state.update_data(payment_details=payment_details)
     await state.set_state(ReferralWithdrawalStates.confirming)
 
-    text = texts.t('REFERRAL_WITHDRAWAL_CONFIRM_TITLE', '📋 <b>Подтверждение заявки</b>') + '\n\n'
+    text = texts.t('REFERRAL_WITHDRAWAL_CONFIRM_TITLE', '<b>Подтверждение заявки</b>') + '\n\n'
     text += (
-        texts.t('REFERRAL_WITHDRAWAL_CONFIRM_AMOUNT', '💰 Сумма: <b>{amount}</b>').format(
-            amount=texts.format_price(amount_kopeks)
-        )
+        texts.t(
+            'REFERRAL_WITHDRAWAL_CONFIRM_AMOUNT',
+            '<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> Сумма: <b>{amount}</b>',
+        ).format(amount=texts.format_price(amount_kopeks))
         + '\n\n'
     )
     text += (
-        texts.t('REFERRAL_WITHDRAWAL_CONFIRM_DETAILS', '💳 Реквизиты:\n<code>{details}</code>').format(
-            details=html_escape(payment_details)
-        )
+        texts.t(
+            'REFERRAL_WITHDRAWAL_CONFIRM_DETAILS',
+            '<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> Реквизиты:\n<code>{details}</code>',
+        ).format(details=html_escape(payment_details))
         + '\n\n'
     )
-    text += texts.t('REFERRAL_WITHDRAWAL_CONFIRM_WARNING', '⚠️ После отправки заявка будет рассмотрена администрацией')
+    text += texts.t(
+        'REFERRAL_WITHDRAWAL_CONFIRM_WARNING',
+        '<tg-emoji emoji-id="5881702736843511327">⚠</tg-emoji> После отправки заявка будет рассмотрена администрацией',
+    )
 
     keyboard = types.InlineKeyboardMarkup(
         inline_keyboard=[
             [
                 types.InlineKeyboardButton(
-                    text=texts.t('REFERRAL_WITHDRAWAL_CONFIRM_BUTTON', '✅ Подтвердить'),
+                    text=texts.t(
+                        'REFERRAL_WITHDRAWAL_CONFIRM_BUTTON',
+                        '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Подтвердить',
+                    ),
                     callback_data='referral_withdrawal_confirm',
                 )
             ],
             [
                 types.InlineKeyboardButton(
-                    text=texts.t('CANCEL', '❌ Отмена'), callback_data='referral_withdrawal_cancel'
+                    text=texts.t('CANCEL', '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Отмена'),
+                    callback_data='referral_withdrawal_cancel',
                 )
             ],
         ]
@@ -930,7 +987,7 @@ async def confirm_withdrawal_request(callback: types.CallbackQuery, db_user: Use
     )
 
     if error:
-        await callback.answer(f'❌ {error}', show_alert=True)
+        await callback.answer(f'<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> {error}', show_alert=True)
         return
 
     # Отправляем уведомление админам
@@ -940,13 +997,13 @@ async def confirm_withdrawal_request(callback: types.CallbackQuery, db_user: Use
     safe_name = html_escape(db_user.full_name or 'Без имени')
     safe_details = html_escape(payment_details)
     admin_text = f"""
-🔔 <b>Новая заявка на вывод #{request.id}</b>
+<tg-emoji emoji-id='5909201569898827582'>🔔</tg-emoji> <b>Новая заявка на вывод #{request.id}</b>
 
-👤 Пользователь: {safe_name}
-🆔 ID: <code>{user_id_display}</code>
-💰 Сумма: <b>{amount_kopeks / 100:.0f}₽</b>
+<tg-emoji emoji-id='5771887475421090729'>👤</tg-emoji> Пользователь: {safe_name}
+ID: <code>{user_id_display}</code>
+<tg-emoji emoji-id='5811989245761426317'>💰</tg-emoji> Сумма: <b>{amount_kopeks / 100:.0f}₽</b>
 
-💳 Реквизиты:
+<tg-emoji emoji-id='5967548335542767952'>💳</tg-emoji> Реквизиты:
 <code>{safe_details}</code>
 
 {referral_withdrawal_service.format_analysis_for_admin(analysis)}
@@ -988,7 +1045,7 @@ async def confirm_withdrawal_request(callback: types.CallbackQuery, db_user: Use
     # Отвечаем пользователю
     text = texts.t(
         'REFERRAL_WITHDRAWAL_SUCCESS',
-        '✅ <b>Заявка #{id} создана!</b>\n\n'
+        '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> <b>Заявка #{id} создана!</b>\n\n'
         'Сумма: <b>{amount}</b>\n\n'
         'Ваша заявка будет рассмотрена администрацией. '
         'Мы уведомим вас о результате.',
@@ -1012,7 +1069,13 @@ async def cancel_withdrawal_request(callback: types.CallbackQuery, db_user: User
     keyboard = types.InlineKeyboardMarkup(
         inline_keyboard=[[make_button(text=texts.BACK, callback_data='menu_referrals', style='danger')]]
     )
-    await edit_or_answer_photo(callback, texts.t('REFERRAL_WITHDRAWAL_CANCELLED', '❌ Заявка отменена'), keyboard)
+    await edit_or_answer_photo(
+        callback,
+        texts.t(
+            'REFERRAL_WITHDRAWAL_CANCELLED', '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Заявка отменена'
+        ),
+        keyboard,
+    )
 
 
 def register_handlers(dp: Dispatcher):

@@ -80,7 +80,7 @@ async def tribute_webhook(request):
                             commit=False,
                         )
 
-                        logger.info('✅ Обработан Tribute платеж', processed_data=processed_data['payment_id'])
+                        logger.info('Обработан Tribute платеж', processed_data=processed_data['payment_id'])
 
                 await db.commit()
                 return web.Response(status=200, text='OK')
@@ -149,7 +149,7 @@ async def handle_successful_payment(message: types.Message):
                         )
 
                         logger.info(
-                            '✅ Обработан Stars платеж', telegram_payment_charge_id=payment.telegram_payment_charge_id
+                            'Обработан Stars платеж', telegram_payment_charge_id=payment.telegram_payment_charge_id
                         )
 
                     await db.commit()

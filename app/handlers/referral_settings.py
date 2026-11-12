@@ -34,8 +34,8 @@ _PREFERENCES = (REWARD_PREFERENCE_MONEY, REWARD_PREFERENCE_DAYS)
 
 def _preference_label(value: str, texts) -> str:
     if value == REWARD_PREFERENCE_DAYS:
-        return texts.t('REFERRAL_PREF_DAYS', '📅 Дни подписки')
-    return texts.t('REFERRAL_PREF_MONEY', '💰 Деньги на баланс')
+        return texts.t('REFERRAL_PREF_DAYS', '<tg-emoji emoji-id="5967412305338568701">📅</tg-emoji> Дни подписки')
+    return texts.t('REFERRAL_PREF_MONEY', '<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> Деньги на баланс')
 
 
 def _subscription_label(subscription, tariff_names: dict[int, str], texts) -> str:
@@ -97,7 +97,10 @@ async def _render(callback: types.CallbackQuery, db: AsyncSession, db_user: User
     side_labels = {REWARD_PREFERENCE_MONEY: choice_money, REWARD_PREFERENCE_DAYS: choice_days}
 
     lines = [
-        texts.t('REFERRAL_REWARD_SETTINGS_TITLE', '⚙️ <b>Настройки наград</b>'),
+        texts.t(
+            'REFERRAL_REWARD_SETTINGS_TITLE',
+            '<tg-emoji emoji-id="5877260593903177342">⚙</tg-emoji> <b>Настройки наград</b>',
+        ),
         '',
         texts.t(
             'REFERRAL_REWARD_SETTINGS_INTRO',
@@ -107,14 +110,19 @@ async def _render(callback: types.CallbackQuery, db: AsyncSession, db_user: User
     keyboard: list[list[types.InlineKeyboardButton]] = []
 
     if kind_choice:
-        lines += ['', texts.t('REFERRAL_PREF_HEADER', '🎁 <b>Что получать</b>')]
+        lines += [
+            '',
+            texts.t(
+                'REFERRAL_PREF_HEADER', '<tg-emoji emoji-id="6032937473162614352">🎁</tg-emoji> <b>Что получать</b>'
+            ),
+        ]
         lines.append(
             f'<i>{texts.t("REFERRAL_PREF_HINT", "Выбор действует только там, где уровень даёт и то и другое.")}</i>'
         )
         for value in _PREFERENCES:
             # На кнопке — сколько именно даёт эта сторона по правилу, которое
             # человеку и применяется. Без суммы выбор делается вслепую.
-            mark = '🔘' if value == current_kind else '⚪️'
+            mark = '' if value == current_kind else ''
             side = side_labels.get(value)
             keyboard.append(
                 [
@@ -132,7 +140,13 @@ async def _render(callback: types.CallbackQuery, db: AsyncSession, db_user: User
     if target_choice and (not kind_choice or current_kind == REWARD_PREFERENCE_DAYS):
         subscriptions = await _user_subscriptions(db, db_user)
         names = await _tariff_names(db, subscriptions)
-        lines += ['', texts.t('REFERRAL_DAYS_TARGET_HEADER', '📅 <b>Куда зачислять дни</b>')]
+        lines += [
+            '',
+            texts.t(
+                'REFERRAL_DAYS_TARGET_HEADER',
+                '<tg-emoji emoji-id="5967412305338568701">📅</tg-emoji> <b>Куда зачислять дни</b>',
+            ),
+        ]
         lines.append(
             f'<i>{texts.t("REFERRAL_DAYS_TARGET_HINT", "Если у уровня задан тариф, дни пойдут в подписку этого тарифа.")}</i>'
         )
@@ -145,7 +159,7 @@ async def _render(callback: types.CallbackQuery, db: AsyncSession, db_user: User
             chosen = db_user.referral_days_subscription_id
             # Автовыбор — тоже вариант, и он должен быть виден как выбранный,
             # иначе непонятно, что происходит сейчас.
-            mark = '🔘' if not chosen else '⚪️'
+            mark = '' if not chosen else ''
             keyboard.append(
                 [
                     types.InlineKeyboardButton(
@@ -155,7 +169,7 @@ async def _render(callback: types.CallbackQuery, db: AsyncSession, db_user: User
                 ]
             )
             for sub in subscriptions:
-                mark = '🔘' if chosen == sub.id else '⚪️'
+                mark = '' if chosen == sub.id else ''
                 keyboard.append(
                     [
                         types.InlineKeyboardButton(
@@ -199,7 +213,11 @@ async def set_reward_preference(callback: types.CallbackQuery, db_user: User, db
         user_id=db_user.id,
         preference=db_user.referral_reward_preference,
     )
-    await callback.answer(get_texts(db_user.language).t('REFERRAL_SETTINGS_SAVED', '✅ Сохранено'))
+    await callback.answer(
+        get_texts(db_user.language).t(
+            'REFERRAL_SETTINGS_SAVED', '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Сохранено'
+        )
+    )
     await _render(callback, db, db_user)
 
 
@@ -231,7 +249,11 @@ async def set_days_target(callback: types.CallbackQuery, db_user: User, db: Asyn
         user_id=db_user.id,
         subscription_id=db_user.referral_days_subscription_id,
     )
-    await callback.answer(get_texts(db_user.language).t('REFERRAL_SETTINGS_SAVED', '✅ Сохранено'))
+    await callback.answer(
+        get_texts(db_user.language).t(
+            'REFERRAL_SETTINGS_SAVED', '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Сохранено'
+        )
+    )
     await _render(callback, db, db_user)
 
 

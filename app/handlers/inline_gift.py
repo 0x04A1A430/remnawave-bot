@@ -5,7 +5,7 @@ Flow:
 2. Recipient clicks "Активировать" → /start <gift_code>
 3. Bot shows preview of what changes.
 4. On confirm: applies gift, decrements counter, updates button text.
-   When activated_count >= max_activations → mark is_activated=True, button → ✓.
+   When activated_count >= max_activations → mark is_activated=True, button → .
 
 DB encoding for subscription params:
   days=NULL          → no change

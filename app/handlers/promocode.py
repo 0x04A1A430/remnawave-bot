@@ -63,7 +63,7 @@ async def activate_promocode_for_registration(
     result = await promocode_service.activate_promocode(db, user_id, code, subscription_id=subscription_id)
 
     if result['success']:
-        logger.info('✅ Пользователь активировал промокод при регистрации', user_id=user_id, code=code)
+        logger.info('Пользователь активировал промокод при регистрации', user_id=user_id, code=code)
 
         # Отправляем уведомление админу, если бот доступен
         if bot:
@@ -116,7 +116,7 @@ async def process_promocode(message: types.Message, db_user: User, state: FSMCon
         await message.answer(
             texts.t(
                 'PROMOCODE_EMPTY_INPUT',
-                '❌ Введите корректный промокод',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Введите корректный промокод',
             ),
             reply_markup=get_back_keyboard(db_user.language),
         )
@@ -147,7 +147,7 @@ async def process_promocode(message: types.Message, db_user: User, state: FSMCon
         await message.answer(
             texts.t(
                 'PROMO_DAILY_LIMIT',
-                '❌ Достигнут лимит активаций промокодов на сегодня. Попробуйте завтра.',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Достигнут лимит активаций промокодов на сегодня. Попробуйте завтра.',
             ),
             reply_markup=get_back_keyboard(db_user.language),
         )
@@ -183,7 +183,7 @@ async def process_promocode(message: types.Message, db_user: User, state: FSMCon
         await message.answer(
             texts.t(
                 'PROMOCODE_SELECT_SUBSCRIPTION',
-                '🎟️ К какой подписке применить промокод?',
+                'К какой подписке применить промокод?',
             ),
             reply_markup=types.InlineKeyboardMarkup(inline_keyboard=buttons),
         )
@@ -197,38 +197,50 @@ async def process_promocode(message: types.Message, db_user: User, state: FSMCon
         error_messages = {
             'not_found': texts.PROMOCODE_INVALID,
             'expired': texts.PROMOCODE_EXPIRED,
-            'inactive': texts.t('PROMOCODE_INACTIVE', '❌ Промокод деактивирован'),
-            'not_yet_valid': texts.t('PROMOCODE_NOT_YET_VALID', '❌ Промокод ещё не начал действовать'),
+            'inactive': texts.t(
+                'PROMOCODE_INACTIVE', '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Промокод деактивирован'
+            ),
+            'not_yet_valid': texts.t(
+                'PROMOCODE_NOT_YET_VALID',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Промокод ещё не начал действовать',
+            ),
             'used': texts.PROMOCODE_USED,
             'already_used_by_user': texts.PROMOCODE_USED,
-            'user_not_found': texts.t('PROMOCODE_USER_NOT_FOUND', '❌ Пользователь не найден'),
+            'user_not_found': texts.t(
+                'PROMOCODE_USER_NOT_FOUND',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Пользователь не найден',
+            ),
             'not_first_purchase': texts.t(
-                'PROMOCODE_NOT_FIRST_PURCHASE', '❌ Этот промокод доступен только для первой покупки'
+                'PROMOCODE_NOT_FIRST_PURCHASE',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Этот промокод доступен только для первой покупки',
             ),
             'active_discount_exists': texts.t(
                 'PROMOCODE_ACTIVE_DISCOUNT_EXISTS',
-                '❌ У вас уже есть активная скидка. Используйте её перед активацией новой.',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> У вас уже есть активная скидка. Используйте её перед активацией новой.',
             ),
             'no_subscription_for_days': texts.t(
                 'PROMOCODE_NO_SUBSCRIPTION',
-                '❌ Для активации этого промокода необходима подписка (активная или просроченная).',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Для активации этого промокода необходима подписка (активная или просроченная).',
             ),
-            'subscription_not_found': texts.t('PROMOCODE_SUBSCRIPTION_NOT_FOUND', '❌ Подписка не найдена.'),
+            'subscription_not_found': texts.t(
+                'PROMOCODE_SUBSCRIPTION_NOT_FOUND',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Подписка не найдена.',
+            ),
             'traffic_not_applicable': texts.t(
                 'PROMOCODE_TRAFFIC_NOT_APPLICABLE',
-                '❌ Этот промокод даёт только трафик, а у вашей подписки он безлимитный. Код не потрачен.',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Этот промокод даёт только трафик, а у вашей подписки он безлимитный. Код не потрачен.',
             ),
             'daily_limit': texts.t(
                 'PROMO_DAILY_LIMIT',
-                '❌ Достигнут лимит активаций промокодов на сегодня. Попробуйте завтра.',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Достигнут лимит активаций промокодов на сегодня. Попробуйте завтра.',
             ),
             'trial_subscription_exists': texts.t(
                 'PROMOCODE_TRIAL_SUBSCRIPTION_EXISTS',
-                '❌ У вас уже есть подписка, поэтому триал-промокод применить нельзя.',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> У вас уже есть подписка, поэтому триал-промокод применить нельзя.',
             ),
             'trial_provisioning_failed': texts.t(
                 'PROMOCODE_TRIAL_PROVISIONING_FAILED',
-                '❌ Не удалось выдать триал прямо сейчас. Попробуйте позже.',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Не удалось выдать триал прямо сейчас. Попробуйте позже.',
             ),
             'server_error': texts.ERROR,
         }
@@ -269,7 +281,10 @@ async def handle_promo_subscription_select(
     else:
         error_text = texts.PROMOCODE_INVALID
         if result.get('error') == 'subscription_not_found':
-            error_text = texts.t('PROMOCODE_SUBSCRIPTION_NOT_FOUND', '❌ Подписка не найдена')
+            error_text = texts.t(
+                'PROMOCODE_SUBSCRIPTION_NOT_FOUND',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Подписка не найдена',
+            )
         if callback.message:
             await callback.message.edit_text(error_text, reply_markup=get_back_keyboard(db_user.language))
     await callback.answer()

@@ -90,7 +90,9 @@ def _build_status_message(
 
     current_online, current_offline = pages[current_index] if pages else ([], [])
 
-    lines: list[str] = [texts.t('SERVER_STATUS_TITLE', '📊 <b>Статус серверов</b>')]
+    lines: list[str] = [
+        texts.t('SERVER_STATUS_TITLE', '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> <b>Статус серверов</b>')
+    ]
 
     if total_servers == 0:
         lines.append('')
@@ -119,12 +121,18 @@ def _build_status_message(
     )
 
     if current_online:
-        lines.append(texts.t('SERVER_STATUS_AVAILABLE', '✅ <b>Доступны</b>'))
+        lines.append(
+            texts.t('SERVER_STATUS_AVAILABLE', '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> <b>Доступны</b>')
+        )
         lines.extend(_format_server_lines(current_online, texts, online=True))
         lines.append('')
 
     if current_offline:
-        lines.append(texts.t('SERVER_STATUS_UNAVAILABLE', '❌ <b>Недоступны</b>'))
+        lines.append(
+            texts.t(
+                'SERVER_STATUS_UNAVAILABLE', '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> <b>Недоступны</b>'
+            )
+        )
         lines.extend(_format_server_lines(current_offline, texts, online=False))
         lines.append('')
 
