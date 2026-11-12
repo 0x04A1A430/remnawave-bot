@@ -45,6 +45,7 @@ from app.database.models import (
     Subscription,
     SubscriptionConversion,
     SubscriptionServer,
+    SubscriptionStatus,
     Transaction,
     User,
     UserMessage,
@@ -1559,13 +1560,15 @@ class UserService:
             if months is None:
                 months = settings.INACTIVE_USER_DELETE_MONTHS
 
-            # В выборку попадают только аккаунты без единой подписки в боте:
-            # даже истёкшая подписка — повод не удалять человека.
+            # Можно удалять и аккаунты со старой подпиской: она должна была
+            # закончиться больше INACTIVE_USER_SUBSCRIPTION_EXPIRE_DAYS дней назад.
+            expired_days = max(1, int(settings.INACTIVE_USER_SUBSCRIPTION_EXPIRE_DAYS))
+            subscription_cutoff = datetime.now(UTC) - timedelta(days=expired_days)
             inactive_users = await get_inactive_users(
                 db,
                 months,
                 include_deleted=True,
-                without_subscriptions=True,
+                expired_subscriptions_before_days=expired_days,
             )
             deleted_count = 0
             skipped_subscription = 0
@@ -1573,7 +1576,18 @@ class UserService:
             skipped_panel_unknown = 0
 
             for user in inactive_users:
-                if getattr(user, 'subscriptions', None):
+                # Защита от гонки: пока список читался, подписку могли продлить.
+                if any(
+                    sub.end_date >= subscription_cutoff
+                    or sub.status
+                    in {
+                        SubscriptionStatus.ACTIVE.value,
+                        SubscriptionStatus.TRIAL.value,
+                        SubscriptionStatus.LIMITED.value,
+                        SubscriptionStatus.PENDING.value,
+                    }
+                    for sub in (getattr(user, 'subscriptions', None) or [])
+                ):
                     skipped_subscription += 1
                     continue
 

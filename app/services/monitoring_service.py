@@ -2755,18 +2755,30 @@ class MonitoringService:
 
             from app.services.user_service import UserService
 
+            expired_days = max(1, int(settings.INACTIVE_USER_SUBSCRIPTION_EXPIRE_DAYS))
+            subscription_cutoff = datetime.now(UTC) - timedelta(days=expired_days)
             inactive_users = await get_inactive_users(
                 db,
                 settings.INACTIVE_USER_DELETE_MONTHS,
-                without_subscriptions=True,
+                expired_subscriptions_before_days=expired_days,
             )
             user_service = UserService()
             deleted_count = 0
 
             for user in inactive_users:
-                # Никакие подписки (даже истёкшие) и активные в панели аккаунты
-                # автоматически не помечаем удалёнными.
-                if getattr(user, 'subscriptions', None):
+                # Действующие подписки и активные в панели аккаунты автоматически
+                # не помечаем удалёнными. Старые истёкшие — можно.
+                if any(
+                    sub.end_date >= subscription_cutoff
+                    or sub.status
+                    in {
+                        SubscriptionStatus.ACTIVE.value,
+                        SubscriptionStatus.TRIAL.value,
+                        SubscriptionStatus.LIMITED.value,
+                        SubscriptionStatus.PENDING.value,
+                    }
+                    for sub in (getattr(user, 'subscriptions', None) or [])
+                ):
                     continue
                 if await user_service._panel_user_is_active(user) is not False:
                     continue

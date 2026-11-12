@@ -7186,13 +7186,14 @@
   "ADMIN_USERS_CLEANUP_INACTIVE": "Очистити неактивних",
   "ADMIN_USERS_CLEANUP_TITLE": "<b>Очищення неактивних користувачів</b>",
   "ADMIN_USERS_CLEANUP_BODY": "Без активності понад {value1} міс.: <b>{value2}</b>\nБуде видалено з бота та панелі Remnawave: <b>{value3}</b>",
-  "ADMIN_USERS_CLEANUP_SKIPPED": "Пропущено (є підписка або активні в панелі): {value1}",
-  "ADMIN_USERS_CLEANUP_WARNING": "Видалення незворотне: профіль у боті та акаунт у панелі зникнуть. Користувачі з підпискою та активні в панелі Remnawave не будуть видалені.",
+  "ADMIN_USERS_CLEANUP_SKIPPED": "Пропущено (діюча підписка або активні в панелі): {value1}",
+  "ADMIN_USERS_CLEANUP_WARNING": "Видалення незворотне: профіль у боті та акаунт у панелі зникнуть. Діючі підписки та користувачі зі статусом ACTIVE у панелі Remnawave не будуть видалені.",
   "ADMIN_USERS_CLEANUP_CONFIRM_BUTTON": "Видалити всюди",
   "ADMIN_USERS_CLEANUP_RUNNING": "<b>Очищення неактивних...</b>",
   "ADMIN_USERS_CLEANUP_DONE": "<b>Очищення завершено</b>\n\nВидалено з бота та панелі Remnawave: <b>{value1}</b>",
-  "ADMIN_USERS_CLEANUP_DONE_SKIPPED": "\nПропущено (є підписка або активні в панелі): {value1}",
+  "ADMIN_USERS_CLEANUP_DONE_SKIPPED": "\nПропущено (діюча підписка або активні в панелі): {value1}",
   "ADMIN_USERS_CLEANUP_BACKUP_RUNNING": "<b>Створюю резервну копію...</b>",
   "ADMIN_USERS_CLEANUP_BACKUP_FAILED": "<b>Видалення скасовано</b>\n\nНе вдалося створити резервну копію. Користувачів не змінено.",
-  "ADMIN_USERS_CLEANUP_BACKUP_FILE": "\nБекап: <code>{value1}</code>"
+  "ADMIN_USERS_CLEANUP_BACKUP_FILE": "\nБекап: <code>{value1}</code>",
+  "ADMIN_USERS_CLEANUP_SUBSCRIPTION_RULE": "Підписка відсутня або закінчилася понад {value1} днів тому.\n"
 }

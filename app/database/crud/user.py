@@ -1541,13 +1541,16 @@ async def get_inactive_users(
     *,
     include_deleted: bool = False,
     without_subscriptions: bool = False,
+    expired_subscriptions_before_days: int | None = None,
 ) -> list[User]:
     """Пользователи без активности дольше ``months`` месяцев.
 
     ``include_deleted`` добавляет уже мягко удалённых: их нужно вычищать из БД
     и панели той же кнопкой, иначе они копятся со статусом «удалён».
     ``without_subscriptions`` оставляет только тех, у кого в боте вообще нет
-    подписки — такие аккаунты безопасно удалять пачкой.
+    подписки. ``expired_subscriptions_before_days`` разрешает удаление с
+    подпиской, если она закончилась больше N дней назад; действующие
+    подписки (по дате или статусу) по-прежнему исключаются.
     """
     threshold_date = datetime.now(UTC) - timedelta(days=months * 30)
 
@@ -1567,6 +1570,27 @@ async def get_inactive_users(
     ]
     if without_subscriptions:
         conditions.append(User.id.not_in(select(Subscription.user_id).distinct().scalar_subquery()))
+    if expired_subscriptions_before_days is not None:
+        subscription_cutoff = datetime.now(UTC) - timedelta(days=expired_subscriptions_before_days)
+        current_subscription_owners = (
+            select(Subscription.user_id)
+            .where(
+                or_(
+                    Subscription.end_date >= subscription_cutoff,
+                    Subscription.status.in_(
+                        [
+                            SubscriptionStatus.ACTIVE.value,
+                            SubscriptionStatus.TRIAL.value,
+                            SubscriptionStatus.LIMITED.value,
+                            SubscriptionStatus.PENDING.value,
+                        ]
+                    ),
+                )
+            )
+            .distinct()
+            .scalar_subquery()
+        )
+        conditions.append(User.id.not_in(current_subscription_owners))
 
     result = await db.execute(
         select(User)

@@ -1783,13 +1783,14 @@
   "ADMIN_USERS_CLEANUP_INACTIVE": "پاک‌سازی کاربران غیرفعال",
   "ADMIN_USERS_CLEANUP_TITLE": "<b>پاک‌سازی کاربران غیرفعال</b>",
   "ADMIN_USERS_CLEANUP_BODY": "بدون فعالیت بیش از {value1} ماه: <b>{value2}</b>\nاز ربات و پنل Remnawave حذف می‌شود: <b>{value3}</b>",
-  "ADMIN_USERS_CLEANUP_SKIPPED": "رد شد (اشتراک دارد یا در پنل فعال است): {value1}",
-  "ADMIN_USERS_CLEANUP_WARNING": "این عمل بازگشت‌ناپذیر است: پروفایل ربات و حساب پنل حذف می‌شوند. کاربران دارای اشتراک یا فعال در پنل حذف نمی‌شوند.",
+  "ADMIN_USERS_CLEANUP_SKIPPED": "رد شد (اشتراک فعال یا فعال در پنل): {value1}",
+  "ADMIN_USERS_CLEANUP_WARNING": "این عمل بازگشت‌ناپذیر است: پروفایل ربات و حساب پنل حذف می‌شوند. اشتراک‌های فعال و کاربران با وضعیت ACTIVE در پنل حذف نمی‌شوند.",
   "ADMIN_USERS_CLEANUP_CONFIRM_BUTTON": "حذف از همه‌جا",
   "ADMIN_USERS_CLEANUP_RUNNING": "<b>در حال پاک‌سازی کاربران غیرفعال...</b>",
   "ADMIN_USERS_CLEANUP_DONE": "<b>پاک‌سازی کامل شد</b>\n\nاز ربات و پنل Remnawave حذف شد: <b>{value1}</b>",
-  "ADMIN_USERS_CLEANUP_DONE_SKIPPED": "\nرد شد (اشتراک دارد یا در پنل فعال است): {value1}",
+  "ADMIN_USERS_CLEANUP_DONE_SKIPPED": "\nرد شد (اشتراک فعال یا فعال در پنل): {value1}",
   "ADMIN_USERS_CLEANUP_BACKUP_RUNNING": "<b>در حال ایجاد نسخه پشتیبان...</b>",
   "ADMIN_USERS_CLEANUP_BACKUP_FAILED": "<b>حذف لغو شد</b>\n\nایجاد نسخه پشتیبان ممکن نشد. هیچ کاربری تغییر نکرد.",
-  "ADMIN_USERS_CLEANUP_BACKUP_FILE": "\nپشتیبان: <code>{value1}</code>"
+  "ADMIN_USERS_CLEANUP_BACKUP_FILE": "\nپشتیبان: <code>{value1}</code>",
+  "ADMIN_USERS_CLEANUP_SUBSCRIPTION_RULE": "اشتراک وجود ندارد یا بیش از {value1} روز پیش منقضی شده است.\n"
 }
