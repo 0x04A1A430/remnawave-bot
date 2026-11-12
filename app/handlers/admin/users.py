@@ -43,6 +43,7 @@ from app.keyboards.admin import (
     get_user_restrictions_keyboard,
 )
 from app.localization.texts import Texts, get_texts
+from app.services.backup_service import backup_service
 from app.services.remnawave_service import RemnaWaveService
 from app.services.subscription_service import SubscriptionService
 from app.services.user_service import UserService
@@ -2931,7 +2932,9 @@ async def _load_inactive_users_for_cleanup(db: AsyncSession) -> tuple[int, list[
     from app.database.crud.user import get_inactive_users
 
     months = max(1, settings.INACTIVE_USER_DELETE_MONTHS)
-    inactive_users = await get_inactive_users(db, months, include_deleted=True)
+    inactive_users = await get_inactive_users(
+        db, months, include_deleted=True, without_subscriptions=True
+    )
     with_active_sub = sum(
         1 for user in inactive_users if any(sub.is_active for sub in (getattr(user, 'subscriptions', None) or []))
     )
@@ -5267,8 +5270,32 @@ async def cleanup_inactive_users(callback: types.CallbackQuery, db_user: User, d
     texts = get_texts(getattr(db_user, 'language', None))
     months = max(1, settings.INACTIVE_USER_DELETE_MONTHS)
 
-    await callback.message.edit_text(texts.t('ADMIN_USERS_CLEANUP_RUNNING', '<b>Очистка неактивных...</b>'))
+    await callback.message.edit_text(texts.t('ADMIN_USERS_CLEANUP_BACKUP_RUNNING', '<b>Создаю резервную копию...</b>'))
     await callback.answer()
+
+    from pathlib import Path
+
+    backup_ok, backup_message, backup_path = await backup_service.create_backup(
+        created_by=db_user.id,
+        compress=True,
+        include_logs=False,
+    )
+    if not backup_ok:
+        logger.error('Очистка неактивных отменена: не удалось создать бекап', error=backup_message)
+        await callback.message.edit_text(
+            compact_text(
+                texts.t(
+                    'ADMIN_USERS_CLEANUP_BACKUP_FAILED',
+                    '<b>Удаление отменено</b>\n\nНе удалось создать резервную копию. Пользователи не тронуты.',
+                )
+            ),
+            reply_markup=types.InlineKeyboardMarkup(
+                inline_keyboard=[[types.InlineKeyboardButton(text=texts.BACK, callback_data='admin_users')]]
+            ),
+        )
+        return
+
+    await callback.message.edit_text(texts.t('ADMIN_USERS_CLEANUP_RUNNING', '<b>Очистка неактивных...</b>'))
 
     user_service = UserService()
     deleted_count, skipped_count = await user_service.cleanup_inactive_users(
@@ -5285,6 +5312,10 @@ async def cleanup_inactive_users(callback: types.CallbackQuery, db_user: User, d
     if skipped_count > 0:
         text += texts.t('ADMIN_USERS_CLEANUP_DONE_SKIPPED', '\nПропущено (активная подписка): {value1}').format(
             value1=skipped_count
+        )
+    if backup_path:
+        text += texts.t('ADMIN_USERS_CLEANUP_BACKUP_FILE', '\nБекап: <code>{value1}</code>').format(
+            value1=html.escape(Path(backup_path).name)
         )
 
     await callback.message.edit_text(

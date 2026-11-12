@@ -493,7 +493,16 @@ class RemnaWaveWebhookService:
             # A merge may commit after the first lookup, transferring identity
             # and deleting the selected row. Serialize with merge, refresh, then
             # resolve again before any destructive handler side effects.
-            await lock_user_for_update(db, user)
+            locked = await lock_user_for_update(db, user, missing_ok=True)
+            if locked is None:
+                panel_user_id, short_uuid = self._extract_panel_identity(data)
+                logger.info(
+                    'RemnaWave webhook: user row already gone before user.deleted',
+                    panel_user_id=panel_user_id,
+                    short_uuid=short_uuid,
+                )
+                return False
+            user = locked
             user, subscription = await self._resolve_user_and_subscription(db, data)
         if not user:
             panel_user_id, short_uuid = self._extract_panel_identity(data)

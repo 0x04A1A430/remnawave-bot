@@ -1552,8 +1552,32 @@ class MonitoringService:
             current_time = datetime.now(UTC)
 
             # Берём ACTIVE + недавно EXPIRED (middleware или check_and_update могли
-            # экспайрить до того, как monitoring успел запустить autopay)
-            recently_expired_threshold = current_time - timedelta(hours=2)
+            # экспайрить до того, как monitoring успел запустить autopay).
+            # При AUTO_RENEW_EXPIRED_FROM_BALANCE=true истёкшие подписки
+            # продлеваются автоматически с баланса, даже без включённого autopay.
+            auto_renew_expired = bool(settings.AUTO_RENEW_EXPIRED_FROM_BALANCE)
+            expired_window_hours = (
+                max(1, int(settings.AUTO_RENEW_EXPIRED_WINDOW_HOURS))
+                if auto_renew_expired
+                else 2
+            )
+            recently_expired_threshold = current_time - timedelta(hours=expired_window_hours)
+            status_condition = or_(
+                Subscription.status == SubscriptionStatus.ACTIVE.value,
+                and_(
+                    Subscription.status == SubscriptionStatus.EXPIRED.value,
+                    Subscription.end_date >= recently_expired_threshold,
+                ),
+            )
+            autopay_condition = Subscription.autopay_enabled == True
+            if auto_renew_expired:
+                autopay_condition = or_(
+                    autopay_condition,
+                    and_(
+                        Subscription.status == SubscriptionStatus.EXPIRED.value,
+                        Subscription.end_date >= recently_expired_threshold,
+                    ),
+                )
             result = await db.execute(
                 select(Subscription)
                 .options(
@@ -1565,16 +1589,8 @@ class MonitoringService:
                 )
                 .where(
                     and_(
-                        or_(
-                            Subscription.status == SubscriptionStatus.ACTIVE.value,
-                            # Подписки, которые были экспайрены middleware/CRUD
-                            # недавно (в пределах 2ч) — autopay может их восстановить
-                            and_(
-                                Subscription.status == SubscriptionStatus.EXPIRED.value,
-                                Subscription.end_date >= recently_expired_threshold,
-                            ),
-                        ),
-                        Subscription.autopay_enabled == True,
+                        status_condition,
+                        autopay_condition,
                         Subscription.is_trial == False,
                     )
                 )
@@ -1639,11 +1655,33 @@ class MonitoringService:
             for sub_id_local, sub_user_id_local, expected_end_date in autopay_pairs:
                 try:
                     target = await lock_autopay_target(
-                        db, sub_user_id_local, sub_id_local, expected_end_date=expected_end_date
+                        db,
+                        sub_user_id_local,
+                        sub_id_local,
+                        expected_end_date=expected_end_date,
+                        allow_without_autopay=True,
                     )
                     if target is None:
                         continue
                     user, subscription = target
+
+                    # Заблокированных/удалённых не продлеваем и не списываем с них
+                    # деньги, даже если на балансе достаточно средств.
+                    if getattr(user, 'status', None) != UserStatus.ACTIVE.value:
+                        logger.debug(
+                            'Пропуск автопродления: пользователь не активен',
+                            subscription_id=subscription.id,
+                            user_id=user.id,
+                            user_status=getattr(user, 'status', None),
+                        )
+                        continue
+                    if getattr(user, 'restriction_subscription', False):
+                        logger.debug(
+                            'Пропуск автопродления: подписка ограничена администратором',
+                            subscription_id=subscription.id,
+                            user_id=user.id,
+                        )
+                        continue
 
                     from app.database.crud.subscription import is_recently_updated_by_webhook
 
@@ -1850,16 +1888,18 @@ class MonitoringService:
                             )
                         else:
                             failed_count += 1
-                            await self._maybe_notify_autopay_failure(
-                                user, charge_amount, subscription, current_time, cause='charge_error'
-                            )
+                            if subscription.autopay_enabled:
+                                await self._maybe_notify_autopay_failure(
+                                    user, charge_amount, subscription, current_time, cause='charge_error'
+                                )
                             logger.warning(
                                 'Ошибка списания средств для автопродления пользователя',
                                 user_identifier=user_identifier,
                             )
                     else:
                         failed_count += 1
-                        await self._maybe_notify_autopay_failure(user, charge_amount, subscription, current_time)
+                        if subscription.autopay_enabled:
+                            await self._maybe_notify_autopay_failure(user, charge_amount, subscription, current_time)
                         logger.warning(
                             'Недостаточно средств для автопродления у пользователя',
                             user_identifier=user_identifier,

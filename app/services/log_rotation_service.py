@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import asyncio
+import html
 import logging
 import tarfile
 from dataclasses import dataclass
@@ -287,12 +288,18 @@ class LogRotationService:
         topic_id = settings.get_log_rotation_topic_id()
 
         try:
+            from app.utils.notification_card import card
+
             file_size_kb = (await asyncio.to_thread(archive_path.stat)).st_size / 1024
-            caption = (
-                f'<b>Логи бота</b>\n'
-                f'Дата: {date_str}\n'
-                f'Файл: <code>{archive_path.name}</code>\n'
-                f'Размер: {file_size_kb:.1f} KB'
+            caption = card(
+                emoji='📄',
+                title='@x1lagent · логи',
+                lines=[
+                    f'▣ <b>Файл:</b> <code>{html.escape(archive_path.name)}</code>',
+                    f'◷ <b>Дата:</b> {date_str}',
+                    f'≡ <b>Размер:</b> {file_size_kb:.1f} KB',
+                ],
+                note=datetime.now(get_local_timezone()).strftime('%d.%m.%Y %H:%M'),
             )
 
             send_kwargs = {

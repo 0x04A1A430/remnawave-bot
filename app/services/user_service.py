@@ -1500,6 +1500,42 @@ class UserService:
                 'new_month': 0,
             }
 
+    async def _panel_user_is_active(self, user: User) -> bool | None:
+        """Проверить панельный статус перед удалением.
+
+        ``True`` — пользователь активен в Remnawave (удалять нельзя),
+        ``False`` — не найден или не активен, ``None`` — проверить не удалось.
+        """
+        from app.external.remnawave_api import UserStatus as PanelUserStatus
+        from app.services.remnawave_service import RemnaWaveService
+
+        remnawave_service = RemnaWaveService()
+        if not remnawave_service.is_configured:
+            return None
+
+        if settings.is_multi_tariff_enabled():
+            panel_user_ids = [sub.remnawave_id for sub in (user.subscriptions or []) if sub.remnawave_id]
+        else:
+            panel_user_ids = [user.remnawave_id] if user.remnawave_id else []
+
+        if not panel_user_ids:
+            return False
+
+        try:
+            async with remnawave_service.get_api_client() as api:
+                for panel_user_id in panel_user_ids:
+                    panel_user = await api.get_user_by_id(panel_user_id)
+                    if panel_user is not None and panel_user.status == PanelUserStatus.ACTIVE:
+                        return True
+            return False
+        except Exception as e:
+            logger.warning(
+                'Не удалось проверить статус пользователя в панели перед удалением',
+                user_id=user.id,
+                error=e,
+            )
+            return None
+
     async def cleanup_inactive_users(
         self,
         db: AsyncSession,
@@ -1508,7 +1544,7 @@ class UserService:
         admin_id: int = 0,
         force_panel_delete: bool = False,
     ) -> tuple[int, int]:
-        """Clean up inactive users, skipping those with active subscriptions.
+        """Удалить неактивных пользователей, не трогая подписки и активных в панели.
 
         Args:
             months: inactivity horizon, defaults to INACTIVE_USER_DELETE_MONTHS.
@@ -1517,20 +1553,36 @@ class UserService:
                 configured deactivate/delete mode.
 
         Returns:
-            Tuple of (deleted_count, skipped_active_sub_count).
+            Tuple of (deleted_count, skipped_count).
         """
         try:
             if months is None:
                 months = settings.INACTIVE_USER_DELETE_MONTHS
 
-            inactive_users = await get_inactive_users(db, months, include_deleted=True)
+            # В выборку попадают только аккаунты без единой подписки в боте:
+            # даже истёкшая подписка — повод не удалять человека.
+            inactive_users = await get_inactive_users(
+                db,
+                months,
+                include_deleted=True,
+                without_subscriptions=True,
+            )
             deleted_count = 0
-            skipped_active_sub = 0
+            skipped_subscription = 0
+            skipped_panel_active = 0
+            skipped_panel_unknown = 0
 
             for user in inactive_users:
-                # Skip users with active paid subscriptions
-                if any(sub.is_active for sub in (getattr(user, 'subscriptions', None) or [])):
-                    skipped_active_sub += 1
+                if getattr(user, 'subscriptions', None):
+                    skipped_subscription += 1
+                    continue
+
+                panel_is_active = await self._panel_user_is_active(user)
+                if panel_is_active is None:
+                    skipped_panel_unknown += 1
+                    continue
+                if panel_is_active:
+                    skipped_panel_active += 1
                     continue
 
                 delete_result = await self.delete_user_account(
@@ -1542,12 +1594,16 @@ class UserService:
                 if delete_result.bot_deleted:
                     deleted_count += 1
 
-            if skipped_active_sub > 0:
+            skipped_count = skipped_subscription + skipped_panel_active + skipped_panel_unknown
+            if skipped_count > 0:
                 logger.info(
-                    'Пропущено неактивных пользователей с активной подпиской', skipped_active_sub=skipped_active_sub
+                    'Пропущено неактивных пользователей при очистке',
+                    skipped_subscription=skipped_subscription,
+                    skipped_panel_active=skipped_panel_active,
+                    skipped_panel_unknown=skipped_panel_unknown,
                 )
             logger.info('Удалено неактивных пользователей', deleted_count=deleted_count)
-            return deleted_count, skipped_active_sub
+            return deleted_count, skipped_count
 
         except Exception as e:
             logger.error('Ошибка очистки неактивных пользователей', e=e)

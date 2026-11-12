@@ -580,6 +580,13 @@ class Settings(BaseSettings):
 
     ENABLE_AUTOPAY: bool = False
 
+    # Автопродление с баланса для уже истёкших подписок, даже если пользователь
+    # не включал autopay. Срабатывает только если баланса хватает на продление.
+    AUTO_RENEW_EXPIRED_FROM_BALANCE: bool = False
+    # Насколько назад смотреть истёкшие подписки (часы), чтобы не продлить
+    # случайно весь исторический хвост при включении.
+    AUTO_RENEW_EXPIRED_WINDOW_HOURS: int = 24
+
     DEFAULT_AUTOPAY_ENABLED: bool = False
     DEFAULT_AUTOPAY_DAYS_BEFORE: int = 3
     # 0 → use the tariff's shortest (cheapest) period, as before.

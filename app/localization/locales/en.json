@@ -7186,10 +7186,13 @@
   "ADMIN_USERS_CLEANUP_INACTIVE": "Clean up inactive",
   "ADMIN_USERS_CLEANUP_TITLE": "<b>Clean up inactive users</b>",
   "ADMIN_USERS_CLEANUP_BODY": "Inactive for more than {value1} month(s): <b>{value2}</b>\nWill be deleted from the bot and Remnawave panel: <b>{value3}</b>",
-  "ADMIN_USERS_CLEANUP_SKIPPED": "With an active subscription (skipped): {value1}",
-  "ADMIN_USERS_CLEANUP_WARNING": "This cannot be undone: the bot profile, subscriptions and panel account will be removed.",
+  "ADMIN_USERS_CLEANUP_SKIPPED": "Skipped (has a subscription or active in the panel): {value1}",
+  "ADMIN_USERS_CLEANUP_WARNING": "This cannot be undone: the bot profile and panel account will be removed. Users with a subscription or an ACTIVE panel status will not be deleted.",
   "ADMIN_USERS_CLEANUP_CONFIRM_BUTTON": "Delete everywhere",
   "ADMIN_USERS_CLEANUP_RUNNING": "<b>Cleaning up inactive users...</b>",
   "ADMIN_USERS_CLEANUP_DONE": "<b>Cleanup complete</b>\n\nDeleted from the bot and Remnawave panel: <b>{value1}</b>",
-  "ADMIN_USERS_CLEANUP_DONE_SKIPPED": "\nSkipped (active subscription): {value1}"
+  "ADMIN_USERS_CLEANUP_DONE_SKIPPED": "\nSkipped (has a subscription or active in the panel): {value1}",
+  "ADMIN_USERS_CLEANUP_BACKUP_RUNNING": "<b>Creating a backup...</b>",
+  "ADMIN_USERS_CLEANUP_BACKUP_FAILED": "<b>Deletion cancelled</b>\n\nCould not create a backup. No users were touched.",
+  "ADMIN_USERS_CLEANUP_BACKUP_FILE": "\nBackup: <code>{value1}</code>"
 }
