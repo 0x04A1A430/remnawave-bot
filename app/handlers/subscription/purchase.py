@@ -327,8 +327,6 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
 
     show_devices = settings.is_devices_selection_enabled()
     devices_used_str = ''
-    devices_list: list[dict[str, Any]] = []
-
     if show_devices:
         try:
             _device_panel_id = (
