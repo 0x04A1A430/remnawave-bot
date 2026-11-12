@@ -1638,7 +1638,8 @@ class MonitoringService:
                     continue
 
                 days_before_expiry = (sub.end_date - current_time).days
-                if days_before_expiry <= min(sub.autopay_days_before or 3, 3):
+                days_before = max(1, min(sub.autopay_days_before or settings.DEFAULT_AUTOPAY_DAYS_BEFORE, 14))
+                if days_before_expiry <= days_before:
                     autopay_subscriptions.append(sub)
 
             processed_count = 0

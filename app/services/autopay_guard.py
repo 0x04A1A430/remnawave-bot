@@ -73,7 +73,11 @@ async def lock_autopay_target(
                     subscription.status == 'active'
                     or (subscription.status == 'expired' and subscription.end_date >= now - expired_window)
                 )
-                and ends_within_days(subscription.end_date, min(subscription.autopay_days_before or 3, 3), now)
+                and ends_within_days(
+                    subscription.end_date,
+                    max(1, min(subscription.autopay_days_before or settings.DEFAULT_AUTOPAY_DAYS_BEFORE, 14)),
+                    now,
+                )
             )
         if allowed:
             from app.services.cispay_recurrent_guard import has_conflicting_cispay

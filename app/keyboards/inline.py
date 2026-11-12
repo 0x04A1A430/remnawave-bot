@@ -2989,7 +2989,10 @@ def get_confirm_unlink_keyboard(card_id: int, language: str = DEFAULT_LANGUAGE) 
     )
 
 
-def get_autopay_days_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
+def get_autopay_days_keyboard(
+    language: str = DEFAULT_LANGUAGE,
+    current_days: int | None = None,
+) -> InlineKeyboardMarkup:
     texts = get_texts(language)
     keyboard = []
 
@@ -2999,6 +3002,7 @@ def get_autopay_days_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboar
                 make_button(
                     text=f'{days} {_get_days_word(days)}',
                     callback_data=f'autopay_days_{days}',
+                    style='success' if current_days == days else None,
                 )
             ]
         )
