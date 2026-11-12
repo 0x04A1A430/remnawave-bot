@@ -219,9 +219,7 @@ def render_startup_message(stats: _StartupStats, *, timestamp: str, texts: Texts
     lines += [
         '',
         texts.t('STARTUP_NOTICE_004', '<b>Система</b>'),
-        f'├ {_panel_line(stats, texts=texts)}',
-        texts.t('STARTUP_NOTICE_005', '├ Тикетов открыто: <b>{v0}</b>').format(v0=_number(stats.open_tickets)),
-        texts.t('STARTUP_NOTICE_006', '└ Режим продаж: {v0}').format(v0=_mode_label(stats, texts=texts)),
+        f'└ {_panel_line(stats, texts=texts)}',
     ]
 
     attention = _attention(stats, texts=texts)
@@ -264,11 +262,7 @@ def render_startup_rich(stats: _StartupStats, texts: Texts | None = None) -> str
     for title, section_rows in _sections(stats, texts=texts):
         for label, value in section_rows:
             rows.append((f'{title} · {label}', f'<b>{value}</b>'))
-    rows += [
-        (texts.t('STARTUP_NOTICE_076', 'Панель'), _panel_line(stats, texts=texts)),
-        (texts.t('STARTUP_NOTICE_077', 'Тикетов открыто'), _number(stats.open_tickets)),
-        (texts.t('STARTUP_NOTICE_078', 'Режим продаж'), _mode_label(stats, texts=texts)),
-    ]
+    rows.append((texts.t('STARTUP_NOTICE_076', 'Панель'), _panel_line(stats, texts=texts)))
     blocks.append(rich_kv_table(rows))
     blocks += ['<hr/>', rich_footer_now()]
     return ''.join(blocks)
