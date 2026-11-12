@@ -1,7 +1,7 @@
 """Reports preserve financial values, escaping and transport while selecting a locale."""
 
 import inspect
-from datetime import date
+from datetime import date, time as datetime_time
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
@@ -60,6 +60,9 @@ async def test_report_keeps_money_counts_conversion_and_name_escaping(wired_repo
     assert texts.t('ADMIN_REPORT_UI_031').format(value1=1, value2='&lt;name&gt;&amp;', value3=11) in text
     assert '<name>' not in text
     assert '&amp;lt;' not in text
+    assert 'Новых тикетов' not in text
+    assert 'Активных тикетов' not in text
+    assert 'Поддержка' not in text
     label = '08.01.2030' if period == ReportPeriod.DAILY else '01.01.2030 - 07.01.2030'
     key = 'ADMIN_REPORT_UI_004' if period == ReportPeriod.DAILY else 'ADMIN_REPORT_UI_005'
     assert text.startswith(texts.t(key).format(value1=label))
@@ -159,3 +162,14 @@ async def test_invalid_period_fails_before_collecting_data(monkeypatch, language
         await service.send_report('invalid', language=language)
     assert str(exc.value) == get_texts(language).t('ADMIN_REPORT_UI_032').format(value1='invalid')
     session_factory.assert_not_called()
+
+
+def test_weekly_auto_report_runs_on_monday_at_configured_time():
+    service = ReportingService()
+
+    next_run_utc, report_date = service._calculate_next_weekly_run(datetime_time(22, 0))
+
+    msk = next_run_utc.astimezone(service._moscow_tz)
+    assert msk.weekday() == 0, 'отчёт должен уходить по понедельникам'
+    assert (msk.hour, msk.minute) == (22, 0)
+    assert report_date == msk.date()
