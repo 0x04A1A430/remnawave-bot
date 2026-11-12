@@ -142,7 +142,11 @@ async def _resolve_switch_subscription_target(callback, db_user, db, state=None)
         )
         if not sub or sub.is_pending_trial:
             await callback.answer(
-                get_texts(db_user.language).t('SUBSCRIPTION_NOT_FOUND', '❌ Подписка не найдена'), show_alert=True
+                get_texts(db_user.language).t(
+                    'SUBSCRIPTION_NOT_FOUND',
+                    '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Подписка не найдена',
+                ),
+                show_alert=True,
             )
             return None, None
         return sub, sub.id
@@ -235,12 +239,21 @@ def format_tariffs_list_text(
 ) -> str:
     """Форматирует текст со списком тарифов для отображения."""
     texts = get_texts(db_user.language if db_user else 'ru')
-    lines = [texts.t('TARIFF_PURCHASE_LIST_TITLE', '📦 <b>Выберите тариф</b>')]
+    lines = [
+        texts.t(
+            'TARIFF_PURCHASE_LIST_TITLE', '<tg-emoji emoji-id="5924720918826848520">📦</tg-emoji> <b>Выберите тариф</b>'
+        )
+    ]
     if purchased_tariff_ids is None:
         purchased_tariff_ids = set()
 
     if has_period_discounts:
-        lines.append(texts.t('TARIFF_PURCHASE_PERIOD_DISCOUNTS_HINT', '🎁 <i>Скидки по периодам</i>'))
+        lines.append(
+            texts.t(
+                'TARIFF_PURCHASE_PERIOD_DISCOUNTS_HINT',
+                '<tg-emoji emoji-id="6032937473162614352">🎁</tg-emoji> <i>Скидки по периодам</i>',
+            )
+        )
 
     lines.append('')
 
@@ -310,12 +323,12 @@ def get_tariffs_keyboard(
         purchased_tariff_ids = set()
     buttons = []
 
-    badge = texts.t('TARIFF_BEST_VALUE_BADGE', '⭐ выгодно')
+    badge = texts.t('TARIFF_BEST_VALUE_BADGE', '<tg-emoji emoji-id="5958376256788502078">⭐</tg-emoji> выгодно')
     for tariff in tariffs:
         if tariff.id in purchased_tariff_ids:
             # Уже купленный тариф важнее подсказки: галочка отвечает на вопрос
             # «а этот у меня есть?», отметка выгоды тут уже ничего не решает.
-            title = f'✅ {tariff.name}'
+            title = f'<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> {tariff.name}'
         elif getattr(tariff, 'is_highlighted', False):
             title = f'{badge} · {tariff.name}'
         else:
@@ -338,7 +351,7 @@ def _period_button_text(tariff: Tariff, period: int, price_text: str, texts) -> 
     """
     label = f'{format_period(period, language=texts.language)} — {price_text}'
     if tariff.highlight_period_days is not None and int(tariff.highlight_period_days) == period:
-        return f'{texts.t("TARIFF_PERIOD_BEST_VALUE_BADGE", "⭐ выгодно")} · {label}'
+        return f'{texts.t("TARIFF_PERIOD_BEST_VALUE_BADGE", "<tg-emoji emoji-id='5958376256788502078'>⭐</tg-emoji> выгодно")} · {label}'
     return label
 
 
@@ -423,7 +436,10 @@ def get_tariff_confirm_keyboard(
     buttons = [
         [
             InlineKeyboardButton(
-                text=texts.t('TARIFF_PURCHASE_CONFIRM_BUTTON', '✅ Подтвердить покупку'),
+                text=texts.t(
+                    'TARIFF_PURCHASE_CONFIRM_BUTTON',
+                    '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Подтвердить покупку',
+                ),
                 callback_data=f'tariff_confirm:{tariff_id}:{period}',
             )
         ],
@@ -435,7 +451,10 @@ def get_tariff_confirm_keyboard(
         buttons.append(
             [
                 InlineKeyboardButton(
-                    text=texts.t('SBP_PURCHASE_BUTTON', '⚡ Оформить с автооплатой СБП'),
+                    text=texts.t(
+                        'SBP_PURCHASE_BUTTON',
+                        '<tg-emoji emoji-id="5843553939672274145">⚡</tg-emoji> Оформить с автооплатой СБП',
+                    ),
                     callback_data=f'tariff_sbp:{tariff_id}',
                 )
             ]
@@ -444,7 +463,10 @@ def get_tariff_confirm_keyboard(
         buttons.append(
             [
                 InlineKeyboardButton(
-                    text=texts.t('LAVA_PURCHASE_BUTTON', '⚡ Оформить с автооплатой Lava'),
+                    text=texts.t(
+                        'LAVA_PURCHASE_BUTTON',
+                        '<tg-emoji emoji-id="5843553939672274145">⚡</tg-emoji> Оформить с автооплатой Lava',
+                    ),
                     callback_data=f'tariff_lava:{tariff_id}',
                 )
             ]
@@ -453,7 +475,10 @@ def get_tariff_confirm_keyboard(
         buttons.append(
             [
                 InlineKeyboardButton(
-                    text=texts.t('CASHERA_PURCHASE_BUTTON', '⚡ Оформить с автооплатой Cashera'),
+                    text=texts.t(
+                        'CASHERA_PURCHASE_BUTTON',
+                        '<tg-emoji emoji-id="5843553939672274145">⚡</tg-emoji> Оформить с автооплатой Cashera',
+                    ),
                     callback_data=f'tariff_cashera:{tariff_id}',
                 )
             ]
@@ -550,7 +575,10 @@ def _sbp_purchase_rows(tariff_id: int, texts, period: int | None = None) -> list
         rows.append(
             [
                 InlineKeyboardButton(
-                    text=texts.t('SBP_PURCHASE_BUTTON', '⚡ Оформить с автооплатой СБП'),
+                    text=texts.t(
+                        'SBP_PURCHASE_BUTTON',
+                        '<tg-emoji emoji-id="5843553939672274145">⚡</tg-emoji> Оформить с автооплатой СБП',
+                    ),
                     callback_data=f'tariff_sbp:{tariff_id}',
                 )
             ]
@@ -559,7 +587,10 @@ def _sbp_purchase_rows(tariff_id: int, texts, period: int | None = None) -> list
         rows.append(
             [
                 InlineKeyboardButton(
-                    text=texts.t('LAVA_PURCHASE_BUTTON', '⚡ Оформить с автооплатой Lava'),
+                    text=texts.t(
+                        'LAVA_PURCHASE_BUTTON',
+                        '<tg-emoji emoji-id="5843553939672274145">⚡</tg-emoji> Оформить с автооплатой Lava',
+                    ),
                     callback_data=f'tariff_lava:{tariff_id}',
                 )
             ]
@@ -568,7 +599,10 @@ def _sbp_purchase_rows(tariff_id: int, texts, period: int | None = None) -> list
         rows.append(
             [
                 InlineKeyboardButton(
-                    text=texts.t('CASHERA_PURCHASE_BUTTON', '⚡ Оформить с автооплатой Cashera'),
+                    text=texts.t(
+                        'CASHERA_PURCHASE_BUTTON',
+                        '<tg-emoji emoji-id="5843553939672274145">⚡</tg-emoji> Оформить с автооплатой Cashera',
+                    ),
                     callback_data=f'tariff_cashera:{tariff_id}',
                 )
             ]
@@ -588,11 +622,11 @@ def format_tariff_info_for_user(
 
     text = texts.t(
         'TARIFF_PURCHASE_INFO',
-        '📦 <b>{name}</b>\n\n<b>Параметры:</b>\n• Трафик: {traffic}\n• Устройств: {devices}\n',
+        '<tg-emoji emoji-id="5924720918826848520">📦</tg-emoji> <b>{name}</b>\n\n<b>Параметры:</b>\n• Трафик: {traffic}\n• Устройств: {devices}\n',
     ).format(name=html.escape(tariff.name), traffic=traffic, devices=tariff.device_limit)
 
     if tariff.description:
-        text += f'\n📝 {html.escape(tariff.description)}\n'
+        text += f'\n<tg-emoji emoji-id="5886330010054168711">📝</tg-emoji> {html.escape(tariff.description)}\n'
 
     if discount_percent > 0:
         text += '\n\n' + (
@@ -619,7 +653,10 @@ def get_daily_tariff_confirm_keyboard(
     buttons = [
         [
             InlineKeyboardButton(
-                text=texts.t('TARIFF_PURCHASE_CONFIRM_BUTTON', '✅ Подтвердить покупку'),
+                text=texts.t(
+                    'TARIFF_PURCHASE_CONFIRM_BUTTON',
+                    '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Подтвердить покупку',
+                ),
                 callback_data=f'daily_tariff_confirm:{tariff_id}',
             )
         ],
@@ -628,7 +665,10 @@ def get_daily_tariff_confirm_keyboard(
         buttons.append(
             [
                 InlineKeyboardButton(
-                    text=texts.t('SBP_PURCHASE_BUTTON', '⚡ Оформить с автооплатой СБП'),
+                    text=texts.t(
+                        'SBP_PURCHASE_BUTTON',
+                        '<tg-emoji emoji-id="5843553939672274145">⚡</tg-emoji> Оформить с автооплатой СБП',
+                    ),
                     callback_data=f'tariff_sbp:{tariff_id}',
                 )
             ]
@@ -637,7 +677,10 @@ def get_daily_tariff_confirm_keyboard(
         buttons.append(
             [
                 InlineKeyboardButton(
-                    text=texts.t('LAVA_PURCHASE_BUTTON', '⚡ Оформить с автооплатой Lava'),
+                    text=texts.t(
+                        'LAVA_PURCHASE_BUTTON',
+                        '<tg-emoji emoji-id="5843553939672274145">⚡</tg-emoji> Оформить с автооплатой Lava',
+                    ),
                     callback_data=f'tariff_lava:{tariff_id}',
                 )
             ]
@@ -646,7 +689,10 @@ def get_daily_tariff_confirm_keyboard(
         buttons.append(
             [
                 InlineKeyboardButton(
-                    text=texts.t('CASHERA_PURCHASE_BUTTON', '⚡ Оформить с автооплатой Cashera'),
+                    text=texts.t(
+                        'CASHERA_PURCHASE_BUTTON',
+                        '<tg-emoji emoji-id="5843553939672274145">⚡</tg-emoji> Оформить с автооплатой Cashera',
+                    ),
                     callback_data=f'tariff_cashera:{tariff_id}',
                 )
             ]
@@ -705,7 +751,10 @@ def get_custom_tariff_keyboard(
         # Текущее значение
         days_row.append(
             InlineKeyboardButton(
-                text=texts.t('TARIFF_PURCHASE_DAYS_BUTTON', '📅 {days} дн.').format(days=days), callback_data='noop'
+                text=texts.t(
+                    'TARIFF_PURCHASE_DAYS_BUTTON', '<tg-emoji emoji-id="5967412305338568701">📅</tg-emoji> {days} дн.'
+                ).format(days=days),
+                callback_data='noop',
             )
         )
 
@@ -734,7 +783,10 @@ def get_custom_tariff_keyboard(
         # Текущее значение
         traffic_row.append(
             InlineKeyboardButton(
-                text=texts.t('TARIFF_PURCHASE_TRAFFIC_BUTTON', '📊 {traffic} ГБ').format(traffic=traffic_gb),
+                text=texts.t(
+                    'TARIFF_PURCHASE_TRAFFIC_BUTTON',
+                    '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> {traffic} ГБ',
+                ).format(traffic=traffic_gb),
                 callback_data='noop',
             )
         )
@@ -754,7 +806,10 @@ def get_custom_tariff_keyboard(
     buttons.append(
         [
             InlineKeyboardButton(
-                text=texts.t('TARIFF_PURCHASE_CONFIRM_BUTTON', '✅ Подтвердить покупку'),
+                text=texts.t(
+                    'TARIFF_PURCHASE_CONFIRM_BUTTON',
+                    '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Подтвердить покупку',
+                ),
                 callback_data=f'custom_confirm:{tariff_id}',
             )
         ]
@@ -943,7 +998,8 @@ async def _bind_tariff_purchase_keyboard(
         row.insert(
             len([delta for delta in (-10, -1) if devices.effective_limit + delta >= devices.min_limit]),
             InlineKeyboardButton(
-                text=f'📱 {devices.effective_limit} ✎', callback_data=f'tariff_devices_input:{tariff.id}:{token}'
+                text=f'<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> {devices.effective_limit}',
+                callback_data=f'tariff_devices_input:{tariff.id}:{token}',
             ),
         )
         keyboard.inline_keyboard.insert(0, row)
@@ -1145,33 +1201,39 @@ async def format_custom_tariff_preview(
         else format_traffic(tariff.traffic_limit_gb, language=texts.language)
     )
 
-    text = texts.t('TARIFF_PURCHASE_CUSTOM_TITLE', '📦 <b>{name}</b>\n\n<b>Настройте параметры:</b>\n').format(
-        name=html.escape(tariff.name)
-    )
+    text = texts.t(
+        'TARIFF_PURCHASE_CUSTOM_TITLE',
+        '<tg-emoji emoji-id="5924720918826848520">📦</tg-emoji> <b>{name}</b>\n\n<b>Настройте параметры:</b>\n',
+    ).format(name=html.escape(tariff.name))
 
     if tariff.can_purchase_custom_days():
-        text += texts.t('TARIFF_PURCHASE_CUSTOM_DAYS_LINE', '📅 Дней: <b>{days}</b> (от {min} до {max})\n').format(
-            days=days, min=tariff.min_days, max=tariff.max_days
-        )
-        text += f'   💰 {format_price_kopeks(period_price)}\n'
+        text += texts.t(
+            'TARIFF_PURCHASE_CUSTOM_DAYS_LINE',
+            '<tg-emoji emoji-id="5967412305338568701">📅</tg-emoji> Дней: <b>{days}</b> (от {min} до {max})\n',
+        ).format(days=days, min=tariff.min_days, max=tariff.max_days)
+        text += f'   <tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> {format_price_kopeks(period_price)}\n'
     else:
         # Фиксированный период - показываем без возможности изменения
-        text += texts.t('TARIFF_PURCHASE_CUSTOM_PERIOD_LINE', '📅 Период: <b>{period}</b>\n').format(
-            period=format_period(days, language=texts.language)
-        )
-        text += f'   💰 {format_price_kopeks(period_price)}\n'
+        text += texts.t(
+            'TARIFF_PURCHASE_CUSTOM_PERIOD_LINE',
+            '<tg-emoji emoji-id="5967412305338568701">📅</tg-emoji> Период: <b>{period}</b>\n',
+        ).format(period=format_period(days, language=texts.language))
+        text += f'   <tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> {format_price_kopeks(period_price)}\n'
 
     if tariff.can_purchase_custom_traffic():
         text += texts.t(
-            'TARIFF_PURCHASE_CUSTOM_TRAFFIC_LINE', '📊 Трафик: <b>{traffic} ГБ</b> (от {min} до {max})\n'
+            'TARIFF_PURCHASE_CUSTOM_TRAFFIC_LINE',
+            '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> Трафик: <b>{traffic} ГБ</b> (от {min} до {max})\n',
         ).format(traffic=traffic_gb, min=tariff.min_traffic_gb, max=tariff.max_traffic_gb)
-        text += f'   💰 +{format_price_kopeks(traffic_price)}\n'
+        text += f'   <tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> +{format_price_kopeks(traffic_price)}\n'
     else:
-        text += texts.t('TARIFF_PURCHASE_TRAFFIC_LINE', '📊 Трафик: {traffic}\n').format(traffic=traffic_display)
+        text += texts.t(
+            'TARIFF_PURCHASE_TRAFFIC_LINE', '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> Трафик: {traffic}\n'
+        ).format(traffic=traffic_display)
 
-    text += texts.t('TARIFF_PURCHASE_DEVICES_LINE', '📱 Устройств: {devices}\n').format(
-        devices=Texts.format_device_limit(device_limit)
-    )
+    text += texts.t(
+        'TARIFF_PURCHASE_DEVICES_LINE', '<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> Устройств: {devices}\n'
+    ).format(devices=Texts.format_device_limit(device_limit))
 
     if has_discount:
         text += f'\n <b>Скидка: {discount_percent}%</b>\n'
@@ -1183,9 +1245,10 @@ async def format_custom_tariff_preview(
 
     if user_balance < total_price:
         missing = total_price - user_balance
-        text += texts.t('TARIFF_PURCHASE_MISSING_LINE', '\n⚠️ <b>Не хватает: {amount}</b>').format(
-            amount=format_price_kopeks(missing)
-        )
+        text += texts.t(
+            'TARIFF_PURCHASE_MISSING_LINE',
+            '\n<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> <b>Не хватает: {amount}</b>',
+        ).format(amount=format_price_kopeks(missing))
     else:
         text += texts.t('TARIFF_PURCHASE_AFTER_PAYMENT_LINE', '\nПосле оплаты: {amount}').format(
             amount=format_price_kopeks(user_balance - total_price)
@@ -1227,7 +1290,7 @@ async def show_tariffs_list(
         await callback.message.edit_text(
             texts.t(
                 'TARIFF_PURCHASE_NO_TARIFFS',
-                '😔 <b>Нет доступных тарифов</b>\n\nК сожалению, сейчас нет тарифов для покупки.',
+                '<b>Нет доступных тарифов</b>\n\nК сожалению, сейчас нет тарифов для покупки.',
             ),
             reply_markup=InlineKeyboardMarkup(
                 inline_keyboard=[[InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu', style='danger')]]
@@ -1352,7 +1415,13 @@ async def _proceed_with_selected_tariff(
         try:
             _daily_existing_sub = await _resolve_purchase_subscription(db, db_user, tariff, state)
         except LookupError:
-            await callback.answer(texts.t('SUBSCRIPTION_NOT_FOUND', '❌ Подписка не найдена'), show_alert=True)
+            await callback.answer(
+                texts.t(
+                    'SUBSCRIPTION_NOT_FOUND',
+                    '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Подписка не найдена',
+                ),
+                show_alert=True,
+            )
             return
         devices, _selected_devices = await _purchase_device_selection(tariff, _daily_existing_sub, state)
         effective_device_limit = devices.effective_limit
@@ -1384,7 +1453,10 @@ async def _proceed_with_selected_tariff(
         )
         _, _, daily_discount = _get_user_period_discount(db_user, 1)
         discount_text = (
-            texts.t('TARIFF_PURCHASE_DAILY_DISCOUNT_LINE', '\n💎 Скидка: {percent}%').format(percent=daily_discount)
+            texts.t(
+                'TARIFF_PURCHASE_DAILY_DISCOUNT_LINE',
+                '\n<tg-emoji emoji-id="5963312935148195483">💎</tg-emoji> Скидка: {percent}%',
+            ).format(percent=daily_discount)
             if daily_discount > 0
             else ''
         )
@@ -1409,14 +1481,14 @@ async def _proceed_with_selected_tariff(
             await callback.message.edit_text(
                 texts.t(
                     'TARIFF_PURCHASE_DAILY_CONFIRM',
-                    '✅ <b>Подтверждение покупки</b>\n\n'
-                    '📦 Тариф: <b>{name}</b>\n'
-                    '📊 Трафик: {traffic}\n'
-                    '📱 Устройств: {devices}\n'
-                    '🔄 Тип: <b>Суточный</b>\n\n'
-                    '💰 <b>Цена: {price}/день</b>{discount}\n\n'
-                    '💳 Ваш баланс: {balance}\n\n'
-                    'ℹ️ Средства будут списываться автоматически раз в сутки.\n'
+                    '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> <b>Подтверждение покупки</b>\n\n'
+                    '<tg-emoji emoji-id="5924720918826848520">📦</tg-emoji> Тариф: <b>{name}</b>\n'
+                    '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> Трафик: {traffic}\n'
+                    '<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> Устройств: {devices}\n'
+                    '<tg-emoji emoji-id="5839200986022812209">🔄</tg-emoji> Тип: <b>Суточный</b>\n\n'
+                    '<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> <b>Цена: {price}/день</b>{discount}\n\n'
+                    '<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> Ваш баланс: {balance}\n\n'
+                    '<tg-emoji emoji-id="5879785854284599288">ℹ️</tg-emoji> Средства будут списываться автоматически раз в сутки.\n'
                     'Вы можете приостановить подписку в любой момент.',
                 ).format(
                     name=html.escape(tariff.name),
@@ -1462,12 +1534,12 @@ async def _proceed_with_selected_tariff(
             await callback.message.edit_text(
                 texts.t(
                     'TARIFF_PURCHASE_DAILY_INSUFFICIENT',
-                    '❌ <b>Недостаточно средств</b>\n\n'
-                    '📦 Тариф: <b>{name}</b>\n'
-                    '🔄 Тип: Суточный\n'
-                    '💰 Цена: {price}/день{discount}\n\n'
-                    '💳 Ваш баланс: {balance}\n'
-                    '⚠️ Не хватает: <b>{missing}</b>',
+                    '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> <b>Недостаточно средств</b>\n\n'
+                    '<tg-emoji emoji-id="5924720918826848520">📦</tg-emoji> Тариф: <b>{name}</b>\n'
+                    '<tg-emoji emoji-id="5839200986022812209">🔄</tg-emoji> Тип: Суточный\n'
+                    '<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> Цена: {price}/день{discount}\n\n'
+                    '<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> Ваш баланс: {balance}\n'
+                    '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> Не хватает: <b>{missing}</b>',
                 ).format(
                     name=html.escape(tariff.name),
                     price=format_price_kopeks(daily_price),
@@ -1550,7 +1622,7 @@ async def _proceed_with_selected_tariff(
                 format_tariff_info_for_user(tariff, db_user.language)
                 + texts.t(
                     'TARIFF_PURCHASE_TRAFFIC_SETUP_HINT',
-                    '\n\n📊 <i>После выбора периода вы сможете настроить трафик</i>',
+                    '\n\n<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> <i>После выбора периода вы сможете настроить трафик</i>',
                 ),
                 reply_markup=get_tariff_periods_keyboard_with_traffic(
                     tariff, db_user.language, db_user=db_user, back_callback=back_callback
@@ -1762,7 +1834,11 @@ async def _confirm_tariff_checkout(callback, state, db_user, db, tariff, period)
     cart = checkout['cart']
     if cart.get('tariff_id') != tariff.id or cart.get('period_days') != period:
         await callback.answer(
-            texts.t('TARIFF_PURCHASE_CART_CORRUPTED', '❌ Данные корзины повреждены'), show_alert=True
+            texts.t(
+                'TARIFF_PURCHASE_CART_CORRUPTED',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Данные корзины повреждены',
+            ),
+            show_alert=True,
         )
         return True
 
@@ -1777,7 +1853,11 @@ async def _confirm_tariff_checkout(callback, state, db_user, db, tariff, period)
     expected_token = _saved_tariff_checkout_external_id(user_id, identity).rsplit(':', 1)[-1][:24]
     if len(callback_parts) != base_parts + 1 or callback_parts[-1] != expected_token:
         await callback.answer(
-            texts.t('TARIFF_PURCHASE_CART_CORRUPTED', '❌ Данные корзины повреждены'), show_alert=True
+            texts.t(
+                'TARIFF_PURCHASE_CART_CORRUPTED',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Данные корзины повреждены',
+            ),
+            show_alert=True,
         )
         return True
     if checkout.get('fresh_fixed') and settings.is_multi_tariff_enabled() and cart.get('subscription_id') is None:
@@ -1786,9 +1866,10 @@ async def _confirm_tariff_checkout(callback, state, db_user, db, tariff, period)
             active = await get_active_subscriptions_by_user_id(db, user_id)
             if sum(not sub.is_trial for sub in active) >= settings.get_max_active_subscriptions():
                 await callback.answer(
-                    texts.t('TARIFF_PURCHASE_MAX_SUBSCRIPTIONS', '❌ Максимум подписок: {max}').format(
-                        max=settings.get_max_active_subscriptions()
-                    ),
+                    texts.t(
+                        'TARIFF_PURCHASE_MAX_SUBSCRIPTIONS',
+                        '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Максимум подписок: {max}',
+                    ).format(max=settings.get_max_active_subscriptions()),
                     show_alert=True,
                 )
                 return True
@@ -1839,12 +1920,15 @@ async def _confirm_tariff_checkout(callback, state, db_user, db, tariff, period)
     )
     if payment is None:
         await callback.message.edit_text(
-            texts.t('TARIFF_PURCHASE_ERROR', '❌ Произошла ошибка при оформлении подписки')
+            texts.t(
+                'TARIFF_PURCHASE_ERROR',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Произошла ошибка при оформлении подписки',
+            )
         )
         return True
     if not payment.is_completed:
         await callback.message.edit_text(
-            texts.t('TARIFF_PURCHASE_IN_PROGRESS', '⏳ Покупка уже обрабатывается. Повторное списание не требуется.')
+            texts.t('TARIFF_PURCHASE_IN_PROGRESS', 'Покупка уже обрабатывается. Повторное списание не требуется.')
         )
         return True
 
@@ -1855,7 +1939,10 @@ async def _confirm_tariff_checkout(callback, state, db_user, db, tariff, period)
         subscription = next((sub for sub in active if sub.tariff_id == tariff_id), None)
     if subscription is None or subscription.tariff_id != tariff_id:
         await callback.message.edit_text(
-            texts.t('TARIFF_PURCHASE_ERROR', '❌ Произошла ошибка при оформлении подписки')
+            texts.t(
+                'TARIFF_PURCHASE_ERROR',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Произошла ошибка при оформлении подписки',
+            )
         )
         return True
     await db.refresh(tariff)
@@ -1872,12 +1959,12 @@ async def _confirm_tariff_checkout(callback, state, db_user, db, tariff, period)
     await callback.message.edit_text(
         texts.t(
             'TARIFF_PURCHASE_SUCCESS',
-            '🎉 <b>Подписка успешно оформлена!</b>\n\n'
-            '📦 Тариф: <b>{name}</b>\n'
-            '📊 Трафик: {traffic}\n'
-            '📱 Устройств: {devices}\n'
-            '📅 Период: {period}\n'
-            '💰 Списано: {price}\n\n'
+            '<tg-emoji emoji-id="5994502837327892086">🎉</tg-emoji> <b>Подписка успешно оформлена!</b>\n\n'
+            '<tg-emoji emoji-id="5924720918826848520">📦</tg-emoji> Тариф: <b>{name}</b>\n'
+            '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> Трафик: {traffic}\n'
+            '<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> Устройств: {devices}\n'
+            '<tg-emoji emoji-id="5967412305338568701">📅</tg-emoji> Период: {period}\n'
+            '<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> Списано: {price}\n\n'
             'Перейдите в раздел «Подписка» для подключения.',
         ).format(
             name=html.escape(tariff.name),
@@ -1890,7 +1977,10 @@ async def _confirm_tariff_checkout(callback, state, db_user, db, tariff, period)
             inline_keyboard=[
                 [
                     InlineKeyboardButton(
-                        text=texts.t('MY_SUBSCRIPTION_BUTTON', '📱 Моя подписка'),
+                        text=texts.t(
+                            'MY_SUBSCRIPTION_BUTTON',
+                            '<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> Моя подписка',
+                        ),
                         callback_data=f'sm:{subscription.id}'
                         if settings.is_multi_tariff_enabled()
                         else 'menu_subscription',
@@ -2052,7 +2142,13 @@ async def select_tariff_period(
         if source_id:
             selected = await get_subscription_by_id_for_user(db, int(source_id), db_user.id)
             if selected is None:
-                await callback.answer(texts.t('SUBSCRIPTION_NOT_FOUND', '❌ Подписка не найдена'), show_alert=True)
+                await callback.answer(
+                    texts.t(
+                        'SUBSCRIPTION_NOT_FOUND',
+                        '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Подписка не найдена',
+                    ),
+                    show_alert=True,
+                )
                 return
             if selected.tariff_id in (None, tariff_id):
                 _existing_sub = selected
@@ -2124,20 +2220,21 @@ async def select_tariff_period(
         discount_text = ''
         if discount_percent > 0:
             discount_text = texts.t(
-                'TARIFF_PURCHASE_DISCOUNT_SHORT_LINE', '\n🎁 Скидка: {percent}% (-{amount})'
+                'TARIFF_PURCHASE_DISCOUNT_SHORT_LINE',
+                '\n<tg-emoji emoji-id="6032937473162614352">🎁</tg-emoji> Скидка: {percent}% (-{amount})',
             ).format(percent=discount_percent, amount=format_price_kopeks(total_discount))
 
         await callback.message.edit_text(
             texts.t(
                 'TARIFF_PURCHASE_CONFIRM',
-                '✅ <b>Подтверждение покупки</b>\n\n'
-                '📦 Тариф: <b>{name}</b>\n'
-                '📊 Трафик: {traffic}\n'
-                '📱 Устройств: {devices}\n'
-                '📅 Период: {period}\n'
+                '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> <b>Подтверждение покупки</b>\n\n'
+                '<tg-emoji emoji-id="5924720918826848520">📦</tg-emoji> Тариф: <b>{name}</b>\n'
+                '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> Трафик: {traffic}\n'
+                '<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> Устройств: {devices}\n'
+                '<tg-emoji emoji-id="5967412305338568701">📅</tg-emoji> Период: {period}\n'
                 '{discount}\n'
-                '💰 <b>Итого: {total}</b>\n\n'
-                '💳 Ваш баланс: {balance}\n'
+                '<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> <b>Итого: {total}</b>\n\n'
+                '<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> Ваш баланс: {balance}\n'
                 'После оплаты: {after}',
             ).format(
                 name=html.escape(tariff.name),
@@ -2213,12 +2310,12 @@ async def select_tariff_period(
         await callback.message.edit_text(
             texts.t(
                 'TARIFF_PURCHASE_INSUFFICIENT',
-                '❌ <b>Недостаточно средств</b>\n\n'
-                '📦 Тариф: <b>{name}</b>\n'
-                '📅 Период: {period}\n'
-                '💰 Стоимость: {price}\n\n'
-                '💳 Ваш баланс: {balance}\n'
-                '⚠️ Не хватает: <b>{missing}</b>',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> <b>Недостаточно средств</b>\n\n'
+                '<tg-emoji emoji-id="5924720918826848520">📦</tg-emoji> Тариф: <b>{name}</b>\n'
+                '<tg-emoji emoji-id="5967412305338568701">📅</tg-emoji> Период: {period}\n'
+                '<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> Стоимость: {price}\n\n'
+                '<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> Ваш баланс: {balance}\n'
+                '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> Не хватает: <b>{missing}</b>',
             ).format(
                 name=html.escape(tariff.name),
                 period=format_period(period, language=texts.language),
@@ -2229,7 +2326,7 @@ async def select_tariff_period(
             + (f'\n\n{deviation_text}' if deviation_text else '')
             + texts.t(
                 'TARIFF_PURCHASE_CART_SAVED_HINT',
-                '\n\n🛒 <i>Корзина сохранена! После пополнения баланса подписка будет оформлена автоматически.</i>',
+                '\n\n<i>Корзина сохранена! После пополнения баланса подписка будет оформлена автоматически.</i>',
             ),
             reply_markup=insufficient_keyboard,
             parse_mode='HTML',
@@ -2337,7 +2434,12 @@ async def confirm_daily_tariff_purchase(
             db, db_user, tariff, state, source_data=selection_data
         )
     except LookupError:
-        await callback.answer(texts.t('SUBSCRIPTION_NOT_FOUND', '❌ Подписка не найдена'), show_alert=True)
+        await callback.answer(
+            texts.t(
+                'SUBSCRIPTION_NOT_FOUND', '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Подписка не найдена'
+            ),
+            show_alert=True,
+        )
         return
     from app.database.crud.subscription import get_subscription_by_user_and_tariff
 
@@ -2455,7 +2557,12 @@ async def confirm_daily_tariff_purchase(
             commit=False,
         ):
             await db.rollback()
-            await callback.message.edit_text(texts.t('TARIFF_PURCHASE_CHARGE_ERROR', '❌ Ошибка списания баланса'))
+            await callback.message.edit_text(
+                texts.t(
+                    'TARIFF_PURCHASE_CHARGE_ERROR',
+                    '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Ошибка списания баланса',
+                )
+            )
             return
         if existing_subscription:
             subscription = existing_subscription
@@ -2510,7 +2617,10 @@ async def confirm_daily_tariff_purchase(
             exc_info=True,
         )
         await callback.message.edit_text(
-            texts.t('TARIFF_PURCHASE_ERROR', '❌ Произошла ошибка при оформлении подписки')
+            texts.t(
+                'TARIFF_PURCHASE_ERROR',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Произошла ошибка при оформлении подписки',
+            )
         )
         return
 
@@ -2588,13 +2698,13 @@ async def confirm_daily_tariff_purchase(
     await callback.message.edit_text(
         texts.t(
             'TARIFF_PURCHASE_DAILY_SUCCESS',
-            '🎉 <b>Суточная подписка оформлена!</b>\n\n'
-            '📦 Тариф: <b>{name}</b>\n'
-            '📊 Трафик: {traffic}\n'
-            '📱 Устройств: {devices}\n'
-            '🔄 Тип: Суточный\n'
-            '💰 Списано: {price}\n\n'
-            'ℹ️ Следующее списание через 24 часа.\n'
+            '<tg-emoji emoji-id="5994502837327892086">🎉</tg-emoji> <b>Суточная подписка оформлена!</b>\n\n'
+            '<tg-emoji emoji-id="5924720918826848520">📦</tg-emoji> Тариф: <b>{name}</b>\n'
+            '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> Трафик: {traffic}\n'
+            '<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> Устройств: {devices}\n'
+            '<tg-emoji emoji-id="5839200986022812209">🔄</tg-emoji> Тип: Суточный\n'
+            '<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> Списано: {price}\n\n'
+            '<tg-emoji emoji-id="5879785854284599288">ℹ️</tg-emoji> Следующее списание через 24 часа.\n'
             'Перейдите в раздел «Подписка» для подключения.',
         ).format(
             name=html.escape(tariff.name),
@@ -2606,7 +2716,10 @@ async def confirm_daily_tariff_purchase(
             inline_keyboard=[
                 [
                     InlineKeyboardButton(
-                        text=texts.t('MY_SUBSCRIPTION_BUTTON', '📱 Моя подписка'),
+                        text=texts.t(
+                            'MY_SUBSCRIPTION_BUTTON',
+                            '<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> Моя подписка',
+                        ),
                         callback_data=f'sm:{subscription.id}'
                         if settings.is_multi_tariff_enabled() and subscription
                         else 'menu_subscription',
@@ -2700,7 +2813,9 @@ def get_tariff_extend_keyboard(
         buttons.append(
             [
                 InlineKeyboardButton(
-                    text=texts.t('CHANGE_TARIFF_BUTTON', '📦 Тариф'),
+                    text=texts.t(
+                        'CHANGE_TARIFF_BUTTON', '<tg-emoji emoji-id="5924720918826848520">📦</tg-emoji> Тариф'
+                    ),
                     callback_data=f'tariff_switch_for:{subscription_id}',
                 )
             ]
@@ -2722,7 +2837,10 @@ def get_tariff_extend_confirm_keyboard(
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text=texts.t('TARIFF_RENEW_CONFIRM_BUTTON', '✅ Подтвердить продление'),
+                    text=texts.t(
+                        'TARIFF_RENEW_CONFIRM_BUTTON',
+                        '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Подтвердить продление',
+                    ),
                     callback_data=f'tariff_ext_confirm:{subscription_id}:{tariff_id}:{period}',
                 )
             ],
@@ -2774,9 +2892,10 @@ async def show_tariff_extend(
                     keyboard.append(
                         [
                             InlineKeyboardButton(
-                                text=texts.t('TARIFF_RENEW_SUB_BUTTON', '🔄 {name} ({days}д.)').format(
-                                    name=tariff_name, days=days_left
-                                ),
+                                text=texts.t(
+                                    'TARIFF_RENEW_SUB_BUTTON',
+                                    '<tg-emoji emoji-id="5839200986022812209">🔄</tg-emoji> {name} ({days}д.)',
+                                ).format(name=tariff_name, days=days_left),
                                 callback_data=f'se:{sub.id}',
                             )
                         ]
@@ -2787,7 +2906,7 @@ async def show_tariff_extend(
                 await callback.message.edit_text(
                     texts.t(
                         'TARIFF_RENEW_PICK_SUBSCRIPTION',
-                        '🔄 <b>Продление подписки</b>\n\nВыберите подписку для продления:',
+                        '<tg-emoji emoji-id="5839200986022812209">🔄</tg-emoji> <b>Продление подписки</b>\n\nВыберите подписку для продления:',
                     ),
                     reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard),
                     parse_mode='HTML',
@@ -2801,7 +2920,12 @@ async def show_tariff_extend(
     else:
         subscription = await get_subscription_by_user_id(db, db_user.id)
     if not subscription:
-        await callback.answer(texts.t('SUBSCRIPTION_NOT_FOUND', '❌ Подписка не найдена'), show_alert=True)
+        await callback.answer(
+            texts.t(
+                'SUBSCRIPTION_NOT_FOUND', '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Подписка не найдена'
+            ),
+            show_alert=True,
+        )
         return
 
     if not subscription.tariff_id:
@@ -2816,7 +2940,14 @@ async def show_tariff_extend(
         for t in tariffs:
             if t.is_daily:
                 continue
-            keyboard.append([InlineKeyboardButton(text=f'📦 {t.name}', callback_data=f'tariff_select:{t.id}')])
+            keyboard.append(
+                [
+                    InlineKeyboardButton(
+                        text=f'<tg-emoji emoji-id="5924720918826848520">📦</tg-emoji> {t.name}',
+                        callback_data=f'tariff_select:{t.id}',
+                    )
+                ]
+            )
         if not keyboard:
             await callback.answer(
                 texts.t('TARIFF_RENEW_NO_TARIFFS', 'Нет доступных тарифов для продления'), show_alert=True
@@ -2827,7 +2958,7 @@ async def show_tariff_extend(
         await callback.message.edit_text(
             texts.t(
                 'TARIFF_RENEW_CHOOSE_TARIFF',
-                '🔄 <b>Выберите тариф для продления</b>\n\n'
+                '<tg-emoji emoji-id="5839200986022812209">🔄</tg-emoji> <b>Выберите тариф для продления</b>\n\n'
                 'Для продления подписки необходимо выбрать тариф.\n'
                 'Подписка будет обновлена с параметрами выбранного тарифа.',
             ),
@@ -2856,13 +2987,20 @@ async def show_tariff_extend(
 
         keyboard = []
         for t in active_tariffs:
-            keyboard.append([InlineKeyboardButton(text=f'📦 {t.name}', callback_data=f'tariff_select:{t.id}')])
+            keyboard.append(
+                [
+                    InlineKeyboardButton(
+                        text=f'<tg-emoji emoji-id="5924720918826848520">📦</tg-emoji> {t.name}',
+                        callback_data=f'tariff_select:{t.id}',
+                    )
+                ]
+            )
         keyboard.append([InlineKeyboardButton(text=texts.t('BACK_BUTTON', '← Назад'), callback_data='back_to_menu')])
 
         await callback.message.edit_text(
             texts.t(
                 'TARIFF_RENEW_CHOOSE_TARIFF',
-                '🔄 <b>Выберите тариф для продления</b>\n\n'
+                '<tg-emoji emoji-id="5839200986022812209">🔄</tg-emoji> <b>Выберите тариф для продления</b>\n\n'
                 'Для продления подписки необходимо выбрать тариф.\n'
                 'Подписка будет обновлена с параметрами выбранного тарифа.',
             ),
@@ -2887,7 +3025,8 @@ async def show_tariff_extend(
     discount_hint = ''
     if has_period_discounts:
         discount_hint = texts.t(
-            'TARIFF_RENEW_PERIOD_DISCOUNTS_HINT', '\n🎁 <i>Скидки зависят от выбранного периода</i>'
+            'TARIFF_RENEW_PERIOD_DISCOUNTS_HINT',
+            '\n<tg-emoji emoji-id="6032937473162614352">🎁</tg-emoji> <i>Скидки зависят от выбранного периода</i>',
         )
 
     actual_device_limit = subscription.device_limit or tariff.device_limit
@@ -2921,10 +3060,10 @@ async def show_tariff_extend(
     await callback.message.edit_text(
         texts.t(
             'TARIFF_RENEW_TITLE',
-            '🔄 <b>Продление подписки</b>{discount_hint}\n\n'
-            '📦 Тариф: <b>{name}</b>\n'
-            '📊 Трафик: {traffic}\n'
-            '📱 Устройств: {devices}\n\n'
+            '<tg-emoji emoji-id="5839200986022812209">🔄</tg-emoji> <b>Продление подписки</b>{discount_hint}\n\n'
+            '<tg-emoji emoji-id="5924720918826848520">📦</tg-emoji> Тариф: <b>{name}</b>\n'
+            '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> Трафик: {traffic}\n'
+            '<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> Устройств: {devices}\n\n'
             'Выберите период продления:',
         ).format(
             discount_hint=discount_hint,
@@ -2969,7 +3108,12 @@ async def select_tariff_extend_period(
     # бы хвостовой период за id подписки — см. issue #3012).
     subscription = await get_subscription_by_id_for_user(db, sub_id, db_user.id)
     if not subscription:
-        await callback.answer(texts.t('SUBSCRIPTION_NOT_FOUND', '❌ Подписка не найдена'), show_alert=True)
+        await callback.answer(
+            texts.t(
+                'SUBSCRIPTION_NOT_FOUND', '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Подписка не найдена'
+            ),
+            show_alert=True,
+        )
         return
     actual_device_limit = subscription.device_limit or tariff.device_limit
 
@@ -3013,20 +3157,21 @@ async def select_tariff_extend_period(
         discount_text = ''
         if discount_percent > 0:
             discount_text = texts.t(
-                'TARIFF_PURCHASE_DISCOUNT_SHORT_LINE', '\n🎁 Скидка: {percent}% (-{amount})'
+                'TARIFF_PURCHASE_DISCOUNT_SHORT_LINE',
+                '\n<tg-emoji emoji-id="6032937473162614352">🎁</tg-emoji> Скидка: {percent}% (-{amount})',
             ).format(percent=discount_percent, amount=format_price_kopeks(total_discount))
 
         await callback.message.edit_text(
             texts.t(
                 'TARIFF_RENEW_CONFIRM',
-                '✅ <b>Подтверждение продления</b>\n\n'
-                '📦 Тариф: <b>{name}</b>\n'
-                '📊 Трафик: {traffic}\n'
-                '📱 Устройств: {devices}\n'
-                '📅 Период: {period}\n'
+                '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> <b>Подтверждение продления</b>\n\n'
+                '<tg-emoji emoji-id="5924720918826848520">📦</tg-emoji> Тариф: <b>{name}</b>\n'
+                '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> Трафик: {traffic}\n'
+                '<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> Устройств: {devices}\n'
+                '<tg-emoji emoji-id="5967412305338568701">📅</tg-emoji> Период: {period}\n'
                 '{discount}\n'
-                '💰 <b>К оплате: {total}</b>\n\n'
-                '💳 Ваш баланс: {balance}\n'
+                '<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> <b>К оплате: {total}</b>\n\n'
+                '<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> Ваш баланс: {balance}\n'
                 'После оплаты: {after}',
             ).format(
                 name=html.escape(tariff.name),
@@ -3158,7 +3303,12 @@ async def confirm_tariff_extend(
         .execution_options(populate_existing=True)
     )
     if not subscription:
-        await callback.answer(texts.t('SUBSCRIPTION_NOT_FOUND', '❌ Подписка не найдена'), show_alert=True)
+        await callback.answer(
+            texts.t(
+                'SUBSCRIPTION_NOT_FOUND', '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Подписка не найдена'
+            ),
+            show_alert=True,
+        )
         return
 
     # Защита от рассинхрона до списания: продлеваемая подписка должна
@@ -3230,7 +3380,10 @@ async def confirm_tariff_extend(
                 await db.rollback()
                 try:
                     await callback.message.edit_text(
-                        texts.t('TARIFF_PURCHASE_CHARGE_ERROR', '❌ Ошибка списания баланса')
+                        texts.t(
+                            'TARIFF_PURCHASE_CHARGE_ERROR',
+                            '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Ошибка списания баланса',
+                        )
                     )
                 except Exception:
                     pass
@@ -3348,12 +3501,12 @@ async def confirm_tariff_extend(
         await callback.message.edit_text(
             texts.t(
                 'TARIFF_RENEW_SUCCESS',
-                '🎉 <b>Подписка успешно продлена!</b>\n\n'
-                '📦 Тариф: <b>{name}</b>\n'
-                '📊 Трафик: {traffic}\n'
-                '📱 Устройств: {devices}\n'
-                '📅 Добавлено: {period}\n'
-                '💰 Списано: {price}',
+                '<tg-emoji emoji-id="5994502837327892086">🎉</tg-emoji> <b>Подписка успешно продлена!</b>\n\n'
+                '<tg-emoji emoji-id="5924720918826848520">📦</tg-emoji> Тариф: <b>{name}</b>\n'
+                '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> Трафик: {traffic}\n'
+                '<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> Устройств: {devices}\n'
+                '<tg-emoji emoji-id="5967412305338568701">📅</tg-emoji> Добавлено: {period}\n'
+                '<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> Списано: {price}',
             ).format(
                 name=html.escape(tariff.name),
                 traffic=traffic,
@@ -3365,7 +3518,10 @@ async def confirm_tariff_extend(
                 inline_keyboard=[
                     [
                         InlineKeyboardButton(
-                            text=texts.t('MY_SUBSCRIPTION_BUTTON', '📱 Моя подписка'),
+                            text=texts.t(
+                                'MY_SUBSCRIPTION_BUTTON',
+                                '<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> Моя подписка',
+                            ),
                             callback_data=f'sm:{subscription.id}'
                             if settings.is_multi_tariff_enabled() and subscription
                             else 'menu_subscription',
@@ -3380,7 +3536,10 @@ async def confirm_tariff_extend(
         logger.error('Ошибка при продлении тарифа', error=e, exc_info=True)
         try:
             await callback.message.edit_text(
-                texts.t('TARIFF_RENEW_ERROR', '❌ Произошла ошибка при продлении подписки')
+                texts.t(
+                    'TARIFF_RENEW_ERROR',
+                    '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Произошла ошибка при продлении подписки',
+                )
             )
         except Exception:
             pass
@@ -3399,15 +3558,30 @@ def format_tariff_switch_list_text(
     """Форматирует текст со списком тарифов для переключения."""
     texts = get_texts(db_user.language if db_user else 'ru')
     lines = [
-        texts.t('TARIFF_SWITCH_LIST_TITLE', '📦 <b>Смена тарифа</b>'),
-        texts.t('TARIFF_SWITCH_CURRENT_LINE', '📌 Текущий: <b>{name}</b>').format(name=current_tariff_name),
+        texts.t(
+            'TARIFF_SWITCH_LIST_TITLE', '<tg-emoji emoji-id="5924720918826848520">📦</tg-emoji> <b>Смена тарифа</b>'
+        ),
+        texts.t(
+            'TARIFF_SWITCH_CURRENT_LINE',
+            '<tg-emoji emoji-id="5908961403917570106">📌</tg-emoji> Текущий: <b>{name}</b>',
+        ).format(name=current_tariff_name),
     ]
 
     if has_period_discounts:
-        lines.append(texts.t('TARIFF_PURCHASE_PERIOD_DISCOUNTS_HINT', '🎁 <i>Скидки по периодам</i>'))
+        lines.append(
+            texts.t(
+                'TARIFF_PURCHASE_PERIOD_DISCOUNTS_HINT',
+                '<tg-emoji emoji-id="6032937473162614352">🎁</tg-emoji> <i>Скидки по периодам</i>',
+            )
+        )
 
     lines.append('')
-    lines.append(texts.t('TARIFF_SWITCH_FULL_PRICE_NOTE', '⚠️ Оплачивается полная стоимость.'))
+    lines.append(
+        texts.t(
+            'TARIFF_SWITCH_FULL_PRICE_NOTE',
+            '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> Оплачивается полная стоимость.',
+        )
+    )
     lines.append('')
 
     for tariff in tariffs:
@@ -3431,9 +3605,10 @@ def format_tariff_switch_list_text(
                 group_pct, offer_pct, daily_discount = _get_user_period_discount(db_user, 1)
                 if daily_discount > 0:
                     daily_price = _apply_promo_discount(daily_price, group_pct, offer_pct)
-            price_text = texts.t('TARIFF_PURCHASE_PRICE_PER_DAY', '🔄 {price}/день{icon}').format(
-                price=format_price_kopeks(daily_price, compact=True), icon=discount_icon
-            )
+            price_text = texts.t(
+                'TARIFF_PURCHASE_PRICE_PER_DAY',
+                '<tg-emoji emoji-id="5839200986022812209">🔄</tg-emoji> {price}/день{icon}',
+            ).format(price=format_price_kopeks(daily_price, compact=True), icon=discount_icon)
         else:
             prices = tariff.period_prices or {}
             if prices:
@@ -3448,7 +3623,9 @@ def format_tariff_switch_list_text(
                     price=format_price_kopeks(min_price, compact=True), icon=discount_icon
                 )
 
-        lines.append(f'<b>{html.escape(tariff.name)}</b> — {traffic} / {tariff.device_limit} 📱 {price_text}')
+        lines.append(
+            f'<b>{html.escape(tariff.name)}</b> — {traffic} / {tariff.device_limit} <tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> {price_text}'
+        )
 
         if tariff.description:
             lines.append(f'<i>{html.escape(tariff.description)}</i>')
@@ -3522,7 +3699,10 @@ def get_tariff_switch_confirm_keyboard(
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text=texts.t('TARIFF_SWITCH_CONFIRM_BUTTON', '✅ Подтвердить переключение'),
+                    text=texts.t(
+                        'TARIFF_SWITCH_CONFIRM_BUTTON',
+                        '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Подтвердить переключение',
+                    ),
                     callback_data=f'tariff_sw_confirm:{tariff_id}:{period}',
                 )
             ],
@@ -3584,7 +3764,7 @@ async def show_tariff_switch_list(
         await callback.message.edit_text(
             texts.t(
                 'TARIFF_SWITCH_EXPIRED',
-                '❌ <b>Переключение недоступно</b>\n\n'
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> <b>Переключение недоступно</b>\n\n'
                 'У вашей подписки не осталось активных дней.\n'
                 'Оформите новый тариф с нуля.',
             ),
@@ -3592,7 +3772,11 @@ async def show_tariff_switch_list(
                 inline_keyboard=[
                     [
                         InlineKeyboardButton(
-                            text=texts.t('BUY_TARIFF_BUTTON', '📦 Купить тариф'), callback_data='menu_buy'
+                            text=texts.t(
+                                'BUY_TARIFF_BUTTON',
+                                '<tg-emoji emoji-id="5924720918826848520">📦</tg-emoji> Купить тариф',
+                            ),
+                            callback_data='menu_buy',
                         )
                     ],
                     [InlineKeyboardButton(text=texts.BACK, callback_data='menu_subscription', style='danger')],
@@ -3611,7 +3795,7 @@ async def show_tariff_switch_list(
         await callback.message.edit_text(
             texts.t(
                 'TARIFF_SWITCH_DISABLED',
-                '🚫 <b>Смена тарифа недоступна</b>\n\nАдминистратор отключил возможность смены тарифа.',
+                '<tg-emoji emoji-id="5872829476143894491">🚫</tg-emoji> <b>Смена тарифа недоступна</b>\n\nАдминистратор отключил возможность смены тарифа.',
             ),
             reply_markup=InlineKeyboardMarkup(
                 inline_keyboard=[
@@ -3647,7 +3831,7 @@ async def show_tariff_switch_list(
         await callback.message.edit_text(
             texts.t(
                 'TARIFF_SWITCH_NO_TARIFFS',
-                '😔 <b>Нет доступных тарифов для переключения</b>\n\nВы уже используете единственный доступный тариф.',
+                '<b>Нет доступных тарифов для переключения</b>\n\nВы уже используете единственный доступный тариф.',
             ),
             reply_markup=InlineKeyboardMarkup(
                 inline_keyboard=[
@@ -3745,7 +3929,10 @@ async def select_tariff_switch(
             _apply_promo_discount(raw_daily_price, group_pct, offer_pct) if daily_discount > 0 else raw_daily_price
         )
         discount_text = (
-            texts.t('TARIFF_PURCHASE_DAILY_DISCOUNT_LINE', '\n💎 Скидка: {percent}%').format(percent=daily_discount)
+            texts.t(
+                'TARIFF_PURCHASE_DAILY_DISCOUNT_LINE',
+                '\n<tg-emoji emoji-id="5963312935148195483">💎</tg-emoji> Скидка: {percent}%',
+            ).format(percent=daily_discount)
             if daily_discount > 0
             else ''
         )
@@ -3761,21 +3948,21 @@ async def select_tariff_switch(
             if whole_days_left > 1:
                 days_warning = '\n\n' + texts.t(
                     'DAILY_SWITCH_WARNING',
-                    '⚠️ <b>Внимание!</b> У вас осталось {days} дн. подписки.\nПри смене на суточный тариф они будут утеряны!',
+                    '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> <b>Внимание!</b> У вас осталось {days} дн. подписки.\nПри смене на суточный тариф они будут утеряны!',
                 ).format(days=whole_days_left)
 
         if user_balance >= daily_price:
             await callback.message.edit_text(
                 texts.t(
                     'TARIFF_SWITCH_DAILY_CONFIRM',
-                    '✅ <b>Подтверждение смены тарифа</b>\n\n'
-                    '📦 Новый тариф: <b>{name}</b>\n'
-                    '📊 Трафик: {traffic}\n'
-                    '📱 Устройств: {devices}\n'
-                    '🔄 Тип: <b>Суточный</b>\n\n'
-                    '💰 <b>Цена: {price}/день</b>{discount}\n\n'
-                    '💳 Ваш баланс: {balance}{warning}\n\n'
-                    'ℹ️ Средства будут списываться автоматически раз в сутки.\n'
+                    '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> <b>Подтверждение смены тарифа</b>\n\n'
+                    '<tg-emoji emoji-id="5924720918826848520">📦</tg-emoji> Новый тариф: <b>{name}</b>\n'
+                    '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> Трафик: {traffic}\n'
+                    '<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> Устройств: {devices}\n'
+                    '<tg-emoji emoji-id="5839200986022812209">🔄</tg-emoji> Тип: <b>Суточный</b>\n\n'
+                    '<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> <b>Цена: {price}/день</b>{discount}\n\n'
+                    '<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> Ваш баланс: {balance}{warning}\n\n'
+                    '<tg-emoji emoji-id="5879785854284599288">ℹ️</tg-emoji> Средства будут списываться автоматически раз в сутки.\n'
                     'Вы можете приостановить подписку в любой момент.',
                 ).format(
                     name=html.escape(tariff.name),
@@ -3790,7 +3977,10 @@ async def select_tariff_switch(
                     inline_keyboard=[
                         [
                             InlineKeyboardButton(
-                                text=texts.t('TARIFF_SWITCH_CONFIRM_BUTTON', '✅ Подтвердить переключение'),
+                                text=texts.t(
+                                    'TARIFF_SWITCH_CONFIRM_BUTTON',
+                                    '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Подтвердить переключение',
+                                ),
                                 callback_data=f'daily_tariff_switch_confirm:{tariff_id}',
                             )
                         ],
@@ -3804,12 +3994,12 @@ async def select_tariff_switch(
             await callback.message.edit_text(
                 texts.t(
                     'TARIFF_PURCHASE_DAILY_INSUFFICIENT',
-                    '❌ <b>Недостаточно средств</b>\n\n'
-                    '📦 Тариф: <b>{name}</b>\n'
-                    '🔄 Тип: Суточный\n'
-                    '💰 Цена: {price}/день{discount}\n\n'
-                    '💳 Ваш баланс: {balance}\n'
-                    '⚠️ Не хватает: <b>{missing}</b>',
+                    '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> <b>Недостаточно средств</b>\n\n'
+                    '<tg-emoji emoji-id="5924720918826848520">📦</tg-emoji> Тариф: <b>{name}</b>\n'
+                    '<tg-emoji emoji-id="5839200986022812209">🔄</tg-emoji> Тип: Суточный\n'
+                    '<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> Цена: {price}/день{discount}\n\n'
+                    '<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> Ваш баланс: {balance}\n'
+                    '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> Не хватает: <b>{missing}</b>',
                 ).format(
                     name=html.escape(tariff.name),
                     price=format_price_kopeks(daily_price),
@@ -3829,14 +4019,15 @@ async def select_tariff_switch(
         # Для обычного тарифа показываем выбор периода
         info_text = texts.t(
             'TARIFF_SWITCH_NEW_TARIFF_INFO',
-            '📦 <b>{name}</b>\n\n<b>Параметры нового тарифа:</b>\n• Трафик: {traffic}\n• Устройств: {devices}\n',
+            '<tg-emoji emoji-id="5924720918826848520">📦</tg-emoji> <b>{name}</b>\n\n<b>Параметры нового тарифа:</b>\n• Трафик: {traffic}\n• Устройств: {devices}\n',
         ).format(name=html.escape(tariff.name), traffic=traffic, devices=tariff.device_limit)
 
         if tariff.description:
-            info_text += f'\n📝 {html.escape(tariff.description)}\n'
+            info_text += f'\n<tg-emoji emoji-id="5886330010054168711">📝</tg-emoji> {html.escape(tariff.description)}\n'
 
         info_text += texts.t(
-            'TARIFF_SWITCH_FULL_PRICE_CHOOSE_PERIOD', '\n⚠️ Оплачивается полная стоимость тарифа.\nВыберите период:'
+            'TARIFF_SWITCH_FULL_PRICE_CHOOSE_PERIOD',
+            '\n<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> Оплачивается полная стоимость тарифа.\nВыберите период:',
         )
 
         await callback.message.edit_text(
@@ -3905,27 +4096,31 @@ async def select_tariff_switch_period(
             current_tariff_name = html.escape(current_tariff.name)
 
     # При смене тарифа устанавливается ровно оплаченный период
-    time_info = texts.t('TARIFF_SWITCH_WILL_SET_LINE', '⏰ Будет установлено: {days} дней').format(days=period)
+    time_info = texts.t(
+        'TARIFF_SWITCH_WILL_SET_LINE',
+        '<tg-emoji emoji-id="5985616167740379273">⏰</tg-emoji> Будет установлено: {days} дней',
+    ).format(days=period)
 
     if user_balance >= final_price:
         discount_text = ''
         if discount_percent > 0:
             discount_text = texts.t(
-                'TARIFF_PURCHASE_DISCOUNT_SHORT_LINE', '\n🎁 Скидка: {percent}% (-{amount})'
+                'TARIFF_PURCHASE_DISCOUNT_SHORT_LINE',
+                '\n<tg-emoji emoji-id="6032937473162614352">🎁</tg-emoji> Скидка: {percent}% (-{amount})',
             ).format(percent=discount_percent, amount=format_price_kopeks(total_discount))
 
         await callback.message.edit_text(
             texts.t(
                 'TARIFF_SWITCH_CONFIRM',
-                '✅ <b>Подтверждение переключения тарифа</b>\n\n'
-                '📌 Текущий тариф: <b>{current}</b>\n'
-                '📦 Новый тариф: <b>{name}</b>\n'
-                '📊 Трафик: {traffic}\n'
-                '📱 Устройств: {devices}\n'
+                '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> <b>Подтверждение переключения тарифа</b>\n\n'
+                '<tg-emoji emoji-id="5908961403917570106">📌</tg-emoji> Текущий тариф: <b>{current}</b>\n'
+                '<tg-emoji emoji-id="5924720918826848520">📦</tg-emoji> Новый тариф: <b>{name}</b>\n'
+                '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> Трафик: {traffic}\n'
+                '<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> Устройств: {devices}\n'
                 '{time_info}\n'
                 '{discount}\n'
-                '💰 <b>К оплате: {total}</b>\n\n'
-                '💳 Ваш баланс: {balance}\n'
+                '<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> <b>К оплате: {total}</b>\n\n'
+                '<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> Ваш баланс: {balance}\n'
                 'После оплаты: {after}',
             ).format(
                 current=current_tariff_name,
@@ -3946,12 +4141,12 @@ async def select_tariff_switch_period(
         await callback.message.edit_text(
             texts.t(
                 'TARIFF_PURCHASE_INSUFFICIENT',
-                '❌ <b>Недостаточно средств</b>\n\n'
-                '📦 Тариф: <b>{name}</b>\n'
-                '📅 Период: {period}\n'
-                '💰 Стоимость: {price}\n\n'
-                '💳 Ваш баланс: {balance}\n'
-                '⚠️ Не хватает: <b>{missing}</b>',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> <b>Недостаточно средств</b>\n\n'
+                '<tg-emoji emoji-id="5924720918826848520">📦</tg-emoji> Тариф: <b>{name}</b>\n'
+                '<tg-emoji emoji-id="5967412305338568701">📅</tg-emoji> Период: {period}\n'
+                '<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> Стоимость: {price}\n\n'
+                '<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> Ваш баланс: {balance}\n'
+                '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> Не хватает: <b>{missing}</b>',
             ).format(
                 name=html.escape(tariff.name),
                 period=format_period(period, language=texts.language),
@@ -4006,7 +4201,13 @@ async def confirm_tariff_switch(
     # Проверяем наличие подписки (switched FROM — resolved via FSM state)
     subscription, _sw_confirm_sub_id = await _resolve_switch_subscription(callback, db_user, db, state)
     if not subscription:
-        await callback.answer(texts.t('NO_SUBSCRIPTION_ERROR', '❌ У вас нет активной подписки'), show_alert=True)
+        await callback.answer(
+            texts.t(
+                'NO_SUBSCRIPTION_ERROR',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> У вас нет активной подписки',
+            ),
+            show_alert=True,
+        )
         return
 
     from sqlalchemy.orm import selectinload
@@ -4021,7 +4222,12 @@ async def confirm_tariff_switch(
         .execution_options(populate_existing=True)
     )
     if subscription is None:
-        await callback.answer(texts.t('SUBSCRIPTION_NOT_FOUND', '❌ Подписка не найдена'), show_alert=True)
+        await callback.answer(
+            texts.t(
+                'SUBSCRIPTION_NOT_FOUND', '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Подписка не найдена'
+            ),
+            show_alert=True,
+        )
         return
 
     # Проверяем разрешение на смену в данном направлении
@@ -4103,7 +4309,10 @@ async def confirm_tariff_switch(
                 await db.rollback()
                 try:
                     await callback.message.edit_text(
-                        texts.t('TARIFF_PURCHASE_CHARGE_ERROR', '❌ Ошибка списания баланса')
+                        texts.t(
+                            'TARIFF_PURCHASE_CHARGE_ERROR',
+                            '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Ошибка списания баланса',
+                        )
                     )
                 except Exception:
                     pass
@@ -4220,7 +4429,7 @@ async def confirm_tariff_switch(
                     # результата лог утверждал бы, что сброс прошёл, когда он
                     # провалился, и старые HWID остались бы за новым лимитом.
                     if await api.reset_user_devices(_reset_panel_id):
-                        logger.info('🔧 Сброшены устройства при смене тарифа для user_id', db_user_id=db_user.id)
+                        logger.info('Сброшены устройства при смене тарифа для user_id', db_user_id=db_user.id)
                     else:
                         logger.error('Не удалось сбросить устройства при смене тарифа', db_user_id=db_user.id)
             except Exception as e:
@@ -4258,16 +4467,18 @@ async def confirm_tariff_switch(
         traffic = format_traffic(tariff.traffic_limit_gb, language=texts.language)
 
         # При смене тарифа устанавливается оплаченный период
-        time_info = texts.t('TARIFF_SWITCH_PERIOD_LINE', '📅 Период: {days} дней').format(days=days_for_new_tariff)
+        time_info = texts.t(
+            'TARIFF_SWITCH_PERIOD_LINE', '<tg-emoji emoji-id="5967412305338568701">📅</tg-emoji> Период: {days} дней'
+        ).format(days=days_for_new_tariff)
 
         await callback.message.edit_text(
             texts.t(
                 'TARIFF_SWITCH_SUCCESS',
-                '🎉 <b>Тариф успешно изменён!</b>\n\n'
-                '📦 Новый тариф: <b>{name}</b>\n'
-                '📊 Трафик: {traffic}\n'
-                '📱 Устройств: {devices}\n'
-                '💰 Списано: {price}\n'
+                '<tg-emoji emoji-id="5994502837327892086">🎉</tg-emoji> <b>Тариф успешно изменён!</b>\n\n'
+                '<tg-emoji emoji-id="5924720918826848520">📦</tg-emoji> Новый тариф: <b>{name}</b>\n'
+                '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> Трафик: {traffic}\n'
+                '<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> Устройств: {devices}\n'
+                '<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> Списано: {price}\n'
                 '{time_info}\n\n'
                 'Перейдите в раздел «Подписка» для просмотра деталей.',
             ).format(
@@ -4281,7 +4492,10 @@ async def confirm_tariff_switch(
                 inline_keyboard=[
                     [
                         InlineKeyboardButton(
-                            text=texts.t('MY_SUBSCRIPTION_BUTTON', '📱 Моя подписка'),
+                            text=texts.t(
+                                'MY_SUBSCRIPTION_BUTTON',
+                                '<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> Моя подписка',
+                            ),
                             callback_data=f'sm:{subscription.id}'
                             if settings.is_multi_tariff_enabled() and subscription
                             else 'menu_subscription',
@@ -4297,7 +4511,10 @@ async def confirm_tariff_switch(
         logger.error('Ошибка при переключении тарифа', error=e, exc_info=True)
         try:
             await callback.message.edit_text(
-                texts.t('TARIFF_SWITCH_ERROR', '❌ Произошла ошибка при переключении тарифа')
+                texts.t(
+                    'TARIFF_SWITCH_ERROR',
+                    '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Произошла ошибка при переключении тарифа',
+                )
             )
         except Exception:
             pass
@@ -4364,7 +4581,13 @@ async def confirm_daily_tariff_switch(
     # Проверяем наличие подписки — ищем подписку FROM (текущую), не TO (новый тариф)
     subscription, _sub_id = await _resolve_switch_subscription(callback, db_user, db, state)
     if not subscription:
-        await callback.answer(texts.t('NO_SUBSCRIPTION_ERROR', '❌ У вас нет активной подписки'), show_alert=True)
+        await callback.answer(
+            texts.t(
+                'NO_SUBSCRIPTION_ERROR',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> У вас нет активной подписки',
+            ),
+            show_alert=True,
+        )
         return
 
     # Проверяем разрешение на смену в данном направлении
@@ -4420,7 +4643,12 @@ async def confirm_daily_tariff_switch(
         )
         if not success:
             try:
-                await callback.message.edit_text(texts.t('TARIFF_PURCHASE_CHARGE_ERROR', '❌ Ошибка списания баланса'))
+                await callback.message.edit_text(
+                    texts.t(
+                        'TARIFF_PURCHASE_CHARGE_ERROR',
+                        '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Ошибка списания баланса',
+                    )
+                )
             except Exception:
                 pass
             return
@@ -4519,7 +4747,7 @@ async def confirm_daily_tariff_switch(
                     # провалился, и старые HWID остались бы за новым лимитом.
                     if await api.reset_user_devices(_reset_panel_id_daily):
                         logger.info(
-                            '🔧 Сброшены устройства при смене на суточный тариф для user_id', db_user_id=db_user.id
+                            'Сброшены устройства при смене на суточный тариф для user_id', db_user_id=db_user.id
                         )
                     else:
                         logger.error(
@@ -4560,13 +4788,13 @@ async def confirm_daily_tariff_switch(
         await callback.message.edit_text(
             texts.t(
                 'TARIFF_SWITCH_DAILY_SUCCESS',
-                '🎉 <b>Тариф успешно изменён!</b>\n\n'
-                '📦 Новый тариф: <b>{name}</b>\n'
-                '📊 Трафик: {traffic}\n'
-                '📱 Устройств: {devices}\n'
-                '🔄 Тип: Суточный\n'
-                '💰 Списано: {price}\n\n'
-                'ℹ️ Следующее списание через 24 часа.',
+                '<tg-emoji emoji-id="5994502837327892086">🎉</tg-emoji> <b>Тариф успешно изменён!</b>\n\n'
+                '<tg-emoji emoji-id="5924720918826848520">📦</tg-emoji> Новый тариф: <b>{name}</b>\n'
+                '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> Трафик: {traffic}\n'
+                '<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> Устройств: {devices}\n'
+                '<tg-emoji emoji-id="5839200986022812209">🔄</tg-emoji> Тип: Суточный\n'
+                '<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> Списано: {price}\n\n'
+                '<tg-emoji emoji-id="5879785854284599288">ℹ️</tg-emoji> Следующее списание через 24 часа.',
             ).format(
                 name=html.escape(tariff.name),
                 traffic=traffic,
@@ -4577,7 +4805,10 @@ async def confirm_daily_tariff_switch(
                 inline_keyboard=[
                     [
                         InlineKeyboardButton(
-                            text=texts.t('MY_SUBSCRIPTION_BUTTON', '📱 Моя подписка'),
+                            text=texts.t(
+                                'MY_SUBSCRIPTION_BUTTON',
+                                '<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> Моя подписка',
+                            ),
                             callback_data=f'sm:{subscription.id}'
                             if settings.is_multi_tariff_enabled() and subscription
                             else 'menu_subscription',
@@ -4622,7 +4853,10 @@ async def confirm_daily_tariff_switch(
             )
         try:
             await callback.message.edit_text(
-                texts.t('TARIFF_SWITCH_ERROR', '❌ Произошла ошибка при переключении тарифа')
+                texts.t(
+                    'TARIFF_SWITCH_ERROR',
+                    '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Произошла ошибка при переключении тарифа',
+                )
             )
         except Exception:
             pass
@@ -4690,18 +4924,35 @@ def format_instant_switch_list_text(
 
     texts = get_texts(db_user.language if db_user else 'ru')
     lines = [
-        texts.t('TARIFF_SWITCH_INSTANT_TITLE', '📦 <b>Мгновенная смена тарифа</b>'),
-        texts.t('TARIFF_SWITCH_CURRENT_LINE', '📌 Текущий: <b>{name}</b>').format(
-            name=html.escape(current_tariff.name)
+        texts.t(
+            'TARIFF_SWITCH_INSTANT_TITLE',
+            '<tg-emoji emoji-id="5924720918826848520">📦</tg-emoji> <b>Мгновенная смена тарифа</b>',
         ),
-        texts.t('TARIFF_SWITCH_DAYS_LEFT_LINE', '⏰ Осталось: <b>{days} дн.</b>').format(days=remaining_days),
+        texts.t(
+            'TARIFF_SWITCH_CURRENT_LINE',
+            '<tg-emoji emoji-id="5908961403917570106">📌</tg-emoji> Текущий: <b>{name}</b>',
+        ).format(name=html.escape(current_tariff.name)),
+        texts.t(
+            'TARIFF_SWITCH_DAYS_LEFT_LINE',
+            '<tg-emoji emoji-id="5985616167740379273">⏰</tg-emoji> Осталось: <b>{days} дн.</b>',
+        ).format(days=remaining_days),
         '',
-        texts.t('TARIFF_SWITCH_KEEP_DAYS_NOTE', '💡 При переключении остаток дней сохраняется.'),
+        texts.t('TARIFF_SWITCH_KEEP_DAYS_NOTE', 'При переключении остаток дней сохраняется.'),
     ]
     if upgrade_ok:
-        lines.append(texts.t('TARIFF_SWITCH_UPGRADE_NOTE', '⬆️ Повышение тарифа = доплата за разницу'))
+        lines.append(
+            texts.t(
+                'TARIFF_SWITCH_UPGRADE_NOTE',
+                '<tg-emoji emoji-id="6005807101056651268">⬆️</tg-emoji> Повышение тарифа = доплата за разницу',
+            )
+        )
     if downgrade_ok:
-        lines.append(texts.t('TARIFF_SWITCH_DOWNGRADE_NOTE', '⬇️ Понижение = бесплатно'))
+        lines.append(
+            texts.t(
+                'TARIFF_SWITCH_DOWNGRADE_NOTE',
+                '<tg-emoji emoji-id="5886451926995833684">⬇️</tg-emoji> Понижение = бесплатно',
+            )
+        )
     lines.append('')
 
     for tariff in tariffs:
@@ -4720,11 +4971,17 @@ def format_instant_switch_list_text(
             continue
 
         if is_upgrade:
-            cost_text = f'⬆️ +{format_price_kopeks(cost, compact=True)}'
+            cost_text = (
+                f'<tg-emoji emoji-id="6005807101056651268">⬆️</tg-emoji> +{format_price_kopeks(cost, compact=True)}'
+            )
         else:
-            cost_text = texts.t('TARIFF_SWITCH_FREE_LABEL', '⬇️ Бесплатно')
+            cost_text = texts.t(
+                'TARIFF_SWITCH_FREE_LABEL', '<tg-emoji emoji-id="5886451926995833684">⬇️</tg-emoji> Бесплатно'
+            )
 
-        lines.append(f'<b>{html.escape(tariff.name)}</b> — {traffic} / {tariff.device_limit} 📱 {cost_text}')
+        lines.append(
+            f'<b>{html.escape(tariff.name)}</b> — {traffic} / {tariff.device_limit} <tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> {cost_text}'
+        )
 
         if tariff.description:
             lines.append(f'<i>{html.escape(tariff.description)}</i>')
@@ -4777,7 +5034,10 @@ def get_instant_switch_confirm_keyboard(
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text=texts.t('TARIFF_SWITCH_CONFIRM_BUTTON', '✅ Подтвердить переключение'),
+                    text=texts.t(
+                        'TARIFF_SWITCH_CONFIRM_BUTTON',
+                        '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Подтвердить переключение',
+                    ),
                     callback_data=f'instant_sw_confirm:{tariff_id}',
                 )
             ],
@@ -4848,7 +5108,7 @@ async def show_instant_switch_list(
         await callback.message.edit_text(
             texts.t(
                 'TARIFF_SWITCH_EXPIRED',
-                '❌ <b>Переключение недоступно</b>\n\n'
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> <b>Переключение недоступно</b>\n\n'
                 'У вашей подписки не осталось активных дней.\n'
                 'Оформите новый тариф с нуля.',
             ),
@@ -4856,7 +5116,11 @@ async def show_instant_switch_list(
                 inline_keyboard=[
                     [
                         InlineKeyboardButton(
-                            text=texts.t('BUY_TARIFF_BUTTON', '📦 Купить тариф'), callback_data='menu_buy'
+                            text=texts.t(
+                                'BUY_TARIFF_BUTTON',
+                                '<tg-emoji emoji-id="5924720918826848520">📦</tg-emoji> Купить тариф',
+                            ),
+                            callback_data='menu_buy',
                         )
                     ],
                     [InlineKeyboardButton(text=texts.BACK, callback_data='menu_subscription', style='danger')],
@@ -4872,7 +5136,7 @@ async def show_instant_switch_list(
         await callback.message.edit_text(
             texts.t(
                 'TARIFF_SWITCH_DISABLED',
-                '🚫 <b>Смена тарифа недоступна</b>\n\nАдминистратор отключил возможность смены тарифа.',
+                '<tg-emoji emoji-id="5872829476143894491">🚫</tg-emoji> <b>Смена тарифа недоступна</b>\n\nАдминистратор отключил возможность смены тарифа.',
             ),
             reply_markup=InlineKeyboardMarkup(
                 inline_keyboard=[
@@ -4903,7 +5167,7 @@ async def show_instant_switch_list(
         await callback.message.edit_text(
             texts.t(
                 'TARIFF_SWITCH_NO_TARIFFS',
-                '😔 <b>Нет доступных тарифов для переключения</b>\n\nВы уже используете единственный доступный тариф.',
+                '<b>Нет доступных тарифов для переключения</b>\n\nВы уже используете единственный доступный тариф.',
             ),
             reply_markup=InlineKeyboardMarkup(
                 inline_keyboard=[
@@ -4959,7 +5223,12 @@ async def preview_instant_switch(
     # Resolve the subscription being switched FROM (via FSM state active_subscription_id)
     subscription, _isw_sub_id = await _resolve_switch_subscription(callback, db_user, db, state)
     if not subscription or not subscription.tariff_id:
-        await callback.answer(texts.t('SUBSCRIPTION_NOT_FOUND', '❌ Подписка не найдена'), show_alert=True)
+        await callback.answer(
+            texts.t(
+                'SUBSCRIPTION_NOT_FOUND', '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Подписка не найдена'
+            ),
+            show_alert=True,
+        )
         return
 
     current_tariff_id = current_tariff_id or subscription.tariff_id
@@ -5006,7 +5275,7 @@ async def preview_instant_switch(
     if is_new_daily and remaining_days > 1:
         daily_warning = '\n\n' + texts.t(
             'DAILY_SWITCH_WARNING',
-            '⚠️ <b>Внимание!</b> У вас осталось {days} дн. подписки.\nПри смене на суточный тариф они будут утеряны!',
+            '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> <b>Внимание!</b> У вас осталось {days} дн. подписки.\nПри смене на суточный тариф они будут утеряны!',
         ).format(days=remaining_days)
 
     # Для суточного тарифа особая логика показа
@@ -5020,7 +5289,10 @@ async def preview_instant_switch(
             else raw_daily_price
         )
         discount_text = (
-            texts.t('TARIFF_PURCHASE_DAILY_DISCOUNT_LINE', '\n💎 Скидка: {percent}%').format(percent=daily_discount)
+            texts.t(
+                'TARIFF_PURCHASE_DAILY_DISCOUNT_LINE',
+                '\n<tg-emoji emoji-id="5963312935148195483">💎</tg-emoji> Скидка: {percent}%',
+            ).format(percent=daily_discount)
             if daily_discount > 0
             else ''
         )
@@ -5030,17 +5302,17 @@ async def preview_instant_switch(
             await callback.message.edit_text(
                 texts.t(
                     'TARIFF_SWITCH_DAILY_PREVIEW',
-                    '🔄 <b>Переключение на суточный тариф</b>\n\n'
-                    '📌 Текущий: <b>{current}</b>\n'
+                    '<tg-emoji emoji-id="5839200986022812209">🔄</tg-emoji> <b>Переключение на суточный тариф</b>\n\n'
+                    '<tg-emoji emoji-id="5908961403917570106">📌</tg-emoji> Текущий: <b>{current}</b>\n'
                     '   • Трафик: {current_traffic}\n'
                     '   • Устройств: {current_devices}\n\n'
-                    '📦 Новый: <b>{name}</b>\n'
+                    '<tg-emoji emoji-id="5924720918826848520">📦</tg-emoji> Новый: <b>{name}</b>\n'
                     '   • Трафик: {traffic}\n'
                     '   • Устройств: {devices}\n'
-                    '   • Тип: 🔄 Суточный\n\n'
-                    '💰 <b>Цена: {price}/день</b>{discount}\n\n'
-                    '💳 Ваш баланс: {balance}{warning}\n\n'
-                    'ℹ️ Средства будут списываться автоматически раз в сутки.',
+                    '   • Тип: <tg-emoji emoji-id="5839200986022812209">🔄</tg-emoji> Суточный\n\n'
+                    '<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> <b>Цена: {price}/день</b>{discount}\n\n'
+                    '<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> Ваш баланс: {balance}{warning}\n\n'
+                    '<tg-emoji emoji-id="5879785854284599288">ℹ️</tg-emoji> Средства будут списываться автоматически раз в сутки.',
                 ).format(
                     current=html.escape(current_tariff.name),
                     current_traffic=current_traffic,
@@ -5061,12 +5333,12 @@ async def preview_instant_switch(
             await callback.message.edit_text(
                 texts.t(
                     'TARIFF_PURCHASE_DAILY_INSUFFICIENT',
-                    '❌ <b>Недостаточно средств</b>\n\n'
-                    '📦 Тариф: <b>{name}</b>\n'
-                    '🔄 Тип: Суточный\n'
-                    '💰 Цена: {price}/день{discount}\n\n'
-                    '💳 Ваш баланс: {balance}\n'
-                    '⚠️ Не хватает: <b>{missing}</b>',
+                    '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> <b>Недостаточно средств</b>\n\n'
+                    '<tg-emoji emoji-id="5924720918826848520">📦</tg-emoji> Тариф: <b>{name}</b>\n'
+                    '<tg-emoji emoji-id="5839200986022812209">🔄</tg-emoji> Тип: Суточный\n'
+                    '<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> Цена: {price}/день{discount}\n\n'
+                    '<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> Ваш баланс: {balance}\n'
+                    '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> Не хватает: <b>{missing}</b>',
                 ).format(
                     name=html.escape(new_tariff.name),
                     price=format_price_kopeks(daily_price),
@@ -5097,16 +5369,16 @@ async def preview_instant_switch(
             await callback.message.edit_text(
                 texts.t(
                     'TARIFF_SWITCH_UPGRADE_PREVIEW',
-                    '⬆️ <b>Повышение тарифа</b>\n\n'
-                    '📌 Текущий: <b>{current}</b>\n'
+                    '<tg-emoji emoji-id="6005807101056651268">⬆️</tg-emoji> <b>Повышение тарифа</b>\n\n'
+                    '<tg-emoji emoji-id="5908961403917570106">📌</tg-emoji> Текущий: <b>{current}</b>\n'
                     '   • Трафик: {current_traffic}\n'
                     '   • Устройств: {current_devices}\n\n'
-                    '📦 Новый: <b>{name}</b>\n'
+                    '<tg-emoji emoji-id="5924720918826848520">📦</tg-emoji> Новый: <b>{name}</b>\n'
                     '   • Трафик: {traffic}\n'
                     '   • Устройств: {devices}\n\n'
-                    '⏰ Осталось дней: <b>{days}</b>\n'
-                    '💰 <b>Доплата: {cost}</b>\n\n'
-                    '💳 Ваш баланс: {balance}\n'
+                    '<tg-emoji emoji-id="5985616167740379273">⏰</tg-emoji> Осталось дней: <b>{days}</b>\n'
+                    '<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> <b>Доплата: {cost}</b>\n\n'
+                    '<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> Ваш баланс: {balance}\n'
                     'После оплаты: {after}',
                 ).format(
                     current=html.escape(current_tariff.name),
@@ -5128,11 +5400,11 @@ async def preview_instant_switch(
             await callback.message.edit_text(
                 texts.t(
                     'TARIFF_SWITCH_UPGRADE_INSUFFICIENT',
-                    '❌ <b>Недостаточно средств</b>\n\n'
-                    '📦 Новый тариф: <b>{name}</b>\n'
-                    '💰 Требуется доплата: {cost}\n\n'
-                    '💳 Ваш баланс: {balance}\n'
-                    '⚠️ Не хватает: <b>{missing}</b>',
+                    '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> <b>Недостаточно средств</b>\n\n'
+                    '<tg-emoji emoji-id="5924720918826848520">📦</tg-emoji> Новый тариф: <b>{name}</b>\n'
+                    '<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> Требуется доплата: {cost}\n\n'
+                    '<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> Ваш баланс: {balance}\n'
+                    '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> Не хватает: <b>{missing}</b>',
                 ).format(
                     name=html.escape(new_tariff.name),
                     cost=format_price_kopeks(upgrade_cost),
@@ -5149,15 +5421,15 @@ async def preview_instant_switch(
         await callback.message.edit_text(
             texts.t(
                 'TARIFF_SWITCH_DOWNGRADE_PREVIEW',
-                '⬇️ <b>Переключение тарифа</b>\n\n'
-                '📌 Текущий: <b>{current}</b>\n'
+                '<tg-emoji emoji-id="5886451926995833684">⬇️</tg-emoji> <b>Переключение тарифа</b>\n\n'
+                '<tg-emoji emoji-id="5908961403917570106">📌</tg-emoji> Текущий: <b>{current}</b>\n'
                 '   • Трафик: {current_traffic}\n'
                 '   • Устройств: {current_devices}\n\n'
-                '📦 Новый: <b>{name}</b>\n'
+                '<tg-emoji emoji-id="5924720918826848520">📦</tg-emoji> Новый: <b>{name}</b>\n'
                 '   • Трафик: {traffic}\n'
                 '   • Устройств: {devices}\n\n'
-                '⏰ Осталось дней: <b>{days}</b>\n'
-                '💰 <b>Бесплатно</b> (понижение/равный тариф)',
+                '<tg-emoji emoji-id="5985616167740379273">⏰</tg-emoji> Осталось дней: <b>{days}</b>\n'
+                '<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> <b>Бесплатно</b> (понижение/равный тариф)',
             ).format(
                 current=html.escape(current_tariff.name),
                 current_traffic=current_traffic,
@@ -5315,7 +5587,10 @@ async def _prepare_telegram_recurrent_devices(callback, db_user, db, state, tari
                     inline_keyboard=[
                         [
                             InlineKeyboardButton(
-                                text=texts.t('TARIFF_PURCHASE_CONFIRM_BUTTON', '✅ Подтвердить покупку'),
+                                text=texts.t(
+                                    'TARIFF_PURCHASE_CONFIRM_BUTTON',
+                                    '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Подтвердить покупку',
+                                ),
                                 callback_data=f'{parts[0]}:{tariff.id}:confirm:{token}',
                             )
                         ],
@@ -5366,7 +5641,10 @@ async def purchase_tariff_with_lava(
         return
     except Exception:
         await callback.answer(
-            texts.t('LAVA_RECURRING_ENABLE_ERROR', '❌ Не удалось подключить автопродление Lava. Попробуйте позже.'),
+            texts.t(
+                'LAVA_RECURRING_ENABLE_ERROR',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Не удалось подключить автопродление Lava. Попробуйте позже.',
+            ),
             show_alert=True,
         )
         return
@@ -5374,17 +5652,24 @@ async def purchase_tariff_with_lava(
     redirect_url = result.get('redirect_url')
     text = texts.t(
         'LAVA_RECURRING_ENABLE_SUCCESS',
-        '⚡ <b>Автопродление Lava</b>\n\nОплатите первый счёт по кнопке ниже.\nПосле оплаты автопродление станет активным.',
+        '<tg-emoji emoji-id="5843553939672274145">⚡</tg-emoji> <b>Автопродление Lava</b>\n\nОплатите первый счёт по кнопке ниже.\nПосле оплаты автопродление станет активным.',
     )
     text += '\n\n' + texts.t(
         'LAVA_PURCHASE_PENDING_NOTE',
-        'ℹ️ Подписка активируется после оплаты первого счёта.',
+        '<tg-emoji emoji-id="5879785854284599288">ℹ️</tg-emoji> Подписка активируется после оплаты первого счёта.',
     )
 
     buttons = []
     if redirect_url:
         buttons.append(
-            [InlineKeyboardButton(text=texts.t('LAVA_RECURRING_PAY_BUTTON', '💳 Оплатить'), url=redirect_url)]
+            [
+                InlineKeyboardButton(
+                    text=texts.t(
+                        'LAVA_RECURRING_PAY_BUTTON', '<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> Оплатить'
+                    ),
+                    url=redirect_url,
+                )
+            ]
         )
     buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data='tariff_list')])
 
@@ -5426,7 +5711,8 @@ async def purchase_tariff_with_cashera(
     except Exception:
         await callback.answer(
             texts.t(
-                'CASHERA_RECURRING_ENABLE_ERROR', '❌ Не удалось подключить автопродление Cashera. Попробуйте позже.'
+                'CASHERA_RECURRING_ENABLE_ERROR',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Не удалось подключить автопродление Cashera. Попробуйте позже.',
             ),
             show_alert=True,
         )
@@ -5435,14 +5721,22 @@ async def purchase_tariff_with_cashera(
     redirect_url = result.get('redirect_url')
     text = texts.t(
         'CASHERA_RECURRING_ENABLE_SUCCESS',
-        '⚡ <b>Автопродление Cashera</b>\n\nПодтвердите автосписания по кнопке ниже.\n'
+        '<tg-emoji emoji-id="5843553939672274145">⚡</tg-emoji> <b>Автопродление Cashera</b>\n\nПодтвердите автосписания по кнопке ниже.\n'
         'После подтверждения и первого списания подписка продлится автоматически.',
     )
 
     buttons = []
     if redirect_url:
         buttons.append(
-            [InlineKeyboardButton(text=texts.t('CASHERA_RECURRING_PAY_BUTTON', '💳 Подтвердить'), url=redirect_url)]
+            [
+                InlineKeyboardButton(
+                    text=texts.t(
+                        'CASHERA_RECURRING_PAY_BUTTON',
+                        '<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> Подтвердить',
+                    ),
+                    url=redirect_url,
+                )
+            ]
         )
     buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data='tariff_list')])
 
@@ -5469,7 +5763,12 @@ async def confirm_instant_switch(
     # Проверяем подписку (switched FROM — resolved via FSM state)
     subscription, _isw_confirm_sub_id = await _resolve_switch_subscription(callback, db_user, db, state)
     if not subscription:
-        await callback.answer(texts.t('SUBSCRIPTION_NOT_FOUND', '❌ Подписка не найдена'), show_alert=True)
+        await callback.answer(
+            texts.t(
+                'SUBSCRIPTION_NOT_FOUND', '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Подписка не найдена'
+            ),
+            show_alert=True,
+        )
         return
 
     from app.database.crud.user import lock_user_for_pricing
@@ -5567,7 +5866,10 @@ async def confirm_instant_switch(
             if not success:
                 try:
                     await callback.message.edit_text(
-                        texts.t('TARIFF_PURCHASE_CHARGE_ERROR', '❌ Ошибка списания баланса')
+                        texts.t(
+                            'TARIFF_PURCHASE_CHARGE_ERROR',
+                            '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Ошибка списания баланса',
+                        )
                     )
                 except Exception:
                     pass
@@ -5632,7 +5934,10 @@ async def confirm_instant_switch(
                     if not success:
                         try:
                             await callback.message.edit_text(
-                                texts.t('TARIFF_PURCHASE_INSUFFICIENT_FUNDS', '❌ Недостаточно средств')
+                                texts.t(
+                                    'TARIFF_PURCHASE_INSUFFICIENT_FUNDS',
+                                    '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Недостаточно средств',
+                                )
                             )
                         except Exception:
                             pass
@@ -5723,7 +6028,7 @@ async def confirm_instant_switch(
                     # провалился, и старые HWID остались бы за новым лимитом.
                     if await api.reset_user_devices(_reset_panel_id_instant):
                         logger.info(
-                            '🔧 Сброшены устройства при мгновенном переключении тарифа для user_id',
+                            'Сброшены устройства при мгновенном переключении тарифа для user_id',
                             db_user_id=db_user.id,
                         )
                     else:
@@ -5769,13 +6074,13 @@ async def confirm_instant_switch(
             await callback.message.edit_text(
                 texts.t(
                     'TARIFF_SWITCH_DAILY_SUCCESS',
-                    '🎉 <b>Тариф успешно изменён!</b>\n\n'
-                    '📦 Новый тариф: <b>{name}</b>\n'
-                    '📊 Трафик: {traffic}\n'
-                    '📱 Устройств: {devices}\n'
-                    '🔄 Тип: Суточный\n'
-                    '💰 Списано: {price}\n\n'
-                    'ℹ️ Следующее списание через 24 часа.',
+                    '<tg-emoji emoji-id="5994502837327892086">🎉</tg-emoji> <b>Тариф успешно изменён!</b>\n\n'
+                    '<tg-emoji emoji-id="5924720918826848520">📦</tg-emoji> Новый тариф: <b>{name}</b>\n'
+                    '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> Трафик: {traffic}\n'
+                    '<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> Устройств: {devices}\n'
+                    '<tg-emoji emoji-id="5839200986022812209">🔄</tg-emoji> Тип: Суточный\n'
+                    '<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> Списано: {price}\n\n'
+                    '<tg-emoji emoji-id="5879785854284599288">ℹ️</tg-emoji> Следующее списание через 24 часа.',
                 ).format(
                     name=html.escape(new_tariff.name),
                     traffic=traffic,
@@ -5786,7 +6091,10 @@ async def confirm_instant_switch(
                     inline_keyboard=[
                         [
                             InlineKeyboardButton(
-                                text=texts.t('MY_SUBSCRIPTION_BUTTON', '📱 Моя подписка'),
+                                text=texts.t(
+                                    'MY_SUBSCRIPTION_BUTTON',
+                                    '<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> Моя подписка',
+                                ),
                                 callback_data=f'sm:{subscription.id}'
                                 if settings.is_multi_tariff_enabled() and subscription
                                 else 'menu_subscription',
@@ -5799,20 +6107,23 @@ async def confirm_instant_switch(
             )
         else:
             if is_upgrade:
-                cost_text = texts.t('TARIFF_SWITCH_CHARGED_LINE', '💰 Списано: {price}').format(
-                    price=format_price_kopeks(upgrade_cost)
-                )
+                cost_text = texts.t(
+                    'TARIFF_SWITCH_CHARGED_LINE',
+                    '<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> Списано: {price}',
+                ).format(price=format_price_kopeks(upgrade_cost))
             else:
-                cost_text = texts.t('TARIFF_SWITCH_FREE_COST_LINE', '💰 Бесплатно')
+                cost_text = texts.t(
+                    'TARIFF_SWITCH_FREE_COST_LINE', '<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> Бесплатно'
+                )
 
             await callback.message.edit_text(
                 texts.t(
                     'TARIFF_SWITCH_INSTANT_SUCCESS',
-                    '🎉 <b>Тариф успешно изменён!</b>\n\n'
-                    '📦 Новый тариф: <b>{name}</b>\n'
-                    '📊 Трафик: {traffic}\n'
-                    '📱 Устройств: {devices}\n'
-                    '⏰ Осталось дней: {days}\n'
+                    '<tg-emoji emoji-id="5994502837327892086">🎉</tg-emoji> <b>Тариф успешно изменён!</b>\n\n'
+                    '<tg-emoji emoji-id="5924720918826848520">📦</tg-emoji> Новый тариф: <b>{name}</b>\n'
+                    '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> Трафик: {traffic}\n'
+                    '<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> Устройств: {devices}\n'
+                    '<tg-emoji emoji-id="5985616167740379273">⏰</tg-emoji> Осталось дней: {days}\n'
                     '{cost_text}',
                 ).format(
                     name=html.escape(new_tariff.name),
@@ -5825,7 +6136,10 @@ async def confirm_instant_switch(
                     inline_keyboard=[
                         [
                             InlineKeyboardButton(
-                                text=texts.t('MY_SUBSCRIPTION_BUTTON', '📱 Моя подписка'),
+                                text=texts.t(
+                                    'MY_SUBSCRIPTION_BUTTON',
+                                    '<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> Моя подписка',
+                                ),
                                 callback_data=f'sm:{subscription.id}'
                                 if settings.is_multi_tariff_enabled() and subscription
                                 else 'menu_subscription',
@@ -5841,7 +6155,10 @@ async def confirm_instant_switch(
         logger.error('Ошибка при мгновенном переключении тарифа', error=e, exc_info=True)
         try:
             await callback.message.edit_text(
-                texts.t('TARIFF_SWITCH_ERROR', '❌ Произошла ошибка при переключении тарифа')
+                texts.t(
+                    'TARIFF_SWITCH_ERROR',
+                    '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Произошла ошибка при переключении тарифа',
+                )
             )
         except Exception:
             pass
@@ -5871,14 +6188,22 @@ async def return_to_saved_tariff_cart(
 
     if not tariff_id:
         await callback.answer(
-            texts.t('TARIFF_PURCHASE_CART_CORRUPTED', '❌ Данные корзины повреждены'), show_alert=True
+            texts.t(
+                'TARIFF_PURCHASE_CART_CORRUPTED',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Данные корзины повреждены',
+            ),
+            show_alert=True,
         )
         return
 
     tariff = await get_tariff_by_id(db, tariff_id)
     if not tariff or not tariff.is_active:
         await callback.answer(
-            texts.t('TARIFF_PURCHASE_NO_LONGER_AVAILABLE', '❌ Тариф больше недоступен'), show_alert=True
+            texts.t(
+                'TARIFF_PURCHASE_NO_LONGER_AVAILABLE',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Тариф больше недоступен',
+            ),
+            show_alert=True,
         )
         # Очищаем корзину (per-subscription в multi-tariff)
         _cart_sub_id = cart_data.get('subscription_id')
@@ -5890,7 +6215,11 @@ async def return_to_saved_tariff_cart(
 
     if cart_mode not in ('tariff_purchase', 'daily_tariff_purchase', 'extend'):
         await callback.answer(
-            texts.t('TARIFF_PURCHASE_CART_CORRUPTED', '❌ Данные корзины повреждены'), show_alert=True
+            texts.t(
+                'TARIFF_PURCHASE_CART_CORRUPTED',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Данные корзины повреждены',
+            ),
+            show_alert=True,
         )
         return
     if await _reject_unavailable_tariff(callback, tariff, db_user, texts):
@@ -5901,18 +6230,33 @@ async def return_to_saved_tariff_cart(
         period = 1 if cart_mode == 'daily_tariff_purchase' else int(cart_data.get('period_days', 30))
     except (TypeError, ValueError):
         await callback.answer(
-            texts.t('TARIFF_PURCHASE_CART_CORRUPTED', '❌ Данные корзины повреждены'), show_alert=True
+            texts.t(
+                'TARIFF_PURCHASE_CART_CORRUPTED',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Данные корзины повреждены',
+            ),
+            show_alert=True,
         )
         return
     if source_id is not None:
         subscription = await get_subscription_by_id_for_user(db, source_id, db_user.id)
         if subscription is None:
-            await callback.answer(texts.t('SUBSCRIPTION_NOT_FOUND', '❌ Подписка не найдена'), show_alert=True)
+            await callback.answer(
+                texts.t(
+                    'SUBSCRIPTION_NOT_FOUND',
+                    '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Подписка не найдена',
+                ),
+                show_alert=True,
+            )
             return
     else:
         subscription = await _resolve_purchase_subscription(db, db_user, tariff)
     if cart_mode == 'extend' and (subscription is None or subscription.tariff_id != tariff_id):
-        await callback.answer(texts.t('SUBSCRIPTION_NOT_FOUND', '❌ Подписка не найдена'), show_alert=True)
+        await callback.answer(
+            texts.t(
+                'SUBSCRIPTION_NOT_FOUND', '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Подписка не найдена'
+            ),
+            show_alert=True,
+        )
         return
     if (
         settings.is_multi_tariff_enabled()
@@ -5950,7 +6294,11 @@ async def return_to_saved_tariff_cart(
             raise ValueError('Unsupported custom traffic cart mode')
     except ValueError:
         await callback.answer(
-            texts.t('TARIFF_PURCHASE_CART_CORRUPTED', '❌ Данные корзины повреждены'), show_alert=True
+            texts.t(
+                'TARIFF_PURCHASE_CART_CORRUPTED',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Данные корзины повреждены',
+            ),
+            show_alert=True,
         )
         return
 
@@ -6051,12 +6399,12 @@ async def return_to_saved_tariff_cart(
             await callback.message.edit_text(
                 texts.t(
                     'TARIFF_PURCHASE_STILL_INSUFFICIENT_DAILY',
-                    '❌ <b>Все еще недостаточно средств</b>\n\n'
-                    '📦 Тариф: <b>{name}</b>\n'
-                    '🔄 Тип: Суточный\n'
-                    '💰 Стоимость: {price}\n\n'
-                    '💳 Ваш баланс: {balance}\n'
-                    '⚠️ Не хватает: <b>{missing}</b>',
+                    '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> <b>Все еще недостаточно средств</b>\n\n'
+                    '<tg-emoji emoji-id="5924720918826848520">📦</tg-emoji> Тариф: <b>{name}</b>\n'
+                    '<tg-emoji emoji-id="5839200986022812209">🔄</tg-emoji> Тип: Суточный\n'
+                    '<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> Стоимость: {price}\n\n'
+                    '<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> Ваш баланс: {balance}\n'
+                    '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> Не хватает: <b>{missing}</b>',
                 ).format(
                     name=html.escape(tariff.name),
                     price=format_price_kopeks(total_price),
@@ -6093,12 +6441,12 @@ async def return_to_saved_tariff_cart(
             await callback.message.edit_text(
                 texts.t(
                     'TARIFF_PURCHASE_STILL_INSUFFICIENT',
-                    '❌ <b>Все еще недостаточно средств</b>\n\n'
-                    '📦 Тариф: <b>{name}</b>\n'
-                    '📅 Период: {period}\n'
-                    '💰 Стоимость: {price}\n\n'
-                    '💳 Ваш баланс: {balance}\n'
-                    '⚠️ Не хватает: <b>{missing}</b>',
+                    '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> <b>Все еще недостаточно средств</b>\n\n'
+                    '<tg-emoji emoji-id="5924720918826848520">📦</tg-emoji> Тариф: <b>{name}</b>\n'
+                    '<tg-emoji emoji-id="5967412305338568701">📅</tg-emoji> Период: {period}\n'
+                    '<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> Стоимость: {price}\n\n'
+                    '<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> Ваш баланс: {balance}\n'
+                    '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> Не хватает: <b>{missing}</b>',
                 ).format(
                     name=html.escape(tariff.name),
                     period=format_period(period, language=texts.language),
@@ -6126,12 +6474,12 @@ async def return_to_saved_tariff_cart(
             await callback.message.edit_text(
                 texts.t(
                     'TARIFF_PURCHASE_STILL_INSUFFICIENT',
-                    '❌ <b>Все еще недостаточно средств</b>\n\n'
-                    '📦 Тариф: <b>{name}</b>\n'
-                    '📅 Период: {period}\n'
-                    '💰 Стоимость: {price}\n\n'
-                    '💳 Ваш баланс: {balance}\n'
-                    '⚠️ Не хватает: <b>{missing}</b>',
+                    '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> <b>Все еще недостаточно средств</b>\n\n'
+                    '<tg-emoji emoji-id="5924720918826848520">📦</tg-emoji> Тариф: <b>{name}</b>\n'
+                    '<tg-emoji emoji-id="5967412305338568701">📅</tg-emoji> Период: {period}\n'
+                    '<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> Стоимость: {price}\n\n'
+                    '<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> Ваш баланс: {balance}\n'
+                    '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> Не хватает: <b>{missing}</b>',
                 ).format(
                     name=html.escape(tariff.name),
                     period=format_period(period, language=texts.language),
@@ -6162,13 +6510,13 @@ async def return_to_saved_tariff_cart(
         await callback.message.edit_text(
             texts.t(
                 'TARIFF_PURCHASE_DAILY_CART_CONFIRM',
-                '✅ <b>Подтверждение покупки</b>\n\n'
-                '📦 Тариф: <b>{name}</b>\n'
-                '📊 Трафик: {traffic}\n'
-                '📱 Устройств: {devices}\n'
-                '🔄 Тип: Суточный\n'
-                '💰 <b>Стоимость в день: {price}</b>\n\n'
-                '💳 Ваш баланс: {balance}\n'
+                '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> <b>Подтверждение покупки</b>\n\n'
+                '<tg-emoji emoji-id="5924720918826848520">📦</tg-emoji> Тариф: <b>{name}</b>\n'
+                '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> Трафик: {traffic}\n'
+                '<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> Устройств: {devices}\n'
+                '<tg-emoji emoji-id="5839200986022812209">🔄</tg-emoji> Тип: Суточный\n'
+                '<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> <b>Стоимость в день: {price}</b>\n\n'
+                '<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> Ваш баланс: {balance}\n'
                 'После оплаты: {after}',
             ).format(
                 name=html.escape(tariff.name),
@@ -6187,7 +6535,8 @@ async def return_to_saved_tariff_cart(
         discount_text = ''
         if discount_percent > 0:
             discount_text = texts.t(
-                'TARIFF_PURCHASE_DISCOUNT_SHORT_LINE', '\n🎁 Скидка: {percent}% (-{amount})'
+                'TARIFF_PURCHASE_DISCOUNT_SHORT_LINE',
+                '\n<tg-emoji emoji-id="6032937473162614352">🎁</tg-emoji> Скидка: {percent}% (-{amount})',
             ).format(percent=discount_percent, amount=format_price_kopeks(discount_amount))
 
         # subscription_id обязателен в callback продления (issue #3012), берём из корзины
@@ -6196,14 +6545,14 @@ async def return_to_saved_tariff_cart(
         await callback.message.edit_text(
             texts.t(
                 'TARIFF_RENEW_CONFIRM',
-                '✅ <b>Подтверждение продления</b>\n\n'
-                '📦 Тариф: <b>{name}</b>\n'
-                '📊 Трафик: {traffic}\n'
-                '📱 Устройств: {devices}\n'
-                '📅 Период: {period}\n'
+                '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> <b>Подтверждение продления</b>\n\n'
+                '<tg-emoji emoji-id="5924720918826848520">📦</tg-emoji> Тариф: <b>{name}</b>\n'
+                '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> Трафик: {traffic}\n'
+                '<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> Устройств: {devices}\n'
+                '<tg-emoji emoji-id="5967412305338568701">📅</tg-emoji> Период: {period}\n'
                 '{discount}\n'
-                '💰 <b>К оплате: {total}</b>\n\n'
-                '💳 Ваш баланс: {balance}\n'
+                '<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> <b>К оплате: {total}</b>\n\n'
+                '<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> Ваш баланс: {balance}\n'
                 'После оплаты: {after}',
             ).format(
                 name=html.escape(tariff.name),
@@ -6219,7 +6568,10 @@ async def return_to_saved_tariff_cart(
                 inline_keyboard=[
                     [
                         InlineKeyboardButton(
-                            text=texts.t('TARIFF_RENEW_CONFIRM_BUTTON', '✅ Подтвердить продление'),
+                            text=texts.t(
+                                'TARIFF_RENEW_CONFIRM_BUTTON',
+                                '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Подтвердить продление',
+                            ),
                             callback_data=f'tariff_ext_confirm:{_extend_sub_id}:{tariff_id}:{period}',
                         )
                     ],
@@ -6245,20 +6597,21 @@ async def return_to_saved_tariff_cart(
         discount_text = ''
         if discount_percent > 0:
             discount_text = texts.t(
-                'TARIFF_PURCHASE_DISCOUNT_SHORT_LINE', '\n🎁 Скидка: {percent}% (-{amount})'
+                'TARIFF_PURCHASE_DISCOUNT_SHORT_LINE',
+                '\n<tg-emoji emoji-id="6032937473162614352">🎁</tg-emoji> Скидка: {percent}% (-{amount})',
             ).format(percent=discount_percent, amount=format_price_kopeks(discount_amount))
 
         await callback.message.edit_text(
             texts.t(
                 'TARIFF_PURCHASE_CONFIRM',
-                '✅ <b>Подтверждение покупки</b>\n\n'
-                '📦 Тариф: <b>{name}</b>\n'
-                '📊 Трафик: {traffic}\n'
-                '📱 Устройств: {devices}\n'
-                '📅 Период: {period}\n'
+                '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> <b>Подтверждение покупки</b>\n\n'
+                '<tg-emoji emoji-id="5924720918826848520">📦</tg-emoji> Тариф: <b>{name}</b>\n'
+                '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> Трафик: {traffic}\n'
+                '<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> Устройств: {devices}\n'
+                '<tg-emoji emoji-id="5967412305338568701">📅</tg-emoji> Период: {period}\n'
                 '{discount}\n'
-                '💰 <b>Итого: {total}</b>\n\n'
-                '💳 Ваш баланс: {balance}\n'
+                '<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> <b>Итого: {total}</b>\n\n'
+                '<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> Ваш баланс: {balance}\n'
                 'После оплаты: {after}',
             ).format(
                 name=html.escape(tariff.name),
@@ -6274,7 +6627,12 @@ async def return_to_saved_tariff_cart(
             parse_mode='HTML',
         )
 
-    await callback.answer(texts.t('TARIFF_PURCHASE_CART_RESTORED', '✅ Корзина восстановлена!'))
+    await callback.answer(
+        texts.t(
+            'TARIFF_PURCHASE_CART_RESTORED',
+            '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Корзина восстановлена!',
+        )
+    )
 
 
 async def purchase_tariff_with_sbp(
@@ -6313,7 +6671,8 @@ async def purchase_tariff_with_sbp(
     except RuntimeError:
         await callback.answer(
             texts.t(
-                'SBP_RECURRING_ENABLE_ERROR', '❌ Не удалось подключить автопродление через СБП. Попробуйте позже.'
+                'SBP_RECURRING_ENABLE_ERROR',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Не удалось подключить автопродление через СБП. Попробуйте позже.',
             ),
             show_alert=True,
         )
@@ -6322,11 +6681,11 @@ async def purchase_tariff_with_sbp(
     redirect_url = result.get('redirect_url')
     text = texts.t(
         'SBP_RECURRING_ENABLE_SUCCESS',
-        '⚡ <b>Автопродление через СБП</b>\n\nПодтвердите подключение в банковском приложении по кнопке ниже.\nПосле подтверждения автопродление станет активным.',
+        '<tg-emoji emoji-id="5843553939672274145">⚡</tg-emoji> <b>Автопродление через СБП</b>\n\nПодтвердите подключение в банковском приложении по кнопке ниже.\nПосле подтверждения автопродление станет активным.',
     )
     text += '\n\n' + texts.t(
         'SBP_PURCHASE_PENDING_NOTE',
-        'ℹ️ Подписка активируется после подтверждения и первого списания.',
+        '<tg-emoji emoji-id="5879785854284599288">ℹ️</tg-emoji> Подписка активируется после подтверждения и первого списания.',
     )
 
     buttons = []
@@ -6334,7 +6693,7 @@ async def purchase_tariff_with_sbp(
         buttons.append(
             [
                 InlineKeyboardButton(
-                    text=texts.t('SBP_RECURRING_CONFIRM_BUTTON', '🏦 Подтвердить в банке'), url=redirect_url
+                    text=texts.t('SBP_RECURRING_CONFIRM_BUTTON', 'Подтвердить в банке'), url=redirect_url
                 )
             ]
         )

@@ -131,7 +131,7 @@ async def get_servers_display_names(squad_uuids: list[str], language: str | None
 
         if not server_names:
             if len(squad_uuids) == 1:
-                return texts.t('SUBSCRIPTION_UI_TEST_SERVER', '🎯 Тестовый сервер')
+                return texts.t('SUBSCRIPTION_UI_TEST_SERVER', 'Тестовый сервер')
             return texts.t('SUBSCRIPTION_UI_COUNTRIES_COUNT_PLAIN', '{count} стран').format(count=len(squad_uuids))
 
         if len(server_names) > 6:
@@ -143,7 +143,7 @@ async def get_servers_display_names(squad_uuids: list[str], language: str | None
     except Exception as e:
         logger.error('Ошибка получения названий серверов', error=e)
         if len(squad_uuids) == 1:
-            return texts.t('SUBSCRIPTION_UI_TEST_SERVER', '🎯 Тестовый сервер')
+            return texts.t('SUBSCRIPTION_UI_TEST_SERVER', 'Тестовый сервер')
         return texts.t('SUBSCRIPTION_UI_COUNTRIES_COUNT_PLAIN', '{count} стран').format(count=len(squad_uuids))
 
 
@@ -180,7 +180,10 @@ async def handle_change_devices(
 
     if not subscription or subscription.is_trial:
         await callback.answer(
-            texts.t('PAID_FEATURE_ONLY', '⚠️ Эта функция доступна только для платных подписок'),
+            texts.t(
+                'PAID_FEATURE_ONLY',
+                '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> Эта функция доступна только для платных подписок',
+            ),
             show_alert=True,
         )
         return
@@ -190,7 +193,7 @@ async def handle_change_devices(
         await callback.answer(
             texts.t(
                 'LEGACY_ADDONS_UNAVAILABLE',
-                '⚠️ Сначала перейдите на тариф — докупки для этой подписки недоступны',
+                '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> Сначала перейдите на тариф — докупки для этой подписки недоступны',
             ),
             show_alert=True,
         )
@@ -198,7 +201,10 @@ async def handle_change_devices(
 
     if subscription.device_limit == 0:
         await callback.answer(
-            texts.t('DEVICES_SELECTION_DISABLED', '⚠️ Изменение количества устройств недоступно'),
+            texts.t(
+                'DEVICES_SELECTION_DISABLED',
+                '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> Изменение количества устройств недоступно',
+            ),
             show_alert=True,
         )
         return
@@ -215,14 +221,20 @@ async def handle_change_devices(
     if tariff:
         if tariff_device_price is None or tariff_device_price <= 0:
             await callback.answer(
-                texts.t('TARIFF_DEVICES_DISABLED', '⚠️ Изменение устройств недоступно для вашего тарифа'),
+                texts.t(
+                    'TARIFF_DEVICES_DISABLED',
+                    '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> Изменение устройств недоступно для вашего тарифа',
+                ),
                 show_alert=True,
             )
             return
     # Для обычных подписок проверяем глобальную настройку
     elif not settings.is_devices_selection_enabled():
         await callback.answer(
-            texts.t('DEVICES_SELECTION_DISABLED', '⚠️ Изменение количества устройств недоступно'),
+            texts.t(
+                'DEVICES_SELECTION_DISABLED',
+                '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> Изменение количества устройств недоступно',
+            ),
             show_alert=True,
         )
         return
@@ -243,11 +255,11 @@ async def handle_change_devices(
         prompt_text = texts.t(
             'CHANGE_DEVICES_PROMPT_TARIFF',
             (
-                '📱 <b>Изменение количества устройств</b>\n\n'
+                '<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> <b>Изменение количества устройств</b>\n\n'
                 'Текущий лимит: {current_devices} устройств\n'
                 'Цена за доп. устройство: {price}/мес\n'
                 'Выберите новое количество устройств:\n\n'
-                '💡 <b>Важно:</b>\n'
+                '<b>Важно:</b>\n'
                 '• При увеличении - доплата пропорционально оставшемуся времени\n'
                 '• При уменьшении - возврат средств не производится'
             ),
@@ -256,10 +268,10 @@ async def handle_change_devices(
         prompt_text = texts.t(
             'CHANGE_DEVICES_PROMPT',
             (
-                '📱 <b>Изменение количества устройств</b>\n\n'
+                '<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> <b>Изменение количества устройств</b>\n\n'
                 'Текущий лимит: {current_devices} устройств\n'
                 'Выберите новое количество устройств:\n\n'
-                '💡 <b>Важно:</b>\n'
+                '<b>Важно:</b>\n'
                 '• При увеличении - доплата пропорционально оставшемуся времени\n'
                 '• При уменьшении - возврат средств не производится'
             ),
@@ -298,7 +310,10 @@ async def confirm_change_devices(
 
     if subscription.device_limit == 0:
         await callback.answer(
-            texts.t('DEVICES_SELECTION_DISABLED', '⚠️ Изменение количества устройств недоступно'),
+            texts.t(
+                'DEVICES_SELECTION_DISABLED',
+                '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> Изменение количества устройств недоступно',
+            ),
             show_alert=True,
         )
         return
@@ -315,7 +330,10 @@ async def confirm_change_devices(
     if tariff:
         if tariff_device_price is None or tariff_device_price <= 0:
             await callback.answer(
-                texts.t('TARIFF_DEVICES_DISABLED', '⚠️ Изменение устройств недоступно для вашего тарифа'),
+                texts.t(
+                    'TARIFF_DEVICES_DISABLED',
+                    '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> Изменение устройств недоступно для вашего тарифа',
+                ),
                 show_alert=True,
             )
             return
@@ -323,7 +341,10 @@ async def confirm_change_devices(
     else:
         if not settings.is_devices_selection_enabled():
             await callback.answer(
-                texts.t('DEVICES_SELECTION_DISABLED', '⚠️ Изменение количества устройств недоступно'),
+                texts.t(
+                    'DEVICES_SELECTION_DISABLED',
+                    '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> Изменение количества устройств недоступно',
+                ),
                 show_alert=True,
             )
             return
@@ -333,7 +354,10 @@ async def confirm_change_devices(
 
     if new_devices_count == current_devices:
         await callback.answer(
-            texts.t('DEVICES_NO_CHANGE', 'ℹ️ Количество устройств не изменилось'),
+            texts.t(
+                'DEVICES_NO_CHANGE',
+                '<tg-emoji emoji-id="5879785854284599288">ℹ️</tg-emoji> Количество устройств не изменилось',
+            ),
             show_alert=True,
         )
         return
@@ -347,7 +371,7 @@ async def confirm_change_devices(
         await callback.answer(
             texts.t(
                 'DEVICES_LIMIT_EXCEEDED',
-                '⚠️ Превышен максимальный лимит устройств ({limit})',
+                '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> Превышен максимальный лимит устройств ({limit})',
             ).format(limit=effective_max),
             show_alert=True,
         )
@@ -362,7 +386,7 @@ async def confirm_change_devices(
         await callback.answer(
             texts.t(
                 'DEVICES_MIN_LIMIT_REACHED',
-                '⚠️ Минимальное количество устройств: {limit}',
+                '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> Минимальное количество устройств: {limit}',
             ).format(limit=min_devices_count),
             show_alert=True,
         )
@@ -422,7 +446,7 @@ async def confirm_change_devices(
             message_text = texts.t(
                 'ADDON_INSUFFICIENT_FUNDS_MESSAGE',
                 (
-                    '⚠️ <b>Недостаточно средств</b>\n\n'
+                    '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> <b>Недостаточно средств</b>\n\n'
                     'Стоимость услуги: {required}\n'
                     'На балансе: {balance}\n'
                     'Не хватает: {missing}\n\n'
@@ -512,7 +536,7 @@ async def confirm_change_devices(
                         devices_warning = texts.t(
                             'DEVICE_CHANGE_RESET_WARNING',
                             (
-                                '\n⚠️ <b>Внимание!</b>\n'
+                                '\n<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> <b>Внимание!</b>\n'
                                 'У вас подключено {connected} устройств.\n'
                                 'При уменьшении лимита до {new} все устройства будут сброшены.\n'
                                 'Вам нужно будет заново подключить нужные устройства.\n'
@@ -524,11 +548,11 @@ async def confirm_change_devices(
     confirm_text = texts.t(
         'DEVICE_CHANGE_CONFIRMATION',
         (
-            '📱 <b>Подтверждение изменения</b>\n\n'
+            '<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> <b>Подтверждение изменения</b>\n\n'
             'Текущее количество: {current} устройств\n'
             'Новое количество: {new} устройств\n\n'
             'Действие: {action}\n'
-            '💰 {cost}\n\n'
+            '<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> {cost}\n\n'
             'Подтвердить изменение?'
         ),
     ).format(
@@ -570,13 +594,19 @@ async def execute_change_devices(
     subscription, _ = await _resolve_subscription(callback, db_user, db, state)
     if not subscription:
         await callback.answer(
-            texts.t('NO_ACTIVE_SUBSCRIPTION', '⚠️ У вас нет активной подписки'),
+            texts.t(
+                'NO_ACTIVE_SUBSCRIPTION',
+                '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> У вас нет активной подписки',
+            ),
             show_alert=True,
         )
         return
     if subscription.device_limit == 0:
         await callback.answer(
-            texts.t('DEVICES_SELECTION_DISABLED', '⚠️ Изменение количества устройств недоступно'),
+            texts.t(
+                'DEVICES_SELECTION_DISABLED',
+                '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> Изменение количества устройств недоступно',
+            ),
             show_alert=True,
         )
         return
@@ -595,14 +625,20 @@ async def execute_change_devices(
         tariff_device_price = getattr(tariff, 'device_price_kopeks', None)
         if tariff_device_price is None or tariff_device_price <= 0:
             await callback.answer(
-                texts.t('TARIFF_DEVICES_DISABLED', '⚠️ Изменение устройств недоступно для вашего тарифа'),
+                texts.t(
+                    'TARIFF_DEVICES_DISABLED',
+                    '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> Изменение устройств недоступно для вашего тарифа',
+                ),
                 show_alert=True,
             )
             return
         price_per_device = tariff_device_price
     elif not settings.is_devices_selection_enabled():
         await callback.answer(
-            texts.t('DEVICES_SELECTION_DISABLED', '⚠️ Изменение количества устройств недоступно'),
+            texts.t(
+                'DEVICES_SELECTION_DISABLED',
+                '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> Изменение количества устройств недоступно',
+            ),
             show_alert=True,
         )
         return
@@ -618,7 +654,7 @@ async def execute_change_devices(
         await callback.answer(
             texts.t(
                 'DEVICES_MIN_LIMIT_REACHED',
-                '⚠️ Минимальное количество устройств: {limit}',
+                '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> Минимальное количество устройств: {limit}',
             ).format(limit=min_devices_count),
             show_alert=True,
         )
@@ -664,7 +700,10 @@ async def execute_change_devices(
 
             if not success:
                 await callback.answer(
-                    texts.t('PAYMENT_CHARGE_ERROR', '⚠️ Ошибка списания средств'),
+                    texts.t(
+                        'PAYMENT_CHARGE_ERROR',
+                        '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> Ошибка списания средств',
+                    ),
                     show_alert=True,
                 )
                 return
@@ -703,7 +742,7 @@ async def execute_change_devices(
             await callback.answer(
                 texts.t(
                     'SUBSCRIPTION_UI_DEVICES_UNLIMITED_REFUND',
-                    '⚠️ У подписки теперь безлимит устройств. Баланс возвращён.',
+                    '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> У подписки теперь безлимит устройств. Баланс возвращён.',
                 ),
                 show_alert=True,
             )
@@ -738,12 +777,12 @@ async def execute_change_devices(
                     (
                         texts.t(
                             'SUBSCRIPTION_UI_DEVICES_UNLIMITED_REFUND',
-                            '⚠️ У подписки теперь безлимит устройств. Баланс возвращён.',
+                            '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> У подписки теперь безлимит устройств. Баланс возвращён.',
                         )
                         if subscription.device_limit == 0
                         else texts.t(
                             'SUBSCRIPTION_UI_DEVICE_LIMIT_REFUNDED',
-                            '⚠️ Лимит устройств ({limit}) превышен. Баланс возвращён.',
+                            '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> Лимит устройств ({limit}) превышен. Баланс возвращён.',
                         ).format(limit=max_devices)
                     ),
                     show_alert=True,
@@ -769,7 +808,10 @@ async def execute_change_devices(
                 )
                 await db.commit()
                 await callback.answer(
-                    texts.t('SUBSCRIPTION_UI_CHANGE_APPLIED_REFUND', '⚠️ Изменение уже применено. Баланс возвращён.'),
+                    texts.t(
+                        'SUBSCRIPTION_UI_CHANGE_APPLIED_REFUND',
+                        '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> Изменение уже применено. Баланс возвращён.',
+                    ),
                     show_alert=True,
                 )
                 return
@@ -807,7 +849,7 @@ async def execute_change_devices(
                         if connected_count > new_devices_count:
                             devices_to_remove = connected_count - new_devices_count
                             logger.info(
-                                '🔧 Удаление лишних устройств при уменьшении лимита: подключено новый лимит удаляем',
+                                'Удаление лишних устройств при уменьшении лимита: подключено новый лимит удаляем',
                                 connected_count=connected_count,
                                 new_devices_count=new_devices_count,
                                 devices_to_remove=devices_to_remove,
@@ -826,7 +868,7 @@ async def execute_change_devices(
                                     # remove_device сам логирует и возвращает False вместо исключения
                                     if await api.remove_device(panel_user_id, device_hwid):
                                         devices_reset_count += 1
-                                        logger.info('✅ Удалено устройство', device_hwid=device_hwid)
+                                        logger.info('Удалено устройство', device_hwid=device_hwid)
                                     else:
                                         logger.error('Ошибка удаления устройства', device_hwid=device_hwid)
             except Exception as reset_error:
@@ -848,34 +890,34 @@ async def execute_change_devices(
         if new_devices_count > current_devices:
             success_text = texts.t(
                 'DEVICE_CHANGE_INCREASE_SUCCESS',
-                '✅ Количество устройств увеличено!\n\n',
+                '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Количество устройств увеличено!\n\n',
             )
             success_text += texts.t(
                 'DEVICE_CHANGE_RESULT_LINE',
-                '📱 Было: {old} → Стало: {new}\n',
+                '<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> Было: {old} → Стало: {new}\n',
             ).format(old=current_devices, new=new_devices_count)
             if price > 0:
                 success_text += texts.t(
                     'DEVICE_CHANGE_CHARGED',
-                    '💰 Списано: {amount}',
+                    '<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> Списано: {amount}',
                 ).format(amount=texts.format_price(price))
         else:
             success_text = texts.t(
                 'DEVICE_CHANGE_DECREASE_SUCCESS',
-                '✅ Количество устройств уменьшено!\n\n',
+                '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Количество устройств уменьшено!\n\n',
             )
             success_text += texts.t(
                 'DEVICE_CHANGE_RESULT_LINE',
-                '📱 Было: {old} → Стало: {new}\n',
+                '<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> Было: {old} → Стало: {new}\n',
             ).format(old=current_devices, new=new_devices_count)
             if devices_reset_count > 0:
                 success_text += texts.t(
                     'DEVICE_CHANGE_DEVICES_REMOVED',
-                    '\n🗑 Удалено устройств: {count}\n',
+                    '\n<tg-emoji emoji-id="5879896690210639947">🗑</tg-emoji> Удалено устройств: {count}\n',
                 ).format(count=devices_reset_count)
             success_text += texts.t(
                 'DEVICE_CHANGE_NO_REFUND_INFO',
-                'ℹ️ Возврат средств не производится',
+                '<tg-emoji emoji-id="5879785854284599288">ℹ️</tg-emoji> Возврат средств не производится',
             )
 
         await callback.message.edit_text(
@@ -883,7 +925,7 @@ async def execute_change_devices(
         )
 
         logger.info(
-            '✅ Пользователь изменил количество устройств с на доплата: ₽',
+            'Пользователь изменил количество устройств с на доплата: ₽',
             telegram_id=db_user.telegram_id,
             current_devices=current_devices,
             new_devices_count=new_devices_count,
@@ -914,7 +956,10 @@ async def handle_device_management(
 
     if not subscription or subscription.is_trial:
         await callback.answer(
-            texts.t('PAID_FEATURE_ONLY', '⚠️ Эта функция доступна только для платных подписок'),
+            texts.t(
+                'PAID_FEATURE_ONLY',
+                '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> Эта функция доступна только для платных подписок',
+            ),
             show_alert=True,
         )
         return
@@ -922,7 +967,10 @@ async def handle_device_management(
     panel_user_id = _get_panel_user_id(subscription, db_user)
     if not panel_user_id:
         await callback.answer(
-            texts.t('DEVICE_UUID_NOT_FOUND', '❌ UUID пользователя не найден'),
+            texts.t(
+                'DEVICE_UUID_NOT_FOUND',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> UUID пользователя не найден',
+            ),
             show_alert=True,
         )
         return
@@ -941,7 +989,10 @@ async def handle_device_management(
 
                 if total_devices == 0:
                     await callback.message.edit_text(
-                        texts.t('DEVICE_NONE_CONNECTED', 'ℹ️ У вас нет подключенных устройств'),
+                        texts.t(
+                            'DEVICE_NONE_CONNECTED',
+                            '<tg-emoji emoji-id="5879785854284599288">ℹ️</tg-emoji> У вас нет подключенных устройств',
+                        ),
                         reply_markup=get_back_keyboard(db_user.language),
                     )
                     await callback.answer()
@@ -954,7 +1005,7 @@ async def handle_device_management(
                 await callback.answer(
                     texts.t(
                         'DEVICE_FETCH_INFO_ERROR',
-                        '❌ Ошибка получения информации об устройствах',
+                        '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Ошибка получения информации об устройствах',
                     ),
                     show_alert=True,
                 )
@@ -964,7 +1015,7 @@ async def handle_device_management(
         await callback.answer(
             texts.t(
                 'DEVICE_FETCH_INFO_ERROR',
-                '❌ Ошибка получения информации об устройствах',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Ошибка получения информации об устройствах',
             ),
             show_alert=True,
         )
@@ -1032,9 +1083,9 @@ async def show_devices_page(
     devices_text = texts.t(
         'DEVICE_MANAGEMENT_OVERVIEW',
         (
-            '🔄 <b>Управление устройствами</b>\n\n'
-            '📊 Всего подключено: {total} устройств\n'
-            '📄 Страница {page} из {pages}\n\n'
+            '<tg-emoji emoji-id="5839200986022812209">🔄</tg-emoji> <b>Управление устройствами</b>\n\n'
+            '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> Всего подключено: {total} устройств\n'
+            '<tg-emoji emoji-id="5839323457015256759">📄</tg-emoji> Страница {page} из {pages}\n\n'
         ),
     ).format(total=len(devices_list), page=pagination.page, pages=pagination.total_pages)
 
@@ -1094,14 +1145,20 @@ async def handle_devices_page(callback: types.CallbackQuery, db_user: User, db: 
                 )
             else:
                 await callback.answer(
-                    texts.t('DEVICE_FETCH_ERROR', '❌ Ошибка получения устройств'),
+                    texts.t(
+                        'DEVICE_FETCH_ERROR',
+                        '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Ошибка получения устройств',
+                    ),
                     show_alert=True,
                 )
 
     except Exception as e:
         logger.error('Ошибка перехода на страницу устройств', error=e)
         await callback.answer(
-            texts.t('DEVICE_PAGE_LOAD_ERROR', '❌ Ошибка загрузки страницы'),
+            texts.t(
+                'DEVICE_PAGE_LOAD_ERROR',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Ошибка загрузки страницы',
+            ),
             show_alert=True,
         )
 
@@ -1118,7 +1175,10 @@ async def handle_single_device_reset(
         if len(callback_parts) < 4:
             logger.error('Некорректный формат callback_data', callback_data=callback.data)
             await callback.answer(
-                texts.t('DEVICE_RESET_INVALID_REQUEST', '❌ Ошибка: некорректный запрос'),
+                texts.t(
+                    'DEVICE_RESET_INVALID_REQUEST',
+                    '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Ошибка: некорректный запрос',
+                ),
                 show_alert=True,
             )
             return
@@ -1126,12 +1186,15 @@ async def handle_single_device_reset(
         device_index = int(callback_parts[2])
         page = int(callback_parts[3])
 
-        logger.info('🔧 Сброс устройства: index=, page', device_index=device_index, page=page)
+        logger.info('Сброс устройства: index=, page', device_index=device_index, page=page)
 
     except (ValueError, IndexError) as e:
-        logger.error('❌ Ошибка парсинга callback_data', callback_data=callback.data, error=e)
+        logger.error('Ошибка парсинга callback_data', callback_data=callback.data, error=e)
         await callback.answer(
-            texts.t('DEVICE_RESET_PARSE_ERROR', '❌ Ошибка обработки запроса'),
+            texts.t(
+                'DEVICE_RESET_PARSE_ERROR',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Ошибка обработки запроса',
+            ),
             show_alert=True,
         )
         return
@@ -1158,7 +1221,10 @@ async def handle_single_device_reset(
                         # remove_device не бросает исключений — сообщаем об отказе явно
                         if not await api.remove_device(panel_user_id, device_hwid):
                             await callback.answer(
-                                texts.t('DEVICE_RESET_ERROR', '❌ Ошибка сброса устройства'),
+                                texts.t(
+                                    'DEVICE_RESET_ERROR',
+                                    '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Ошибка сброса устройства',
+                                ),
                                 show_alert=True,
                             )
                             return
@@ -1169,7 +1235,7 @@ async def handle_single_device_reset(
                         await callback.answer(
                             texts.t(
                                 'DEVICE_RESET_SUCCESS',
-                                '✅ Устройство {device} успешно сброшено!',
+                                '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Устройство {device} успешно сброшено!',
                             ).format(device=device_info),
                             show_alert=True,
                         )
@@ -1197,13 +1263,13 @@ async def handle_single_device_reset(
                                 await callback.message.edit_text(
                                     texts.t(
                                         'DEVICE_RESET_ALL_DONE',
-                                        'ℹ️ Все устройства сброшены',
+                                        '<tg-emoji emoji-id="5879785854284599288">ℹ️</tg-emoji> Все устройства сброшены',
                                     ),
                                     reply_markup=get_back_keyboard(db_user.language),
                                 )
 
                         logger.info(
-                            '✅ Пользователь сбросил устройство',
+                            'Пользователь сбросил устройство',
                             telegram_id=db_user.telegram_id,
                             device_info=device_info,
                         )
@@ -1211,25 +1277,33 @@ async def handle_single_device_reset(
                         await callback.answer(
                             texts.t(
                                 'DEVICE_RESET_ID_FAILED',
-                                '❌ Не удалось получить ID устройства',
+                                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Не удалось получить ID устройства',
                             ),
                             show_alert=True,
                         )
                 else:
                     await callback.answer(
-                        texts.t('DEVICE_RESET_NOT_FOUND', '❌ Устройство не найдено'),
+                        texts.t(
+                            'DEVICE_RESET_NOT_FOUND',
+                            '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Устройство не найдено',
+                        ),
                         show_alert=True,
                     )
             else:
                 await callback.answer(
-                    texts.t('DEVICE_FETCH_ERROR', '❌ Ошибка получения устройств'),
+                    texts.t(
+                        'DEVICE_FETCH_ERROR',
+                        '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Ошибка получения устройств',
+                    ),
                     show_alert=True,
                 )
 
     except Exception as e:
         logger.error('Ошибка сброса устройства', error=e)
         await callback.answer(
-            texts.t('DEVICE_RESET_ERROR', '❌ Ошибка сброса устройства'),
+            texts.t(
+                'DEVICE_RESET_ERROR', '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Ошибка сброса устройства'
+            ),
             show_alert=True,
         )
 
@@ -1243,7 +1317,10 @@ async def handle_all_devices_reset_from_management(
 
     if not panel_user_id:
         await callback.answer(
-            texts.t('DEVICE_UUID_NOT_FOUND', '❌ UUID пользователя не найден'),
+            texts.t(
+                'DEVICE_UUID_NOT_FOUND',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> UUID пользователя не найден',
+            ),
             show_alert=True,
         )
         return
@@ -1260,7 +1337,7 @@ async def handle_all_devices_reset_from_management(
                 await callback.answer(
                     texts.t(
                         'DEVICE_LIST_FETCH_ERROR',
-                        '❌ Ошибка получения списка устройств',
+                        '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Ошибка получения списка устройств',
                     ),
                     show_alert=True,
                 )
@@ -1270,12 +1347,15 @@ async def handle_all_devices_reset_from_management(
 
             if not devices_list:
                 await callback.answer(
-                    texts.t('DEVICE_NONE_CONNECTED', 'ℹ️ У вас нет подключенных устройств'),
+                    texts.t(
+                        'DEVICE_NONE_CONNECTED',
+                        '<tg-emoji emoji-id="5879785854284599288">ℹ️</tg-emoji> У вас нет подключенных устройств',
+                    ),
                     show_alert=True,
                 )
                 return
 
-            logger.info('🔧 Найдено устройств для сброса', devices_list_count=len(devices_list))
+            logger.info('Найдено устройств для сброса', devices_list_count=len(devices_list))
 
             success_count = 0
             failed_count = 0
@@ -1286,13 +1366,13 @@ async def handle_all_devices_reset_from_management(
                     # remove_device сам логирует и возвращает False вместо исключения
                     if await api.remove_device(panel_user_id, device_hwid):
                         success_count += 1
-                        logger.info('✅ Устройство удалено', device_hwid=device_hwid)
+                        logger.info('Устройство удалено', device_hwid=device_hwid)
                     else:
                         failed_count += 1
-                        logger.error('❌ Ошибка удаления устройства', device_hwid=device_hwid)
+                        logger.error('Ошибка удаления устройства', device_hwid=device_hwid)
                 else:
                     failed_count += 1
-                    logger.warning('⚠️ У устройства нет HWID', device=device)
+                    logger.warning('У устройства нет HWID', device=device)
 
             if success_count > 0:
                 if failed_count == 0:
@@ -1300,17 +1380,17 @@ async def handle_all_devices_reset_from_management(
                         texts.t(
                             'DEVICE_RESET_ALL_SUCCESS_MESSAGE',
                             (
-                                '✅ <b>Все устройства успешно сброшены!</b>\n\n'
-                                '🔄 Сброшено: {count} устройств\n'
-                                '📱 Теперь вы можете заново подключить свои устройства\n\n'
-                                "💡 Используйте ссылку из раздела 'Моя подписка' для повторного подключения"
+                                '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> <b>Все устройства успешно сброшены!</b>\n\n'
+                                '<tg-emoji emoji-id="5839200986022812209">🔄</tg-emoji> Сброшено: {count} устройств\n'
+                                '<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> Теперь вы можете заново подключить свои устройства\n\n'
+                                "Используйте ссылку из раздела 'Моя подписка' для повторного подключения"
                             ),
                         ).format(count=success_count),
                         reply_markup=get_back_keyboard(db_user.language),
                         parse_mode='HTML',
                     )
                     logger.info(
-                        '✅ Пользователь успешно сбросил устройств',
+                        'Пользователь успешно сбросил устройств',
                         telegram_id=db_user.telegram_id,
                         success_count=success_count,
                     )
@@ -1319,9 +1399,9 @@ async def handle_all_devices_reset_from_management(
                         texts.t(
                             'DEVICE_RESET_PARTIAL_MESSAGE',
                             (
-                                '⚠️ <b>Частичный сброс устройств</b>\n\n'
-                                '✅ Удалено: {success} устройств\n'
-                                '❌ Не удалось удалить: {failed} устройств\n\n'
+                                '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> <b>Частичный сброс устройств</b>\n\n'
+                                '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Удалено: {success} устройств\n'
+                                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Не удалось удалить: {failed} устройств\n\n'
                                 'Попробуйте еще раз или обратитесь в поддержку.'
                             ),
                         ).format(success=success_count, failed=failed_count),
@@ -1329,7 +1409,7 @@ async def handle_all_devices_reset_from_management(
                         parse_mode='HTML',
                     )
                     logger.warning(
-                        '⚠️ Частичный сброс у пользователя /',
+                        'Частичный сброс у пользователя /',
                         telegram_id=db_user.telegram_id,
                         success_count=success_count,
                         devices_list_count=len(devices_list),
@@ -1339,7 +1419,7 @@ async def handle_all_devices_reset_from_management(
                     texts.t(
                         'DEVICE_RESET_ALL_FAILED_MESSAGE',
                         (
-                            '❌ <b>Не удалось сбросить устройства</b>\n\n'
+                            '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> <b>Не удалось сбросить устройства</b>\n\n'
                             'Попробуйте еще раз позже или обратитесь в техподдержку.\n\n'
                             'Всего устройств: {total}'
                         ),
@@ -1347,9 +1427,7 @@ async def handle_all_devices_reset_from_management(
                     reply_markup=get_back_keyboard(db_user.language),
                     parse_mode='HTML',
                 )
-                logger.error(
-                    '❌ Не удалось сбросить ни одного устройства у пользователя', telegram_id=db_user.telegram_id
-                )
+                logger.error('Не удалось сбросить ни одного устройства у пользователя', telegram_id=db_user.telegram_id)
 
     except Exception as e:
         logger.error('Ошибка сброса всех устройств', error=e)
@@ -1367,7 +1445,10 @@ async def confirm_add_devices(callback: types.CallbackQuery, db_user: User, db: 
 
     if subscription.device_limit == 0:
         await callback.answer(
-            texts.t('DEVICES_SELECTION_DISABLED', '⚠️ Изменение количества устройств недоступно'),
+            texts.t(
+                'DEVICES_SELECTION_DISABLED',
+                '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> Изменение количества устройств недоступно',
+            ),
             show_alert=True,
         )
         return
@@ -1384,7 +1465,10 @@ async def confirm_add_devices(callback: types.CallbackQuery, db_user: User, db: 
     if tariff:
         if tariff_device_price is None or tariff_device_price <= 0:
             await callback.answer(
-                texts.t('TARIFF_DEVICES_DISABLED', '⚠️ Добавление устройств недоступно для вашего тарифа'),
+                texts.t(
+                    'TARIFF_DEVICES_DISABLED',
+                    '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> Добавление устройств недоступно для вашего тарифа',
+                ),
                 show_alert=True,
             )
             return
@@ -1392,7 +1476,10 @@ async def confirm_add_devices(callback: types.CallbackQuery, db_user: User, db: 
     else:
         if not settings.is_devices_selection_enabled():
             await callback.answer(
-                texts.t('DEVICES_SELECTION_DISABLED', '⚠️ Изменение количества устройств недоступно'),
+                texts.t(
+                    'DEVICES_SELECTION_DISABLED',
+                    '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> Изменение количества устройств недоступно',
+                ),
                 show_alert=True,
             )
             return
@@ -1409,7 +1496,7 @@ async def confirm_add_devices(callback: types.CallbackQuery, db_user: User, db: 
         await callback.answer(
             texts.t(
                 'DEVICES_LIMIT_EXCEEDED_DETAIL',
-                '⚠️ Превышен максимальный лимит устройств ({limit}). У вас: {current}, добавляете: {adding}',
+                '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> Превышен максимальный лимит устройств ({limit}). У вас: {current}, добавляете: {adding}',
             ).format(limit=effective_max, current=subscription.device_limit, adding=devices_count),
             show_alert=True,
         )
@@ -1502,7 +1589,7 @@ async def confirm_add_devices(callback: types.CallbackQuery, db_user: User, db: 
         message_text = texts.t(
             'ADDON_INSUFFICIENT_FUNDS_MESSAGE',
             (
-                '⚠️ <b>Недостаточно средств</b>\n\n'
+                '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> <b>Недостаточно средств</b>\n\n'
                 'Стоимость услуги: {required}\n'
                 'На балансе: {balance}\n'
                 'Не хватает: {missing}\n\n'
@@ -1554,7 +1641,10 @@ async def confirm_add_devices(callback: types.CallbackQuery, db_user: User, db: 
 
         if not success:
             await callback.answer(
-                texts.t('SUBSCRIPTION_UI_DEBIT_WARNING_EMOJI', '⚠️ Ошибка списания средств'),
+                texts.t(
+                    'SUBSCRIPTION_UI_DEBIT_WARNING_EMOJI',
+                    '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> Ошибка списания средств',
+                ),
                 show_alert=True,
             )
             return
@@ -1586,12 +1676,12 @@ async def confirm_add_devices(callback: types.CallbackQuery, db_user: User, db: 
                 (
                     texts.t(
                         'SUBSCRIPTION_UI_DEVICES_UNLIMITED_REFUND',
-                        '⚠️ У подписки теперь безлимит устройств. Баланс возвращён.',
+                        '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> У подписки теперь безлимит устройств. Баланс возвращён.',
                     )
                     if subscription.device_limit == 0
                     else texts.t(
                         'SUBSCRIPTION_UI_DEVICE_LIMIT_REFUNDED',
-                        '⚠️ Лимит устройств ({limit}) превышен. Баланс возвращён.',
+                        '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> Лимит устройств ({limit}) превышен. Баланс возвращён.',
                     ).format(limit=max_devices)
                 ),
                 show_alert=True,
@@ -1640,11 +1730,12 @@ async def confirm_add_devices(callback: types.CallbackQuery, db_user: User, db: 
 
         success_text = texts.t(
             'SUBSCRIPTION_UI_DEVICES_ADDED_DETAILS',
-            '✅ Устройства успешно добавлены!\n\n📱 Добавлено: {added} устройств\nНовый лимит: {limit} устройств\n',
+            '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Устройства успешно добавлены!\n\n<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> Добавлено: {added} устройств\nНовый лимит: {limit} устройств\n',
         ).format(added=devices_count, limit=subscription.device_limit)
-        success_text += texts.t('SUBSCRIPTION_UI_CHARGED_FOR_PERIOD', '💰 Списано: {amount} (за {period})').format(
-            amount=texts.format_price(price), period=period_label
-        )
+        success_text += texts.t(
+            'SUBSCRIPTION_UI_CHARGED_FOR_PERIOD',
+            '<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> Списано: {amount} (за {period})',
+        ).format(amount=texts.format_price(price), period=period_label)
         if total_discount > 0:
             success_text += texts.t('SUBSCRIPTION_UI_DISCOUNT_SUFFIX', ' (скидка {percent}%: -{amount})').format(
                 percent=devices_discount_percent, amount=texts.format_price(total_discount)
@@ -1655,7 +1746,7 @@ async def confirm_add_devices(callback: types.CallbackQuery, db_user: User, db: 
         )
 
         logger.info(
-            '✅ Пользователь добавил устройств за ₽',
+            'Пользователь добавил устройств за ₽',
             telegram_id=db_user.telegram_id,
             devices_count=devices_count,
             price=price / 100,
@@ -1690,7 +1781,10 @@ async def handle_device_guide(callback: types.CallbackQuery, db_user: User, db: 
 
     if not subscription_link:
         await callback.answer(
-            texts.t('SUBSCRIPTION_LINK_UNAVAILABLE', '❌ Ссылка подписки недоступна'),
+            texts.t(
+                'SUBSCRIPTION_LINK_UNAVAILABLE',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Ссылка подписки недоступна',
+            ),
             show_alert=True,
         )
         return
@@ -1701,7 +1795,10 @@ async def handle_device_guide(callback: types.CallbackQuery, db_user: User, db: 
 
     if not apps:
         await callback.answer(
-            texts.t('SUBSCRIPTION_DEVICE_APPS_NOT_FOUND', '❌ Приложения для этого устройства не найдены'),
+            texts.t(
+                'SUBSCRIPTION_DEVICE_APPS_NOT_FOUND',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Приложения для этого устройства не найдены',
+            ),
             show_alert=True,
         )
         return
@@ -1718,37 +1815,43 @@ async def handle_device_guide(callback: types.CallbackQuery, db_user: User, db: 
 
     if hide_subscription_link:
         link_section = (
-            texts.t('SUBSCRIPTION_DEVICE_LINK_TITLE', '🔗 <b>Ссылка подписки:</b>')
+            texts.t(
+                'SUBSCRIPTION_DEVICE_LINK_TITLE',
+                '<tg-emoji emoji-id="5877465816030515018">🔗</tg-emoji> <b>Ссылка подписки:</b>',
+            )
             + '\n'
             + texts.t(
                 'SUBSCRIPTION_LINK_HIDDEN_NOTICE',
-                'ℹ️ Ссылка подписки доступна по кнопкам ниже или в разделе "Моя подписка".',
+                '<tg-emoji emoji-id="5879785854284599288">ℹ️</tg-emoji> Ссылка подписки доступна по кнопкам ниже или в разделе "Моя подписка".',
             )
             + '\n\n'
         )
     else:
         link_section = (
-            texts.t('SUBSCRIPTION_DEVICE_LINK_TITLE', '🔗 <b>Ссылка подписки:</b>')
+            texts.t(
+                'SUBSCRIPTION_DEVICE_LINK_TITLE',
+                '<tg-emoji emoji-id="5877465816030515018">🔗</tg-emoji> <b>Ссылка подписки:</b>',
+            )
             + f'\n<code>{html_mod.escape(subscription_link)}</code>\n\n'
         )
 
     guide_text = (
         texts.t(
             'SUBSCRIPTION_DEVICE_GUIDE_TITLE',
-            '📱 <b>Настройка для {device_name}</b>',
+            '<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> <b>Настройка для {device_name}</b>',
         ).format(device_name=html_mod.escape(get_device_name(device_type, db_user.language)))
         + '\n\n'
         + link_section
         + texts.t(
             'SUBSCRIPTION_DEVICE_FEATURED_APP',
-            '📋 <b>Рекомендуемое приложение:</b> {app_name}',
+            '<b>Рекомендуемое приложение:</b> {app_name}',
         ).format(app_name=html_mod.escape(featured_app.get('name', '')))
     )
 
     if other_app_names:
         guide_text += '\n\n' + texts.t(
             'SUBSCRIPTION_DEVICE_OTHER_APPS',
-            '📦 <b>Другие приложения:</b> {app_list}',
+            '<tg-emoji emoji-id="5924720918826848520">📦</tg-emoji> <b>Другие приложения:</b> {app_list}',
         ).format(app_list=other_app_names)
         guide_text += '\n' + texts.t(
             'SUBSCRIPTION_DEVICE_OTHER_APPS_HINT',
@@ -1759,7 +1862,7 @@ async def handle_device_guide(callback: types.CallbackQuery, db_user: User, db: 
     if blocks_text:
         guide_text += '\n\n' + blocks_text
 
-    guide_text += '\n\n' + texts.t('SUBSCRIPTION_DEVICE_HOW_TO_TITLE', '💡 <b>Как подключить:</b>')
+    guide_text += '\n\n' + texts.t('SUBSCRIPTION_DEVICE_HOW_TO_TITLE', '<b>Как подключить:</b>')
     guide_text += '\n' + '\n'.join(
         [
             texts.t(
@@ -1804,7 +1907,10 @@ async def handle_app_selection(callback: types.CallbackQuery, db_user: User, db:
 
     if not apps:
         await callback.answer(
-            texts.t('SUBSCRIPTION_DEVICE_APPS_NOT_FOUND', '❌ Приложения для этого устройства не найдены'),
+            texts.t(
+                'SUBSCRIPTION_DEVICE_APPS_NOT_FOUND',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Приложения для этого устройства не найдены',
+            ),
             show_alert=True,
         )
         return
@@ -1812,7 +1918,7 @@ async def handle_app_selection(callback: types.CallbackQuery, db_user: User, db:
     app_text = (
         texts.t(
             'SUBSCRIPTION_APPS_TITLE',
-            '📱 <b>Приложения для {device_name}</b>',
+            '<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> <b>Приложения для {device_name}</b>',
         ).format(device_name=html_mod.escape(get_device_name(device_type, db_user.language)))
         + '\n\n'
         + texts.t('SUBSCRIPTION_APPS_PROMPT', 'Выберите приложение для подключения:')
@@ -1841,7 +1947,10 @@ async def handle_specific_app_guide(
 
     if not subscription_link:
         await callback.answer(
-            texts.t('SUBSCRIPTION_LINK_UNAVAILABLE', '❌ Ссылка подписки недоступна'),
+            texts.t(
+                'SUBSCRIPTION_LINK_UNAVAILABLE',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Ссылка подписки недоступна',
+            ),
             show_alert=True,
         )
         return
@@ -1851,7 +1960,10 @@ async def handle_specific_app_guide(
 
     if not app:
         await callback.answer(
-            texts.t('SUBSCRIPTION_APP_NOT_FOUND', '❌ Приложение не найдено'),
+            texts.t(
+                'SUBSCRIPTION_APP_NOT_FOUND',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Приложение не найдено',
+            ),
             show_alert=True,
         )
         return
@@ -1860,24 +1972,30 @@ async def handle_specific_app_guide(
 
     if hide_subscription_link:
         link_section = (
-            texts.t('SUBSCRIPTION_DEVICE_LINK_TITLE', '🔗 <b>Ссылка подписки:</b>')
+            texts.t(
+                'SUBSCRIPTION_DEVICE_LINK_TITLE',
+                '<tg-emoji emoji-id="5877465816030515018">🔗</tg-emoji> <b>Ссылка подписки:</b>',
+            )
             + '\n'
             + texts.t(
                 'SUBSCRIPTION_LINK_HIDDEN_NOTICE',
-                'ℹ️ Ссылка подписки доступна по кнопкам ниже или в разделе "Моя подписка".',
+                '<tg-emoji emoji-id="5879785854284599288">ℹ️</tg-emoji> Ссылка подписки доступна по кнопкам ниже или в разделе "Моя подписка".',
             )
             + '\n\n'
         )
     else:
         link_section = (
-            texts.t('SUBSCRIPTION_DEVICE_LINK_TITLE', '🔗 <b>Ссылка подписки:</b>')
+            texts.t(
+                'SUBSCRIPTION_DEVICE_LINK_TITLE',
+                '<tg-emoji emoji-id="5877465816030515018">🔗</tg-emoji> <b>Ссылка подписки:</b>',
+            )
             + f'\n<code>{html_mod.escape(subscription_link)}</code>\n\n'
         )
 
     guide_text = (
         texts.t(
             'SUBSCRIPTION_SPECIFIC_APP_TITLE',
-            '📱 <b>{app_name} - {device_name}</b>',
+            '<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> <b>{app_name} - {device_name}</b>',
         ).format(
             app_name=html_mod.escape(app.get('name', '')),
             device_name=html_mod.escape(get_device_name(device_type, db_user.language)),
@@ -1915,7 +2033,8 @@ async def show_device_connection_help(
     if not subscription_link:
         await callback.answer(
             get_texts(getattr(db_user, 'language', None)).t(
-                'SUBSCRIPTION_UI_LINK_UNAVAILABLE', '❌ Ссылка подписки недоступна'
+                'SUBSCRIPTION_UI_LINK_UNAVAILABLE',
+                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Ссылка подписки недоступна',
             ),
             show_alert=True,
         )
@@ -1925,14 +2044,14 @@ async def show_device_connection_help(
         texts = get_texts(db_user.language)
         help_text = texts.t(
             'SUBSCRIPTION_LINK_HIDDEN_NOTICE',
-            'ℹ️ Ссылка подписки доступна по кнопкам ниже или в разделе "Моя подписка".',
+            '<tg-emoji emoji-id="5879785854284599288">ℹ️</tg-emoji> Ссылка подписки доступна по кнопкам ниже или в разделе "Моя подписка".',
         )
     else:
         help_text = (
             get_texts(getattr(db_user, 'language', None))
             .t(
                 'SUBSCRIPTION_UI_DEVICE_RECONNECT_HELP',
-                '\n📱 <b>Как подключить устройство заново</b>\n\nПосле сброса устройства вам нужно:\n\n<b>1. Получить ссылку подписки:</b>\n\n<b>2. Настроить VPN приложение:</b>\n• Откройте ваше VPN приложение\n• Найдите функцию "Добавить подписку" или "Import"\n• Вставьте скопированную ссылку\n\n<b>3. Подключиться:</b>\n• Выберите сервер\n• Нажмите "Подключить"\n\n<b>🔗 Ваша ссылка подписки:</b>\n<code>{link}</code>\n\n💡 <b>Совет:</b> Сохраните эту ссылку - она понадобится для подключения новых устройств\n',
+                '\n<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> <b>Как подключить устройство заново</b>\n\nПосле сброса устройства вам нужно:\n\n<b>1. Получить ссылку подписки:</b>\n\n<b>2. Настроить VPN приложение:</b>\n• Откройте ваше VPN приложение\n• Найдите функцию "Добавить подписку" или "Import"\n• Вставьте скопированную ссылку\n\n<b>3. Подключиться:</b>\n• Выберите сервер\n• Нажмите "Подключить"\n\n<b><tg-emoji emoji-id="5877465816030515018">🔗</tg-emoji> Ваша ссылка подписки:</b>\n<code>{link}</code>\n\n<b>Совет:</b> Сохраните эту ссылку - она понадобится для подключения новых устройств\n',
             )
             .format(link=html_mod.escape(subscription_link))
         )

@@ -81,16 +81,20 @@ async def handle_add_traffic(callback: types.CallbackQuery, db_user: User, db: A
                 keyboard.append(
                     [
                         types.InlineKeyboardButton(
-                            text=texts.t('SUBSCRIPTION_UI_TRAFFIC_DAYS_BUTTON', '📊 {traffic} ({days}д.)').format(
-                                traffic=tariff_name, days=days_left
-                            ),
+                            text=texts.t(
+                                'SUBSCRIPTION_UI_TRAFFIC_DAYS_BUTTON',
+                                '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> {traffic} ({days}д.)',
+                            ).format(traffic=tariff_name, days=days_left),
                             callback_data=f'st:{sub.id}',
                         )
                     ]
                 )
             keyboard.append([types.InlineKeyboardButton(text='← Назад', callback_data='back_to_menu')])
             await callback.message.edit_text(
-                texts.t('SUBSCRIPTION_UI_TRAFFIC_SELECT', '📊 <b>Докупить трафик</b>\n\nВыберите подписку:'),
+                texts.t(
+                    'SUBSCRIPTION_UI_TRAFFIC_SELECT',
+                    '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> <b>Докупить трафик</b>\n\nВыберите подписку:',
+                ),
                 reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
             )
             await callback.answer()
@@ -102,7 +106,10 @@ async def handle_add_traffic(callback: types.CallbackQuery, db_user: User, db: A
 
     if not subscription or subscription.is_trial:
         await callback.answer(
-            texts.t('PAID_FEATURE_ONLY', '⚠ Эта функция доступна только для платных подписок'),
+            texts.t(
+                'PAID_FEATURE_ONLY',
+                '<tg-emoji emoji-id="5881702736843511327">⚠</tg-emoji> Эта функция доступна только для платных подписок',
+            ),
             show_alert=True,
         )
         return
@@ -112,7 +119,7 @@ async def handle_add_traffic(callback: types.CallbackQuery, db_user: User, db: A
         await callback.answer(
             texts.t(
                 'LEGACY_ADDONS_UNAVAILABLE',
-                '⚠️ Сначала перейдите на тариф — докупки для этой подписки недоступны',
+                '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> Сначала перейдите на тариф — докупки для этой подписки недоступны',
             ),
             show_alert=True,
         )
@@ -120,7 +127,10 @@ async def handle_add_traffic(callback: types.CallbackQuery, db_user: User, db: A
 
     if subscription.traffic_limit_gb == 0:
         await callback.answer(
-            texts.t('TRAFFIC_ALREADY_UNLIMITED', '⚠ У вас уже безлимитный трафик'),
+            texts.t(
+                'TRAFFIC_ALREADY_UNLIMITED',
+                '<tg-emoji emoji-id="5881702736843511327">⚠</tg-emoji> У вас уже безлимитный трафик',
+            ),
             show_alert=True,
         )
         return
@@ -132,7 +142,7 @@ async def handle_add_traffic(callback: types.CallbackQuery, db_user: User, db: A
             await callback.answer(
                 texts.t(
                     'TARIFF_TRAFFIC_TOPUP_DISABLED',
-                    '⚠️ На вашем тарифе докупка трафика недоступна',
+                    '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> На вашем тарифе докупка трафика недоступна',
                 ),
                 show_alert=True,
             )
@@ -152,7 +162,7 @@ async def handle_add_traffic(callback: types.CallbackQuery, db_user: User, db: A
         prompt_text = texts.t(
             'ADD_TRAFFIC_PROMPT',
             (
-                '📈 <b>Добавить трафик к подписке</b>\n\n'
+                '<tg-emoji emoji-id="5776219138917668486">📈</tg-emoji> <b>Добавить трафик к подписке</b>\n\n'
                 'Текущий лимит: {current_traffic}\n'
                 'Выберите дополнительный трафик:'
             ),
@@ -178,7 +188,7 @@ async def handle_add_traffic(callback: types.CallbackQuery, db_user: User, db: A
         await callback.answer(
             texts.t(
                 'TRAFFIC_TOPUP_DISABLED',
-                '⚠️ Функция докупки трафика отключена',
+                '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> Функция докупки трафика отключена',
             ),
             show_alert=True,
         )
@@ -188,7 +198,7 @@ async def handle_add_traffic(callback: types.CallbackQuery, db_user: User, db: A
         await callback.answer(
             texts.t(
                 'TRAFFIC_FIXED_MODE',
-                '⚠️ В текущем режиме трафик фиксированный и не может быть изменен',
+                '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> В текущем режиме трафик фиксированный и не может быть изменен',
             ),
             show_alert=True,
         )
@@ -204,7 +214,9 @@ async def handle_add_traffic(callback: types.CallbackQuery, db_user: User, db: A
 
     prompt_text = texts.t(
         'ADD_TRAFFIC_PROMPT',
-        ('📈 <b>Добавить трафик к подписке</b>\n\nТекущий лимит: {current_traffic}\nВыберите дополнительный трафик:'),
+        (
+            '<tg-emoji emoji-id="5776219138917668486">📈</tg-emoji> <b>Добавить трафик к подписке</b>\n\nТекущий лимит: {current_traffic}\nВыберите дополнительный трафик:'
+        ),
     ).format(current_traffic=texts.format_traffic(current_traffic))
 
     await callback.message.edit_text(
@@ -266,7 +278,8 @@ async def handle_reset_traffic(
     if settings.is_traffic_topup_blocked():
         await callback.answer(
             get_texts(getattr(db_user, 'language', None)).t(
-                'SUBSCRIPTION_UI_FIXED_TRAFFIC_RESET', '⚠️ В текущем режиме трафик фиксированный и не может быть сброшен'
+                'SUBSCRIPTION_UI_FIXED_TRAFFIC_RESET',
+                '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> В текущем режиме трафик фиксированный и не может быть сброшен',
             ),
             show_alert=True,
         )
@@ -279,14 +292,14 @@ async def handle_reset_traffic(
 
     if not subscription or subscription.is_trial:
         await callback.answer(
-            texts.t('SUBSCRIPTION_UI_PAID_ONLY_HOURGLASS', '⌛ Эта функция доступна только для платных подписок'),
+            texts.t('SUBSCRIPTION_UI_PAID_ONLY_HOURGLASS', 'Эта функция доступна только для платных подписок'),
             show_alert=True,
         )
         return
 
     if subscription.traffic_limit_gb == 0:
         await callback.answer(
-            texts.t('SUBSCRIPTION_UI_UNLIMITED_TRAFFIC', '⌛ У вас безлимитный трафик'),
+            texts.t('SUBSCRIPTION_UI_UNLIMITED_TRAFFIC', 'У вас безлимитный трафик'),
             show_alert=True,
         )
         return
@@ -300,7 +313,7 @@ async def handle_reset_traffic(
         base_traffic_gb = subscription.traffic_limit_gb - purchased_gb
         price_info = texts.t(
             'SUBSCRIPTION_UI_RESET_PRICE_BREAKDOWN',
-            '\n\n💡 <i>Расчет цены:</i>\n• Базовый трафик: {base}\n• Докупленный: {extra}',
+            '\n\n<i>Расчет цены:</i>\n• Базовый трафик: {base}\n• Докупленный: {extra}',
         ).format(base=texts.format_traffic(base_traffic_gb), extra=texts.format_traffic(purchased_gb))
 
     # Проверяем достаточно ли средств
@@ -308,13 +321,15 @@ async def handle_reset_traffic(
     missing_kopeks = max(0, reset_price - db_user.balance_kopeks)
 
     # Формируем текст о балансе
-    balance_info = texts.t('SUBSCRIPTION_UI_BALANCE_LINE', '\n\n💰 На балансе: {balance}').format(
-        balance=texts.format_price(db_user.balance_kopeks)
-    )
+    balance_info = texts.t(
+        'SUBSCRIPTION_UI_BALANCE_LINE',
+        '\n\n<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> На балансе: {balance}',
+    ).format(balance=texts.format_price(db_user.balance_kopeks))
     if not has_enough_balance:
-        balance_info += texts.t('SUBSCRIPTION_UI_MISSING_LINE', '\n⚠️ Не хватает: {amount}').format(
-            amount=texts.format_price(missing_kopeks)
-        )
+        balance_info += texts.t(
+            'SUBSCRIPTION_UI_MISSING_LINE',
+            '\n<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> Не хватает: {amount}',
+        ).format(amount=texts.format_price(missing_kopeks))
 
     reset_keyboard = get_reset_traffic_confirm_keyboard(
         reset_price,
@@ -334,7 +349,7 @@ async def handle_reset_traffic(
     await callback.message.edit_text(
         texts.t(
             'SUBSCRIPTION_UI_RESET_DETAILS',
-            '🔄 <b>Сброс трафика</b>\n\nИспользовано: {used}\nЛимит: {limit}\n\nСтоимость сброса: {price}{discount}{breakdown}\n\n',
+            '<tg-emoji emoji-id="5839200986022812209">🔄</tg-emoji> <b>Сброс трафика</b>\n\nИспользовано: {used}\nЛимит: {limit}\n\nСтоимость сброса: {price}{discount}{breakdown}\n\n',
         ).format(
             used=texts.format_traffic(subscription.traffic_used_gb, is_limit=False),
             limit=texts.format_traffic(subscription.traffic_limit_gb),
@@ -366,7 +381,8 @@ async def confirm_reset_traffic(
     if settings.is_traffic_topup_blocked():
         await callback.answer(
             get_texts(getattr(db_user, 'language', None)).t(
-                'SUBSCRIPTION_UI_FIXED_TRAFFIC', '⚠️ В текущем режиме трафик фиксированный'
+                'SUBSCRIPTION_UI_FIXED_TRAFFIC',
+                '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> В текущем режиме трафик фиксированный',
             ),
             show_alert=True,
         )
@@ -462,7 +478,7 @@ async def confirm_reset_traffic(
             await callback.message.edit_text(
                 texts.t(
                     'SUBSCRIPTION_UI_BASE_RESET_SUCCESS',
-                    '✅ Базовый трафик обновлён. Остатки докупленных пакетов сохранены.',
+                    '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Базовый трафик обновлён. Остатки докупленных пакетов сохранены.',
                 ),
                 reply_markup=get_back_keyboard(language),
             )
@@ -490,7 +506,7 @@ async def confirm_reset_traffic(
         message_text = texts.t(
             'ADDON_INSUFFICIENT_FUNDS_MESSAGE',
             (
-                '⚠️ <b>Недостаточно средств</b>\n\n'
+                '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> <b>Недостаточно средств</b>\n\n'
                 'Стоимость услуги: {required}\n'
                 'На балансе: {balance}\n'
                 'Не хватает: {missing}\n\n'
@@ -518,7 +534,7 @@ async def confirm_reset_traffic(
 
         if not success:
             await callback.answer(
-                texts.t('SUBSCRIPTION_UI_DEBIT_HOURGLASS', '⌛ Ошибка списания средств'),
+                texts.t('SUBSCRIPTION_UI_DEBIT_HOURGLASS', 'Ошибка списания средств'),
                 show_alert=True,
             )
             return
@@ -581,12 +597,12 @@ async def confirm_reset_traffic(
         await callback.message.edit_text(
             texts.t(
                 'SUBSCRIPTION_UI_RESET_SUCCESS_DETAILS',
-                '✅ Трафик успешно сброшен!\n\n🔄 Использованный трафик обнулен\n📊 Лимит: {limit}',
+                '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Трафик успешно сброшен!\n\n<tg-emoji emoji-id="5839200986022812209">🔄</tg-emoji> Использованный трафик обнулен\n<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> Лимит: {limit}',
             ).format(limit=texts.format_traffic(subscription.traffic_limit_gb)),
             reply_markup=get_back_keyboard(db_user.language),
         )
 
-        logger.info('✅ Пользователь сбросил трафик', telegram_id=db_user.telegram_id)
+        logger.info('Пользователь сбросил трафик', telegram_id=db_user.telegram_id)
 
     except Exception as e:
         logger.error('Ошибка сброса трафика', error=e)
@@ -604,16 +620,20 @@ async def refresh_traffic_config():
         packages = settings.get_traffic_packages()
         enabled_count = sum(1 for pkg in packages if pkg['enabled'])
 
-        logger.info('🔄 Конфигурация трафика обновлена: активных пакетов', enabled_count=enabled_count)
+        logger.info('Конфигурация трафика обновлена: активных пакетов', enabled_count=enabled_count)
         for pkg in packages:
             if pkg['enabled']:
-                gb_text = '♾️ Безлимит' if pkg['gb'] == 0 else f'{pkg["gb"]} ГБ'
-                logger.info('📦 ₽', gb_text=gb_text, pkg=pkg['price'] / 100)
+                gb_text = (
+                    '<tg-emoji emoji-id="5908972566537572230">♾️</tg-emoji> Безлимит'
+                    if pkg['gb'] == 0
+                    else f'{pkg["gb"]} ГБ'
+                )
+                logger.info('₽', gb_text=gb_text, pkg=pkg['price'] / 100)
 
         return True
 
     except Exception as e:
-        logger.error('⚠️ Ошибка обновления конфигурации трафика', error=e)
+        logger.error('Ошибка обновления конфигурации трафика', error=e)
         return False
 
 
@@ -622,45 +642,75 @@ async def get_traffic_packages_info(language: str | None = None) -> str:
     try:
         packages = settings.get_traffic_packages()
 
-        info_lines = [texts.t('SUBSCRIPTION_UI_PACKAGES_TITLE', '📦 Настроенные пакеты трафика:')]
+        info_lines = [
+            texts.t(
+                'SUBSCRIPTION_UI_PACKAGES_TITLE',
+                '<tg-emoji emoji-id="5924720918826848520">📦</tg-emoji> Настроенные пакеты трафика:',
+            )
+        ]
 
         enabled_packages = [pkg for pkg in packages if pkg['enabled']]
         disabled_packages = [pkg for pkg in packages if not pkg['enabled']]
 
         if enabled_packages:
-            info_lines.append(texts.t('SUBSCRIPTION_UI_PACKAGES_ACTIVE_TITLE', '\n✅ Активные:'))
+            info_lines.append(
+                texts.t(
+                    'SUBSCRIPTION_UI_PACKAGES_ACTIVE_TITLE',
+                    '\n<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Активные:',
+                )
+            )
             for pkg in enabled_packages:
                 gb_text = (
-                    texts.t('SUBSCRIPTION_UI_UNLIMITED_INFINITY', '♾️ Безлимит')
+                    texts.t(
+                        'SUBSCRIPTION_UI_UNLIMITED_INFINITY',
+                        '<tg-emoji emoji-id="5908972566537572230">♾️</tg-emoji> Безлимит',
+                    )
                     if pkg['gb'] == 0
                     else texts.t('SUBSCRIPTION_UI_GB_VALUE', '{amount} ГБ').format(amount=pkg['gb'])
                 )
                 info_lines.append(f'   • {gb_text}: {pkg["price"] // 100}₽')
 
         if disabled_packages:
-            info_lines.append(texts.t('SUBSCRIPTION_UI_PACKAGES_DISABLED_TITLE', '\n❌ Отключенные:'))
+            info_lines.append(
+                texts.t(
+                    'SUBSCRIPTION_UI_PACKAGES_DISABLED_TITLE',
+                    '\n<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Отключенные:',
+                )
+            )
             for pkg in disabled_packages:
                 gb_text = (
-                    texts.t('SUBSCRIPTION_UI_UNLIMITED_INFINITY', '♾️ Безлимит')
+                    texts.t(
+                        'SUBSCRIPTION_UI_UNLIMITED_INFINITY',
+                        '<tg-emoji emoji-id="5908972566537572230">♾️</tg-emoji> Безлимит',
+                    )
                     if pkg['gb'] == 0
                     else texts.t('SUBSCRIPTION_UI_GB_VALUE', '{amount} ГБ').format(amount=pkg['gb'])
                 )
                 info_lines.append(f'   • {gb_text}: {pkg["price"] // 100}₽')
 
         info_lines.append(
-            texts.t('SUBSCRIPTION_UI_PACKAGES_TOTAL', '\n📊 Всего пакетов: {count}').format(count=len(packages))
+            texts.t(
+                'SUBSCRIPTION_UI_PACKAGES_TOTAL',
+                '\n<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> Всего пакетов: {count}',
+            ).format(count=len(packages))
         )
         info_lines.append(
-            texts.t('SUBSCRIPTION_UI_PACKAGES_ACTIVE', '🟢 Активных: {count}').format(count=len(enabled_packages))
+            texts.t('SUBSCRIPTION_UI_PACKAGES_ACTIVE', 'Активных: {count}').format(count=len(enabled_packages))
         )
         info_lines.append(
-            texts.t('SUBSCRIPTION_UI_PACKAGES_DISABLED', '🔴 Отключенных: {count}').format(count=len(disabled_packages))
+            texts.t(
+                'SUBSCRIPTION_UI_PACKAGES_DISABLED',
+                '<tg-emoji emoji-id="5967333011652350314">🔴</tg-emoji> Отключенных: {count}',
+            ).format(count=len(disabled_packages))
         )
 
         return compact_blank_lines('\n'.join(info_lines))
 
     except Exception as e:
-        return texts.t('SUBSCRIPTION_UI_PACKAGES_INFO_ERROR', '⚠️ Ошибка получения информации: {error}').format(error=e)
+        return texts.t(
+            'SUBSCRIPTION_UI_PACKAGES_INFO_ERROR',
+            '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> Ошибка получения информации: {error}',
+        ).format(error=e)
 
 
 async def select_traffic(callback: types.CallbackQuery, state: FSMContext, db_user: User):
@@ -733,7 +783,8 @@ async def add_traffic(callback: types.CallbackQuery, db_user: User, db: AsyncSes
         else:
             await callback.answer(
                 get_texts(getattr(db_user, 'language', None)).t(
-                    'SUBSCRIPTION_UI_TARIFF_TRAFFIC_UNAVAILABLE', '⚠️ На вашем тарифе докупка трафика недоступна'
+                    'SUBSCRIPTION_UI_TARIFF_TRAFFIC_UNAVAILABLE',
+                    '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> На вашем тарифе докупка трафика недоступна',
                 ),
                 show_alert=True,
             )
@@ -743,7 +794,8 @@ async def add_traffic(callback: types.CallbackQuery, db_user: User, db: AsyncSes
         if settings.is_traffic_topup_blocked():
             await callback.answer(
                 get_texts(getattr(db_user, 'language', None)).t(
-                    'SUBSCRIPTION_UI_FIXED_TRAFFIC', '⚠️ В текущем режиме трафик фиксированный'
+                    'SUBSCRIPTION_UI_FIXED_TRAFFIC',
+                    '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> В текущем режиме трафик фиксированный',
                 ),
                 show_alert=True,
             )
@@ -753,7 +805,8 @@ async def add_traffic(callback: types.CallbackQuery, db_user: User, db: AsyncSes
     if base_price == 0 and traffic_gb != 0:
         await callback.answer(
             get_texts(getattr(db_user, 'language', None)).t(
-                'SUBSCRIPTION_UI_PACKAGE_PRICE_MISSING', '⚠️ Цена для этого пакета не настроена'
+                'SUBSCRIPTION_UI_PACKAGE_PRICE_MISSING',
+                '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> Цена для этого пакета не настроена',
             ),
             show_alert=True,
         )
@@ -768,7 +821,10 @@ async def add_traffic(callback: types.CallbackQuery, db_user: User, db: AsyncSes
     except Exception:
         await db.rollback()
         await callback.answer(
-            texts.t('SUBSCRIPTION_UI_ACCOUNTING_UNAVAILABLE', '⚠️ Учёт трафика временно недоступен. Попробуйте позже.'),
+            texts.t(
+                'SUBSCRIPTION_UI_ACCOUNTING_UNAVAILABLE',
+                '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> Учёт трафика временно недоступен. Попробуйте позже.',
+            ),
             show_alert=True,
         )
         return
@@ -832,7 +888,7 @@ async def add_traffic(callback: types.CallbackQuery, db_user: User, db: AsyncSes
         message_text = texts.t(
             'ADDON_INSUFFICIENT_FUNDS_MESSAGE',
             (
-                '⚠️ <b>Недостаточно средств</b>\n\n'
+                '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> <b>Недостаточно средств</b>\n\n'
                 'Стоимость услуги: {required}\n'
                 'На балансе: {balance}\n'
                 'Не хватает: {missing}\n\n'
@@ -870,7 +926,8 @@ async def add_traffic(callback: types.CallbackQuery, db_user: User, db: AsyncSes
         if not success:
             await callback.answer(
                 get_texts(getattr(db_user, 'language', None)).t(
-                    'SUBSCRIPTION_UI_DEBIT_WARNING_EMOJI', '⚠️ Ошибка списания средств'
+                    'SUBSCRIPTION_UI_DEBIT_WARNING_EMOJI',
+                    '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> Ошибка списания средств',
                 ),
                 show_alert=True,
             )
@@ -935,7 +992,9 @@ async def add_traffic(callback: types.CallbackQuery, db_user: User, db: AsyncSes
 
         success_text = '<b>Трафик добавлен</b>\n\n<blockquote expandable>'
         if traffic_gb == 0:
-            success_text += 'Тип: безлимит\n🎉 Теперь у вас безлимитный трафик!'
+            success_text += (
+                'Тип: безлимит\n<tg-emoji emoji-id="5994502837327892086">🎉</tg-emoji> Теперь у вас безлимитный трафик!'
+            )
         else:
             success_text += (
                 f'Добавлено: {traffic_gb} ГБ\nНовый лимит: {texts.format_traffic(subscription.traffic_limit_gb)}'
@@ -956,7 +1015,7 @@ async def add_traffic(callback: types.CallbackQuery, db_user: User, db: AsyncSes
             success_text, reply_markup=get_back_keyboard(db_user.language), parse_mode='HTML'
         )
 
-        logger.info('✅ Пользователь добавил ГБ трафика', telegram_id=db_user.telegram_id, traffic_gb=traffic_gb)
+        logger.info('Пользователь добавил ГБ трафика', telegram_id=db_user.telegram_id, traffic_gb=traffic_gb)
 
     except Exception as e:
         await db.rollback()
@@ -970,7 +1029,7 @@ async def handle_no_traffic_packages(callback: types.CallbackQuery, db_user: Use
     await callback.answer(
         get_texts(getattr(db_user, 'language', None)).t(
             'SUBSCRIPTION_UI_NO_TRAFFIC_PACKAGES',
-            '⚠️ В данный момент нет доступных пакетов трафика. Обратитесь в техподдержку для получения информации.',
+            '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> В данный момент нет доступных пакетов трафика. Обратитесь в техподдержку для получения информации.',
         ),
         show_alert=True,
     )
@@ -984,7 +1043,8 @@ async def handle_switch_traffic(
     if settings.is_traffic_topup_blocked():
         await callback.answer(
             get_texts(getattr(db_user, 'language', None)).t(
-                'SUBSCRIPTION_UI_FIXED_TRAFFIC', '⚠️ В текущем режиме трафик фиксированный'
+                'SUBSCRIPTION_UI_FIXED_TRAFFIC',
+                '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> В текущем режиме трафик фиксированный',
             ),
             show_alert=True,
         )
@@ -997,7 +1057,10 @@ async def handle_switch_traffic(
 
     if not subscription or subscription.is_trial:
         await callback.answer(
-            texts.t('SUBSCRIPTION_UI_PAID_ONLY', '⚠️ Эта функция доступна только для платных подписок'),
+            texts.t(
+                'SUBSCRIPTION_UI_PAID_ONLY',
+                '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> Эта функция доступна только для платных подписок',
+            ),
             show_alert=True,
         )
         return
@@ -1010,7 +1073,8 @@ async def handle_switch_traffic(
         if tariff and not tariff.allow_traffic_topup:
             await callback.answer(
                 texts.t(
-                    'SUBSCRIPTION_UI_TRAFFIC_SWITCH_UNAVAILABLE', '⚠️ Для вашего тарифа переключение трафика недоступно'
+                    'SUBSCRIPTION_UI_TRAFFIC_SWITCH_UNAVAILABLE',
+                    '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> Для вашего тарифа переключение трафика недоступно',
                 ),
                 show_alert=True,
             )
@@ -1032,13 +1096,14 @@ async def handle_switch_traffic(
     purchased_info = ''
     if purchased_traffic > 0:
         purchased_info = texts.t(
-            'SUBSCRIPTION_UI_BASE_EXTRA_TRAFFIC', '\n📦 Базовый пакет: {base}\n➕ Докуплено: {extra}'
+            'SUBSCRIPTION_UI_BASE_EXTRA_TRAFFIC',
+            '\n<tg-emoji emoji-id="5924720918826848520">📦</tg-emoji> Базовый пакет: {base}\n<tg-emoji emoji-id="5877219383691972108">➕</tg-emoji> Докуплено: {extra}',
         ).format(base=texts.format_traffic(base_traffic), extra=texts.format_traffic(purchased_traffic))
 
     await callback.message.edit_text(
         texts.t(
             'SUBSCRIPTION_UI_SWITCH_TRAFFIC_DETAILS',
-            '🔄 <b>Переключение лимита трафика</b>\n\nТекущий лимит: {limit}{packages}\nВыберите новый лимит трафика:\n\n💡 <b>Важно:</b>\n• При увеличении - доплата за разницу\n• При уменьшении - возврат средств не производится\n• Докупленный трафик будет сброшен',
+            '<tg-emoji emoji-id="5839200986022812209">🔄</tg-emoji> <b>Переключение лимита трафика</b>\n\nТекущий лимит: {limit}{packages}\nВыберите новый лимит трафика:\n\n<b>Важно:</b>\n• При увеличении - доплата за разницу\n• При уменьшении - возврат средств не производится\n• Докупленный трафик будет сброшен',
         ).format(limit=texts.format_traffic(current_traffic), packages=purchased_info),
         reply_markup=get_traffic_switch_keyboard(
             current_traffic,
@@ -1070,7 +1135,10 @@ async def confirm_switch_traffic(
 
     if new_traffic_gb == current_traffic:
         await callback.answer(
-            texts.t('SUBSCRIPTION_UI_TRAFFIC_UNCHANGED', 'ℹ️ Лимит трафика не изменился'),
+            texts.t(
+                'SUBSCRIPTION_UI_TRAFFIC_UNCHANGED',
+                '<tg-emoji emoji-id="5879785854284599288">ℹ️</tg-emoji> Лимит трафика не изменился',
+            ),
             show_alert=True,
         )
         return
@@ -1108,7 +1176,7 @@ async def confirm_switch_traffic(
             message_text = texts.t(
                 'ADDON_INSUFFICIENT_FUNDS_MESSAGE',
                 (
-                    '⚠️ <b>Недостаточно средств</b>\n\n'
+                    '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> <b>Недостаточно средств</b>\n\n'
                     'Стоимость услуги: {required}\n'
                     'На балансе: {balance}\n'
                     'Не хватает: {missing}\n\n'
@@ -1152,7 +1220,8 @@ async def confirm_switch_traffic(
         cost_text = texts.t('SUBSCRIPTION_UI_NO_REFUND', 'Возврат средств не производится')
 
     confirm_text = texts.t(
-        'SUBSCRIPTION_UI_TRAFFIC_SWITCH_CONFIRM_TITLE', '🔄 <b>Подтверждение переключения трафика</b>\n\n'
+        'SUBSCRIPTION_UI_TRAFFIC_SWITCH_CONFIRM_TITLE',
+        '<tg-emoji emoji-id="5839200986022812209">🔄</tg-emoji> <b>Подтверждение переключения трафика</b>\n\n',
     )
     confirm_text += texts.t('SUBSCRIPTION_UI_CURRENT_LIMIT_LINE', 'Текущий лимит: {limit}\n').format(
         limit=texts.format_traffic(current_traffic)
@@ -1161,7 +1230,7 @@ async def confirm_switch_traffic(
         limit=texts.format_traffic(new_traffic_gb)
     )
     confirm_text += texts.t('SUBSCRIPTION_UI_ACTION_LINE', 'Действие: {action}\n').format(action=action_text)
-    confirm_text += f'💰 {cost_text}\n\n'
+    confirm_text += f'<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> {cost_text}\n\n'
     confirm_text += texts.t('SUBSCRIPTION_UI_CONFIRM_SWITCH_QUESTION', 'Подтвердить переключение?')
 
     await callback.message.edit_text(
@@ -1223,7 +1292,10 @@ async def execute_switch_traffic(
 
             if not success:
                 await callback.answer(
-                    texts.t('SUBSCRIPTION_UI_DEBIT_WARNING_EMOJI', '⚠️ Ошибка списания средств'),
+                    texts.t(
+                        'SUBSCRIPTION_UI_DEBIT_WARNING_EMOJI',
+                        '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> Ошибка списания средств',
+                    ),
                     show_alert=True,
                 )
                 return
@@ -1279,33 +1351,45 @@ async def execute_switch_traffic(
             logger.error('Ошибка отправки уведомления об изменении трафика', error=e)
 
         if new_traffic_gb > current_traffic:
-            success_text = texts.t('SUBSCRIPTION_UI_LIMIT_INCREASED', '✅ Лимит трафика увеличен!\n\n')
-            success_text += texts.t('SUBSCRIPTION_UI_PREVIOUS_TRAFFIC', '📊 Было: {traffic} → ').format(
-                traffic=texts.format_traffic(current_traffic)
+            success_text = texts.t(
+                'SUBSCRIPTION_UI_LIMIT_INCREASED',
+                '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Лимит трафика увеличен!\n\n',
             )
+            success_text += texts.t(
+                'SUBSCRIPTION_UI_PREVIOUS_TRAFFIC',
+                '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> Было: {traffic} → ',
+            ).format(traffic=texts.format_traffic(current_traffic))
             success_text += texts.t('SUBSCRIPTION_UI_UPDATED_TRAFFIC', 'Стало: {traffic}\n').format(
                 traffic=texts.format_traffic(new_traffic_gb)
             )
             if price_difference > 0:
-                success_text += texts.t('SUBSCRIPTION_UI_CHARGED_AMOUNT', '💰 Списано: {amount}').format(
-                    amount=texts.format_price(price_difference)
-                )
+                success_text += texts.t(
+                    'SUBSCRIPTION_UI_CHARGED_AMOUNT',
+                    '<tg-emoji emoji-id="5811989245761426317">💰</tg-emoji> Списано: {amount}',
+                ).format(amount=texts.format_price(price_difference))
         elif new_traffic_gb < current_traffic:
-            success_text = texts.t('SUBSCRIPTION_UI_LIMIT_DECREASED', '✅ Лимит трафика уменьшен!\n\n')
-            success_text += texts.t('SUBSCRIPTION_UI_PREVIOUS_TRAFFIC', '📊 Было: {traffic} → ').format(
-                traffic=texts.format_traffic(current_traffic)
+            success_text = texts.t(
+                'SUBSCRIPTION_UI_LIMIT_DECREASED',
+                '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Лимит трафика уменьшен!\n\n',
             )
+            success_text += texts.t(
+                'SUBSCRIPTION_UI_PREVIOUS_TRAFFIC',
+                '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> Было: {traffic} → ',
+            ).format(traffic=texts.format_traffic(current_traffic))
             success_text += texts.t('SUBSCRIPTION_UI_UPDATED_TRAFFIC', 'Стало: {traffic}\n').format(
                 traffic=texts.format_traffic(new_traffic_gb)
             )
-            success_text += texts.t('SUBSCRIPTION_UI_NO_REFUND_INFO', 'ℹ️ Возврат средств не производится')
+            success_text += texts.t(
+                'SUBSCRIPTION_UI_NO_REFUND_INFO',
+                '<tg-emoji emoji-id="5879785854284599288">ℹ️</tg-emoji> Возврат средств не производится',
+            )
 
         await callback.message.edit_text(
             compact_blank_lines(success_text), reply_markup=get_back_keyboard(db_user.language)
         )
 
         logger.info(
-            '✅ Пользователь переключил трафик с на доплата: ₽',
+            'Пользователь переключил трафик с на доплата: ₽',
             telegram_id=db_user.telegram_id,
             current_traffic=current_traffic,
             new_traffic_gb=new_traffic_gb,

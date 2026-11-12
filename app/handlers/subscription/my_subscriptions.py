@@ -37,10 +37,10 @@ def _status_emoji(sub) -> str:
     """Return status emoji based on subscription's actual status."""
     actual = sub.actual_status
     if actual in ('active', 'trial'):
-        return '🟢'
+        return ''
     if actual == 'limited':
-        return '🟡'
-    return '🔴'
+        return ''
+    return '<tg-emoji emoji-id="5967333011652350314">🔴</tg-emoji> '
 
 
 def _status_label(sub, language: str | None = None) -> str:
@@ -84,11 +84,25 @@ def _format_subscription_line(sub, idx: int, language: str | None = None) -> str
     # End date
     end_date = format_subscription_end_date(sub.end_date)
 
-    parts = [f'{emoji} <b>{idx}. {tariff_name}</b>{label}']
-    parts.append(texts.t('SUBSCRIPTION_UI_LIST_TRAFFIC', '   📊 Трафик: {traffic}').format(traffic=traffic))
+    parts = [f'{emoji}<b>{idx}. {tariff_name}</b>{label}']
+    parts.append(
+        texts.t(
+            'SUBSCRIPTION_UI_LIST_TRAFFIC',
+            '   <tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> Трафик: {traffic}',
+        ).format(traffic=traffic)
+    )
     if devices:
-        parts.append(texts.t('SUBSCRIPTION_UI_LIST_DEVICES', '   📱 Устройства: {devices}').format(devices=devices))
-    parts.append(texts.t('SUBSCRIPTION_UI_LIST_UNTIL', '   📅 До: {date}').format(date=end_date))
+        parts.append(
+            texts.t(
+                'SUBSCRIPTION_UI_LIST_DEVICES',
+                '   <tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> Устройства: {devices}',
+            ).format(devices=devices)
+        )
+    parts.append(
+        texts.t(
+            'SUBSCRIPTION_UI_LIST_UNTIL', '   <tg-emoji emoji-id="5967412305338568701">📅</tg-emoji> До: {date}'
+        ).format(date=end_date)
+    )
 
     return '\n'.join(parts)
 
@@ -106,7 +120,7 @@ def _build_subscriptions_keyboard(
         buttons.append(
             [
                 types.InlineKeyboardButton(
-                    text=f'⚙️ {tariff_name}',
+                    text=f'<tg-emoji emoji-id="5877260593903177342">⚙️</tg-emoji> {tariff_name}',
                     callback_data=f'sm:{sub.id}',
                 )
             ]
@@ -120,7 +134,9 @@ def _build_subscriptions_keyboard(
         buy_text = getattr(texts, 'MENU_BUY_SUBSCRIPTION', 'Купить ещё тариф')
         buttons.append(
             [
-                types.InlineKeyboardButton(text=f'➕ {buy_text}', callback_data='menu_buy'),
+                types.InlineKeyboardButton(
+                    text=f'<tg-emoji emoji-id="5877219383691972108">➕</tg-emoji> {buy_text}', callback_data='menu_buy'
+                ),
             ]
         )
     # Кнопка «Подарить подписку» убрана из меню подписок по запросу.
@@ -154,7 +170,11 @@ def _build_subscription_detail_keyboard(
         buttons.append(
             [
                 types.InlineKeyboardButton(
-                    text=texts.t('SUBSCRIPTION_UI_CONNECT_LINK', '🔗 Ссылка подключения'), callback_data=f'sl:{sub_id}'
+                    text=texts.t(
+                        'SUBSCRIPTION_UI_CONNECT_LINK',
+                        '<tg-emoji emoji-id="5877465816030515018">🔗</tg-emoji> Ссылка подключения',
+                    ),
+                    callback_data=f'sl:{sub_id}',
                 )
             ]
         )
@@ -172,7 +192,11 @@ def _build_subscription_detail_keyboard(
         buttons.append(
             [
                 types.InlineKeyboardButton(
-                    text=texts.t('SUBSCRIPTION_UI_RENEW_BUTTON', '🔄 Продлить'), callback_data=f'se:{sub_id}'
+                    text=texts.t(
+                        'SUBSCRIPTION_UI_RENEW_BUTTON',
+                        '<tg-emoji emoji-id="5839200986022812209">🔄</tg-emoji> Продлить',
+                    ),
+                    callback_data=f'se:{sub_id}',
                 )
             ]
         )
@@ -181,7 +205,10 @@ def _build_subscription_detail_keyboard(
         buttons.append(
             [
                 types.InlineKeyboardButton(
-                    text=texts.t('SUBSCRIPTION_UI_AUTOPAY_BUTTON', '💳 Автоплатеж'),
+                    text=texts.t(
+                        'SUBSCRIPTION_UI_AUTOPAY_BUTTON',
+                        '<tg-emoji emoji-id="5967548335542767952">💳</tg-emoji> Автоплатеж',
+                    ),
                     callback_data='subscription_autopay',
                 )
             ]
@@ -189,14 +216,22 @@ def _build_subscription_detail_keyboard(
         buttons.append(
             [
                 types.InlineKeyboardButton(
-                    text=texts.t('SUBSCRIPTION_UI_TRAFFIC_BUTTON', '📊 Трафик'), callback_data=f'st:{sub_id}'
+                    text=texts.t(
+                        'SUBSCRIPTION_UI_TRAFFIC_BUTTON',
+                        '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> Трафик',
+                    ),
+                    callback_data=f'st:{sub_id}',
                 )
             ]
         )
         buttons.append(
             [
                 types.InlineKeyboardButton(
-                    text=texts.t('SUBSCRIPTION_UI_DEVICES_BUTTON', '📱 Устройства'), callback_data=f'sd:{sub_id}'
+                    text=texts.t(
+                        'SUBSCRIPTION_UI_DEVICES_BUTTON',
+                        '<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> Устройства',
+                    ),
+                    callback_data=f'sd:{sub_id}',
                 )
             ]
         )
@@ -205,7 +240,10 @@ def _build_subscription_detail_keyboard(
         buttons.append(
             [
                 types.InlineKeyboardButton(
-                    text=texts.t('SUBSCRIPTION_UI_DELETE_BUTTON', '🗑 Удалить подписку'),
+                    text=texts.t(
+                        'SUBSCRIPTION_UI_DELETE_BUTTON',
+                        '<tg-emoji emoji-id="5879896690210639947">🗑</tg-emoji> Удалить подписку',
+                    ),
                     callback_data=f'sub_del:{sub_id}',
                 )
             ]
@@ -215,7 +253,10 @@ def _build_subscription_detail_keyboard(
         buttons.append(
             [
                 types.InlineKeyboardButton(
-                    text=texts.t('SUBSCRIPTION_UI_REISSUE_BUTTON', '🔄 Перевыпустить'),
+                    text=texts.t(
+                        'SUBSCRIPTION_UI_REISSUE_BUTTON',
+                        '<tg-emoji emoji-id="5839200986022812209">🔄</tg-emoji> Перевыпустить',
+                    ),
                     callback_data=f'sr:{sub_id}',
                 )
             ]
@@ -224,7 +265,11 @@ def _build_subscription_detail_keyboard(
     buttons.append(
         [
             types.InlineKeyboardButton(
-                text=texts.t('SUBSCRIPTION_UI_BACK_TO_LIST', '◀️ К списку подписок'), callback_data='my_subscriptions'
+                text=texts.t(
+                    'SUBSCRIPTION_UI_BACK_TO_LIST',
+                    '<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> К списку подписок',
+                ),
+                callback_data='my_subscriptions',
             )
         ]
     )
@@ -249,13 +294,11 @@ async def show_my_subscriptions(
     subscriptions = [sub for sub in subscriptions if not sub.is_pending_trial]
 
     if not subscriptions:
-        text = compact_blank_lines(
-            texts.t('SUBSCRIPTION_UI_LIST_EMPTY', '📋 <b>Мои подписки</b>\n\nУ вас нет подписок.')
-        )
+        text = compact_blank_lines(texts.t('SUBSCRIPTION_UI_LIST_EMPTY', '<b>Мои подписки</b>\n\nУ вас нет подписок.'))
         buttons = [
             [
                 types.InlineKeyboardButton(
-                    text=texts.t('SUBSCRIPTION_UI_BUY', '🛒 Купить подписку'),
+                    text=texts.t('SUBSCRIPTION_UI_BUY', 'Купить подписку'),
                     callback_data='menu_buy',
                 )
             ],
@@ -263,7 +306,7 @@ async def show_my_subscriptions(
         buttons.append([types.InlineKeyboardButton(text='← Назад', callback_data='back_to_menu')])
         keyboard = types.InlineKeyboardMarkup(inline_keyboard=buttons)
     else:
-        blocks = [texts.t('SUBSCRIPTION_UI_LIST_TITLE', '📋 <b>Мои подписки</b>')]
+        blocks = [texts.t('SUBSCRIPTION_UI_LIST_TITLE', '<b>Мои подписки</b>')]
         for idx, sub in enumerate(subscriptions, 1):
             blocks.append(_format_subscription_line(sub, idx, db_user.language))
         text = compact_blank_lines('\n\n'.join(blocks))
@@ -317,21 +360,21 @@ async def show_subscription_detail(
 
     end_date = format_subscription_end_date(subscription.end_date, '%d.%m.%Y %H:%M')
     status_keys = {
-        '🔴 Истекла': ('SUBSCRIPTION_STATUS_EXPIRED', '🔴'),
-        '🎯 Тестовая': ('SUBSCRIPTION_STATUS_TRIAL', '🎯'),
-        '🟢 Активна': ('SUBSCRIPTION_STATUS_ACTIVE', '🟢'),
-        '⚫ Отключена': ('SUBSCRIPTION_STATUS_DISABLED', '⚫'),
-        '⚠️ Трафик исчерпан': ('SUBSCRIPTION_STATUS_LIMITED', '⚠️'),
-        '❓ Неизвестно': ('SUBSCRIPTION_STATUS_UNKNOWN', '❓'),
+        '🔴 Истекла': ('SUBSCRIPTION_STATUS_EXPIRED', '<tg-emoji emoji-id="5967333011652350314">🔴</tg-emoji> '),
+        '🎯 Тестовая': ('SUBSCRIPTION_STATUS_TRIAL', ''),
+        '🟢 Активна': ('SUBSCRIPTION_STATUS_ACTIVE', ''),
+        '⚫ Отключена': ('SUBSCRIPTION_STATUS_DISABLED', ''),
+        '⚠️ Трафик исчерпан': ('SUBSCRIPTION_STATUS_LIMITED', '<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> '),
+        '❓ Неизвестно': ('SUBSCRIPTION_STATUS_UNKNOWN', '<tg-emoji emoji-id="5873121512445187130">❓</tg-emoji> '),
     }
     status = subscription.status_display
     if status in status_keys:
         status_key, emoji = status_keys[status]
-        status = f'{emoji} {texts.t(status_key)}'
+        status = f'{emoji}{texts.t(status_key)}'
 
     text = texts.t(
         'SUBSCRIPTION_UI_DETAIL',
-        '📋 <b>{name}</b>\n\nСтатус: {status}\n📊 Трафик: {traffic}\n📱 Устройства: {devices}\n📅 До: {date}\n',
+        '<b>{name}</b>\n\nСтатус: {status}\n<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> Трафик: {traffic}\n<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> Устройства: {devices}\n<tg-emoji emoji-id="5967412305338568701">📅</tg-emoji> До: {date}\n',
     ).format(
         name=tariff_name,
         status=status,
@@ -342,7 +385,9 @@ async def show_subscription_detail(
 
     subscription_link = get_display_subscription_link(subscription)
     if subscription_link and not settings.should_hide_subscription_link():
-        text += f'\n🔗 <code>{html.escape(subscription_link)}</code>'
+        text += (
+            f'\n<tg-emoji emoji-id="5877465816030515018">🔗</tg-emoji> <code>{html.escape(subscription_link)}</code>'
+        )
 
     text = compact_blank_lines(text)
 
@@ -464,7 +509,7 @@ async def handle_subscription_devices(
         get_texts(db_user.language)
         .t(
             'SUBSCRIPTION_UI_DEVICES_MENU',
-            '📱 <b>Устройства</b>\n\nТекущий лимит: {devices} устройств',
+            '<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> <b>Устройства</b>\n\nТекущий лимит: {devices} устройств',
         )
         .format(devices=current_devices)
     )
@@ -475,7 +520,8 @@ async def handle_subscription_devices(
             [
                 types.InlineKeyboardButton(
                     text=get_texts(getattr(db_user, 'language', None)).t(
-                        'SUBSCRIPTION_UI_BUY_DEVICES', '➕ Докупить устройства'
+                        'SUBSCRIPTION_UI_BUY_DEVICES',
+                        '<tg-emoji emoji-id="5877219383691972108">➕</tg-emoji> Докупить устройства',
                     ),
                     callback_data=f'change_devices_menu:{sub_id}',
                 )
@@ -485,7 +531,8 @@ async def handle_subscription_devices(
         [
             types.InlineKeyboardButton(
                 text=get_texts(getattr(db_user, 'language', None)).t(
-                    'SUBSCRIPTION_UI_MANAGE_DEVICES', '📱 Управление устройствами'
+                    'SUBSCRIPTION_UI_MANAGE_DEVICES',
+                    '<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> Управление устройствами',
                 ),
                 callback_data=f'device_management:{sub_id}',
             )
@@ -494,7 +541,9 @@ async def handle_subscription_devices(
     keyboard.append(
         [
             types.InlineKeyboardButton(
-                text=get_texts(getattr(db_user, 'language', None)).t('SUBSCRIPTION_UI_BACK', '◀️ Назад'),
+                text=get_texts(getattr(db_user, 'language', None)).t(
+                    'SUBSCRIPTION_UI_BACK', '<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Назад'
+                ),
                 callback_data=f'sm:{sub_id}',
             )
         ]
@@ -576,14 +625,17 @@ async def handle_subscription_delete_confirm(
 
     text = texts.t(
         'SUBSCRIPTION_UI_DELETE_CONFIRM',
-        '🗑 <b>Удалить подписку «{name}»?</b>\n\n⚠️ Подписка будет удалена безвозвратно.\nВсе данные, устройства и настройки будут потеряны.\nЭто действие нельзя отменить.',
+        '<tg-emoji emoji-id="5879896690210639947">🗑</tg-emoji> <b>Удалить подписку «{name}»?</b>\n\n<tg-emoji emoji-id="5881702736843511327">⚠️</tg-emoji> Подписка будет удалена безвозвратно.\nВсе данные, устройства и настройки будут потеряны.\nЭто действие нельзя отменить.',
     ).format(name=tariff_name)
 
     keyboard = types.InlineKeyboardMarkup(
         inline_keyboard=[
             [
                 types.InlineKeyboardButton(
-                    text=texts.t('SUBSCRIPTION_UI_CONFIRM_DELETE', '🗑 Да, удалить'),
+                    text=texts.t(
+                        'SUBSCRIPTION_UI_CONFIRM_DELETE',
+                        '<tg-emoji emoji-id="5879896690210639947">🗑</tg-emoji> Да, удалить',
+                    ),
                     callback_data=f'sub_del_yes:{sub_id}',
                 )
             ],
