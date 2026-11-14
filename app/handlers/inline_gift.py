@@ -35,6 +35,10 @@ from app.database.database import AsyncSessionLocal
 from app.database.models import InlineGiftSubscription, SubscriptionStatus, TransactionType
 from app.localization.loader import DEFAULT_LANGUAGE
 from app.localization.texts import get_texts
+from app.services.inline_gift_draft_service import (
+    load_gift_draft,
+    materialize_gift_draft,
+)
 from app.services.subscription_service import SubscriptionService
 from app.utils.button_emoji import make_button
 
@@ -301,9 +305,14 @@ def _check_recipient(gift: InlineGiftSubscription, telegram_id: int, username: s
 
 
 async def inline_gift_exists(gift_code: str) -> bool:
-    """True, если код принадлежит inline-подарку (для legacy-ссылок без bs_)."""
+    """True, если код принадлежит inline-подарку (БД или Redis-черновик)."""
     if not gift_code:
         return False
+    # The draft is written when the inline query is answered, before Telegram's
+    # (optional) chosen_inline_result update. Checking it first keeps bare-code
+    # deep links working even when feedback delivery is disabled.
+    if await load_gift_draft(gift_code) is not None:
+        return True
     async with AsyncSessionLocal() as session:
         result = await session.execute(
             select(InlineGiftSubscription.id).where(InlineGiftSubscription.gift_code == gift_code).limit(1)
@@ -322,6 +331,20 @@ async def handle_gift_deeplink(message: types.Message, gift_code: str, state=Non
         gift = result.scalars().first()
 
         if not gift:
+            # The row is normally created by chosen_inline_result. If Telegram
+            # never delivered it (inline feedback disabled / probabilistic
+            # delivery), restore the gift from the Redis draft written at
+            # inline-query time instead of silently falling through to the menu.
+            gift = await materialize_gift_draft(session, gift_code)
+
+        if not gift:
+            # Called speculatively for bare codes/referral payloads too, so keep
+            # this at debug level; the explicit `bs_` branch in start.py warns.
+            logger.debug(
+                'Inline gift code not found',
+                gift_code_prefix=(gift_code or '')[:8],
+                telegram_id=telegram_id,
+            )
             return False
 
         user = await get_user_by_telegram_id(session, telegram_id)
@@ -410,6 +433,8 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
     async with AsyncSessionLocal() as db:
         result = await db.execute(select(InlineGiftSubscription).where(InlineGiftSubscription.gift_code == gift_code))
         gift = result.scalars().first()
+        if not gift:
+            gift = await materialize_gift_draft(db, gift_code)
 
         user = await get_user_by_telegram_id(db, telegram_id)
         language = user.language if user else DEFAULT_LANGUAGE
@@ -1112,7 +1137,7 @@ async def _update_inline_button(
         return
     try:
         if remaining > 0 and gift_code:
-            bot_username = settings.BOT_USERNAME or ''
+            bot_username = settings.get_bot_username() or ''
             deep_link = f'https://t.me/{bot_username}?start=bs_{gift_code}'
             kb = types.InlineKeyboardMarkup(inline_keyboard=[[make_button(text=text, url=deep_link)]])
         else:
@@ -1160,8 +1185,14 @@ async def show_pending_inline_gift(
     gift_code: str,
     telegram_id: int | None = None,
     username: str | None = None,
-) -> None:
-    """Called after new user registration when they arrived via a gift link."""
+) -> bool:
+    """Called after new user registration when they arrived via a gift link.
+
+    Returns ``True`` when the gift was delivered to the user (preview or a
+    terminal "already activated"/"wrong recipient" notice) and the main menu
+    should be suppressed. Returns ``False`` when nothing could be shown, so the
+    caller keeps the normal post-registration flow instead of dead-ending.
+    """
     if telegram_id is None:
         telegram_id = message.from_user.id
         username = (message.from_user.username or '').lower()
@@ -1175,7 +1206,15 @@ async def show_pending_inline_gift(
         gift = result.scalars().first()
 
         if not gift:
-            return
+            gift = await materialize_gift_draft(session, gift_code)
+
+        if not gift:
+            logger.warning(
+                'Inline gift not found after registration',
+                gift_code_prefix=(gift_code or '')[:8],
+                telegram_id=telegram_id,
+            )
+            return False
 
         user = await get_user_by_telegram_id(session, telegram_id)
         language = user.language if user else DEFAULT_LANGUAGE
@@ -1186,7 +1225,7 @@ async def show_pending_inline_gift(
 
         if gift.is_activated or activated >= max_act:
             await message.answer(texts.t('INLINE_GIFT_ALREADY_ACTIVATED', 'Этот подарок уже был активирован.'))
-            return
+            return True
 
         if not _check_recipient(gift, telegram_id, username):
             await message.answer(
@@ -1195,7 +1234,7 @@ async def show_pending_inline_gift(
                     'Этот подарок предназначен другому пользователю.',
                 )
             )
-            return
+            return True
 
         if gift.recipient_telegram_id == 0 and max_act == 1:
             gift.recipient_telegram_id = telegram_id
@@ -1236,6 +1275,7 @@ async def show_pending_inline_gift(
         reset_traffic=bool(gift.reset_traffic),
     )
     await message.answer(text_out, reply_markup=keyboard, parse_mode='HTML')
+    return True
 
 
 def register_handlers(dp: Dispatcher) -> None:

@@ -57,6 +57,10 @@ from app.database.database import AsyncSessionLocal
 from app.database.models import InlineGiftSubscription, User
 from app.localization.loader import DEFAULT_LANGUAGE
 from app.localization.texts import get_texts
+from app.services.inline_gift_draft_service import (
+    drop_gift_draft,
+    save_gift_draft,
+)
 
 
 logger = structlog.get_logger(__name__)
@@ -143,6 +147,93 @@ class ParsedQuery:
             )
             > 1
         )
+
+
+def _gift_components(parsed: ParsedQuery) -> list[str]:
+    """Human/machine list of the components carried by the parsed query."""
+    components = []
+    if parsed.has_subscription:
+        components.append('subscription')
+    if parsed.has_discount:
+        components.append('discount')
+    if parsed.has_balance:
+        components.append('balance')
+    if parsed.has_temp:
+        components.append('temp_traffic')
+    if parsed.has_reset:
+        components.append('reset')
+    return components
+
+
+def _gift_payload_fields(
+    parsed: ParsedQuery,
+    db_user: User | None,
+    *,
+    sender_user_id: int | None = None,
+) -> dict[str, object]:
+    """Map a parsed inline query to ``InlineGiftSubscription`` column values.
+
+    Shared by the query-answer draft and the ``chosen_inline_result`` insert so
+    both paths persist exactly the same gift. ``recipient_telegram_id`` is kept
+    non-null: phantom/email users have ``User.telegram_id`` unset and assigning
+    NULL to the NOT NULL column used to make the insert fail silently.
+    """
+    if parsed.is_multi:
+        return {
+            'recipient_telegram_id': 0,
+            'sender_user_id': sender_user_id,
+            'gift_type': 'subscription',
+            'days': parsed.days,
+            'traffic_limit_gb': parsed.traffic_gb,
+            'device_limit': parsed.devices,
+            'discount_percent': None,
+            'balance_amount_kopeks': None,
+            'temp_traffic_gb': None,
+            'temp_traffic_days': None,
+            'reset_traffic': None,
+            'max_activations': parsed.multi_count,
+            'intended_recipient': None,
+        }
+
+    components = _gift_components(parsed)
+    gift_type = 'combo' if len(components) > 1 else components[0]
+
+    db_telegram_id = getattr(db_user, 'telegram_id', None) if db_user else None
+    recipient_telegram_id = db_telegram_id or parsed.target_id or 0
+
+    intended_sentinel = None
+    if not db_user:
+        if parsed.target_id:
+            intended_sentinel = f'tid:{parsed.target_id}'
+        elif parsed.username:
+            intended_sentinel = f'u:{parsed.username}'
+
+    return {
+        'recipient_telegram_id': recipient_telegram_id,
+        'sender_user_id': sender_user_id,
+        'gift_type': gift_type,
+        'days': parsed.days,
+        'traffic_limit_gb': parsed.traffic_gb,
+        'device_limit': parsed.devices,
+        'discount_percent': parsed.discount_percent if parsed.has_discount else None,
+        'balance_amount_kopeks': parsed.balance_rub * 100 if parsed.has_balance else None,
+        'temp_traffic_gb': parsed.temp_traffic_gb if parsed.has_temp else None,
+        'temp_traffic_days': (parsed.temp_traffic_days or 30) if parsed.has_temp else None,
+        'reset_traffic': parsed.reset_traffic if parsed.has_reset else None,
+        'max_activations': 1,
+        'intended_recipient': intended_sentinel,
+    }
+
+
+def _build_gift_deep_link(gift_code: str) -> str:
+    """Canonical ``t.me`` deep link for an inline gift.
+
+    Uses the normalised username (no leading ``@``): a raw ``BOT_USERNAME`` with
+    ``@`` or a stale value produced ``https://t.me/@bot?start=…`` and links that
+    opened the wrong chat.
+    """
+    bot_username = settings.get_bot_username() or ''
+    return f'https://t.me/{bot_username}?start=bs_{gift_code}'
 
 
 def _parse_val(s: str, allow_neg_one: bool = False) -> int | None:
@@ -565,8 +656,7 @@ async def handle_admin_inline_query(inline_query: types.InlineQuery) -> None:
             texts,
         )
         gift_code = secrets.token_urlsafe(32)
-        bot_username = settings.BOT_USERNAME or ''
-        deep_link = f'https://t.me/{bot_username}?start={gift_code}'
+        deep_link = _build_gift_deep_link(gift_code)
         caption = _build_subscription_caption(
             '',
             parsed.days,
@@ -588,6 +678,9 @@ async def handle_admin_inline_query(inline_query: types.InlineQuery) -> None:
                 ]
             ]
         )
+        # Persist the payload under the generated code so /start can still
+        # materialise the gift if chosen_inline_result is not delivered.
+        await save_gift_draft(gift_code, **_gift_payload_fields(parsed, None))
         results = [
             _gift_result(
                 gift_code,
@@ -674,8 +767,7 @@ async def handle_admin_inline_query(inline_query: types.InlineQuery) -> None:
         return
 
     gift_code = secrets.token_urlsafe(32)
-    bot_username = settings.BOT_USERNAME or ''
-    deep_link = f'https://t.me/{bot_username}?start=bs_{gift_code}'
+    deep_link = _build_gift_deep_link(gift_code)
     keyboard = types.InlineKeyboardMarkup(
         inline_keyboard=[
             [
@@ -686,6 +778,9 @@ async def handle_admin_inline_query(inline_query: types.InlineQuery) -> None:
             ]
         ]
     )
+    # Persist the payload under the generated code so /start can still
+    # materialise the gift if chosen_inline_result is not delivered.
+    await save_gift_draft(gift_code, **_gift_payload_fields(parsed, db_user))
 
     # Build combined caption / description / title from all components
     caption = _build_combo_caption(recipient_display, parsed, texts)
@@ -760,6 +855,12 @@ async def handle_chosen_inline_result(chosen: types.ChosenInlineResult) -> None:
         return
 
     inline_message_id = chosen.inline_message_id
+    logger.info(
+        'Chosen inline result received',
+        result_id_prefix=gift_code[:8],
+        has_inline_message_id=bool(inline_message_id),
+        from_user_id=chosen.from_user.id,
+    )
     if not inline_message_id:
         logger.warning(
             'Chosen inline result has no inline_message_id; the inline message '
@@ -777,21 +878,24 @@ async def handle_chosen_inline_result(chosen: types.ChosenInlineResult) -> None:
         if parsed.is_multi:
             has_params = parsed.days is not None or parsed.traffic_gb is not None or parsed.devices is not None
             if not has_params:
+                logger.warning('Chosen multi-activation gift has no parameters', result_id=gift_code)
                 return
+            fields = _gift_payload_fields(parsed, None, sender_user_id=admin_user.id if admin_user else None)
             gift = InlineGiftSubscription(
                 gift_code=gift_code,
-                recipient_telegram_id=0,
-                sender_user_id=admin_user.id if admin_user else None,
-                gift_type='subscription',
-                days=parsed.days,
-                traffic_limit_gb=parsed.traffic_gb,
-                device_limit=parsed.devices,
-                max_activations=parsed.multi_count,
-                activated_count=0,
                 inline_message_id=inline_message_id,
+                activated_count=0,
+                is_activated=False,
+                **fields,
             )
             db.add(gift)
-            await db.commit()
+            try:
+                await db.commit()
+            except Exception:
+                await db.rollback()
+                logger.exception('Failed to create multi-activation gift', gift_code_prefix=gift_code[:8])
+                return
+            await drop_gift_draft(gift_code)
             logger.info(
                 'Multi-activation gift created',
                 gift_code=gift_code,
@@ -805,64 +909,50 @@ async def handle_chosen_inline_result(chosen: types.ChosenInlineResult) -> None:
         elif parsed.username:
             result = await db.execute(select(User).where(sql_func.lower(User.username) == parsed.username.lower()))
         else:
+            logger.warning('Chosen inline gift has no resolvable target', result_id=gift_code)
             return
 
         db_user = result.scalars().first()
-        recipient_telegram_id = db_user.telegram_id if db_user else (parsed.target_id or 0)
-
-        intended_sentinel = None
-        if not db_user:
-            if parsed.target_id:
-                intended_sentinel = f'tid:{parsed.target_id}'
-            else:
-                intended_sentinel = f'u:{parsed.username}'
 
         if not parsed.has_any:
+            logger.warning('Chosen inline gift has no components', result_id=gift_code, query=query_text[:64])
             return
 
-        components = []
-        if parsed.has_subscription:
-            components.append('subscription')
-        if parsed.has_discount:
-            components.append('discount')
-        if parsed.has_balance:
-            components.append('balance')
-        if parsed.has_temp:
-            components.append('temp_traffic')
-        if parsed.has_reset:
-            components.append('reset')
-
-        gift_type = 'combo' if len(components) > 1 else components[0]
-
+        fields = _gift_payload_fields(
+            parsed,
+            db_user,
+            sender_user_id=admin_user.id if admin_user else None,
+        )
         gift = InlineGiftSubscription(
             gift_code=gift_code,
-            recipient_telegram_id=recipient_telegram_id,
-            sender_user_id=admin_user.id if admin_user else None,
-            gift_type=gift_type,
-            days=parsed.days,
-            traffic_limit_gb=parsed.traffic_gb,
-            device_limit=parsed.devices,
-            discount_percent=parsed.discount_percent if parsed.has_discount else None,
-            balance_amount_kopeks=parsed.balance_rub * 100 if parsed.has_balance else None,
-            temp_traffic_gb=parsed.temp_traffic_gb if parsed.has_temp else None,
-            temp_traffic_days=(parsed.temp_traffic_days or 30) if parsed.has_temp else None,
-            reset_traffic=parsed.reset_traffic if parsed.has_reset else None,
             inline_message_id=inline_message_id,
-            intended_recipient=intended_sentinel,
+            activated_count=0,
+            is_activated=False,
+            **fields,
         )
 
         db.add(gift)
-        await db.commit()
+        try:
+            await db.commit()
+        except Exception:
+            await db.rollback()
+            logger.exception(
+                'Failed to create inline gift',
+                gift_code_prefix=gift_code[:8],
+                recipient_telegram_id=fields.get('recipient_telegram_id'),
+            )
+            return
+        await drop_gift_draft(gift_code)
         logger.info(
             'Inline gift created',
             gift_code=gift_code,
-            recipient_telegram_id=recipient_telegram_id,
-            gift_type=gift_type,
-            components=components,
+            recipient_telegram_id=fields.get('recipient_telegram_id'),
+            gift_type=fields.get('gift_type'),
+            components=_gift_components(parsed),
             target_id=parsed.target_id,
             username=parsed.username,
             db_user_found=db_user is not None,
-            intended_sentinel=intended_sentinel,
+            intended_sentinel=fields.get('intended_recipient'),
             inline_message_id=inline_message_id,
         )
 

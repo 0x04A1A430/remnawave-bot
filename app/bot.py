@@ -166,6 +166,7 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
     dp.message.middleware(GlobalErrorMiddleware())
     dp.callback_query.middleware(GlobalErrorMiddleware())
     dp.pre_checkout_query.middleware(GlobalErrorMiddleware())
+    dp.chosen_inline_result.middleware(GlobalErrorMiddleware())
     dp.message.middleware(MaintenanceMiddleware())
     dp.callback_query.middleware(MaintenanceMiddleware())
     blacklist_middleware = BlacklistMiddleware()

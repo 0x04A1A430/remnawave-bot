@@ -542,11 +542,12 @@ async def _activate_pending_inline_gift_after_registration(
     gift_code = data.get('pending_inline_gift_code')
     if not gift_code:
         return False
+    shown = False
     try:
         from app.handlers.inline_gift import show_pending_inline_gift
 
         effective_user = from_user or message.from_user
-        await show_pending_inline_gift(
+        shown = await show_pending_inline_gift(
             message,
             gift_code,
             telegram_id=effective_user.id,
@@ -559,7 +560,7 @@ async def _activate_pending_inline_gift_after_registration(
         )
     finally:
         await state.update_data(pending_inline_gift_code=None)
-    return True  # gift code existed, skip main menu
+    return bool(shown)
 
 
 _COUPON_ERROR_TEXTS = {
@@ -943,9 +944,7 @@ def _calculate_subscription_flags(subscription):
     grace_active = getattr(subscription, 'grace_session_open', False) is True
     has_active_subscription = actual_status in {'active', 'trial', 'limited'} or grace_active
     subscription_is_active = (
-        bool(getattr(subscription, 'is_active', False))
-        or actual_status == 'limited'
-        or grace_active
+        bool(getattr(subscription, 'is_active', False)) or actual_status == 'limited' or grace_active
     )
 
     return has_active_subscription, subscription_is_active
@@ -1425,7 +1424,25 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
             handled = await handle_gift_deeplink(message, gift_code, state)
             if handled:
                 return
-            start_parameter = None  # Don't treat as campaign or referral
+            pending_gift_code = (await state.get_data()).get('pending_inline_gift_code')
+            if pending_gift_code:
+                # Unregistered recipient: handle_gift_deeplink saved the code and
+                # the preview is shown once registration completes.
+                start_parameter = None
+            else:
+                logger.warning(
+                    'Inline gift deep link points to a missing gift',
+                    gift_code_prefix=gift_code[:8],
+                    telegram_id=message.from_user.id,
+                )
+                language = getattr(access_user, 'language', None) or data.get('language', DEFAULT_LANGUAGE)
+                await message.answer(
+                    get_texts(language).t(
+                        'INLINE_GIFT_NOT_FOUND',
+                        'Подарок не найден или истёк срок действия.',
+                    )
+                )
+                return
 
     # Legacy inline-gift links were generated without the bs_ prefix. Accept
     # those too, otherwise a bare gift code falls through to the referral branch
@@ -2465,6 +2482,15 @@ async def complete_registration_from_callback(callback: types.CallbackQuery, sta
 
         await db.refresh(existing_user, ['subscriptions'])
 
+        showed_gift = await _activate_pending_inline_gift_after_registration(
+            state,
+            callback.message,
+            from_user=callback.from_user,
+        )
+        if showed_gift:
+            await state.clear()
+            return
+
         existing_user_subs = getattr(existing_user, 'subscriptions', None) or []
         first_existing_sub = next(
             (s for s in existing_user_subs if s.is_active), existing_user_subs[0] if existing_user_subs else None
@@ -2830,6 +2856,11 @@ async def complete_registration(message: types.Message, state: FSMContext, db: A
             )
 
         await db.refresh(existing_user, ['subscriptions'])
+
+        showed_gift = await _activate_pending_inline_gift_after_registration(state, message)
+        if showed_gift:
+            await state.clear()
+            return
 
         existing_user_subs = getattr(existing_user, 'subscriptions', None) or []
         first_existing_sub = next(
@@ -3378,11 +3409,23 @@ async def required_sub_channel_check(
                             error=exc,
                         )
                 else:
-                    state_data['referral_code'] = pending_start_payload
-                    logger.info(
-                        'CHANNEL CHECK: Payload интерпретирован как реферальный код',
-                        pending_start_payload=pending_start_payload,
-                    )
+                    from app.handlers.inline_gift import inline_gift_exists
+
+                    gift_code = pending_start_payload.removeprefix('bs_')
+                    if gift_code and await inline_gift_exists(gift_code):
+                        state_data['pending_inline_gift_code'] = gift_code
+                        # An inline gift is not valid registration-invite evidence.
+                        state_data.pop('registration_invite_payload', None)
+                        logger.info(
+                            'CHANNEL CHECK: Inline gift restored from payload',
+                            gift_code_prefix=gift_code[:8],
+                        )
+                    else:
+                        state_data['referral_code'] = pending_start_payload
+                        logger.info(
+                            'CHANNEL CHECK: Payload интерпретирован как реферальный код',
+                            pending_start_payload=pending_start_payload,
+                        )
             else:
                 logger.info(
                     'CHANNEL CHECK: Реферальный код уже сохранен в state',
@@ -3449,6 +3492,25 @@ async def required_sub_channel_check(
         if pending_start_payload:
             await delete_pending_payload_from_redis(query.from_user.id)
             logger.info('CHANNEL CHECK: Redis payload удален после успешной проверки подписки')
+
+        pending_gift_code = state_data.get('pending_inline_gift_code')
+        if pending_gift_code and user and user.status != UserStatus.DELETED.value:
+            from app.handlers.inline_gift import show_pending_inline_gift
+
+            showed_gift = await show_pending_inline_gift(
+                query.message,
+                pending_gift_code,
+                telegram_id=query.from_user.id,
+                username=query.from_user.username,
+            )
+            await state.update_data(pending_inline_gift_code=None)
+            if showed_gift:
+                logger.info(
+                    'CHANNEL CHECK: Inline gift preview shown after channel check',
+                    gift_code_prefix=pending_gift_code[:8],
+                    telegram_id=query.from_user.id,
+                )
+                return None
 
         if user and user.status != UserStatus.DELETED.value:
             # Uses primary subscription (multi-tariff compatible via property)
