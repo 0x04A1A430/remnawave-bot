@@ -57,8 +57,6 @@ RECENT_WINDOW: Final[timedelta] = timedelta(hours=24)
 NO_VALUE: Final[str] = '—'
 
 # URL-ы
-GITHUB_BOT_URL: Final[str] = 'https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot'
-GITHUB_CABINET_URL: Final[str] = 'https://github.com/BEDOLAGA-DEV/bedolaga-cabinet'
 COMMUNITY_URL: Final[str] = 'https://t.me/+wTdMtSWq8YdmZmVi'
 DEVELOPER_CONTACT_URL: Final[str] = 'https://t.me/fringg'
 

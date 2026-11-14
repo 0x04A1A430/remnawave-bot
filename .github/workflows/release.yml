@@ -67,9 +67,6 @@ jobs:
           CHORE=$(git log $RANGE --pretty=format:"%s|%an|%h" --no-merges | grep -iE "^chore|^ci|^build|^test" || true)
           OTHER=$(git log $RANGE --pretty=format:"%s|%an|%h" --no-merges | grep -ivE "^(feat|fix|perf|refactor|docs|style|chore|ci|build|test)" || true)
 
-          # Collect unique contributors
-          CONTRIBUTORS=$(git log $RANGE --pretty=format:"%an" --no-merges | sort -u)
-
           # Stats
           TOTAL_COMMITS=$(git log $RANGE --oneline --no-merges | wc -l | tr -d ' ')
           FILES_CHANGED=$(git diff --stat $RANGE 2>/dev/null | tail -1 || echo "N/A")
@@ -133,14 +130,6 @@ jobs:
             fi
 
             echo "---"
-            echo ""
-            echo "### Contributors"
-            echo ""
-            if [ -n "$CONTRIBUTORS" ]; then
-              echo "$CONTRIBUTORS" | while read -r name; do
-                echo "- @${name}"
-              done
-            fi
             echo ""
             echo "### Stats"
             echo ""
