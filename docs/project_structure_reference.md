@@ -5247,6 +5247,9 @@
 - `tests/services/test_backup_covers_all_payments.py` — Python-модуль
   Классы: нет
   Функции: `test_every_payment_table_is_exported`, `test_export_list_has_no_phantom_payment_tables` — Обратная сторона: модель в списке, а таблицы уже нет., `test_payment_table_is_cleared_on_restore` — Восстановление «с заменой» должно чистить и таблицы платежей.
+- `tests/services/test_backup_notification_style.py` — Python-модуль
+  Классы: нет
+  Функции: `test_backup_notification_is_branded_and_has_one_button`
 - `tests/services/test_backup_schedule_skip.py` — Python-модуль
   Классы: нет
   Функции: `test_skips_all_missed_hourly_slots_in_one_step`, `test_skips_missed_15min_slots`, `test_future_next_run_advances_by_one_interval`

@@ -17,7 +17,7 @@ from zoneinfo import ZoneInfo
 import aiofiles
 import pyzipper
 import structlog
-from aiogram.types import FSInputFile
+from aiogram.types import FSInputFile, InlineKeyboardMarkup
 from sqlalchemy import inspect, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
@@ -581,11 +581,11 @@ class BackupService:
 
             size_mb = file_size / 1024 / 1024
             message = (
-                f'✓ Бекап успешно создан!\n'
-                f'▣ Файл: {filename}\n'
-                f'≡ Таблиц: {overview.get("tables_count", 0)}\n'
-                f'↑ Записей: {overview.get("total_records", 0):,}\n'
-                f'«Размер»: {size_mb:.2f} MB'
+                f'Бекап успешно создан!\n'
+                f'Файл: {filename}\n'
+                f'Таблиц: {overview.get("tables_count", 0)}\n'
+                f'Записей: {overview.get("total_records", 0):,}\n'
+                f'Размер: {size_mb:.2f} MB'
             )
 
             logger.info(message)
@@ -993,10 +993,10 @@ class BackupService:
             self._invalidate_restored_caches()
 
             message = (
-                f'✓ Восстановление завершено!\n'
-                f'≡ Таблиц: {metadata.get("tables_count", 0)}\n'
-                f'↑ Записей: {metadata.get("total_records", 0):,}\n'
-                f'▤ Дата бекапа: {metadata.get("timestamp", "неизвестно")}'
+                f'Восстановление завершено!\n'
+                f'Таблиц: {metadata.get("tables_count", 0)}\n'
+                f'Записей: {metadata.get("total_records", 0):,}\n'
+                f'Дата бекапа: {metadata.get("timestamp", "неизвестно")}'
             )
 
             logger.info(message)
@@ -1299,10 +1299,10 @@ class BackupService:
         self._invalidate_restored_caches()
 
         message = (
-            f'✓ Восстановление завершено!\n'
-            f'≡ Таблиц: {restored_tables}\n'
-            f'↑ Записей: {restored_records:,}\n'
-            f'▤ Дата бекапа: {metadata.get("timestamp", "неизвестно")}'
+            f'Восстановление завершено!\n'
+            f'Таблиц: {restored_tables}\n'
+            f'Записей: {restored_records:,}\n'
+            f'Дата бекапа: {metadata.get("timestamp", "неизвестно")}'
         )
 
         logger.info(message)
@@ -2135,18 +2135,29 @@ class BackupService:
             if not settings.is_admin_notifications_enabled():
                 return
 
-            from app.utils.notification_card import card
+            from app.utils.notification_card import button, card, premium
 
-            emoji = '✅' if 'success' in event_type else '⚠'
-            safe_message = html_lib.escape(message) if 'error' in event_type else message
+            is_error = 'error' in event_type
+            title_by_event = {
+                'restore_success': 'Бекап восстановлен',
+                'restore_error': 'Ошибка восстановления',
+                'error': 'Ошибка бекапа',
+            }
+            title = title_by_event.get(event_type, 'Бекап создан')
+            safe_message = html_lib.escape(message) if is_error else message
             lines = [safe_message]
             if file_path:
-                lines.append(f'▣ <code>{html_lib.escape(Path(file_path).name)}</code>')
+                lines.append(f'{premium("📄")} <b>Файл:</b> <code>{html_lib.escape(Path(file_path).name)}</code>')
             notification_text = card(
-                emoji=emoji,
-                title='Система бекапов',
+                emoji='❌' if is_error else '✅',
+                title=title,
                 lines=lines,
                 note=datetime.now(UTC).strftime('%d.%m.%Y %H:%M:%S'),
+            )
+            keyboard = InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [button('К бекапам', '💾', callback_data='backup_panel', style='primary')],
+                ]
             )
 
             try:
@@ -2154,7 +2165,9 @@ class BackupService:
 
                 admin_service = AdminNotificationService(self.bot)
                 await admin_service.send_admin_notification(
-                    notification_text, category=NotificationCategory.INFRASTRUCTURE
+                    notification_text,
+                    reply_markup=keyboard,
+                    category=NotificationCategory.INFRASTRUCTURE,
                 )
             except Exception as e:
                 logger.error('Ошибка отправки уведомления через AdminNotificationService', error=e)
@@ -2191,17 +2204,16 @@ class BackupService:
             file_name = filename or Path(file_to_send).name
             from aiogram.types import InlineKeyboardMarkup
 
-            from app.utils.button_emoji import make_button
-            from app.utils.notification_card import card
+            from app.utils.notification_card import button, card, premium
 
             caption = card(
-                emoji='🗂',
+                emoji='💾',
                 title='@x1lagent · backup',
                 lines=[
-                    f'▣ <b>Файл:</b> <code>{html_lib.escape(file_name)}</code>',
-                    f'≡ <b>Таблиц:</b> {tables_count}',
-                    f'↑ <b>Записей:</b> {f"{total_records:,}".replace(",", " ")}',
-                    f'≡ <b>Размер:</b> {size_mb:.2f} MB',
+                    f'{premium("📄")} <b>Файл:</b> <code>{html_lib.escape(file_name)}</code>',
+                    f'{premium("📊")} <b>Таблиц:</b> {tables_count}',
+                    f'{premium("📈")} <b>Записей:</b> {f"{total_records:,}".replace(",", " ")}',
+                    f'{premium("📦")} <b>Размер:</b> {size_mb:.2f} MB',
                 ],
                 note=datetime.now(UTC).strftime('%d.%m.%Y %H:%M:%S'),
             )
@@ -2212,7 +2224,9 @@ class BackupService:
                 'caption': caption,
                 'parse_mode': 'HTML',
                 'reply_markup': InlineKeyboardMarkup(
-                    inline_keyboard=[[make_button('@x1lagent', url='https://t.me/x1lagent', style='primary')]]
+                    inline_keyboard=[
+                        [button('@x1lagent', '💬', url='https://t.me/x1lagent', style='primary')],
+                    ]
                 ),
             }
 

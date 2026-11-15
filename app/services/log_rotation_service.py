@@ -288,16 +288,18 @@ class LogRotationService:
         topic_id = settings.get_log_rotation_topic_id()
 
         try:
-            from app.utils.notification_card import card
+            from aiogram.types import InlineKeyboardMarkup
+
+            from app.utils.notification_card import button, card, premium
 
             file_size_kb = (await asyncio.to_thread(archive_path.stat)).st_size / 1024
             caption = card(
-                emoji='📄',
+                emoji='🗒',
                 title='@x1lagent · логи',
                 lines=[
-                    f'▣ <b>Файл:</b> <code>{html.escape(archive_path.name)}</code>',
-                    f'◷ <b>Дата:</b> {date_str}',
-                    f'≡ <b>Размер:</b> {file_size_kb:.1f} KB',
+                    f'{premium("📄")} <b>Файл:</b> <code>{html.escape(archive_path.name)}</code>',
+                    f'{premium("📅")} <b>Дата:</b> {date_str}',
+                    f'{premium("📦")} <b>Размер:</b> {file_size_kb:.1f} KB',
                 ],
                 note=datetime.now(get_local_timezone()).strftime('%d.%m.%Y %H:%M'),
             )
@@ -307,6 +309,11 @@ class LogRotationService:
                 'document': FSInputFile(archive_path),
                 'caption': caption,
                 'parse_mode': 'HTML',
+                'reply_markup': InlineKeyboardMarkup(
+                    inline_keyboard=[
+                        [button('К логам', '🗒', callback_data='admin_system_logs', style='primary')],
+                    ]
+                ),
             }
 
             if topic_id:

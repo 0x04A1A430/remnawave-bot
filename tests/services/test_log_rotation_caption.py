@@ -31,3 +31,6 @@ async def test_log_archive_caption_uses_branded_card(monkeypatch, tmp_path) -> N
     assert 'logs_2026-11-12.tar.gz' in caption
     assert call.kwargs['chat_id'] == 123
     assert call.kwargs['message_thread_id'] == 456
+    buttons = [button for row in call.kwargs['reply_markup'].inline_keyboard for button in row]
+    assert len(buttons) == 1
+    assert buttons[0].callback_data == 'admin_system_logs'
