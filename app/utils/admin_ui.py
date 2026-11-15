@@ -31,7 +31,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from app.utils.button_emoji import make_button
-from app.utils.text_compact import compact_blank_lines
+from app.utils.text_compact import compact_blank_lines, compact_message_spacing
 
 
 @dataclass(frozen=True)
@@ -422,6 +422,130 @@ def _infer_button_icon(callback: str, text: str) -> str | None:
     return 'settings' if _is_admin_callback(callback) else None
 
 
+_DANGER_MARKERS = (
+    'delete',
+    'remove',
+    'clear',
+    'reset',
+    'revoke',
+    'stop',
+    'disable',
+    'deactivate',
+    'block_user',
+    'ban_user',
+    'block_ticket',
+    'admin_block_user',
+    'close_ticket',
+    'close_all',
+    'drop',
+    'wipe',
+    'удал',
+    'очист',
+    'сброс',
+    'отключ',
+    'деактив',
+    'заблокировать',
+    'закрыть',
+)
+_SUCCESS_MARKERS = (
+    'unblock',
+    'confirm',
+    'save',
+    'create',
+    'add',
+    'apply',
+    'enable',
+    'activate',
+    'start',
+    'send',
+    'publish',
+    'restore',
+    'topup',
+    'pay',
+    'разблок',
+    'подтверд',
+    'сохран',
+    'создат',
+    'добав',
+    'примен',
+    'включ',
+    'актив',
+    'запуст',
+    'отправ',
+    'опублик',
+    'восстанов',
+    'пополн',
+    'оплат',
+)
+_PRIMARY_MARKERS = (
+    'list',
+    'view',
+    'show',
+    'stats',
+    'settings',
+    'edit',
+    'open',
+    'filter',
+    'export',
+    'download',
+    'detail',
+    'info',
+    'select',
+    'choose',
+    'history',
+    'log',
+    'report',
+    'search',
+    'refresh',
+    'sync',
+    'список',
+    'просмотр',
+    'статистик',
+    'настрой',
+    'поиск',
+    'редакт',
+    'открыт',
+    'фильтр',
+    'экспорт',
+    'скач',
+    'подроб',
+    'истор',
+    'лог',
+    'отчёт',
+    'обнов',
+)
+
+
+def _infer_button_style(callback: str, text: str) -> str | None:
+    """Семантический цвет: зелёный — важное/подтверждения, синий — меню/навигация, красный — опасное."""
+    if not _is_admin_callback(callback):
+        return None
+
+    if _is_blocked_user_button(callback, text):
+        return 'danger'
+    # Обычные строки пользователей не красим: красный только у забаненных.
+    if callback.startswith('admin_user_manage_'):
+        return None
+    # «Назад» — навигация, а не опасное действие.
+    if _looks_like_back(callback, text):
+        return None
+    if _is_pagination_button(callback, text):
+        return 'primary'
+
+    lowered = f'{callback} {text}'.lower()
+    # unblock/разблокировать — позитивное действие, а не block.
+    if any(marker in lowered for marker in ('unblock', 'разблок')):
+        return 'success'
+    if any(marker in lowered for marker in _DANGER_MARKERS):
+        return 'danger'
+    if any(marker in lowered for marker in _SUCCESS_MARKERS):
+        return 'success'
+    if any(marker in lowered for marker in _PRIMARY_MARKERS):
+        return 'primary'
+    # Меню и важные разделы — синие.
+    return 'primary'
+
+
 def admin_icon(name: str) -> str:
     """HTML premium-иконки по имени; неизвестное имя — пустая строка."""
     icon = ADMIN_ICONS.get(name)
@@ -453,6 +577,7 @@ def admin_screen(
     if emoji and not prepared.startswith('<tg-emoji'):
         prepared = f'{emoji} {prepared}'
 
+    prepared = compact_message_spacing(prepared)
     if compact:
         prepared = compact_blank_lines(prepared)
     return prepared
@@ -552,11 +677,12 @@ def decorate_admin_markup(markup: Any) -> Any:
                     text = cleaned
 
             if is_pagination:
-                # Служебные стрелки/счётчики: без premium-эмодзи и цвета.
+                # Служебные стрелки/счётчики: без premium-эмодзи, но это
+                # навигация — синий цвет меню.
                 if button.icon_custom_emoji_id:
                     updates['icon_custom_emoji_id'] = None
-                if button.style:
-                    updates['style'] = None
+                if button.style != 'primary':
+                    updates['style'] = 'primary'
             elif _looks_like_back(callback, text):
                 # «Назад»: стрелка уже есть в тексте, иконка и цвет не нужны.
                 if button.icon_custom_emoji_id:
@@ -564,9 +690,8 @@ def decorate_admin_markup(markup: Any) -> Any:
                 if button.style:
                     updates['style'] = None
             else:
-                # Красный — только забаненные пользователи, остальное нейтрально.
                 is_blocked = _is_blocked_user_button(callback, text)
-                desired_style = 'danger' if is_blocked else None
+                desired_style = _infer_button_style(callback, text)
                 if button.style != desired_style:
                     updates['style'] = desired_style
 

@@ -474,6 +474,15 @@ def _sanitize_method(method: TelegramMethod[TelegramType]) -> TelegramMethod[Tel
 
     if isinstance(method, AnswerCallbackQuery) and method.text and '<tg-emoji' in method.text:
         updates['text'] = _TG_EMOJI_TAG_RE.sub(r'\1', method.text)
+    else:
+        from app.utils.text_compact import compact_message_spacing
+
+        for field in ('text', 'caption'):
+            value = getattr(method, field, None)
+            if isinstance(value, str):
+                compacted = compact_message_spacing(value)
+                if compacted != value:
+                    updates[field] = compacted
 
     return method.model_copy(update=updates) if updates else method
 

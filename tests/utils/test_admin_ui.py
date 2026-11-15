@@ -89,7 +89,7 @@ def test_admin_back_button_keeps_custom_label_intact():
     assert button.icon_custom_emoji_id is None
 
 
-def test_decorate_admin_markup_adds_icons_and_removes_bulk_colors():
+def test_decorate_admin_markup_adds_icons_and_semantic_colors():
     decorated = _decorated(
         [
             InlineKeyboardButton(text=' Настройки', callback_data='admin_submenu_settings', style='primary'),
@@ -100,9 +100,9 @@ def test_decorate_admin_markup_adds_icons_and_removes_bulk_colors():
 
     assert settings.text == 'Настройки'
     assert settings.icon_custom_emoji_id == ADMIN_ICONS['settings'].emoji_id
-    assert settings.style is None
+    assert settings.style == 'primary'
     assert updates.icon_custom_emoji_id == ADMIN_ICONS['updates'].emoji_id
-    assert updates.style is None
+    assert updates.style == 'primary'
 
 
 def test_decorate_admin_markup_keeps_unknown_buttons_untouched():
@@ -148,7 +148,7 @@ def test_decorate_admin_markup_back_has_no_icon_and_no_color():
         assert button.style is None
 
 
-def test_decorate_admin_markup_keeps_deep_menu_icons_and_neutralizes_actions():
+def test_decorate_admin_markup_keeps_deep_menu_icons_and_semantic_colors():
     decorated = _decorated(
         [
             InlineKeyboardButton(text='Сохранить', callback_data='admin_server_promo_save_1', style='success'),
@@ -163,7 +163,10 @@ def test_decorate_admin_markup_keeps_deep_menu_icons_and_neutralizes_actions():
     assert delete.icon_custom_emoji_id == ADMIN_ICONS['delete'].emoji_id
     assert closed.icon_custom_emoji_id == ADMIN_ICONS['chat'].emoji_id
     assert backups.icon_custom_emoji_id == ADMIN_ICONS['backup'].emoji_id
-    assert all(button.style is None for button in (save, delete, closed, backups))
+    assert save.style == 'success'
+    assert delete.style == 'danger'
+    assert closed.style == 'primary'
+    assert backups.style == 'primary'
 
 
 def test_decorate_admin_markup_deep_action_icons_by_text():
@@ -178,10 +181,17 @@ def test_decorate_admin_markup_deep_action_icons_by_text():
         ]
     )
 
-    expected = ['plus', 'edit', 'refresh', 'search', 'filter', 'chart']
-    for button, icon_name in zip(decorated.inline_keyboard[0], expected, strict=True):
+    expected = [
+        ('plus', 'success'),
+        ('edit', 'primary'),
+        ('refresh', 'primary'),
+        ('search', 'primary'),
+        ('filter', 'primary'),
+        ('chart', 'primary'),
+    ]
+    for button, (icon_name, style) in zip(decorated.inline_keyboard[0], expected, strict=True):
         assert button.icon_custom_emoji_id == ADMIN_ICONS[icon_name].emoji_id
-        assert button.style is None
+        assert button.style == style
 
 
 def test_decorate_admin_markup_keeps_explicit_deep_icon():
@@ -198,14 +208,14 @@ def test_decorate_admin_markup_keeps_explicit_deep_icon():
     button = decorated.inline_keyboard[0][0]
 
     assert button.icon_custom_emoji_id == ADMIN_ICONS['save'].emoji_id
-    assert button.style is None
+    assert button.style == 'success'
 
 
 def test_decorate_admin_markup_gives_unknown_admin_button_default_icon():
     decorated = _decorated([InlineKeyboardButton(text='Неизвестно', callback_data='admin_unknown_action')])
     button = decorated.inline_keyboard[0][0]
 
-    assert button.style is None
+    assert button.style == 'primary'
     assert button.icon_custom_emoji_id == ADMIN_ICONS['settings'].emoji_id
 
 
@@ -252,7 +262,7 @@ def test_decorate_admin_markup_pagination_has_no_icon_or_color():
 
     for button in decorated.inline_keyboard[0]:
         assert button.icon_custom_emoji_id is None
-        assert button.style is None
+        assert button.style == 'primary'
 
 
 def test_decorate_admin_markup_clears_shared_pagination_callbacks():
@@ -270,7 +280,7 @@ def test_decorate_admin_markup_clears_shared_pagination_callbacks():
 
     for button in decorated.inline_keyboard[0]:
         assert button.icon_custom_emoji_id is None
-        assert button.style is None
+        assert button.style == 'primary'
 
 
 def test_decorate_admin_markup_leaves_user_buttons_untouched():
@@ -312,4 +322,4 @@ def test_decorate_admin_markup_does_not_treat_backup_as_back():
     button = decorated.inline_keyboard[0][0]
 
     assert button.icon_custom_emoji_id == ADMIN_ICONS['backup'].emoji_id
-    assert button.style is None
+    assert button.style == 'primary'
