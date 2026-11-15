@@ -79,7 +79,7 @@ class BlacklistService:
                 # Получаем содержимое файла
                 async with aiohttp.ClientSession() as session, session.get(raw_url) as response:
                     if response.status != 200:
-                        logger.error('Ошибка при получении черного списка', status=response.status)
+                        logger.error('Ошибка при получении черного списка', status=response.status, url=raw_url)
                         return False
 
                     content = await response.text()
@@ -205,8 +205,15 @@ class BlacklistService:
 
     async def get_all_blacklisted_users(self) -> list[tuple[int, str, str]]:
         """
-        Возвращает весь черный список
+        Возвращает весь черный список.
+
+        При отключённой проверке не ходим в сеть автоматически: иначе любое
+        открытие админ-меню настроек дёргает GitHub и пишет ошибку, если URL
+        недоступен. Принудительное обновление остаётся доступно через кнопку.
         """
+        if not self.is_blacklist_check_enabled():
+            return self.blacklist_data.copy()
+
         interval_hours = self.get_blacklist_update_interval_hours()
         required_interval = timedelta(hours=interval_hours)
         if not self.blacklist_data or (self.last_update and datetime.now(UTC) - self.last_update > required_interval):

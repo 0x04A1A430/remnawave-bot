@@ -306,17 +306,13 @@ async def show_blocked_users_menu(
     data = await state.get_data()
     scan_result = data.get('blocked_users_scan_result')
 
-    text = BlockedUsersText.MENU_TITLE.localized(texts) + BlockedUsersText.MENU_DESCRIPTION.localized(db_user.language)
+    text = BlockedUsersText.MENU_TITLE.localized(texts) + BlockedUsersText.MENU_DESCRIPTION.localized(texts)
 
     if scan_result:
-        text += (
-            get_texts(db_user.language)
-            .t(
-                'ADMIN_BLOCKED_LAST_SCAN',
-                '\n\n <b>Последнее сканирование:</b>\n• Заблокированных: {blocked}\n• Активных: {active}',
-            )
-            .format(blocked=scan_result.get('blocked_count', 0), active=scan_result.get('active_users', 0))
-        )
+        text += texts.t(
+            'ADMIN_BLOCKED_LAST_SCAN',
+            '\n\n <b>Последнее сканирование:</b>\n• Заблокированных: {blocked}\n• Активных: {active}',
+        ).format(blocked=scan_result.get('blocked_count', 0), active=scan_result.get('active_users', 0))
 
     await callback.message.edit_text(
         text,
