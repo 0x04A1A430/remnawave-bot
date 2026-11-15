@@ -153,9 +153,12 @@ def _get_subscription_emoji(user: User) -> str:
 
 
 def _get_user_button_style(user: User) -> str | None:
-    """Цвет кнопки пользователя: красный остаётся только у забаненных."""
+    """Цвет кнопки пользователя: красный — забаненные, зелёный — с подпиской."""
     if user.status == UserStatus.BLOCKED.value:
         return 'danger'
+    subscriptions = getattr(user, 'subscriptions', None) or []
+    if any(getattr(sub, 'is_active', False) for sub in subscriptions):
+        return 'success'
     return None
 
 

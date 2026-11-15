@@ -138,3 +138,24 @@ async def test_admin_balance_ui_preserves_signed_amount_and_ledger_description(m
     assert message.answer.await_args.args[0] == get_texts(language).t('ADMIN_USERS_RESTRICTIONS_035').format(
         value1=action, value2=users.settings.format_price(abs(kopeks))
     )
+
+
+def test_user_list_status_colors():
+    from app.database.models import UserStatus
+    from app.handlers.admin import users
+
+    active_sub = SimpleNamespace(is_active=True)
+    expired_sub = SimpleNamespace(is_active=False)
+
+    assert (
+        users._get_user_button_style(SimpleNamespace(status=UserStatus.ACTIVE.value, subscriptions=[active_sub]))
+        == 'success'
+    )
+    assert (
+        users._get_user_button_style(SimpleNamespace(status=UserStatus.ACTIVE.value, subscriptions=[expired_sub]))
+        is None
+    )
+    assert (
+        users._get_user_button_style(SimpleNamespace(status=UserStatus.BLOCKED.value, subscriptions=[active_sub]))
+        == 'danger'
+    )

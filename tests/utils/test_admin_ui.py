@@ -219,17 +219,20 @@ def test_decorate_admin_markup_gives_unknown_admin_button_default_icon():
     assert button.icon_custom_emoji_id == ADMIN_ICONS['settings'].emoji_id
 
 
-def test_decorate_admin_markup_keeps_only_blocked_user_red():
+def test_decorate_admin_markup_keeps_user_status_colors():
     decorated = _decorated(
         [
             InlineKeyboardButton(text='Иван', callback_data='admin_user_manage_1'),
+            InlineKeyboardButton(text='Мария $', callback_data='admin_user_manage_3', style='success'),
             InlineKeyboardButton(text='× Пётр', callback_data='admin_user_manage_2', style='primary'),
         ]
     )
-    active, blocked = decorated.inline_keyboard[0]
+    active, subscribed, blocked = decorated.inline_keyboard[0]
 
     assert active.style is None
     assert active.icon_custom_emoji_id == ADMIN_ICONS['user'].emoji_id
+    assert subscribed.style == 'success'
+    assert subscribed.icon_custom_emoji_id == ADMIN_ICONS['user'].emoji_id
     assert blocked.style == 'danger'
     # «×» в тексте уже маркирует бан — лишнюю иконку не добавляем.
     assert blocked.icon_custom_emoji_id is None

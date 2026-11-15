@@ -692,6 +692,10 @@ def decorate_admin_markup(markup: Any) -> Any:
             else:
                 is_blocked = _is_blocked_user_button(callback, text)
                 desired_style = _infer_button_style(callback, text)
+                # Пользователи с подпиской остаются зелёными: цвет приходит
+                # из списка (`_get_user_button_style`), а не из callback.
+                if callback.startswith('admin_user_manage_') and not is_blocked and button.style == 'success':
+                    desired_style = 'success'
                 if button.style != desired_style:
                     updates['style'] = desired_style
 
