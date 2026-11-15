@@ -1,11 +1,12 @@
 """Политика визуального слоя админки.
 
 Закрепляем правила:
-- пагинация и «Назад» — без premium-иконок и без цвета;
+- пагинация и «Назад» — без premium-иконок; навигация синяя, не красная;
 - ``danger`` в админке остаётся только у забаненных пользователей;
+- пользователи с подпиской — зелёные;
 - иконки глубоких меню (save/delete/edit/refresh/search/chart/backup/chat …)
   сохраняются;
-- пользовательские кнопки не трогаются.
+- пользовательские кнопки не трогаются, кроме back/home навигации.
 """
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
@@ -18,6 +19,7 @@ from app.utils.admin_ui import (
     admin_quote,
     admin_screen,
     decorate_admin_markup,
+    normalize_navigation_markup,
 )
 
 
@@ -72,12 +74,12 @@ def test_admin_button_does_not_override_icon_from_text():
     assert button.icon_custom_emoji_id == ADMIN_ICONS['star'].emoji_id
 
 
-def test_admin_back_button_keeps_arrow_and_has_no_icon_or_style():
+def test_admin_back_button_keeps_arrow_and_has_no_icon():
     button = admin_back_button(_Texts, 'admin_panel')
 
     assert button.text == '← Назад'
     assert button.callback_data == 'admin_panel'
-    assert button.style is None
+    assert button.style == 'primary'
     assert button.icon_custom_emoji_id is None
 
 
@@ -85,7 +87,7 @@ def test_admin_back_button_keeps_custom_label_intact():
     button = admin_back_button(_Texts, 'admin_migration_cancel', label='← Отмена')
 
     assert button.text == '← Отмена'
-    assert button.style is None
+    assert button.style == 'primary'
     assert button.icon_custom_emoji_id is None
 
 
@@ -122,7 +124,7 @@ def test_decorate_admin_markup_strips_legacy_glyph():
     assert button.icon_custom_emoji_id == ADMIN_ICONS['users'].emoji_id
 
 
-def test_decorate_admin_markup_back_has_no_icon_and_no_color():
+def test_decorate_admin_markup_back_has_no_icon_and_is_blue():
     decorated = _decorated(
         [
             InlineKeyboardButton(
@@ -145,7 +147,7 @@ def test_decorate_admin_markup_back_has_no_icon_and_no_color():
     for button in (back_icon, back_arrow, cancel):
         assert button.text.startswith('←')
         assert button.icon_custom_emoji_id is None
-        assert button.style is None
+        assert button.style == 'primary'
 
 
 def test_decorate_admin_markup_keeps_deep_menu_icons_and_semantic_colors():
@@ -326,3 +328,22 @@ def test_decorate_admin_markup_does_not_treat_backup_as_back():
 
     assert button.icon_custom_emoji_id == ADMIN_ICONS['backup'].emoji_id
     assert button.style == 'primary'
+
+
+def test_normalize_navigation_markup_makes_back_and_home_blue():
+    markup = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text='← Назад', callback_data='back_to_menu', style='danger'),
+                InlineKeyboardButton(text='На главную', callback_data='main_menu', style='danger'),
+                InlineKeyboardButton(text='Удалить', callback_data='delete_1', style='danger'),
+            ]
+        ]
+    )
+
+    decorated = normalize_navigation_markup(markup)
+    back, home, delete = decorated.inline_keyboard[0]
+
+    assert back.style == 'primary'
+    assert home.style == 'primary'
+    assert delete.style == 'danger'

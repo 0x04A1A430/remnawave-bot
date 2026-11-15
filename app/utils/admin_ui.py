@@ -422,6 +422,62 @@ def _infer_button_icon(callback: str, text: str) -> str | None:
     return 'settings' if _is_admin_callback(callback) else None
 
 
+_NAV_BACK_CALLBACKS = frozenset({'back_to_menu', 'menu_back', 'main_menu', 'home', 'back', 'back_to_main'})
+_NAV_BACK_TEXT_MARKERS = (
+    '←',
+    '◀',
+    '⬅',
+    '⏪',
+    'назад',
+    'back',
+    'главное меню',
+    'главную',
+    'к списку',
+    'к пользователям',
+    'к промокодам',
+    'к уровням',
+    'к предложению',
+    'к профилю',
+)
+
+
+def _is_back_navigation(callback: str, text: str) -> bool:
+    if callback in _NAV_BACK_CALLBACKS:
+        return True
+    if callback.startswith('back_to_') or callback.endswith('_back'):
+        return True
+    lowered = text.strip().lower()
+    return lowered.startswith(_NAV_BACK_TEXT_MARKERS)
+
+
+def normalize_navigation_markup(markup: Any) -> Any:
+    """Кнопки «Назад»/«На главную» — синяя навигация, без premium-иконки."""
+    from aiogram.types import InlineKeyboardMarkup
+
+    if not isinstance(markup, InlineKeyboardMarkup):
+        return markup
+
+    changed = False
+    rows = []
+    for row in markup.inline_keyboard:
+        new_row = []
+        for button in row:
+            updates: dict[str, Any] = {}
+            callback = button.callback_data or ''
+            if _is_back_navigation(callback, button.text or ''):
+                if button.style != 'primary':
+                    updates['style'] = 'primary'
+                if button.icon_custom_emoji_id:
+                    updates['icon_custom_emoji_id'] = None
+            if updates:
+                new_row.append(button.model_copy(update=updates))
+                changed = True
+            else:
+                new_row.append(button)
+        rows.append(new_row)
+    return markup.model_copy(update={'inline_keyboard': rows}) if changed else markup
+
+
 _DANGER_MARKERS = (
     'delete',
     'remove',
@@ -621,15 +677,15 @@ def admin_button(
 
 
 def admin_back_button(texts: Any, callback_data: str, *, label: str | None = None) -> Any:
-    """Единая кнопка возврата без premium-иконки и без цвета.
+    """Единая кнопка возврата без premium-иконки.
 
     В локали текст уже содержит стрелку «←», поэтому иконку не добавляем (иначе
-    две стрелки), а текст не переписываем. Нейтральный цвет поддерживает и
-    ``decorate_admin_markup``: explicit ``danger`` у админского back снимается.
+    две стрелки), а текст не переписываем. Навигация — синяя, не красная.
     """
     return make_button(
         text=label or texts.BACK,
         callback_data=callback_data,
+        style='primary',
     )
 
 
@@ -684,11 +740,12 @@ def decorate_admin_markup(markup: Any) -> Any:
                 if button.style != 'primary':
                     updates['style'] = 'primary'
             elif _looks_like_back(callback, text):
-                # «Назад»: стрелка уже есть в тексте, иконка и цвет не нужны.
+                # «Назад»: стрелка уже есть в тексте, иконка не нужна.
+                # Навигация синяя, не красная.
                 if button.icon_custom_emoji_id:
                     updates['icon_custom_emoji_id'] = None
-                if button.style:
-                    updates['style'] = None
+                if button.style != 'primary':
+                    updates['style'] = 'primary'
             else:
                 is_blocked = _is_blocked_user_button(callback, text)
                 desired_style = _infer_button_style(callback, text)

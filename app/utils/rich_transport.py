@@ -464,11 +464,12 @@ def _sanitize_method(method: TelegramMethod[TelegramType]) -> TelegramMethod[Tel
 
     markup = getattr(method, 'reply_markup', None)
     if markup is not None:
-        from app.utils.admin_ui import decorate_admin_markup
+        from app.utils.admin_ui import decorate_admin_markup, normalize_navigation_markup
         from app.utils.button_emoji import sanitize_markup
 
         sanitized = sanitize_markup(markup)
         decorated = decorate_admin_markup(sanitized)
+        decorated = normalize_navigation_markup(decorated)
         if decorated is not markup:
             updates['reply_markup'] = decorated
 
