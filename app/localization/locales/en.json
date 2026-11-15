@@ -2382,6 +2382,7 @@
   "BOT_COMMAND_CLEAR_RULES": "Clear rules",
   "BOT_COMMAND_MONITORING": "Monitoring status",
   "BOT_COMMAND_PAYSUPPORT": "Payment support",
+  "PAYMENT_SUPPORT_INFO_TITLE": "Payment support",
   "PAYMENT_SUPPORT_INFO": "<b>Payment support</b>\n\nCreate a ticket or contact this service’s support. Include the date, amount and what happened. Do not send passwords or bank card details.\n\nPayment issues are handled by the service owner, not Telegram support.",
   "PAYMENT_SUPPORT_PROMPT": "Describe the payment issue, including the date and amount. You can attach a photo or video.",
   "PAYMENT_SUPPORT_TITLE": "Payment issue",

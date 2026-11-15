@@ -1,5 +1,6 @@
 import asyncio
 import html
+import re
 import time
 
 import structlog
@@ -22,9 +23,11 @@ from app.keyboards.inline import (
 )
 from app.localization.texts import get_texts
 from app.services.admin_notification_service import AdminNotificationService
+from app.utils.admin_ui import ADMIN_ICONS as _UI_ICONS, admin_heading, admin_icon, admin_quote
+from app.utils.button_emoji import make_button, parse_button_label
 from app.utils.cache import RateLimitCache, cache, cache_key
 from app.utils.formatters import format_username_link
-from app.utils.miniapp_buttons import build_admin_ticket_cabinet_button
+from app.utils.miniapp_buttons import build_admin_ticket_cabinet_button, strip_leading_emoji
 from app.utils.photo_message import edit_or_answer_photo, safe_edit_or_resend
 from app.utils.text_compact import compact_blank_lines
 from app.utils.ticket_media import get_ticket_media, ticket_media_chunks
@@ -38,6 +41,78 @@ from app.utils.timezone import format_local_datetime
 
 
 logger = structlog.get_logger(__name__)
+
+# Ведущие украшения локалей: юникод-эмодзи, селекторы, стрелки «←».
+_LEADING_GLYPHS_RE = re.compile(r'^[\s\u200b\u200d\ufe0f\u20e3←⬅→➡◀▶►‹›«»•·●○◉◎▪▫■□◆◇]+')
+_HTML_TAG_RE = re.compile(r'</?[a-zA-Z][^>]*>')
+
+
+def _title(raw: str) -> str:
+    """Заголовок из локали без разметки, ведущего эмодзи и хвостового двоеточия.
+
+    Иконку на экране ставит код: иначе рядом с premium-эмодзи оказывался
+    юникод-глиф из локали (🟢, 🤖) и строка выглядела как двойной заголовок.
+    """
+    plain = parse_button_label(raw or '').text
+    plain = _HTML_TAG_RE.sub('', plain)
+    plain = strip_leading_emoji(plain)
+    plain = _LEADING_GLYPHS_RE.sub('', plain).strip()
+    return plain.strip(':').strip()
+
+
+def _heading(icon_name: str, raw_title: str) -> str:
+    """Иконка + жирный заголовок — как в остальном пользовательском меню."""
+    title = _title(raw_title)
+    return admin_heading(icon_name, title) if title else admin_icon(icon_name)
+
+
+def _screen(
+    icon_name: str,
+    raw_title: str,
+    *,
+    quote: list[str] | tuple[str, ...] = (),
+    body: str = '',
+) -> str:
+    """Экран из блоков: заголовок, цитата с параметрами, текст."""
+    parts: list[str] = [_heading(icon_name, raw_title)]
+    quote_lines = [line for line in quote if line]
+    if quote_lines:
+        parts.append(admin_quote('\n'.join(quote_lines)))
+    if body:
+        parts.append(body)
+    return compact_blank_lines('\n\n'.join(parts))
+
+
+def _alert(icon_name: str, message: str, *, title: str = '') -> str:
+    """Ошибка/лимит: заголовок экрана + причина в цитате.
+
+    Без заголовка экран терминальный (тикет закрыт, ответ отправлен) — тогда
+    это одна строка «иконка + жирный текст», как в остальном меню.
+    """
+    if title:
+        return _screen(icon_name, title, body=admin_quote(message))
+    return _heading(icon_name, message)
+
+
+_ARROW_PREFIXES = ('←', '⬅', '→', '➡', '↩', '⟵')
+
+
+def _btn_text(raw: str) -> str:
+    """Подпись кнопки без юникод-эмодзи: свой значок ставится через icon_custom_emoji_id.
+
+    Стрелку в начале («← Назад») оставляем — она навигационная, а не эмодзи,
+    хотя strip_leading_emoji считает её украшением.
+    """
+    text = parse_button_label(raw or '').text.replace('\ufe0f', '').lstrip()
+    for arrow in _ARROW_PREFIXES:
+        if text.startswith(arrow):
+            return f'{arrow} {text[len(arrow) :].strip()}'.strip()
+    return strip_leading_emoji(text).strip()
+
+
+def _plain(raw: str) -> str:
+    """Текст для alert'ов: Telegram показывает их без parse_mode, теги — мусор."""
+    return html.unescape(_HTML_TAG_RE.sub('', raw or '')).strip()
 
 
 class TicketStates(StatesGroup):
@@ -59,38 +134,51 @@ async def show_ticket_priority_selection(
     if blocked_until:
         if blocked_until.year > 9999 - 1:
             await callback.answer(
-                texts.t('USER_BLOCKED_FOREVER', 'Вы заблокированы для обращений в поддержку.'), show_alert=True
+                _plain(texts.t('USER_BLOCKED_FOREVER', 'Вы заблокированы для обращений в поддержку.')), show_alert=True
             )
         else:
             await callback.answer(
-                texts.t('USER_BLOCKED_UNTIL', 'Вы заблокированы до {time}').format(
-                    time=blocked_until.strftime('%d.%m.%Y %H:%M')
+                _plain(
+                    texts.t('USER_BLOCKED_UNTIL', 'Вы заблокированы до {time}').format(
+                        time=blocked_until.strftime('%d.%m.%Y %H:%M')
+                    )
                 ),
                 show_alert=True,
             )
         return
     if await TicketCRUD.user_has_active_ticket(db, db_user.id):
         await callback.answer(
-            texts.t('TICKET_ALREADY_OPEN', 'У вас уже есть незакрытый тикет. Сначала закройте его.'), show_alert=True
+            _plain(texts.t('TICKET_ALREADY_OPEN', 'У вас уже есть незакрытый тикет. Сначала закройте его.')),
+            show_alert=True,
         )
         return
 
-    prompt_text = (
-        texts.t('PAYMENT_SUPPORT_PROMPT')
-        if payment_support
-        else texts.t('TICKET_TITLE_INPUT', 'Введите заголовок тикета:')
-    )
+    if payment_support:
+        prompt_text = _screen(
+            'money',
+            texts.t('PAYMENT_SUPPORT_TITLE', 'Проблема с оплатой'),
+            body=texts.t(
+                'PAYMENT_SUPPORT_PROMPT',
+                'Опишите проблему с оплатой: укажите дату и сумму. Можно приложить фото или видео.',
+            ),
+        )
+    else:
+        prompt_text = _screen(
+            'plus',
+            texts.t('CREATE_TICKET_BUTTON', 'Создать тикет'),
+            quote=[texts.t('TICKET_TITLE_INPUT', 'Введите заголовок тикета:')],
+        )
     cancel_kb = get_ticket_cancel_keyboard(db_user.language)
     prompt_msg = callback.message
     try:
-        await callback.message.edit_text(prompt_text, reply_markup=cancel_kb)
+        await callback.message.edit_text(prompt_text, reply_markup=cancel_kb, parse_mode='HTML')
     except TelegramBadRequest:
         # Предыдущее сообщение — фото (нет текста для edit_text), удаляем и шлём новое
         try:
             await callback.message.delete()
         except Exception:
             pass
-        prompt_msg = await callback.message.answer(prompt_text, reply_markup=cancel_kb)
+        prompt_msg = await callback.message.answer(prompt_text, reply_markup=cancel_kb, parse_mode='HTML')
     # Запоминаем исходное сообщение бота, чтобы далее редактировать его, а не слать новые
     await state.update_data(
         prompt_chat_id=prompt_msg.chat.id, prompt_message_id=prompt_msg.message_id, payment_support=payment_support
@@ -134,16 +222,20 @@ async def handle_ticket_title_input(message: types.Message, state: FSMContext, d
     asyncio.create_task(_try_delete_message_later(message.bot, message.chat.id, message.message_id, 2.0))
     if len(title) < 5:
         texts = get_texts(db_user.language)
-        text_val = texts.t(
-            'TICKET_TITLE_TOO_SHORT', 'Заголовок должен содержать минимум 5 символов. Попробуйте еще раз:'
+        text_val = _alert(
+            'warning',
+            texts.t('TICKET_TITLE_TOO_SHORT', 'Заголовок должен содержать минимум 5 символов. Попробуйте еще раз:'),
+            title=texts.t('CREATE_TICKET_BUTTON', 'Создать тикет'),
         )
         await _edit_or_send(message, prompt_chat_id, prompt_message_id, text_val, db_user.language)
         return
 
     if len(title) > 255:
         texts = get_texts(db_user.language)
-        text_val = texts.t(
-            'TICKET_TITLE_TOO_LONG', 'Заголовок слишком длинный. Максимум 255 символов. Попробуйте еще раз:'
+        text_val = _alert(
+            'warning',
+            texts.t('TICKET_TITLE_TOO_LONG', 'Заголовок слишком длинный. Максимум 255 символов. Попробуйте еще раз:'),
+            title=texts.t('CREATE_TICKET_BUTTON', 'Создать тикет'),
         )
         await _edit_or_send(message, prompt_chat_id, prompt_message_id, text_val, db_user.language)
         return
@@ -155,22 +247,26 @@ async def handle_ticket_title_input(message: types.Message, state: FSMContext, d
     if blocked_until:
         texts = get_texts(db_user.language)
         if blocked_until.year > 9999 - 1:
-            await message.answer(texts.t('USER_BLOCKED_FOREVER', 'Вы заблокированы для обращений в поддержку.'))
+            blocked_text = texts.t('USER_BLOCKED_FOREVER', 'Вы заблокированы для обращений в поддержку.')
         else:
-            await message.answer(
-                texts.t('USER_BLOCKED_UNTIL', 'Вы заблокированы до {time}').format(
-                    time=blocked_until.strftime('%d.%m.%Y %H:%M')
-                )
+            blocked_text = texts.t('USER_BLOCKED_UNTIL', 'Вы заблокированы до {time}').format(
+                time=blocked_until.strftime('%d.%m.%Y %H:%M')
             )
+        await message.answer(_alert('lock', blocked_text), parse_mode='HTML')
         await state.clear()
         return
 
     await state.update_data(title=title)
 
     texts = get_texts(db_user.language)
-    text_val = texts.t(
-        'TICKET_MESSAGE_INPUT', 'Опишите проблему (до {limit} символов) или отправьте фото с подписью:'
-    ).format(limit=TICKET_MESSAGE_MAX_LENGTH)
+    text_val = _screen(
+        'plus',
+        texts.t('CREATE_TICKET_BUTTON', 'Создать тикет'),
+        quote=[f'{admin_icon("document")} {html.escape(title)}'],
+        body=texts.t(
+            'TICKET_MESSAGE_INPUT', 'Опишите проблему (до {limit} символов) или отправьте фото с подписью:'
+        ).format(limit=TICKET_MESSAGE_MAX_LENGTH),
+    )
     await _edit_or_send(message, prompt_chat_id, prompt_message_id, text_val, db_user.language)
 
     await state.set_state(TicketStates.waiting_for_message)
@@ -249,20 +345,23 @@ async def handle_ticket_message_input(message: types.Message, state: FSMContext,
         data_prompt = await state.get_data()
         prompt_chat_id = data_prompt.get('prompt_chat_id')
         prompt_message_id = data_prompt.get('prompt_message_id')
-        text_msg = (
+        blocked_text = (
             texts.t('USER_BLOCKED_FOREVER', 'Вы заблокированы для обращений в поддержку.')
             if blocked_until.year > 9999 - 1
             else texts.t('USER_BLOCKED_UNTIL', 'Вы заблокированы до {time}').format(
                 time=blocked_until.strftime('%d.%m.%Y %H:%M')
             )
         )
+        text_msg = _alert('lock', blocked_text)
         if prompt_chat_id and prompt_message_id:
             try:
-                await message.bot.edit_message_text(chat_id=prompt_chat_id, message_id=prompt_message_id, text=text_msg)
+                await message.bot.edit_message_text(
+                    chat_id=prompt_chat_id, message_id=prompt_message_id, text=text_msg, parse_mode='HTML'
+                )
             except TelegramBadRequest:
-                await message.answer(text_msg)
+                await message.answer(text_msg, parse_mode='HTML')
         else:
-            await message.answer(text_msg)
+            await message.answer(text_msg, parse_mode='HTML')
         await state.clear()
         return
 
@@ -274,8 +373,12 @@ async def handle_ticket_message_input(message: types.Message, state: FSMContext,
         data_prompt = await state.get_data()
         prompt_chat_id = data_prompt.get('prompt_chat_id')
         prompt_message_id = data_prompt.get('prompt_message_id')
-        err_text = texts.t(
-            'TICKET_MESSAGE_TOO_SHORT', 'Сообщение слишком короткое. Опишите проблему подробнее или отправьте фото:'
+        err_text = _alert(
+            'warning',
+            texts.t(
+                'TICKET_MESSAGE_TOO_SHORT', 'Сообщение слишком короткое. Опишите проблему подробнее или отправьте фото:'
+            ),
+            title=texts.t('CREATE_TICKET_BUTTON', 'Создать тикет'),
         )
         await _edit_or_send(message, prompt_chat_id, prompt_message_id, err_text, db_user.language)
         return
@@ -287,10 +390,14 @@ async def handle_ticket_message_input(message: types.Message, state: FSMContext,
         data_prompt = await state.get_data()
         prompt_chat_id = data_prompt.get('prompt_chat_id')
         prompt_message_id = data_prompt.get('prompt_message_id')
-        err_text = texts.t(
-            'TICKET_MESSAGE_TOO_LONG',
-            'Сообщение слишком длинное. Максимум {limit} символов. Сократите текст и отправьте еще раз:',
-        ).format(limit=TICKET_MESSAGE_MAX_LENGTH)
+        err_text = _alert(
+            'warning',
+            texts.t(
+                'TICKET_MESSAGE_TOO_LONG',
+                'Сообщение слишком длинное. Максимум {limit} символов. Сократите текст и отправьте еще раз:',
+            ).format(limit=TICKET_MESSAGE_MAX_LENGTH),
+            title=texts.t('CREATE_TICKET_BUTTON', 'Создать тикет'),
+        )
         await _edit_or_send(message, prompt_chat_id, prompt_message_id, err_text, db_user.language)
         return
 
@@ -318,18 +425,14 @@ async def handle_ticket_message_input(message: types.Message, state: FSMContext,
         texts = get_texts(db_user.language)
         # Ограничим длину подтверждения чтобы не упереться в лимиты
         safe_title = html.escape(title if len(title) <= 200 else (title[:197] + '...'))
-        creation_text = compact_blank_lines(
-            f'<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> <b>Тикет #{ticket.id} создан</b>\n\n'
-            f'<tg-emoji emoji-id="5886330010054168711">📝</tg-emoji> Заголовок: {safe_title}\n'
-            f'<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> Статус: {ticket.status_emoji} '
-            f'{texts.t("TICKET_STATUS_OPEN", "Открыт")}\n'
-            f'<tg-emoji emoji-id="5967412305338568701">📅</tg-emoji> Создан: {format_local_datetime(ticket.created_at, "%d.%m.%Y %H:%M")}\n'
-            + (
-                f'<tg-emoji emoji-id="5877495434124988415">📎</tg-emoji> Вложение: {"видео" if media_type == "video" else "фото"}\n'
-                if media_file_id
-                else ''
-            )
-        )
+        detail_lines = [
+            f'{admin_icon("document")} Заголовок: {safe_title}',
+            f'{admin_icon("tag")} Статус: {texts.t("TICKET_STATUS_OPEN", "Открыт")}',
+            f'{admin_icon("calendar")} Создан: {format_local_datetime(ticket.created_at, "%d.%m.%Y %H:%M")}',
+        ]
+        if media_file_id:
+            detail_lines.append(f'{admin_icon("image")} Вложение: {"видео" if media_type == "video" else "фото"}')
+        creation_text = _screen('success', f'Тикет #{ticket.id} создан', quote=detail_lines)
 
         data_prompt = await state.get_data()
         prompt_chat_id = data_prompt.get('prompt_chat_id')
@@ -337,16 +440,24 @@ async def handle_ticket_message_input(message: types.Message, state: FSMContext,
         keyboard = types.InlineKeyboardMarkup(
             inline_keyboard=[
                 [
-                    types.InlineKeyboardButton(
-                        text=texts.t(
-                            'VIEW_TICKET', '<tg-emoji emoji-id="5960714428394507968">👁</tg-emoji> Посмотреть тикет'
+                    make_button(
+                        text=_btn_text(
+                            texts.t(
+                                'VIEW_TICKET',
+                                '<tg-emoji emoji-id="5960714428394507968">👁</tg-emoji> Посмотреть тикет',
+                            )
                         ),
                         callback_data=f'view_ticket_{ticket.id}',
+                        style='primary',
+                        icon_custom_emoji_id=_UI_ICONS['eye'].emoji_id,
                     )
                 ],
                 [
-                    types.InlineKeyboardButton(
-                        text=texts.t('BACK_TO_MENU', '← В главное меню'), callback_data='back_to_menu', style='danger'
+                    make_button(
+                        text=texts.t('BACK_TO_MENU', '← В главное меню'),
+                        callback_data='back_to_menu',
+                        style='danger',
+                        icon_custom_emoji_id=_UI_ICONS['back'].emoji_id,
                     )
                 ],
             ]
@@ -374,10 +485,14 @@ async def handle_ticket_message_input(message: types.Message, state: FSMContext,
         logger.error('Error creating ticket', error=e)
         texts = get_texts(db_user.language)
         await message.answer(
-            texts.t(
-                'TICKET_CREATE_ERROR',
-                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Произошла ошибка при создании тикета. Попробуйте позже.',
-            )
+            _alert(
+                'cross',
+                texts.t(
+                    'TICKET_CREATE_ERROR',
+                    '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Произошла ошибка при создании тикета. Попробуйте позже.',
+                ),
+            ),
+            parse_mode='HTML',
         )
 
 
@@ -411,23 +526,37 @@ async def show_my_tickets(callback: types.CallbackQuery, db_user: User, db: Asyn
     # Проверка на отсутствие тикетов совсем (ни открытых, ни закрытых)
     has_closed_any = await TicketCRUD.count_user_tickets_by_statuses(db, db_user.id, [TicketStatus.CLOSED.value]) > 0
     if not open_tickets and not has_closed_any:
+        empty_text = _screen('chat', texts.t('NO_TICKETS', 'У вас пока нет тикетов.'))
         await callback.message.edit_text(
-            texts.t('NO_TICKETS', 'У вас пока нет тикетов.'),
+            empty_text,
             reply_markup=types.InlineKeyboardMarkup(
                 inline_keyboard=[
                     [
-                        types.InlineKeyboardButton(
-                            text=texts.t('CREATE_TICKET_BUTTON', 'Создать тикет'), callback_data='create_ticket'
+                        make_button(
+                            text=texts.t('CREATE_TICKET_BUTTON', 'Создать тикет'),
+                            callback_data='create_ticket',
+                            style='success',
+                            icon_custom_emoji_id=_UI_ICONS['plus'].emoji_id,
                         )
                     ],
                     [
-                        types.InlineKeyboardButton(
-                            text=texts.t('VIEW_CLOSED_TICKETS', 'Закрытые тикеты'), callback_data='my_tickets_closed'
+                        make_button(
+                            text=_btn_text(texts.t('VIEW_CLOSED_TICKETS', 'Закрытые тикеты')),
+                            callback_data='my_tickets_closed',
+                            icon_custom_emoji_id=_UI_ICONS['lock'].emoji_id,
                         )
                     ],
-                    [types.InlineKeyboardButton(text=texts.BACK, callback_data='menu_support', style='danger')],
+                    [
+                        make_button(
+                            text=texts.BACK,
+                            callback_data='menu_support',
+                            style='danger',
+                            icon_custom_emoji_id=_UI_ICONS['back'].emoji_id,
+                        )
+                    ],
                 ]
             ),
+            parse_mode='HTML',
         )
         await callback.answer()
         return
@@ -445,15 +574,22 @@ async def show_my_tickets(callback: types.CallbackQuery, db_user: User, db: Asyn
     keyboard.inline_keyboard.insert(
         0,
         [
-            types.InlineKeyboardButton(
-                text=texts.t('VIEW_CLOSED_TICKETS', 'Закрытые тикеты'), callback_data='my_tickets_closed'
+            make_button(
+                text=_btn_text(texts.t('VIEW_CLOSED_TICKETS', 'Закрытые тикеты')),
+                callback_data='my_tickets_closed',
+                icon_custom_emoji_id=_UI_ICONS['lock'].emoji_id,
             )
         ],
     )
     # Всегда используем фото-рендер с логотипом (утилита сама сделает фоллбек при необходимости)
+    caption = _screen(
+        'chat',
+        texts.t('MY_TICKETS_TITLE', 'Ваши тикеты:'),
+        quote=[f'{admin_icon("chat")} {texts.t("OPEN_TICKETS", "Открытые")}: {total_open}'],
+    )
     await edit_or_answer_photo(
         callback=callback,
-        caption=texts.t('MY_TICKETS_TITLE', 'Ваши тикеты:'),
+        caption=caption,
         keyboard=keyboard,
         parse_mode='HTML',
     )
@@ -475,19 +611,28 @@ async def show_my_tickets_closed(callback: types.CallbackQuery, db_user: User, d
     total_closed = await TicketCRUD.count_user_tickets_by_statuses(db, db_user.id, [TicketStatus.CLOSED.value])
     if total_closed == 0:
         await callback.message.edit_text(
-            texts.t('NO_CLOSED_TICKETS', 'Закрытых тикетов пока нет.'),
+            _screen('lock', texts.t('NO_CLOSED_TICKETS', 'Закрытых тикетов пока нет.')),
             reply_markup=types.InlineKeyboardMarkup(
                 inline_keyboard=[
                     [
-                        types.InlineKeyboardButton(
+                        make_button(
                             text=texts.t('BACK_TO_OPEN_TICKETS', '← Открытые тикеты'),
                             callback_data='my_tickets',
-                            style='danger',
+                            style='primary',
+                            icon_custom_emoji_id=_UI_ICONS['chat'].emoji_id,
                         )
                     ],
-                    [types.InlineKeyboardButton(text=texts.BACK, callback_data='menu_support', style='danger')],
+                    [
+                        make_button(
+                            text=texts.BACK,
+                            callback_data='menu_support',
+                            style='danger',
+                            icon_custom_emoji_id=_UI_ICONS['back'].emoji_id,
+                        )
+                    ],
                 ]
             ),
+            parse_mode='HTML',
         )
         await callback.answer()
         return
@@ -508,14 +653,21 @@ async def show_my_tickets_closed(callback: types.CallbackQuery, db_user: User, d
     kb.inline_keyboard.insert(
         0,
         [
-            types.InlineKeyboardButton(
-                text=texts.t('BACK_TO_OPEN_TICKETS', '← Открытые тикеты'), callback_data='my_tickets', style='danger'
+            make_button(
+                text=texts.t('BACK_TO_OPEN_TICKETS', '← Открытые тикеты'),
+                callback_data='my_tickets',
+                style='primary',
+                icon_custom_emoji_id=_UI_ICONS['chat'].emoji_id,
             )
         ],
     )
     await edit_or_answer_photo(
         callback=callback,
-        caption=texts.t('CLOSED_TICKETS_TITLE', 'Закрытые тикеты:'),
+        caption=_screen(
+            'lock',
+            texts.t('CLOSED_TICKETS_TITLE', 'Закрытые тикеты:'),
+            quote=[f'{admin_icon("lock")} {_title(texts.t("CLOSED_TICKETS", "Закрытые"))}: {total_closed}'],
+        ),
         keyboard=kb,
         parse_mode='HTML',
     )
@@ -543,7 +695,7 @@ async def view_ticket(callback: types.CallbackQuery, db_user: User, db: AsyncSes
 
     if not ticket or ticket.user_id != db_user.id:
         texts = get_texts(db_user.language)
-        await callback.answer(texts.t('TICKET_NOT_FOUND', 'Тикет не найден.'), show_alert=True)
+        await callback.answer(_plain(texts.t('TICKET_NOT_FOUND', 'Тикет не найден.')), show_alert=True)
         return
 
     texts = get_texts(db_user.language)
@@ -556,27 +708,27 @@ async def view_ticket(callback: types.CallbackQuery, db_user: User, db: AsyncSes
         TicketStatus.PENDING.value: texts.t('TICKET_STATUS_PENDING', 'В ожидании'),
     }.get(ticket.status, ticket.status)
 
-    header = (
-        f'Тикет #{ticket.id}\n\n'
-        f'<tg-emoji emoji-id="5886330010054168711">📝</tg-emoji> Заголовок: {html.escape(ticket.title or "")}\n'
-        f'<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> Статус: {ticket.status_emoji} {status_text}\n'
-        f'<tg-emoji emoji-id="5967412305338568701">📅</tg-emoji> Создан: {format_local_datetime(ticket.created_at, "%d.%m.%Y %H:%M")}\n\n'
+    header = _screen(
+        'chat',
+        f'Тикет #{ticket.id}',
+        quote=[
+            f'{admin_icon("document")} Заголовок: {html.escape(ticket.title or "")}',
+            f'{admin_icon("tag")} Статус: {status_text}',
+            f'{admin_icon("calendar")} Создан: {format_local_datetime(ticket.created_at, "%d.%m.%Y %H:%M")}',
+        ],
     )
+    header += '\n\n'
     message_blocks: list[str] = []
     if ticket.messages:
-        message_blocks.append(
-            f'<tg-emoji emoji-id="5886666250158870040">💬</tg-emoji> Сообщения ({len(ticket.messages)}):\n\n'
-        )
+        message_blocks.append(f'{admin_icon("chat")} <b>Сообщения ({len(ticket.messages)})</b>\n\n')
         for msg in ticket.messages:
             sender = (
-                '<tg-emoji emoji-id="5771887475421090729">👤</tg-emoji> Вы'
-                if msg.is_user_message
-                else '<tg-emoji emoji-id="5988023995125993550">🛠</tg-emoji> Поддержка'
+                f'{admin_icon("user")} <b>Вы</b>' if msg.is_user_message else f'{admin_icon("tools")} <b>Поддержка</b>'
             )
-            block = f'{sender} ({format_local_datetime(msg.created_at, "%d.%m %H:%M")}):\n{html.escape(msg.message_text or "")}\n\n'
+            block = f'{sender} · {format_local_datetime(msg.created_at, "%d.%m %H:%M")}\n{html.escape(msg.message_text or "")}\n\n'
             for item in get_ticket_media(msg):
                 label = {'photo': 'фото', 'video': 'видео', 'document': 'файл'}[item['type']]
-                block += f'<tg-emoji emoji-id="5877495434124988415">📎</tg-emoji> Вложение: {label}\n\n'
+                block += f'{admin_icon("image")} Вложение: {label}\n\n'
             message_blocks.append(block)
     pages = build_ticket_pages(header, message_blocks, max_len=TICKET_PAGE_MAX_LEN)
     total_pages = len(pages)
@@ -594,11 +746,12 @@ async def view_ticket(callback: types.CallbackQuery, db_user: User, db: AsyncSes
             keyboard.inline_keyboard.insert(
                 0,
                 [
-                    types.InlineKeyboardButton(
+                    make_button(
                         text=texts.t(
                             'TICKET_ATTACHMENTS', '<tg-emoji emoji-id="5877495434124988415">📎</tg-emoji> Вложения'
                         ),
                         callback_data=f'ticket_attachments_{ticket_id}',
+                        icon_custom_emoji_id=_UI_ICONS['image'].emoji_id,
                     )
                 ],
             )
@@ -609,17 +762,21 @@ async def view_ticket(callback: types.CallbackQuery, db_user: User, db: AsyncSes
         nav_row = []
         if page > 1:
             nav_row.append(
-                types.InlineKeyboardButton(
+                make_button(
                     text='<tg-emoji emoji-id="5875082500023258804">⬅</tg-emoji>',
                     callback_data=f'ticket_view_page_{ticket_id}_{page - 1}',
+                    style='primary',
+                    icon_custom_emoji_id=_UI_ICONS['arrow_left'].emoji_id,
                 )
             )
-        nav_row.append(types.InlineKeyboardButton(text=f'{page}/{total_pages}', callback_data='noop'))
+        nav_row.append(make_button(text=f'{page}/{total_pages}', callback_data='noop'))
         if page < total_pages:
             nav_row.append(
-                types.InlineKeyboardButton(
+                make_button(
                     text='<tg-emoji emoji-id="5877468380125990242">➡</tg-emoji>',
                     callback_data=f'ticket_view_page_{ticket_id}_{page + 1}',
+                    style='primary',
+                    icon_custom_emoji_id=_UI_ICONS['arrow_right'].emoji_id,
                 )
             )
         if getattr(keyboard, 'inline_keyboard', None) is not None:
@@ -643,17 +800,17 @@ async def send_ticket_attachments(callback: types.CallbackQuery, db_user: User, 
     try:
         ticket_id = int(callback.data.replace('ticket_attachments_', ''))
     except ValueError:
-        await callback.answer(texts.t('TICKET_NOT_FOUND', 'Тикет не найден.'), show_alert=True)
+        await callback.answer(_plain(texts.t('TICKET_NOT_FOUND', 'Тикет не найден.')), show_alert=True)
         return
 
     ticket = await TicketCRUD.get_ticket_by_id(db, ticket_id, load_messages=True)
     if not ticket or ticket.user_id != db_user.id:
-        await callback.answer(texts.t('TICKET_NOT_FOUND', 'Тикет не найден.'), show_alert=True)
+        await callback.answer(_plain(texts.t('TICKET_NOT_FOUND', 'Тикет не найден.')), show_alert=True)
         return
 
     attachments = [item for message in ticket.messages for item in get_ticket_media(message)]
     if not attachments:
-        await callback.answer(texts.t('NO_ATTACHMENTS', 'Вложений нет.'), show_alert=True)
+        await callback.answer(_plain(texts.t('NO_ATTACHMENTS', 'Вложений нет.')), show_alert=True)
         return
 
     # Telegram ограничивает media group до 10 элементов. Отправим чанками.
@@ -684,23 +841,28 @@ async def send_ticket_attachments(callback: types.CallbackQuery, db_user: User, 
             kb = types.InlineKeyboardMarkup(
                 inline_keyboard=[
                     [
-                        types.InlineKeyboardButton(
+                        make_button(
                             text=texts.t(
                                 'DELETE_MESSAGE', '<tg-emoji emoji-id="5879896690210639947">🗑</tg-emoji> Удалить'
                             ),
                             callback_data=f'user_delete_message_{last_group_message.message_id}',
+                            style='danger',
+                            icon_custom_emoji_id=_UI_ICONS['delete'].emoji_id,
                         )
                     ]
                 ]
             )
             await callback.message.bot.send_message(
-                chat_id=callback.from_user.id, text=texts.t('ATTACHMENTS_SENT', 'Вложения отправлены.'), reply_markup=kb
+                chat_id=callback.from_user.id,
+                text=_screen('image', texts.t('ATTACHMENTS_SENT', 'Вложения отправлены.')),
+                reply_markup=kb,
+                parse_mode='HTML',
             )
         except Exception:
             pass
     else:
         try:
-            await callback.answer(texts.t('ATTACHMENTS_SENT', 'Вложения отправлены.'))
+            await callback.answer(_plain(texts.t('ATTACHMENTS_SENT', 'Вложения отправлены.')))
         except Exception:
             pass
 
@@ -709,14 +871,14 @@ async def user_delete_message(callback: types.CallbackQuery):
     try:
         msg_id = int(callback.data.replace('user_delete_message_', ''))
     except ValueError:
-        await callback.answer('<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji>')
+        await callback.answer('❌')
         return
     try:
         await callback.message.bot.delete_message(chat_id=callback.from_user.id, message_id=msg_id)
         await callback.message.delete()
     except Exception:
         pass
-    await callback.answer('<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji>')
+    await callback.answer('✅')
 
 
 async def _edit_or_send(
@@ -734,11 +896,12 @@ async def _edit_or_send(
                 message_id=message_id,
                 text=text,
                 reply_markup=get_ticket_cancel_keyboard(language),
+                parse_mode='HTML',
             )
             return
         except TelegramBadRequest:
             pass
-    await message.answer(text, reply_markup=get_ticket_cancel_keyboard(language))
+    await message.answer(text, reply_markup=get_ticket_cancel_keyboard(language), parse_mode='HTML')
 
 
 async def _try_delete_message_later(bot: Bot, chat_id: int, message_id: int, delay_seconds: float = 1.0):
@@ -758,10 +921,16 @@ async def reply_to_ticket(callback: types.CallbackQuery, state: FSMContext, db_u
 
     texts = get_texts(db_user.language)
 
+    prompt_text = _screen(
+        'chat',
+        texts.t('REPLY_TO_TICKET', 'Ответить'),
+        body=texts.t('TICKET_REPLY_INPUT', 'Введите ваш ответ:'),
+    )
     try:
         await callback.message.edit_text(
-            texts.t('TICKET_REPLY_INPUT', 'Введите ваш ответ:'),
+            prompt_text,
             reply_markup=get_ticket_reply_cancel_keyboard(db_user.language),
+            parse_mode='HTML',
         )
     except TelegramBadRequest:
         try:
@@ -769,8 +938,9 @@ async def reply_to_ticket(callback: types.CallbackQuery, state: FSMContext, db_u
         except Exception:
             pass
         await callback.message.answer(
-            texts.t('TICKET_REPLY_INPUT', 'Введите ваш ответ:'),
+            prompt_text,
             reply_markup=get_ticket_reply_cancel_keyboard(db_user.language),
+            parse_mode='HTML',
         )
 
     await state.set_state(TicketStates.waiting_for_reply)
@@ -829,7 +999,12 @@ async def handle_ticket_reply(message: types.Message, state: FSMContext, db_user
     if len(reply_text) < 5 and not media_file_id:
         texts = get_texts(db_user.language)
         await message.answer(
-            texts.t('TICKET_REPLY_TOO_SHORT', 'Ответ должен содержать минимум 5 символов. Попробуйте еще раз:')
+            _alert(
+                'warning',
+                texts.t('TICKET_REPLY_TOO_SHORT', 'Ответ должен содержать минимум 5 символов. Попробуйте еще раз:'),
+                title=texts.t('REPLY_TO_TICKET', 'Ответить'),
+            ),
+            parse_mode='HTML',
         )
         return
 
@@ -837,10 +1012,15 @@ async def handle_ticket_reply(message: types.Message, state: FSMContext, db_user
     if len(reply_text) > TICKET_MESSAGE_MAX_LENGTH:
         texts = get_texts(db_user.language)
         await message.answer(
-            texts.t(
-                'TICKET_REPLY_TOO_LONG',
-                'Ответ слишком длинный. Максимум {limit} символов. Сократите текст и отправьте еще раз:',
-            ).format(limit=TICKET_MESSAGE_MAX_LENGTH)
+            _alert(
+                'warning',
+                texts.t(
+                    'TICKET_REPLY_TOO_LONG',
+                    'Ответ слишком длинный. Максимум {limit} символов. Сократите текст и отправьте еще раз:',
+                ).format(limit=TICKET_MESSAGE_MAX_LENGTH),
+                title=texts.t('REPLY_TO_TICKET', 'Ответить'),
+            ),
+            parse_mode='HTML',
         )
         return
 
@@ -849,7 +1029,9 @@ async def handle_ticket_reply(message: types.Message, state: FSMContext, db_user
 
     if not ticket_id:
         texts = get_texts(db_user.language)
-        await message.answer(texts.t('TICKET_REPLY_ERROR', 'Ошибка: не найден ID тикета.'))
+        await message.answer(
+            _alert('cross', texts.t('TICKET_REPLY_ERROR', 'Ошибка: не найден ID тикета.')), parse_mode='HTML'
+        )
         await state.clear()
         return
 
@@ -858,26 +1040,32 @@ async def handle_ticket_reply(message: types.Message, state: FSMContext, db_user
         ticket = await TicketCRUD.get_ticket_by_id(db, ticket_id, load_messages=False)
         if not ticket or ticket.user_id != db_user.id:
             texts = get_texts(db_user.language)
-            await message.answer(texts.t('TICKET_NOT_FOUND', 'Тикет не найден.'))
+            await message.answer(_alert('search', texts.t('TICKET_NOT_FOUND', 'Тикет не найден.')), parse_mode='HTML')
             await state.clear()
             return
         if ticket.status == TicketStatus.CLOSED.value:
             texts = get_texts(db_user.language)
             await message.answer(
-                texts.t('TICKET_CLOSED', '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Тикет закрыт.'),
+                _alert(
+                    'lock',
+                    texts.t('TICKET_CLOSED', '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Тикет закрыт.'),
+                ),
                 reply_markup=types.InlineKeyboardMarkup(
                     inline_keyboard=[
                         [
-                            types.InlineKeyboardButton(
+                            make_button(
                                 text=texts.t(
                                     'CLOSE_NOTIFICATION',
                                     '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Закрыть уведомление',
                                 ),
                                 callback_data=f'close_ticket_notification_{ticket.id}',
+                                style='danger',
+                                icon_custom_emoji_id=_UI_ICONS['cross'].emoji_id,
                             )
                         ]
                     ]
                 ),
+                parse_mode='HTML',
             )
             await state.clear()
             return
@@ -886,23 +1074,29 @@ async def handle_ticket_reply(message: types.Message, state: FSMContext, db_user
         if ticket.status == TicketStatus.CLOSED.value or ticket.is_user_reply_blocked:
             texts = get_texts(db_user.language)
             await message.answer(
-                texts.t(
-                    'TICKET_CLOSED_NO_REPLY',
-                    '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Тикет закрыт, ответить невозможно.',
+                _alert(
+                    'lock',
+                    texts.t(
+                        'TICKET_CLOSED_NO_REPLY',
+                        '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Тикет закрыт, ответить невозможно.',
+                    ),
                 ),
                 reply_markup=types.InlineKeyboardMarkup(
                     inline_keyboard=[
                         [
-                            types.InlineKeyboardButton(
+                            make_button(
                                 text=texts.t(
                                     'CLOSE_NOTIFICATION',
                                     '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Закрыть уведомление',
                                 ),
                                 callback_data=f'close_ticket_notification_{ticket.id}',
+                                style='danger',
+                                icon_custom_emoji_id=_UI_ICONS['cross'].emoji_id,
                             )
                         ]
                     ]
                 ),
+                parse_mode='HTML',
             )
             await state.clear()
             return
@@ -922,26 +1116,38 @@ async def handle_ticket_reply(message: types.Message, state: FSMContext, db_user
         texts = get_texts(db_user.language)
 
         await message.answer(
-            texts.t('TICKET_REPLY_SENT', '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Ваш ответ отправлен!'),
+            _screen(
+                'success',
+                texts.t(
+                    'TICKET_REPLY_SENT', '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Ваш ответ отправлен!'
+                ),
+            ),
             reply_markup=types.InlineKeyboardMarkup(
                 inline_keyboard=[
                     [
-                        types.InlineKeyboardButton(
-                            text=texts.t(
-                                'VIEW_TICKET', '<tg-emoji emoji-id="5960714428394507968">👁</tg-emoji> Посмотреть тикет'
+                        make_button(
+                            text=_btn_text(
+                                texts.t(
+                                    'VIEW_TICKET',
+                                    '<tg-emoji emoji-id="5960714428394507968">👁</tg-emoji> Посмотреть тикет',
+                                )
                             ),
                             callback_data=f'view_ticket_{ticket_id}',
+                            style='primary',
+                            icon_custom_emoji_id=_UI_ICONS['eye'].emoji_id,
                         )
                     ],
                     [
-                        types.InlineKeyboardButton(
+                        make_button(
                             text=texts.t('BACK_TO_MENU', '← В главное меню'),
                             callback_data='back_to_menu',
                             style='danger',
+                            icon_custom_emoji_id=_UI_ICONS['back'].emoji_id,
                         )
                     ],
                 ]
             ),
+            parse_mode='HTML',
         )
 
         await state.clear()
@@ -956,10 +1162,14 @@ async def handle_ticket_reply(message: types.Message, state: FSMContext, db_user
         logger.error('Error adding ticket reply', error=e)
         texts = get_texts(db_user.language)
         await message.answer(
-            texts.t(
-                'TICKET_REPLY_ERROR',
-                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Произошла ошибка при отправке ответа. Попробуйте позже.',
-            )
+            _alert(
+                'cross',
+                texts.t(
+                    'TICKET_REPLY_ERROR',
+                    '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Произошла ошибка при отправке ответа. Попробуйте позже.',
+                ),
+            ),
+            parse_mode='HTML',
         )
 
 
@@ -972,7 +1182,7 @@ async def close_ticket(callback: types.CallbackQuery, db_user: User, db: AsyncSe
         ticket = await TicketCRUD.get_ticket_by_id(db, ticket_id, load_messages=False)
         if not ticket or ticket.user_id != db_user.id:
             texts = get_texts(db_user.language)
-            await callback.answer(texts.t('TICKET_NOT_FOUND', 'Тикет не найден.'), show_alert=True)
+            await callback.answer(_plain(texts.t('TICKET_NOT_FOUND', 'Тикет не найден.')), show_alert=True)
             return
 
         # Запрещаем закрытие, если заблокирован для ответа? (не требуется) Закрываем тикет
@@ -981,7 +1191,9 @@ async def close_ticket(callback: types.CallbackQuery, db_user: User, db: AsyncSe
         if success:
             texts = get_texts(db_user.language)
             await callback.answer(
-                texts.t('TICKET_CLOSED', '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Тикет закрыт.'),
+                _plain(
+                    texts.t('TICKET_CLOSED', '<tg-emoji emoji-id="5776375003280838798">✅</tg-emoji> Тикет закрыт.')
+                ),
                 show_alert=True,
             )
 
@@ -992,9 +1204,11 @@ async def close_ticket(callback: types.CallbackQuery, db_user: User, db: AsyncSe
         else:
             texts = get_texts(db_user.language)
             await callback.answer(
-                texts.t(
-                    'TICKET_CLOSE_ERROR',
-                    '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Ошибка при закрытии тикета.',
+                _plain(
+                    texts.t(
+                        'TICKET_CLOSE_ERROR',
+                        '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Ошибка при закрытии тикета.',
+                    )
                 ),
                 show_alert=True,
             )
@@ -1003,9 +1217,11 @@ async def close_ticket(callback: types.CallbackQuery, db_user: User, db: AsyncSe
         logger.error('Error closing ticket', error=e)
         texts = get_texts(db_user.language)
         await callback.answer(
-            texts.t(
-                'TICKET_CLOSE_ERROR',
-                '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Ошибка при закрытии тикета.',
+            _plain(
+                texts.t(
+                    'TICKET_CLOSE_ERROR',
+                    '<tg-emoji emoji-id="5778527486270770928">❌</tg-emoji> Ошибка при закрытии тикета.',
+                )
             ),
             show_alert=True,
         )
@@ -1018,19 +1234,22 @@ async def cancel_ticket_creation(callback: types.CallbackQuery, state: FSMContex
     texts = get_texts(db_user.language)
 
     await callback.message.edit_text(
-        texts.t('TICKET_CREATION_CANCELLED', 'Создание тикета отменено.'),
+        _screen('cross', texts.t('TICKET_CREATION_CANCELLED', 'Создание тикета отменено.')),
         reply_markup=types.InlineKeyboardMarkup(
             inline_keyboard=[
                 [
-                    types.InlineKeyboardButton(
+                    make_button(
                         text=texts.t(
                             'BACK_TO_SUPPORT', '<tg-emoji emoji-id="5875082500023258804">⬅</tg-emoji> К поддержке'
                         ),
                         callback_data='menu_support',
+                        style='danger',
+                        icon_custom_emoji_id=_UI_ICONS['back'].emoji_id,
                     )
                 ]
             ]
         ),
+        parse_mode='HTML',
     )
     await callback.answer()
 
@@ -1042,19 +1261,22 @@ async def cancel_ticket_reply(callback: types.CallbackQuery, state: FSMContext, 
     texts = get_texts(db_user.language)
 
     await callback.message.edit_text(
-        texts.t('TICKET_REPLY_CANCELLED', 'Ответ отменен.'),
+        _screen('cross', texts.t('TICKET_REPLY_CANCELLED', 'Ответ отменен.')),
         reply_markup=types.InlineKeyboardMarkup(
             inline_keyboard=[
                 [
-                    types.InlineKeyboardButton(
+                    make_button(
                         text=texts.t(
                             'BACK_TO_TICKETS', '<tg-emoji emoji-id="5875082500023258804">⬅</tg-emoji> К тикетам'
                         ),
                         callback_data='my_tickets',
+                        style='danger',
+                        icon_custom_emoji_id=_UI_ICONS['back'].emoji_id,
                     )
                 ]
             ]
         ),
+        parse_mode='HTML',
     )
     await callback.answer()
 
@@ -1073,10 +1295,13 @@ async def close_ticket_notification(callback: types.CallbackQuery, db_user: User
     except TelegramBadRequest:
         # Message is too old to delete (>48h) — edit it instead
         try:
-            await callback.message.edit_text(texts.t('NOTIFICATION_CLOSED', 'Уведомление закрыто.'))
+            await callback.message.edit_text(
+                _screen('check', texts.t('NOTIFICATION_CLOSED', 'Уведомление закрыто.')),
+                parse_mode='HTML',
+            )
         except TelegramBadRequest:
             pass
-    await callback.answer(texts.t('NOTIFICATION_CLOSED', 'Уведомление закрыто.'))
+    await callback.answer(_plain(texts.t('NOTIFICATION_CLOSED', 'Уведомление закрыто.')))
 
 
 def build_ticket_card_keyboard(ticket: Ticket, user: User | None, *, role: str):

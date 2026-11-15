@@ -160,7 +160,14 @@ async def process_server_limit_input(message: types.Message, db_user: User, db: 
     tariff = await get_tariff_by_id(db, data.get('tariff_id')) if data.get('tariff_id') is not None else None
     squad_uuid = data.get('squad_uuid')
     if tariff is None or not squad_uuid:
-        await message.answer(get_texts(db_user.language).t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'))
+        await message.answer(
+            admin_screen(
+                get_texts(db_user.language).t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'),
+                icon='warning',
+                compact=True,
+            ),
+            parse_mode='HTML',
+        )
         await state.clear()
         return
 
@@ -170,9 +177,13 @@ async def process_server_limit_input(message: types.Message, db_user: User, db: 
             raise ValueError
     except ValueError:
         await message.answer(
-            get_texts(db_user.language).t(
-                'ADMIN_TARIFF_HELPER_INVALID_SERVER_LIMIT',
-                'Введите целое число гигабайт, не меньше нуля. <code>0</code> — по тарифу.',
+            admin_screen(
+                get_texts(db_user.language).t(
+                    'ADMIN_TARIFF_HELPER_INVALID_SERVER_LIMIT',
+                    'Введите целое число гигабайт, не меньше нуля. <code>0</code> — по тарифу.',
+                ),
+                icon='warning',
+                compact=True,
             ),
             parse_mode='HTML',
         )

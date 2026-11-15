@@ -222,6 +222,7 @@ async def _start_field_edit(
     title: str,
     current_value: str,
     prompt: str,
+    icon: str = 'calendar',
 ) -> None:
     await state.set_state(state_value)
     await state.update_data(tariff_id=tariff.id, language=db_user.language)
@@ -239,7 +240,7 @@ async def _start_field_edit(
                 v2=current_value,
                 v3=prompt,
             ),
-            icon='calendar',
+            icon=icon,
             compact=True,
         ),
         reply_markup=InlineKeyboardMarkup(
@@ -275,6 +276,7 @@ async def start_edit_custom_days_price(
             'ADMIN_TARIFF_HELPER_DAY_PRICE_PROMPT',
             'Введите цену за 1 день в рублях.\nПример: <code>15</code> или <code>12.50</code>',
         ),
+        icon='money',
     )
 
 
@@ -331,7 +333,14 @@ async def _load_tariff_from_state(
     tariff_id = (await state.get_data()).get('tariff_id')
     tariff = await get_tariff_by_id(db, tariff_id) if tariff_id is not None else None
     if tariff is None:
-        await message.answer(get_texts(language).t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'))
+        await message.answer(
+            admin_screen(
+                get_texts(language).t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'),
+                icon='warning',
+                compact=True,
+            ),
+            parse_mode='HTML',
+        )
         await state.clear()
     return tariff
 
@@ -359,9 +368,13 @@ async def process_custom_days_price_input(message: types.Message, db_user: User,
         price_kopeks = parse_positive_rubles_to_kopeks(message.text or '')
     except ValueError:
         await message.answer(
-            get_texts(db_user.language).t(
-                'ADMIN_TARIFF_HELPER_INVALID_DAY_PRICE',
-                'Некорректная цена. Введите положительную сумму в рублях с точностью не более двух знаков.\nПример: <code>15</code> или <code>12.50</code>',
+            admin_screen(
+                get_texts(db_user.language).t(
+                    'ADMIN_TARIFF_HELPER_INVALID_DAY_PRICE',
+                    'Некорректная цена. Введите положительную сумму в рублях с точностью не более двух знаков.\nПример: <code>15</code> или <code>12.50</code>',
+                ),
+                icon='warning',
+                compact=True,
             ),
             parse_mode='HTML',
         )
@@ -380,9 +393,13 @@ async def process_custom_days_min_input(message: types.Message, db_user: User, d
         minimum = parse_positive_days(message.text or '')
     except ValueError:
         await message.answer(
-            get_texts(db_user.language).t(
-                'ADMIN_TARIFF_HELPER_INVALID_MIN_DAYS',
-                'Введите положительное целое число дней.\nПример: <code>3</code>',
+            admin_screen(
+                get_texts(db_user.language).t(
+                    'ADMIN_TARIFF_HELPER_INVALID_MIN_DAYS',
+                    'Введите положительное целое число дней.\nПример: <code>3</code>',
+                ),
+                icon='warning',
+                compact=True,
             ),
             parse_mode='HTML',
         )
@@ -390,12 +407,17 @@ async def process_custom_days_min_input(message: types.Message, db_user: User, d
     maximum = getattr(tariff, 'max_days', None)
     if maximum is not None and maximum > 0 and minimum > maximum:
         await message.answer(
-            get_texts(db_user.language)
-            .t(
-                'ADMIN_TARIFF_HELPER_PROCESS_CUSTOM_DAYS_MIN_INPUT_2',
-                'Минимум дней не может быть больше текущего максимума ({v0} дн.).',
-            )
-            .format(v0=maximum)
+            admin_screen(
+                get_texts(db_user.language)
+                .t(
+                    'ADMIN_TARIFF_HELPER_PROCESS_CUSTOM_DAYS_MIN_INPUT_2',
+                    'Минимум дней не может быть больше текущего максимума ({v0} дн.).',
+                )
+                .format(v0=maximum),
+                icon='warning',
+                compact=True,
+            ),
+            parse_mode='HTML',
         )
         return
     tariff = await update_tariff(db, tariff, min_days=minimum)
@@ -420,9 +442,13 @@ async def process_custom_days_max_input(message: types.Message, db_user: User, d
         maximum = parse_positive_days(message.text or '')
     except ValueError:
         await message.answer(
-            get_texts(db_user.language).t(
-                'ADMIN_TARIFF_HELPER_INVALID_MAX_DAYS',
-                'Введите положительное целое число дней.\nПример: <code>90</code>',
+            admin_screen(
+                get_texts(db_user.language).t(
+                    'ADMIN_TARIFF_HELPER_INVALID_MAX_DAYS',
+                    'Введите положительное целое число дней.\nПример: <code>90</code>',
+                ),
+                icon='warning',
+                compact=True,
             ),
             parse_mode='HTML',
         )
@@ -430,12 +456,17 @@ async def process_custom_days_max_input(message: types.Message, db_user: User, d
     minimum = getattr(tariff, 'min_days', None)
     if minimum is not None and minimum > 0 and maximum < minimum:
         await message.answer(
-            get_texts(db_user.language)
-            .t(
-                'ADMIN_TARIFF_HELPER_PROCESS_CUSTOM_DAYS_MAX_INPUT_2',
-                'Максимум дней не может быть меньше текущего минимума ({v0} дн.).',
-            )
-            .format(v0=minimum)
+            admin_screen(
+                get_texts(db_user.language)
+                .t(
+                    'ADMIN_TARIFF_HELPER_PROCESS_CUSTOM_DAYS_MAX_INPUT_2',
+                    'Максимум дней не может быть меньше текущего минимума ({v0} дн.).',
+                )
+                .format(v0=minimum),
+                icon='warning',
+                compact=True,
+            ),
+            parse_mode='HTML',
         )
         return
     tariff = await update_tariff(db, tariff, max_days=maximum)

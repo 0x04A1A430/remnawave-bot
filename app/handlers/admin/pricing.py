@@ -1,3 +1,4 @@
+import html
 from collections.abc import Iterable
 from dataclasses import dataclass
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
@@ -502,11 +503,11 @@ def _build_settings_section(
     entries = SETTING_ENTRIES_BY_SECTION.get(section, ())
 
     if section == 'trial':
-        title = texts.t('ADMIN_PRICING_SECTION_TRIAL_TITLE', ' Пробный период')
+        title = texts.t('ADMIN_PRICING_SECTION_TRIAL_TITLE', 'Пробный период')
     elif section == 'core':
-        title = texts.t('ADMIN_PRICING_SECTION_CORE_TITLE', ' Настройки тарифов')
+        title = texts.t('ADMIN_PRICING_SECTION_CORE_TITLE', 'Настройки тарифов')
     else:
-        title = texts.t('ADMIN_PRICING_SECTION_SETTINGS_GENERIC', ' Настройки')
+        title = texts.t('ADMIN_PRICING_SECTION_SETTINGS_GENERIC', 'Настройки')
 
     lines: list[str] = [title, '']
     keyboard_rows: list[list[types.InlineKeyboardButton]] = []
@@ -553,7 +554,7 @@ def _build_settings_section(
                         callback_data=(
                             f'admin_pricing_choice:{section}:{_encode_setting_callback_key(entry.key)}:{option.value}'
                         ),
-                        style='success' if is_active else None,
+                        style='success' if is_active else 'primary',
                     )
                 )
             for i in range(0, len(buttons), 2):
@@ -569,6 +570,8 @@ def _build_settings_section(
                     admin_button(
                         button_text.strip(),
                         callback_data=(f'admin_pricing_setting:{section}:{_encode_setting_callback_key(entry.key)}'),
+                        icon='edit',
+                        style='primary',
                     )
                 ]
             )
@@ -596,7 +599,7 @@ def _build_traffic_options_section(language: str) -> tuple[str, types.InlineKeyb
 
     title = texts.t(
         'ADMIN_PRICING_SECTION_TRAFFIC_OPTIONS_TITLE',
-        ' Отображение пакетов трафика',
+        'Отображение пакетов трафика',
     )
 
     lines: list[str] = [title, '']
@@ -662,7 +665,7 @@ def _build_period_options_section(language: str) -> tuple[str, types.InlineKeybo
     subscription_options = (14, 30, 60, 90, 180, 360)
     renewal_options = (30, 60, 90, 180, 360)
 
-    title = texts.t('ADMIN_PRICING_SECTION_PERIOD_OPTIONS_TITLE', ' Доступные периоды')
+    title = texts.t('ADMIN_PRICING_SECTION_PERIOD_OPTIONS_TITLE', 'Доступные периоды')
     lines: list[str] = [title, '']
 
     sub_list = ', '.join(f'{days}{suffix}' for days in sorted(available_subscription)) or '—'
@@ -860,6 +863,8 @@ def _build_section(
                 admin_button(
                     f'{strip_leading_emoji(label)} • {settings.format_price(price)}',
                     callback_data=f'admin_pricing_edit:{section}:{key}',
+                    icon='edit',
+                    style='primary',
                 )
             ]
         )
@@ -1088,7 +1093,7 @@ async def start_setting_edit(
         example = guidance.get('example') or '—'
         warning = guidance.get('warning') or ''
         prompt_parts = [
-            f' <b>{texts.t("ADMIN_PRICING_SETTING_EDIT_TITLE", "Настройка параметра")}</b>',
+            f'<b>{texts.t("ADMIN_PRICING_SETTING_EDIT_TITLE", "Настройка параметра")}</b>',
             '',
             f'{texts.t("ADMIN_PRICING_SETTING_PARAMETER", "Параметр")}: <b>{label}</b>',
             f'{texts.t("ADMIN_PRICING_SETTING_CURRENT", "Текущее значение")}: <b>{formatted_current}</b>',
@@ -1151,7 +1156,14 @@ async def process_pricing_input(
     texts = get_texts(db_user.language)
 
     if not key:
-        await message.answer(texts.t('ADMIN_PRICING_EDIT_EXPIRED', 'Сессия редактирования истекла.'))
+        await message.answer(
+            admin_screen(
+                texts.t('ADMIN_PRICING_EDIT_EXPIRED', 'Сессия редактирования истекла.'),
+                icon='warning',
+                compact=True,
+            ),
+            parse_mode='HTML',
+        )
         await state.clear()
         return
 
@@ -1167,7 +1179,14 @@ async def process_pricing_input(
                 section_text,
                 section_keyboard,
             )
-        await message.answer(texts.t('ADMIN_PRICING_EDIT_CANCELLED', 'Изменения отменены.'))
+        await message.answer(
+            admin_screen(
+                texts.t('ADMIN_PRICING_EDIT_CANCELLED', 'Изменения отменены.'),
+                icon='info',
+                compact=True,
+            ),
+            parse_mode='HTML',
+        )
         return
 
     if mode == 'price':
@@ -1175,10 +1194,15 @@ async def process_pricing_input(
             new_value = _parse_price_input(raw_value)
         except ValueError:
             await message.answer(
-                texts.t(
-                    'ADMIN_PRICING_EDIT_INVALID',
-                    'Не удалось распознать цену. Укажите число в рублях (например 990 или 990.50).',
-                )
+                admin_screen(
+                    texts.t(
+                        'ADMIN_PRICING_EDIT_INVALID',
+                        'Не удалось распознать цену. Укажите число в рублях (например 990 или 990.50).',
+                    ),
+                    icon='warning',
+                    compact=True,
+                ),
+                parse_mode='HTML',
             )
             return
     else:
@@ -1189,7 +1213,10 @@ async def process_pricing_input(
                 'ADMIN_PRICING_SETTING_INVALID',
                 'Не удалось обновить параметр. Проверьте формат значения.',
             )
-            await message.answer(error_text)
+            await message.answer(
+                admin_screen(html.escape(error_text), icon='warning', compact=True),
+                parse_mode='HTML',
+            )
             return
 
     await bot_configuration_service.set_value(db, key, new_value)
@@ -1223,10 +1250,15 @@ async def process_pricing_input(
         key, bot_configuration_service.get_current_value(key), language=texts.language
     )
     await message.answer(
-        texts.t(
-            'ADMIN_PRICING_SETTING_SUCCESS',
-            'Параметр {label} обновлен: {value}',
-        ).format(label=label, value=formatted_value)
+        admin_screen(
+            texts.t(
+                'ADMIN_PRICING_SETTING_SUCCESS',
+                'Параметр {label} обновлен: {value}',
+            ).format(label=label, value=formatted_value),
+            icon='success',
+            compact=True,
+        ),
+        parse_mode='HTML',
     )
 
     await state.clear()

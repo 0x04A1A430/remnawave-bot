@@ -13,7 +13,7 @@ from app.database.models import User
 from app.localization.texts import get_texts
 from app.services.support_settings_service import SupportSettingsService
 from app.states import SupportSettingsStates
-from app.utils.admin_ui import admin_back_button, admin_button, admin_screen
+from app.utils.admin_ui import admin_back_button, admin_button, admin_quote, admin_screen
 from app.utils.decorators import admin_required, error_handler
 
 
@@ -94,7 +94,7 @@ def _get_support_settings_keyboard(language: str) -> types.InlineKeyboardMarkup:
                 _label(texts.t('ADMIN_SUPPORT_SETTINGS_EDIT_DESCRIPTION', 'Изменить описание')),
                 callback_data='admin_support_edit_desc',
                 icon='document',
-                style='success',
+                style='primary',
             )
         ]
     )
@@ -200,8 +200,9 @@ async def show_support_settings(callback: types.CallbackQuery, db_user: User, db
         icon='support',
         compact=True,
     )
+    description = admin_quote(desc) if desc.strip() else ''
     await callback.message.edit_text(
-        f'{header}\n\n{desc}',
+        '\n\n'.join(part for part in (header, description) if part),
         reply_markup=_get_support_settings_keyboard(db_user.language),
         parse_mode='HTML',
     )
@@ -275,7 +276,14 @@ async def handle_sla_minutes(message: types.Message, db_user: User, db: AsyncSes
         if minutes <= 0 or minutes > 1440:
             raise ValueError
     except Exception:
-        await message.answer(texts.t('ADMIN_SUPPORT_SLA_INVALID', 'Введите корректное число минут (1-1440)'))
+        await message.answer(
+            admin_screen(
+                texts.t('ADMIN_SUPPORT_SLA_INVALID', 'Введите корректное число минут (1-1440)'),
+                icon='error',
+                compact=True,
+            ),
+            parse_mode='HTML',
+        )
         return
     await SupportSettingsService.set_sla_minutes(db, minutes)
     await state.clear()
@@ -338,7 +346,14 @@ async def handle_moderator_id(message: types.Message, db_user: User, db: AsyncSe
     try:
         tid = int(text)
     except Exception:
-        await message.answer(texts.t('ADMIN_SUPPORT_INVALID_TELEGRAM_ID', 'Введите корректный Telegram ID (число)'))
+        await message.answer(
+            admin_screen(
+                texts.t('ADMIN_SUPPORT_INVALID_TELEGRAM_ID', 'Введите корректный Telegram ID (число)'),
+                icon='error',
+                compact=True,
+            ),
+            parse_mode='HTML',
+        )
         return
     if action == 'remove_moderator':
         ok = await SupportSettingsService.remove_moderator(db, tid)
@@ -370,11 +385,8 @@ async def list_moderators(callback: types.CallbackQuery, db_user: User, db: Asyn
     if not moderators:
         await callback.answer(texts.t('ADMIN_SUPPORT_MODERATORS_EMPTY', 'Список пуст'), show_alert=True)
         return
-    text = (
-        texts.t('ADMIN_SUPPORT_MODERATORS_TITLE', '<b>Модераторы</b>')
-        + '\n\n'
-        + '\n'.join([f'• <code>{tid}</code>' for tid in moderators])
-    )
+    moderators_block = '\n'.join(f'• <code>{tid}</code>' for tid in moderators)
+    text = f'{texts.t("ADMIN_SUPPORT_MODERATORS_TITLE", "<b>Модераторы</b>")}\n\n{admin_quote(moderators_block)}'
     await callback.message.edit_text(
         admin_screen(text, icon='users', compact=True),
         parse_mode='HTML',

@@ -36,47 +36,123 @@ class AdminIcon:
         return f"<tg-emoji emoji-id='{self.emoji_id}'>{self.glyph}</tg-emoji>"
 
 
-# Только ID, которые уже встречаются в app/localization/locales/*.json.
-# Так админка не зависит от новых emoji-паков и одинаково выглядит во всех языках.
+# Premium-пак TgAndroidIcons (515 эмодзи). Имена ниже — семантические:
+# экран/кнопка выбирает смысл, а не конкретный глиф. Юникод-фоллбэк остаётся
+# внутри тега, поэтому старые клиенты без premium-эмодзи видят обычный символ.
 ADMIN_ICONS: dict[str, AdminIcon] = {
+    # Навигация и статусы
     'crown': AdminIcon('5807868868886009920', '👑'),
-    'users': AdminIcon('5944970130554359187', '👥'),
+    'back': AdminIcon('5877629862306385808', '◀️'),
+    'arrow_left': AdminIcon('5875082500023258804', '⬅️'),
+    'arrow_right': AdminIcon('5877468380125990242', '➡️'),
+    'arrow_up': AdminIcon('5875078273775439450', '🔼'),
+    'arrow_down': AdminIcon('5875008416132370818', '🔽'),
+    'success': AdminIcon('5776375003280838798', '✅'),
+    'check': AdminIcon('5825794181183836432', '✔️'),
+    'error': AdminIcon('5778527486270770928', '❌'),
+    'cross': AdminIcon('5778527486270770928', '❌'),
+    'warning': AdminIcon('5881702736843511327', '⚠️'),
+    'info': AdminIcon('5879785854284599288', 'ℹ️'),
+    'question': AdminIcon('5873121512445187130', '❓'),
+    'plus': AdminIcon('5877219383691972108', '➕'),
+    'prohibit': AdminIcon('5872829476143894491', '🚫'),
+    'circle_red': AdminIcon('5967333011652350314', '🔴'),
+    'circle_white': AdminIcon('5994324703559290598', '⚪️'),
+    'lock': AdminIcon('5832546462478635761', '🔒'),
+    'unlock': AdminIcon('6034962180875490251', '🔓'),
+    'refresh': AdminIcon('5839200986022812209', '🔄'),
+    'sync': AdminIcon('6006085522311614682', '🔃'),
+    'repeat': AdminIcon('6005843436479975944', '🔁'),
+    'queue': AdminIcon('6028482475385164542', '⏩'),
+    'infinity': AdminIcon('5908972566537572230', '♾'),
+    'clock': AdminIcon('5778605968208170641', '🕒'),
+    'calendar': AdminIcon('5967412305338568701', '📅'),
+    'trials': AdminIcon('5985616167740379273', '⏰'),
+    # Пользователи и доступ
     'user': AdminIcon('5886412370347036129', '👤'),
+    'users': AdminIcon('5944970130554359187', '👥'),
     'id': AdminIcon('5936017305585586269', '🪪'),
-    'servers': AdminIcon('5879585266426973039', '🌐'),
+    'key': AdminIcon('6005570495603282482', '🔑'),
+    'shield': AdminIcon('5926783847453692661', '🛡'),
+    'eye': AdminIcon('5960714428394507968', '👁'),
+    'hand': AdminIcon('5870734657384877785', '✋'),
+    'thumbs_up': AdminIcon('5992199545151295755', '👍'),
+    'thumbs_down': AdminIcon('5994368422031397063', '👎'),
+    'heart': AdminIcon('5992453811510186287', '❤️'),
+    # Инфраструктура, серверы, система
+    'servers': AdminIcon('5967432491684860012', '🛜'),
+    'network': AdminIcon('5967432491684860012', '🛜'),
+    'wifi': AdminIcon('5874986954180791957', '📶'),
+    'system': AdminIcon('5877318502947229960', '💻'),
+    'terminal': AdminIcon('5877396173135811032', '⌨'),
+    'database': AdminIcon('5877316724830768997', '🗃'),
+    'folder': AdminIcon('5875206779196935950', '📁'),
+    'image': AdminIcon('5888799736508454231', '🖼'),
+    'map': AdminIcon('5883955653348692941', '🗺'),
+    'battery': AdminIcon('5778546461436284629', '🔋'),
+    'save': AdminIcon('5884448719889240368', '💾'),
+    'backup': AdminIcon('5884448719889240368', '💾'),
+    'download': AdminIcon('5886451926995833684', '⬇️'),
+    'upload': AdminIcon('6005807101056651268', '⬆️'),
+    'export': AdminIcon('5877540355187937244', '📤'),
+    'import': AdminIcon('5877307202888273539', '📥'),
+    'terminal_action': AdminIcon('5877396173135811032', '⌨'),
+    'tools': AdminIcon('5988023995125993550', '🛠'),
+    'settings': AdminIcon('5877260593903177342', '⚙'),
+    'filter': AdminIcon('5875431869842985304', '🎛'),
+    'broom': AdminIcon('5845947563601041174', '🧹'),
+    'flask': AdminIcon('5897607722295103204', '🧪'),
+    'fire': AdminIcon('6008118472066732010', '🔥'),
+    'sparkles': AdminIcon('5931621672846103580', '💫'),
+    'airplane': AdminIcon('5875465628285931233', '✈️'),
+    'home': AdminIcon('5967822972931542886', '🏠'),
+    'door': AdminIcon('5877341274863832725', '🚪'),
+    # Деньги, тарифы, продажи
     'tariff': AdminIcon('5924720918826848520', '📦'),
     'pricing': AdminIcon('5967548335542767952', '💳'),
-    'stats': AdminIcon('5877485980901971030', '📊'),
-    'chart': AdminIcon('5931472654660800739', '📊'),
-    'support': AdminIcon('5931415565955503486', '🤖'),
-    'messages': AdminIcon('5909015791088439934', '🎙'),
-    'settings': AdminIcon('5877260593903177342', '⚙'),
-    'system': AdminIcon('5877318502947229960', '💻'),
-    'trials': AdminIcon('5985616167740379273', '⏰'),
-    'payments': AdminIcon('5811989245761426317', '💰'),
-    'money': AdminIcon('5967548335542767952', '💳'),
-    'promo': AdminIcon('5967548335542767952', '💳'),
-    'referrals': AdminIcon('5944970130554359187', '👥'),
+    'payments': AdminIcon('5967390100357648692', '💵'),
+    'money': AdminIcon('5811989245761426317', '💰'),
+    'coin': AdminIcon('5992430854909989581', '🪙'),
+    'diamond': AdminIcon('5771755323572359189', '💎'),
+    'star': AdminIcon('5958376256788502078', '⭐️'),
+    'medal': AdminIcon('5961051261204696786', '🥇'),
     'gift': AdminIcon('6032937473162614352', '🎁'),
-    'calendar': AdminIcon('5967412305338568701', '📅'),
-    'refresh': AdminIcon('5839200986022812209', '🔄'),
-    'updates': AdminIcon('5839200986022812209', '🔄'),
+    'tag': AdminIcon('5854776233950188167', '🏷'),
+    'promo': AdminIcon('5854776233950188167', '🏷'),
+    'certificate': AdminIcon('5992157823838984339', '🎓'),
+    # Коммуникации и контент
+    'messages': AdminIcon('5771695636411847302', '📢'),
+    'broadcast': AdminIcon('5771695636411847302', '📢'),
+    'chat': AdminIcon('5886666250158870040', '💬'),
+    'support': AdminIcon('5931415565955503486', '🤖'),
+    'phone': AdminIcon('5897567714674741148', '📞'),
+    'email': AdminIcon('5985817223749439505', '✉️'),
+    'mic': AdminIcon('5897554554894946515', '🎤'),
+    'video': AdminIcon('5882002216323125435', '🎥'),
+    'music': AdminIcon('5891249688933305846', '🎵'),
+    'palette': AdminIcon('5814690801665446789', '🎨'),
+    'dice': AdminIcon('5960608239623082921', '🎲'),
+    'bell': AdminIcon('5909201569898827582', '🔔'),
+    'bell_off': AdminIcon('5909123362839335003', '🔕'),
+    'pin': AdminIcon('5908961403917570106', '📌'),
+    'search': AdminIcon('5874960879434338403', '🔎'),
+    'edit': AdminIcon('5879841310902324730', '✏️'),
+    'delete': AdminIcon('5879896690210639947', '🗑'),
     'link': AdminIcon('5877465816030515018', '🔗'),
     'document': AdminIcon('5956561916573782596', '📄'),
-    'rules': AdminIcon('5956561916573782596', '📄'),
-    'faq': AdminIcon('5956561916573782596', '📄'),
-    'logs': AdminIcon('5956561916573782596', '📄'),
-    'success': AdminIcon('5776375003280838798', '✅'),
-    'error': AdminIcon('5778527486270770928', '❌'),
-    'warning': AdminIcon('5881702736843511327', '⚠️'),
-    'lock': AdminIcon('5872829476143894491', '🚫'),
-    'delete': AdminIcon('5879896690210639947', '🗑'),
+    'rules': AdminIcon('5897850551156084824', '📖'),
+    'faq': AdminIcon('5873121512445187130', '❓'),
+    'logs': AdminIcon('5877597667231534929', '🗒'),
+    'report': AdminIcon('5886506997066502636', '📰'),
+    'stats': AdminIcon('5877485980901971030', '📊'),
+    'chart': AdminIcon('5776219138917668486', '📈'),
     'devices': AdminIcon('5985833664884250583', '📱'),
-    'star': AdminIcon('5958376256788502078', '⭐️'),
-    'diamond': AdminIcon('5771755323572359189', '💎'),
-    'coin': AdminIcon('5992430854909989581', '🪙'),
-    'fire': AdminIcon('6008118472066732010', '🔥'),
-    'back': AdminIcon('5877629862306385808', '◀️'),
+    'users_group': AdminIcon('5944970130554359187', '👥'),
+    'referrals': AdminIcon('5944970130554359187', '👥'),
+    'updates': AdminIcon('5839200986022812209', '🔄'),
+    'sun': AdminIcon('6005924903419646424', '🌞'),
+    'flower': AdminIcon('5967574255670399788', '🌸'),
+    'burger': AdminIcon('5875271289605722323', '🍔'),
 }
 
 _LEGACY_BOLD_RE = re.compile(r'\*\*(.+?)\*\*', re.DOTALL)
@@ -94,7 +170,7 @@ ADMIN_BUTTON_ICONS: dict[str, str] = {
     'admin_servers': 'servers',
     'admin_tariffs': 'tariff',
     'admin_pricing': 'pricing',
-    'admin_submenu_promo': 'stats',
+    'admin_submenu_promo': 'promo',
     'admin_submenu_support': 'support',
     'admin_submenu_communications': 'messages',
     'admin_submenu_settings': 'settings',
@@ -103,42 +179,73 @@ ADMIN_BUTTON_ICONS: dict[str, str] = {
     'admin_trials_reset': 'refresh',
     'admin_payments': 'payments',
     'admin_users': 'users',
-    'admin_user_search': 'user',
+    'admin_user_search': 'search',
     'admin_referrals': 'referrals',
     'admin_subscriptions': 'tariff',
     'admin_promocodes': 'promo',
-    'admin_statistics': 'stats',
-    'admin_campaigns': 'messages',
+    'admin_statistics': 'chart',
+    'admin_campaigns': 'broadcast',
     'admin_coupons': 'gift',
-    'admin_contests': 'star',
+    'admin_contests': 'medal',
     'admin_promo_groups': 'users',
-    'admin_remnawave': 'servers',
-    'admin_remna_config': 'settings',
+    'admin_remnawave': 'shield',
+    'admin_remna_config': 'terminal',
     'admin_monitoring': 'chart',
-    'admin_mon_settings': 'chart',
+    'admin_mon_settings': 'filter',
     'admin_bot_config': 'settings',
     'admin_rules': 'rules',
-    'maintenance_panel': 'settings',
-    'admin_privacy_policy': 'document',
+    'maintenance_panel': 'tools',
+    'admin_privacy_policy': 'shield',
     'admin_public_offer': 'document',
     'admin_faq': 'faq',
-    'reqch:list': 'link',
-    'qamounts:list': 'money',
-    'overpay_cert': 'success',
+    'reqch:list': 'broadcast',
+    'qamounts:list': 'payments',
+    'overpay_cert': 'certificate',
     'admin_updates': 'updates',
-    'backup_panel': 'tariff',
+    'backup_panel': 'backup',
     'admin_system_logs': 'logs',
-    'admin_reports': 'stats',
-    'admin_tickets': 'support',
+    'admin_reports': 'report',
+    'admin_tickets': 'chat',
     'admin_support_audit': 'logs',
-    'admin_support_settings': 'settings',
-    'admin_blacklist_settings': 'lock',
+    'admin_support_settings': 'tools',
+    'admin_blacklist_settings': 'prohibit',
     'admin_blocked_users': 'lock',
-    'admin_messages': 'messages',
+    'admin_messages': 'broadcast',
     'admin_polls': 'stats',
     'admin_promo_offers': 'gift',
-    'welcome_text_panel': 'document',
-    'user_messages_panel': 'messages',
+    'welcome_text_panel': 'edit',
+    'user_messages_panel': 'chat',
+    # Частые действия в списках/карточках
+    'admin_users_stats': 'chart',
+    'admin_subs_list': 'document',
+    'admin_subs_expiring': 'calendar',
+    'admin_subs_stats': 'chart',
+    'admin_subs_countries': 'map',
+    'admin_stats_users': 'users',
+    'admin_stats_subs': 'tariff',
+    'admin_stats_revenue': 'payments',
+    'admin_stats_referrals': 'referrals',
+    'admin_stats_summary': 'chart',
+    'admin_rw_system': 'chart',
+    'admin_rw_nodes': 'servers',
+    'admin_rw_sync': 'sync',
+    'admin_mon_logs': 'logs',
+    'admin_mon_logs_filters': 'filter',
+    'admin_mon_clear_logs': 'delete',
+    'admin_system_logs_refresh': 'refresh',
+    'admin_system_logs_download': 'download',
+    'admin_payments_check_all': 'check',
+    'admin_payments_export': 'export',
+    'admin_promo_create': 'plus',
+    'admin_promo_list': 'promo',
+    'admin_ref_levels': 'medal',
+    'admin_support_audit_page': 'logs',
+    'admin_blacklist_update': 'refresh',
+    'admin_blacklist_view': 'eye',
+    'admin_blacklist_set_url': 'link',
+    'admin_blacklist_toggle': 'unlock',
+    'admin_blocked_scan': 'refresh',
+    'admin_blocked_list': 'lock',
 }
 
 # Только разделы, уникальные для админки: пользовательская кнопка «Админ-панель»
@@ -151,6 +258,261 @@ ADMIN_BUTTON_STYLES: dict[str, str] = {
     'admin_trials_reset': 'primary',
     'admin_payments': 'success',
 }
+
+# Префиксы callback_data для глубоких меню: конкретные правила идут раньше
+# общих. Нужны, потому что кнопки вложенных экранов собираются динамически
+# (`admin_tariff_edit_name:{id}`, `promo_manage_{id}` и т.п.).
+ADMIN_BUTTON_ICON_PREFIXES: tuple[tuple[str, str], ...] = (
+    ('admin_tariff_edit', 'edit'),
+    ('admin_server_edit', 'edit'),
+    ('promo_edit', 'edit'),
+    ('admin_campaign_edit', 'edit'),
+    ('admin_user_edit', 'edit'),
+    ('admin_subs_list', 'document'),
+    ('admin_subs_expiring', 'calendar'),
+    ('admin_subs_stats', 'chart'),
+    ('admin_subs_countries', 'map'),
+    ('admin_subs', 'tariff'),
+    ('admin_sub', 'tariff'),
+    ('admin_stats', 'chart'),
+    ('admin_statistics', 'chart'),
+    ('admin_servers', 'servers'),
+    ('admin_server', 'servers'),
+    ('admin_users', 'users'),
+    ('admin_user', 'user'),
+    ('admin_tariff', 'tariff'),
+    ('admin_price', 'pricing'),
+    ('admin_pricing', 'pricing'),
+    ('admin_rw_system', 'chart'),
+    ('admin_rw_nodes', 'servers'),
+    ('admin_rw', 'servers'),
+    ('admin_mon_logs', 'logs'),
+    ('admin_mon_settings', 'filter'),
+    ('admin_mon', 'chart'),
+    ('admin_monitoring', 'chart'),
+    ('admin_promo_offers', 'gift'),
+    ('admin_promo', 'promo'),
+    ('promo_manage', 'promo'),
+    ('promo_', 'promo'),
+    ('admin_ref', 'referrals'),
+    ('admin_contest', 'medal'),
+    ('admin_campaign', 'broadcast'),
+    ('admin_support_audit', 'logs'),
+    ('admin_support_settings', 'tools'),
+    ('admin_support', 'support'),
+    ('admin_ticket', 'chat'),
+    ('admin_faq', 'faq'),
+    ('admin_rules', 'rules'),
+    ('admin_privacy', 'shield'),
+    ('admin_public_offer', 'document'),
+    ('admin_system_logs', 'logs'),
+    ('admin_logs', 'logs'),
+    ('backup', 'backup'),
+    ('admin_updates', 'updates'),
+    ('admin_reports', 'report'),
+    ('maintenance', 'tools'),
+    ('admin_bot_config', 'settings'),
+    ('admin_remna_config', 'terminal'),
+    ('admin_blacklist', 'prohibit'),
+    ('admin_blocked', 'lock'),
+    ('admin_trials', 'trials'),
+    ('admin_payments', 'payments'),
+    ('admin_coupons', 'gift'),
+    ('admin_polls', 'stats'),
+    ('poll_', 'stats'),
+    ('reqch:', 'broadcast'),
+    ('qamounts:', 'payments'),
+    ('overpay', 'certificate'),
+    ('welcome', 'edit'),
+    ('user_message', 'chat'),
+    ('list_user_messages', 'chat'),
+    ('admin_help', 'question'),
+    ('admin_gift', 'gift'),
+    ('admin_panel', 'crown'),
+    ('admin_', 'settings'),
+)
+
+_ADMIN_CALLBACK_PREFIXES = (
+    'admin_',
+    'promo_',
+    'poll_',
+    'backup_',
+    'maintenance_',
+    'welcome_',
+    'reqch:',
+    'qamounts:',
+    'overpay_',
+    'user_message',
+    'list_user_messages',
+    'back_to_',
+)
+
+_DANGER_MARKERS = (
+    'delete',
+    'remove',
+    'cancel',
+    'clear',
+    'reset',
+    'revoke',
+    'stop',
+    'disable',
+    'deactivate',
+    'block',
+    'ban',
+    'close_ticket',
+    'close_all',
+    'drop',
+    'wipe',
+    'удал',
+    'отмен',
+    'назад',
+    'очист',
+    'сброс',
+    'отключ',
+    'деактив',
+    'заблок',
+    'закрыть',
+)
+_SUCCESS_MARKERS = (
+    'create',
+    'add',
+    'save',
+    'confirm',
+    'apply',
+    'enable',
+    'activate',
+    'start',
+    'send',
+    'publish',
+    'restore',
+    'topup',
+    'pay',
+    'создат',
+    'добав',
+    'сохран',
+    'подтверд',
+    'примен',
+    'включ',
+    'актив',
+    'запуст',
+    'отправ',
+    'опублик',
+    'восстанов',
+    'пополн',
+    'оплат',
+)
+_PRIMARY_MARKERS = (
+    'list',
+    'view',
+    'show',
+    'stats',
+    'settings',
+    'search',
+    'edit',
+    'open',
+    'page',
+    'next',
+    'prev',
+    'filter',
+    'export',
+    'download',
+    'detail',
+    'info',
+    'select',
+    'choose',
+    'history',
+    'log',
+    'report',
+    'список',
+    'просмотр',
+    'статистик',
+    'настрой',
+    'поиск',
+    'редакт',
+    'открыт',
+    'страниц',
+    'фильтр',
+    'экспорт',
+    'скач',
+    'подроб',
+    'истор',
+    'лог',
+    'отчёт',
+)
+_BACK_TEXT_MARKERS = ('←', '◀', '⬅', '⏪', 'назад', 'back')
+
+
+def _is_admin_callback(callback: str) -> bool:
+    return bool(callback) and callback.startswith(_ADMIN_CALLBACK_PREFIXES)
+
+
+def _looks_like_back(callback: str, text: str) -> bool:
+    if callback.startswith(('back_to_', 'admin_back_')) or callback.endswith('_back'):
+        return True
+    lowered = text.strip().lower()
+    return lowered.startswith(_BACK_TEXT_MARKERS)
+
+
+def _infer_button_style(callback: str, text: str) -> str | None:
+    """Цвет для глубоких меню: явные правила экрана важнее этого fallback."""
+    if not _is_admin_callback(callback):
+        return None
+    if _looks_like_back(callback, text):
+        return 'danger'
+    lowered = f'{callback} {text}'.lower()
+    if any(marker in lowered for marker in _DANGER_MARKERS):
+        return 'danger'
+    if any(marker in lowered for marker in _SUCCESS_MARKERS):
+        return 'success'
+    if any(marker in lowered for marker in _PRIMARY_MARKERS):
+        return 'primary'
+    # Для админских действий по умолчанию даём навигационный цвет, чтобы
+    # глубокие меню не оставались серыми.
+    return 'primary'
+
+
+def _infer_button_icon(callback: str, text: str, style: str | None) -> str | None:
+    lowered = f'{callback} {text}'.lower()
+    if style == 'danger':
+        if _looks_like_back(callback, text):
+            return 'back'
+        if any(marker in lowered for marker in ('delete', 'remove', 'clear', 'wipe', 'drop', 'удал', 'очист')):
+            return 'delete'
+        if any(marker in lowered for marker in ('block', 'ban', 'lock', 'заблок')):
+            return 'lock'
+        return 'warning'
+
+    # Действие важнее раздела: «Сохранить» в карточке тарифа — это дискета,
+    # а не иконка тарифа.
+    if any(marker in lowered for marker in ('save', 'сохран', 'примен', 'apply', 'confirm', 'подтверд')):
+        return 'save'
+    if any(marker in lowered for marker in ('create', 'add', 'создат', 'добав')):
+        return 'plus'
+    if any(marker in lowered for marker in ('edit', 'редакт', 'измен')):
+        return 'edit'
+    if any(marker in lowered for marker in ('send', 'отправ', 'publish', 'опублик')):
+        return 'broadcast'
+    if any(marker in lowered for marker in ('refresh', 'обнов', 'sync', 'синхрон')):
+        return 'refresh'
+    if any(marker in lowered for marker in ('search', 'поиск')):
+        return 'search'
+    if any(marker in lowered for marker in ('filter', 'фильтр')):
+        return 'filter'
+    if any(marker in lowered for marker in ('download', 'скач')):
+        return 'download'
+    if any(marker in lowered for marker in ('export', 'экспорт')):
+        return 'export'
+    if any(marker in lowered for marker in ('stats', 'статистик', 'chart', 'график')):
+        return 'chart'
+
+    icon = ADMIN_BUTTON_ICONS.get(callback)
+    if icon:
+        return icon
+
+    for prefix, icon_name in ADMIN_BUTTON_ICON_PREFIXES:
+        if callback.startswith(prefix):
+            return icon_name
+    return 'settings' if _is_admin_callback(callback) else None
 
 
 def admin_icon(name: str) -> str:
@@ -257,7 +619,7 @@ def decorate_admin_markup(markup: Any) -> Any:
         for button in row:
             updates: dict[str, Any] = {}
             callback = button.callback_data or ''
-            is_admin_button = callback in ADMIN_BUTTON_ICONS or callback.startswith('admin_')
+            is_admin_button = _is_admin_callback(callback)
 
             text = button.text or ''
             if is_admin_button:
@@ -265,22 +627,19 @@ def decorate_admin_markup(markup: Any) -> Any:
                 cleaned = _LEGACY_BUTTON_GLYPHS_RE.sub('', cleaned).strip()
                 if cleaned != text:
                     updates['text'] = cleaned
+                    text = cleaned
 
-            icon_name = ADMIN_BUTTON_ICONS.get(callback)
-            if (
-                icon_name
-                and not button.icon_custom_emoji_id
-                and button.style != 'danger'
-                and updates.get('style') != 'danger'
-                and '<tg-emoji' not in (button.text or '')
-            ):
-                token = ADMIN_ICONS.get(icon_name)
+            style = button.style
+            if not style:
+                style = ADMIN_BUTTON_STYLES.get(callback) or _infer_button_style(callback, text)
+                if style:
+                    updates['style'] = style
+
+            if not button.icon_custom_emoji_id and '<tg-emoji' not in text:
+                icon_name = _infer_button_icon(callback, text, style)
+                token = ADMIN_ICONS.get(icon_name) if icon_name else None
                 if token:
                     updates['icon_custom_emoji_id'] = token.emoji_id
-
-            style = ADMIN_BUTTON_STYLES.get(callback)
-            if style and not button.style:
-                updates['style'] = style
 
             if updates:
                 new_row.append(button.model_copy(update=updates))

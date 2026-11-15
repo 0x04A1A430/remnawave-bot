@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database.models import User
 from app.localization.texts import get_texts
 from app.services.backup_service import backup_service
-from app.utils.admin_ui import admin_back_button, admin_button, admin_screen
+from app.utils.admin_ui import admin_back_button, admin_button, admin_quote, admin_screen
 from app.utils.decorators import admin_required, error_handler
 from app.utils.miniapp_buttons import strip_leading_emoji
 
@@ -216,7 +216,7 @@ def get_backup_manage_keyboard(backup_filename: str, language: str = 'ru'):
                 admin_button(
                     _label(texts.t('ADMIN_BACKUP_UI_061', 'К списку')),
                     callback_data='backup_list',
-                    style='danger',
+                    style='primary',
                 )
             ],
         ]
@@ -247,18 +247,21 @@ def get_backup_settings_keyboard(settings_obj, language: str = 'ru'):
                 admin_button(
                     _label(texts.t('ADMIN_BACKUP_UI_062', 'Автобекапы: {v0}').format(v0=auto_status)),
                     callback_data='backup_toggle_auto',
+                    style='primary',
                 )
             ],
             [
                 admin_button(
                     _label(texts.t('ADMIN_BACKUP_UI_063', 'Сжатие: {v0}').format(v0=compression_status)),
                     callback_data='backup_toggle_compression',
+                    style='primary',
                 )
             ],
             [
                 admin_button(
                     _label(texts.t('ADMIN_BACKUP_UI_064', 'Логи в бекапе: {v0}').format(v0=logs_status)),
                     callback_data='backup_toggle_logs',
+                    style='primary',
                 )
             ],
             [admin_back_button(texts, 'backup_panel')],
@@ -273,23 +276,33 @@ async def show_backup_panel(callback: types.CallbackQuery, db_user: User, db: As
 
     status_auto = 'Включены' if settings_obj.auto_backup_enabled else 'Отключены'
 
-    text = f"""<b>Система бекапов</b>
-
-<b>Статус:</b>
-• Автобекапы: {status_auto}
-• Интервал: {settings_obj.backup_interval_hours} часов
-• Хранить: {settings_obj.max_backups_keep} файлов
-• Сжатие: {'Да' if settings_obj.compression_enabled else 'Нет'}
-
-<b>Расположение:</b> <code>/app/data/backups</code>
-
-<b>Доступные операции:</b>
-• Создание полного бекапа всех данных
-• Восстановление из файла бекапа
-• Управление автоматическими бекапами"""
+    text = '\n'.join(
+        [
+            '<b>Система бекапов</b>',
+            '',
+            admin_quote(
+                '\n'.join(
+                    [
+                        '<b>Статус:</b>',
+                        f'• Автобекапы: {status_auto}',
+                        f'• Интервал: {settings_obj.backup_interval_hours} часов',
+                        f'• Хранить: {settings_obj.max_backups_keep} файлов',
+                        f'• Сжатие: {"Да" if settings_obj.compression_enabled else "Нет"}',
+                        '',
+                        '<b>Расположение:</b> <code>/app/data/backups</code>',
+                    ]
+                )
+            ),
+            '',
+            '<b>Доступные операции:</b>',
+            '• Создание полного бекапа всех данных',
+            '• Восстановление из файла бекапа',
+            '• Управление автоматическими бекапами',
+        ]
+    )
 
     await callback.message.edit_text(
-        admin_screen(text, icon='tariff', compact=True),
+        admin_screen(text, icon='backup', compact=True),
         parse_mode='HTML',
         reply_markup=get_backup_main_keyboard(db_user.language),
     )
@@ -382,7 +395,7 @@ async def show_backup_list(callback: types.CallbackQuery, db_user: User, db: Asy
         keyboard = get_backup_list_keyboard(backups, page, language=db_user.language)
 
     await callback.message.edit_text(
-        admin_screen(_clean_legacy(text), icon='tariff', compact=True),
+        admin_screen(_clean_legacy(text), icon='backup', compact=True),
         parse_mode='HTML',
         reply_markup=keyboard,
     )
@@ -418,26 +431,35 @@ async def manage_backup_file(callback: types.CallbackQuery, db_user: User, db: A
     except:
         date_str = 'Ошибка формата даты'
 
-    text = f"""<b>Информация о бекапе</b>
-
-<b>Файл:</b> <code>{filename}</code>
-<b>Создан:</b> {date_str}
-<b>Размер:</b> {backup_info.get('file_size_mb', 0):.2f} MB
-<b>Таблиц:</b> {backup_info.get('tables_count', '?')}
-<b>Записей:</b> {backup_info.get('total_records', '?'):,}
-<b>Сжатие:</b> {'Да' if backup_info.get('compressed') else 'Нет'}
-<b>БД:</b> {backup_info.get('database_type', 'unknown')}
-"""
+    text = '\n'.join(
+        [
+            '<b>Информация о бекапе</b>',
+            '',
+            admin_quote(
+                '\n'.join(
+                    [
+                        f'<b>Файл:</b> <code>{html.escape(filename)}</code>',
+                        f'<b>Создан:</b> {date_str}',
+                        f'<b>Размер:</b> {backup_info.get("file_size_mb", 0):.2f} MB',
+                        f'<b>Таблиц:</b> {backup_info.get("tables_count", "?")}',
+                        f'<b>Записей:</b> {backup_info.get("total_records", "?"):,}',
+                        f'<b>Сжатие:</b> {"Да" if backup_info.get("compressed") else "Нет"}',
+                        f'<b>БД:</b> {html.escape(str(backup_info.get("database_type", "unknown")))}',
+                    ]
+                )
+            ),
+        ]
+    )
 
     if backup_info.get('error'):
         text += (
             get_texts(db_user.language)
-            .t('ADMIN_BACKUP_UI_014', '\n⚠ <b>Ошибка:</b> {v0}')
+            .t('ADMIN_BACKUP_UI_014', '\n<b>Ошибка:</b> {v0}')
             .format(v0=_localize_backup_message(backup_info['error'], db_user.language))
         )
 
     await callback.message.edit_text(
-        admin_screen(_clean_legacy(text), icon='tariff', compact=True),
+        admin_screen(_clean_legacy(text), icon='backup', compact=True),
         parse_mode='HTML',
         reply_markup=get_backup_manage_keyboard(filename, language=db_user.language),
     )
@@ -452,7 +474,7 @@ async def delete_backup_confirm(callback: types.CallbackQuery, db_user: User, db
 
     text = texts.t('ADMIN_BACKUP_UI_002', '<b>Удаление бекапа</b>\n\n')
     text += texts.t('ADMIN_BACKUP_UI_003', 'Вы уверены, что хотите удалить бекап?\n\n')
-    text += f'<code>{filename}</code>\n\n'
+    text += f'<code>{html.escape(filename)}</code>\n\n'
     text += texts.t('ADMIN_BACKUP_UI_004', '<b>Это действие нельзя отменить!</b>')
 
     keyboard = InlineKeyboardMarkup(
@@ -533,8 +555,8 @@ async def restore_backup_start(callback: types.CallbackQuery, db_user: User, db:
         filename = callback.data.replace('backup_restore_file_', '')
 
         text = texts.t('ADMIN_BACKUP_UI_015', '<b>Восстановление из бекапа</b>\n\n')
-        text += texts.t('ADMIN_BACKUP_UI_016', '<b>Файл:</b> <code>{v0}</code>\n\n').format(v0=filename)
-        text += texts.t('ADMIN_BACKUP_UI_017', '<b>ВНИМАНИЕ!</b>\n')
+        text += texts.t('ADMIN_BACKUP_UI_016', '<b>Файл:</b> <code>{v0}</code>\n\n').format(v0=html.escape(filename))
+        text += texts.t('ADMIN_BACKUP_UI_017', '<b>Внимание!</b>\n')
         text += texts.t('ADMIN_BACKUP_UI_018', '• Процесс может занять несколько минут\n')
         text += texts.t('ADMIN_BACKUP_UI_019', '• Рекомендуется создать бекап перед восстановлением\n')
         text += texts.t('ADMIN_BACKUP_UI_020', '• Существующие данные будут дополнены\n\n')
@@ -568,7 +590,7 @@ async def restore_backup_start(callback: types.CallbackQuery, db_user: User, db:
 
 Отправьте файл бекапа (.json, .json.gz или .tar.gz)
 
-<b>ВАЖНО:</b>
+<b>Важно:</b>
 • Файл должен быть создан этой системой бекапов
 • Процесс может занять несколько минут
 • Рекомендуется создать бекап перед восстановлением
@@ -597,7 +619,7 @@ async def restore_backup_start(callback: types.CallbackQuery, db_user: User, db:
         await state.set_state(BackupStates.waiting_backup_file)
 
     await callback.message.edit_text(
-        admin_screen(_clean_legacy(text), icon='refresh', compact=True),
+        admin_screen(_clean_legacy(text), icon='upload', compact=True),
         parse_mode='HTML',
         reply_markup=keyboard,
     )
@@ -632,7 +654,7 @@ async def restore_backup_execute(callback: types.CallbackQuery, db_user: User, d
                 texts.t(
                     'ADMIN_BACKUP_UI_031',
                     '<b>Восстановление из бекапа...</b>\n\nРаботаем с {v0} данных...\nФайл: <code>{v1}</code>\n\nЭто может занять несколько минут.',
-                ).format(v0=action_text, v1=filename)
+                ).format(v0=action_text, v1=html.escape(filename))
             ),
             icon='refresh',
             compact=True,
@@ -743,16 +765,28 @@ async def handle_backup_file_upload(message: types.Message, db_user: User, db: A
 
         await message.bot.download_file(file.file_path, temp_path)
 
-        text = f"""<b>Файл загружен</b>
+        uploaded_name = html.escape(document.file_name or '')
 
-<b>Имя:</b> <code>{document.file_name}</code>
-<b>Размер:</b> {document.file_size / 1024 / 1024:.2f} MB
-
-<b>ВНИМАНИЕ!</b>
-Процесс восстановления изменит данные в базе.
-Рекомендуется создать бекап перед восстановлением.
-
-Продолжить?"""
+        text = '\n'.join(
+            [
+                '<b>Файл загружен</b>',
+                '',
+                admin_quote(
+                    '\n'.join(
+                        [
+                            f'<b>Имя:</b> <code>{uploaded_name}</code>',
+                            f'<b>Размер:</b> {document.file_size / 1024 / 1024:.2f} MB',
+                        ]
+                    )
+                ),
+                '',
+                '<b>Внимание!</b>',
+                'Процесс восстановления изменит данные в базе.',
+                'Рекомендуется создать бекап перед восстановлением.',
+                '',
+                'Продолжить?',
+            ]
+        )
 
         keyboard = InlineKeyboardMarkup(
             inline_keyboard=[
@@ -778,15 +812,20 @@ async def handle_backup_file_upload(message: types.Message, db_user: User, db: A
             ]
         )
 
-        await message.answer(
-            admin_screen(text, icon='document', compact=True), parse_mode='HTML', reply_markup=keyboard
-        )
+        await message.answer(admin_screen(text, icon='upload', compact=True), parse_mode='HTML', reply_markup=keyboard)
         await state.clear()
 
     except Exception as e:
         logger.error('Ошибка загрузки файла бекапа', error=e)
         await message.answer(
-            _clean_legacy(texts.t('ADMIN_BACKUP_UI_052', 'Ошибка загрузки файла: {v0!s}').format(v0=e)),
+            admin_screen(
+                _clean_legacy(
+                    texts.t('ADMIN_BACKUP_UI_052', 'Ошибка загрузки файла: {v0!s}').format(v0=html.escape(str(e)))
+                ),
+                icon='error',
+                compact=True,
+            ),
+            parse_mode='HTML',
             reply_markup=InlineKeyboardMarkup(
                 inline_keyboard=[
                     [
@@ -806,19 +845,29 @@ async def handle_backup_file_upload(message: types.Message, db_user: User, db: A
 async def show_backup_settings(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
     settings_obj = await backup_service.get_backup_settings()
 
-    text = f"""<b>Настройки системы бекапов</b>
-
-<b>Автоматические бекапы:</b>
-• Статус: {'Включены' if settings_obj.auto_backup_enabled else 'Отключены'}
-• Интервал: {settings_obj.backup_interval_hours} часов
-• Время запуска: {settings_obj.backup_time}
-
-<b>Хранение:</b>
-• Максимум файлов: {settings_obj.max_backups_keep}
-• Сжатие: {'Включено' if settings_obj.compression_enabled else 'Отключено'}
-• Включать логи: {'Да' if settings_obj.include_logs else 'Нет'}
-
-<b>Расположение:</b> <code>{settings_obj.backup_location}</code>"""
+    text = '\n'.join(
+        [
+            '<b>Настройки системы бекапов</b>',
+            '',
+            admin_quote(
+                '\n'.join(
+                    [
+                        '<b>Автоматические бекапы:</b>',
+                        f'• Статус: {"Включены" if settings_obj.auto_backup_enabled else "Отключены"}',
+                        f'• Интервал: {settings_obj.backup_interval_hours} часов',
+                        f'• Время запуска: {settings_obj.backup_time}',
+                        '',
+                        '<b>Хранение:</b>',
+                        f'• Максимум файлов: {settings_obj.max_backups_keep}',
+                        f'• Сжатие: {"Включено" if settings_obj.compression_enabled else "Отключено"}',
+                        f'• Включать логи: {"Да" if settings_obj.include_logs else "Нет"}',
+                        '',
+                        f'<b>Расположение:</b> <code>{html.escape(str(settings_obj.backup_location))}</code>',
+                    ]
+                )
+            ),
+        ]
+    )
 
     await callback.message.edit_text(
         admin_screen(text, icon='settings', compact=True),

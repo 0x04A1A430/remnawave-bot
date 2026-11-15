@@ -11,7 +11,7 @@ from app.keyboards.admin import get_admin_main_keyboard, get_maintenance_keyboar
 from app.localization.texts import get_texts
 from app.services.maintenance_service import maintenance_service
 from app.services.system_settings_service import bot_configuration_service
-from app.utils.admin_ui import admin_button, admin_screen
+from app.utils.admin_ui import admin_button, admin_quote, admin_screen
 from app.utils.decorators import admin_required, error_handler
 
 
@@ -119,23 +119,37 @@ async def show_maintenance_panel(callback: types.CallbackQuery, db_user: User, d
     if panel_status.get('response_time'):
         panel_info += f'\n<b>Время отклика:</b> {panel_status["response_time"]}с'
 
-    message_text = f"""<b>Управление техническими работами</b>
+    auto_start_text = 'Включен' if status_info['monitoring_configured'] else 'Отключен'
+    auto_enable_text = 'Включено' if status_info['auto_enable_configured'] else 'Отключено'
+    access_note = (
+        '<i>В режиме техработ обычные пользователи не могут использовать бота. Администраторы имеют полный доступ.</i>'
+    )
 
-<b>Режим техработ:</b> {status_text}
-<b>API Remnawave:</b> {api_text}
-<b>Мониторинг:</b> {monitoring_text}
-<b>Автозапуск мониторинга:</b> {'Включен' if status_info['monitoring_configured'] else 'Отключен'}
-<b>Интервал проверки:</b> {status_info['check_interval']}с
-<b>Автовключение:</b> {'Включено' if status_info['auto_enable_configured'] else 'Отключено'}
-{panel_info}
-{enabled_info}
-{last_check_info}
-{failures_info}
-
-ℹ <i>В режиме техработ обычные пользователи не могут использовать бота. Администраторы имеют полный доступ.</i>"""
+    message_text = '\n'.join(
+        [
+            '<b>Управление техническими работами</b>',
+            '',
+            admin_quote(
+                '\n'.join(
+                    [
+                        f'<b>Режим техработ:</b> {status_text}',
+                        f'<b>API Remnawave:</b> {api_text}',
+                        f'<b>Мониторинг:</b> {monitoring_text}',
+                        f'<b>Автозапуск мониторинга:</b> {auto_start_text}',
+                        f'<b>Интервал проверки:</b> {status_info["check_interval"]}с',
+                        f'<b>Автовключение:</b> {auto_enable_text}',
+                        panel_info.strip(),
+                        *[item.strip() for item in (enabled_info, last_check_info, failures_info) if item.strip()],
+                    ]
+                )
+            ),
+            '',
+            access_note,
+        ]
+    )
 
     await callback.message.edit_text(
-        admin_screen(message_text, icon='settings', compact=True),
+        admin_screen(message_text, icon='tools', compact=True),
         parse_mode='HTML',
         reply_markup=get_maintenance_keyboard(
             db_user.language,
@@ -220,12 +234,19 @@ async def process_maintenance_reason(message: types.Message, db_user: User, db: 
     else:
         response_text = texts.t('ADMIN_MAINTENANCE_014', 'Ошибка включения режима техработ')
 
-    await message.answer(response_text)
+    await message.answer(
+        admin_screen(response_text, icon='success' if success else 'error', compact=True),
+        parse_mode='HTML',
+    )
     await state.clear()
 
     maintenance_service.get_status_info()
     await message.answer(
-        texts.t('ADMIN_MAINTENANCE_024', 'Вернуться к панели управления техработами:'),
+        admin_screen(
+            texts.t('ADMIN_MAINTENANCE_024', 'Вернуться к панели управления техработами:'),
+            icon='tools',
+            compact=True,
+        ),
         reply_markup=types.InlineKeyboardMarkup(
             inline_keyboard=[
                 [
@@ -237,6 +258,7 @@ async def process_maintenance_reason(message: types.Message, db_user: User, db: 
                 ]
             ]
         ),
+        parse_mode='HTML',
     )
 
 
@@ -285,10 +307,13 @@ async def force_api_check(callback: types.CallbackQuery, db_user: User, db: Asyn
         )
     else:
         message = texts.t('ADMIN_MAINTENANCE_016', 'Ошибка проверки: {value1}').format(
-            value1=check_result.get('error', texts.t('ADMIN_MAINTENANCE_051', 'Неизвестная ошибка'))
+            value1=html.escape(str(check_result.get('error', texts.t('ADMIN_MAINTENANCE_051', 'Неизвестная ошибка'))))
         )
 
-    await callback.message.answer(message)
+    await callback.message.answer(
+        admin_screen(message, icon='success' if check_result['success'] else 'error', compact=True),
+        parse_mode='HTML',
+    )
 
     await show_maintenance_panel(callback, db_user, db, None)
 
@@ -312,9 +337,8 @@ async def check_panel_status(callback: types.CallbackQuery, db_user: User, db: A
             'degraded': texts.t('ADMIN_MAINTENANCE_054', 'Панель работает со сбоями'),
         }.get(status_data['status'], texts.t('ADMIN_MAINTENANCE_033', 'Статус неизвестен'))
 
-        message_parts = [
-            texts.t('ADMIN_MAINTENANCE_034', '<b>Статус панели Remnawave</b>\n'),
-            f'{status_text}',
+        status_lines = [
+            status_text,
             texts.t('ADMIN_MAINTENANCE_035', 'Время отклика: {value1}с').format(
                 value1=status_data.get('response_time', 0)
             ),
@@ -328,24 +352,37 @@ async def check_panel_status(callback: types.CallbackQuery, db_user: User, db: A
 
         attempts_used = status_data.get('attempts_used')
         if attempts_used:
-            message_parts.append(
+            status_lines.append(
                 texts.t('ADMIN_MAINTENANCE_046', 'Попыток проверки: {value1}').format(value1=attempts_used)
             )
 
         if status_data.get('api_error'):
-            message_parts.append(
+            status_lines.append(
                 texts.t('ADMIN_MAINTENANCE_047', 'Ошибка: {value1}').format(
                     value1=html.escape(status_data['api_error'][:100])
                 )
             )
 
-        message = '\n'.join(message_parts)
+        message = '\n'.join(
+            [
+                texts.t('ADMIN_MAINTENANCE_034', '<b>Статус панели Remnawave</b>').strip(),
+                '',
+                admin_quote('\n'.join(status_lines)),
+            ]
+        )
 
         await callback.message.answer(admin_screen(message, icon='chart', compact=True), parse_mode='HTML')
 
     except Exception as e:
         await callback.message.answer(
-            texts.t('ADMIN_MAINTENANCE_055', 'Ошибка проверки статуса: {value1!s}').format(value1=e)
+            admin_screen(
+                texts.t('ADMIN_MAINTENANCE_055', 'Ошибка проверки статуса: {value1!s}').format(
+                    value1=html.escape(str(e))
+                ),
+                icon='error',
+                compact=True,
+            ),
+            parse_mode='HTML',
         )
 
 
@@ -450,7 +487,10 @@ async def process_notification_message(message: types.Message, db_user: User, db
     status = data.get('notification_status')
 
     if not status:
-        await message.answer(texts.t('ADMIN_MAINTENANCE_049', 'Ошибка: статус не выбран'))
+        await message.answer(
+            admin_screen(texts.t('ADMIN_MAINTENANCE_049', 'Ошибка: статус не выбран'), icon='error', compact=True),
+            parse_mode='HTML',
+        )
         await state.clear()
         return
 
@@ -466,18 +506,37 @@ async def process_notification_message(message: types.Message, db_user: User, db
         success = await rw_service.send_manual_status_notification(message.bot, status, notification_message)
 
         if success:
-            await message.answer(texts.t('ADMIN_MAINTENANCE_056', ' Уведомление отправлено'))
+            await message.answer(
+                admin_screen(texts.t('ADMIN_MAINTENANCE_056', 'Уведомление отправлено'), icon='success', compact=True),
+                parse_mode='HTML',
+            )
         else:
-            await message.answer(texts.t('ADMIN_MAINTENANCE_057', ' Ошибка отправки уведомления'))
+            await message.answer(
+                admin_screen(
+                    texts.t('ADMIN_MAINTENANCE_057', 'Ошибка отправки уведомления'), icon='error', compact=True
+                ),
+                parse_mode='HTML',
+            )
 
     except Exception as e:
         logger.error('Ошибка отправки ручного уведомления', error=e)
-        await message.answer(texts.t('ADMIN_MAINTENANCE_058', ' Ошибка: {value1!s}').format(value1=e))
+        await message.answer(
+            admin_screen(
+                texts.t('ADMIN_MAINTENANCE_058', 'Ошибка: {value1!s}').format(value1=html.escape(str(e))),
+                icon='error',
+                compact=True,
+            ),
+            parse_mode='HTML',
+        )
 
     await state.clear()
 
     await message.answer(
-        texts.t('ADMIN_MAINTENANCE_040', 'Вернуться к панели техработ:'),
+        admin_screen(
+            texts.t('ADMIN_MAINTENANCE_040', 'Вернуться к панели техработ:'),
+            icon='tools',
+            compact=True,
+        ),
         reply_markup=types.InlineKeyboardMarkup(
             inline_keyboard=[
                 [
@@ -489,6 +548,7 @@ async def process_notification_message(message: types.Message, db_user: User, db
                 ]
             ]
         ),
+        parse_mode='HTML',
     )
 
 
@@ -497,7 +557,11 @@ async def process_notification_message(message: types.Message, db_user: User, db
 async def back_to_admin_panel(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
     texts = get_texts(db_user.language)
 
-    await callback.message.edit_text(texts.ADMIN_PANEL, reply_markup=get_admin_main_keyboard(db_user.language))
+    await callback.message.edit_text(
+        admin_screen(texts.ADMIN_PANEL, icon='crown', compact=True),
+        reply_markup=get_admin_main_keyboard(db_user.language),
+        parse_mode='HTML',
+    )
     await callback.answer()
 
 

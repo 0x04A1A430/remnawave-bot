@@ -51,7 +51,9 @@ async def test_rejected_upload_uses_account_language_without_storing_file(langua
     )
     state = SimpleNamespace(update_data=AsyncMock(), set_state=AsyncMock())
     await inspect.unwrap(ui.process_certificate_file)(message, state, db_user=SimpleNamespace(language=language))
-    assert message.answer.await_args.args[0] == get_texts(language).t('ADMIN_OVERPAY_CERT_014')
+    call = message.answer.await_args
+    assert get_texts(language).t('ADMIN_OVERPAY_CERT_014') in call.args[0]
+    assert call.kwargs.get('parse_mode') == 'HTML'
     state.update_data.assert_not_awaited()
     state.set_state.assert_not_awaited()
 

@@ -242,7 +242,7 @@ async def _start_field_edit(
                 'ADMIN_TARIFF_HELPER_START_FIELD_EDIT_1',
                 '{v0}\n\nТариф: <b>{v1}</b>\nТекущее значение: <b>{v2}</b>\n\n{v3}',
             )
-            .format(v0=title, v1=html.escape(tariff.name), v2=current_value, v3=prompt),
+            .format(v0=strip_leading_emoji(title), v1=html.escape(tariff.name), v2=current_value, v3=prompt),
             icon='settings',
             compact=True,
         ),
@@ -269,7 +269,7 @@ async def start_edit_panel_tag(callback: types.CallbackQuery, db_user: User, db:
         state,
         tariff,
         state_value=AdminStates.editing_tariff_panel_tag,
-        title=get_texts(db_user.language).t('ADMIN_TARIFF_HELPER_TAG_TITLE', ' <b>Тег панели</b>'),
+        title=get_texts(db_user.language).t('ADMIN_TARIFF_HELPER_TAG_TITLE', '<b>Тег панели</b>'),
         current_value=_tag_display(tariff, language=db_user.language),
         prompt=get_texts(db_user.language)
         .t(
@@ -295,7 +295,7 @@ async def start_edit_lava_product(callback: types.CallbackQuery, db_user: User, 
         state,
         tariff,
         state_value=AdminStates.editing_tariff_lava_product,
-        title=get_texts(db_user.language).t('ADMIN_TARIFF_HELPER_LAVA_TITLE', ' <b>Продукт Lava (автопродление)</b>'),
+        title=get_texts(db_user.language).t('ADMIN_TARIFF_HELPER_LAVA_TITLE', '<b>Продукт Lava (автопродление)</b>'),
         current_value=_lava_display(tariff, language=db_user.language),
         prompt=get_texts(db_user.language).t(
             'ADMIN_TARIFF_HELPER_LAVA_PROMPT',
@@ -319,7 +319,7 @@ async def start_edit_display_order(callback: types.CallbackQuery, db_user: User,
         state,
         tariff,
         state_value=AdminStates.editing_tariff_display_order,
-        title=get_texts(db_user.language).t('ADMIN_TARIFF_HELPER_ORDER_TITLE', ' <b>Порядок в списке</b>'),
+        title=get_texts(db_user.language).t('ADMIN_TARIFF_HELPER_ORDER_TITLE', '<b>Порядок в списке</b>'),
         current_value=str(getattr(tariff, 'display_order', 0)),
         prompt=get_texts(db_user.language).t(
             'ADMIN_TARIFF_HELPER_ORDER_PROMPT', 'Введите порядок целым числом от 0 — меньше число, выше тариф в списке.'
@@ -333,7 +333,14 @@ async def _load_tariff_from_state(
     tariff_id = (await state.get_data()).get('tariff_id')
     tariff = await get_tariff_by_id(db, tariff_id) if tariff_id is not None else None
     if tariff is None:
-        await message.answer(get_texts(language).t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'))
+        await message.answer(
+            admin_screen(
+                get_texts(language).t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'),
+                icon='warning',
+                compact=True,
+            ),
+            parse_mode='HTML',
+        )
         await state.clear()
     return tariff
 
@@ -354,22 +361,27 @@ async def process_panel_tag_input(message: types.Message, db_user: User, db: Asy
         tag = None if raw == '-' else normalize_panel_tag(raw)
     except ValueError:
         await message.answer(
-            get_texts(db_user.language)
-            .t('ADMIN_TARIFF_HELPER_PROCESS_PANEL_TAG_INPUT_2', ' {v0}. Попробуйте ещё раз:')
-            .format(
-                v0=get_texts(db_user.language).t(
-                    'ADMIN_TARIFF_VALIDATION_PANEL_TAG_ERROR', f'Тег панели: {PANEL_TAG_RULES}'
-                )
-            )
+            admin_screen(
+                get_texts(db_user.language)
+                .t('ADMIN_TARIFF_HELPER_PROCESS_PANEL_TAG_INPUT_2', '{v0}. Попробуйте ещё раз:')
+                .format(
+                    v0=get_texts(db_user.language).t(
+                        'ADMIN_TARIFF_VALIDATION_PANEL_TAG_ERROR', f'Тег панели: {PANEL_TAG_RULES}'
+                    )
+                ),
+                icon='warning',
+                compact=True,
+            ),
+            parse_mode='HTML',
         )
         return
     tariff = await update_tariff(db, tariff, panel_tag=tag)
     confirmation = (
         get_texts(db_user.language)
-        .t('ADMIN_TARIFF_HELPER_PROCESS_PANEL_TAG_INPUT_1', ' Тег панели: {v0}')
+        .t('ADMIN_TARIFF_HELPER_PROCESS_PANEL_TAG_INPUT_1', 'Тег панели: {v0}')
         .format(v0=html.escape(tag))
         if tag
-        else get_texts(db_user.language).t('ADMIN_TARIFF_HELPER_TAG_REMOVED', ' Тег панели снят — общий из настроек')
+        else get_texts(db_user.language).t('ADMIN_TARIFF_HELPER_TAG_REMOVED', 'Тег панели снят — общий из настроек')
     )
     await _finish(message, db_user, state, tariff, confirmation)
 
@@ -386,10 +398,10 @@ async def process_lava_product_input(message: types.Message, db_user: User, db: 
     tariff = await update_tariff(db, tariff, lava_product_id=value)
     confirmation = (
         get_texts(db_user.language)
-        .t('ADMIN_TARIFF_HELPER_PROCESS_LAVA_PRODUCT_INPUT_1', ' Продукт Lava: {v0}')
+        .t('ADMIN_TARIFF_HELPER_PROCESS_LAVA_PRODUCT_INPUT_1', 'Продукт Lava: {v0}')
         .format(v0=html.escape(value))
         if value
-        else get_texts(db_user.language).t('ADMIN_TARIFF_HELPER_LAVA_REMOVED', ' Продукт Lava отвязан')
+        else get_texts(db_user.language).t('ADMIN_TARIFF_HELPER_LAVA_REMOVED', 'Продукт Lava отвязан')
     )
     await _finish(message, db_user, state, tariff, confirmation)
 
@@ -406,9 +418,14 @@ async def process_display_order_input(message: types.Message, db_user: User, db:
             raise ValueError
     except ValueError:
         await message.answer(
-            get_texts(db_user.language).t(
-                'ADMIN_TARIFF_HELPER_INVALID_ORDER', ' Введите целое число от 0. Попробуйте ещё раз:'
-            )
+            admin_screen(
+                get_texts(db_user.language).t(
+                    'ADMIN_TARIFF_HELPER_INVALID_ORDER', 'Введите целое число от 0. Попробуйте ещё раз:'
+                ),
+                icon='warning',
+                compact=True,
+            ),
+            parse_mode='HTML',
         )
         return
     tariff = await update_tariff(db, tariff, display_order=order)
@@ -418,7 +435,7 @@ async def process_display_order_input(message: types.Message, db_user: User, db:
         state,
         tariff,
         get_texts(db_user.language)
-        .t('ADMIN_TARIFF_HELPER_PROCESS_DISPLAY_ORDER_INPUT_1', ' Порядок в списке: {v0}')
+        .t('ADMIN_TARIFF_HELPER_PROCESS_DISPLAY_ORDER_INPUT_1', 'Порядок в списке: {v0}')
         .format(v0=order),
     )
 
@@ -442,20 +459,22 @@ async def load_external_squads() -> list:
 def _external_squad_keyboard(tariff: Tariff, squads: list, language: str) -> InlineKeyboardMarkup:
     texts = get_texts(language)
     current = getattr(tariff, 'external_squad_uuid', None)
+    no_squad_label = '* Без внешнего сквада' if current is None else 'Без внешнего сквада'
     buttons = [
         [
             admin_button(
-                '* Без внешнего сквада' if current is None else 'Без внешнего сквада',
+                no_squad_label,
                 callback_data=f'admin_tariff_set_ext_squad:{tariff.id}:{_NO_EXTERNAL_SQUAD}',
             )
         ]
     ]
     for squad in squads:
-        prefix = '* ' if squad.uuid == current else ''
+        mark = '* ' if squad.uuid == current else ''
         buttons.append(
             [
                 admin_button(
-                    f'{prefix}{squad.name}', callback_data=f'admin_tariff_set_ext_squad:{tariff.id}:{squad.uuid}'
+                    f'{mark}{strip_leading_emoji(squad.name)}',
+                    callback_data=f'admin_tariff_set_ext_squad:{tariff.id}:{squad.uuid}',
                 )
             ]
         )

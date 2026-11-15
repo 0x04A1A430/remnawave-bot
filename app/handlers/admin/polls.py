@@ -135,6 +135,15 @@ async def _send_creation_message(
     return sent_message
 
 
+def _creation_cancelled_text(texts) -> str:
+    """Экран отмены создания опроса в общем визуальном языке."""
+    return admin_screen(
+        texts.t('ADMIN_POLLS_CREATION_CANCELLED', 'Создание опроса отменено.'),
+        icon='info',
+        compact=True,
+    )
+
+
 def _render_creation_progress(
     texts,
     data: dict,
@@ -160,7 +169,7 @@ def _render_creation_progress(
         if error_message:
             lines.append('')
             lines.append(error_message)
-        return '\n'.join(lines)
+        return admin_screen('\n'.join(lines), icon='stats', compact=True)
 
     description_prompt = texts.t(
         'ADMIN_POLLS_CREATION_DESCRIPTION_PROMPT',
@@ -190,7 +199,7 @@ def _render_creation_progress(
         if error_message:
             lines.append('')
             lines.append(error_message)
-        return '\n'.join(lines)
+        return admin_screen('\n'.join(lines), icon='stats', compact=True)
 
     reward_prompt = texts.t(
         'ADMIN_POLLS_CREATION_REWARD_PROMPT',
@@ -211,7 +220,7 @@ def _render_creation_progress(
         if error_message:
             lines.append('')
             lines.append(error_message)
-        return '\n'.join(lines)
+        return admin_screen('\n'.join(lines), icon='stats', compact=True)
 
     question_prompt = texts.t(
         'ADMIN_POLLS_CREATION_QUESTION_PROMPT',
@@ -242,7 +251,7 @@ def _render_creation_progress(
         lines.append('')
         lines.append(error_message)
 
-    return '\n'.join(lines)
+    return admin_screen('\n'.join(lines), icon='stats', compact=True)
 
 
 class PollCreationStates(StatesGroup):
@@ -269,7 +278,7 @@ def _build_polls_keyboard(polls: list[Poll], language: str) -> types.InlineKeybo
     keyboard.append(
         [
             admin_button(
-                strip_leading_emoji(texts.t('ADMIN_POLLS_CREATE', ' Создать опрос')),
+                strip_leading_emoji(texts.t('ADMIN_POLLS_CREATE', 'Создать опрос')),
                 callback_data='poll_create',
                 style='success',
             )
@@ -296,7 +305,7 @@ def _build_poll_details_keyboard(poll_id: int, language: str) -> types.InlineKey
         inline_keyboard=[
             [
                 admin_button(
-                    strip_leading_emoji(texts.t('ADMIN_POLLS_SEND', ' Отправить')),
+                    strip_leading_emoji(texts.t('ADMIN_POLLS_SEND', 'Отправить')),
                     callback_data=f'poll_send:{poll_id}',
                     icon='success',
                     style='success',
@@ -304,7 +313,7 @@ def _build_poll_details_keyboard(poll_id: int, language: str) -> types.InlineKey
             ],
             [
                 admin_button(
-                    strip_leading_emoji(texts.t('ADMIN_POLLS_STATS', ' Статистика')),
+                    strip_leading_emoji(texts.t('ADMIN_POLLS_STATS', 'Статистика')),
                     callback_data=f'poll_stats:{poll_id}',
                     icon='stats',
                     style='primary',
@@ -312,7 +321,7 @@ def _build_poll_details_keyboard(poll_id: int, language: str) -> types.InlineKey
             ],
             [
                 admin_button(
-                    strip_leading_emoji(texts.t('ADMIN_POLLS_DELETE', ' Удалить')),
+                    strip_leading_emoji(texts.t('ADMIN_POLLS_DELETE', 'Удалить')),
                     callback_data=f'poll_delete:{poll_id}',
                     icon='delete',
                     style='danger',
@@ -322,7 +331,7 @@ def _build_poll_details_keyboard(poll_id: int, language: str) -> types.InlineKey
                 admin_back_button(
                     texts,
                     'admin_polls',
-                    label=strip_leading_emoji(texts.t('ADMIN_POLLS_BACK', ' К списку')),
+                    label=strip_leading_emoji(texts.t('ADMIN_POLLS_BACK', 'К списку')),
                 )
             ],
         ]
@@ -341,24 +350,24 @@ def _build_target_keyboard(poll_id: int, language: str) -> types.InlineKeyboardM
     return types.InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                _target_button('ADMIN_BROADCAST_TARGET_ALL', ' Всем', 'all'),
-                _target_button('ADMIN_BROADCAST_TARGET_ACTIVE', ' С подпиской', 'active'),
+                _target_button('ADMIN_BROADCAST_TARGET_ALL', 'Всем', 'all'),
+                _target_button('ADMIN_BROADCAST_TARGET_ACTIVE', 'С подпиской', 'active'),
             ],
             [
-                _target_button('ADMIN_BROADCAST_TARGET_TRIAL', ' Триал', 'trial'),
-                _target_button('ADMIN_BROADCAST_TARGET_NO_SUB', ' Без подписки', 'no'),
+                _target_button('ADMIN_BROADCAST_TARGET_TRIAL', 'Триал', 'trial'),
+                _target_button('ADMIN_BROADCAST_TARGET_NO_SUB', 'Без подписки', 'no'),
             ],
             [
-                _target_button('ADMIN_BROADCAST_TARGET_EXPIRING', ' Истекающие', 'expiring'),
-                _target_button('ADMIN_BROADCAST_TARGET_EXPIRED', ' Истекшие', 'expired'),
+                _target_button('ADMIN_BROADCAST_TARGET_EXPIRING', 'Истекающие', 'expiring'),
+                _target_button('ADMIN_BROADCAST_TARGET_EXPIRED', 'Истекшие', 'expired'),
             ],
             [
-                _target_button('ADMIN_BROADCAST_TARGET_ACTIVE_ZERO', ' Активна 0 ГБ', 'active_zero'),
-                _target_button('ADMIN_BROADCAST_TARGET_TRIAL_ZERO', ' Триал 0 ГБ', 'trial_zero'),
+                _target_button('ADMIN_BROADCAST_TARGET_ACTIVE_ZERO', 'Активна 0 ГБ', 'active_zero'),
+                _target_button('ADMIN_BROADCAST_TARGET_TRIAL_ZERO', 'Триал 0 ГБ', 'trial_zero'),
             ],
             [
                 admin_button(
-                    strip_leading_emoji(texts.t('ADMIN_POLLS_CUSTOM_TARGET', ' По критериям')),
+                    strip_leading_emoji(texts.t('ADMIN_POLLS_CUSTOM_TARGET', 'По критериям')),
                     callback_data=f'poll_custom_menu:{poll_id}',
                     style='primary',
                 )
@@ -380,20 +389,20 @@ def _build_custom_target_keyboard(poll_id: int, language: str) -> types.InlineKe
     return types.InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                _criteria_button('ADMIN_CRITERIA_TODAY', ' Сегодня', 'today'),
-                _criteria_button('ADMIN_CRITERIA_WEEK', ' За неделю', 'week'),
+                _criteria_button('ADMIN_CRITERIA_TODAY', 'Сегодня', 'today'),
+                _criteria_button('ADMIN_CRITERIA_WEEK', 'За неделю', 'week'),
             ],
             [
-                _criteria_button('ADMIN_CRITERIA_MONTH', ' За месяц', 'month'),
-                _criteria_button('ADMIN_CRITERIA_ACTIVE_TODAY', ' Активные сегодня', 'active_today'),
+                _criteria_button('ADMIN_CRITERIA_MONTH', 'За месяц', 'month'),
+                _criteria_button('ADMIN_CRITERIA_ACTIVE_TODAY', 'Активные сегодня', 'active_today'),
             ],
             [
-                _criteria_button('ADMIN_CRITERIA_INACTIVE_WEEK', ' Неактивные 7+ дней', 'inactive_week'),
-                _criteria_button('ADMIN_CRITERIA_INACTIVE_MONTH', ' Неактивные 30+ дней', 'inactive_month'),
+                _criteria_button('ADMIN_CRITERIA_INACTIVE_WEEK', 'Неактивные 7+ дней', 'inactive_week'),
+                _criteria_button('ADMIN_CRITERIA_INACTIVE_MONTH', 'Неактивные 30+ дней', 'inactive_month'),
             ],
             [
-                _criteria_button('ADMIN_CRITERIA_REFERRALS', ' Через рефералов', 'referrals'),
-                _criteria_button('ADMIN_CRITERIA_DIRECT', ' Прямая регистрация', 'direct'),
+                _criteria_button('ADMIN_CRITERIA_REFERRALS', 'Через рефералов', 'referrals'),
+                _criteria_button('ADMIN_CRITERIA_DIRECT', 'Прямая регистрация', 'direct'),
             ],
             [admin_back_button(texts, f'poll_send:{poll_id}')],
         ]
@@ -406,7 +415,7 @@ def _build_send_confirmation_keyboard(poll_id: int, target: str, language: str) 
         inline_keyboard=[
             [
                 admin_button(
-                    strip_leading_emoji(texts.t('ADMIN_POLLS_SEND_CONFIRM_BUTTON', ' Отправить')),
+                    strip_leading_emoji(texts.t('ADMIN_POLLS_SEND_CONFIRM_BUTTON', 'Отправить')),
                     callback_data=f'poll_send_confirm:{poll_id}:{target}',
                     style='success',
                 )
@@ -422,7 +431,7 @@ async def show_polls_panel(callback: types.CallbackQuery, db_user: User, db: Asy
     polls = await list_polls(db)
     texts = get_texts(db_user.language)
 
-    lines = [texts.t('ADMIN_POLLS_LIST_TITLE', ' <b>Опросы</b>'), '']
+    lines = [texts.t('ADMIN_POLLS_LIST_TITLE', '<b>Опросы</b>'), '']
     if not polls:
         lines.append(texts.t('ADMIN_POLLS_LIST_EMPTY', 'Опросов пока нет.'))
     else:
@@ -479,10 +488,7 @@ async def process_poll_title(
 
     if message.text == '/cancel':
         await _safe_delete_message(message)
-        cancel_text = texts.t(
-            'ADMIN_POLLS_CREATION_CANCELLED',
-            ' Создание опроса отменено.',
-        )
+        cancel_text = _creation_cancelled_text(texts)
         keyboard = get_admin_communications_submenu_keyboard(db_user.language)
         updated = await _edit_creation_message(
             message.bot,
@@ -508,7 +514,7 @@ async def process_poll_title(
     if not title:
         error_text = texts.t(
             'ADMIN_POLLS_CREATION_TITLE_EMPTY',
-            ' Заголовок не может быть пустым. Попробуйте снова.',
+            'Заголовок не может быть пустым. Попробуйте снова.',
         )
         form_text = _render_creation_progress(texts, state_data, 'title', error_message=error_text)
         updated = await _edit_creation_message(message.bot, state_data, form_text)
@@ -549,10 +555,7 @@ async def process_poll_description(
 
     if message.text == '/cancel':
         await _safe_delete_message(message)
-        cancel_text = texts.t(
-            'ADMIN_POLLS_CREATION_CANCELLED',
-            ' Создание опроса отменено.',
-        )
+        cancel_text = _creation_cancelled_text(texts)
         keyboard = get_admin_communications_submenu_keyboard(db_user.language)
         updated = await _edit_creation_message(
             message.bot,
@@ -584,7 +587,7 @@ async def process_poll_description(
         if not is_valid:
             error_text = texts.t(
                 'ADMIN_POLLS_CREATION_INVALID_HTML',
-                ' Ошибка в HTML: {error}',
+                'Ошибка в HTML: {error}',
             ).format(error=error_message)
             form_text = _render_creation_progress(texts, state_data, 'description', error_message=error_text)
             updated = await _edit_creation_message(message.bot, state_data, form_text)
@@ -639,10 +642,7 @@ async def process_poll_reward(
 
     if message.text == '/cancel':
         await _safe_delete_message(message)
-        cancel_text = texts.t(
-            'ADMIN_POLLS_CREATION_CANCELLED',
-            ' Создание опроса отменено.',
-        )
+        cancel_text = _creation_cancelled_text(texts)
         keyboard = get_admin_communications_submenu_keyboard(db_user.language)
         updated = await _edit_creation_message(
             message.bot,
@@ -667,7 +667,7 @@ async def process_poll_reward(
     if reward_kopeks is None:
         error_text = texts.t(
             'ADMIN_POLLS_CREATION_REWARD_INVALID',
-            ' Некорректная сумма. Попробуйте ещё раз.',
+            'Некорректная сумма. Попробуйте ещё раз.',
         )
         form_text = _render_creation_progress(texts, state_data, 'reward', error_message=error_text)
         updated = await _edit_creation_message(message.bot, state_data, form_text)
@@ -712,10 +712,7 @@ async def process_poll_question(
 
     if message.text == '/cancel':
         await _safe_delete_message(message)
-        cancel_text = texts.t(
-            'ADMIN_POLLS_CREATION_CANCELLED',
-            ' Создание опроса отменено.',
-        )
+        cancel_text = _creation_cancelled_text(texts)
         keyboard = get_admin_communications_submenu_keyboard(db_user.language)
         updated = await _edit_creation_message(
             message.bot,
@@ -742,7 +739,7 @@ async def process_poll_question(
         if not questions:
             error_text = texts.t(
                 'ADMIN_POLLS_CREATION_NEEDS_QUESTION',
-                ' Добавьте хотя бы один вопрос.',
+                'Добавьте хотя бы один вопрос.',
             )
             form_text = _render_creation_progress(texts, data, 'questions', error_message=error_text)
             updated = await _edit_creation_message(message.bot, data, form_text)
@@ -806,7 +803,7 @@ async def process_poll_question(
     if len(lines) < 3:
         error_text = texts.t(
             'ADMIN_POLLS_CREATION_MIN_OPTIONS',
-            ' Нужен вопрос и минимум два варианта ответа.',
+            'Нужен вопрос и минимум два варианта ответа.',
         )
         form_text = _render_creation_progress(texts, state_data, 'questions', error_message=error_text)
         updated = await _edit_creation_message(message.bot, state_data, form_text)
@@ -850,7 +847,7 @@ async def process_poll_question(
 
 async def _render_poll_details(poll: Poll, language: str) -> str:
     texts = get_texts(language)
-    lines = [f' <b>{html.escape(poll.title)}</b>']
+    lines = [f'<b>{html.escape(poll.title)}</b>']
     if poll.description:
         lines.append(html.escape(poll.description))
 
@@ -863,9 +860,7 @@ async def _render_poll_details(poll: Poll, language: str) -> str:
         for idx, question in enumerate(sorted(poll.questions, key=lambda q: q.order), start=1):
             lines.append(f'{idx}. {html.escape(question.text)}')
             for option in sorted(question.options, key=lambda o: o.order):
-                lines.append(
-                    texts.t('ADMIN_POLLS_OPTION_BULLET', '   • {option}').format(option=html.escape(option.text))
-                )
+                lines.append(texts.t('ADMIN_POLLS_OPTION_BULLET', '• {option}').format(option=html.escape(option.text)))
 
     return admin_screen('\n'.join(lines), icon='stats', compact=True)
 
@@ -907,7 +902,11 @@ async def start_poll_send(
 
     texts = get_texts(db_user.language)
     await callback.message.edit_text(
-        texts.t('ADMIN_POLLS_SEND_CHOOSE_TARGET', ' Выберите аудиторию для отправки опроса:'),
+        admin_screen(
+            texts.t('ADMIN_POLLS_SEND_CHOOSE_TARGET', 'Выберите аудиторию для отправки опроса:'),
+            icon='messages',
+            compact=True,
+        ),
         reply_markup=_build_target_keyboard(poll.id, db_user.language),
         parse_mode='HTML',
     )
@@ -923,11 +922,16 @@ async def show_custom_target_menu(
 ):
     poll_id = int(callback.data.split(':')[1])
     await callback.message.edit_text(
-        get_texts(db_user.language).t(
-            'ADMIN_POLLS_CUSTOM_PROMPT',
-            'Выберите дополнительный критерий аудитории:',
+        admin_screen(
+            get_texts(db_user.language).t(
+                'ADMIN_POLLS_CUSTOM_PROMPT',
+                'Выберите дополнительный критерий аудитории:',
+            ),
+            icon='filter',
+            compact=True,
         ),
         reply_markup=_build_custom_target_keyboard(poll_id, db_user.language),
+        parse_mode='HTML',
     )
     await callback.answer()
 
@@ -947,10 +951,14 @@ async def _show_send_confirmation(
 
     audience_name = get_target_display_name(target)
     texts = get_texts(db_user.language)
-    confirmation_text = texts.t(
-        'ADMIN_POLLS_SEND_CONFIRM',
-        ' Отправить опрос «{title}» аудитории «{audience}»? Пользователей: {count}',
-    ).format(title=poll.title, audience=audience_name, count=user_count)
+    confirmation_text = admin_screen(
+        texts.t(
+            'ADMIN_POLLS_SEND_CONFIRM',
+            'Отправить опрос «{title}» аудитории «{audience}»? Пользователей: {count}',
+        ).format(title=html.escape(poll.title), audience=audience_name, count=user_count),
+        icon='question',
+        compact=True,
+    )
 
     await callback.message.edit_text(
         confirmation_text,
@@ -1016,16 +1024,24 @@ async def confirm_poll_send(
     user_language = db_user.language
     texts = get_texts(user_language)
     await callback.message.edit_text(
-        texts.t('ADMIN_POLLS_SENDING', ' Запускаю отправку опроса...'),
+        admin_screen(
+            texts.t('ADMIN_POLLS_SENDING', 'Запускаю отправку опроса...'),
+            icon='messages',
+            compact=True,
+        ),
         parse_mode='HTML',
     )
 
     result = await send_poll_to_users(callback.bot, db, poll, users)
 
-    result_text = texts.t(
-        'ADMIN_POLLS_SEND_RESULT',
-        ' Отправка завершена\nУспешно: {sent}\nОшибок: {failed}\nПропущено: {skipped}\nВсего: {total}',
-    ).format(**result)
+    result_text = admin_screen(
+        texts.t(
+            'ADMIN_POLLS_SEND_RESULT',
+            'Отправка завершена\nУспешно: {sent}\nОшибок: {failed}\nПропущено: {skipped}\nВсего: {total}',
+        ).format(**result),
+        icon='success',
+        compact=True,
+    )
 
     await callback.message.edit_text(
         result_text,
@@ -1052,7 +1068,7 @@ async def show_poll_stats(
     texts = get_texts(db_user.language)
 
     reward_sum = settings.format_price(stats['reward_sum_kopeks'])
-    lines = [texts.t('ADMIN_POLLS_STATS_HEADER', ' <b>Статистика опроса</b>'), '']
+    lines = [texts.t('ADMIN_POLLS_STATS_HEADER', '<b>Статистика опроса</b>'), '']
     lines.append(
         texts.t(
             'ADMIN_POLLS_STATS_OVERVIEW',
@@ -1098,15 +1114,19 @@ async def confirm_poll_delete(
 
     texts = get_texts(db_user.language)
     await callback.message.edit_text(
-        texts.t(
-            'ADMIN_POLLS_CONFIRM_DELETE',
-            'Вы уверены, что хотите удалить опрос «{title}»?',
-        ).format(title=poll.title),
+        admin_screen(
+            texts.t(
+                'ADMIN_POLLS_CONFIRM_DELETE',
+                'Вы уверены, что хотите удалить опрос «{title}»?',
+            ).format(title=html.escape(poll.title)),
+            icon='warning',
+            compact=True,
+        ),
         reply_markup=types.InlineKeyboardMarkup(
             inline_keyboard=[
                 [
                     admin_button(
-                        strip_leading_emoji(texts.t('ADMIN_POLLS_DELETE', ' Удалить')),
+                        strip_leading_emoji(texts.t('ADMIN_POLLS_DELETE', 'Удалить')),
                         callback_data=f'poll_delete_confirm:{poll_id}',
                         icon='delete',
                         style='danger',
@@ -1133,7 +1153,7 @@ async def delete_poll_handler(
 
     if success:
         await callback.message.edit_text(
-            admin_screen(texts.t('ADMIN_POLLS_DELETED', ' Опрос удалён.'), icon='success', compact=True),
+            admin_screen(texts.t('ADMIN_POLLS_DELETED', 'Опрос удалён.'), icon='success', compact=True),
             reply_markup=_build_polls_keyboard(await list_polls(db), db_user.language),
             parse_mode='HTML',
         )

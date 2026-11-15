@@ -1,4 +1,5 @@
 import html
+import re
 
 import structlog
 from aiogram import Dispatcher, F, types
@@ -22,12 +23,21 @@ from app.database.models import User
 from app.localization.texts import get_texts
 from app.services.remnawave_service import RemnaWaveService
 from app.states import AdminStates
-from app.utils.admin_ui import admin_back_button, admin_button, admin_screen
+from app.utils.admin_ui import admin_back_button, admin_button, admin_icon, admin_screen
 from app.utils.cache import cache
 from app.utils.decorators import admin_required, error_handler
 
 
 logger = structlog.get_logger(__name__)
+
+# Локали хранят следы прежнего оформления: декоративные глифы и метку NEW.
+# Иконку и отступы даёт admin_screen, поэтому префиксы строк срезаем.
+_LEGACY_PREFIX_RE = re.compile(r'^[ \t]*(?:[▤▣▥◷↻↑↓]\s*|NEW\s+)+', re.MULTILINE)
+_LEGACY_BULLET_RE = re.compile(r'(?<=• )(?:[▤▣▥◷↻↑↓]\s*|NEW\s+)+')
+
+
+def _clean_legacy(value: str) -> str:
+    return _LEGACY_BULLET_RE.sub('', _LEGACY_PREFIX_RE.sub('', value)).strip()
 
 
 def _build_server_edit_view(server, language: str = 'ru'):
@@ -71,63 +81,83 @@ def _build_server_edit_view(server, language: str = 'ru'):
             v6=server.country_code or get_texts(language).t('ADMIN_SERVER_UI_024', 'Не указан'),
             v7=server.max_users or get_texts(language).t('ADMIN_SERVER_UI_025', 'Без лимита'),
             v8=server.current_users,
-            v9=promo_groups_text,
+            v9=html.escape(promo_groups_text),
             v10=trial_status,
-            v11=server.description or get_texts(language).t('ADMIN_SERVER_UI_026', 'Не указано'),
+            v11=html.escape(server.description)
+            if server.description
+            else get_texts(language).t('ADMIN_SERVER_UI_026', 'Не указано'),
         )
     )
 
     keyboard = [
         [
-            types.InlineKeyboardButton(
-                text=get_texts(language).t('ADMIN_SERVER_UI_060', 'Название'),
+            admin_button(
+                get_texts(language).t('ADMIN_SERVER_UI_060', 'Название'),
                 callback_data=f'admin_server_edit_name_{server.id}',
+                icon='edit',
+                style='primary',
             ),
-            types.InlineKeyboardButton(
-                text=get_texts(language).t('ADMIN_SERVER_UI_061', 'Цена'),
+            admin_button(
+                get_texts(language).t('ADMIN_SERVER_UI_061', 'Цена'),
                 callback_data=f'admin_server_edit_price_{server.id}',
+                icon='pricing',
+                style='primary',
             ),
         ],
         [
-            types.InlineKeyboardButton(
-                text=get_texts(language).t('ADMIN_SERVER_UI_062', 'Страна'),
+            admin_button(
+                get_texts(language).t('ADMIN_SERVER_UI_062', 'Страна'),
                 callback_data=f'admin_server_edit_country_{server.id}',
+                icon='map',
+                style='primary',
             ),
-            types.InlineKeyboardButton(
-                text=get_texts(language).t('ADMIN_SERVER_UI_063', 'Лимит'),
+            admin_button(
+                get_texts(language).t('ADMIN_SERVER_UI_063', 'Лимит'),
                 callback_data=f'admin_server_edit_limit_{server.id}',
+                icon='users',
+                style='primary',
             ),
         ],
         [
-            types.InlineKeyboardButton(
-                text=get_texts(language).t('ADMIN_SERVER_UI_064', 'Юзеры'),
+            admin_button(
+                get_texts(language).t('ADMIN_SERVER_UI_064', 'Юзеры'),
                 callback_data=f'admin_server_users_{server.id}',
+                icon='users',
+                style='primary',
             ),
         ],
         [
-            types.InlineKeyboardButton(
-                text=get_texts(language).t('ADMIN_SERVER_UI_094', 'Выдавать в триал')
+            admin_button(
+                get_texts(language).t('ADMIN_SERVER_UI_094', 'Выдавать в триал')
                 if not server.is_trial_eligible
                 else get_texts(language).t('ADMIN_SERVER_UI_095', 'Не выдавать в триал'),
                 callback_data=f'admin_server_trial_{server.id}',
+                icon='trials',
+                style='primary',
             ),
         ],
         [
-            types.InlineKeyboardButton(
-                text=get_texts(language).t('ADMIN_SERVER_UI_065', 'Промогруппы'),
+            admin_button(
+                get_texts(language).t('ADMIN_SERVER_UI_065', 'Промогруппы'),
                 callback_data=f'admin_server_edit_promo_{server.id}',
+                icon='users_group',
+                style='primary',
             ),
-            types.InlineKeyboardButton(
-                text=get_texts(language).t('ADMIN_SERVER_UI_066', 'Описание'),
+            admin_button(
+                get_texts(language).t('ADMIN_SERVER_UI_066', 'Описание'),
                 callback_data=f'admin_server_edit_desc_{server.id}',
+                icon='edit',
+                style='primary',
             ),
         ],
         [
-            types.InlineKeyboardButton(
-                text=get_texts(language).t('ADMIN_SERVER_UI_096', 'Отключить')
+            admin_button(
+                get_texts(language).t('ADMIN_SERVER_UI_096', 'Отключить')
                 if server.is_available
                 else get_texts(language).t('ADMIN_SERVER_UI_097', 'Включить'),
                 callback_data=f'admin_server_toggle_{server.id}',
+                icon='lock' if server.is_available else 'unlock',
+                style='danger' if server.is_available else 'success',
             )
         ],
         [
@@ -141,7 +171,10 @@ def _build_server_edit_view(server, language: str = 'ru'):
         ],
     ]
 
-    return admin_screen(text, icon='servers', compact=True), types.InlineKeyboardMarkup(inline_keyboard=keyboard)
+    return (
+        admin_screen(_clean_legacy(text), icon='servers', compact=True),
+        types.InlineKeyboardMarkup(inline_keyboard=keyboard),
+    )
 
 
 def _build_server_promo_groups_keyboard(server_id: int, promo_groups, selected_ids, language: str = 'ru'):
@@ -263,8 +296,14 @@ async def show_servers_list(callback: types.CallbackQuery, db_user: User, db: As
         if len(keyboard) <= row_num:
             keyboard.append([])
 
+        label = server.display_name if len(server.display_name) <= 15 else f'{server.display_name[:15]}…'
         keyboard[row_num].append(
-            admin_button(f'{server.display_name[:15]}...', callback_data=f'admin_server_edit_{server.id}')
+            admin_button(
+                label,
+                callback_data=f'admin_server_edit_{server.id}',
+                icon='servers',
+                style='primary',
+            )
         )
 
     if total_pages > 1:
@@ -282,7 +321,7 @@ async def show_servers_list(callback: types.CallbackQuery, db_user: User, db: As
     keyboard.append([admin_back_button(texts, 'admin_servers')])
 
     await callback.message.edit_text(
-        admin_screen(text, icon='servers', compact=True),
+        admin_screen(_clean_legacy(text), icon='servers', compact=True),
         reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
         parse_mode='HTML',
     )
@@ -292,11 +331,16 @@ async def show_servers_list(callback: types.CallbackQuery, db_user: User, db: As
 @admin_required
 @error_handler
 async def sync_servers_with_remnawave(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+    texts = get_texts(db_user.language)
+
     await callback.message.edit_text(
-        get_texts(db_user.language).t(
-            'ADMIN_SERVER_UI_031', ' Синхронизация с Remnawave...\n\nПодождите, это может занять время.'
+        admin_screen(
+            texts.t('ADMIN_SERVER_UI_031', 'Синхронизация с Remnawave...\n\nПодождите, это может занять время.'),
+            icon='sync',
+            compact=True,
         ),
         reply_markup=None,
+        parse_mode='HTML',
     )
 
     try:
@@ -305,13 +349,16 @@ async def sync_servers_with_remnawave(callback: types.CallbackQuery, db_user: Us
 
         if not squads:
             await callback.message.edit_text(
-                get_texts(db_user.language).t(
-                    'ADMIN_SERVER_UI_074',
-                    ' Не удалось получить данные о сквадах из Remnawave.\n\nПроверьте настройки API.',
+                admin_screen(
+                    texts.t(
+                        'ADMIN_SERVER_UI_074',
+                        'Не удалось получить данные о сквадах из Remnawave.\n\nПроверьте настройки API.',
+                    ),
+                    icon='warning',
+                    compact=True,
                 ),
-                reply_markup=types.InlineKeyboardMarkup(
-                    inline_keyboard=[[types.InlineKeyboardButton(text=' Назад', callback_data='admin_servers')]]
-                ),
+                reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[admin_back_button(texts, 'admin_servers')]]),
+                parse_mode='HTML',
             )
             return
 
@@ -319,47 +366,50 @@ async def sync_servers_with_remnawave(callback: types.CallbackQuery, db_user: Us
 
         await cache.delete_pattern('available_countries*')
 
-        text = f"""
- <b>Синхронизация завершена</b>
+        text = f"""<b>Синхронизация завершена</b>
 
- <b>Результаты:</b>
+<b>Результаты:</b>
 • Создано новых серверов: {created}
 • Обновлено существующих: {updated}
 • Удалено отсутствующих: {removed}
 • Всего обработано: {len(squads)}
 
-ℹ Новые серверы созданы как недоступные.
-Настройте их в списке серверов.
-"""
+{admin_icon('info')} Новые серверы созданы как недоступные.
+Настройте их в списке серверов."""
 
         keyboard = [
             [
-                types.InlineKeyboardButton(
-                    text=get_texts(db_user.language).t('ADMIN_SERVER_UI_070', ' Список серверов'),
+                admin_button(
+                    texts.t('ADMIN_SERVER_UI_070', 'Список серверов'),
                     callback_data='admin_servers_list',
+                    style='primary',
                 ),
-                types.InlineKeyboardButton(
-                    text=get_texts(db_user.language).t('ADMIN_SERVER_UI_098', ' Повторить'),
+                admin_button(
+                    texts.t('ADMIN_SERVER_UI_098', 'Повторить'),
                     callback_data='admin_servers_sync',
+                    icon='refresh',
+                    style='primary',
                 ),
             ],
-            [
-                types.InlineKeyboardButton(
-                    text=get_texts(db_user.language).t('ADMIN_SERVER_UI_068', '← Назад'), callback_data='admin_servers'
-                )
-            ],
-            [types.InlineKeyboardButton(text=' Назад', callback_data='admin_servers')],
+            [admin_back_button(texts, 'admin_servers')],
         ]
 
-        await callback.message.edit_text(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
+        await callback.message.edit_text(
+            admin_screen(_clean_legacy(text), icon='success', compact=True),
+            reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
+            parse_mode='HTML',
+        )
 
     except Exception as e:
         logger.error('Ошибка синхронизации серверов', error=e)
         await callback.message.edit_text(
-            get_texts(db_user.language).t('ADMIN_SERVER_UI_075', ' Ошибка синхронизации: {v0!s}').format(v0=e),
-            reply_markup=types.InlineKeyboardMarkup(
-                inline_keyboard=[[types.InlineKeyboardButton(text=' Назад', callback_data='admin_servers')]]
+            admin_screen(
+                texts.t('ADMIN_SERVER_UI_075', 'Ошибка синхронизации: {v0!s}').format(v0=e),
+                icon='error',
+                compact=True,
             ),
+            reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[admin_back_button(texts, 'admin_servers')]]),
+            parse_mode='HTML',
         )
 
     await callback.answer()
@@ -373,7 +423,7 @@ async def show_server_edit_menu(callback: types.CallbackQuery, db_user: User, db
 
     if not server:
         await callback.answer(
-            get_texts(db_user.language).t('ADMIN_SERVER_UI_044', ' Сервер не найден!'), show_alert=True
+            get_texts(db_user.language).t('ADMIN_SERVER_UI_044', 'Сервер не найден!'), show_alert=True
         )
         return
 
@@ -396,7 +446,7 @@ async def show_server_users(callback: types.CallbackQuery, db_user: User, db: As
 
     if not server:
         await callback.answer(
-            get_texts(db_user.language).t('ADMIN_SERVER_UI_044', ' Сервер не найден!'), show_alert=True
+            get_texts(db_user.language).t('ADMIN_SERVER_UI_044', 'Сервер не найден!'), show_alert=True
         )
         return
 
@@ -412,23 +462,20 @@ async def show_server_users(callback: types.CallbackQuery, db_user: User, db: As
     end_index = start_index + page_size
     page_users = users[start_index:end_index]
 
+    texts = get_texts(db_user.language)
     safe_name = html.escape(server.display_name or '—')
     safe_uuid = html.escape(server.squad_uuid or '—')
 
     header = [
-        get_texts(db_user.language).t('ADMIN_SERVER_UI_015', ' <b>Пользователи сервера</b>'),
+        texts.t('ADMIN_SERVER_UI_015', '<b>Пользователи сервера</b>'),
         '',
-        get_texts(db_user.language).t('ADMIN_SERVER_UI_016', '• Сервер: {v0}').format(v0=safe_name),
+        texts.t('ADMIN_SERVER_UI_016', '• Сервер: {v0}').format(v0=safe_name),
         f'• UUID: <code>{safe_uuid}</code>',
-        get_texts(db_user.language).t('ADMIN_SERVER_UI_017', '• Подключений: {v0}').format(v0=total_users),
+        texts.t('ADMIN_SERVER_UI_017', '• Подключений: {v0}').format(v0=total_users),
     ]
 
     if total_pages > 1:
-        header.append(
-            get_texts(db_user.language)
-            .t('ADMIN_SERVER_UI_032', '• Страница: {v0}/{v1}')
-            .format(v0=page, v1=total_pages)
-        )
+        header.append(texts.t('ADMIN_SERVER_UI_032', '• Страница: {v0}/{v1}').format(v0=page, v1=total_pages))
 
     header.append('')
 
@@ -453,26 +500,26 @@ async def show_server_users(callback: types.CallbackQuery, db_user: User, db: As
 
         text += '\n' + '\n'.join(lines)
     else:
-        text += get_texts(db_user.language).t('ADMIN_SERVER_UI_018', 'Пользователи не найдены.')
+        text += texts.t('ADMIN_SERVER_UI_018', 'Пользователи не найдены.')
 
     keyboard: list[list[types.InlineKeyboardButton]] = []
 
     for user in page_users:
         display_name = user.full_name
         if len(display_name) > 30:
-            display_name = display_name[:27] + '...'
+            display_name = display_name[:27] + '…'
 
         if settings.is_multi_tariff_enabled() and hasattr(user, 'subscriptions') and user.subscriptions:
             status_parts = []
             for sub in user.subscriptions:
-                emoji = '' if sub.is_active else ''
+                marker = '✅' if sub.is_active else '▫️'
                 name = sub.tariff.name if sub.tariff else f'#{sub.id}'
-                status_parts.append(f'{emoji}{name}')
+                status_parts.append(f'{marker}{name}')
             subscription_status = ', '.join(status_parts)
         elif user.subscription:
             subscription_status = user.subscription.status_display
         else:
-            subscription_status = get_texts(db_user.language).t('ADMIN_SERVER_UI_045', ' Нет подписки')
+            subscription_status = texts.t('ADMIN_SERVER_UI_045', 'Нет подписки')
         status_icon = _get_status_icon(subscription_status)
 
         if status_icon:
@@ -494,37 +541,37 @@ async def show_server_users(callback: types.CallbackQuery, db_user: User, db: As
 
         if page > 1:
             navigation_buttons.append(
-                types.InlineKeyboardButton(
-                    text=' Предыдущая',
+                admin_button(
+                    '←',
                     callback_data=f'admin_server_users_{server_id}_{page - 1}',
+                    style='primary',
                 )
             )
 
         navigation_buttons.append(
-            types.InlineKeyboardButton(
-                text=get_texts(db_user.language)
-                .t('ADMIN_SERVER_UI_076', 'Стр. {v0}/{v1}')
-                .format(v0=page, v1=total_pages),
+            admin_button(
+                texts.t('ADMIN_SERVER_UI_076', 'Стр. {v0}/{v1}').format(v0=page, v1=total_pages),
                 callback_data=f'admin_server_users_{server_id}_{page}',
             )
         )
 
         if page < total_pages:
             navigation_buttons.append(
-                types.InlineKeyboardButton(
-                    text='Следующая ',
+                admin_button(
+                    '→',
                     callback_data=f'admin_server_users_{server_id}_{page + 1}',
+                    style='primary',
                 )
             )
 
         keyboard.append(navigation_buttons)
 
-    keyboard.append([types.InlineKeyboardButton(text=' К серверу', callback_data=f'admin_server_edit_{server_id}')])
+    keyboard.append([admin_back_button(texts, f'admin_server_edit_{server_id}', label='К серверу')])
 
-    keyboard.append([types.InlineKeyboardButton(text=' К списку', callback_data='admin_servers_list')])
+    keyboard.append([admin_back_button(texts, 'admin_servers_list', label='К списку')])
 
     await callback.message.edit_text(
-        text,
+        admin_screen(_clean_legacy(text), icon='users', compact=True),
         reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
         parse_mode='HTML',
     )
@@ -540,7 +587,7 @@ async def toggle_server_availability(callback: types.CallbackQuery, db_user: Use
 
     if not server:
         await callback.answer(
-            get_texts(db_user.language).t('ADMIN_SERVER_UI_044', ' Сервер не найден!'), show_alert=True
+            get_texts(db_user.language).t('ADMIN_SERVER_UI_044', 'Сервер не найден!'), show_alert=True
         )
         return
 
@@ -554,7 +601,7 @@ async def toggle_server_availability(callback: types.CallbackQuery, db_user: Use
         if new_status
         else get_texts(db_user.language).t('ADMIN_SERVER_UI_020', 'отключен')
     )
-    await callback.answer(get_texts(db_user.language).t('ADMIN_SERVER_UI_033', ' Сервер {v0}!').format(v0=status_text))
+    await callback.answer(get_texts(db_user.language).t('ADMIN_SERVER_UI_033', 'Сервер {v0}!').format(v0=status_text))
 
     server = await get_server_squad_by_id(db, server_id)
 
@@ -571,7 +618,7 @@ async def toggle_server_trial_assignment(callback: types.CallbackQuery, db_user:
 
     if not server:
         await callback.answer(
-            get_texts(db_user.language).t('ADMIN_SERVER_UI_044', ' Сервер не найден!'), show_alert=True
+            get_texts(db_user.language).t('ADMIN_SERVER_UI_044', 'Сервер не найден!'), show_alert=True
         )
         return
 
@@ -584,7 +631,7 @@ async def toggle_server_trial_assignment(callback: types.CallbackQuery, db_user:
         else get_texts(db_user.language).t('ADMIN_SERVER_UI_022', 'перестанет выдаваться')
     )
     await callback.answer(
-        get_texts(db_user.language).t('ADMIN_SERVER_UI_034', ' Сквад {v0} в триал').format(v0=status_text)
+        get_texts(db_user.language).t('ADMIN_SERVER_UI_034', 'Сквад {v0} в триал').format(v0=status_text)
     )
 
     server = await get_server_squad_by_id(db, server_id)
@@ -599,35 +646,35 @@ async def toggle_server_trial_assignment(callback: types.CallbackQuery, db_user:
 async def start_server_edit_price(callback: types.CallbackQuery, state: FSMContext, db_user: User, db: AsyncSession):
     server_id = int(callback.data.split('_')[-1])
     server = await get_server_squad_by_id(db, server_id)
+    texts = get_texts(db_user.language)
 
     if not server:
-        await callback.answer(
-            get_texts(db_user.language).t('ADMIN_SERVER_UI_044', ' Сервер не найден!'), show_alert=True
-        )
+        await callback.answer(texts.t('ADMIN_SERVER_UI_044', 'Сервер не найден!'), show_alert=True)
         return
 
     await state.set_data({'server_id': server_id})
     await state.set_state(AdminStates.editing_server_price)
 
     current_price = (
-        f'{int(server.price_rubles)} ₽'
-        if server.price_kopeks > 0
-        else get_texts(db_user.language).t('ADMIN_SERVER_UI_007', 'Бесплатно')
+        f'{int(server.price_rubles)} ₽' if server.price_kopeks > 0 else texts.t('ADMIN_SERVER_UI_007', 'Бесплатно')
     )
 
     await callback.message.edit_text(
-        get_texts(db_user.language)
-        .t(
-            'ADMIN_SERVER_UI_035',
-            ' <b>Редактирование цены</b>\n\nТекущая цена: <b>{v0}</b>\n\nОтправьте новую цену в рублях (например: 15.50) или 0 для бесплатного доступа:',
-        )
-        .format(v0=current_price),
+        admin_screen(
+            texts.t(
+                'ADMIN_SERVER_UI_035',
+                '<b>Редактирование цены</b>\n\nТекущая цена: <b>{v0}</b>\n\nОтправьте новую цену в рублях (например: 15.50) или 0 для бесплатного доступа:',
+            ).format(v0=current_price),
+            icon='pricing',
+            compact=True,
+        ),
         reply_markup=types.InlineKeyboardMarkup(
             inline_keyboard=[
                 [
-                    types.InlineKeyboardButton(
-                        text=get_texts(db_user.language).t('ADMIN_SERVER_UI_084', ' Отмена'),
-                        callback_data=f'admin_server_edit_{server_id}',
+                    admin_back_button(
+                        texts,
+                        f'admin_server_edit_{server_id}',
+                        label=texts.t('ADMIN_SERVER_UI_084', 'Отмена'),
                     )
                 ]
             ]
@@ -642,19 +689,30 @@ async def start_server_edit_price(callback: types.CallbackQuery, state: FSMConte
 async def process_server_price_edit(message: types.Message, state: FSMContext, db_user: User, db: AsyncSession):
     data = await state.get_data()
     server_id = data.get('server_id')
+    texts = get_texts(db_user.language)
 
     try:
         price_rubles = float(message.text.replace(',', '.'))
 
         if price_rubles < 0:
             await message.answer(
-                get_texts(db_user.language).t('ADMIN_SERVER_UI_079', ' Цена не может быть отрицательной')
+                admin_screen(
+                    texts.t('ADMIN_SERVER_UI_079', 'Цена не может быть отрицательной'),
+                    icon='error',
+                    compact=True,
+                ),
+                parse_mode='HTML',
             )
             return
 
         if price_rubles > 10000:
             await message.answer(
-                get_texts(db_user.language).t('ADMIN_SERVER_UI_080', ' Слишком высокая цена (максимум 10,000 ₽)')
+                admin_screen(
+                    texts.t('ADMIN_SERVER_UI_080', 'Слишком высокая цена (максимум 10,000 ₽)'),
+                    icon='error',
+                    compact=True,
+                ),
+                parse_mode='HTML',
             )
             return
 
@@ -667,30 +725,36 @@ async def process_server_price_edit(message: types.Message, state: FSMContext, d
 
             await cache.delete_pattern('available_countries*')
 
-            price_text = (
-                f'{int(price_rubles)} ₽'
-                if price_kopeks > 0
-                else get_texts(db_user.language).t('ADMIN_SERVER_UI_007', 'Бесплатно')
-            )
+            price_text = f'{int(price_rubles)} ₽' if price_kopeks > 0 else texts.t('ADMIN_SERVER_UI_007', 'Бесплатно')
             await message.answer(
-                get_texts(db_user.language)
-                .t('ADMIN_SERVER_UI_081', ' Цена сервера изменена на: <b>{v0}</b>')
-                .format(v0=price_text),
+                admin_screen(
+                    texts.t('ADMIN_SERVER_UI_081', 'Цена сервера изменена на: <b>{v0}</b>').format(v0=price_text),
+                    icon='success',
+                    compact=True,
+                ),
                 reply_markup=types.InlineKeyboardMarkup(
-                    inline_keyboard=[
-                        [types.InlineKeyboardButton(text=' К серверу', callback_data=f'admin_server_edit_{server_id}')]
-                    ]
+                    inline_keyboard=[[admin_back_button(texts, f'admin_server_edit_{server_id}', label='К серверу')]]
                 ),
                 parse_mode='HTML',
             )
         else:
-            await message.answer(get_texts(db_user.language).t('ADMIN_SERVER_UI_049', ' Ошибка при обновлении сервера'))
+            await message.answer(
+                admin_screen(
+                    texts.t('ADMIN_SERVER_UI_049', 'Ошибка при обновлении сервера'),
+                    icon='error',
+                    compact=True,
+                ),
+                parse_mode='HTML',
+            )
 
     except ValueError:
         await message.answer(
-            get_texts(db_user.language).t(
-                'ADMIN_SERVER_UI_082', ' Неверный формат цены. Используйте числа (например: 15.50)'
-            )
+            admin_screen(
+                texts.t('ADMIN_SERVER_UI_082', 'Неверный формат цены. Используйте числа (например: 15.50)'),
+                icon='error',
+                compact=True,
+            ),
+            parse_mode='HTML',
         )
 
 
@@ -699,29 +763,31 @@ async def process_server_price_edit(message: types.Message, state: FSMContext, d
 async def start_server_edit_name(callback: types.CallbackQuery, state: FSMContext, db_user: User, db: AsyncSession):
     server_id = int(callback.data.split('_')[-1])
     server = await get_server_squad_by_id(db, server_id)
+    texts = get_texts(db_user.language)
 
     if not server:
-        await callback.answer(
-            get_texts(db_user.language).t('ADMIN_SERVER_UI_044', ' Сервер не найден!'), show_alert=True
-        )
+        await callback.answer(texts.t('ADMIN_SERVER_UI_044', 'Сервер не найден!'), show_alert=True)
         return
 
     await state.set_data({'server_id': server_id})
     await state.set_state(AdminStates.editing_server_name)
 
     await callback.message.edit_text(
-        get_texts(db_user.language)
-        .t(
-            'ADMIN_SERVER_UI_036',
-            ' <b>Редактирование названия</b>\n\nТекущее название: <b>{v0}</b>\n\nОтправьте новое название для сервера:',
-        )
-        .format(v0=html.escape(server.display_name)),
+        admin_screen(
+            texts.t(
+                'ADMIN_SERVER_UI_036',
+                '<b>Редактирование названия</b>\n\nТекущее название: <b>{v0}</b>\n\nОтправьте новое название для сервера:',
+            ).format(v0=html.escape(server.display_name)),
+            icon='edit',
+            compact=True,
+        ),
         reply_markup=types.InlineKeyboardMarkup(
             inline_keyboard=[
                 [
-                    types.InlineKeyboardButton(
-                        text=get_texts(db_user.language).t('ADMIN_SERVER_UI_084', ' Отмена'),
-                        callback_data=f'admin_server_edit_{server_id}',
+                    admin_back_button(
+                        texts,
+                        f'admin_server_edit_{server_id}',
+                        label=texts.t('ADMIN_SERVER_UI_084', 'Отмена'),
                     )
                 ]
             ]
@@ -736,18 +802,29 @@ async def start_server_edit_name(callback: types.CallbackQuery, state: FSMContex
 async def process_server_name_edit(message: types.Message, state: FSMContext, db_user: User, db: AsyncSession):
     data = await state.get_data()
     server_id = data.get('server_id')
+    texts = get_texts(db_user.language)
 
     new_name = message.text.strip()
 
     if len(new_name) > 255:
         await message.answer(
-            get_texts(db_user.language).t('ADMIN_SERVER_UI_046', ' Название слишком длинное (максимум 255 символов)')
+            admin_screen(
+                texts.t('ADMIN_SERVER_UI_046', 'Название слишком длинное (максимум 255 символов)'),
+                icon='error',
+                compact=True,
+            ),
+            parse_mode='HTML',
         )
         return
 
     if len(new_name) < 3:
         await message.answer(
-            get_texts(db_user.language).t('ADMIN_SERVER_UI_047', ' Название слишком короткое (минимум 3 символа)')
+            admin_screen(
+                texts.t('ADMIN_SERVER_UI_047', 'Название слишком короткое (минимум 3 символа)'),
+                icon='error',
+                compact=True,
+            ),
+            parse_mode='HTML',
         )
         return
 
@@ -759,15 +836,20 @@ async def process_server_name_edit(message: types.Message, state: FSMContext, db
         await cache.delete_pattern('available_countries*')
 
         await message.answer(
-            get_texts(db_user.language)
-            .t('ADMIN_SERVER_UI_048', ' Название сервера изменено на: <b>{v0}</b>')
-            .format(v0=new_name),
+            admin_screen(
+                texts.t('ADMIN_SERVER_UI_048', 'Название сервера изменено на: <b>{v0}</b>').format(
+                    v0=html.escape(new_name)
+                ),
+                icon='success',
+                compact=True,
+            ),
             reply_markup=types.InlineKeyboardMarkup(
                 inline_keyboard=[
                     [
-                        types.InlineKeyboardButton(
-                            text=get_texts(db_user.language).t('ADMIN_SERVER_UI_101', ' К серверу'),
-                            callback_data=f'admin_server_edit_{server_id}',
+                        admin_back_button(
+                            texts,
+                            f'admin_server_edit_{server_id}',
+                            label=texts.t('ADMIN_SERVER_UI_101', 'К серверу'),
                         )
                     ]
                 ]
@@ -775,7 +857,14 @@ async def process_server_name_edit(message: types.Message, state: FSMContext, db
             parse_mode='HTML',
         )
     else:
-        await message.answer(get_texts(db_user.language).t('ADMIN_SERVER_UI_049', ' Ошибка при обновлении сервера'))
+        await message.answer(
+            admin_screen(
+                texts.t('ADMIN_SERVER_UI_049', 'Ошибка при обновлении сервера'),
+                icon='error',
+                compact=True,
+            ),
+            parse_mode='HTML',
+        )
 
 
 @admin_required
@@ -783,40 +872,42 @@ async def process_server_name_edit(message: types.Message, state: FSMContext, db
 async def delete_server_confirm(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
     server_id = int(callback.data.split('_')[-1])
     server = await get_server_squad_by_id(db, server_id)
+    texts = get_texts(db_user.language)
 
     if not server:
-        await callback.answer(
-            get_texts(db_user.language).t('ADMIN_SERVER_UI_044', ' Сервер не найден!'), show_alert=True
-        )
+        await callback.answer(texts.t('ADMIN_SERVER_UI_044', 'Сервер не найден!'), show_alert=True)
         return
 
-    text = f"""
- <b>Удаление сервера</b>
+    text = f"""<b>Удаление сервера</b>
 
 Вы действительно хотите удалить сервер:
 <b>{html.escape(server.display_name)}</b>
 
- <b>Внимание!</b>
+{admin_icon('warning')} <b>Внимание!</b>
 Сервер можно удалить только если к нему нет активных подключений.
 
-Это действие нельзя отменить!
-"""
+Это действие нельзя отменить!"""
 
     keyboard = [
         [
-            types.InlineKeyboardButton(
-                text=get_texts(db_user.language).t('ADMIN_SERVER_UI_083', ' Да, удалить'),
+            admin_button(
+                texts.t('ADMIN_SERVER_UI_083', 'Да, удалить'),
                 callback_data=f'admin_server_delete_confirm_{server_id}',
+                icon='delete',
+                style='danger',
             ),
-            types.InlineKeyboardButton(
-                text=get_texts(db_user.language).t('ADMIN_SERVER_UI_084', ' Отмена'),
-                callback_data=f'admin_server_edit_{server_id}',
+            admin_back_button(
+                texts,
+                f'admin_server_edit_{server_id}',
+                label=texts.t('ADMIN_SERVER_UI_084', 'Отмена'),
             ),
         ]
     ]
 
     await callback.message.edit_text(
-        text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard), parse_mode='HTML'
+        admin_screen(_clean_legacy(text), icon='warning', compact=True),
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
+        parse_mode='HTML',
     )
     await callback.answer()
 
@@ -826,11 +917,10 @@ async def delete_server_confirm(callback: types.CallbackQuery, db_user: User, db
 async def delete_server_execute(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
     server_id = int(callback.data.split('_')[-1])
     server = await get_server_squad_by_id(db, server_id)
+    texts = get_texts(db_user.language)
 
     if not server:
-        await callback.answer(
-            get_texts(db_user.language).t('ADMIN_SERVER_UI_044', ' Сервер не найден!'), show_alert=True
-        )
+        await callback.answer(texts.t('ADMIN_SERVER_UI_044', 'Сервер не найден!'), show_alert=True)
         return
 
     success = await delete_server_squad(db, server_id)
@@ -839,15 +929,20 @@ async def delete_server_execute(callback: types.CallbackQuery, db_user: User, db
         await cache.delete_pattern('available_countries*')
 
         await callback.message.edit_text(
-            get_texts(db_user.language)
-            .t('ADMIN_SERVER_UI_050', ' Сервер <b>{v0}</b> успешно удален!')
-            .format(v0=html.escape(server.display_name)),
+            admin_screen(
+                texts.t('ADMIN_SERVER_UI_050', 'Сервер <b>{v0}</b> успешно удален!').format(
+                    v0=html.escape(server.display_name)
+                ),
+                icon='success',
+                compact=True,
+            ),
             reply_markup=types.InlineKeyboardMarkup(
                 inline_keyboard=[
                     [
-                        types.InlineKeyboardButton(
-                            text=get_texts(db_user.language).t('ADMIN_SERVER_UI_102', ' К списку серверов'),
-                            callback_data='admin_servers_list',
+                        admin_back_button(
+                            texts,
+                            'admin_servers_list',
+                            label=texts.t('ADMIN_SERVER_UI_102', 'К списку серверов'),
                         )
                     ]
                 ]
@@ -856,18 +951,21 @@ async def delete_server_execute(callback: types.CallbackQuery, db_user: User, db
         )
     else:
         await callback.message.edit_text(
-            get_texts(db_user.language)
-            .t(
-                'ADMIN_SERVER_UI_051',
-                ' Не удалось удалить сервер <b>{v0}</b>\n\nВозможно, к нему есть активные подключения.',
-            )
-            .format(v0=html.escape(server.display_name)),
+            admin_screen(
+                texts.t(
+                    'ADMIN_SERVER_UI_051',
+                    'Не удалось удалить сервер <b>{v0}</b>\n\nВозможно, к нему есть активные подключения.',
+                ).format(v0=html.escape(server.display_name)),
+                icon='error',
+                compact=True,
+            ),
             reply_markup=types.InlineKeyboardMarkup(
                 inline_keyboard=[
                     [
-                        types.InlineKeyboardButton(
-                            text=get_texts(db_user.language).t('ADMIN_SERVER_UI_101', ' К серверу'),
-                            callback_data=f'admin_server_edit_{server_id}',
+                        admin_back_button(
+                            texts,
+                            f'admin_server_edit_{server_id}',
+                            label=texts.t('ADMIN_SERVER_UI_101', 'К серверу'),
                         )
                     ]
                 ]
@@ -942,31 +1040,35 @@ async def show_server_detailed_stats(callback: types.CallbackQuery, db_user: Use
 async def start_server_edit_country(callback: types.CallbackQuery, state: FSMContext, db_user: User, db: AsyncSession):
     server_id = int(callback.data.split('_')[-1])
     server = await get_server_squad_by_id(db, server_id)
+    texts = get_texts(db_user.language)
 
     if not server:
-        await callback.answer(
-            get_texts(db_user.language).t('ADMIN_SERVER_UI_044', ' Сервер не найден!'), show_alert=True
-        )
+        await callback.answer(texts.t('ADMIN_SERVER_UI_044', 'Сервер не найден!'), show_alert=True)
         return
 
     await state.set_data({'server_id': server_id})
     await state.set_state(AdminStates.editing_server_country)
 
-    current_country = server.country_code or get_texts(db_user.language).t('ADMIN_SERVER_UI_024', 'Не указан')
+    current_country = (
+        html.escape(server.country_code) if server.country_code else texts.t('ADMIN_SERVER_UI_024', 'Не указан')
+    )
 
     await callback.message.edit_text(
-        get_texts(db_user.language)
-        .t(
-            'ADMIN_SERVER_UI_037',
-            " <b>Редактирование кода страны</b>\n\nТекущий код страны: <b>{v0}</b>\n\nОтправьте новый код страны (например: RU, US, DE) или '-' для удаления:",
-        )
-        .format(v0=current_country),
+        admin_screen(
+            texts.t(
+                'ADMIN_SERVER_UI_037',
+                "<b>Редактирование кода страны</b>\n\nТекущий код страны: <b>{v0}</b>\n\nОтправьте новый код страны (например: RU, US, DE) или '-' для удаления:",
+            ).format(v0=current_country),
+            icon='map',
+            compact=True,
+        ),
         reply_markup=types.InlineKeyboardMarkup(
             inline_keyboard=[
                 [
-                    types.InlineKeyboardButton(
-                        text=get_texts(db_user.language).t('ADMIN_SERVER_UI_084', ' Отмена'),
-                        callback_data=f'admin_server_edit_{server_id}',
+                    admin_back_button(
+                        texts,
+                        f'admin_server_edit_{server_id}',
+                        label=texts.t('ADMIN_SERVER_UI_084', 'Отмена'),
                     )
                 ]
             ]
@@ -981,6 +1083,7 @@ async def start_server_edit_country(callback: types.CallbackQuery, state: FSMCon
 async def process_server_country_edit(message: types.Message, state: FSMContext, db_user: User, db: AsyncSession):
     data = await state.get_data()
     server_id = data.get('server_id')
+    texts = get_texts(db_user.language)
 
     new_country = message.text.strip().upper()
 
@@ -988,7 +1091,12 @@ async def process_server_country_edit(message: types.Message, state: FSMContext,
         new_country = None
     elif len(new_country) > 5:
         await message.answer(
-            get_texts(db_user.language).t('ADMIN_SERVER_UI_087', ' Код страны слишком длинный (максимум 5 символов)')
+            admin_screen(
+                texts.t('ADMIN_SERVER_UI_087', 'Код страны слишком длинный (максимум 5 символов)'),
+                icon='error',
+                compact=True,
+            ),
+            parse_mode='HTML',
         )
         return
 
@@ -999,17 +1107,20 @@ async def process_server_country_edit(message: types.Message, state: FSMContext,
 
         await cache.delete_pattern('available_countries*')
 
-        country_text = new_country or get_texts(db_user.language).t('ADMIN_SERVER_UI_038', 'Удален')
+        country_text = html.escape(new_country) if new_country else texts.t('ADMIN_SERVER_UI_038', 'Удален')
         await message.answer(
-            get_texts(db_user.language)
-            .t('ADMIN_SERVER_UI_052', ' Код страны изменен на: <b>{v0}</b>')
-            .format(v0=country_text),
+            admin_screen(
+                texts.t('ADMIN_SERVER_UI_052', 'Код страны изменен на: <b>{v0}</b>').format(v0=country_text),
+                icon='success',
+                compact=True,
+            ),
             reply_markup=types.InlineKeyboardMarkup(
                 inline_keyboard=[
                     [
-                        types.InlineKeyboardButton(
-                            text=get_texts(db_user.language).t('ADMIN_SERVER_UI_101', ' К серверу'),
-                            callback_data=f'admin_server_edit_{server_id}',
+                        admin_back_button(
+                            texts,
+                            f'admin_server_edit_{server_id}',
+                            label=texts.t('ADMIN_SERVER_UI_101', 'К серверу'),
                         )
                     ]
                 ]
@@ -1017,7 +1128,14 @@ async def process_server_country_edit(message: types.Message, state: FSMContext,
             parse_mode='HTML',
         )
     else:
-        await message.answer(get_texts(db_user.language).t('ADMIN_SERVER_UI_049', ' Ошибка при обновлении сервера'))
+        await message.answer(
+            admin_screen(
+                texts.t('ADMIN_SERVER_UI_049', 'Ошибка при обновлении сервера'),
+                icon='error',
+                compact=True,
+            ),
+            parse_mode='HTML',
+        )
 
 
 @admin_required
@@ -1025,31 +1143,33 @@ async def process_server_country_edit(message: types.Message, state: FSMContext,
 async def start_server_edit_limit(callback: types.CallbackQuery, state: FSMContext, db_user: User, db: AsyncSession):
     server_id = int(callback.data.split('_')[-1])
     server = await get_server_squad_by_id(db, server_id)
+    texts = get_texts(db_user.language)
 
     if not server:
-        await callback.answer(
-            get_texts(db_user.language).t('ADMIN_SERVER_UI_044', ' Сервер не найден!'), show_alert=True
-        )
+        await callback.answer(texts.t('ADMIN_SERVER_UI_044', 'Сервер не найден!'), show_alert=True)
         return
 
     await state.set_data({'server_id': server_id})
     await state.set_state(AdminStates.editing_server_limit)
 
-    current_limit = server.max_users or get_texts(db_user.language).t('ADMIN_SERVER_UI_025', 'Без лимита')
+    current_limit = server.max_users or texts.t('ADMIN_SERVER_UI_025', 'Без лимита')
 
     await callback.message.edit_text(
-        get_texts(db_user.language)
-        .t(
-            'ADMIN_SERVER_UI_039',
-            ' <b>Редактирование лимита пользователей</b>\n\nТекущий лимит: <b>{v0}</b>\n\nОтправьте новый лимит пользователей (число) или 0 для безлимитного доступа:',
-        )
-        .format(v0=current_limit),
+        admin_screen(
+            texts.t(
+                'ADMIN_SERVER_UI_039',
+                '<b>Редактирование лимита пользователей</b>\n\nТекущий лимит: <b>{v0}</b>\n\nОтправьте новый лимит пользователей (число) или 0 для безлимитного доступа:',
+            ).format(v0=current_limit),
+            icon='users',
+            compact=True,
+        ),
         reply_markup=types.InlineKeyboardMarkup(
             inline_keyboard=[
                 [
-                    types.InlineKeyboardButton(
-                        text=get_texts(db_user.language).t('ADMIN_SERVER_UI_084', ' Отмена'),
-                        callback_data=f'admin_server_edit_{server_id}',
+                    admin_back_button(
+                        texts,
+                        f'admin_server_edit_{server_id}',
+                        label=texts.t('ADMIN_SERVER_UI_084', 'Отмена'),
                     )
                 ]
             ]
@@ -1064,19 +1184,30 @@ async def start_server_edit_limit(callback: types.CallbackQuery, state: FSMConte
 async def process_server_limit_edit(message: types.Message, state: FSMContext, db_user: User, db: AsyncSession):
     data = await state.get_data()
     server_id = data.get('server_id')
+    texts = get_texts(db_user.language)
 
     try:
         limit = int(message.text.strip())
 
         if limit < 0:
             await message.answer(
-                get_texts(db_user.language).t('ADMIN_SERVER_UI_088', ' Лимит не может быть отрицательным')
+                admin_screen(
+                    texts.t('ADMIN_SERVER_UI_088', 'Лимит не может быть отрицательным'),
+                    icon='error',
+                    compact=True,
+                ),
+                parse_mode='HTML',
             )
             return
 
         if limit > 10000:
             await message.answer(
-                get_texts(db_user.language).t('ADMIN_SERVER_UI_089', ' Слишком большой лимит (максимум 10,000)')
+                admin_screen(
+                    texts.t('ADMIN_SERVER_UI_089', 'Слишком большой лимит (максимум 10,000)'),
+                    icon='error',
+                    compact=True,
+                ),
+                parse_mode='HTML',
             )
             return
 
@@ -1088,27 +1219,39 @@ async def process_server_limit_edit(message: types.Message, state: FSMContext, d
             await state.clear()
 
             limit_text = (
-                get_texts(db_user.language).t('ADMIN_SERVER_UI_053', '{v0} пользователей').format(v0=limit)
+                texts.t('ADMIN_SERVER_UI_053', '{v0} пользователей').format(v0=limit)
                 if limit > 0
-                else get_texts(db_user.language).t('ADMIN_SERVER_UI_025', 'Без лимита')
+                else texts.t('ADMIN_SERVER_UI_025', 'Без лимита')
             )
             await message.answer(
-                get_texts(db_user.language)
-                .t('ADMIN_SERVER_UI_090', ' Лимит пользователей изменен на: <b>{v0}</b>')
-                .format(v0=limit_text),
+                admin_screen(
+                    texts.t('ADMIN_SERVER_UI_090', 'Лимит пользователей изменен на: <b>{v0}</b>').format(v0=limit_text),
+                    icon='success',
+                    compact=True,
+                ),
                 reply_markup=types.InlineKeyboardMarkup(
-                    inline_keyboard=[
-                        [types.InlineKeyboardButton(text=' К серверу', callback_data=f'admin_server_edit_{server_id}')]
-                    ]
+                    inline_keyboard=[[admin_back_button(texts, f'admin_server_edit_{server_id}', label='К серверу')]]
                 ),
                 parse_mode='HTML',
             )
         else:
-            await message.answer(get_texts(db_user.language).t('ADMIN_SERVER_UI_049', ' Ошибка при обновлении сервера'))
+            await message.answer(
+                admin_screen(
+                    texts.t('ADMIN_SERVER_UI_049', 'Ошибка при обновлении сервера'),
+                    icon='error',
+                    compact=True,
+                ),
+                parse_mode='HTML',
+            )
 
     except ValueError:
         await message.answer(
-            get_texts(db_user.language).t('ADMIN_SERVER_UI_091', ' Неверный формат числа. Введите целое число.')
+            admin_screen(
+                texts.t('ADMIN_SERVER_UI_091', 'Неверный формат числа. Введите целое число.'),
+                icon='error',
+                compact=True,
+            ),
+            parse_mode='HTML',
         )
 
 
@@ -1119,31 +1262,35 @@ async def start_server_edit_description(
 ):
     server_id = int(callback.data.split('_')[-1])
     server = await get_server_squad_by_id(db, server_id)
+    texts = get_texts(db_user.language)
 
     if not server:
-        await callback.answer(
-            get_texts(db_user.language).t('ADMIN_SERVER_UI_044', ' Сервер не найден!'), show_alert=True
-        )
+        await callback.answer(texts.t('ADMIN_SERVER_UI_044', 'Сервер не найден!'), show_alert=True)
         return
 
     await state.set_data({'server_id': server_id})
     await state.set_state(AdminStates.editing_server_description)
 
-    current_desc = server.description or get_texts(db_user.language).t('ADMIN_SERVER_UI_026', 'Не указано')
+    current_desc = (
+        html.escape(server.description) if server.description else texts.t('ADMIN_SERVER_UI_026', 'Не указано')
+    )
 
     await callback.message.edit_text(
-        get_texts(db_user.language)
-        .t(
-            'ADMIN_SERVER_UI_040',
-            " <b>Редактирование описания</b>\n\nТекущее описание:\n<i>{v0}</i>\n\nОтправьте новое описание сервера или '-' для удаления:",
-        )
-        .format(v0=current_desc),
+        admin_screen(
+            texts.t(
+                'ADMIN_SERVER_UI_040',
+                "<b>Редактирование описания</b>\n\nТекущее описание:\n<i>{v0}</i>\n\nОтправьте новое описание сервера или '-' для удаления:",
+            ).format(v0=current_desc),
+            icon='edit',
+            compact=True,
+        ),
         reply_markup=types.InlineKeyboardMarkup(
             inline_keyboard=[
                 [
-                    types.InlineKeyboardButton(
-                        text=get_texts(db_user.language).t('ADMIN_SERVER_UI_084', ' Отмена'),
-                        callback_data=f'admin_server_edit_{server_id}',
+                    admin_back_button(
+                        texts,
+                        f'admin_server_edit_{server_id}',
+                        label=texts.t('ADMIN_SERVER_UI_084', 'Отмена'),
                     )
                 ]
             ]
@@ -1158,6 +1305,7 @@ async def start_server_edit_description(
 async def process_server_description_edit(message: types.Message, state: FSMContext, db_user: User, db: AsyncSession):
     data = await state.get_data()
     server_id = data.get('server_id')
+    texts = get_texts(db_user.language)
 
     new_description = message.text.strip()
 
@@ -1165,7 +1313,12 @@ async def process_server_description_edit(message: types.Message, state: FSMCont
         new_description = None
     elif len(new_description) > 1000:
         await message.answer(
-            get_texts(db_user.language).t('ADMIN_SERVER_UI_092', ' Описание слишком длинное (максимум 1000 символов)')
+            admin_screen(
+                texts.t('ADMIN_SERVER_UI_092', 'Описание слишком длинное (максимум 1000 символов)'),
+                icon='error',
+                compact=True,
+            ),
+            parse_mode='HTML',
         )
         return
 
@@ -1174,18 +1327,21 @@ async def process_server_description_edit(message: types.Message, state: FSMCont
     if server:
         await state.clear()
 
-        desc_text = new_description or get_texts(db_user.language).t('ADMIN_SERVER_UI_041', 'Удалено')
+        desc_text = html.escape(new_description) if new_description else texts.t('ADMIN_SERVER_UI_041', 'Удалено')
         await cache.delete_pattern('available_countries*')
         await message.answer(
-            get_texts(db_user.language)
-            .t('ADMIN_SERVER_UI_054', ' Описание сервера изменено:\n\n<i>{v0}</i>')
-            .format(v0=desc_text),
+            admin_screen(
+                texts.t('ADMIN_SERVER_UI_054', 'Описание сервера изменено:\n\n<i>{v0}</i>').format(v0=desc_text),
+                icon='success',
+                compact=True,
+            ),
             reply_markup=types.InlineKeyboardMarkup(
                 inline_keyboard=[
                     [
-                        types.InlineKeyboardButton(
-                            text=get_texts(db_user.language).t('ADMIN_SERVER_UI_101', ' К серверу'),
-                            callback_data=f'admin_server_edit_{server_id}',
+                        admin_back_button(
+                            texts,
+                            f'admin_server_edit_{server_id}',
+                            label=texts.t('ADMIN_SERVER_UI_101', 'К серверу'),
                         )
                     ]
                 ]
@@ -1193,7 +1349,14 @@ async def process_server_description_edit(message: types.Message, state: FSMCont
             parse_mode='HTML',
         )
     else:
-        await message.answer(get_texts(db_user.language).t('ADMIN_SERVER_UI_049', ' Ошибка при обновлении сервера'))
+        await message.answer(
+            admin_screen(
+                texts.t('ADMIN_SERVER_UI_049', 'Ошибка при обновлении сервера'),
+                icon='error',
+                compact=True,
+            ),
+            parse_mode='HTML',
+        )
 
 
 @admin_required
@@ -1206,11 +1369,10 @@ async def start_server_edit_promo_groups(
 ):
     server_id = int(callback.data.split('_')[-1])
     server = await get_server_squad_by_id(db, server_id)
+    texts = get_texts(db_user.language)
 
     if not server:
-        await callback.answer(
-            get_texts(db_user.language).t('ADMIN_SERVER_UI_044', ' Сервер не найден!'), show_alert=True
-        )
+        await callback.answer(texts.t('ADMIN_SERVER_UI_044', 'Сервер не найден!'), show_alert=True)
         return
 
     promo_groups_data = await get_promo_groups_with_counts(db)
@@ -1219,9 +1381,7 @@ async def start_server_edit_promo_groups(
     ]
 
     if not promo_groups:
-        await callback.answer(
-            get_texts(db_user.language).t('ADMIN_SERVER_UI_055', ' Не найдены промогруппы'), show_alert=True
-        )
+        await callback.answer(texts.t('ADMIN_SERVER_UI_055', 'Не найдены промогруппы'), show_alert=True)
         return
 
     selected_ids = {pg.id for pg in server.allowed_promo_groups}
@@ -1240,17 +1400,13 @@ async def start_server_edit_promo_groups(
         }
     )
 
-    text = (
-        get_texts(db_user.language)
-        .t(
-            'ADMIN_SERVER_UI_004',
-            ' <b>Настройка промогрупп</b>\n\nСервер: <b>{v0}</b>\n\nВыберите промогруппы, которым будет доступен этот сервер.\nДолжна быть выбрана минимум одна промогруппа.',
-        )
-        .format(v0=html.escape(server.display_name))
-    )
+    text = texts.t(
+        'ADMIN_SERVER_UI_004',
+        '<b>Настройка промогрупп</b>\n\nСервер: <b>{v0}</b>\n\nВыберите промогруппы, которым будет доступен этот сервер.\nДолжна быть выбрана минимум одна промогруппа.',
+    ).format(v0=html.escape(server.display_name))
 
     await callback.message.edit_text(
-        text,
+        admin_screen(_clean_legacy(text), icon='users_group', compact=True),
         reply_markup=_build_server_promo_groups_keyboard(
             server_id, promo_groups, selected_ids, language=db_user.language
         ),
@@ -1274,7 +1430,7 @@ async def toggle_server_promo_group(
     data = await state.get_data()
     if not data or data.get('server_id') != server_id:
         await callback.answer(
-            get_texts(db_user.language).t('ADMIN_SERVER_UI_056', ' Сессия редактирования устарела'), show_alert=True
+            get_texts(db_user.language).t('ADMIN_SERVER_UI_056', 'Сессия редактирования устарела'), show_alert=True
         )
         return
 
@@ -1284,7 +1440,7 @@ async def toggle_server_promo_group(
     if group_id in selected:
         if len(selected) == 1:
             await callback.answer(
-                get_texts(db_user.language).t('ADMIN_SERVER_UI_093', ' Нельзя отключить последнюю промогруппу'),
+                get_texts(db_user.language).t('ADMIN_SERVER_UI_093', 'Нельзя отключить последнюю промогруппу'),
                 show_alert=True,
             )
             return
@@ -1310,11 +1466,10 @@ async def save_server_promo_groups(
     db_user: User,
     db: AsyncSession,
 ):
+    texts = get_texts(db_user.language)
     data = await state.get_data()
     if not data:
-        await callback.answer(
-            get_texts(db_user.language).t('ADMIN_SERVER_UI_057', ' Нет данных для сохранения'), show_alert=True
-        )
+        await callback.answer(texts.t('ADMIN_SERVER_UI_057', 'Нет данных для сохранения'), show_alert=True)
         return
 
     server_id = data.get('server_id')
@@ -1322,7 +1477,7 @@ async def save_server_promo_groups(
 
     if not selected:
         await callback.answer(
-            get_texts(db_user.language).t('ADMIN_SERVER_UI_058', ' Выберите хотя бы одну промогруппу'),
+            texts.t('ADMIN_SERVER_UI_058', 'Выберите хотя бы одну промогруппу'),
             show_alert=True,
         )
         return
@@ -1330,13 +1485,11 @@ async def save_server_promo_groups(
     try:
         server = await update_server_squad_promo_groups(db, server_id, selected)
     except ValueError as exc:
-        await callback.answer(f' {exc}', show_alert=True)
+        await callback.answer(f'{exc}', show_alert=True)
         return
 
     if not server:
-        await callback.answer(
-            get_texts(db_user.language).t('ADMIN_SERVER_UI_059', ' Сервер не найден'), show_alert=True
-        )
+        await callback.answer(texts.t('ADMIN_SERVER_UI_059', 'Сервер не найден'), show_alert=True)
         return
 
     await cache.delete_pattern('available_countries*')
@@ -1349,15 +1502,22 @@ async def save_server_promo_groups(
         reply_markup=keyboard,
         parse_mode='HTML',
     )
-    await callback.answer(get_texts(db_user.language).t('ADMIN_SERVER_UI_042', ' Промогруппы обновлены!'))
+    await callback.answer(texts.t('ADMIN_SERVER_UI_042', 'Промогруппы обновлены!'))
 
 
 @admin_required
 @error_handler
 async def sync_server_user_counts_handler(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+    texts = get_texts(db_user.language)
+
     await callback.message.edit_text(
-        get_texts(db_user.language).t('ADMIN_SERVER_UI_043', ' Синхронизация счетчиков пользователей...'),
+        admin_screen(
+            texts.t('ADMIN_SERVER_UI_043', 'Синхронизация счетчиков пользователей...'),
+            icon='sync',
+            compact=True,
+        ),
         reply_markup=None,
+        parse_mode='HTML',
     )
 
     try:
@@ -1365,43 +1525,46 @@ async def sync_server_user_counts_handler(callback: types.CallbackQuery, db_user
 
         updated_count = await sync_server_user_counts(db)
 
-        text = f"""
- <b>Синхронизация завершена</b>
+        text = f"""<b>Синхронизация завершена</b>
 
- <b>Результат:</b>
+<b>Результат:</b>
 • Обновлено серверов: {updated_count}
 
-Счетчики пользователей синхронизированы с реальными данными.
-"""
+Счетчики пользователей синхронизированы с реальными данными."""
 
         keyboard = [
             [
-                types.InlineKeyboardButton(
-                    text=get_texts(db_user.language).t('ADMIN_SERVER_UI_070', ' Список серверов'),
+                admin_button(
+                    texts.t('ADMIN_SERVER_UI_070', 'Список серверов'),
                     callback_data='admin_servers_list',
+                    style='primary',
                 ),
-                types.InlineKeyboardButton(
-                    text=get_texts(db_user.language).t('ADMIN_SERVER_UI_098', ' Повторить'),
+                admin_button(
+                    texts.t('ADMIN_SERVER_UI_098', 'Повторить'),
                     callback_data='admin_servers_sync_counts',
+                    icon='refresh',
+                    style='primary',
                 ),
             ],
-            [
-                types.InlineKeyboardButton(
-                    text=get_texts(db_user.language).t('ADMIN_SERVER_UI_068', '← Назад'), callback_data='admin_servers'
-                )
-            ],
-            [types.InlineKeyboardButton(text=' Назад', callback_data='admin_servers')],
+            [admin_back_button(texts, 'admin_servers')],
         ]
 
-        await callback.message.edit_text(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
+        await callback.message.edit_text(
+            admin_screen(_clean_legacy(text), icon='success', compact=True),
+            reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
+            parse_mode='HTML',
+        )
 
     except Exception as e:
         logger.error('Ошибка синхронизации счетчиков', error=e)
         await callback.message.edit_text(
-            get_texts(db_user.language).t('ADMIN_SERVER_UI_075', ' Ошибка синхронизации: {v0!s}').format(v0=e),
-            reply_markup=types.InlineKeyboardMarkup(
-                inline_keyboard=[[types.InlineKeyboardButton(text=' Назад', callback_data='admin_servers')]]
+            admin_screen(
+                texts.t('ADMIN_SERVER_UI_075', 'Ошибка синхронизации: {v0!s}').format(v0=e),
+                icon='error',
+                compact=True,
             ),
+            reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[admin_back_button(texts, 'admin_servers')]]),
+            parse_mode='HTML',
         )
 
     await callback.answer()

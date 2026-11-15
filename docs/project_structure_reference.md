@@ -4923,6 +4923,9 @@
 - `tests/handlers/test_legacy_subscription_switch_list.py` — Python-модуль
   Классы: нет
   Функции: `test_legacy_subscription_sees_tariffs_when_switching_is_disabled`, `test_expired_legacy_subscription_sees_tariffs` — Истёкшая старая подписка переводится на тариф той же строкой, а не покупкой с нуля., `test_legacy_subscription_list_does_not_say_unknown_tariff` — Человеку не пишем «Текущий: Неизвестно» — у старой подписки тарифа просто нет., `test_legacy_subscription_period_confirmation_does_not_say_unknown_tariff` — Экран подтверждения после выбора тарифа тоже без «Текущий тариф: Неизвестно».
+- `tests/handlers/test_main_menu_support_tickets.py` — Python-модуль
+  Классы: нет
+  Функции: `test_main_menu_support_opens_ticket_menu_when_tickets_enabled`, `test_main_menu_support_keeps_url_when_tickets_disabled`, `test_support_ticket_keyboard_has_styled_actions`
 - `tests/handlers/test_menu_start_screen_formatting.py` — Python-модуль
   Классы: нет
   Функции: `test_main_menu_has_no_extra_blank_lines`, `test_start_referral_question_screen_has_no_blank_line_holes`
@@ -6291,7 +6294,7 @@
   Функции: нет
 - `tests/utils/test_admin_ui.py` — Python-модуль
   Классы: нет
-  Функции: `test_admin_screen_converts_legacy_markdown_and_adds_icon`, `test_admin_screen_does_not_duplicate_existing_icon`, `test_admin_screen_strips_zero_width_and_edges`, `test_heading_and_quote_match_user_style`, `test_admin_button_keeps_callback_and_adds_icon_and_style`, `test_admin_button_does_not_override_icon_from_text`, `test_admin_back_button_is_danger`, `test_decorate_admin_markup_adds_icons_styles_and_cleans_labels`, `test_decorate_admin_markup_keeps_unknown_buttons_untouched`, `test_decorate_admin_markup_strips_legacy_glyph_and_skips_danger_icon`
+  Функции: `test_admin_screen_converts_legacy_markdown_and_adds_icon`, `test_admin_screen_does_not_duplicate_existing_icon`, `test_admin_screen_strips_zero_width_and_edges`, `test_heading_and_quote_match_user_style`, `test_admin_button_keeps_callback_and_adds_icon_and_style`, `test_admin_button_does_not_override_icon_from_text`, `test_admin_back_button_is_danger`, `test_decorate_admin_markup_adds_icons_styles_and_cleans_labels`, `test_decorate_admin_markup_keeps_unknown_buttons_untouched`, `test_decorate_admin_markup_strips_legacy_glyph_and_adds_back_icon`, `test_decorate_admin_markup_infers_deep_menu_action_icon_and_style`, `test_decorate_admin_markup_gives_unknown_admin_button_default_icon`
 - `tests/utils/test_button_emoji_sanitize.py` — Python-модуль
   Классы: нет
   Функции: `test_parse_strips_custom_emoji_from_label`, `test_make_button_converts_markup_to_icon`, `test_sanitize_markup_cleans_directly_built_buttons`, `test_sanitize_keeps_plain_markup_untouched`, `test_callback_answer_text_loses_markup`

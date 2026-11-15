@@ -44,9 +44,13 @@ from app.services.pinned_message_service import (
     unpin_active_pinned_message,
 )
 from app.states import AdminStates
-from app.utils.admin_ui import admin_screen
+from app.utils.admin_ui import admin_back_button, admin_button, admin_icon, admin_screen
 from app.utils.decorators import admin_required, error_handler
-from app.utils.miniapp_buttons import BUTTON_KEY_TO_CABINET_PATH, build_miniapp_or_callback_button
+from app.utils.miniapp_buttons import (
+    BUTTON_KEY_TO_CABINET_PATH,
+    build_miniapp_or_callback_button,
+    strip_leading_emoji,
+)
 from app.utils.timezone import local_day_start
 
 
@@ -290,22 +294,22 @@ async def show_pinned_message_menu(
                 if pinned_message.media_type == 'photo'
                 else texts.t('ADMIN_MESSAGES_UI_CONFIRM_BUTTON_SELECTION_069', 'Видео')
             )
-            media_line = texts.t('ADMIN_MESSAGES_UI_SHOW_PINNED_MESSAGE_MENU_003', ' Медиа: {value1}\n').format(
+            media_line = texts.t('ADMIN_MESSAGES_UI_SHOW_PINNED_MESSAGE_MENU_003', 'Медиа: {value1}\n').format(
                 value1=media_label
             )
         position_line = (
-            texts.t('ADMIN_MESSAGES_UI_SHOW_PINNED_MESSAGE_MENU_004', ' Отправлять перед меню')
+            texts.t('ADMIN_MESSAGES_UI_SHOW_PINNED_MESSAGE_MENU_004', 'Отправлять перед меню')
             if pinned_message.send_before_menu
-            else texts.t('ADMIN_MESSAGES_UI_SHOW_PINNED_MESSAGE_MENU_005', ' Отправлять после меню')
+            else texts.t('ADMIN_MESSAGES_UI_SHOW_PINNED_MESSAGE_MENU_005', 'Отправлять после меню')
         )
         start_mode_line = (
-            texts.t('ADMIN_MESSAGES_UI_SHOW_PINNED_MESSAGE_MENU_006', ' При каждом /start')
+            texts.t('ADMIN_MESSAGES_UI_SHOW_PINNED_MESSAGE_MENU_006', 'При каждом /start')
             if pinned_message.send_on_every_start
-            else texts.t('ADMIN_MESSAGES_UI_SHOW_PINNED_MESSAGE_MENU_007', ' Только один раз и при обновлении')
+            else texts.t('ADMIN_MESSAGES_UI_SHOW_PINNED_MESSAGE_MENU_007', 'Только один раз и при обновлении')
         )
         body = texts.t(
             'ADMIN_MESSAGES_UI_SHOW_PINNED_MESSAGE_MENU_008',
-            ' <b>Закрепленное сообщение</b>\n\n Текущий текст:\n<code>{value1}</code>\n\n{value2}{value3}\n{value4}\n Обновлено: {value5}',
+            '<b>Закрепленное сообщение</b>\n\nТекущий текст:\n<code>{value1}</code>\n\n{value2}{value3}\n{value4}\nОбновлено: {value5}',
         ).format(
             value1=content_preview,
             value2=media_line,
@@ -316,11 +320,11 @@ async def show_pinned_message_menu(
     else:
         body = texts.t(
             'ADMIN_MESSAGES_UI_SHOW_PINNED_MESSAGE_MENU_009',
-            ' <b>Закрепленное сообщение</b>\n\nСообщение не задано. Отправьте новый текст, чтобы разослать и закрепить его у пользователей.',
+            '<b>Закрепленное сообщение</b>\n\nСообщение не задано. Отправьте новый текст, чтобы разослать и закрепить его у пользователей.',
         )
 
     await callback.message.edit_text(
-        body,
+        admin_screen(body, icon='pin', compact=True),
         reply_markup=get_pinned_message_keyboard(
             db_user.language,
             send_before_menu=getattr(pinned_message, 'send_before_menu', True),
@@ -341,16 +345,21 @@ async def prompt_pinned_message_update(
     texts = get_texts(db_user.language)
     await state.set_state(AdminStates.editing_pinned_message)
     await callback.message.edit_text(
-        texts.t(
-            'ADMIN_MESSAGES_UI_PROMPT_PINNED_MESSAGE_UPDATE_010',
-            ' <b>Новое закрепленное сообщение</b>\n\nПришлите текст, фото или видео, которое нужно закрепить.\nБот отправит его всем активным пользователям, открепит старое и закрепит новое без уведомлений.',
+        admin_screen(
+            texts.t(
+                'ADMIN_MESSAGES_UI_PROMPT_PINNED_MESSAGE_UPDATE_010',
+                '<b>Новое закрепленное сообщение</b>\n\nПришлите текст, фото или видео, которое нужно закрепить.\nБот отправит его всем активным пользователям, открепит старое и закрепит новое без уведомлений.',
+            ),
+            icon='pin',
+            compact=True,
         ),
         reply_markup=types.InlineKeyboardMarkup(
             inline_keyboard=[
                 [
-                    types.InlineKeyboardButton(
-                        text=texts.t('ADMIN_MESSAGES_UI_CONFIRM_BUTTON_SELECTION_078', ' Отмена'),
-                        callback_data='admin_pinned_message',
+                    admin_back_button(
+                        texts,
+                        'admin_pinned_message',
+                        label=strip_leading_emoji(texts.t('ADMIN_MESSAGES_UI_CONFIRM_BUTTON_SELECTION_078', 'Отмена')),
                     )
                 ]
             ]
@@ -426,9 +435,13 @@ async def delete_pinned_message(
         return
 
     await callback.message.edit_text(
-        texts.t(
-            'ADMIN_MESSAGES_UI_DELETE_PINNED_MESSAGE_015',
-            ' <b>Удаление закрепленного сообщения</b>\n\nПодождите, пока бот открепит сообщение у пользователей...',
+        admin_screen(
+            texts.t(
+                'ADMIN_MESSAGES_UI_DELETE_PINNED_MESSAGE_015',
+                '<b>Удаление закрепленного сообщения</b>\n\nПодождите, пока бот открепит сообщение у пользователей...',
+            ),
+            icon='delete',
+            compact=True,
         ),
         parse_mode='HTML',
     )
@@ -440,9 +453,13 @@ async def delete_pinned_message(
 
     if not deleted:
         await callback.message.edit_text(
-            texts.t(
-                'ADMIN_MESSAGES_UI_DELETE_PINNED_MESSAGE_016',
-                ' Не удалось найти активное закрепленное сообщение для удаления',
+            admin_screen(
+                texts.t(
+                    'ADMIN_MESSAGES_UI_DELETE_PINNED_MESSAGE_016',
+                    'Не удалось найти активное закрепленное сообщение для удаления',
+                ),
+                icon='warning',
+                compact=True,
             ),
             reply_markup=get_admin_messages_keyboard(db_user.language),
             parse_mode='HTML',
@@ -452,10 +469,14 @@ async def delete_pinned_message(
 
     total = unpinned_count + failed_count
     await callback.message.edit_text(
-        texts.t(
-            'ADMIN_MESSAGES_UI_DELETE_PINNED_MESSAGE_017',
-            ' <b>Закрепленное сообщение удалено</b>\n\n Чатов обработано: {value1}\n Откреплено: {value2}\n Ошибок: {value3}\n\nНовое сообщение можно задать кнопкой "Обновить".',
-        ).format(value1=total, value2=unpinned_count, value3=failed_count),
+        admin_screen(
+            texts.t(
+                'ADMIN_MESSAGES_UI_DELETE_PINNED_MESSAGE_017',
+                '<b>Закрепленное сообщение удалено</b>\n\nЧатов обработано: {value1}\nОткреплено: {value2}\nОшибок: {value3}\n\nНовое сообщение можно задать кнопкой "Обновить".',
+            ).format(value1=total, value2=unpinned_count, value3=failed_count),
+            icon='success',
+            compact=True,
+        ),
         reply_markup=get_admin_messages_keyboard(db_user.language),
         parse_mode='HTML',
     )
@@ -485,7 +506,14 @@ async def process_pinned_message_update(
 
     if not pinned_text and not media_file_id:
         await message.answer(
-            texts.t('ADMIN_PINNED_NO_CONTENT', ' Не удалось прочитать текст или медиа в сообщении, попробуйте снова.')
+            admin_screen(
+                texts.t(
+                    'ADMIN_PINNED_NO_CONTENT', 'Не удалось прочитать текст или медиа в сообщении, попробуйте снова.'
+                ),
+                icon='warning',
+                compact=True,
+            ),
+            parse_mode='HTML',
         )
         return
 
@@ -498,7 +526,10 @@ async def process_pinned_message_update(
             media_file_id=media_file_id,
         )
     except ValueError as validation_error:
-        await message.answer(f' {validation_error}')
+        await message.answer(
+            admin_screen(html.escape(str(validation_error)), icon='warning', compact=True),
+            parse_mode='HTML',
+        )
         return
 
     # Сообщение сохранено, спрашиваем о рассылке
@@ -506,12 +537,16 @@ async def process_pinned_message_update(
     from app.states import AdminStates
 
     await message.answer(
-        texts.t(
-            'ADMIN_PINNED_SAVED_ASK_BROADCAST',
-            ' <b>Сообщение сохранено!</b>\n\n'
-            'Выберите, как доставить сообщение пользователям:\n\n'
-            '• <b>Разослать сейчас</b> — отправит и закрепит у всех активных пользователей\n'
-            '• <b>Только при /start</b> — пользователи увидят при следующем запуске бота',
+        admin_screen(
+            texts.t(
+                'ADMIN_PINNED_SAVED_ASK_BROADCAST',
+                '<b>Сообщение сохранено!</b>\n\n'
+                'Выберите, как доставить сообщение пользователям:\n\n'
+                '• <b>Разослать сейчас</b> — отправит и закрепит у всех активных пользователей\n'
+                '• <b>Только при /start</b> — пользователи увидят при следующем запуске бота',
+            ),
+            icon='success',
+            compact=True,
         ),
         reply_markup=get_pinned_broadcast_confirm_keyboard(db_user.language, pinned_message.id),
         parse_mode='HTML',
@@ -543,13 +578,17 @@ async def handle_pinned_broadcast_now(
 
     if not pinned_message:
         await callback.answer(
-            texts.t('ADMIN_MESSAGES_UI_HANDLE_PINNED_BROADCAST_NOW_018', ' Сообщение не найдено'), show_alert=True
+            texts.t('ADMIN_MESSAGES_UI_HANDLE_PINNED_BROADCAST_NOW_018', 'Сообщение не найдено'), show_alert=True
         )
         await state.clear()
         return
 
     await callback.message.edit_text(
-        texts.t('ADMIN_PINNED_SAVING', ' Сообщение сохранено. Начинаю отправку и закрепление у пользователей...'),
+        admin_screen(
+            texts.t('ADMIN_PINNED_SAVING', 'Сообщение сохранено. Начинаю отправку и закрепление у пользователей...'),
+            icon='pin',
+            compact=True,
+        ),
         parse_mode='HTML',
     )
 
@@ -561,10 +600,14 @@ async def handle_pinned_broadcast_now(
 
     total = sent_count + failed_count
     await callback.message.edit_text(
-        texts.t(
-            'ADMIN_PINNED_UPDATED',
-            ' <b>Закрепленное сообщение обновлено</b>\n\n Получателей: {total}\n Отправлено: {sent}\n Ошибок: {failed}',
-        ).format(total=total, sent=sent_count, failed=failed_count),
+        admin_screen(
+            texts.t(
+                'ADMIN_PINNED_UPDATED',
+                '<b>Закрепленное сообщение обновлено</b>\n\nПолучателей: {total}\nОтправлено: {sent}\nОшибок: {failed}',
+            ).format(total=total, sent=sent_count, failed=failed_count),
+            icon='success',
+            compact=True,
+        ),
         reply_markup=get_admin_messages_keyboard(db_user.language),
         parse_mode='HTML',
     )
@@ -583,10 +626,14 @@ async def handle_pinned_broadcast_skip(
     texts = get_texts(db_user.language)
 
     await callback.message.edit_text(
-        texts.t(
-            'ADMIN_PINNED_SAVED_NO_BROADCAST',
-            ' <b>Закрепленное сообщение сохранено</b>\n\n'
-            'Рассылка не выполнена. Пользователи увидят сообщение при следующем вводе /start.',
+        admin_screen(
+            texts.t(
+                'ADMIN_PINNED_SAVED_NO_BROADCAST',
+                '<b>Закрепленное сообщение сохранено</b>\n\n'
+                'Рассылка не выполнена. Пользователи увидят сообщение при следующем вводе /start.',
+            ),
+            icon='success',
+            compact=True,
         ),
         reply_markup=get_admin_messages_keyboard(db_user.language),
         parse_mode='HTML',
@@ -599,9 +646,13 @@ async def handle_pinned_broadcast_skip(
 async def show_broadcast_targets(callback: types.CallbackQuery, db_user: User, state: FSMContext):
     texts = get_texts(db_user.language)
     await callback.message.edit_text(
-        texts.t(
-            'ADMIN_MESSAGES_UI_SHOW_BROADCAST_TARGETS_019',
-            ' <b>Выбор целевой аудитории</b>\n\nВыберите категорию пользователей для рассылки:',
+        admin_screen(
+            texts.t(
+                'ADMIN_MESSAGES_UI_SHOW_BROADCAST_TARGETS_019',
+                '<b>Выбор целевой аудитории</b>\n\nВыберите категорию пользователей для рассылки:',
+            ),
+            icon='messages',
+            compact=True,
         ),
         reply_markup=get_broadcast_target_keyboard(db_user.language),
         parse_mode='HTML',
@@ -618,13 +669,15 @@ async def show_tariff_filter(callback: types.CallbackQuery, db_user: User, db: A
 
     if not tariffs:
         await callback.message.edit_text(
-            texts.t(
-                'ADMIN_MESSAGES_UI_SHOW_TARIFF_FILTER_020',
-                ' <b>Нет доступных тарифов</b>\n\nСоздайте тарифы в разделе управления тарифами.',
+            admin_screen(
+                texts.t(
+                    'ADMIN_MESSAGES_UI_SHOW_TARIFF_FILTER_020',
+                    '<b>Нет доступных тарифов</b>\n\nСоздайте тарифы в разделе управления тарифами.',
+                ),
+                icon='warning',
+                compact=True,
             ),
-            reply_markup=types.InlineKeyboardMarkup(
-                inline_keyboard=[[types.InlineKeyboardButton(text=' Назад', callback_data='admin_msg_by_sub')]]
-            ),
+            reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[admin_back_button(texts, 'admin_msg_by_sub')]]),
             parse_mode='HTML',
         )
         await callback.answer()
@@ -645,8 +698,8 @@ async def show_tariff_filter(callback: types.CallbackQuery, db_user: User, db: A
         count = tariff_counts.get(tariff.id, 0)
         buttons.append(
             [
-                types.InlineKeyboardButton(
-                    text=texts.t('ADMIN_MESSAGES_UI_SHOW_TARIFF_FILTER_022', '{value1} ({value2} чел.)').format(
+                admin_button(
+                    texts.t('ADMIN_MESSAGES_UI_SHOW_TARIFF_FILTER_022', '{value1} ({value2} чел.)').format(
                         value1=tariff.name, value2=count
                     ),
                     callback_data=f'broadcast_tariff_{tariff.id}',
@@ -654,12 +707,16 @@ async def show_tariff_filter(callback: types.CallbackQuery, db_user: User, db: A
             ]
         )
 
-    buttons.append([types.InlineKeyboardButton(text=' Назад', callback_data='admin_msg_by_sub')])
+    buttons.append([admin_back_button(texts, 'admin_msg_by_sub')])
 
     await callback.message.edit_text(
-        texts.t(
-            'ADMIN_MESSAGES_UI_SHOW_TARIFF_FILTER_024',
-            ' <b>Рассылка по тарифу</b>\n\nВыберите тариф для рассылки пользователям с активной подпиской на этот тариф:',
+        admin_screen(
+            texts.t(
+                'ADMIN_MESSAGES_UI_SHOW_TARIFF_FILTER_024',
+                '<b>Рассылка по тарифу</b>\n\nВыберите тариф для рассылки пользователям с активной подпиской на этот тариф:',
+            ),
+            icon='tariff',
+            compact=True,
         ),
         reply_markup=types.InlineKeyboardMarkup(inline_keyboard=buttons),
         parse_mode='HTML',
@@ -688,20 +745,19 @@ async def show_messages_history(callback: types.CallbackQuery, db_user: User, db
     total_pages = (total_count + limit - 1) // limit
 
     if not broadcasts:
-        text = """
- <b>История рассылок</b>
-
- История рассылок пуста.
-Отправьте первую рассылку, чтобы увидеть её здесь.
-"""
-        keyboard = [[types.InlineKeyboardButton(text=' Назад', callback_data='admin_messages')]]
+        text = '<b>История рассылок</b>\n\nИстория рассылок пуста.\nОтправьте первую рассылку, чтобы увидеть её здесь.'
+        keyboard = [[admin_back_button(texts, 'admin_messages')]]
     else:
         text = texts.t(
-            'ADMIN_MESSAGES_UI_SHOW_MESSAGES_HISTORY_027', ' <b>История рассылок</b> (страница {value1}/{value2})\n\n'
+            'ADMIN_MESSAGES_UI_SHOW_MESSAGES_HISTORY_027', '<b>История рассылок</b> (страница {value1}/{value2})\n\n'
         ).format(value1=page, value2=total_pages)
 
         for broadcast in broadcasts:
-            status_emoji = '' if broadcast.status == 'completed' else '' if broadcast.status == 'failed' else ''
+            status_emoji = {
+                'completed': admin_icon('success'),
+                'partial': admin_icon('warning'),
+                'failed': admin_icon('error'),
+            }.get(broadcast.status, admin_icon('clock'))
             success_rate = (
                 round((broadcast.sent_count / broadcast.total_count * 100), 1) if broadcast.total_count > 0 else 0
             )
@@ -709,26 +765,25 @@ async def show_messages_history(callback: types.CallbackQuery, db_user: User, db
             message_preview = (
                 broadcast.message_text[:100] + '...'
                 if broadcast.message_text and len(broadcast.message_text) > 100
-                else (broadcast.message_text or texts.t('ADMIN_MESSAGES_UI_SHOW_MESSAGES_HISTORY_028', ' Опрос'))
+                else (broadcast.message_text or texts.t('ADMIN_MESSAGES_UI_SHOW_MESSAGES_HISTORY_028', 'Опрос'))
             )
-
-            import html
 
             message_preview = html.escape(message_preview)
 
-            text += f"""
-{status_emoji} <b>{broadcast.created_at.strftime('%d.%m.%Y %H:%M')}</b>
- Отправлено: {broadcast.sent_count}/{broadcast.total_count} ({success_rate}%)
- Аудитория: {get_target_name(broadcast.target_type)}
- Админ: {html.escape(broadcast.admin_name or '')}
- Сообщение: {message_preview}
-━━━━━━━━━━━━━━━━━━━━━━━
-"""
+            text += (
+                f'{status_emoji} <b>{broadcast.created_at.strftime("%d.%m.%Y %H:%M")}</b>\n'
+                f'• Отправлено: {broadcast.sent_count}/{broadcast.total_count} ({success_rate}%)\n'
+                f'• Аудитория: {get_target_name(broadcast.target_type)}\n'
+                f'• Админ: {html.escape(broadcast.admin_name or "")}\n'
+                f'• Сообщение: {message_preview}\n\n'
+            )
 
         keyboard = get_broadcast_history_keyboard(page, total_pages, db_user.language).inline_keyboard
 
     await callback.message.edit_text(
-        text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard), parse_mode='HTML'
+        admin_screen(text, icon='messages', compact=True),
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
+        parse_mode='HTML',
     )
     await callback.answer()
 
@@ -738,30 +793,30 @@ async def show_messages_history(callback: types.CallbackQuery, db_user: User, db
 async def show_custom_broadcast(callback: types.CallbackQuery, db_user: User, state: FSMContext, db: AsyncSession):
     stats = await get_users_statistics(db)
 
-    text = f"""
- <b>Рассылка по критериям</b>
+    text = f"""<b>Рассылка по критериям</b>
 
- <b>Доступные фильтры:</b>
+<b>Доступные фильтры:</b>
 
- <b>По регистрации:</b>
+<b>По регистрации:</b>
 • Сегодня: {stats['today']} чел.
 • За неделю: {stats['week']} чел.
 • За месяц: {stats['month']} чел.
 
- <b>По активности:</b>
+<b>По активности:</b>
 • Активные сегодня: {stats['active_today']} чел.
 • Неактивные 7+ дней: {stats['inactive_week']} чел.
 • Неактивные 30+ дней: {stats['inactive_month']} чел.
 
- <b>По источнику:</b>
+<b>По источнику:</b>
 • Через рефералов: {stats['referrals']} чел.
 • Прямая регистрация: {stats['direct']} чел.
 
-Выберите критерий для фильтрации:
-"""
+Выберите критерий для фильтрации:"""
 
     await callback.message.edit_text(
-        text, reply_markup=get_custom_criteria_keyboard(db_user.language), parse_mode='HTML'
+        admin_screen(text, icon='filter', compact=True),
+        reply_markup=get_custom_criteria_keyboard(db_user.language),
+        parse_mode='HTML',
     )
     await callback.answer()
 
@@ -788,16 +843,21 @@ async def select_custom_criteria(callback: types.CallbackQuery, db_user: User, s
     await state.update_data(broadcast_target=f'custom_{criteria}')
 
     await callback.message.edit_text(
-        texts.t(
-            'ADMIN_MESSAGES_UI_SELECT_CUSTOM_CRITERIA_039',
-            ' <b>Создание рассылки</b>\n\n <b>Критерий:</b> {value1}\n <b>Получателей:</b> {value2}\n\nВведите текст сообщения для рассылки:\n\n<i>Поддерживается HTML разметка</i>',
-        ).format(value1=criteria_names.get(criteria, criteria), value2=user_count),
+        admin_screen(
+            texts.t(
+                'ADMIN_MESSAGES_UI_SELECT_CUSTOM_CRITERIA_039',
+                '<b>Создание рассылки</b>\n\n<b>Критерий:</b> {value1}\n<b>Получателей:</b> {value2}\n\nВведите текст сообщения для рассылки:\n\n<i>Поддерживается HTML разметка</i>',
+            ).format(value1=criteria_names.get(criteria, criteria), value2=user_count),
+            icon='messages',
+            compact=True,
+        ),
         reply_markup=types.InlineKeyboardMarkup(
             inline_keyboard=[
                 [
-                    types.InlineKeyboardButton(
-                        text=texts.t('ADMIN_MESSAGES_UI_CONFIRM_BUTTON_SELECTION_078', ' Отмена'),
-                        callback_data='admin_messages',
+                    admin_back_button(
+                        texts,
+                        'admin_messages',
+                        label=strip_leading_emoji(texts.t('ADMIN_MESSAGES_UI_CONFIRM_BUTTON_SELECTION_078', 'Отмена')),
                     )
                 ]
             ]
@@ -851,16 +911,21 @@ async def select_broadcast_target(callback: types.CallbackQuery, db_user: User, 
     await state.update_data(broadcast_target=target)
 
     await callback.message.edit_text(
-        texts.t(
-            'ADMIN_MESSAGES_UI_SELECT_BROADCAST_TARGET_051',
-            ' <b>Создание рассылки</b>\n\n <b>Аудитория:</b> {value1}\n <b>Получателей:</b> {value2}\n\nВведите текст сообщения для рассылки:\n\n<i>Поддерживается HTML разметка</i>',
-        ).format(value1=target_name, value2=user_count),
+        admin_screen(
+            texts.t(
+                'ADMIN_MESSAGES_UI_SELECT_BROADCAST_TARGET_051',
+                '<b>Создание рассылки</b>\n\n<b>Аудитория:</b> {value1}\n<b>Получателей:</b> {value2}\n\nВведите текст сообщения для рассылки:\n\n<i>Поддерживается HTML разметка</i>',
+            ).format(value1=target_name, value2=user_count),
+            icon='messages',
+            compact=True,
+        ),
         reply_markup=types.InlineKeyboardMarkup(
             inline_keyboard=[
                 [
-                    types.InlineKeyboardButton(
-                        text=texts.t('ADMIN_MESSAGES_UI_CONFIRM_BUTTON_SELECTION_078', ' Отмена'),
-                        callback_data='admin_messages',
+                    admin_back_button(
+                        texts,
+                        'admin_messages',
+                        label=strip_leading_emoji(texts.t('ADMIN_MESSAGES_UI_CONFIRM_BUTTON_SELECTION_078', 'Отмена')),
                     )
                 ]
             ]
@@ -880,19 +945,28 @@ async def process_broadcast_message(message: types.Message, db_user: User, state
 
     if len(broadcast_text) > 4000:
         await message.answer(
-            texts.t(
-                'ADMIN_MESSAGES_UI_PROCESS_BROADCAST_MESSAGE_053',
-                ' Сообщение слишком длинное (максимум 4000 символов)',
-            )
+            admin_screen(
+                texts.t(
+                    'ADMIN_MESSAGES_UI_PROCESS_BROADCAST_MESSAGE_053',
+                    'Сообщение слишком длинное (максимум 4000 символов)',
+                ),
+                icon='warning',
+                compact=True,
+            ),
+            parse_mode='HTML',
         )
         return
 
     await state.update_data(broadcast_message=broadcast_text)
 
     await message.answer(
-        texts.t(
-            'ADMIN_MESSAGES_UI_PROCESS_BROADCAST_MESSAGE_054',
-            ' <b>Добавление медиафайла</b>\n\nВы можете добавить к сообщению фото, видео или документ.\nИли пропустить этот шаг.\n\nВыберите тип медиа:',
+        admin_screen(
+            texts.t(
+                'ADMIN_MESSAGES_UI_PROCESS_BROADCAST_MESSAGE_054',
+                '<b>Добавление медиафайла</b>\n\nВы можете добавить к сообщению фото, видео или документ.\nИли пропустить этот шаг.\n\nВыберите тип медиа:',
+            ),
+            icon='image',
+            compact=True,
         ),
         reply_markup=get_broadcast_media_keyboard(db_user.language),
         parse_mode='HTML',
@@ -911,26 +985,31 @@ async def handle_media_selection(callback: types.CallbackQuery, db_user: User, s
     media_type = callback.data.replace('add_media_', '')
 
     media_instructions = {
-        'photo': texts.t('ADMIN_MESSAGES_UI_HANDLE_MEDIA_SELECTION_055', ' Отправьте фотографию для рассылки:'),
-        'video': texts.t('ADMIN_MESSAGES_UI_HANDLE_MEDIA_SELECTION_056', ' Отправьте видео для рассылки:'),
-        'document': texts.t('ADMIN_MESSAGES_UI_HANDLE_MEDIA_SELECTION_057', ' Отправьте документ для рассылки:'),
+        'photo': texts.t('ADMIN_MESSAGES_UI_HANDLE_MEDIA_SELECTION_055', 'Отправьте фотографию для рассылки:'),
+        'video': texts.t('ADMIN_MESSAGES_UI_HANDLE_MEDIA_SELECTION_056', 'Отправьте видео для рассылки:'),
+        'document': texts.t('ADMIN_MESSAGES_UI_HANDLE_MEDIA_SELECTION_057', 'Отправьте документ для рассылки:'),
     }
 
     await state.update_data(media_type=media_type, waiting_for_media=True)
 
-    instruction_text = texts.t(
-        'ADMIN_MESSAGES_UI_HANDLE_MEDIA_SELECTION_058', '{value1}\n\n<i>Размер файла не должен превышать 50 МБ</i>'
-    ).format(
-        value1=media_instructions.get(
-            media_type, texts.t('ADMIN_MESSAGES_UI_HANDLE_MEDIA_SELECTION_059', 'Отправьте медиафайл:')
-        )
+    instruction_text = admin_screen(
+        texts.t(
+            'ADMIN_MESSAGES_UI_HANDLE_MEDIA_SELECTION_058', '{value1}\n\n<i>Размер файла не должен превышать 50 МБ</i>'
+        ).format(
+            value1=media_instructions.get(
+                media_type, texts.t('ADMIN_MESSAGES_UI_HANDLE_MEDIA_SELECTION_059', 'Отправьте медиафайл:')
+            )
+        ),
+        icon='image',
+        compact=True,
     )
     instruction_keyboard = types.InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                types.InlineKeyboardButton(
-                    text=texts.t('ADMIN_MESSAGES_UI_CONFIRM_BUTTON_SELECTION_078', ' Отмена'),
-                    callback_data='admin_messages',
+                admin_back_button(
+                    texts,
+                    'admin_messages',
+                    label=strip_leading_emoji(texts.t('ADMIN_MESSAGES_UI_CONFIRM_BUTTON_SELECTION_078', 'Отмена')),
                 )
             ]
         ]
@@ -981,10 +1060,15 @@ async def process_broadcast_media(message: types.Message, db_user: User, state: 
         media_type = 'document'
     else:
         await message.answer(
-            texts.t(
-                'ADMIN_MESSAGES_UI_PROCESS_BROADCAST_MEDIA_061',
-                ' Пожалуйста, отправьте {value1} как указано в инструкции.',
-            ).format(value1=_media_label(expected_type, texts))
+            admin_screen(
+                texts.t(
+                    'ADMIN_MESSAGES_UI_PROCESS_BROADCAST_MEDIA_061',
+                    'Пожалуйста, отправьте {value1} как указано в инструкции.',
+                ).format(value1=_media_label(expected_type, texts)),
+                icon='warning',
+                compact=True,
+            ),
+            parse_mode='HTML',
         )
         return
 
@@ -1001,10 +1085,14 @@ async def show_media_preview(message: types.Message, db_user: User, state: FSMCo
     media_type = data.get('media_type')
     media_file_id = data.get('media_file_id')
 
-    preview_text = texts.t(
-        'ADMIN_MESSAGES_UI_SHOW_MEDIA_PREVIEW_062',
-        ' <b>Медиафайл добавлен</b>\n\n <b>Тип:</b> {value1}\n Файл сохранен и готов к отправке\n\nЧто делать дальше?',
-    ).format(value1=_media_label(media_type, texts))
+    preview_text = admin_screen(
+        texts.t(
+            'ADMIN_MESSAGES_UI_SHOW_MEDIA_PREVIEW_062',
+            '<b>Медиафайл добавлен</b>\n\n<b>Тип:</b> {value1}\nФайл сохранен и готов к отправке\n\nЧто делать дальше?',
+        ).format(value1=_media_label(media_type, texts)),
+        icon='image',
+        compact=True,
+    )
 
     # Для предпросмотра рассылки используем оригинальный метод без патчинга логотипа
     # чтобы показать именно загруженное фото
@@ -1034,8 +1122,6 @@ async def handle_media_confirmation(callback: types.CallbackQuery, db_user: User
     if action == 'confirm_media':
         await show_button_selector_callback(callback, db_user, state)
     elif action == 'replace_media':
-        data = await state.get_data()
-        data.get('media_type', 'photo')
         await handle_media_selection(callback, db_user, state)
     elif action == 'skip_media':
         await state.update_data(has_media=False, media_file_id=None, media_type=None, media_caption=None)
@@ -1048,13 +1134,45 @@ async def handle_change_media(callback: types.CallbackQuery, db_user: User, stat
     texts = get_texts(db_user.language)
     await safe_edit_or_send_text(
         callback,
-        texts.t(
-            'ADMIN_MESSAGES_UI_HANDLE_CHANGE_MEDIA_063', ' <b>Изменение медиафайла</b>\n\nВыберите новый тип медиа:'
+        admin_screen(
+            texts.t(
+                'ADMIN_MESSAGES_UI_HANDLE_CHANGE_MEDIA_063', '<b>Изменение медиафайла</b>\n\nВыберите новый тип медиа:'
+            ),
+            icon='image',
+            compact=True,
         ),
         reply_markup=get_broadcast_media_keyboard(db_user.language),
         parse_mode='HTML',
     )
     await callback.answer()
+
+
+def _buttons_selector_text(texts, has_media: bool, media_type: str | None = None) -> str:
+    """Общий экран выбора кнопок для рассылки: один текст на оба входа."""
+    media_info = ''
+    if has_media:
+        media_info = texts.t(
+            'ADMIN_MESSAGES_UI_SHOW_BUTTON_SELECTOR_CALLBACK_065', '\n<b>Медиафайл:</b> {value1} добавлен'
+        ).format(
+            value1=_media_label(
+                media_type or texts.t('ADMIN_MESSAGES_UI_SHOW_BUTTON_SELECTOR_CALLBACK_064', 'файл'), texts
+            )
+        )
+
+    text = texts.t(
+        'ADMIN_MESSAGES_UI_SHOW_BUTTON_SELECTOR_CALLBACK_066',
+        '<b>Выбор дополнительных кнопок</b>\n\nВыберите кнопки, которые будут добавлены к сообщению рассылки:\n\n'
+        '<b>Пополнить баланс</b> — откроет методы пополнения\n'
+        '<b>Партнерка</b> — откроет реферальную программу\n'
+        '<b>Промокод</b> — откроет форму ввода промокода\n'
+        '<b>Подключиться</b> — поможет подключить приложение\n'
+        '<b>Подписка</b> — покажет состояние подписки\n'
+        '<b>Техподдержка</b> — свяжет с поддержкой\n\n'
+        '<b>Кнопка "На главную"</b> включена по умолчанию, но вы можете отключить её при необходимости.{value1}\n\n'
+        'Выберите нужные кнопки и нажмите "Продолжить":',
+    ).format(value1=media_info)
+
+    return admin_screen(text, icon='palette', compact=True)
 
 
 @admin_required
@@ -1069,17 +1187,7 @@ async def show_button_selector_callback(callback: types.CallbackQuery, db_user: 
         selected_buttons = list(DEFAULT_SELECTED_BUTTONS)
         await state.update_data(selected_buttons=selected_buttons)
 
-    media_info = ''
-    if has_media:
-        media_type = data.get('media_type', texts.t('ADMIN_MESSAGES_UI_SHOW_BUTTON_SELECTOR_CALLBACK_064', 'файл'))
-        media_info = texts.t(
-            'ADMIN_MESSAGES_UI_SHOW_BUTTON_SELECTOR_CALLBACK_065', '\n <b>Медиафайл:</b> {value1} добавлен'
-        ).format(value1=_media_label(media_type, texts))
-
-    text = texts.t(
-        'ADMIN_MESSAGES_UI_SHOW_BUTTON_SELECTOR_CALLBACK_066',
-        '\n <b>Выбор дополнительных кнопок</b>\n\nВыберите кнопки, которые будут добавлены к сообщению рассылки:\n\n <b>Пополнить баланс</b> — откроет методы пополнения\n <b>Партнерка</b> — откроет реферальную программу\n <b>Промокод</b> — откроет форму ввода промокода\n <b>Подключиться</b> — поможет подключить приложение\n <b>Подписка</b> — покажет состояние подписки\n <b>Техподдержка</b> — свяжет с поддержкой\n\n <b>Кнопка "На главную"</b> включена по умолчанию, но вы можете отключить её при необходимости.{value1}\n\nВыберите нужные кнопки и нажмите "Продолжить":\n',
-    ).format(value1=media_info)
+    text = _buttons_selector_text(texts, has_media, data.get('media_type'))
 
     keyboard = get_updated_message_buttons_selector_keyboard_with_media(selected_buttons, has_media, db_user.language)
 
@@ -1117,22 +1225,7 @@ async def show_button_selector(message: types.Message, db_user: User, state: FSM
 
     has_media = data.get('has_media', False)
 
-    text = """
- <b>Выбор дополнительных кнопок</b>
-
-Выберите кнопки, которые будут добавлены к сообщению рассылки:
-
- <b>Пополнить баланс</b> — откроет методы пополнения
- <b>Партнерка</b> — откроет реферальную программу
- <b>Промокод</b> — откроет форму ввода промокода
- <b>Подключиться</b> — поможет подключить приложение
- <b>Подписка</b> — покажет состояние подписки
- <b>Техподдержка</b> — свяжет с поддержкой
-
- <b>Кнопка "На главную"</b> включена по умолчанию, но вы можете отключить её при необходимости.
-
-Выберите нужные кнопки и нажмите "Продолжить":
-"""
+    text = _buttons_selector_text(get_texts(db_user.language), has_media, data.get('media_type'))
 
     keyboard = get_updated_message_buttons_selector_keyboard_with_media(selected_buttons, has_media, db_user.language)
 
@@ -1192,7 +1285,7 @@ async def confirm_button_selection(callback: types.CallbackQuery, db_user: User,
             'video': texts.t('ADMIN_MESSAGES_UI_CONFIRM_BUTTON_SELECTION_069', 'Видео'),
             'document': texts.t('ADMIN_MESSAGES_UI_CONFIRM_BUTTON_SELECTION_070', 'Документ'),
         }
-        media_info = texts.t('ADMIN_MESSAGES_UI_CONFIRM_BUTTON_SELECTION_071', '\n <b>Медиафайл:</b> {value1}').format(
+        media_info = texts.t('ADMIN_MESSAGES_UI_CONFIRM_BUTTON_SELECTION_071', '\n<b>Медиафайл:</b> {value1}').format(
             value1=media_type_names.get(media_type, media_type)
         )
 
@@ -1200,26 +1293,34 @@ async def confirm_button_selection(callback: types.CallbackQuery, db_user: User,
     button_labels = get_broadcast_button_labels(db_user.language)
     selected_names = [button_labels[key] for key in ordered_keys if key in selected_buttons]
     if selected_names:
-        buttons_info = texts.t('ADMIN_MESSAGES_UI_CONFIRM_BUTTON_SELECTION_072', '\n <b>Кнопки:</b> {value1}').format(
+        buttons_info = texts.t('ADMIN_MESSAGES_UI_CONFIRM_BUTTON_SELECTION_072', '\n<b>Кнопки:</b> {value1}').format(
             value1=', '.join(selected_names)
         )
     else:
-        buttons_info = texts.t('ADMIN_MESSAGES_UI_CONFIRM_BUTTON_SELECTION_073', '\n <b>Кнопки:</b> отсутствуют')
+        buttons_info = texts.t('ADMIN_MESSAGES_UI_CONFIRM_BUTTON_SELECTION_073', '\n<b>Кнопки:</b> отсутствуют')
 
-    preview_text = texts.t(
-        'ADMIN_MESSAGES_UI_CONFIRM_BUTTON_SELECTION_074',
-        '\n <b>Предварительный просмотр рассылки</b>\n\n <b>Аудитория:</b> {value1}\n <b>Получателей:</b> {value2}\n\n <b>Сообщение:</b>\n{value3}{value4}\n\n{value5}\n\nПодтвердить отправку?\n',
-    ).format(value1=target_display, value2=user_count, value3=message_text, value4=media_info, value5=buttons_info)
+    preview_text = admin_screen(
+        texts.t(
+            'ADMIN_MESSAGES_UI_CONFIRM_BUTTON_SELECTION_074',
+            '<b>Предварительный просмотр рассылки</b>\n\n<b>Аудитория:</b> {value1}\n<b>Получателей:</b> {value2}\n\n<b>Сообщение:</b>\n{value3}{value4}\n\n{value5}\n\nПодтвердить отправку?',
+        ).format(value1=target_display, value2=user_count, value3=message_text, value4=media_info, value5=buttons_info),
+        icon='messages',
+        compact=True,
+    )
 
     keyboard = [
         [
-            types.InlineKeyboardButton(
-                text=texts.t('ADMIN_MESSAGES_UI_CONFIRM_BUTTON_SELECTION_075', ' Отправить'),
+            admin_button(
+                strip_leading_emoji(texts.t('ADMIN_MESSAGES_UI_CONFIRM_BUTTON_SELECTION_075', 'Отправить')),
                 callback_data='admin_confirm_broadcast',
+                icon='success',
+                style='success',
             ),
-            types.InlineKeyboardButton(
-                text=texts.t('ADMIN_MESSAGES_UI_CONFIRM_BUTTON_SELECTION_076', ' Изменить кнопки'),
+            admin_button(
+                strip_leading_emoji(texts.t('ADMIN_MESSAGES_UI_CONFIRM_BUTTON_SELECTION_076', 'Изменить кнопки')),
                 callback_data='edit_buttons',
+                icon='edit',
+                style='primary',
             ),
         ]
     ]
@@ -1227,18 +1328,21 @@ async def confirm_button_selection(callback: types.CallbackQuery, db_user: User,
     if has_media:
         keyboard.append(
             [
-                types.InlineKeyboardButton(
-                    text=texts.t('ADMIN_MESSAGES_UI_CONFIRM_BUTTON_SELECTION_077', ' Изменить медиа'),
+                admin_button(
+                    strip_leading_emoji(texts.t('ADMIN_MESSAGES_UI_CONFIRM_BUTTON_SELECTION_077', 'Изменить медиа')),
                     callback_data='change_media',
+                    icon='image',
+                    style='primary',
                 )
             ]
         )
 
     keyboard.append(
         [
-            types.InlineKeyboardButton(
-                text=texts.t('ADMIN_MESSAGES_UI_CONFIRM_BUTTON_SELECTION_078', ' Отмена'),
-                callback_data='admin_messages',
+            admin_back_button(
+                texts,
+                'admin_messages',
+                label=strip_leading_emoji(texts.t('ADMIN_MESSAGES_UI_CONFIRM_BUTTON_SELECTION_078', 'Отмена')),
             )
         ]
     )
@@ -1318,9 +1422,13 @@ async def confirm_broadcast(callback: types.CallbackQuery, db_user: User, state:
 
     await safe_edit_or_send_text(
         callback,
-        texts.t(
-            'ADMIN_MESSAGES_UI_CONFIRM_BROADCAST_079',
-            ' <b>Подготовка рассылки...</b>\n\n Загружаю список получателей...',
+        admin_screen(
+            texts.t(
+                'ADMIN_MESSAGES_UI_CONFIRM_BROADCAST_079',
+                '<b>Подготовка рассылки...</b>\n\nЗагружаю список получателей...',
+            ),
+            icon='messages',
+            compact=True,
         ),
         reply_markup=None,
         parse_mode='HTML',
@@ -1522,17 +1630,21 @@ async def confirm_broadcast(callback: types.CallbackQuery, db_user: User, state:
                 if current_blocked
                 else ''
             )
-            return texts.t(
-                'ADMIN_MESSAGES_UI_BUILD_PROGRESS_TEXT_081',
-                ' <b>Рассылка в процессе...</b>\n\n[{value1}] {value2}%\n\n <b>Прогресс:</b>\n• Отправлено: {value3}\n{value4}• Ошибок: {value5}\n• Обработано: {value6}/{value7}\n\n Не закрывайте диалог — рассылка продолжается...',
-            ).format(
-                value1=bar,
-                value2=percent,
-                value3=current_sent,
-                value4=blocked_line,
-                value5=current_failed,
-                value6=processed,
-                value7=total,
+            return admin_screen(
+                texts.t(
+                    'ADMIN_MESSAGES_UI_BUILD_PROGRESS_TEXT_081',
+                    '<b>Рассылка в процессе...</b>\n\n[{value1}] {value2}%\n\n<b>Прогресс:</b>\n• Отправлено: {value3}\n{value4}• Ошибок: {value5}\n• Обработано: {value6}/{value7}\n\nНе закрывайте диалог — рассылка продолжается...',
+                ).format(
+                    value1=bar,
+                    value2=percent,
+                    value3=current_sent,
+                    value4=blocked_line,
+                    value5=current_failed,
+                    value6=processed,
+                    value7=total,
+                ),
+                icon='messages',
+                compact=True,
             )
         return ''
 
@@ -1619,7 +1731,7 @@ async def confirm_broadcast(callback: types.CallbackQuery, db_user: User, state:
 
     success_rate = round(sent_count / total_users_count * 100, 1) if total_users_count else 0
     media_info = (
-        texts.t('ADMIN_MESSAGES_UI_CONFIRM_BUTTON_SELECTION_071', '\n <b>Медиафайл:</b> {value1}').format(
+        texts.t('ADMIN_MESSAGES_UI_CONFIRM_BUTTON_SELECTION_071', '\n<b>Медиафайл:</b> {value1}').format(
             value1=_media_label(media_type, texts)
         )
         if has_media
@@ -1633,25 +1745,31 @@ async def confirm_broadcast(callback: types.CallbackQuery, db_user: User, state:
         else ''
     )
 
-    result_text = texts.t(
-        'ADMIN_MESSAGES_UI_CONFIRM_BROADCAST_084',
-        ' <b>Рассылка завершена!</b>\n\n <b>Результат:</b>\n• Отправлено: {value1}\n{value2}• Не доставлено: {value3}\n• Всего пользователей: {value4}\n• Успешность: {value5}%{value6}\n\n<b>Администратор:</b> {value7}',
-    ).format(
-        value1=sent_count,
-        value2=blocked_line,
-        value3=failed_count,
-        value4=total_users_count,
-        value5=success_rate,
-        value6=media_info,
-        value7=html.escape(admin_name),
+    result_text = admin_screen(
+        texts.t(
+            'ADMIN_MESSAGES_UI_CONFIRM_BROADCAST_084',
+            '<b>Рассылка завершена!</b>\n\n<b>Результат:</b>\n• Отправлено: {value1}\n{value2}• Не доставлено: {value3}\n• Всего пользователей: {value4}\n• Успешность: {value5}%{value6}\n\n<b>Администратор:</b> {value7}',
+        ).format(
+            value1=sent_count,
+            value2=blocked_line,
+            value3=failed_count,
+            value4=total_users_count,
+            value5=success_rate,
+            value6=media_info,
+            value7=html.escape(admin_name),
+        ),
+        icon='success',
+        compact=True,
     )
 
     back_keyboard = types.InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                types.InlineKeyboardButton(
-                    text=texts.t('ADMIN_MESSAGES_UI_CONFIRM_BROADCAST_085', ' К рассылкам'),
+                admin_button(
+                    strip_leading_emoji(texts.t('ADMIN_MESSAGES_UI_CONFIRM_BROADCAST_085', 'К рассылкам')),
                     callback_data='admin_messages',
+                    icon='messages',
+                    style='primary',
                 )
             ]
         ]

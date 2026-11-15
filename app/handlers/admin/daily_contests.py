@@ -22,7 +22,7 @@ from app.keyboards.admin import (
 from app.localization.texts import get_texts
 from app.services.contest_rotation_service import contest_rotation_service
 from app.states import AdminStates
-from app.utils.admin_ui import admin_back_button, admin_button, admin_icon, admin_screen
+from app.utils.admin_ui import admin_back_button, admin_button, admin_heading, admin_icon, admin_screen
 from app.utils.decorators import admin_required, error_handler
 from app.utils.miniapp_buttons import strip_leading_emoji
 
@@ -31,12 +31,12 @@ logger = structlog.get_logger(__name__)
 
 # Следы прежнего оформления, оставшиеся в локалях: декоративные глифы в начале
 # строк и лишние ведущие пробелы — иконку и отступы даёт admin_screen.
-_LEGACY_PREFIX_RE = re.compile(r'^[ \t]*(?:[▤▣▥◷↻←▶⏭◆✓✗⚠↑][ \t]*)*', re.MULTILINE)
+_LEGACY_PREFIX_RE = re.compile(r'^[ \t]*(?:(?:NEW|[▤▣▥◷↻←→▶⏭◆✓✗⚠↑+])[ \t]*)*', re.MULTILINE)
 
 
 def _clean_legacy(value: str) -> str:
     """Убирает декоративные глифы и ведущие пробелы строк локали."""
-    return _LEGACY_PREFIX_RE.sub('', value).strip()
+    return _LEGACY_PREFIX_RE.sub('', value or '').strip()
 
 
 def _label(value: str) -> str:
@@ -69,7 +69,7 @@ async def show_daily_contests(
     texts = get_texts(db_user.language)
     templates = await list_templates(db, enabled_only=False)
 
-    lines = [texts.t('ADMIN_DAILY_CONTESTS_TITLE', 'Ежедневные конкурсы')]
+    lines = [admin_heading('star', texts.t('ADMIN_DAILY_CONTESTS_TITLE', 'Ежедневные конкурсы')), '']
     if not templates:
         lines.append(texts.t('ADMIN_CONTESTS_EMPTY', 'Пока нет созданных конкурсов.'))
     else:
@@ -163,20 +163,22 @@ async def show_daily_contest(
 
     state_icon = admin_icon('success') if tpl.is_enabled else admin_icon('lock')
     status_text = (
-        texts.t('ADMIN_CONTEST_STATUS_ACTIVE', 'Активен')
+        texts.t('ADMIN_CONTEST_STATUS_ACTIVE', 'Активен').strip()
         if tpl.is_enabled
-        else texts.t('ADMIN_CONTEST_STATUS_INACTIVE', 'Выключен')
+        else texts.t('ADMIN_CONTEST_STATUS_INACTIVE', 'Выключен').strip()
     )
     lines = [
         f'<b>{html.escape(tpl.name)}</b> (slug: {html.escape(tpl.slug)})',
         f'{state_icon} {status_text}',
         texts.t('ADMIN_DAILY_CONTEST_UI_008', 'Тип приза: {value1} | Значение: {value2}').format(
-            value1=tpl.prize_type or 'days', value2=tpl.prize_value or '1'
+            value1=html.escape(str(tpl.prize_type or 'days')), value2=html.escape(str(tpl.prize_value or '1'))
         ),
         texts.t('ADMIN_DAILY_CONTEST_UI_009', 'Макс победителей: {value1}').format(value1=tpl.max_winners),
         texts.t('ADMIN_DAILY_CONTEST_UI_010', 'Попыток/польз: {value1}').format(value1=tpl.attempts_per_user),
         texts.t('ADMIN_DAILY_CONTEST_UI_011', 'Раундов в день: {value1}').format(value1=tpl.times_per_day),
-        texts.t('ADMIN_DAILY_CONTEST_UI_012', 'Расписание: {value1}').format(value1=tpl.schedule_times or '-'),
+        texts.t('ADMIN_DAILY_CONTEST_UI_012', 'Расписание: {value1}').format(
+            value1=html.escape(str(tpl.schedule_times or '-'))
+        ),
         texts.t('ADMIN_DAILY_CONTEST_UI_013', 'Длительность раунда: {value1} ч.').format(value1=tpl.cooldown_hours),
     ]
     await callback.message.edit_text(
@@ -316,7 +318,7 @@ async def prompt_edit_field(
                 'ADMIN_CONTEST_FIELD_PROMPT',
                 'Введите новое значение для {label}:',
             ).format(label=_field_labels(texts).get(field, field)),
-            icon='star',
+            icon='edit',
             compact=True,
         ),
         reply_markup=kb,
@@ -338,13 +340,17 @@ async def process_edit_field(
     template_id = data.get('template_id')
     field = data.get('field')
     if not template_id or not field or field not in EDITABLE_FIELDS:
-        await message.answer(texts.ERROR)
+        await message.answer(
+            admin_screen(texts.ERROR, icon='warning', compact=True),
+        )
         await state.clear()
         return
 
     tpl = await _get_template(db, template_id)
     if not tpl:
-        await message.answer(texts.t('ADMIN_CONTEST_NOT_FOUND', 'Конкурс не найден.'))
+        await message.answer(
+            admin_screen(texts.t('ADMIN_CONTEST_NOT_FOUND', 'Конкурс не найден.'), icon='warning', compact=True),
+        )
         await state.clear()
         return
 
@@ -358,7 +364,9 @@ async def process_edit_field(
         else:
             value = raw.strip()
     except Exception:
-        await message.answer(texts.t('ADMIN_INVALID_NUMBER', 'Некорректное число'))
+        await message.answer(
+            admin_screen(texts.t('ADMIN_INVALID_NUMBER', 'Некорректное число'), icon='warning', compact=True),
+        )
         await state.clear()
         return
 
@@ -366,7 +374,10 @@ async def process_edit_field(
     back_kb = types.InlineKeyboardMarkup(
         inline_keyboard=[[admin_back_button(texts, f'admin_daily_contest_{template_id}')]]
     )
-    await message.answer(texts.t('ADMIN_UPDATED', 'Обновлено'), reply_markup=back_kb)
+    await message.answer(
+        admin_screen(texts.t('ADMIN_UPDATED', 'Обновлено'), icon='success', compact=True),
+        reply_markup=back_kb,
+    )
     await state.clear()
 
 
@@ -391,8 +402,11 @@ async def edit_payload(
     kb = types.InlineKeyboardMarkup(inline_keyboard=[[admin_back_button(texts, f'admin_daily_contest_{template_id}')]])
     # HTML-блок с JSON намеренно не сжимается: отступы здесь — часть данных.
     await callback.message.edit_text(
-        texts.t('ADMIN_CONTEST_PAYLOAD_PROMPT', 'Отправьте JSON payload для игры (словарь настроек):\n')
-        + f'<code>{html.escape(payload_json)}</code>',
+        admin_screen(
+            texts.t('ADMIN_CONTEST_PAYLOAD_PROMPT', 'Отправьте JSON payload для игры (словарь настроек):\n')
+            + f'<code>{html.escape(payload_json)}</code>',
+            icon='document',
+        ),
         reply_markup=kb,
         parse_mode='HTML',
     )
@@ -411,7 +425,9 @@ async def process_payload(
     data = await state.get_data()
     template_id = data.get('template_id')
     if not template_id:
-        await message.answer(texts.ERROR)
+        await message.answer(
+            admin_screen(texts.ERROR, icon='warning', compact=True),
+        )
         await state.clear()
         return
 
@@ -420,13 +436,17 @@ async def process_payload(
         if not isinstance(payload, dict):
             raise ValueError
     except Exception:
-        await message.answer(texts.t('ADMIN_INVALID_JSON', 'Некорректный JSON'))
+        await message.answer(
+            admin_screen(texts.t('ADMIN_INVALID_JSON', 'Некорректный JSON'), icon='warning', compact=True),
+        )
         await state.clear()
         return
 
     tpl = await _get_template(db, template_id)
     if not tpl:
-        await message.answer(texts.t('ADMIN_CONTEST_NOT_FOUND', 'Конкурс не найден.'))
+        await message.answer(
+            admin_screen(texts.t('ADMIN_CONTEST_NOT_FOUND', 'Конкурс не найден.'), icon='warning', compact=True),
+        )
         await state.clear()
         return
 
@@ -434,7 +454,10 @@ async def process_payload(
     back_kb = types.InlineKeyboardMarkup(
         inline_keyboard=[[admin_back_button(texts, f'admin_daily_contest_{template_id}')]]
     )
-    await message.answer(texts.t('ADMIN_UPDATED', 'Обновлено'), reply_markup=back_kb)
+    await message.answer(
+        admin_screen(texts.t('ADMIN_UPDATED', 'Обновлено'), icon='success', compact=True),
+        reply_markup=back_kb,
+    )
     await state.clear()
 
 

@@ -416,7 +416,11 @@ async def reply_to_admin_ticket(callback: types.CallbackQuery, state: FSMContext
 
     # Изменяем состояние только если сообщение доступно
     await state.update_data(ticket_id=ticket_id, reply_mode=True)
-    reply_text = texts.t('ADMIN_TICKET_REPLY_INPUT', 'Введите ответ от поддержки:')
+    reply_text = admin_screen(
+        texts.t('ADMIN_TICKET_REPLY_INPUT', 'Введите ответ от поддержки:'),
+        icon='chat',
+        compact=True,
+    )
     reply_markup = get_admin_ticket_reply_cancel_keyboard(db_user.language)
     await safe_edit_or_resend(message, reply_text, reply_markup)
 
@@ -428,7 +432,10 @@ async def handle_admin_ticket_reply(message: types.Message, state: FSMContext, d
     texts = get_texts(db_user.language)
     if not (settings.is_admin(message.from_user.id) or SupportSettingsService.is_moderator(message.from_user.id)):
         texts = get_texts(db_user.language)
-        await message.answer(texts.ACCESS_DENIED)
+        await message.answer(
+            admin_screen(texts.ACCESS_DENIED, icon='prohibit', compact=True),
+            parse_mode='HTML',
+        )
         await state.clear()
         return
     # Проверяем, что пользователь в правильном состоянии
@@ -475,7 +482,12 @@ async def handle_admin_ticket_reply(message: types.Message, state: FSMContext, d
     if len(reply_text) < 1 and not media_file_id:
         texts = get_texts(db_user.language)
         await message.answer(
-            texts.t('TICKET_REPLY_TOO_SHORT', 'Ответ должен содержать минимум 5 символов. Попробуйте еще раз:')
+            admin_screen(
+                texts.t('TICKET_REPLY_TOO_SHORT', 'Ответ должен содержать минимум 5 символов. Попробуйте еще раз:'),
+                icon='warning',
+                compact=True,
+            ),
+            parse_mode='HTML',
         )
         return
 
@@ -488,7 +500,14 @@ async def handle_admin_ticket_reply(message: types.Message, state: FSMContext, d
 
     if not ticket_id:
         texts = get_texts(db_user.language)
-        await message.answer(texts.t('TICKET_REPLY_ERROR', 'Ошибка: не найден ID тикета.'))
+        await message.answer(
+            admin_screen(
+                texts.t('TICKET_REPLY_ERROR', 'Ошибка: не найден ID тикета.'),
+                icon='error',
+                compact=True,
+            ),
+            parse_mode='HTML',
+        )
         await state.clear()
         return
 
@@ -500,21 +519,36 @@ async def handle_admin_ticket_reply(message: types.Message, state: FSMContext, d
                 minutes = max(1, min(60 * 24 * 365, minutes))
             except ValueError:
                 await message.answer(
-                    texts.t('ADMIN_TICKETS_UI_HANDLE_ADMIN_BLOCK_DURATION_INPUT_023', 'Введите целое число минут')
+                    admin_screen(
+                        texts.t('ADMIN_TICKETS_UI_HANDLE_ADMIN_BLOCK_DURATION_INPUT_023', 'Введите целое число минут'),
+                        icon='warning',
+                        compact=True,
+                    ),
+                    parse_mode='HTML',
                 )
                 return
             until = datetime.now(UTC) + timedelta(minutes=minutes)
             ok = await TicketCRUD.set_user_reply_block(db, ticket_id, permanent=False, until=until)
             if ok:
                 await message.answer(
-                    texts.t(
-                        'ADMIN_TICKETS_UI_HANDLE_ADMIN_TICKET_REPLY_019',
-                        'Пользователь заблокирован на {value1} минут',
-                    ).format(value1=minutes)
+                    admin_screen(
+                        texts.t(
+                            'ADMIN_TICKETS_UI_HANDLE_ADMIN_TICKET_REPLY_019',
+                            'Пользователь заблокирован на {value1} минут',
+                        ).format(value1=minutes),
+                        icon='lock',
+                        compact=True,
+                    ),
+                    parse_mode='HTML',
                 )
             else:
                 await message.answer(
-                    texts.t('ADMIN_TICKETS_UI_HANDLE_ADMIN_BLOCK_DURATION_INPUT_025', 'Ошибка блокировки')
+                    admin_screen(
+                        texts.t('ADMIN_TICKETS_UI_HANDLE_ADMIN_BLOCK_DURATION_INPUT_025', 'Ошибка блокировки'),
+                        icon='error',
+                        compact=True,
+                    ),
+                    parse_mode='HTML',
                 )
             await state.clear()
             return
@@ -523,10 +557,15 @@ async def handle_admin_ticket_reply(message: types.Message, state: FSMContext, d
         if len(reply_text) > TICKET_MESSAGE_MAX_LENGTH:
             texts = get_texts(db_user.language)
             await message.answer(
-                texts.t(
-                    'TICKET_REPLY_TOO_LONG',
-                    'Ответ слишком длинный. Максимум {limit} символов. Сократите текст и отправьте еще раз:',
-                ).format(limit=TICKET_MESSAGE_MAX_LENGTH)
+                admin_screen(
+                    texts.t(
+                        'TICKET_REPLY_TOO_LONG',
+                        'Ответ слишком длинный. Максимум {limit} символов. Сократите текст и отправьте еще раз:',
+                    ).format(limit=TICKET_MESSAGE_MAX_LENGTH),
+                    icon='warning',
+                    compact=True,
+                ),
+                parse_mode='HTML',
             )
             return
 
@@ -534,7 +573,10 @@ async def handle_admin_ticket_reply(message: types.Message, state: FSMContext, d
         ticket = await TicketCRUD.get_ticket_by_id(db, ticket_id, load_messages=False, load_user=True)
         if not ticket:
             texts = get_texts(db_user.language)
-            await message.answer(texts.t('TICKET_NOT_FOUND', 'Тикет не найден.'))
+            await message.answer(
+                admin_screen(texts.t('TICKET_NOT_FOUND', 'Тикет не найден.'), icon='error', compact=True),
+                parse_mode='HTML',
+            )
             await state.clear()
             return
 
@@ -585,7 +627,14 @@ async def handle_admin_ticket_reply(message: types.Message, state: FSMContext, d
     except Exception as e:
         logger.error('Error adding admin ticket reply', error=e)
         texts = get_texts(db_user.language)
-        await message.answer(texts.t('TICKET_REPLY_ERROR', 'Произошла ошибка при отправке ответа. Попробуйте позже.'))
+        await message.answer(
+            admin_screen(
+                texts.t('TICKET_REPLY_ERROR', 'Произошла ошибка при отправке ответа. Попробуйте позже.'),
+                icon='error',
+                compact=True,
+            ),
+            parse_mode='HTML',
+        )
 
 
 async def mark_ticket_as_answered(callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext):
@@ -629,7 +678,8 @@ async def close_all_open_admin_tickets(callback: types.CallbackQuery, db_user: U
 
     if closed_count == 0:
         await callback.answer(
-            texts.t('ADMIN_CLOSE_ALL_OPEN_TICKETS_EMPTY', 'ℹ Нет открытых тикетов для закрытия.'), show_alert=True
+            _label(texts.t('ADMIN_CLOSE_ALL_OPEN_TICKETS_EMPTY', 'ℹ Нет открытых тикетов для закрытия.')),
+            show_alert=True,
         )
         return
 
@@ -788,8 +838,10 @@ async def block_user_in_ticket(callback: types.CallbackQuery, state: FSMContext,
         await state.update_data(origin_chat_id=message.chat.id, origin_message_id=message.message_id)
     except Exception as e:
         logger.warning('Failed to save origin message ids for ticket block', ticket_id=ticket_id, error=e)
-    block_prompt = texts.t(
-        'ENTER_BLOCK_MINUTES', 'Введите количество минут для блокировки пользователя (например, 15):'
+    block_prompt = admin_screen(
+        texts.t('ENTER_BLOCK_MINUTES', 'Введите количество минут для блокировки пользователя (например, 15):'),
+        icon='lock',
+        compact=True,
     )
     block_markup = types.InlineKeyboardMarkup(
         inline_keyboard=[
@@ -813,7 +865,10 @@ async def handle_admin_block_duration_input(message: types.Message, state: FSMCo
     texts = get_texts(db_user.language)
     if not (settings.is_admin(message.from_user.id) or SupportSettingsService.is_moderator(message.from_user.id)):
         texts = get_texts(db_user.language)
-        await message.answer(texts.ACCESS_DENIED)
+        await message.answer(
+            admin_screen(texts.ACCESS_DENIED, icon='prohibit', compact=True),
+            parse_mode='HTML',
+        )
         await state.clear()
         return
     # Проверяем состояние
@@ -824,7 +879,12 @@ async def handle_admin_block_duration_input(message: types.Message, state: FSMCo
     reply_text = message.text.strip()
     if len(reply_text) < 1:
         await message.answer(
-            texts.t('ADMIN_TICKETS_UI_HANDLE_ADMIN_BLOCK_DURATION_INPUT_023', 'Введите целое число минут')
+            admin_screen(
+                texts.t('ADMIN_TICKETS_UI_HANDLE_ADMIN_BLOCK_DURATION_INPUT_023', 'Введите целое число минут'),
+                icon='warning',
+                compact=True,
+            ),
+            parse_mode='HTML',
         )
         return
 
@@ -837,13 +897,25 @@ async def handle_admin_block_duration_input(message: types.Message, state: FSMCo
         minutes = max(1, min(60 * 24 * 365, minutes))  # максимум 1 год
     except ValueError:
         await message.answer(
-            texts.t('ADMIN_TICKETS_UI_HANDLE_ADMIN_BLOCK_DURATION_INPUT_023', 'Введите целое число минут')
+            admin_screen(
+                texts.t('ADMIN_TICKETS_UI_HANDLE_ADMIN_BLOCK_DURATION_INPUT_023', 'Введите целое число минут'),
+                icon='warning',
+                compact=True,
+            ),
+            parse_mode='HTML',
         )
         return
 
     if not ticket_id:
         texts = get_texts(db_user.language)
-        await message.answer(texts.t('TICKET_REPLY_ERROR', 'Ошибка: не найден ID тикета.'))
+        await message.answer(
+            admin_screen(
+                texts.t('TICKET_REPLY_ERROR', 'Ошибка: не найден ID тикета.'),
+                icon='error',
+                compact=True,
+            ),
+            parse_mode='HTML',
+        )
         await state.clear()
         return
 
@@ -851,14 +923,24 @@ async def handle_admin_block_duration_input(message: types.Message, state: FSMCo
         ticket = await TicketCRUD.get_ticket_by_id(db, ticket_id, load_messages=False)
         if not ticket:
             texts = get_texts(db_user.language)
-            await message.answer(texts.t('TICKET_NOT_FOUND', 'Тикет не найден.'))
+            await message.answer(
+                admin_screen(texts.t('TICKET_NOT_FOUND', 'Тикет не найден.'), icon='error', compact=True),
+                parse_mode='HTML',
+            )
             await state.clear()
             return
 
         until = datetime.now(UTC) + timedelta(minutes=minutes)
         ok = await TicketCRUD.set_user_reply_block(db, ticket_id, permanent=False, until=until)
         if not ok:
-            await message.answer(texts.t('ADMIN_TICKETS_UI_HANDLE_ADMIN_BLOCK_DURATION_INPUT_025', 'Ошибка блокировки'))
+            await message.answer(
+                admin_screen(
+                    texts.t('ADMIN_TICKETS_UI_HANDLE_ADMIN_BLOCK_DURATION_INPUT_025', 'Ошибка блокировки'),
+                    icon='error',
+                    compact=True,
+                ),
+                parse_mode='HTML',
+            )
             return
         # audit
         try:
@@ -1030,30 +1112,52 @@ async def handle_admin_block_duration_input(message: types.Message, state: FSMCo
                         )
                     except Exception:
                         await message.answer(
-                            texts.t(
-                                'ADMIN_TICKETS_UI_HANDLE_ADMIN_TICKET_REPLY_019',
-                                'Пользователь заблокирован на {value1} минут',
-                            ).format(value1=minutes)
+                            admin_screen(
+                                texts.t(
+                                    'ADMIN_TICKETS_UI_HANDLE_ADMIN_TICKET_REPLY_019',
+                                    'Пользователь заблокирован на {value1} минут',
+                                ).format(value1=minutes),
+                                icon='lock',
+                                compact=True,
+                            ),
+                            parse_mode='HTML',
                         )
             else:
                 await message.answer(
-                    texts.t(
-                        'ADMIN_TICKETS_UI_HANDLE_ADMIN_TICKET_REPLY_019',
-                        'Пользователь заблокирован на {value1} минут',
-                    ).format(value1=minutes)
+                    admin_screen(
+                        texts.t(
+                            'ADMIN_TICKETS_UI_HANDLE_ADMIN_TICKET_REPLY_019',
+                            'Пользователь заблокирован на {value1} минут',
+                        ).format(value1=minutes),
+                        icon='lock',
+                        compact=True,
+                    ),
+                    parse_mode='HTML',
                 )
         except Exception:
             await message.answer(
-                texts.t(
-                    'ADMIN_TICKETS_UI_HANDLE_ADMIN_TICKET_REPLY_019', 'Пользователь заблокирован на {value1} минут'
-                ).format(value1=minutes)
+                admin_screen(
+                    texts.t(
+                        'ADMIN_TICKETS_UI_HANDLE_ADMIN_TICKET_REPLY_019', 'Пользователь заблокирован на {value1} минут'
+                    ).format(value1=minutes),
+                    icon='lock',
+                    compact=True,
+                ),
+                parse_mode='HTML',
             )
         finally:
             await state.clear()
     except Exception as e:
         logger.error('Error setting block duration', error=e)
         texts = get_texts(db_user.language)
-        await message.answer(texts.t('TICKET_REPLY_ERROR', 'Произошла ошибка. Попробуйте позже.'))
+        await message.answer(
+            admin_screen(
+                texts.t('TICKET_REPLY_ERROR', 'Произошла ошибка. Попробуйте позже.'),
+                icon='error',
+                compact=True,
+            ),
+            parse_mode='HTML',
+        )
 
 
 async def unblock_user_in_ticket(callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext):
@@ -1392,8 +1496,11 @@ def register_handlers(dp: Dispatcher):
                 )
                 await callback.message.bot.send_message(
                     chat_id=callback.from_user.id,
-                    text=texts.t('ATTACHMENTS_SENT', 'Вложения отправлены.'),
+                    text=admin_screen(
+                        texts.t('ATTACHMENTS_SENT', 'Вложения отправлены.'), icon='success', compact=True
+                    ),
                     reply_markup=kb,
+                    parse_mode='HTML',
                 )
             except Exception:
                 await callback.answer(texts.t('ATTACHMENTS_SENT', 'Вложения отправлены.'))

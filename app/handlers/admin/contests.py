@@ -45,12 +45,12 @@ PAGE_SIZE = 5
 
 # Следы прежнего оформления, оставшиеся в локалях: декоративные глифы в начале
 # строк и лишние ведущие пробелы — иконку и отступы даёт admin_screen.
-_LEGACY_PREFIX_RE = re.compile(r'^[ \t]*(?:[▤▣▥◷↻←▶⏭◆✓✗⚠↑][ \t]*)*', re.MULTILINE)
+_LEGACY_PREFIX_RE = re.compile(r'^[ \t]*(?:(?:NEW|[▤▣▥◷↻←→▶⏭◆✓✗⚠↑+])[ \t]*)*', re.MULTILINE)
 
 
 def _clean_legacy(value: str) -> str:
     """Убирает декоративные глифы и ведущие пробелы строк локали."""
-    return _LEGACY_PREFIX_RE.sub('', value).strip()
+    return _LEGACY_PREFIX_RE.sub('', value or '').strip()
 
 
 def _label(value: str) -> str:
@@ -73,9 +73,9 @@ def _format_contest_summary(contest, texts, tz: ZoneInfo) -> str:
     end_local = end_local.astimezone(tz)
 
     status = (
-        f'{admin_icon("success")} {texts.t("ADMIN_CONTEST_STATUS_ACTIVE", "Активен")}'
+        f'{admin_icon("success")} {texts.t("ADMIN_CONTEST_STATUS_ACTIVE", "Активен").strip()}'
         if contest.is_active
-        else f'{admin_icon("lock")} {texts.t("ADMIN_CONTEST_STATUS_INACTIVE", "Выключен")}'
+        else f'{admin_icon("lock")} {texts.t("ADMIN_CONTEST_STATUS_INACTIVE", "Выключен").strip()}'
     )
 
     period = f'{start_local.strftime("%d.%m %H:%M")} — {end_local.strftime("%d.%m %H:%M")} ({tz.key})'
@@ -389,7 +389,9 @@ async def process_edit_summary_times(
     data = await state.get_data()
     contest_id = data.get('contest_id')
     if not contest_id:
-        await message.answer(texts.ERROR)
+        await message.answer(
+            admin_screen(texts.ERROR, icon='warning', compact=True),
+        )
         await state.clear()
         return
 
@@ -397,14 +399,20 @@ async def process_edit_summary_times(
     summary_time = times[0] if times else _parse_time(message.text or '')
     if not summary_time:
         await message.answer(
-            texts.t('ADMIN_CONTEST_INVALID_TIME', 'Не удалось распознать время. Формат: 12:00 или 12:00,18:00')
+            admin_screen(
+                texts.t('ADMIN_CONTEST_INVALID_TIME', 'Не удалось распознать время. Формат: 12:00 или 12:00,18:00'),
+                icon='warning',
+                compact=True,
+            ),
         )
         await state.clear()
         return
 
     contest = await get_referral_contest(db, int(contest_id))
     if not contest:
-        await message.answer(texts.t('ADMIN_CONTEST_NOT_FOUND', 'Конкурс не найден.'))
+        await message.answer(
+            admin_screen(texts.t('ADMIN_CONTEST_NOT_FOUND', 'Конкурс не найден.'), icon='warning', compact=True),
+        )
         await state.clear()
         return
 
@@ -415,7 +423,9 @@ async def process_edit_summary_times(
         daily_summary_times=','.join(t.strftime('%H:%M') for t in times) if times else None,
     )
 
-    await message.answer(texts.t('ADMIN_UPDATED', 'Обновлено'))
+    await message.answer(
+        admin_screen(texts.t('ADMIN_UPDATED', 'Обновлено'), icon='success', compact=True),
+    )
     await state.clear()
 
 
@@ -509,11 +519,16 @@ async def start_contest_creation(
     await state.clear()
     await state.set_state(AdminStates.creating_referral_contest_mode)
     await callback.message.edit_text(
-        texts.t(
-            'ADMIN_CONTEST_MODE_PROMPT',
-            'Выберите условие зачёта: реферал должен купить подписку или достаточно регистрации.',
+        admin_screen(
+            texts.t(
+                'ADMIN_CONTEST_MODE_PROMPT',
+                'Выберите условие зачёта: реферал должен купить подписку или достаточно регистрации.',
+            ),
+            icon='star',
+            compact=True,
         ),
         reply_markup=get_contest_mode_keyboard(db_user.language),
+        parse_mode='HTML',
     )
     await callback.answer()
 
@@ -531,7 +546,7 @@ async def select_contest_mode(
     await state.update_data(contest_type=mode)
     await state.set_state(AdminStates.creating_referral_contest_title)
     await callback.message.edit_text(
-        texts.t('ADMIN_CONTEST_ENTER_TITLE', 'Введите название конкурса:'),
+        admin_screen(texts.t('ADMIN_CONTEST_ENTER_TITLE', 'Введите название конкурса:'), icon='edit', compact=True),
         reply_markup=None,
     )
     await callback.answer()
@@ -546,7 +561,11 @@ async def process_title(message: types.Message, state: FSMContext, db_user, db: 
     await state.update_data(title=title)
     await state.set_state(AdminStates.creating_referral_contest_description)
     await message.answer(
-        texts.t('ADMIN_CONTEST_ENTER_DESCRIPTION', "Опишите конкурс (или отправьте '-' чтобы пропустить):")
+        admin_screen(
+            texts.t('ADMIN_CONTEST_ENTER_DESCRIPTION', "Опишите конкурс (или отправьте '-' чтобы пропустить):"),
+            icon='document',
+            compact=True,
+        ),
     )
 
 
@@ -561,7 +580,11 @@ async def process_description(message: types.Message, state: FSMContext, db_user
     await state.set_state(AdminStates.creating_referral_contest_prize)
     texts = get_texts(db_user.language)
     await message.answer(
-        texts.t('ADMIN_CONTEST_ENTER_PRIZE', "Укажите призы/выгоды конкурса (или '-' чтобы пропустить):")
+        admin_screen(
+            texts.t('ADMIN_CONTEST_ENTER_PRIZE', "Укажите призы/выгоды конкурса (или '-' чтобы пропустить):"),
+            icon='gift',
+            compact=True,
+        ),
     )
 
 
@@ -576,10 +599,14 @@ async def process_prize(message: types.Message, state: FSMContext, db_user, db: 
     await state.set_state(AdminStates.creating_referral_contest_start)
     texts = get_texts(db_user.language)
     await message.answer(
-        texts.t(
-            'ADMIN_CONTEST_ENTER_START',
-            'Введите дату и время старта (дд.мм.гггг чч:мм) по вашему часовому поясу:',
-        )
+        admin_screen(
+            texts.t(
+                'ADMIN_CONTEST_ENTER_START',
+                'Введите дату и время старта (дд.мм.гггг чч:мм) по вашему часовому поясу:',
+            ),
+            icon='calendar',
+            compact=True,
+        ),
     )
 
 
@@ -592,17 +619,25 @@ async def process_start_date(message: types.Message, state: FSMContext, db_user,
 
     if not start_dt:
         await message.answer(
-            texts.t('ADMIN_CONTEST_INVALID_DATE', 'Не удалось распознать дату. Формат: 01.06.2024 12:00')
+            admin_screen(
+                texts.t('ADMIN_CONTEST_INVALID_DATE', 'Не удалось распознать дату. Формат: 01.06.2024 12:00'),
+                icon='warning',
+                compact=True,
+            ),
         )
         return
 
     await state.update_data(start_at=start_dt.isoformat())
     await state.set_state(AdminStates.creating_referral_contest_end)
     await message.answer(
-        texts.t(
-            'ADMIN_CONTEST_ENTER_END',
-            'Введите дату и время окончания (дд.мм.гггг чч:мм) по вашему часовому поясу:',
-        )
+        admin_screen(
+            texts.t(
+                'ADMIN_CONTEST_ENTER_END',
+                'Введите дату и время окончания (дд.мм.гггг чч:мм) по вашему часовому поясу:',
+            ),
+            icon='calendar',
+            compact=True,
+        ),
     )
 
 
@@ -615,7 +650,11 @@ async def process_end_date(message: types.Message, state: FSMContext, db_user, d
 
     if not end_dt:
         await message.answer(
-            texts.t('ADMIN_CONTEST_INVALID_DATE', 'Не удалось распознать дату. Формат: 01.06.2024 12:00')
+            admin_screen(
+                texts.t('ADMIN_CONTEST_INVALID_DATE', 'Не удалось распознать дату. Формат: 01.06.2024 12:00'),
+                icon='warning',
+                compact=True,
+            ),
         )
         return
 
@@ -624,20 +663,28 @@ async def process_end_date(message: types.Message, state: FSMContext, db_user, d
     start_dt = datetime.fromisoformat(start_raw) if start_raw else None
     if start_dt and end_dt <= start_dt:
         await message.answer(
-            texts.t(
-                'ADMIN_CONTEST_END_BEFORE_START',
-                'Дата окончания должна быть позже даты начала.',
-            )
+            admin_screen(
+                texts.t(
+                    'ADMIN_CONTEST_END_BEFORE_START',
+                    'Дата окончания должна быть позже даты начала.',
+                ),
+                icon='warning',
+                compact=True,
+            ),
         )
         return
 
     await state.update_data(end_at=end_dt.isoformat())
     await state.set_state(AdminStates.creating_referral_contest_time)
     await message.answer(
-        texts.t(
-            'ADMIN_CONTEST_ENTER_DAILY_TIME',
-            'Во сколько отправлять ежедневные итоги? Укажите время в формате ЧЧ:ММ (например, 12:00).',
-        )
+        admin_screen(
+            texts.t(
+                'ADMIN_CONTEST_ENTER_DAILY_TIME',
+                'Во сколько отправлять ежедневные итоги? Укажите время в формате ЧЧ:ММ (например, 12:00).',
+            ),
+            icon='clock',
+            compact=True,
+        ),
     )
 
 
@@ -650,7 +697,11 @@ async def finalize_contest_creation(message: types.Message, state: FSMContext, d
 
     if not summary_time:
         await message.answer(
-            texts.t('ADMIN_CONTEST_INVALID_TIME', 'Не удалось распознать время. Формат: 12:00 или 12:00,18:00')
+            admin_screen(
+                texts.t('ADMIN_CONTEST_INVALID_TIME', 'Не удалось распознать время. Формат: 12:00 или 12:00,18:00'),
+                icon='warning',
+                compact=True,
+            ),
         )
         return
 
@@ -660,7 +711,11 @@ async def finalize_contest_creation(message: types.Message, state: FSMContext, d
     start_at_raw = data.get('start_at')
     end_at_raw = data.get('end_at')
     if not start_at_raw or not end_at_raw:
-        await message.answer(texts.t('ADMIN_CONTEST_INVALID_DATE', 'Не удалось распознать дату.'))
+        await message.answer(
+            admin_screen(
+                texts.t('ADMIN_CONTEST_INVALID_DATE', 'Не удалось распознать дату.'), icon='warning', compact=True
+            ),
+        )
         return
 
     start_at = datetime.fromisoformat(start_at_raw).astimezone(UTC)
@@ -685,7 +740,7 @@ async def finalize_contest_creation(message: types.Message, state: FSMContext, d
     await state.clear()
 
     await message.answer(
-        texts.t('ADMIN_CONTEST_CREATED', 'Конкурс создан!'),
+        admin_screen(texts.t('ADMIN_CONTEST_CREATED', 'Конкурс создан!'), icon='success', compact=True),
         reply_markup=get_referral_contest_manage_keyboard(
             contest.id,
             is_active=contest.is_active,
@@ -726,7 +781,7 @@ async def show_detailed_stats(
     # Общее сообщение с основной статистикой
     general_lines = [
         texts.t('ADMIN_CONTEST_UI_004', '<b>Статистика конкурса</b>'),
-        html.escape(contest.title),
+        f'<b>{html.escape(contest.title)}</b>',
         '',
         texts.t('ADMIN_CONTEST_UI_005', 'Участников (рефереров): <b>{value1}</b>').format(
             value1=stats['total_participants']
@@ -865,7 +920,13 @@ async def sync_contest(
 
     if 'error' in cleanup_stats:
         await callback.message.answer(
-            texts.t('ADMIN_CONTEST_UI_059', ' Ошибка очистки:\n{value1}').format(value1=cleanup_stats['error']),
+            admin_screen(
+                texts.t('ADMIN_CONTEST_UI_059', 'Ошибка очистки:\n{value1}').format(
+                    value1=html.escape(str(cleanup_stats['error']))
+                ),
+                icon='warning',
+                compact=True,
+            ),
         )
         return
 
@@ -874,7 +935,13 @@ async def sync_contest(
 
     if 'error' in stats:
         await callback.message.answer(
-            texts.t('ADMIN_CONTEST_UI_060', ' Ошибка синхронизации:\n{value1}').format(value1=stats['error']),
+            admin_screen(
+                texts.t('ADMIN_CONTEST_UI_060', 'Ошибка синхронизации:\n{value1}').format(
+                    value1=html.escape(str(stats['error']))
+                ),
+                icon='warning',
+                compact=True,
+            ),
         )
         return
 
@@ -1003,7 +1070,13 @@ async def debug_contest_transactions(
 
     if 'error' in debug_data:
         await callback.message.answer(
-            texts.t('ADMIN_CONTEST_UI_061', ' Ошибка: {value1}').format(value1=debug_data['error'])
+            admin_screen(
+                texts.t('ADMIN_CONTEST_UI_061', 'Ошибка: {value1}').format(
+                    value1=html.escape(str(debug_data['error']))
+                ),
+                icon='warning',
+                compact=True,
+            )
         )
         return
 
@@ -1208,15 +1281,23 @@ async def process_virtual_participant_name(
     name = message.text.strip()
     if not name or len(name) > 200:
         await message.answer(
-            texts.t('ADMIN_CONTEST_UI_064', 'Имя должно быть от 1 до 200 символов. Попробуйте ещё раз:')
+            admin_screen(
+                texts.t('ADMIN_CONTEST_UI_064', 'Имя должно быть от 1 до 200 символов. Попробуйте ещё раз:'),
+                icon='warning',
+                compact=True,
+            ),
         )
         return
     await state.update_data(vp_name=name)
     await state.set_state(AdminStates.adding_virtual_participant_count)
     await message.answer(
-        texts.t('ADMIN_CONTEST_UI_049', 'Имя: <b>{value1}</b>\n\nВведите количество рефералов (число):').format(
-            value1=name
-        )
+        admin_screen(
+            texts.t('ADMIN_CONTEST_UI_049', 'Имя: <b>{value1}</b>\n\nВведите количество рефералов (число):').format(
+                value1=html.escape(name)
+            ),
+            icon='users',
+            compact=True,
+        ),
     )
 
 
@@ -1234,7 +1315,11 @@ async def process_virtual_participant_count(
         if count < 1:
             raise ValueError
     except (ValueError, TypeError):
-        await message.answer(texts.t('ADMIN_CONTEST_UI_072', 'Введите положительное целое число:'))
+        await message.answer(
+            admin_screen(
+                texts.t('ADMIN_CONTEST_UI_072', 'Введите положительное целое число:'), icon='warning', compact=True
+            ),
+        )
         return
 
     data = await state.get_data()
@@ -1424,7 +1509,9 @@ async def process_mass_virtual_count(
         count = int(message.text.strip())
         if count < 1 or count > 50:
             await message.answer(
-                texts.t('ADMIN_CONTEST_UI_073', 'Введите число от 1 до 50:'),
+                admin_screen(
+                    texts.t('ADMIN_CONTEST_UI_073', 'Введите число от 1 до 50:'), icon='warning', compact=True
+                ),
                 reply_markup=types.InlineKeyboardMarkup(
                     inline_keyboard=[
                         [
@@ -1440,7 +1527,9 @@ async def process_mass_virtual_count(
             return
     except ValueError:
         await message.answer(
-            texts.t('ADMIN_CONTEST_UI_074', 'Введите корректное число от 1 до 50:'),
+            admin_screen(
+                texts.t('ADMIN_CONTEST_UI_074', 'Введите корректное число от 1 до 50:'), icon='warning', compact=True
+            ),
             reply_markup=types.InlineKeyboardMarkup(
                 inline_keyboard=[
                     [
@@ -1501,10 +1590,18 @@ async def process_mass_virtual_referrals(
     try:
         referrals_count = int(message.text.strip())
         if referrals_count < 1 or referrals_count > 100:
-            await message.answer(texts.t('ADMIN_CONTEST_UI_075', 'Введите число от 1 до 100:'))
+            await message.answer(
+                admin_screen(
+                    texts.t('ADMIN_CONTEST_UI_075', 'Введите число от 1 до 100:'), icon='warning', compact=True
+                ),
+            )
             return
     except ValueError:
-        await message.answer(texts.t('ADMIN_CONTEST_UI_076', 'Введите корректное число от 1 до 100:'))
+        await message.answer(
+            admin_screen(
+                texts.t('ADMIN_CONTEST_UI_076', 'Введите корректное число от 1 до 100:'), icon='warning', compact=True
+            ),
+        )
         return
 
     data = await state.get_data()
@@ -1621,7 +1718,11 @@ async def process_edit_virtual_participant_count(
         if count < 1:
             raise ValueError
     except (ValueError, TypeError):
-        await message.answer(texts.t('ADMIN_CONTEST_UI_072', 'Введите положительное целое число:'))
+        await message.answer(
+            admin_screen(
+                texts.t('ADMIN_CONTEST_UI_072', 'Введите положительное целое число:'), icon='warning', compact=True
+            ),
+        )
         return
 
     data = await state.get_data()
@@ -1654,7 +1755,9 @@ async def process_edit_virtual_participant_count(
             parse_mode='HTML',
         )
     else:
-        await message.answer(texts.t('ADMIN_CONTEST_UI_065', 'Участник не найден.'))
+        await message.answer(
+            admin_screen(texts.t('ADMIN_CONTEST_UI_065', 'Участник не найден.'), icon='warning', compact=True),
+        )
 
 
 def register_handlers(dp: Dispatcher):

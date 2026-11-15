@@ -32,5 +32,7 @@ async def test_missing_group_edit_uses_saved_language_and_clears_state(monkeypat
 
     await handler(message, state, SimpleNamespace(language='en'), object())
 
-    message.answer.assert_awaited_once_with(get_texts('fa').t('ADMIN_PROMO_GROUP_NOT_FOUND'))
+    call = message.answer.await_args
+    assert get_texts('fa').t('ADMIN_PROMO_GROUP_NOT_FOUND') in call.args[0]
+    assert call.kwargs.get('parse_mode') == 'HTML'
     state.clear.assert_awaited_once()

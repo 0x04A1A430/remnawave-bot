@@ -751,11 +751,14 @@ async def handle_admin_inline_query(inline_query: types.InlineQuery) -> None:
                 cur_days = max(0, sub.days_left) if hasattr(sub, 'days_left') else 0
                 cur_devices = sub.device_limit or 1
                 gb = sub.traffic_limit_gb
-                traffic_str = texts.t('INLINE_GIFT_TRAFFIC_UNLIMITED', 'Безлимит') if gb == 0 else f'{gb} ГБ'
                 sub_info_lines = [
-                    f'{sub.days_left} дн.',
-                    traffic_str,
-                    f'{sub.device_limit} уст.',
+                    _days_label_short(cur_days, texts),
+                    (
+                        texts.t('INLINE_GIFT_TRAFFIC_UNLIMITED', 'Безлимит')
+                        if gb == 0
+                        else texts.t('INLINE_GIFT_TRAFFIC_GB', '{gb} ГБ').format(gb=gb)
+                    ),
+                    f'{sub.device_limit} {texts.t("INLINE_GIFT_DEVICES_SUFFIX", "уст.")}',
                 ]
             else:
                 sub_info_lines = [texts.t('INLINE_GIFT_NO_SUB', 'нет подписки')]
@@ -814,13 +817,15 @@ async def handle_admin_inline_query(inline_query: types.InlineQuery) -> None:
             if parsed.traffic_gb is not None:
                 result_parts.append(_fmt_traffic(parsed.traffic_gb, texts))
             if parsed.devices is not None:
-                result_parts.append(f'{max(cur_devices, parsed.devices)} уст.')
+                result_parts.append(
+                    f'{max(cur_devices, parsed.devices)} {texts.t("INLINE_GIFT_DEVICES_SUFFIX", "уст.")}'
+                )
             desc_parts.append(' | '.join(result_parts) if result_parts else ' | '.join(sub_info_lines))
         else:
             desc_parts.append(summary)
 
     if parsed.has_discount:
-        title_parts.append(f'скидка {parsed.discount_percent}%')
+        title_parts.append(f'{texts.t("INLINE_GIFT_LABEL_DISCOUNT", "Скидка")} {parsed.discount_percent}%')
         desc_parts.append(texts.t('INLINE_GIFT_DISCOUNT_DESC', 'Скидка {pct}%').format(pct=parsed.discount_percent))
 
     if parsed.has_balance:
@@ -829,11 +834,11 @@ async def handle_admin_inline_query(inline_query: types.InlineQuery) -> None:
 
     if parsed.has_temp:
         temp_days = parsed.temp_traffic_days or 30
-        title_parts.append(f'+{parsed.temp_traffic_gb} ГБ врем.')
-        desc_parts.append(f'+{parsed.temp_traffic_gb} ГБ трафика на {temp_days} дн.')
+        title_parts.append(f'+{texts.t("INLINE_GIFT_TRAFFIC_GB", "{gb} ГБ").format(gb=parsed.temp_traffic_gb)}')
+        desc_parts.append(_temp_body_line(parsed.temp_traffic_gb, temp_days, texts))
 
     if parsed.has_reset:
-        title_parts.append('сброс трафика')
+        title_parts.append(texts.t('INLINE_GIFT_LABEL_RESET', 'Сброс трафика'))
         desc_parts.append(texts.t('INLINE_GIFT_RESET_DESC', 'Сброс использованного трафика'))
 
     description = ', '.join(desc_parts)

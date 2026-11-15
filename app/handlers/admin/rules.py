@@ -78,7 +78,7 @@ async def show_rules_management(callback: types.CallbackQuery, db_user: User, db
                 _label(texts.t('ADMIN_RULES_UI_017', 'Редактировать правила')),
                 callback_data='admin_edit_rules',
                 icon='rules',
-                style='success',
+                style='primary',
             )
         ],
         [
@@ -114,6 +114,7 @@ async def show_rules_management(callback: types.CallbackQuery, db_user: User, db
                 _label(texts.t('ADMIN_RULES_UI_032', 'HTML помощь')),
                 callback_data='admin_rules_help',
                 icon='document',
+                style='primary',
             )
         ],
         [admin_back_button(texts, 'admin_submenu_settings')],
@@ -171,7 +172,7 @@ async def view_current_rules(callback: types.CallbackQuery, db_user: User, db: A
                             _label(texts.t('ADMIN_RULES_UI_030', 'Редактировать')),
                             callback_data='admin_edit_rules',
                             icon='rules',
-                            style='success',
+                            style='primary',
                         )
                     ],
                     [
@@ -242,6 +243,7 @@ async def start_edit_rules(callback: types.CallbackQuery, db_user: User, state: 
                             _label(texts.t('ADMIN_RULES_UI_032', 'HTML помощь')),
                             callback_data='admin_rules_help',
                             icon='document',
+                            style='primary',
                         )
                     ],
                     [
@@ -304,6 +306,7 @@ async def process_rules_edit(message: types.Message, db_user: User, state: FSMCo
                             _label(texts.t('ADMIN_RULES_UI_032', 'HTML помощь')),
                             callback_data='admin_rules_help',
                             icon='document',
+                            style='primary',
                         )
                     ],
                     [
@@ -586,7 +589,7 @@ async def show_html_help(callback: types.CallbackQuery, db_user: User, db: Async
                         _label(texts.t('ADMIN_RULES_UI_017', 'Редактировать правила')),
                         callback_data='admin_edit_rules',
                         icon='rules',
-                        style='success',
+                        style='primary',
                     )
                 ],
                 [admin_back_button(texts, 'admin_rules')],

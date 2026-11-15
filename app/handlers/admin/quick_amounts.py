@@ -60,16 +60,13 @@ def _list_keyboard(configs: list, defaults: dict, language: str = 'ru') -> Inlin
     texts = get_texts(language)
     buttons = []
     for config in configs:
-        if config.quick_amounts or config.quick_amounts is not None:
-            marker = ''
-        else:
-            marker = '▫'
+        # ▫ помечает методы, работающие на значениях по умолчанию (см. ADMIN_QUICK_OVERVIEW).
+        marker = '▫ ' if config.quick_amounts is None else ''
         title = _method_title(config, defaults)
-        text = f'{marker} {title}' if marker else title
         buttons.append(
             [
                 admin_button(
-                    text,
+                    f'{marker}{title}',
                     callback_data=f'qamounts:view:{config.method_id}',
                 )
             ]
@@ -85,8 +82,8 @@ def _view_keyboard(method_id: str, quick_amounts: list[int] | None, language: st
             admin_button(
                 _label(texts.t('ADMIN_QUICK_EDIT')),
                 callback_data=f'qamounts:edit:{method_id}',
-                icon='settings',
-                style='success',
+                icon='edit',
+                style='primary',
             )
         ]
     ]
@@ -97,6 +94,7 @@ def _view_keyboard(method_id: str, quick_amounts: list[int] | None, language: st
                     _label('Отключить кнопки'),
                     callback_data=f'qamounts:disable:{method_id}',
                     icon='lock',
+                    style='danger',
                 )
             ]
         )
@@ -107,6 +105,7 @@ def _view_keyboard(method_id: str, quick_amounts: list[int] | None, language: st
                     _label(texts.t('ADMIN_QUICK_RESET')),
                     callback_data=f'qamounts:reset:{method_id}',
                     icon='refresh',
+                    style='danger',
                 )
             ]
         )
@@ -231,7 +230,10 @@ async def reset_quick_amounts(callback: CallbackQuery, **kwargs) -> None:
 async def process_quick_amounts(message: Message, state: FSMContext, **kwargs) -> None:
     texts = get_texts(getattr(kwargs.get('db_user'), 'language', 'ru'))
     if not message.text:
-        await message.answer(texts.t('ADMIN_QUICK_TEXT_REQUIRED'))
+        await message.answer(
+            admin_screen(texts.t('ADMIN_QUICK_TEXT_REQUIRED'), icon='warning', compact=True),
+            parse_mode='HTML',
+        )
         return
 
     amounts_kopeks: list[int] = []
@@ -248,7 +250,11 @@ async def process_quick_amounts(message: Message, state: FSMContext, **kwargs) -
             raise ValueError(message.text)
     except (ValueError, OverflowError):
         await message.answer(
-            texts.t('ADMIN_QUICK_INVALID').format(limit=MAX_QUICK_AMOUNTS, maximum=MAX_QUICK_AMOUNT_KOPEKS // 100),
+            admin_screen(
+                texts.t('ADMIN_QUICK_INVALID').format(limit=MAX_QUICK_AMOUNTS, maximum=MAX_QUICK_AMOUNT_KOPEKS // 100),
+                icon='error',
+                compact=True,
+            ),
             parse_mode='HTML',
         )
         return
@@ -258,7 +264,10 @@ async def process_quick_amounts(message: Message, state: FSMContext, **kwargs) -
 
     if not method_id:
         await state.clear()
-        await message.answer(texts.t('ADMIN_QUICK_NO_METHOD'))
+        await message.answer(
+            admin_screen(texts.t('ADMIN_QUICK_NO_METHOD'), icon='warning', compact=True),
+            parse_mode='HTML',
+        )
         return
 
     async with AsyncSessionLocal() as db:
@@ -266,13 +275,19 @@ async def process_quick_amounts(message: Message, state: FSMContext, **kwargs) -
             config = await update_config(db, method_id, {'quick_amounts': amounts_kopeks})
         except ValueError as error:
             logger.warning('Некорректные быстрые суммы', method_id=method_id, error=error)
-            await message.answer(texts.t('ADMIN_QUICK_SAVE_ERROR'))
+            await message.answer(
+                admin_screen(texts.t('ADMIN_QUICK_SAVE_ERROR'), icon='error', compact=True),
+                parse_mode='HTML',
+            )
             return
 
     await state.clear()
 
     if not config:
-        await message.answer(texts.t('ADMIN_QUICK_MISSING'))
+        await message.answer(
+            admin_screen(texts.t('ADMIN_QUICK_MISSING'), icon='error', compact=True),
+            parse_mode='HTML',
+        )
         return
 
     defaults = _get_method_defaults()

@@ -29,11 +29,10 @@ _DYNAMIC_LANGUAGE_CONFIGS = {
         'traffic_pattern': '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> {size} ГБ - {price}',
         'unlimited_pattern': '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> Безлимит - {price}',
         'support_info': (
-            '\n? <b>Поддержка</b>\n\n'
+            '\n<tg-emoji emoji-id="5988023995125993550">🛠</tg-emoji> <b>Поддержка</b>\n\n'
             'Это центр тикетов: создавайте обращения, просматривайте ответы и историю.\n\n'
-            '• ◆ Создать тикет — опишите проблему или вопрос\n'
-            '• ▤ Мои тикеты — статус и переписка\n'
-            '• <tg-emoji emoji-id="5886666250158870040">💬</tg-emoji> Связаться — написать напрямую (если нужно)\n\n'
+            '<tg-emoji emoji-id="5877219383691972108">➕</tg-emoji> <b>Создать тикет</b> — опишите проблему или вопрос\n'
+            '<tg-emoji emoji-id="5886666250158870040">💬</tg-emoji> <b>Мои тикеты</b> — статус и переписка\n\n'
             'Старайтесь использовать тикеты — так мы быстрее поможем и ничего не потеряется.\n'
         ),
     },
@@ -41,23 +40,21 @@ _DYNAMIC_LANGUAGE_CONFIGS = {
         'traffic_pattern': '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> {size} گیگابایت - {price}',
         'unlimited_pattern': '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> نامحدود - {price}',
         'support_info': (
-            '\n? <b>پشتیبانی</b>\n\n'
-            'برای هرگونه سؤال به پشتیبانی پیام دهید:\n\n'
-            '<tg-emoji emoji-id="5771887475421090729">👤</tg-emoji> {support_username}\n\n'
-            '• ◆ ایجاد تیکت\n'
-            '• ▤ تیکت‌های من\n'
-            '• <tg-emoji emoji-id="5886666250158870040">💬</tg-emoji> تماس مستقیم\n'
+            '\n<tg-emoji emoji-id="5988023995125993550">🛠</tg-emoji> <b>پشتیبانی</b>\n\n'
+            'این مرکز تیکت است: درخواست ایجاد کنید، پاسخ‌ها و تاریخچه را ببینید.\n\n'
+            '<tg-emoji emoji-id="5877219383691972108">➕</tg-emoji> <b>ایجاد تیکت</b> — مشکل یا سؤال خود را بنویسید\n'
+            '<tg-emoji emoji-id="5886666250158870040">💬</tg-emoji> <b>تیکت‌های من</b> — وضعیت و گفتگو\n\n'
+            'لطفاً از تیکت‌ها استفاده کنید تا سریع‌تر کمک کنیم و چیزی گم نشود.\n'
         ),
     },
     'en': {
         'traffic_pattern': '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> {size} GB - {price}',
         'unlimited_pattern': '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> Unlimited - {price}',
         'support_info': (
-            '\n? <b>RemnaWave Support</b>\n\n'
+            '\n<tg-emoji emoji-id="5988023995125993550">🛠</tg-emoji> <b>RemnaWave Support</b>\n\n'
             'This is the ticket center: create requests, view replies and history.\n\n'
-            '• ◆ Create ticket — describe your issue or question\n'
-            '• ▤ My tickets — status and conversation\n'
-            '• <tg-emoji emoji-id="5886666250158870040">💬</tg-emoji> Contact — message directly if needed\n\n'
+            '<tg-emoji emoji-id="5877219383691972108">➕</tg-emoji> <b>Create ticket</b> — describe your issue or question\n'
+            '<tg-emoji emoji-id="5886666250158870040">💬</tg-emoji> <b>My tickets</b> — status and conversation\n\n'
             'Prefer tickets — it helps us respond faster and keep context.\n'
         ),
     },
@@ -65,15 +62,11 @@ _DYNAMIC_LANGUAGE_CONFIGS = {
         'traffic_pattern': '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> {size} ГБ - {price}',
         'unlimited_pattern': '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji> Безліміт - {price}',
         'support_info': (
-            '\n<tg-emoji emoji-id="5988023995125993550">🛠</tg-emoji> <b>Технічна підтримка</b>\n\n'
-            'З усіх питань звертайтеся до нашої підтримки:\n\n'
-            '<tg-emoji emoji-id="5771887475421090729">👤</tg-emoji> {support_username}\n\n'
-            'Ми допоможемо з:\n'
-            '• Налаштуванням підключення\n'
-            '• Вирішенням технічних проблем\n'
-            '• Питаннями щодо оплати\n'
-            '• Іншими питаннями\n\n'
-            '⏰ Час відповіді: зазвичай протягом 1-2 годин\n'
+            '\n<tg-emoji emoji-id="5988023995125993550">🛠</tg-emoji> <b>Підтримка</b>\n\n'
+            'Це центр тикетів: створюйте звернення, переглядайте відповіді та історію.\n\n'
+            '<tg-emoji emoji-id="5877219383691972108">➕</tg-emoji> <b>Створити тикет</b> — опишіть проблему чи питання\n'
+            '<tg-emoji emoji-id="5886666250158870040">💬</tg-emoji> <b>Мої тикети</b> — статус і листування\n\n'
+            'Користуйтеся тикетами — так ми швидше допоможемо і нічого не загубиться.\n'
         ),
     },
     'zh': {
@@ -81,14 +74,10 @@ _DYNAMIC_LANGUAGE_CONFIGS = {
         'unlimited_pattern': '<tg-emoji emoji-id="5877485980901971030">📊</tg-emoji>无限-{price}',
         'support_info': (
             '\n<tg-emoji emoji-id="5988023995125993550">🛠</tg-emoji> <b>技术支持</b>\n\n'
-            '如有任何问题，请联系我们的支持团队：\n\n'
-            '<tg-emoji emoji-id="5771887475421090729">👤</tg-emoji> {support_username}\n\n'
-            '我们将帮助您：\n'
-            '• 设置连接\n'
-            '• 解决技术问题\n'
-            '• 付款问题\n'
-            '• 其他问题\n\n'
-            '⏰ 响应时间：通常在 1-2 小时内\n'
+            '这里是工单中心：创建工单、查看回复和历史记录。\n\n'
+            '<tg-emoji emoji-id="5877219383691972108">➕</tg-emoji> <b>创建工单</b> — 描述您的问题\n'
+            '<tg-emoji emoji-id="5886666250158870040">💬</tg-emoji> <b>我的工单</b> — 状态和对话\n\n'
+            '请优先使用工单，这样我们可以更快回复并保留上下文。\n'
         ),
     },
 }

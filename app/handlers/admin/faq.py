@@ -12,7 +12,7 @@ from app.handlers.admin.display_mode_button import cycle_display_mode_setting
 from app.localization.texts import get_texts
 from app.services.faq_service import FaqService
 from app.states import AdminStates
-from app.utils.admin_ui import admin_back_button, admin_button, admin_screen
+from app.utils.admin_ui import admin_back_button, admin_button, admin_quote, admin_screen
 from app.utils.decorators import admin_required, error_handler
 from app.utils.display_mode import display_mode_label
 from app.utils.miniapp_buttons import strip_leading_emoji
@@ -135,12 +135,13 @@ async def _build_overview(
         '',
     )
 
+    meta_parts = [part for part in (language_block, status_text, stats_block) if part]
+    meta_block = admin_quote('\n'.join(meta_parts)) if meta_parts else ''
+
     message_parts = [
         header,
         description,
-        language_block,
-        status_text,
-        stats_block,
+        meta_block,
         pages_overview,
         actions_prompt,
     ]
@@ -210,6 +211,7 @@ async def _build_overview(
                 _label(texts.t('ADMIN_FAQ_HTML_HELP', 'HTML помощь')),
                 callback_data='admin_faq_help',
                 icon='document',
+                style='primary',
             )
         ]
     )
@@ -561,18 +563,27 @@ async def show_faq_page_details(
             content=html.escape(preview_trimmed)
         )
 
+    page_meta_parts = [
+        part
+        for part in (
+            texts.t(
+                'ADMIN_FAQ_PAGE_TITLE',
+                '<b>Заголовок:</b> {title}',
+            ).format(title=html.escape(title)),
+            texts.t(
+                'ADMIN_FAQ_PAGE_STATUS',
+                'Статус: {status}',
+            ).format(status=status_label),
+            updated_block,
+        )
+        if part
+    ]
+    page_meta = admin_quote('\n'.join(page_meta_parts)) if page_meta_parts else ''
+
     message_parts = [
         header,
-        texts.t(
-            'ADMIN_FAQ_PAGE_TITLE',
-            '<b>Заголовок:</b> {title}',
-        ).format(title=html.escape(title)),
-        texts.t(
-            'ADMIN_FAQ_PAGE_STATUS',
-            'Статус: {status}',
-        ).format(status=status_label),
+        page_meta,
         preview_text,
-        updated_block,
     ]
 
     message_text = '\n\n'.join(part.strip() for part in message_parts if part)
@@ -585,7 +596,7 @@ async def show_faq_page_details(
                 _label(texts.t('ADMIN_FAQ_EDIT_TITLE_BUTTON', 'Изменить заголовок')),
                 callback_data=f'admin_faq_edit_title:{page.id}',
                 icon='document',
-                style='success',
+                style='primary',
             )
         ]
     )
@@ -595,7 +606,7 @@ async def show_faq_page_details(
                 _label(texts.t('ADMIN_FAQ_EDIT_CONTENT_BUTTON', 'Изменить текст')),
                 callback_data=f'admin_faq_edit_content:{page.id}',
                 icon='document',
-                style='success',
+                style='primary',
             )
         ]
     )
@@ -933,7 +944,10 @@ async def process_edit_faq_content(
 
     if not page_id:
         await state.clear()
-        await message.answer(texts.t('ADMIN_FAQ_UNEXPECTED_STATE', 'Состояние сброшено.'))
+        await message.answer(
+            admin_screen(texts.t('ADMIN_FAQ_UNEXPECTED_STATE', 'Состояние сброшено.'), icon='warning', compact=True),
+            parse_mode='HTML',
+        )
         return
 
     page = await FaqService.get_page(
@@ -946,7 +960,8 @@ async def process_edit_faq_content(
 
     if not page:
         await message.answer(
-            texts.t('ADMIN_FAQ_PAGE_NOT_FOUND', 'Страница не найдена.'),
+            admin_screen(texts.t('ADMIN_FAQ_PAGE_NOT_FOUND', 'Страница не найдена.'), icon='error', compact=True),
+            parse_mode='HTML',
         )
         await state.clear()
         return
@@ -1154,7 +1169,7 @@ async def show_faq_html_help(
     ]
 
     await callback.message.edit_text(
-        help_text,
+        admin_screen(help_text, icon='document'),
         reply_markup=types.InlineKeyboardMarkup(inline_keyboard=buttons),
         parse_mode='HTML',
     )

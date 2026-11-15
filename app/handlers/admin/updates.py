@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database.models import User
 from app.localization.texts import get_texts
 from app.services.version_service import version_service
-from app.utils.admin_ui import admin_back_button, admin_button, admin_screen
+from app.utils.admin_ui import admin_back_button, admin_button, admin_quote, admin_screen
 from app.utils.decorators import admin_required, error_handler
 from app.utils.miniapp_buttons import strip_leading_emoji
 
@@ -80,16 +80,25 @@ async def show_updates_menu(callback: types.CallbackQuery, db_user: User, db: As
 
         last_check_text = ''
         if last_check:
-            last_check_text = f'\nПоследняя проверка: {last_check.strftime("%d.%m.%Y %H:%M")}'
+            last_check_text = f'\n<b>Последняя проверка:</b> {last_check.strftime("%d.%m.%Y %H:%M")}'
 
-        message = f"""<b>Система обновлений</b>
+        version_block = '\n'.join(
+            [
+                f'<b>Текущая версия:</b> <code>{html.escape(str(current_version))}</code>',
+                f'<b>Статус:</b> {status_text}',
+                f'<b>Репозиторий:</b> {html.escape(str(version_service.repo))}',
+            ]
+        )
 
-<b>Текущая версия:</b> <code>{current_version}</code>
-<b>Статус:</b> {status_text}
-
-<b>Репозиторий:</b> {version_service.repo}{last_check_text}
-
-ℹ Система автоматически проверяет обновления каждый час и отправляет уведомления о новых версиях."""
+        message = '\n'.join(
+            [
+                '<b>Система обновлений</b>',
+                '',
+                admin_quote(f'{version_block}{last_check_text}'),
+                '',
+                '<i>Система автоматически проверяет обновления каждый час и отправляет уведомления о новых версиях.</i>',
+            ]
+        )
 
         await callback.message.edit_text(
             admin_screen(message, icon='updates', compact=True),
@@ -117,31 +126,51 @@ async def check_updates(callback: types.CallbackQuery, db_user: User, db: AsyncS
         has_updates, newer_releases = await version_service.check_for_updates(force=True)
 
         if not has_updates:
-            message = f"""<b>Обновления не найдены</b>
-
-<b>Текущая версия:</b> <code>{version_service.current_version}</code>
-<b>Статус:</b> У вас установлена последняя версия
-
-<b>Репозиторий:</b> {version_service.repo}"""
+            message = '\n'.join(
+                [
+                    '<b>Обновления не найдены</b>',
+                    '',
+                    admin_quote(
+                        '\n'.join(
+                            [
+                                f'<b>Текущая версия:</b> <code>{html.escape(str(version_service.current_version))}</code>',
+                                '<b>Статус:</b> У вас установлена последняя версия',
+                                f'<b>Репозиторий:</b> {html.escape(str(version_service.repo))}',
+                            ]
+                        )
+                    ),
+                ]
+            )
 
         else:
             updates_list = []
             for i, release in enumerate(newer_releases[:5]):
                 icon = version_service.format_version_display(release).split()[0]
-                updates_list.append(f'{i + 1}. {icon} <code>{release.tag_name}</code> • {release.formatted_date}')
+                updates_list.append(
+                    f'{i + 1}. {icon} <code>{html.escape(str(release.tag_name))}</code> • {release.formatted_date}'
+                )
 
             updates_text = '\n'.join(updates_list)
             more_text = f'\n\nИ еще {len(newer_releases) - 5} обновлений...' if len(newer_releases) > 5 else ''
 
-            message = f"""<b>Найдены обновления</b>
-
-<b>Текущая версия:</b> <code>{version_service.current_version}</code>
-<b>Доступно обновлений:</b> {len(newer_releases)}
-
-<b>Последние версии:</b>
-{updates_text}{more_text}
-
-<b>Репозиторий:</b> {version_service.repo}"""
+            message = '\n'.join(
+                [
+                    '<b>Найдены обновления</b>',
+                    '',
+                    admin_quote(
+                        '\n'.join(
+                            [
+                                f'<b>Текущая версия:</b> <code>{html.escape(str(version_service.current_version))}</code>',
+                                f'<b>Доступно обновлений:</b> {len(newer_releases)}',
+                                f'<b>Репозиторий:</b> {html.escape(str(version_service.repo))}',
+                            ]
+                        )
+                    ),
+                    '',
+                    '<b>Последние версии:</b>',
+                    f'{updates_text}{more_text}',
+                ]
+            )
 
         keyboard = get_updates_keyboard(db_user.language)
 
@@ -197,12 +226,12 @@ async def show_version_info(callback: types.CallbackQuery, db_user: User, db: As
         current_info = texts.t('ADMIN_UPDATES_001')
 
         if current_release:
-            current_info += texts.t('ADMIN_UPDATES_013').format(value1=current_release.tag_name)
+            current_info += texts.t('ADMIN_UPDATES_013').format(value1=html.escape(str(current_release.tag_name)))
             current_info += texts.t('ADMIN_UPDATES_014').format(value1=current_release.formatted_date)
             if _release_description(current_release, texts):
                 current_info += texts.t('ADMIN_UPDATES_019').format(value1=_release_description(current_release, texts))
         else:
-            current_info += texts.t('ADMIN_UPDATES_013').format(value1=current_version)
+            current_info += texts.t('ADMIN_UPDATES_013').format(value1=html.escape(str(current_version)))
             current_info += texts.t('ADMIN_UPDATES_015')
 
         message_parts = [current_info]
@@ -211,16 +240,16 @@ async def show_version_info(callback: types.CallbackQuery, db_user: User, db: As
             updates_info = texts.t('ADMIN_UPDATES_016')
 
             for release in newer_releases:
-                updates_info += f'<b>{release.tag_name}</b>\n'
-                updates_info += f'    {release.formatted_date}\n'
+                updates_info += f'<b>{html.escape(str(release.tag_name))}</b>\n'
+                updates_info += f'{release.formatted_date}\n'
                 if _release_description(release, texts):
-                    updates_info += f'    {_release_description(release, texts)}\n'
+                    updates_info += f'{_release_description(release, texts)}\n'
                 updates_info += '\n'
 
             message_parts.append(updates_info.rstrip())
 
         system_info = texts.t('ADMIN_UPDATES_002')
-        system_info += texts.t('ADMIN_UPDATES_003').format(value1=version_service.repo)
+        system_info += texts.t('ADMIN_UPDATES_003').format(value1=html.escape(str(version_service.repo)))
         system_info += texts.t('ADMIN_UPDATES_004').format(
             value1=texts.t('ADMIN_UPDATES_029') if version_service.enabled else texts.t('ADMIN_UPDATES_030')
         )

@@ -259,6 +259,7 @@ async def _start_custom_traffic_field_edit(
     title: str,
     current_value: str,
     prompt: str,
+    icon: str = 'tariff',
 ) -> None:
     """Start one custom-traffic field editor using the shared FSM contract."""
     tariff_id = tariff.id
@@ -279,7 +280,7 @@ async def _start_custom_traffic_field_edit(
                 v2=current_value,
                 v3=prompt,
             ),
-            icon='tariff',
+            icon=icon,
             compact=True,
         ),
         reply_markup=InlineKeyboardMarkup(
@@ -335,6 +336,7 @@ async def start_edit_custom_traffic_price(
             'ADMIN_TARIFF_HELPER_TRAFFIC_PRICE_PROMPT',
             'Введите цену за 1 ГБ в рублях.\nПример: <code>2</code> или <code>2.50</code>',
         ),
+        icon='money',
     )
 
 
@@ -420,7 +422,14 @@ async def _load_custom_traffic_tariff_from_state(
     tariff_id = state_data.get('tariff_id')
     tariff = await get_tariff_by_id(db, tariff_id) if tariff_id is not None else None
     if tariff is None:
-        await message.answer(get_texts(language).t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'))
+        await message.answer(
+            admin_screen(
+                get_texts(language).t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'),
+                icon='warning',
+                compact=True,
+            ),
+            parse_mode='HTML',
+        )
         await state.clear()
     return tariff
 
@@ -462,9 +471,13 @@ async def process_custom_traffic_price_input(
         price_kopeks = parse_positive_rubles_to_kopeks(message.text or '')
     except ValueError:
         await message.answer(
-            get_texts(db_user.language).t(
-                'ADMIN_TARIFF_HELPER_INVALID_TRAFFIC_PRICE',
-                'Некорректная цена. Введите положительную сумму в рублях с точностью не более двух знаков.\nПример: <code>2</code> или <code>2.50</code>',
+            admin_screen(
+                get_texts(db_user.language).t(
+                    'ADMIN_TARIFF_HELPER_INVALID_TRAFFIC_PRICE',
+                    'Некорректная цена. Введите положительную сумму в рублях с точностью не более двух знаков.\nПример: <code>2</code> или <code>2.50</code>',
+                ),
+                icon='warning',
+                compact=True,
             ),
             parse_mode='HTML',
         )
@@ -498,18 +511,30 @@ async def process_custom_traffic_min_input(
     try:
         minimum = parse_positive_gb(message.text or '')
     except ValueError:
-        await message.answer('Введите положительное целое число гигабайт.\nПример: <code>5</code>', parse_mode='HTML')
+        await message.answer(
+            admin_screen(
+                'Введите положительное целое число гигабайт.\nПример: <code>5</code>',
+                icon='warning',
+                compact=True,
+            ),
+            parse_mode='HTML',
+        )
         return
 
     maximum = getattr(tariff, 'max_traffic_gb', None)
     if maximum is not None and maximum > 0 and minimum > maximum:
         await message.answer(
-            get_texts(db_user.language)
-            .t(
-                'ADMIN_TARIFF_HELPER_PROCESS_CUSTOM_TRAFFIC_MIN_INPUT_2',
-                'Минимальный объём не может быть больше текущего максимума ({v0} ГБ).',
-            )
-            .format(v0=maximum),
+            admin_screen(
+                get_texts(db_user.language)
+                .t(
+                    'ADMIN_TARIFF_HELPER_PROCESS_CUSTOM_TRAFFIC_MIN_INPUT_2',
+                    'Минимальный объём не может быть больше текущего максимума ({v0} ГБ).',
+                )
+                .format(v0=maximum),
+                icon='warning',
+                compact=True,
+            ),
+            parse_mode='HTML',
         )
         return
 
@@ -542,9 +567,13 @@ async def process_custom_traffic_max_input(
         maximum = parse_positive_gb(message.text or '')
     except ValueError:
         await message.answer(
-            get_texts(db_user.language).t(
-                'ADMIN_TARIFF_HELPER_INVALID_MAX_TRAFFIC',
-                'Введите положительное целое число гигабайт.\nПример: <code>100</code>',
+            admin_screen(
+                get_texts(db_user.language).t(
+                    'ADMIN_TARIFF_HELPER_INVALID_MAX_TRAFFIC',
+                    'Введите положительное целое число гигабайт.\nПример: <code>100</code>',
+                ),
+                icon='warning',
+                compact=True,
             ),
             parse_mode='HTML',
         )
@@ -553,12 +582,17 @@ async def process_custom_traffic_max_input(
     minimum = getattr(tariff, 'min_traffic_gb', None)
     if minimum is not None and minimum > 0 and maximum < minimum:
         await message.answer(
-            get_texts(db_user.language)
-            .t(
-                'ADMIN_TARIFF_HELPER_PROCESS_CUSTOM_TRAFFIC_MAX_INPUT_2',
-                'Максимальный объём не может быть меньше текущего минимума ({v0} ГБ).',
-            )
-            .format(v0=minimum),
+            admin_screen(
+                get_texts(db_user.language)
+                .t(
+                    'ADMIN_TARIFF_HELPER_PROCESS_CUSTOM_TRAFFIC_MAX_INPUT_2',
+                    'Максимальный объём не может быть меньше текущего минимума ({v0} ГБ).',
+                )
+                .format(v0=minimum),
+                icon='warning',
+                compact=True,
+            ),
+            parse_mode='HTML',
         )
         return
 

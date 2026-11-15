@@ -38,12 +38,12 @@ MAX_WHOLESALE_PRICE_RUBLES = 10_000_000
 
 # Следы прежнего оформления, оставшиеся в локалях: декоративные глифы в начале
 # строк и лишние ведущие пробелы — иконку и отступы даёт admin_screen.
-_LEGACY_PREFIX_RE = re.compile(r'^[ \t]*(?:[▤▣▥◷↻←▶⏭◆✓✗⚠↑][ \t]*)*', re.MULTILINE)
+_LEGACY_PREFIX_RE = re.compile(r'^[ \t]*(?:(?:NEW|[▤▣▥◷↻←→▶⏭◆✓✗⚠↑+])[ \t]*)*', re.MULTILINE)
 
 
 def _clean_legacy(value: str) -> str:
     """Убирает декоративные глифы и ведущие пробелы строк локали."""
-    return _LEGACY_PREFIX_RE.sub('', value).strip()
+    return _LEGACY_PREFIX_RE.sub('', value or '').strip()
 
 
 # Admin ids with a batch-creation in flight. aiogram dispatches updates
@@ -142,6 +142,7 @@ def _batch_card_keyboard(
                     strip_leading_emoji(texts.t('ADMIN_COUPONS_UI_BATCH_CARD_KEYBOARD_009', 'Файл со ссылками')),
                     callback_data=f'admin_coupon_export_{batch.id}',
                     icon='document',
+                    style='primary',
                 )
             ]
         )
@@ -207,7 +208,10 @@ async def _read_int(message: types.Message, lo: int, hi: int, error_text: str, l
     except ValueError:
         value = None
     if value is None or not lo <= value <= hi:
-        await message.answer(error_text, reply_markup=_cancel_keyboard(language))
+        await message.answer(
+            admin_screen(error_text, icon='warning', compact=True),
+            reply_markup=_cancel_keyboard(language),
+        )
         return None
     return value
 
@@ -237,7 +241,8 @@ async def _render_coupons_menu(
             admin_button(
                 _format_batch_button(batch, language=language),
                 callback_data=f'admin_coupon_manage_{batch.id}',
-                icon='gift',
+                icon=None if batch.is_revoked else 'gift',
+                style='primary',
             )
         ]
         for batch in batches
@@ -381,9 +386,13 @@ async def process_coupon_batch_days(message: types.Message, db_user: User, state
 
     await state.update_data(coupon_period_days=days)
     await message.answer(
-        texts.t(
-            'ADMIN_COUPONS_UI_PROCESS_COUPON_BATCH_DAYS_026', ' Введите количество купонов в партии (1-{value1}):'
-        ).format(value1=MAX_COUPONS_PER_BATCH),
+        admin_screen(
+            texts.t(
+                'ADMIN_COUPONS_UI_PROCESS_COUPON_BATCH_DAYS_026', ' Введите количество купонов в партии (1-{value1}):'
+            ).format(value1=MAX_COUPONS_PER_BATCH),
+            icon='gift',
+            compact=True,
+        ),
         reply_markup=_cancel_keyboard(db_user.language),
     )
     await state.set_state(AdminStates.creating_coupon_batch_count)
@@ -407,8 +416,12 @@ async def process_coupon_batch_count(message: types.Message, db_user: User, stat
 
     await state.update_data(coupon_count=count)
     await message.answer(
-        texts.t(
-            'ADMIN_COUPONS_UI_PROCESS_COUPON_BATCH_COUNT_028', ' Введите название партии (например, имя партнёра):'
+        admin_screen(
+            texts.t(
+                'ADMIN_COUPONS_UI_PROCESS_COUPON_BATCH_COUNT_028', ' Введите название партии (например, имя партнёра):'
+            ),
+            icon='edit',
+            compact=True,
         ),
         reply_markup=_cancel_keyboard(db_user.language),
     )
@@ -422,16 +435,24 @@ async def process_coupon_batch_name(message: types.Message, db_user: User, state
     name = (message.text or '').strip()
     if not name or len(name) > 255:
         await message.answer(
-            texts.t('ADMIN_COUPONS_UI_PROCESS_COUPON_BATCH_NAME_029', ' Название должно быть от 1 до 255 символов'),
+            admin_screen(
+                texts.t('ADMIN_COUPONS_UI_PROCESS_COUPON_BATCH_NAME_029', ' Название должно быть от 1 до 255 символов'),
+                icon='warning',
+                compact=True,
+            ),
             reply_markup=_cancel_keyboard(db_user.language),
         )
         return
 
     await state.update_data(coupon_batch_name=name)
     await message.answer(
-        texts.t(
-            'ADMIN_COUPONS_UI_PROCESS_COUPON_BATCH_NAME_030',
-            ' Введите оптовую цену за купон в рублях — только для учёта (0 — не указывать):',
+        admin_screen(
+            texts.t(
+                'ADMIN_COUPONS_UI_PROCESS_COUPON_BATCH_NAME_030',
+                ' Введите оптовую цену за купон в рублях — только для учёта (0 — не указывать):',
+            ),
+            icon='money',
+            compact=True,
         ),
         reply_markup=_cancel_keyboard(db_user.language),
     )
@@ -446,8 +467,12 @@ async def process_coupon_batch_price(message: types.Message, db_user: User, stat
         rubles = float((message.text or '').strip().replace(',', '.').replace(' ', ''))
     except ValueError:
         await message.answer(
-            texts.t(
-                'ADMIN_COUPONS_UI_PROCESS_COUPON_BATCH_PRICE_031', ' Введите цену числом (например, 150 или 99.50)'
+            admin_screen(
+                texts.t(
+                    'ADMIN_COUPONS_UI_PROCESS_COUPON_BATCH_PRICE_031', ' Введите цену числом (например, 150 или 99.50)'
+                ),
+                icon='warning',
+                compact=True,
             ),
             reply_markup=_cancel_keyboard(db_user.language),
         )
@@ -455,18 +480,26 @@ async def process_coupon_batch_price(message: types.Message, db_user: User, stat
     # Inverted range check: also rejects NaN (all comparisons with NaN are False)
     if not 0 <= rubles <= MAX_WHOLESALE_PRICE_RUBLES:
         await message.answer(
-            texts.t(
-                'ADMIN_COUPONS_UI_PROCESS_COUPON_BATCH_PRICE_032', ' Цена должна быть от 0 до {value1} рублей'
-            ).format(value1=MAX_WHOLESALE_PRICE_RUBLES),
+            admin_screen(
+                texts.t(
+                    'ADMIN_COUPONS_UI_PROCESS_COUPON_BATCH_PRICE_032', ' Цена должна быть от 0 до {value1} рублей'
+                ).format(value1=MAX_WHOLESALE_PRICE_RUBLES),
+                icon='warning',
+                compact=True,
+            ),
             reply_markup=_cancel_keyboard(db_user.language),
         )
         return
 
     await state.update_data(coupon_price_kopeks=int(round(rubles * 100)))
     await message.answer(
-        texts.t(
-            'ADMIN_COUPONS_UI_PROCESS_COUPON_BATCH_PRICE_033',
-            ' Введите срок действия купонов в днях (0 — бессрочно):',
+        admin_screen(
+            texts.t(
+                'ADMIN_COUPONS_UI_PROCESS_COUPON_BATCH_PRICE_033',
+                ' Введите срок действия купонов в днях (0 — бессрочно):',
+            ),
+            icon='calendar',
+            compact=True,
         ),
         reply_markup=_cancel_keyboard(db_user.language),
     )
@@ -491,9 +524,13 @@ async def process_coupon_batch_expiry(message: types.Message, db_user: User, sta
 
     await state.update_data(coupon_expiry_days=expiry_days)
     await message.answer(
-        texts.t(
-            'ADMIN_COUPONS_UI_PROCESS_COUPON_BATCH_EXPIRY_035',
-            ' Сколько купонов из партии может активировать ОДИН пользователь?\n\n<i>0 — без ограничения. Для раздач и конкурсов ставьте 1, чтобы один человек не забрал всю партию.</i>',
+        admin_screen(
+            texts.t(
+                'ADMIN_COUPONS_UI_PROCESS_COUPON_BATCH_EXPIRY_035',
+                ' Сколько купонов из партии может активировать ОДИН пользователь?\n\n<i>0 — без ограничения. Для раздач и конкурсов ставьте 1, чтобы один человек не забрал всю партию.</i>',
+            ),
+            icon='users',
+            compact=True,
         ),
         reply_markup=_cancel_keyboard(db_user.language),
     )
@@ -704,11 +741,13 @@ async def _send_batch_links_file(
     file = types.BufferedInputFile(content.encode('utf-8'), filename=f'coupons_batch_{batch.id}.txt')
     await callback.message.answer_document(
         document=file,
-        caption=(
+        caption=admin_screen(
             texts.t(
                 'ADMIN_COUPONS_UI_SEND_BATCH_LINKS_FILE_051',
-                ' Партия #{value1} «{value2}»: {value3} активных купонов, {value4} дн. каждый.',
-            ).format(value1=batch.id, value2=html.escape(batch.name), value3=len(tokens), value4=batch.period_days)
+                'Партия #{value1} «{value2}»: {value3} активных купонов, {value4} дн. каждый.',
+            ).format(value1=batch.id, value2=html.escape(batch.name), value3=len(tokens), value4=batch.period_days),
+            icon='document',
+            compact=True,
         ),
     )
     return True

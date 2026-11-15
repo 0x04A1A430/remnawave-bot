@@ -20,7 +20,7 @@ from app.database.database import AsyncSessionLocal
 from app.localization.texts import get_texts
 from app.services.channel_subscription_service import channel_subscription_service
 from app.services.system_settings_service import normalize_settings_language
-from app.utils.admin_ui import admin_back_button, admin_button, admin_screen
+from app.utils.admin_ui import admin_back_button, admin_button, admin_icon, admin_screen
 from app.utils.decorators import admin_required
 from app.utils.miniapp_buttons import strip_leading_emoji
 
@@ -41,6 +41,31 @@ def _label(text: str) -> str:
     return strip_leading_emoji(text.strip())
 
 
+def _status_mark(is_active: bool) -> str:
+    """Premium-метка статуса вместо legacy-скобок ``[x]`` / ``[ ]``."""
+    return admin_icon('success' if is_active else 'circle_white')
+
+
+def _channel_title(channel, texts) -> str:
+    return channel.title or texts.t('ADMIN_REQUIRED_CHANNELS_UI_VIEW_CHANNEL_013', 'Без названия')
+
+
+def _channels_overview_text(channels: list, texts) -> str:
+    """Список каналов: premium-метка статуса, ID и название."""
+    if not channels:
+        return texts.t(
+            'ADMIN_REQUIRED_CHANNELS_UI_SHOW_CHANNELS_LIST_006',
+            '<b>Обязательные каналы</b>\n\nКаналы не настроены. Нажмите «Добавить» чтобы создать.',
+        )
+    lines = [texts.t('ADMIN_REQUIRED_CHANNELS_UI_SHOW_CHANNELS_LIST_007', '<b>Обязательные каналы</b>\n').strip()]
+    for ch in channels:
+        lines.append(
+            f'{_status_mark(ch.is_active)} <code>{html.escape(ch.channel_id)}</code> — '
+            f'{html.escape(_channel_title(ch, texts))}'
+        )
+    return '\n'.join(lines)
+
+
 # -- List channels ----------------------------------------------------------------
 
 
@@ -55,12 +80,11 @@ def _channels_keyboard(channels: list, language: str = 'ru') -> InlineKeyboardMa
     texts = get_texts(language)
     buttons = []
     for ch in channels:
-        status = '[x]' if ch.is_active else '[ ]'
-        title = ch.title or ch.channel_id
+        title = _channel_title(ch, texts)
         buttons.append(
             [
                 admin_button(
-                    f'{status} {title}',
+                    title,
                     callback_data=f'reqch:view:{ch.id}',
                     icon='success' if ch.is_active else 'lock',
                 )
@@ -102,6 +126,7 @@ def _channel_detail_keyboard(channel_id: int, is_active: bool, language: str = '
                     toggle_text,
                     callback_data=f'reqch:toggle:{channel_id}',
                     icon='lock' if is_active else 'success',
+                    style='danger' if is_active else 'success',
                 )
             ],
             [
@@ -131,21 +156,10 @@ async def show_channels_list(callback: CallbackQuery, **kwargs) -> None:
     async with AsyncSessionLocal() as db:
         channels = await get_all_channels(db)
 
-    if not channels:
-        text = texts.t(
-            'ADMIN_REQUIRED_CHANNELS_UI_SHOW_CHANNELS_LIST_006',
-            '<b>Обязательные каналы</b>\n\nКаналы не настроены. Нажмите «Добавить» чтобы создать.',
-        )
-    else:
-        lines = [texts.t('ADMIN_REQUIRED_CHANNELS_UI_SHOW_CHANNELS_LIST_007', '<b>Обязательные каналы</b>\n')]
-        for ch in channels:
-            status = '[x]' if ch.is_active else '[ ]'
-            title = ch.title or ch.channel_id
-            lines.append(f'{status} <code>{html.escape(ch.channel_id)}</code> — {html.escape(title)}')
-        text = '\n'.join(lines)
+    text = _channels_overview_text(channels, texts)
 
     await callback.message.edit_text(
-        admin_screen(text, icon='link', compact=True),
+        admin_screen(text, icon='broadcast', compact=True),
         reply_markup=_channels_keyboard(channels, language=language),
         parse_mode='HTML',
     )
@@ -178,11 +192,12 @@ async def view_channel(callback: CallbackQuery, **kwargs) -> None:
         if ch.is_active
         else texts.t('ADMIN_REQUIRED_CHANNELS_UI_VIEW_CHANNEL_011', 'Отключён')
     )
+    status = f'{_status_mark(ch.is_active)} {status}'
     text = texts.t(
         'ADMIN_REQUIRED_CHANNELS_UI_VIEW_CHANNEL_012',
         '<b>{value1}</b>\n\n<b>ID:</b> <code>{value2}</code>\n<b>Ссылка:</b> {value3}\n<b>Статус:</b> {value4}\n<b>Порядок:</b> {value5}',
     ).format(
-        value1=html.escape(ch.title or texts.t('ADMIN_REQUIRED_CHANNELS_UI_VIEW_CHANNEL_013', 'Без названия')),
+        value1=html.escape(_channel_title(ch, texts)),
         value2=html.escape(ch.channel_id),
         value3=html.escape(ch.channel_link or '—'),
         value4=status,
@@ -231,11 +246,7 @@ async def toggle_channel_handler(callback: CallbackQuery, **kwargs) -> None:
     async with AsyncSessionLocal() as db:
         channels = await get_all_channels(db)
     await callback.message.edit_text(
-        admin_screen(
-            texts.t('ADMIN_REQUIRED_CHANNELS_UI_TOGGLE_CHANNEL_HANDLER_018', '<b>Обязательные каналы</b>'),
-            icon='link',
-            compact=True,
-        ),
+        admin_screen(_channels_overview_text(channels, texts), icon='broadcast', compact=True),
         reply_markup=_channels_keyboard(channels, language=language),
         parse_mode='HTML',
     )
@@ -269,11 +280,7 @@ async def delete_channel_handler(callback: CallbackQuery, **kwargs) -> None:
     async with AsyncSessionLocal() as db:
         channels = await get_all_channels(db)
     await callback.message.edit_text(
-        admin_screen(
-            texts.t('ADMIN_REQUIRED_CHANNELS_UI_TOGGLE_CHANNEL_HANDLER_018', '<b>Обязательные каналы</b>'),
-            icon='link',
-            compact=True,
-        ),
+        admin_screen(_channels_overview_text(channels, texts), icon='broadcast', compact=True),
         reply_markup=_channels_keyboard(channels, language=language),
         parse_mode='HTML',
     )
@@ -309,7 +316,12 @@ async def process_channel_id(message: Message, state: FSMContext, **kwargs) -> N
     texts = get_texts(language)
     if not message.text:
         await message.answer(
-            texts.t('ADMIN_REQUIRED_CHANNELS_UI_PROCESS_CHANNEL_ID_024', 'Отправьте текстовое сообщение.')
+            admin_screen(
+                texts.t('ADMIN_REQUIRED_CHANNELS_UI_PROCESS_CHANNEL_ID_024', 'Отправьте текстовое сообщение.'),
+                icon='warning',
+                compact=True,
+            ),
+            parse_mode='HTML',
         )
         return
     channel_id = message.text.strip()
@@ -319,24 +331,34 @@ async def process_channel_id(message: Message, state: FSMContext, **kwargs) -> N
         channel_id = validate_channel_id(channel_id)
     except ValueError:
         await message.answer(
-            texts.t(
-                'ADMIN_REQUIRED_CHANNELS_UI_PROCESS_CHANNEL_ID_025', 'Неверный формат. {value1}\n\nПопробуйте ещё раз:'
-            ).format(
-                value1=texts.t(
-                    'ADMIN_ACCESS_CHANNEL_ID_HINT',
-                    'Введите числовой ID канала. Префикс -100 добавляется автоматически.',
-                )
-            )
+            admin_screen(
+                texts.t(
+                    'ADMIN_REQUIRED_CHANNELS_UI_PROCESS_CHANNEL_ID_025',
+                    'Неверный формат. {value1}\n\nПопробуйте ещё раз:',
+                ).format(
+                    value1=texts.t(
+                        'ADMIN_ACCESS_CHANNEL_ID_HINT',
+                        'Введите числовой ID канала. Префикс -100 добавляется автоматически.',
+                    )
+                ),
+                icon='error',
+                compact=True,
+            ),
+            parse_mode='HTML',
         )
         return
 
     await state.update_data(channel_id=channel_id)
     await state.set_state(AddChannelStates.waiting_channel_link)
     await message.answer(
-        texts.t(
-            'ADMIN_REQUIRED_CHANNELS_UI_PROCESS_CHANNEL_ID_026',
-            'Канал: <code>{value1}</code>\n\nТеперь отправьте ссылку на канал (например <code>https://t.me/mychannel</code>)\nИли отправьте <code>-</code> чтобы пропустить:',
-        ).format(value1=channel_id),
+        admin_screen(
+            texts.t(
+                'ADMIN_REQUIRED_CHANNELS_UI_PROCESS_CHANNEL_ID_026',
+                'Канал: <code>{value1}</code>\n\nТеперь отправьте ссылку на канал (например <code>https://t.me/mychannel</code>)\nИли отправьте <code>-</code> чтобы пропустить:',
+            ).format(value1=html.escape(channel_id)),
+            icon='link',
+            compact=True,
+        ),
         parse_mode='HTML',
     )
 
@@ -348,7 +370,12 @@ async def process_channel_link(message: Message, state: FSMContext, **kwargs) ->
     texts = get_texts(language)
     if not message.text:
         await message.answer(
-            texts.t('ADMIN_REQUIRED_CHANNELS_UI_PROCESS_CHANNEL_ID_024', 'Отправьте текстовое сообщение.')
+            admin_screen(
+                texts.t('ADMIN_REQUIRED_CHANNELS_UI_PROCESS_CHANNEL_ID_024', 'Отправьте текстовое сообщение.'),
+                icon='warning',
+                compact=True,
+            ),
+            parse_mode='HTML',
         )
         return
     link = message.text.strip()
@@ -359,10 +386,15 @@ async def process_channel_link(message: Message, state: FSMContext, **kwargs) ->
         # Validate and normalize channel link
         if not link.startswith(('https://t.me/', 'http://t.me/', '@')):
             await message.answer(
-                texts.t(
-                    'ADMIN_REQUIRED_CHANNELS_UI_PROCESS_CHANNEL_LINK_028',
-                    'Ссылка должна быть URL вида t.me или @username. Попробуйте ещё раз:',
-                )
+                admin_screen(
+                    texts.t(
+                        'ADMIN_REQUIRED_CHANNELS_UI_PROCESS_CHANNEL_LINK_028',
+                        'Ссылка должна быть URL вида t.me или @username. Попробуйте ещё раз:',
+                    ),
+                    icon='error',
+                    compact=True,
+                ),
+                parse_mode='HTML',
             )
             return
         if link.startswith('@'):
@@ -373,10 +405,15 @@ async def process_channel_link(message: Message, state: FSMContext, **kwargs) ->
     await state.update_data(channel_link=link)
     await state.set_state(AddChannelStates.waiting_channel_title)
     await message.answer(
-        texts.t(
-            'ADMIN_REQUIRED_CHANNELS_UI_PROCESS_CHANNEL_LINK_029',
-            'Отправьте название канала (например <code>Новости проекта</code>)\nИли отправьте <code>-</code> чтобы пропустить:',
-        )
+        admin_screen(
+            texts.t(
+                'ADMIN_REQUIRED_CHANNELS_UI_PROCESS_CHANNEL_LINK_029',
+                'Отправьте название канала (например <code>Новости проекта</code>)\nИли отправьте <code>-</code> чтобы пропустить:',
+            ),
+            icon='edit',
+            compact=True,
+        ),
+        parse_mode='HTML',
     )
 
 
@@ -387,7 +424,12 @@ async def process_channel_title(message: Message, state: FSMContext, **kwargs) -
     texts = get_texts(language)
     if not message.text:
         await message.answer(
-            texts.t('ADMIN_REQUIRED_CHANNELS_UI_PROCESS_CHANNEL_ID_024', 'Отправьте текстовое сообщение.')
+            admin_screen(
+                texts.t('ADMIN_REQUIRED_CHANNELS_UI_PROCESS_CHANNEL_ID_024', 'Отправьте текстовое сообщение.'),
+                icon='warning',
+                compact=True,
+            ),
+            parse_mode='HTML',
         )
         return
     title = message.text.strip()

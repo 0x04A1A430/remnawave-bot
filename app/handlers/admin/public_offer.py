@@ -12,7 +12,7 @@ from app.handlers.admin.display_mode_button import cycle_display_mode_setting
 from app.localization.texts import get_texts
 from app.services.public_offer_service import PublicOfferService
 from app.states import AdminStates
-from app.utils.admin_ui import admin_back_button, admin_button, admin_screen
+from app.utils.admin_ui import admin_back_button, admin_button, admin_quote, admin_screen
 from app.utils.decorators import admin_required, error_handler
 from app.utils.display_mode import display_mode_label
 from app.utils.miniapp_buttons import strip_leading_emoji
@@ -111,12 +111,11 @@ async def _build_overview(
     message_parts = [
         header,
         description,
-        language_block,
-        status_text,
     ]
 
-    if updated_block:
-        message_parts.append(updated_block)
+    meta_parts = [part for part in (language_block, status_text, updated_block) if part]
+    if meta_parts:
+        message_parts.append(admin_quote('\n'.join(meta_parts)))
 
     message_parts.append(preview_block)
     message_parts.append(actions_prompt)
@@ -136,7 +135,7 @@ async def _build_overview(
                 ),
                 callback_data='admin_public_offer_edit',
                 icon='document',
-                style='success',
+                style='primary',
             )
         ]
     )
@@ -209,6 +208,7 @@ async def _build_overview(
                 ),
                 callback_data='admin_public_offer_help',
                 icon='document',
+                style='primary',
             )
         ]
     )
@@ -316,11 +316,14 @@ async def start_edit_public_offer(
         if len(offer.content.strip()) > 400:
             preview += '...'
         current_preview = (
-            texts.t(
-                'ADMIN_PUBLIC_OFFER_CURRENT_PREVIEW',
-                'Текущий текст (превью):',
+            admin_quote(
+                texts.t(
+                    'ADMIN_PUBLIC_OFFER_CURRENT_PREVIEW',
+                    'Текущий текст (превью):',
+                )
+                + f'\n<code>{html.escape(preview)}</code>'
             )
-            + f'\n<code>{html.escape(preview)}</code>\n\n'
+            + '\n\n'
         )
 
     prompt = texts.t(
@@ -354,6 +357,7 @@ async def start_edit_public_offer(
                     ),
                     callback_data='admin_public_offer_help',
                     icon='document',
+                    style='primary',
                 )
             ],
             [
@@ -546,14 +550,14 @@ async def view_public_offer(
                     ),
                     callback_data='admin_public_offer_edit',
                     icon='document',
-                    style='success',
+                    style='primary',
                 )
             ],
         ]
     )
 
     await callback.message.edit_text(
-        f'{header}\n\n{preview}{note}',
+        admin_screen(f'{header}\n\n{preview}{note}'),
         reply_markup=keyboard,
         parse_mode='HTML',
     )
@@ -607,7 +611,7 @@ async def show_public_offer_html_help(
     )
 
     await callback.message.edit_text(
-        help_text,
+        admin_screen(help_text, icon='document'),
         reply_markup=types.InlineKeyboardMarkup(inline_keyboard=buttons),
         parse_mode='HTML',
     )

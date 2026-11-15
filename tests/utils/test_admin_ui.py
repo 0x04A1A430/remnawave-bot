@@ -96,7 +96,7 @@ def test_decorate_admin_markup_keeps_unknown_buttons_untouched():
     assert degraded.inline_keyboard[0][0].icon_custom_emoji_id is None
 
 
-def test_decorate_admin_markup_strips_legacy_glyph_and_skips_danger_icon():
+def test_decorate_admin_markup_strips_legacy_glyph_and_adds_back_icon():
     markup = InlineKeyboardMarkup(
         inline_keyboard=[
             [
@@ -111,4 +111,38 @@ def test_decorate_admin_markup_strips_legacy_glyph_and_skips_danger_icon():
 
     assert forward.text == 'Список'
     assert forward.icon_custom_emoji_id == ADMIN_ICONS['users'].emoji_id
-    assert back.icon_custom_emoji_id is None
+    assert back.style == 'danger'
+    assert back.icon_custom_emoji_id == ADMIN_ICONS['back'].emoji_id
+
+
+def test_decorate_admin_markup_infers_deep_menu_action_icon_and_style():
+    markup = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text='Сохранить', callback_data='admin_server_promo_save_1'),
+                InlineKeyboardButton(text='Удалить', callback_data='admin_tariff_delete:1'),
+                InlineKeyboardButton(text='Закрытые', callback_data='admin_tickets_scope_closed'),
+                InlineKeyboardButton(text='Бекапы', callback_data='backup_panel'),
+            ]
+        ]
+    )
+
+    decorated = decorate_admin_markup(markup)
+    save, delete, closed, backups = decorated.inline_keyboard[0]
+
+    assert save.style == 'success' and save.icon_custom_emoji_id == ADMIN_ICONS['save'].emoji_id
+    assert delete.style == 'danger' and delete.icon_custom_emoji_id == ADMIN_ICONS['delete'].emoji_id
+    assert closed.style == 'primary' and closed.icon_custom_emoji_id == ADMIN_ICONS['chat'].emoji_id
+    assert backups.style == 'primary' and backups.icon_custom_emoji_id == ADMIN_ICONS['backup'].emoji_id
+
+
+def test_decorate_admin_markup_gives_unknown_admin_button_default_icon():
+    markup = InlineKeyboardMarkup(
+        inline_keyboard=[[InlineKeyboardButton(text='Неизвестно', callback_data='admin_unknown_action')]]
+    )
+
+    decorated = decorate_admin_markup(markup)
+    button = decorated.inline_keyboard[0][0]
+
+    assert button.style == 'primary'
+    assert button.icon_custom_emoji_id == ADMIN_ICONS['settings'].emoji_id

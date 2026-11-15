@@ -43,12 +43,22 @@ from app.states import (
     SquadMigrationStates,
     SquadRenameStates,
 )
-from app.utils.admin_ui import admin_back_button, admin_button, admin_screen
+from app.utils.admin_ui import admin_back_button, admin_button, admin_icon, admin_screen
 from app.utils.decorators import admin_required, error_handler
 from app.utils.formatters import format_bytes, format_datetime
 
 
 logger = structlog.get_logger(__name__)
+
+# Локали хранят следы прежнего оформления: декоративные глифы и метку NEW.
+# Иконку и отступы даёт admin_screen, поэтому префиксы строк срезаем.
+_LEGACY_PREFIX_RE = re.compile(r'^[ \t]*(?:[▤▣▥◷↻↑↓]\s*|NEW\s+)+', re.MULTILINE)
+_LEGACY_BULLET_RE = re.compile(r'(?<=• )(?:[▤▣▥◷↻↑↓]\s*|NEW\s+)+')
+
+
+def _clean_legacy(value: str) -> str:
+    return _LEGACY_BULLET_RE.sub('', _LEGACY_PREFIX_RE.sub('', value)).strip()
+
 
 squad_inbound_selections = {}
 squad_create_data = {}
@@ -176,15 +186,15 @@ def _build_auto_sync_view(
             'immediate': texts.t('ADMIN_REMNAWAVE_UI_BUILD_AUTO_SYNC_VIEW_008', 'при включении'),
         }
         reason_text = reason_map.get(status.last_run_reason or '', '—')
-        result_icon = '' if status.last_run_success else ''
+        result_icon = admin_icon('success') if status.last_run_success else admin_icon('error')
         result_label = (
             texts.t('ADMIN_REMNAWAVE_UI_BUILD_AUTO_SYNC_VIEW_009', 'успешно')
             if status.last_run_success
             else texts.t('ADMIN_REMNAWAVE_UI_BUILD_AUTO_SYNC_VIEW_010', 'с ошибками')
         )
         error_block = (
-            texts.t('ADMIN_REMNAWAVE_UI_BUILD_AUTO_SYNC_VIEW_011', '\n Ошибка: {value1}').format(
-                value1=status.last_run_error
+            texts.t('ADMIN_REMNAWAVE_UI_BUILD_AUTO_SYNC_VIEW_011', '\nОшибка: {value1}').format(
+                value1=html.escape(str(status.last_run_error))
             )
             if status.last_run_error
             else ''
@@ -203,7 +213,7 @@ def _build_auto_sync_view(
         )
     elif status.last_run_started_at:
         last_run_text = (
-            texts.t('ADMIN_REMNAWAVE_UI_BUILD_AUTO_SYNC_VIEW_013', ' Синхронизация началась, но еще не завершилась')
+            texts.t('ADMIN_REMNAWAVE_UI_BUILD_AUTO_SYNC_VIEW_013', 'Синхронизация началась, но еще не завершилась')
             if status.is_running
             else texts.t('ADMIN_REMNAWAVE_UI_BUILD_AUTO_SYNC_VIEW_014', 'ℹ Последний запуск: {value1}').format(
                 value1=format_datetime(status.last_run_started_at)
@@ -213,23 +223,23 @@ def _build_auto_sync_view(
         last_run_text = '—'
 
     running_text = (
-        texts.t('ADMIN_REMNAWAVE_UI_BUILD_AUTO_SYNC_VIEW_015', ' Выполняется сейчас')
+        texts.t('ADMIN_REMNAWAVE_UI_BUILD_AUTO_SYNC_VIEW_015', 'Выполняется сейчас')
         if status.is_running
         else texts.t('ADMIN_REMNAWAVE_UI_BUILD_AUTO_SYNC_VIEW_016', 'Ожидание')
     )
     toggle_text = (
-        texts.t('ADMIN_REMNAWAVE_UI_BUILD_AUTO_SYNC_VIEW_017', ' Отключить')
+        texts.t('ADMIN_REMNAWAVE_UI_BUILD_AUTO_SYNC_VIEW_017', 'Отключить')
         if status.enabled
-        else texts.t('ADMIN_REMNAWAVE_UI_BUILD_AUTO_SYNC_VIEW_018', ' Включить')
+        else texts.t('ADMIN_REMNAWAVE_UI_BUILD_AUTO_SYNC_VIEW_018', 'Включить')
     )
 
     text = texts.t(
         'ADMIN_REMNAWAVE_UI_BUILD_AUTO_SYNC_VIEW_019',
-        ' <b>Автосинхронизация RemnaWave</b>\n\n <b>Статус:</b> {value1}\n <b>Расписание:</b> {value2}\n <b>Следующий запуск:</b> {value3}\n <b>Состояние:</b> {value4}\n\n <b>Последний запуск:</b>\n{value5}\n\n <b>Пользователи:</b>\n{value6}\n\n <b>Серверы:</b>\n{value7}\n',
+        '<b>Автосинхронизация RemnaWave</b>\n\n<b>Статус:</b> {value1}\n<b>Расписание:</b> {value2}\n<b>Следующий запуск:</b> {value3}\n<b>Состояние:</b> {value4}\n\n<b>Последний запуск:</b>\n{value5}\n\n<b>Пользователи:</b>\n{value6}\n\n<b>Серверы:</b>\n{value7}',
     ).format(
-        value1=texts.t('ADMIN_REMNAWAVE_UI_BUILD_AUTO_SYNC_VIEW_020', ' Включена')
+        value1=texts.t('ADMIN_REMNAWAVE_UI_BUILD_AUTO_SYNC_VIEW_020', 'Включена')
         if status.enabled
-        else texts.t('ADMIN_REMNAWAVE_UI_BUILD_AUTO_SYNC_VIEW_021', ' Отключена'),
+        else texts.t('ADMIN_REMNAWAVE_UI_BUILD_AUTO_SYNC_VIEW_021', 'Отключена'),
         value2=times_text,
         value3=next_run_text if status.enabled else '—',
         value4=running_text,
@@ -241,44 +251,45 @@ def _build_auto_sync_view(
     keyboard = types.InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                types.InlineKeyboardButton(
-                    text=texts.t('ADMIN_REMNAWAVE_UI_BUILD_AUTO_SYNC_VIEW_022', ' Запустить сейчас'),
+                admin_button(
+                    _clean_legacy(texts.t('ADMIN_REMNAWAVE_UI_BUILD_AUTO_SYNC_VIEW_022', 'Запустить сейчас')),
                     callback_data='remnawave_auto_sync_run',
+                    icon='refresh',
+                    style='success',
                 )
             ],
             [
-                types.InlineKeyboardButton(
-                    text=toggle_text,
+                admin_button(
+                    toggle_text,
                     callback_data='remnawave_auto_sync_toggle',
+                    icon='lock' if status.enabled else 'unlock',
+                    style='danger' if status.enabled else 'success',
                 )
             ],
             [
-                types.InlineKeyboardButton(
-                    text=texts.t('ADMIN_REMNAWAVE_UI_BUILD_AUTO_SYNC_VIEW_023', ' Изменить расписание'),
+                admin_button(
+                    texts.t('ADMIN_REMNAWAVE_UI_BUILD_AUTO_SYNC_VIEW_023', 'Изменить расписание'),
                     callback_data='remnawave_auto_sync_times',
+                    icon='clock',
+                    style='primary',
                 )
             ],
-            [
-                types.InlineKeyboardButton(
-                    text=' Назад',
-                    callback_data='admin_rw_sync',
-                )
-            ],
+            [admin_back_button(texts, 'admin_rw_sync')],
         ]
     )
 
-    return text, keyboard
+    return admin_screen(_clean_legacy(text), icon='sync', compact=True), keyboard
 
 
 def _format_migration_server_label(texts, server) -> str:
     status = (
-        texts.t('ADMIN_SQUAD_MIGRATION_STATUS_AVAILABLE', ' Доступен')
+        texts.t('ADMIN_SQUAD_MIGRATION_STATUS_AVAILABLE', 'Доступен')
         if getattr(server, 'is_available', True)
-        else texts.t('ADMIN_SQUAD_MIGRATION_STATUS_UNAVAILABLE', ' Недоступен')
+        else texts.t('ADMIN_SQUAD_MIGRATION_STATUS_UNAVAILABLE', 'Недоступен')
     )
     return texts.t(
         'ADMIN_SQUAD_MIGRATION_SERVER_LABEL',
-        '{name} —  {users} ({status})',
+        '{name} — {users} ({status})',
     ).format(name=html.escape(server.display_name), users=server.current_users, status=status)
 
 
@@ -297,7 +308,7 @@ def _build_migration_keyboard(
 
     button_template = texts.t(
         'ADMIN_SQUAD_MIGRATION_SQUAD_BUTTON',
-        ' {name} —  {users} ({status})',
+        '{name} — {users} ({status})',
     )
 
     for squad in squads:
@@ -310,14 +321,18 @@ def _build_migration_keyboard(
             if getattr(squad, 'is_available', True)
             else texts.t('ADMIN_SQUAD_MIGRATION_STATUS_UNAVAILABLE_SHORT', '')
         )
+        label = f'{squad.display_name} — {squad.current_users}'
+        if status:
+            label = button_template.format(
+                name=squad.display_name,
+                users=squad.current_users,
+                status=status,
+            )
+
         rows.append(
             [
                 types.InlineKeyboardButton(
-                    text=button_template.format(
-                        name=squad.display_name,
-                        users=squad.current_users,
-                        status=status,
-                    ),
+                    text=label,
                     callback_data=f'{prefix}_{squad.squad_uuid}',
                 )
             ]
@@ -327,14 +342,15 @@ def _build_migration_keyboard(
         nav_buttons = []
         if page > 1:
             nav_buttons.append(
-                types.InlineKeyboardButton(
-                    text='',
+                admin_button(
+                    '←',
                     callback_data=f'{prefix}_page_{page - 1}',
+                    style='primary',
                 )
             )
         nav_buttons.append(
-            types.InlineKeyboardButton(
-                text=texts.t(
+            admin_button(
+                texts.t(
                     'ADMIN_SQUAD_MIGRATION_PAGE',
                     'Стр. {page}/{pages}',
                 ).format(page=page, pages=total_pages),
@@ -343,19 +359,17 @@ def _build_migration_keyboard(
         )
         if page < total_pages:
             nav_buttons.append(
-                types.InlineKeyboardButton(
-                    text='',
+                admin_button(
+                    '→',
                     callback_data=f'{prefix}_page_{page + 1}',
+                    style='primary',
                 )
             )
         rows.append(nav_buttons)
 
     rows.append(
         [
-            types.InlineKeyboardButton(
-                text=texts.CANCEL,
-                callback_data='admin_migration_cancel',
-            )
+            admin_back_button(texts, 'admin_migration_cancel', label=texts.CANCEL),
         ]
     )
 
@@ -408,7 +422,7 @@ async def show_squad_migration_menu(
     )
 
     message = (
-        texts.t('ADMIN_SQUAD_MIGRATION_TITLE', ' <b>Переезд сквадов</b>')
+        texts.t('ADMIN_SQUAD_MIGRATION_TITLE', '<b>Переезд сквадов</b>')
         + '\n\n'
         + texts.t(
             'ADMIN_SQUAD_MIGRATION_SELECT_SOURCE',
@@ -425,9 +439,10 @@ async def show_squad_migration_menu(
     await state.set_state(SquadMigrationStates.selecting_source)
 
     await callback.message.edit_text(
-        message,
+        admin_screen(_clean_legacy(message), icon='sync', compact=True),
         reply_markup=keyboard,
         disable_web_page_preview=True,
+        parse_mode='HTML',
     )
     await callback.answer()
 
@@ -462,7 +477,7 @@ async def paginate_migration_source(
     )
 
     message = (
-        texts.t('ADMIN_SQUAD_MIGRATION_TITLE', ' <b>Переезд сквадов</b>')
+        texts.t('ADMIN_SQUAD_MIGRATION_TITLE', '<b>Переезд сквадов</b>')
         + '\n\n'
         + texts.t(
             'ADMIN_SQUAD_MIGRATION_SELECT_SOURCE',
@@ -477,9 +492,10 @@ async def paginate_migration_source(
         )
 
     await callback.message.edit_text(
-        message,
+        admin_screen(_clean_legacy(message), icon='sync', compact=True),
         reply_markup=keyboard,
         disable_web_page_preview=True,
+        parse_mode='HTML',
     )
     await callback.answer()
 
@@ -532,7 +548,7 @@ async def handle_migration_source_selection(
     )
 
     message = (
-        texts.t('ADMIN_SQUAD_MIGRATION_TITLE', ' <b>Переезд сквадов</b>')
+        texts.t('ADMIN_SQUAD_MIGRATION_TITLE', '<b>Переезд сквадов</b>')
         + '\n\n'
         + texts.t(
             'ADMIN_SQUAD_MIGRATION_SELECTED_SOURCE',
@@ -554,9 +570,10 @@ async def handle_migration_source_selection(
     await state.set_state(SquadMigrationStates.selecting_target)
 
     await callback.message.edit_text(
-        message,
+        admin_screen(_clean_legacy(message), icon='sync', compact=True),
         reply_markup=keyboard,
         disable_web_page_preview=True,
+        parse_mode='HTML',
     )
     await callback.answer()
 
@@ -601,7 +618,7 @@ async def paginate_migration_target(
     source_display = data.get('source_display') or source_uuid
 
     message = (
-        texts.t('ADMIN_SQUAD_MIGRATION_TITLE', ' <b>Переезд сквадов</b>')
+        texts.t('ADMIN_SQUAD_MIGRATION_TITLE', '<b>Переезд сквадов</b>')
         + '\n\n'
         + texts.t(
             'ADMIN_SQUAD_MIGRATION_SELECTED_SOURCE',
@@ -621,9 +638,10 @@ async def paginate_migration_target(
         )
 
     await callback.message.edit_text(
-        message,
+        admin_screen(_clean_legacy(message), icon='sync', compact=True),
         reply_markup=keyboard,
         disable_web_page_preview=True,
+        parse_mode='HTML',
     )
     await callback.answer()
 
@@ -691,7 +709,7 @@ async def handle_migration_target_selection(
     await state.set_state(SquadMigrationStates.confirming)
 
     message_lines = [
-        texts.t('ADMIN_SQUAD_MIGRATION_TITLE', ' <b>Переезд сквадов</b>'),
+        texts.t('ADMIN_SQUAD_MIGRATION_TITLE', '<b>Переезд сквадов</b>'),
         '',
         texts.t(
             'ADMIN_SQUAD_MIGRATION_CONFIRM_DETAILS',
@@ -719,36 +737,38 @@ async def handle_migration_target_selection(
     keyboard = types.InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                types.InlineKeyboardButton(
-                    text=texts.t(
+                admin_button(
+                    texts.t(
                         'ADMIN_SQUAD_MIGRATION_CONFIRM_BUTTON',
-                        ' Подтвердить',
+                        'Подтвердить',
                     ),
                     callback_data='admin_migration_confirm',
+                    icon='success',
+                    style='success',
                 )
             ],
             [
-                types.InlineKeyboardButton(
-                    text=texts.t(
+                admin_button(
+                    texts.t(
                         'ADMIN_SQUAD_MIGRATION_CHANGE_TARGET',
-                        ' Изменить сервер назначения',
+                        'Изменить сервер назначения',
                     ),
                     callback_data='admin_migration_change_target',
+                    icon='edit',
+                    style='primary',
                 )
             ],
             [
-                types.InlineKeyboardButton(
-                    text=texts.CANCEL,
-                    callback_data='admin_migration_cancel',
-                )
+                admin_back_button(texts, 'admin_migration_cancel', label=texts.CANCEL),
             ],
         ]
     )
 
     await callback.message.edit_text(
-        '\n'.join(message_lines),
+        admin_screen(_clean_legacy('\n'.join(message_lines)), icon='sync', compact=True),
         reply_markup=keyboard,
         disable_web_page_preview=True,
+        parse_mode='HTML',
     )
     await callback.answer()
 
@@ -785,7 +805,7 @@ async def change_migration_target(
     source_display = data.get('source_display') or source_uuid
 
     message = (
-        texts.t('ADMIN_SQUAD_MIGRATION_TITLE', ' <b>Переезд сквадов</b>')
+        texts.t('ADMIN_SQUAD_MIGRATION_TITLE', '<b>Переезд сквадов</b>')
         + '\n\n'
         + texts.t(
             'ADMIN_SQUAD_MIGRATION_SELECTED_SOURCE',
@@ -805,9 +825,10 @@ async def change_migration_target(
         )
 
     await callback.message.edit_text(
-        message,
+        admin_screen(_clean_legacy(message), icon='sync', compact=True),
         reply_markup=keyboard,
         disable_web_page_preview=True,
+        parse_mode='HTML',
     )
     await callback.answer()
 
@@ -848,22 +869,27 @@ async def confirm_squad_migration(
     except RemnaWaveConfigurationError as error:
         message = texts.t(
             'ADMIN_SQUAD_MIGRATION_API_ERROR',
-            ' RemnaWave API не настроен: {error}',
-        ).format(error=str(error))
+            'RemnaWave API не настроен: {error}',
+        ).format(error=html.escape(str(error)))
         reply_markup = types.InlineKeyboardMarkup(
             inline_keyboard=[
                 [
-                    types.InlineKeyboardButton(
-                        text=texts.t(
+                    admin_back_button(
+                        texts,
+                        'admin_remnawave',
+                        label=texts.t(
                             'ADMIN_SQUAD_MIGRATION_BACK_BUTTON',
-                            ' В Remnawave',
+                            'В Remnawave',
                         ),
-                        callback_data='admin_remnawave',
                     )
                 ]
             ]
         )
-        await callback.message.edit_text(message, reply_markup=reply_markup)
+        await callback.message.edit_text(
+            admin_screen(_clean_legacy(message), icon='error', compact=True),
+            reply_markup=reply_markup,
+            parse_mode='HTML',
+        )
         await state.clear()
         return
 
@@ -875,36 +901,43 @@ async def confirm_squad_migration(
         error_code = result.get('error') or 'unexpected'
         message = texts.t(
             'ADMIN_SQUAD_MIGRATION_ERROR',
-            ' Не удалось выполнить переезд (код: {code}). {details}',
-        ).format(code=error_code, details=error_message)
+            'Не удалось выполнить переезд (код: {code}). {details}',
+        ).format(code=html.escape(str(error_code)), details=html.escape(str(error_message)))
         reply_markup = types.InlineKeyboardMarkup(
             inline_keyboard=[
                 [
-                    types.InlineKeyboardButton(
-                        text=texts.t(
+                    admin_back_button(
+                        texts,
+                        'admin_remnawave',
+                        label=texts.t(
                             'ADMIN_SQUAD_MIGRATION_BACK_BUTTON',
-                            ' В Remnawave',
+                            'В Remnawave',
                         ),
-                        callback_data='admin_remnawave',
                     )
                 ],
                 [
-                    types.InlineKeyboardButton(
-                        text=texts.t(
+                    admin_button(
+                        texts.t(
                             'ADMIN_SQUAD_MIGRATION_NEW_BUTTON',
-                            ' Новый переезд',
+                            'Новый переезд',
                         ),
                         callback_data='admin_rw_migration',
+                        icon='sync',
+                        style='primary',
                     )
                 ],
             ]
         )
-        await callback.message.edit_text(message, reply_markup=reply_markup)
+        await callback.message.edit_text(
+            admin_screen(_clean_legacy(message), icon='error', compact=True),
+            reply_markup=reply_markup,
+            parse_mode='HTML',
+        )
         await state.clear()
         return
 
     message_lines = [
-        texts.t('ADMIN_SQUAD_MIGRATION_SUCCESS_TITLE', ' Переезд завершен'),
+        texts.t('ADMIN_SQUAD_MIGRATION_SUCCESS_TITLE', 'Переезд завершен'),
         '',
         texts.t('ADMIN_SQUAD_MIGRATION_CONFIRM_SOURCE', '• Из: {source}').format(source=source_display),
         texts.t('ADMIN_SQUAD_MIGRATION_CONFIRM_TARGET', '• В: {target}').format(target=target_display),
@@ -940,30 +973,34 @@ async def confirm_squad_migration(
     reply_markup = types.InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                types.InlineKeyboardButton(
-                    text=texts.t(
+                admin_button(
+                    texts.t(
                         'ADMIN_SQUAD_MIGRATION_NEW_BUTTON',
-                        ' Новый переезд',
+                        'Новый переезд',
                     ),
                     callback_data='admin_rw_migration',
+                    icon='sync',
+                    style='primary',
                 )
             ],
             [
-                types.InlineKeyboardButton(
-                    text=texts.t(
+                admin_back_button(
+                    texts,
+                    'admin_remnawave',
+                    label=texts.t(
                         'ADMIN_SQUAD_MIGRATION_BACK_BUTTON',
-                        ' В Remnawave',
+                        'В Remnawave',
                     ),
-                    callback_data='admin_remnawave',
                 )
             ],
         ]
     )
 
     await callback.message.edit_text(
-        '\n'.join(message_lines),
+        admin_screen(_clean_legacy('\n'.join(message_lines)), icon='success', compact=True),
         reply_markup=reply_markup,
         disable_web_page_preview=True,
+        parse_mode='HTML',
     )
     await state.clear()
 
@@ -981,24 +1018,29 @@ async def cancel_squad_migration(
 
     message = texts.t(
         'ADMIN_SQUAD_MIGRATION_CANCELLED',
-        ' Переезд отменен.',
+        'Переезд отменен.',
     )
 
     reply_markup = types.InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                types.InlineKeyboardButton(
-                    text=texts.t(
+                admin_back_button(
+                    texts,
+                    'admin_remnawave',
+                    label=texts.t(
                         'ADMIN_SQUAD_MIGRATION_BACK_BUTTON',
-                        ' В Remnawave',
+                        'В Remnawave',
                     ),
-                    callback_data='admin_remnawave',
                 )
             ]
         ]
     )
 
-    await callback.message.edit_text(message, reply_markup=reply_markup)
+    await callback.message.edit_text(
+        admin_screen(_clean_legacy(message), icon='warning', compact=True),
+        reply_markup=reply_markup,
+        parse_mode='HTML',
+    )
     await callback.answer()
 
 
@@ -1025,21 +1067,21 @@ async def show_remnawave_menu(callback: types.CallbackQuery, db_user: User, db: 
 
     status = connection_test.get('status')
     if status == 'connected':
-        status_emoji = '●'
+        status_icon = admin_icon('success')
     elif status == 'not_configured':
-        status_emoji = 'ℹ'
+        status_icon = admin_icon('info')
     else:
-        status_emoji = '○'
+        status_icon = admin_icon('error')
 
     api_url_display = settings.REMNAWAVE_API_URL or '—'
 
     text = f"""<b>Управление Remnawave</b>
 
-<b>Соединение:</b> {status_emoji} {connection_test.get('message', 'Нет данных')}
-<b>URL:</b> <code>{api_url_display}</code>"""
+<b>Соединение:</b> {status_icon} {html.escape(str(connection_test.get('message', 'Нет данных')))}
+<b>URL:</b> <code>{html.escape(api_url_display)}</code>"""
 
     await callback.message.edit_text(
-        admin_screen(text, icon='servers', compact=True),
+        admin_screen(_clean_legacy(text), icon='servers', compact=True),
         reply_markup=get_admin_remnawave_keyboard(db_user.language),
         parse_mode='HTML',
     )
@@ -1055,8 +1097,12 @@ async def show_system_stats(callback: types.CallbackQuery, db_user: User, db: As
 
     if 'error' in stats:
         await callback.message.edit_text(
-            texts.t('ADMIN_REMNAWAVE_UI_SHOW_SYSTEM_STATS_027', 'Ошибка получения статистики: {value1}').format(
-                value1=stats['error']
+            admin_screen(
+                texts.t('ADMIN_REMNAWAVE_UI_SHOW_SYSTEM_STATS_027', 'Ошибка получения статистики: {value1}').format(
+                    value1=html.escape(str(stats['error']))
+                ),
+                icon='error',
+                compact=True,
             ),
             reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[admin_back_button(texts, 'admin_remnawave')]]),
             parse_mode='HTML',
@@ -1082,27 +1128,34 @@ async def show_system_stats(callback: types.CallbackQuery, db_user: User, db: As
         value1=uptime_days, value2=uptime_hours
     )
 
+    status_icons = {
+        'ACTIVE': admin_icon('success'),
+        'DISABLED': admin_icon('error'),
+        'LIMITED': admin_icon('warning'),
+        'EXPIRED': admin_icon('clock'),
+    }
     users_status_text = ''
     for status, count in users_by_status.items():
-        status_emoji = {'ACTIVE': '●', 'DISABLED': '○', 'LIMITED': '◐', 'EXPIRED': '◯'}.get(status, '')
-        users_status_text += f'  {status_emoji} {_localize_panel_value(texts, status)}: {count}\n'
+        status_icon = status_icons.get(status, admin_icon('info'))
+        users_status_text += f'{status_icon} {html.escape(_localize_panel_value(texts, status))}: {count}\n'
 
     top_nodes_text = ''
     for i, node in enumerate(nodes_weekly[:3], 1):
-        top_nodes_text += f'  {i}. {node["name"]}: {format_bytes(node["total_bytes"])}\n'
+        top_nodes_text += f'{i}. {html.escape(str(node["name"]))}: {format_bytes(node["total_bytes"])}\n'
 
     realtime_nodes_text = ''
     for node in nodes_realtime[:3]:
         node_total = node.get('downloadBytes', 0) + node.get('uploadBytes', 0)
         if node_total > 0:
-            realtime_nodes_text += f'   {node.get("nodeName", texts.t("ADMIN_PANEL_VALUE_UNKNOWN_NODE", "Неизвестный"))}: {format_bytes(node_total)}\n'
+            node_name = node.get('nodeName', texts.t('ADMIN_PANEL_VALUE_UNKNOWN_NODE', 'Неизвестный'))
+            realtime_nodes_text += f'{html.escape(str(node_name))}: {format_bytes(node_total)}\n'
 
     def format_traffic_change(difference_str):
         if not difference_str or difference_str == '0':
             return ''
         if difference_str.startswith('-'):
-            return f' ( {difference_str[1:]})'
-        return f' ( {difference_str})'
+            return f' (↓ {difference_str[1:]})'
+        return f' (↑ {difference_str})'
 
     text = f"""<b>Детальная статистика Remnawave</b>
 
@@ -1187,7 +1240,7 @@ async def show_system_stats(callback: types.CallbackQuery, db_user: User, db: As
     ]
 
     await callback.message.edit_text(
-        admin_screen(text, icon='chart', compact=True),
+        admin_screen(_clean_legacy(text), icon='chart', compact=True),
         reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
         parse_mode='HTML',
     )
@@ -1210,12 +1263,15 @@ async def show_traffic_stats(callback: types.CallbackQuery, db_user: User, db: A
 
     except Exception as e:
         await callback.message.edit_text(
-            texts.t(
-                'ADMIN_REMNAWAVE_UI_SHOW_TRAFFIC_STATS_040', ' Ошибка получения статистики трафика: {value1}'
-            ).format(value1=str(e)),
-            reply_markup=types.InlineKeyboardMarkup(
-                inline_keyboard=[[types.InlineKeyboardButton(text=' Назад', callback_data='admin_remnawave')]]
+            admin_screen(
+                texts.t(
+                    'ADMIN_REMNAWAVE_UI_SHOW_TRAFFIC_STATS_040', 'Ошибка получения статистики трафика: {value1}'
+                ).format(value1=html.escape(str(e))),
+                icon='error',
+                compact=True,
             ),
+            reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[admin_back_button(texts, 'admin_remnawave')]]),
+            parse_mode='HTML',
         )
         await callback.answer()
         return
@@ -1241,19 +1297,18 @@ async def show_traffic_stats(callback: types.CallbackQuery, db_user: User, db: A
         if not diff_str or diff_str == '0':
             return ''
         if diff_str.startswith('-'):
-            return f'  {diff_str[1:]}'
-        return f'  {diff_str}'
+            return f'  ↓ {diff_str[1:]}'
+        return f'  ↑ {diff_str}'
 
-    text = f"""
- <b>Статистика трафика Remnawave</b>
+    text = f"""<b>Статистика трафика Remnawave</b>
 
- <b>Трафик по inbounds:</b>
+<b>Трафик по inbounds:</b>
 - Скачивание: {format_bytes(total_realtime_download)}
 - Загрузка: {format_bytes(total_realtime_upload)}
 - Общий трафик: {format_bytes(total_realtime)}
 - Пользователи онлайн: {total_users_online}
 
- <b>Статистика по периодам:</b>
+<b>Статистика по периодам:</b>
 
 <b>За 2 дня:</b>
 - Текущий: {format_bytes(parse_bandwidth(periods['last_2_days'].get('current', '0')))}
@@ -1286,7 +1341,8 @@ async def show_traffic_stats(callback: types.CallbackQuery, db_user: User, db: A
         for node in sorted(realtime_usage, key=lambda x: x.get('totalBytes', 0), reverse=True):
             node_total = node.get('totalBytes', 0)
             if node_total > 0:
-                text += f'- {node.get("nodeName", texts.t("ADMIN_PANEL_VALUE_UNKNOWN_NODE", "Неизвестный"))}: {format_bytes(node_total)}\n'
+                node_name = node.get('nodeName', texts.t('ADMIN_PANEL_VALUE_UNKNOWN_NODE', 'Неизвестный'))
+                text += f'- {html.escape(str(node_name))}: {format_bytes(node_total)}\n'
 
     if nodes_stats.get('lastSevenDays'):
         text += texts.t('ADMIN_REMNAWAVE_UI_SHOW_TRAFFIC_STATS_044', '\n <b>Топ нод за 7 дней:</b>\n')
@@ -1300,7 +1356,7 @@ async def show_traffic_stats(callback: types.CallbackQuery, db_user: User, db: A
 
         sorted_nodes = sorted(nodes_weekly.items(), key=lambda x: x[1], reverse=True)
         for i, (node_name, total_bytes) in enumerate(sorted_nodes[:5], 1):
-            text += f'{i}. {node_name}: {format_bytes(total_bytes)}\n'
+            text += f'{i}. {html.escape(str(node_name))}: {format_bytes(total_bytes)}\n'
 
     text += texts.t('ADMIN_REMNAWAVE_UI_SHOW_TRAFFIC_STATS_045', '\n <b>Обновлено:</b> {value1}').format(
         value1=format_datetime(datetime.now(UTC))
@@ -1308,28 +1364,35 @@ async def show_traffic_stats(callback: types.CallbackQuery, db_user: User, db: A
 
     keyboard = [
         [
-            types.InlineKeyboardButton(
-                text=texts.t('ADMIN_REMNAWAVE_UI_SHOW_SYSTEM_STATS_036', ' Обновить'),
+            admin_button(
+                texts.t('ADMIN_REMNAWAVE_UI_SHOW_SYSTEM_STATS_036', 'Обновить'),
                 callback_data='admin_rw_traffic',
+                icon='refresh',
+                style='primary',
             )
         ],
         [
-            types.InlineKeyboardButton(
-                text=texts.t('ADMIN_REMNAWAVE_UI_SHOW_SYSTEM_STATS_037', ' Ноды'), callback_data='admin_rw_nodes'
+            admin_button(
+                texts.t('ADMIN_REMNAWAVE_UI_SHOW_SYSTEM_STATS_037', 'Ноды'),
+                callback_data='admin_rw_nodes',
+                icon='servers',
+                style='primary',
             ),
-            types.InlineKeyboardButton(
-                text=texts.t('ADMIN_REMNAWAVE_UI_SHOW_TRAFFIC_STATS_048', ' Система'), callback_data='admin_rw_system'
+            admin_button(
+                texts.t('ADMIN_REMNAWAVE_UI_SHOW_TRAFFIC_STATS_048', 'Система'),
+                callback_data='admin_rw_system',
+                icon='chart',
+                style='primary',
             ),
         ],
-        [
-            types.InlineKeyboardButton(
-                text=texts.t('ADMIN_REMNAWAVE_UI_SHOW_SYSTEM_STATS_039', '← Назад'), callback_data='admin_remnawave'
-            )
-        ],
-        [types.InlineKeyboardButton(text=' Назад', callback_data='admin_remnawave')],
+        [admin_back_button(texts, 'admin_remnawave')],
     ]
 
-    await callback.message.edit_text(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
+    await callback.message.edit_text(
+        admin_screen(_clean_legacy(text), icon='chart', compact=True),
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
+        parse_mode='HTML',
+    )
     await callback.answer()
 
 
@@ -1342,39 +1405,60 @@ async def show_nodes_management(callback: types.CallbackQuery, db_user: User, db
 
     if not nodes:
         await callback.message.edit_text(
-            texts.t('ADMIN_REMNAWAVE_UI_SHOW_NODES_MANAGEMENT_050', ' Ноды не найдены или ошибка подключения'),
-            reply_markup=types.InlineKeyboardMarkup(
-                inline_keyboard=[[types.InlineKeyboardButton(text=' Назад', callback_data='admin_remnawave')]]
+            admin_screen(
+                texts.t('ADMIN_REMNAWAVE_UI_SHOW_NODES_MANAGEMENT_050', 'Ноды не найдены или ошибка подключения'),
+                icon='warning',
+                compact=True,
             ),
+            reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[admin_back_button(texts, 'admin_remnawave')]]),
+            parse_mode='HTML',
         )
         await callback.answer()
         return
 
-    text = texts.t('ADMIN_REMNAWAVE_UI_SHOW_NODES_MANAGEMENT_052', ' <b>Управление нодами</b>\n\n')
+    text = texts.t('ADMIN_REMNAWAVE_UI_SHOW_NODES_MANAGEMENT_052', '<b>Управление нодами</b>\n\n')
     keyboard = []
 
     for node in nodes:
-        status_emoji = '●' if node['is_node_online'] else '○'
-        connection_emoji = '●' if node['is_connected'] else '○'
+        status_icon = admin_icon('success') if node['is_node_online'] else admin_icon('error')
+        connection_icon = admin_icon('success') if node['is_connected'] else admin_icon('error')
 
-        text += f'{status_emoji} {connection_emoji} <b>{node["name"]}</b>\n'
-        text += f' {node["country_code"]} • {node["address"]}\n'
-        text += texts.t('ADMIN_REMNAWAVE_UI_SHOW_NODES_MANAGEMENT_053', ' Онлайн: {value1}\n\n').format(
+        text += f'{status_icon} {connection_icon} <b>{html.escape(str(node["name"]))}</b>\n'
+        text += f'{html.escape(str(node["country_code"]))} • {html.escape(str(node["address"]))}\n'
+        text += texts.t('ADMIN_REMNAWAVE_UI_SHOW_NODES_MANAGEMENT_053', 'Онлайн: {value1}\n\n').format(
             value1=node['users_online'] or 0
         )
 
         keyboard.append(
-            [types.InlineKeyboardButton(text=f' {node["name"]}', callback_data=f'admin_node_manage_{node["uuid"]}')]
+            [
+                admin_button(
+                    str(node['name']),
+                    callback_data=f'admin_node_manage_{node["uuid"]}',
+                    icon='servers',
+                    style='primary',
+                )
+            ]
         )
 
     keyboard.extend(
         [
-            [types.InlineKeyboardButton(text=' Перезагрузить все', callback_data='admin_restart_all_nodes')],
-            [types.InlineKeyboardButton(text=' Назад', callback_data='admin_remnawave')],
+            [
+                admin_button(
+                    'Перезагрузить все',
+                    callback_data='admin_restart_all_nodes',
+                    icon='refresh',
+                    style='danger',
+                )
+            ],
+            [admin_back_button(texts, 'admin_remnawave')],
         ]
     )
 
-    await callback.message.edit_text(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
+    await callback.message.edit_text(
+        admin_screen(_clean_legacy(text), icon='servers', compact=True),
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
+        parse_mode='HTML',
+    )
     await callback.answer()
 
 
@@ -1388,11 +1472,11 @@ async def show_node_details(callback: types.CallbackQuery, db_user: User, db: As
     node = await remnawave_service.get_node_details(node_uuid)
 
     if not node:
-        await callback.answer(texts.t('ADMIN_REMNAWAVE_UI_SHOW_NODE_DETAILS_056', ' Нода не найдена'), show_alert=True)
+        await callback.answer(texts.t('ADMIN_REMNAWAVE_UI_SHOW_NODE_DETAILS_056', 'Нода не найдена'), show_alert=True)
         return
 
-    status_emoji = '●' if node['is_node_online'] else '○'
-    xray_emoji = '' if node['is_xray_running'] else ''
+    status_icon = admin_icon('success') if node['is_node_online'] else admin_icon('error')
+    xray_icon = admin_icon('success') if node['is_xray_running'] else admin_icon('error')
 
     status_change = format_datetime(node['last_status_change']) if node.get('last_status_change') else '—'
     created_at = format_datetime(node['created_at']) if node.get('created_at') else '—'
@@ -1416,44 +1500,46 @@ async def show_node_details(callback: types.CallbackQuery, db_user: User, db: As
     else:
         xray_uptime_str = '—'
 
-    text = f"""
- <b>Нода: {html.escape(node['name'])}</b>
+    text = f"""<b>Нода: {html.escape(str(node['name']))}</b>
 
 <b>Статус:</b>
-- Онлайн: {status_emoji} {'Да' if node['is_node_online'] else 'Нет'}
-- Xray: {xray_emoji} {'Запущен' if node['is_xray_running'] else 'Остановлен'}
-- Подключена: {' Да' if node['is_connected'] else ' Нет'}
-- Отключена: {' Да' if node['is_disabled'] else ' Нет'}
-- Изменение статуса: {status_change}
-- Сообщение: {html.escape(str(node.get('last_status_message') or '—'))}
-- Uptime Xray: {xray_uptime_str}
+• Онлайн: {status_icon} {'Да' if node['is_node_online'] else 'Нет'}
+• Xray: {xray_icon} {'Запущен' if node['is_xray_running'] else 'Остановлен'}
+• Подключена: {'Да' if node['is_connected'] else 'Нет'}
+• Отключена: {'Да' if node['is_disabled'] else 'Нет'}
+• Изменение статуса: {status_change}
+• Сообщение: {html.escape(str(node.get('last_status_message') or '—'))}
+• Uptime Xray: {xray_uptime_str}
 
 <b>Версии:</b>
-- Xray: {xray_ver}
-- Node: {node_ver}
+• Xray: {xray_ver}
+• Node: {node_ver}
 
 <b>Информация:</b>
-- Адрес: {html.escape(node['address'])}
-- Страна: {html.escape(node['country_code'])}
-- Пользователей онлайн: {node['users_online']}
-- CPU: {cpu_info}
-- RAM: {total_ram}
-- Провайдер: {html.escape(str(node.get('provider_uuid') or '—'))}
+• Адрес: {html.escape(str(node['address']))}
+• Страна: {html.escape(str(node['country_code']))}
+• Пользователей онлайн: {node['users_online']}
+• CPU: {cpu_info}
+• RAM: {total_ram}
+• Провайдер: {html.escape(str(node.get('provider_uuid') or '—'))}
 
 <b>Трафик:</b>
-- Использовано: {format_bytes(node['traffic_used_bytes'])}
-- Лимит: {format_bytes(node['traffic_limit_bytes']) if node['traffic_limit_bytes'] else 'Без лимита'}
-- Трекинг: {' Активен' if node.get('is_traffic_tracking_active') else ' Отключен'}
-- День сброса: {node.get('traffic_reset_day') or '—'}
-- Уведомления: {notify_percent}
-- Множитель: {node.get('consumption_multiplier') or 1}
+• Использовано: {format_bytes(node['traffic_used_bytes'])}
+• Лимит: {format_bytes(node['traffic_limit_bytes']) if node['traffic_limit_bytes'] else 'Без лимита'}
+• Трекинг: {'Активен' if node.get('is_traffic_tracking_active') else 'Отключен'}
+• День сброса: {node.get('traffic_reset_day') or '—'}
+• Уведомления: {notify_percent}
+• Множитель: {node.get('consumption_multiplier') or 1}
 
 <b>Метаданные:</b>
-- Создана: {created_at}
-- Обновлена: {updated_at}
-"""
+• Создана: {created_at}
+• Обновлена: {updated_at}"""
 
-    await callback.message.edit_text(text, reply_markup=get_node_management_keyboard(node_uuid, db_user.language))
+    await callback.message.edit_text(
+        admin_screen(_clean_legacy(text), icon='servers', compact=True),
+        reply_markup=get_node_management_keyboard(node_uuid, db_user.language),
+        parse_mode='HTML',
+    )
     await callback.answer()
 
 
@@ -1473,13 +1559,13 @@ async def manage_node(callback: types.CallbackQuery, db_user: User, db: AsyncSes
             'restart': texts.t('ADMIN_REMNAWAVE_UI_MANAGE_NODE_071', 'перезагружена'),
         }
         await callback.answer(
-            texts.t('ADMIN_REMNAWAVE_UI_MANAGE_NODE_072', ' Нода {value1}').format(
+            texts.t('ADMIN_REMNAWAVE_UI_MANAGE_NODE_072', 'Нода {value1}').format(
                 value1=action_text.get(action, texts.t('ADMIN_REMNAWAVE_UI_MANAGE_NODE_073', 'обработана'))
             )
         )
     else:
         await callback.answer(
-            texts.t('ADMIN_REMNAWAVE_UI_MANAGE_NODE_074', ' Ошибка выполнения действия'), show_alert=True
+            texts.t('ADMIN_REMNAWAVE_UI_MANAGE_NODE_074', 'Ошибка выполнения действия'), show_alert=True
         )
 
     await show_node_details(callback, db_user, db)
@@ -1496,11 +1582,11 @@ async def show_node_statistics(callback: types.CallbackQuery, db_user: User, db:
     node = await remnawave_service.get_node_details(node_uuid)
 
     if not node:
-        await callback.answer(texts.t('ADMIN_REMNAWAVE_UI_SHOW_NODE_DETAILS_056', ' Нода не найдена'), show_alert=True)
+        await callback.answer(texts.t('ADMIN_REMNAWAVE_UI_SHOW_NODE_DETAILS_056', 'Нода не найдена'), show_alert=True)
         return
 
-    status_emoji = '●' if node['is_node_online'] else '○'
-    xray_emoji = '' if node['is_xray_running'] else ''
+    status_icon = admin_icon('success') if node['is_node_online'] else admin_icon('error')
+    xray_icon = admin_icon('success') if node['is_xray_running'] else admin_icon('error')
     xray_uptime_sec = node.get('xray_uptime', 0)
     if xray_uptime_sec:
         days, rem = divmod(int(xray_uptime_sec), 86400)
@@ -1541,36 +1627,34 @@ async def show_node_statistics(callback: types.CallbackQuery, db_user: User, db:
         xray_ver = html.escape(str(versions.get('xray') or '—'))
         node_ver = html.escape(str(versions.get('node') or '—'))
 
-        text = f"""
- <b>Статистика ноды: {html.escape(node['name'])}</b>
+        text = f"""<b>Статистика ноды: {html.escape(str(node['name']))}</b>
 
 <b>Статус:</b>
-- Онлайн: {status_emoji} {'Да' if node['is_node_online'] else 'Нет'}
-- Xray: {xray_emoji} {'Запущен' if node['is_xray_running'] else 'Остановлен'} (v{xray_ver})
-- Node: v{node_ver}
-- Пользователей онлайн: {node['users_online']}
-- Изменение статуса: {status_change}
-- Сообщение: {html.escape(str(node.get('last_status_message') or '—'))}
-- Uptime Xray: {xray_uptime_str}
+• Онлайн: {status_icon} {'Да' if node['is_node_online'] else 'Нет'}
+• Xray: {xray_icon} {'Запущен' if node['is_xray_running'] else 'Остановлен'} (v{xray_ver})
+• Node: v{node_ver}
+• Пользователей онлайн: {node['users_online']}
+• Изменение статуса: {status_change}
+• Сообщение: {html.escape(str(node.get('last_status_message') or '—'))}
+• Uptime Xray: {xray_uptime_str}
 
 <b>Ресурсы:</b>
-- CPU: {cpu_info}
-- RAM: {total_ram}
-- Load: {load_str}
-- Провайдер: {html.escape(str(node.get('provider_uuid') or '—'))}
+• CPU: {cpu_info}
+• RAM: {total_ram}
+• Load: {load_str}
+• Провайдер: {html.escape(str(node.get('provider_uuid') or '—'))}
 
 <b>Трафик:</b>
-- Использовано: {format_bytes(node['traffic_used_bytes'] or 0)}
-- Лимит: {format_bytes(node['traffic_limit_bytes']) if node['traffic_limit_bytes'] else 'Без лимита'}
-- Трекинг: {' Активен' if node.get('is_traffic_tracking_active') else ' Отключен'}
-- День сброса: {node.get('traffic_reset_day') or '—'}
-- Уведомления: {notify_percent}
-- Множитель: {node.get('consumption_multiplier') or 1}
+• Использовано: {format_bytes(node['traffic_used_bytes'] or 0)}
+• Лимит: {format_bytes(node['traffic_limit_bytes']) if node['traffic_limit_bytes'] else 'Без лимита'}
+• Трекинг: {'Активен' if node.get('is_traffic_tracking_active') else 'Отключен'}
+• День сброса: {node.get('traffic_reset_day') or '—'}
+• Уведомления: {notify_percent}
+• Множитель: {node.get('consumption_multiplier') or 1}
 
 <b>Метаданные:</b>
-- Создана: {created_at}
-- Обновлена: {updated_at}
-"""
+• Создана: {created_at}
+• Обновлена: {updated_at}"""
 
         if node_realtime:
             text += texts.t(
@@ -1600,7 +1684,7 @@ async def show_node_statistics(callback: types.CallbackQuery, db_user: User, db:
                     if panel_user_id is not None
                     else texts.t('ADMIN_REMNAWAVE_UI_SHOW_NODE_STATISTICS_086', 'неизвестный')
                 )
-                text += f'- {label}: {format_bytes(usage.get("total", 0) or 0)}\n'
+                text += f'• {html.escape(str(label))}: {format_bytes(usage.get("total", 0) or 0)}\n'
 
             if len(node_usage) > len(top_consumers):
                 text += texts.t('ADMIN_REMNAWAVE_UI_SHOW_NODE_STATISTICS_087', '- …и ещё {value1}\n').format(
@@ -1617,53 +1701,73 @@ async def show_node_statistics(callback: types.CallbackQuery, db_user: User, db:
 
         keyboard = types.InlineKeyboardMarkup(
             inline_keyboard=[
-                [types.InlineKeyboardButton(text=' Обновить', callback_data=f'node_stats_{node_uuid}')],
-                [types.InlineKeyboardButton(text=' Назад', callback_data=f'admin_node_manage_{node_uuid}')],
+                [
+                    admin_button(
+                        'Обновить',
+                        callback_data=f'node_stats_{node_uuid}',
+                        icon='refresh',
+                        style='primary',
+                    )
+                ],
+                [admin_back_button(texts, f'admin_node_manage_{node_uuid}')],
             ]
         )
 
-        await callback.message.edit_text(text, reply_markup=keyboard)
+        await callback.message.edit_text(
+            admin_screen(_clean_legacy(text), icon='chart', compact=True),
+            reply_markup=keyboard,
+            parse_mode='HTML',
+        )
         await callback.answer()
 
     except Exception as e:
         logger.error('Ошибка получения статистики ноды', node_uuid=node_uuid, error=e)
 
-        text = f"""
- <b>Статистика ноды: {html.escape(node['name'])}</b>
+        text = f"""<b>Статистика ноды: {html.escape(str(node['name']))}</b>
 
 <b>Статус:</b>
-- Онлайн: {status_emoji} {'Да' if node['is_node_online'] else 'Нет'}
-- Xray: {xray_emoji} {'Запущен' if node['is_xray_running'] else 'Остановлен'}
-- Пользователей онлайн: {node['users_online']}
-- Изменение статуса: {format_datetime(node.get('last_status_change')) if node.get('last_status_change') else '—'}
-- Сообщение: {html.escape(str(node.get('last_status_message') or '—'))}
-- Uptime Xray: {xray_uptime_str}
+• Онлайн: {status_icon} {'Да' if node['is_node_online'] else 'Нет'}
+• Xray: {xray_icon} {'Запущен' if node['is_xray_running'] else 'Остановлен'}
+• Пользователей онлайн: {node['users_online']}
+• Изменение статуса: {format_datetime(node.get('last_status_change')) if node.get('last_status_change') else '—'}
+• Сообщение: {html.escape(str(node.get('last_status_message') or '—'))}
+• Uptime Xray: {xray_uptime_str}
 
 <b>Трафик:</b>
-- Использовано: {format_bytes(node['traffic_used_bytes'] or 0)}
-- Лимит: {format_bytes(node['traffic_limit_bytes']) if node['traffic_limit_bytes'] else 'Без лимита'}
-- Трекинг: {' Активен' if node.get('is_traffic_tracking_active') else ' Отключен'}
-- День сброса: {node.get('traffic_reset_day') or '—'}
-- Уведомления: {node.get('notify_percent') or '—'}
-- Множитель: {node.get('consumption_multiplier') or 1}
+• Использовано: {format_bytes(node['traffic_used_bytes'] or 0)}
+• Лимит: {format_bytes(node['traffic_limit_bytes']) if node['traffic_limit_bytes'] else 'Без лимита'}
+• Трекинг: {'Активен' if node.get('is_traffic_tracking_active') else 'Отключен'}
+• День сброса: {node.get('traffic_reset_day') or '—'}
+• Уведомления: {node.get('notify_percent') or '—'}
+• Множитель: {node.get('consumption_multiplier') or 1}
 
- <b>Детальная статистика временно недоступна</b>
+{admin_icon('warning')} <b>Детальная статистика временно недоступна</b>
 Возможные причины:
 • Проблемы с подключением к API
 • Нода недавно добавлена
 • Недостаточно данных для отображения
 
-<b>Обновлено:</b> {format_datetime('now')}
-"""
+<b>Обновлено:</b> {format_datetime(datetime.now(UTC))}"""
 
         keyboard = types.InlineKeyboardMarkup(
             inline_keyboard=[
-                [types.InlineKeyboardButton(text=' Попробовать снова', callback_data=f'node_stats_{node_uuid}')],
-                [types.InlineKeyboardButton(text=' Назад', callback_data=f'admin_node_manage_{node_uuid}')],
+                [
+                    admin_button(
+                        'Попробовать снова',
+                        callback_data=f'node_stats_{node_uuid}',
+                        icon='refresh',
+                        style='primary',
+                    )
+                ],
+                [admin_back_button(texts, f'admin_node_manage_{node_uuid}')],
             ]
         )
 
-        await callback.message.edit_text(text, reply_markup=keyboard)
+        await callback.message.edit_text(
+            admin_screen(_clean_legacy(text), icon='warning', compact=True),
+            reply_markup=keyboard,
+            parse_mode='HTML',
+        )
         await callback.answer()
 
 
@@ -1677,27 +1781,30 @@ async def show_squad_details(callback: types.CallbackQuery, db_user: User, db: A
     squad = await remnawave_service.get_squad_details(squad_uuid)
 
     if not squad:
-        await callback.answer(texts.t('ADMIN_REMNAWAVE_UI_SHOW_SQUAD_DETAILS_102', ' Сквад не найден'), show_alert=True)
+        await callback.answer(texts.t('ADMIN_REMNAWAVE_UI_SHOW_SQUAD_DETAILS_102', 'Сквад не найден'), show_alert=True)
         return
 
-    text = f"""
- <b>Сквад: {squad['name']}</b>
+    text = f"""<b>Сквад: {html.escape(str(squad['name']))}</b>
 
 <b>Информация:</b>
-- UUID: <code>{squad['uuid']}</code>
-- Участников: {squad['members_count']}
-- Инбаундов: {squad['inbounds_count']}
+• UUID: <code>{html.escape(str(squad['uuid']))}</code>
+• Участников: {squad['members_count']}
+• Инбаундов: {squad['inbounds_count']}
 
 <b>Инбаунды:</b>
 """
 
     if squad.get('inbounds'):
         for inbound in squad['inbounds']:
-            text += f'- {inbound["tag"]} ({inbound["type"]})\n'
+            text += f'• {html.escape(str(inbound["tag"]))} ({html.escape(str(inbound["type"]))})\n'
     else:
         text += texts.t('ADMIN_REMNAWAVE_UI_SHOW_SQUAD_DETAILS_104', 'Нет активных инбаундов')
 
-    await callback.message.edit_text(text, reply_markup=get_squad_management_keyboard(squad_uuid, db_user.language))
+    await callback.message.edit_text(
+        admin_screen(_clean_legacy(text), icon='servers', compact=True),
+        reply_markup=get_squad_management_keyboard(squad_uuid, db_user.language),
+        parse_mode='HTML',
+    )
     await callback.answer()
 
 
@@ -1715,11 +1822,11 @@ async def manage_squad_action(callback: types.CallbackQuery, db_user: User, db: 
         success = await remnawave_service.add_all_users_to_squad(squad_uuid)
         if success:
             await callback.answer(
-                texts.t('ADMIN_REMNAWAVE_UI_MANAGE_SQUAD_ACTION_105', ' Задача добавления пользователей в очередь')
+                texts.t('ADMIN_REMNAWAVE_UI_MANAGE_SQUAD_ACTION_105', 'Задача добавления пользователей в очередь')
             )
         else:
             await callback.answer(
-                texts.t('ADMIN_REMNAWAVE_UI_MANAGE_SQUAD_ACTION_106', ' Ошибка добавления пользователей'),
+                texts.t('ADMIN_REMNAWAVE_UI_MANAGE_SQUAD_ACTION_106', 'Ошибка добавления пользователей'),
                 show_alert=True,
             )
 
@@ -1727,11 +1834,11 @@ async def manage_squad_action(callback: types.CallbackQuery, db_user: User, db: 
         success = await remnawave_service.remove_all_users_from_squad(squad_uuid)
         if success:
             await callback.answer(
-                texts.t('ADMIN_REMNAWAVE_UI_MANAGE_SQUAD_ACTION_107', ' Задача удаления пользователей в очередь')
+                texts.t('ADMIN_REMNAWAVE_UI_MANAGE_SQUAD_ACTION_107', 'Задача удаления пользователей в очередь')
             )
         else:
             await callback.answer(
-                texts.t('ADMIN_REMNAWAVE_UI_MANAGE_SQUAD_ACTION_108', ' Ошибка удаления пользователей'),
+                texts.t('ADMIN_REMNAWAVE_UI_MANAGE_SQUAD_ACTION_108', 'Ошибка удаления пользователей'),
                 show_alert=True,
             )
 
@@ -1739,14 +1846,27 @@ async def manage_squad_action(callback: types.CallbackQuery, db_user: User, db: 
         success = await remnawave_service.delete_squad(squad_uuid)
         if success:
             await callback.message.edit_text(
-                texts.t('ADMIN_REMNAWAVE_UI_MANAGE_SQUAD_ACTION_109', ' Сквад успешно удален'),
-                reply_markup=types.InlineKeyboardMarkup(
-                    inline_keyboard=[[types.InlineKeyboardButton(text=' К сквадам', callback_data='admin_rw_squads')]]
+                admin_screen(
+                    texts.t('ADMIN_REMNAWAVE_UI_MANAGE_SQUAD_ACTION_109', 'Сквад успешно удален'),
+                    icon='success',
+                    compact=True,
                 ),
+                reply_markup=types.InlineKeyboardMarkup(
+                    inline_keyboard=[
+                        [
+                            admin_back_button(
+                                texts,
+                                'admin_rw_squads',
+                                label=texts.t('ADMIN_REMNAWAVE_UI_FINISH_SQUAD_CREATION_170', 'Список сквадов'),
+                            )
+                        ]
+                    ]
+                ),
+                parse_mode='HTML',
             )
         else:
             await callback.answer(
-                texts.t('ADMIN_REMNAWAVE_UI_MANAGE_SQUAD_ACTION_111', ' Ошибка удаления сквада'), show_alert=True
+                texts.t('ADMIN_REMNAWAVE_UI_MANAGE_SQUAD_ACTION_111', 'Ошибка удаления сквада'), show_alert=True
             )
         return
 
@@ -1765,24 +1885,27 @@ async def show_squad_edit_menu(callback: types.CallbackQuery, db_user: User, db:
     squad = await remnawave_service.get_squad_details(squad_uuid)
 
     if not squad:
-        await callback.answer(texts.t('ADMIN_REMNAWAVE_UI_SHOW_SQUAD_DETAILS_102', ' Сквад не найден'), show_alert=True)
+        await callback.answer(texts.t('ADMIN_REMNAWAVE_UI_SHOW_SQUAD_DETAILS_102', 'Сквад не найден'), show_alert=True)
         return
 
-    text = f"""
- <b>Редактирование сквада: {squad['name']}</b>
+    text = f"""<b>Редактирование сквада: {html.escape(str(squad['name']))}</b>
 
 <b>Текущие инбаунды:</b>
 """
 
     if squad.get('inbounds'):
         for inbound in squad['inbounds']:
-            text += f' {inbound["tag"]} ({inbound["type"]})\n'
+            text += f'• {html.escape(str(inbound["tag"]))} ({html.escape(str(inbound["type"]))})\n'
     else:
         text += texts.t('ADMIN_REMNAWAVE_UI_SHOW_SQUAD_EDIT_MENU_114', 'Нет активных инбаундов\n')
 
     text += texts.t('ADMIN_REMNAWAVE_UI_SHOW_SQUAD_EDIT_MENU_115', '\n<b>Доступные действия:</b>')
 
-    await callback.message.edit_text(text, reply_markup=get_squad_edit_keyboard(squad_uuid, db_user.language))
+    await callback.message.edit_text(
+        admin_screen(_clean_legacy(text), icon='edit', compact=True),
+        reply_markup=get_squad_edit_keyboard(squad_uuid, db_user.language),
+        parse_mode='HTML',
+    )
     await callback.answer()
 
 
@@ -1798,12 +1921,12 @@ async def show_squad_inbounds_selection(callback: types.CallbackQuery, db_user: 
     all_inbounds = await remnawave_service.get_all_inbounds()
 
     if not squad:
-        await callback.answer(texts.t('ADMIN_REMNAWAVE_UI_SHOW_SQUAD_DETAILS_102', ' Сквад не найден'), show_alert=True)
+        await callback.answer(texts.t('ADMIN_REMNAWAVE_UI_SHOW_SQUAD_DETAILS_102', 'Сквад не найден'), show_alert=True)
         return
 
     if not all_inbounds:
         await callback.answer(
-            texts.t('ADMIN_REMNAWAVE_UI_SHOW_SQUAD_INBOUNDS_SELECTION_117', ' Нет доступных инбаундов'),
+            texts.t('ADMIN_REMNAWAVE_UI_SHOW_SQUAD_INBOUNDS_SELECTION_117', 'Нет доступных инбаундов'),
             show_alert=True,
         )
         return
@@ -1811,10 +1934,9 @@ async def show_squad_inbounds_selection(callback: types.CallbackQuery, db_user: 
     if squad_uuid not in squad_inbound_selections:
         squad_inbound_selections[squad_uuid] = {inbound['uuid'] for inbound in squad.get('inbounds', [])}
 
-    text = f"""
- <b>Изменение инбаундов</b>
+    text = f"""<b>Изменение инбаундов</b>
 
-<b>Сквад:</b> {squad['name']}
+<b>Сквад:</b> {html.escape(str(squad['name']))}
 <b>Текущих инбаундов:</b> {len(squad_inbound_selections[squad_uuid])}
 
 <b>Доступные инбаунды:</b>
@@ -1824,29 +1946,41 @@ async def show_squad_inbounds_selection(callback: types.CallbackQuery, db_user: 
 
     for i, inbound in enumerate(all_inbounds[:15]):
         is_selected = inbound['uuid'] in squad_inbound_selections[squad_uuid]
-        emoji = '' if is_selected else ''
+        marker = '✅' if is_selected else '▫️'
 
         keyboard.append(
             [
                 types.InlineKeyboardButton(
-                    text=f'{emoji} {inbound["tag"]} ({inbound["type"]})', callback_data=f'sqd_tgl_{i}_{squad_uuid[:8]}'
+                    text=f'{marker} {inbound["tag"]} ({inbound["type"]})',
+                    callback_data=f'sqd_tgl_{i}_{squad_uuid[:8]}',
                 )
             ]
         )
 
     if len(all_inbounds) > 15:
         text += texts.t(
-            'ADMIN_REMNAWAVE_UI_SHOW_SQUAD_INBOUNDS_SELECTION_119', '\n Показано первые 15 из {value1} инбаундов'
+            'ADMIN_REMNAWAVE_UI_SHOW_SQUAD_INBOUNDS_SELECTION_119', '\nПоказано первые 15 из {value1} инбаундов'
         ).format(value1=len(all_inbounds))
 
     keyboard.extend(
         [
-            [types.InlineKeyboardButton(text=' Сохранить изменения', callback_data=f'sqd_save_{squad_uuid[:8]}')],
-            [types.InlineKeyboardButton(text=' Назад', callback_data=f'sqd_edit_{squad_uuid[:8]}')],
+            [
+                admin_button(
+                    'Сохранить изменения',
+                    callback_data=f'sqd_save_{squad_uuid[:8]}',
+                    icon='save',
+                    style='success',
+                )
+            ],
+            [admin_back_button(texts, f'sqd_edit_{squad_uuid[:8]}')],
         ]
     )
 
-    await callback.message.edit_text(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
+    await callback.message.edit_text(
+        admin_screen(_clean_legacy(text), icon='settings', compact=True),
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
+        parse_mode='HTML',
+    )
     await callback.answer()
 
 
@@ -1860,7 +1994,7 @@ async def show_squad_rename_form(callback: types.CallbackQuery, db_user: User, d
     squad = await remnawave_service.get_squad_details(squad_uuid)
 
     if not squad:
-        await callback.answer(texts.t('ADMIN_REMNAWAVE_UI_SHOW_SQUAD_DETAILS_102', ' Сквад не найден'), show_alert=True)
+        await callback.answer(texts.t('ADMIN_REMNAWAVE_UI_SHOW_SQUAD_DETAILS_102', 'Сквад не найден'), show_alert=True)
         return
 
     await state.update_data(squad_uuid=squad_uuid, squad_name=squad['name'])
@@ -1868,19 +2002,24 @@ async def show_squad_rename_form(callback: types.CallbackQuery, db_user: User, d
 
     text = texts.t(
         'ADMIN_REMNAWAVE_UI_SHOW_SQUAD_RENAME_FORM_123',
-        '\n <b>Переименование сквада</b>\n\n<b>Текущее название:</b> {value1}\n\n <b>Введите новое название сквада:</b>\n\n<i>Требования к названию:</i>\n• От 2 до 20 символов\n• Только буквы, цифры, дефисы и подчеркивания\n• Без пробелов и специальных символов\n\nОтправьте сообщение с новым названием или нажмите "Отмена" для выхода.\n',
-    ).format(value1=squad['name'])
+        '<b>Переименование сквада</b>\n\n<b>Текущее название:</b> {value1}\n\n<b>Введите новое название сквада:</b>\n\n<i>Требования к названию:</i>\n• От 2 до 20 символов\n• Только буквы, цифры, дефисы и подчеркивания\n• Без пробелов и специальных символов\n\nОтправьте сообщение с новым названием или нажмите "Отмена" для выхода.\n',
+    ).format(value1=html.escape(str(squad['name'])))
 
     keyboard = [
         [
-            types.InlineKeyboardButton(
-                text=texts.t('ADMIN_REMNAWAVE_UI_SHOW_SQUAD_RENAME_FORM_124', ' Отмена'),
-                callback_data=f'cancel_rename_{squad_uuid}',
+            admin_back_button(
+                texts,
+                f'cancel_rename_{squad_uuid}',
+                label=texts.t('ADMIN_REMNAWAVE_UI_SHOW_SQUAD_RENAME_FORM_124', 'Отмена'),
             )
         ]
     ]
 
-    await callback.message.edit_text(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
+    await callback.message.edit_text(
+        admin_screen(_clean_legacy(text), icon='edit', compact=True),
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
+        parse_mode='HTML',
+    )
     await callback.answer()
 
 
@@ -1905,7 +2044,14 @@ async def process_squad_new_name(message: types.Message, db_user: User, db: Asyn
     old_name = data.get('squad_name')
 
     if not squad_uuid:
-        await message.answer(texts.t('ADMIN_REMNAWAVE_UI_PROCESS_SQUAD_NEW_NAME_125', ' Ошибка: сквад не найден'))
+        await message.answer(
+            admin_screen(
+                texts.t('ADMIN_REMNAWAVE_UI_PROCESS_SQUAD_NEW_NAME_125', 'Ошибка: сквад не найден'),
+                icon='error',
+                compact=True,
+            ),
+            parse_mode='HTML',
+        )
         await state.clear()
         return
 
@@ -1913,28 +2059,44 @@ async def process_squad_new_name(message: types.Message, db_user: User, db: Asyn
 
     if not new_name:
         await message.answer(
-            texts.t(
-                'ADMIN_REMNAWAVE_UI_PROCESS_SQUAD_NEW_NAME_126', ' Название не может быть пустым. Попробуйте еще раз:'
-            )
+            admin_screen(
+                texts.t(
+                    'ADMIN_REMNAWAVE_UI_PROCESS_SQUAD_NEW_NAME_126',
+                    'Название не может быть пустым. Попробуйте еще раз:',
+                ),
+                icon='warning',
+                compact=True,
+            ),
+            parse_mode='HTML',
         )
         return
 
     # Правила панели (POST/PATCH /api/internal-squads): иначе она ответит 400.
     if not is_valid_internal_squad_name(new_name):
         await message.answer(
-            texts.t(
-                'ADMIN_REMNAWAVE_UI_PROCESS_SQUAD_NEW_NAME_127',
-                ' Название: от {value1} до {value2} символов, только латиница, цифры, пробел, дефис и подчёркивание. Попробуйте еще раз:',
-            ).format(value1=INTERNAL_SQUAD_NAME_MIN_LENGTH, value2=INTERNAL_SQUAD_NAME_MAX_LENGTH)
+            admin_screen(
+                texts.t(
+                    'ADMIN_REMNAWAVE_UI_PROCESS_SQUAD_NEW_NAME_127',
+                    'Название: от {value1} до {value2} символов, только латиница, цифры, пробел, дефис и подчёркивание. Попробуйте еще раз:',
+                ).format(value1=INTERNAL_SQUAD_NAME_MIN_LENGTH, value2=INTERNAL_SQUAD_NAME_MAX_LENGTH),
+                icon='warning',
+                compact=True,
+            ),
+            parse_mode='HTML',
         )
         return
 
     if new_name == old_name:
         await message.answer(
-            texts.t(
-                'ADMIN_REMNAWAVE_UI_PROCESS_SQUAD_NEW_NAME_128',
-                ' Новое название совпадает с текущим. Введите другое название:',
-            )
+            admin_screen(
+                texts.t(
+                    'ADMIN_REMNAWAVE_UI_PROCESS_SQUAD_NEW_NAME_128',
+                    'Новое название совпадает с текущим. Введите другое название:',
+                ),
+                icon='warning',
+                compact=True,
+            ),
+            parse_mode='HTML',
         )
         return
 
@@ -1943,45 +2105,58 @@ async def process_squad_new_name(message: types.Message, db_user: User, db: Asyn
 
     if success:
         await message.answer(
-            texts.t(
-                'ADMIN_REMNAWAVE_UI_PROCESS_SQUAD_NEW_NAME_129',
-                ' <b>Сквад успешно переименован!</b>\n\n<b>Старое название:</b> {value1}\n<b>Новое название:</b> {value2}',
-            ).format(value1=old_name, value2=new_name),
+            admin_screen(
+                texts.t(
+                    'ADMIN_REMNAWAVE_UI_PROCESS_SQUAD_NEW_NAME_129',
+                    '<b>Сквад успешно переименован!</b>\n\n<b>Старое название:</b> {value1}\n<b>Новое название:</b> {value2}',
+                ).format(value1=html.escape(str(old_name)), value2=html.escape(str(new_name))),
+                icon='success',
+                compact=True,
+            ),
             reply_markup=types.InlineKeyboardMarkup(
                 inline_keyboard=[
                     [
-                        types.InlineKeyboardButton(
-                            text=texts.t('ADMIN_REMNAWAVE_UI_PROCESS_SQUAD_NEW_NAME_130', ' Детали сквада'),
+                        admin_button(
+                            texts.t('ADMIN_REMNAWAVE_UI_PROCESS_SQUAD_NEW_NAME_130', 'Детали сквада'),
                             callback_data=f'admin_squad_manage_{squad_uuid}',
+                            icon='servers',
+                            style='primary',
                         )
                     ],
                     [
-                        types.InlineKeyboardButton(
-                            text=texts.t('ADMIN_REMNAWAVE_UI_PROCESS_SQUAD_NEW_NAME_131', '← К сквадам'),
-                            callback_data='admin_rw_squads',
+                        admin_back_button(
+                            texts,
+                            'admin_rw_squads',
+                            label=texts.t('ADMIN_REMNAWAVE_UI_PROCESS_SQUAD_NEW_NAME_131', 'К сквадам'),
                         )
                     ],
-                    [types.InlineKeyboardButton(text=' К сквадам', callback_data='admin_rw_squads')],
                 ]
             ),
+            parse_mode='HTML',
         )
         await state.clear()
     else:
         await message.answer(
-            texts.t(
-                'ADMIN_REMNAWAVE_UI_PROCESS_SQUAD_NEW_NAME_132',
-                ' <b>Ошибка переименования сквада</b>\n\nВозможные причины:\n• Сквад с таким названием уже существует\n• Проблемы с подключением к API\n• Недостаточно прав\n\nПопробуйте другое название:',
+            admin_screen(
+                texts.t(
+                    'ADMIN_REMNAWAVE_UI_PROCESS_SQUAD_NEW_NAME_132',
+                    '<b>Ошибка переименования сквада</b>\n\nВозможные причины:\n• Сквад с таким названием уже существует\n• Проблемы с подключением к API\n• Недостаточно прав\n\nПопробуйте другое название:',
+                ),
+                icon='error',
+                compact=True,
             ),
             reply_markup=types.InlineKeyboardMarkup(
                 inline_keyboard=[
                     [
-                        types.InlineKeyboardButton(
-                            text=texts.t('ADMIN_REMNAWAVE_UI_SHOW_SQUAD_RENAME_FORM_124', ' Отмена'),
-                            callback_data=f'cancel_rename_{squad_uuid}',
+                        admin_back_button(
+                            texts,
+                            f'cancel_rename_{squad_uuid}',
+                            label=texts.t('ADMIN_REMNAWAVE_UI_SHOW_SQUAD_RENAME_FORM_124', 'Отмена'),
                         )
                     ]
                 ]
             ),
+            parse_mode='HTML',
         )
 
 
@@ -2003,13 +2178,13 @@ async def toggle_squad_inbound(callback: types.CallbackQuery, db_user: User, db:
             break
 
     if not full_squad_uuid:
-        await callback.answer(texts.t('ADMIN_REMNAWAVE_UI_SHOW_SQUAD_DETAILS_102', ' Сквад не найден'), show_alert=True)
+        await callback.answer(texts.t('ADMIN_REMNAWAVE_UI_SHOW_SQUAD_DETAILS_102', 'Сквад не найден'), show_alert=True)
         return
 
     all_inbounds = await remnawave_service.get_all_inbounds()
     if inbound_index >= len(all_inbounds):
         await callback.answer(
-            texts.t('ADMIN_REMNAWAVE_UI_TOGGLE_SQUAD_INBOUND_135', ' Инбаунд не найден'), show_alert=True
+            texts.t('ADMIN_REMNAWAVE_UI_TOGGLE_SQUAD_INBOUND_135', 'Инбаунд не найден'), show_alert=True
         )
         return
 
@@ -2021,35 +2196,37 @@ async def toggle_squad_inbound(callback: types.CallbackQuery, db_user: User, db:
     if selected_inbound['uuid'] in squad_inbound_selections[full_squad_uuid]:
         squad_inbound_selections[full_squad_uuid].remove(selected_inbound['uuid'])
         await callback.answer(
-            texts.t('ADMIN_REMNAWAVE_UI_TOGGLE_SQUAD_INBOUND_136', ' Убран: {value1}').format(
+            texts.t('ADMIN_REMNAWAVE_UI_TOGGLE_SQUAD_INBOUND_136', 'Убран: {value1}').format(
                 value1=selected_inbound['tag']
             )
         )
     else:
         squad_inbound_selections[full_squad_uuid].add(selected_inbound['uuid'])
         await callback.answer(
-            texts.t('ADMIN_REMNAWAVE_UI_TOGGLE_SQUAD_INBOUND_137', ' Добавлен: {value1}').format(
+            texts.t('ADMIN_REMNAWAVE_UI_TOGGLE_SQUAD_INBOUND_137', 'Добавлен: {value1}').format(
                 value1=selected_inbound['tag']
             )
         )
 
     text = texts.t(
         'ADMIN_REMNAWAVE_UI_TOGGLE_SQUAD_INBOUND_138',
-        '\n <b>Изменение инбаундов</b>\n\n<b>Сквад:</b> {value1}\n<b>Выбрано инбаундов:</b> {value2}\n\n<b>Доступные инбаунды:</b>\n',
+        '<b>Изменение инбаундов</b>\n\n<b>Сквад:</b> {value1}\n<b>Выбрано инбаундов:</b> {value2}\n\n<b>Доступные инбаунды:</b>\n',
     ).format(
-        value1=squads[0]['name'] if squads else texts.t('ADMIN_REMNAWAVE_UI_TOGGLE_SQUAD_INBOUND_139', 'Неизвестно'),
+        value1=html.escape(str(squads[0]['name']))
+        if squads
+        else texts.t('ADMIN_REMNAWAVE_UI_TOGGLE_SQUAD_INBOUND_139', 'Неизвестно'),
         value2=len(squad_inbound_selections[full_squad_uuid]),
     )
 
     keyboard = []
     for i, inbound in enumerate(all_inbounds[:15]):
         is_selected = inbound['uuid'] in squad_inbound_selections[full_squad_uuid]
-        emoji = '' if is_selected else ''
+        marker = '✅' if is_selected else '▫️'
 
         keyboard.append(
             [
                 types.InlineKeyboardButton(
-                    text=f'{emoji} {inbound["tag"]} ({inbound["type"]})',
+                    text=f'{marker} {inbound["tag"]} ({inbound["type"]})',
                     callback_data=f'sqd_tgl_{i}_{short_squad_uuid}',
                 )
             ]
@@ -2057,12 +2234,23 @@ async def toggle_squad_inbound(callback: types.CallbackQuery, db_user: User, db:
 
     keyboard.extend(
         [
-            [types.InlineKeyboardButton(text=' Сохранить изменения', callback_data=f'sqd_save_{short_squad_uuid}')],
-            [types.InlineKeyboardButton(text=' Назад', callback_data=f'sqd_edit_{short_squad_uuid}')],
+            [
+                admin_button(
+                    'Сохранить изменения',
+                    callback_data=f'sqd_save_{short_squad_uuid}',
+                    icon='save',
+                    style='success',
+                )
+            ],
+            [admin_back_button(texts, f'sqd_edit_{short_squad_uuid}')],
         ]
     )
 
-    await callback.message.edit_text(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
+    await callback.message.edit_text(
+        admin_screen(_clean_legacy(text), icon='settings', compact=True),
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
+        parse_mode='HTML',
+    )
 
 
 @admin_required
@@ -2083,7 +2271,7 @@ async def save_squad_inbounds(callback: types.CallbackQuery, db_user: User, db: 
             break
 
     if not full_squad_uuid:
-        await callback.answer(texts.t('ADMIN_REMNAWAVE_UI_SHOW_SQUAD_DETAILS_102', ' Сквад не найден'), show_alert=True)
+        await callback.answer(texts.t('ADMIN_REMNAWAVE_UI_SHOW_SQUAD_DETAILS_102', 'Сквад не найден'), show_alert=True)
         return
 
     selected_inbounds = squad_inbound_selections.get(full_squad_uuid, set())
@@ -2095,38 +2283,45 @@ async def save_squad_inbounds(callback: types.CallbackQuery, db_user: User, db: 
             squad_inbound_selections.pop(full_squad_uuid, None)
 
             await callback.message.edit_text(
-                texts.t(
-                    'ADMIN_REMNAWAVE_UI_SAVE_SQUAD_INBOUNDS_143',
-                    ' <b>Инбаунды сквада обновлены</b>\n\n<b>Сквад:</b> {value1}\n<b>Количество инбаундов:</b> {value2}',
-                ).format(value1=squad_name, value2=len(selected_inbounds)),
+                admin_screen(
+                    texts.t(
+                        'ADMIN_REMNAWAVE_UI_SAVE_SQUAD_INBOUNDS_143',
+                        '<b>Инбаунды сквада обновлены</b>\n\n<b>Сквад:</b> {value1}\n<b>Количество инбаундов:</b> {value2}',
+                    ).format(value1=html.escape(str(squad_name)), value2=len(selected_inbounds)),
+                    icon='success',
+                    compact=True,
+                ),
                 reply_markup=types.InlineKeyboardMarkup(
                     inline_keyboard=[
-                        [types.InlineKeyboardButton(text=' К сквадам', callback_data='admin_rw_squads')],
                         [
-                            types.InlineKeyboardButton(
-                                text=texts.t('ADMIN_REMNAWAVE_UI_PROCESS_SQUAD_NEW_NAME_131', '← К сквадам'),
-                                callback_data='admin_rw_squads',
+                            admin_back_button(
+                                texts,
+                                'admin_rw_squads',
+                                label=texts.t('ADMIN_REMNAWAVE_UI_PROCESS_SQUAD_NEW_NAME_131', 'К сквадам'),
                             )
                         ],
                         [
-                            types.InlineKeyboardButton(
-                                text=texts.t('ADMIN_REMNAWAVE_UI_PROCESS_SQUAD_NEW_NAME_130', ' Детали сквада'),
+                            admin_button(
+                                texts.t('ADMIN_REMNAWAVE_UI_PROCESS_SQUAD_NEW_NAME_130', 'Детали сквада'),
                                 callback_data=f'admin_squad_manage_{full_squad_uuid}',
+                                icon='servers',
+                                style='primary',
                             )
                         ],
                     ]
                 ),
+                parse_mode='HTML',
             )
-            await callback.answer(texts.t('ADMIN_REMNAWAVE_UI_SAVE_SQUAD_INBOUNDS_146', ' Изменения сохранены!'))
+            await callback.answer(texts.t('ADMIN_REMNAWAVE_UI_SAVE_SQUAD_INBOUNDS_146', 'Изменения сохранены!'))
         else:
             await callback.answer(
-                texts.t('ADMIN_REMNAWAVE_UI_SAVE_SQUAD_INBOUNDS_147', ' Ошибка сохранения изменений'), show_alert=True
+                texts.t('ADMIN_REMNAWAVE_UI_SAVE_SQUAD_INBOUNDS_147', 'Ошибка сохранения изменений'), show_alert=True
             )
 
     except Exception as e:
         logger.error('Error saving squad inbounds', error=e)
         await callback.answer(
-            texts.t('ADMIN_REMNAWAVE_UI_SAVE_SQUAD_INBOUNDS_148', ' Ошибка при сохранении'), show_alert=True
+            texts.t('ADMIN_REMNAWAVE_UI_SAVE_SQUAD_INBOUNDS_148', 'Ошибка при сохранении'), show_alert=True
         )
 
 
@@ -2146,7 +2341,7 @@ async def show_squad_edit_menu_short(callback: types.CallbackQuery, db_user: Use
             break
 
     if not full_squad_uuid:
-        await callback.answer(texts.t('ADMIN_REMNAWAVE_UI_SHOW_SQUAD_DETAILS_102', ' Сквад не найден'), show_alert=True)
+        await callback.answer(texts.t('ADMIN_REMNAWAVE_UI_SHOW_SQUAD_DETAILS_102', 'Сквад не найден'), show_alert=True)
         return
 
     refreshed_callback = callback.model_copy(update={'data': f'squad_edit_{full_squad_uuid}'}).as_(callback.bot)
@@ -2159,24 +2354,35 @@ async def show_squad_edit_menu_short(callback: types.CallbackQuery, db_user: Use
 async def start_squad_creation(callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext):
     await state.set_state(SquadCreateStates.waiting_for_name)
 
-    text = """
- <b>Создание нового сквада</b>
+    text = """<b>Создание нового сквада</b>
 
 <b>Шаг 1 из 2: Название сквада</b>
 
- <b>Введите название для нового сквада:</b>
+<b>Введите название для нового сквада:</b>
 
 <i>Требования к названию:</i>
 • От 2 до 20 символов
 • Только буквы, цифры, дефисы и подчеркивания
 • Без пробелов и специальных символов
 
-Отправьте сообщение с названием или нажмите "Отмена" для выхода.
-"""
+Отправьте сообщение с названием или нажмите "Отмена" для выхода."""
 
-    keyboard = [[types.InlineKeyboardButton(text=' Отмена', callback_data='cancel_squad_create')]]
+    texts = get_texts(db_user.language)
+    keyboard = [
+        [
+            admin_back_button(
+                texts,
+                'cancel_squad_create',
+                label=texts.t('ADMIN_REMNAWAVE_UI_SHOW_SQUAD_RENAME_FORM_124', 'Отмена'),
+            )
+        ]
+    ]
 
-    await callback.message.edit_text(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
+    await callback.message.edit_text(
+        admin_screen(_clean_legacy(text), icon='plus', compact=True),
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
+        parse_mode='HTML',
+    )
     await callback.answer()
 
 
@@ -2188,19 +2394,30 @@ async def process_squad_name(message: types.Message, db_user: User, db: AsyncSes
 
     if not squad_name:
         await message.answer(
-            texts.t(
-                'ADMIN_REMNAWAVE_UI_PROCESS_SQUAD_NEW_NAME_126', ' Название не может быть пустым. Попробуйте еще раз:'
-            )
+            admin_screen(
+                texts.t(
+                    'ADMIN_REMNAWAVE_UI_PROCESS_SQUAD_NEW_NAME_126',
+                    'Название не может быть пустым. Попробуйте еще раз:',
+                ),
+                icon='warning',
+                compact=True,
+            ),
+            parse_mode='HTML',
         )
         return
 
     # Правила панели (POST/PATCH /api/internal-squads): иначе она ответит 400.
     if not is_valid_internal_squad_name(squad_name):
         await message.answer(
-            texts.t(
-                'ADMIN_REMNAWAVE_UI_PROCESS_SQUAD_NEW_NAME_127',
-                ' Название: от {value1} до {value2} символов, только латиница, цифры, пробел, дефис и подчёркивание. Попробуйте еще раз:',
-            ).format(value1=INTERNAL_SQUAD_NAME_MIN_LENGTH, value2=INTERNAL_SQUAD_NAME_MAX_LENGTH)
+            admin_screen(
+                texts.t(
+                    'ADMIN_REMNAWAVE_UI_PROCESS_SQUAD_NEW_NAME_127',
+                    'Название: от {value1} до {value2} символов, только латиница, цифры, пробел, дефис и подчёркивание. Попробуйте еще раз:',
+                ).format(value1=INTERNAL_SQUAD_NAME_MIN_LENGTH, value2=INTERNAL_SQUAD_NAME_MAX_LENGTH),
+                icon='warning',
+                compact=True,
+            ),
+            parse_mode='HTML',
         )
         return
 
@@ -2215,19 +2432,31 @@ async def process_squad_name(message: types.Message, db_user: User, db: AsyncSes
 
     if not all_inbounds:
         await message.answer(
-            texts.t(
-                'ADMIN_REMNAWAVE_UI_PROCESS_SQUAD_NAME_154',
-                ' <b>Нет доступных инбаундов</b>\n\nДля создания сквада необходимо иметь хотя бы один инбаунд.',
+            admin_screen(
+                texts.t(
+                    'ADMIN_REMNAWAVE_UI_PROCESS_SQUAD_NAME_154',
+                    '<b>Нет доступных инбаундов</b>\n\nДля создания сквада необходимо иметь хотя бы один инбаунд.',
+                ),
+                icon='warning',
+                compact=True,
             ),
             reply_markup=types.InlineKeyboardMarkup(
-                inline_keyboard=[[types.InlineKeyboardButton(text=' К сквадам', callback_data='admin_rw_squads')]]
+                inline_keyboard=[
+                    [
+                        admin_back_button(
+                            texts,
+                            'admin_rw_squads',
+                            label=texts.t('ADMIN_REMNAWAVE_UI_FINISH_SQUAD_CREATION_170', 'Список сквадов'),
+                        )
+                    ]
+                ]
             ),
+            parse_mode='HTML',
         )
         await state.clear()
         return
 
-    text = f"""
- <b>Создание сквада: {squad_name}</b>
+    text = f"""<b>Создание сквада: {html.escape(str(squad_name))}</b>
 
 <b>Шаг 2 из 2: Выбор инбаундов</b>
 
@@ -2240,32 +2469,44 @@ async def process_squad_name(message: types.Message, db_user: User, db: AsyncSes
 
     for i, inbound in enumerate(all_inbounds[:15]):
         keyboard.append(
-            [types.InlineKeyboardButton(text=f' {inbound["tag"]} ({inbound["type"]})', callback_data=f'create_tgl_{i}')]
+            [
+                types.InlineKeyboardButton(
+                    text=f'{inbound["tag"]} ({inbound["type"]})',
+                    callback_data=f'create_tgl_{i}',
+                )
+            ]
         )
 
     if len(all_inbounds) > 15:
         text += texts.t(
-            'ADMIN_REMNAWAVE_UI_SHOW_SQUAD_INBOUNDS_SELECTION_119', '\n Показано первые 15 из {value1} инбаундов'
+            'ADMIN_REMNAWAVE_UI_SHOW_SQUAD_INBOUNDS_SELECTION_119', '\nПоказано первые 15 из {value1} инбаундов'
         ).format(value1=len(all_inbounds))
 
     keyboard.extend(
         [
             [
-                types.InlineKeyboardButton(
-                    text=texts.t('ADMIN_REMNAWAVE_UI_PROCESS_SQUAD_NAME_158', ' Создать сквад'),
+                admin_button(
+                    texts.t('ADMIN_REMNAWAVE_UI_PROCESS_SQUAD_NAME_158', 'Создать сквад'),
                     callback_data='create_squad_finish',
+                    icon='plus',
+                    style='success',
                 )
             ],
             [
-                types.InlineKeyboardButton(
-                    text=texts.t('ADMIN_REMNAWAVE_UI_SHOW_SQUAD_RENAME_FORM_124', ' Отмена'),
-                    callback_data='cancel_squad_create',
+                admin_back_button(
+                    texts,
+                    'cancel_squad_create',
+                    label=texts.t('ADMIN_REMNAWAVE_UI_SHOW_SQUAD_RENAME_FORM_124', 'Отмена'),
                 )
             ],
         ]
     )
 
-    await message.answer(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
+    await message.answer(
+        admin_screen(_clean_legacy(text), icon='plus', compact=True),
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
+        parse_mode='HTML',
+    )
 
 
 @admin_required
@@ -2277,7 +2518,7 @@ async def toggle_create_inbound(callback: types.CallbackQuery, db_user: User, db
 
     if user_id not in squad_create_data:
         await callback.answer(
-            texts.t('ADMIN_REMNAWAVE_UI_TOGGLE_CREATE_INBOUND_160', ' Ошибка: данные сессии не найдены'),
+            texts.t('ADMIN_REMNAWAVE_UI_TOGGLE_CREATE_INBOUND_160', 'Ошибка: данные сессии не найдены'),
             show_alert=True,
         )
         await state.clear()
@@ -2288,7 +2529,7 @@ async def toggle_create_inbound(callback: types.CallbackQuery, db_user: User, db
 
     if inbound_index >= len(all_inbounds):
         await callback.answer(
-            texts.t('ADMIN_REMNAWAVE_UI_TOGGLE_SQUAD_INBOUND_135', ' Инбаунд не найден'), show_alert=True
+            texts.t('ADMIN_REMNAWAVE_UI_TOGGLE_SQUAD_INBOUND_135', 'Инбаунд не найден'), show_alert=True
         )
         return
 
@@ -2298,22 +2539,21 @@ async def toggle_create_inbound(callback: types.CallbackQuery, db_user: User, db
     if selected_inbound['uuid'] in selected_inbounds:
         selected_inbounds.remove(selected_inbound['uuid'])
         await callback.answer(
-            texts.t('ADMIN_REMNAWAVE_UI_TOGGLE_SQUAD_INBOUND_136', ' Убран: {value1}').format(
+            texts.t('ADMIN_REMNAWAVE_UI_TOGGLE_SQUAD_INBOUND_136', 'Убран: {value1}').format(
                 value1=selected_inbound['tag']
             )
         )
     else:
         selected_inbounds.add(selected_inbound['uuid'])
         await callback.answer(
-            texts.t('ADMIN_REMNAWAVE_UI_TOGGLE_SQUAD_INBOUND_137', ' Добавлен: {value1}').format(
+            texts.t('ADMIN_REMNAWAVE_UI_TOGGLE_SQUAD_INBOUND_137', 'Добавлен: {value1}').format(
                 value1=selected_inbound['tag']
             )
         )
 
     squad_name = squad_create_data[user_id]['name']
 
-    text = f"""
- <b>Создание сквада: {squad_name}</b>
+    text = f"""<b>Создание сквада: {html.escape(str(squad_name))}</b>
 
 <b>Шаг 2 из 2: Выбор инбаундов</b>
 
@@ -2326,12 +2566,13 @@ async def toggle_create_inbound(callback: types.CallbackQuery, db_user: User, db
 
     for i, inbound in enumerate(all_inbounds[:15]):
         is_selected = inbound['uuid'] in selected_inbounds
-        emoji = '' if is_selected else ''
+        marker = '✅' if is_selected else '▫️'
 
         keyboard.append(
             [
                 types.InlineKeyboardButton(
-                    text=f'{emoji} {inbound["tag"]} ({inbound["type"]})', callback_data=f'create_tgl_{i}'
+                    text=f'{marker} {inbound["tag"]} ({inbound["type"]})',
+                    callback_data=f'create_tgl_{i}',
                 )
             ]
         )
@@ -2339,21 +2580,28 @@ async def toggle_create_inbound(callback: types.CallbackQuery, db_user: User, db
     keyboard.extend(
         [
             [
-                types.InlineKeyboardButton(
-                    text=texts.t('ADMIN_REMNAWAVE_UI_PROCESS_SQUAD_NAME_158', ' Создать сквад'),
+                admin_button(
+                    texts.t('ADMIN_REMNAWAVE_UI_PROCESS_SQUAD_NAME_158', 'Создать сквад'),
                     callback_data='create_squad_finish',
+                    icon='plus',
+                    style='success',
                 )
             ],
             [
-                types.InlineKeyboardButton(
-                    text=texts.t('ADMIN_REMNAWAVE_UI_SHOW_SQUAD_RENAME_FORM_124', ' Отмена'),
-                    callback_data='cancel_squad_create',
+                admin_back_button(
+                    texts,
+                    'cancel_squad_create',
+                    label=texts.t('ADMIN_REMNAWAVE_UI_SHOW_SQUAD_RENAME_FORM_124', 'Отмена'),
                 )
             ],
         ]
     )
 
-    await callback.message.edit_text(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
+    await callback.message.edit_text(
+        admin_screen(_clean_legacy(text), icon='plus', compact=True),
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
+        parse_mode='HTML',
+    )
 
 
 @admin_required
@@ -2364,7 +2612,7 @@ async def finish_squad_creation(callback: types.CallbackQuery, db_user: User, db
 
     if user_id not in squad_create_data:
         await callback.answer(
-            texts.t('ADMIN_REMNAWAVE_UI_TOGGLE_CREATE_INBOUND_160', ' Ошибка: данные сессии не найдены'),
+            texts.t('ADMIN_REMNAWAVE_UI_TOGGLE_CREATE_INBOUND_160', 'Ошибка: данные сессии не найдены'),
             show_alert=True,
         )
         await state.clear()
@@ -2375,7 +2623,7 @@ async def finish_squad_creation(callback: types.CallbackQuery, db_user: User, db
 
     if not selected_inbounds:
         await callback.answer(
-            texts.t('ADMIN_REMNAWAVE_UI_FINISH_SQUAD_CREATION_168', ' Необходимо выбрать хотя бы один инбаунд'),
+            texts.t('ADMIN_REMNAWAVE_UI_FINISH_SQUAD_CREATION_168', 'Необходимо выбрать хотя бы один инбаунд'),
             show_alert=True,
         )
         return
@@ -2388,33 +2636,63 @@ async def finish_squad_creation(callback: types.CallbackQuery, db_user: User, db
 
     if success:
         await callback.message.edit_text(
-            texts.t(
-                'ADMIN_REMNAWAVE_UI_FINISH_SQUAD_CREATION_169',
-                ' <b>Сквад успешно создан!</b>\n\n<b>Название:</b> {value1}\n<b>Количество инбаундов:</b> {value2}\n\nСквад готов к использованию!',
-            ).format(value1=squad_name, value2=len(selected_inbounds)),
+            admin_screen(
+                texts.t(
+                    'ADMIN_REMNAWAVE_UI_FINISH_SQUAD_CREATION_169',
+                    '<b>Сквад успешно создан!</b>\n\n<b>Название:</b> {value1}\n<b>Количество инбаундов:</b> {value2}\n\nСквад готов к использованию!',
+                ).format(value1=html.escape(str(squad_name)), value2=len(selected_inbounds)),
+                icon='success',
+                compact=True,
+            ),
             reply_markup=types.InlineKeyboardMarkup(
                 inline_keyboard=[
-                    [types.InlineKeyboardButton(text=' Список сквадов', callback_data='admin_rw_squads')],
-                    [types.InlineKeyboardButton(text=' К панели Remnawave', callback_data='admin_remnawave')],
+                    [
+                        admin_button(
+                            texts.t('ADMIN_REMNAWAVE_UI_FINISH_SQUAD_CREATION_170', 'Список сквадов'),
+                            callback_data='admin_rw_squads',
+                            icon='servers',
+                            style='primary',
+                        )
+                    ],
+                    [admin_back_button(texts, 'admin_remnawave')],
                 ]
             ),
+            parse_mode='HTML',
         )
-        await callback.answer(texts.t('ADMIN_REMNAWAVE_UI_FINISH_SQUAD_CREATION_172', ' Сквад создан!'))
+        await callback.answer(texts.t('ADMIN_REMNAWAVE_UI_FINISH_SQUAD_CREATION_172', 'Сквад создан!'))
     else:
         await callback.message.edit_text(
-            texts.t(
-                'ADMIN_REMNAWAVE_UI_FINISH_SQUAD_CREATION_173',
-                ' <b>Ошибка создания сквада</b>\n\n<b>Название:</b> {value1}\n\nВозможные причины:\n• Сквад с таким названием уже существует\n• Проблемы с подключением к API\n• Недостаточно прав\n• Некорректные инбаунды',
-            ).format(value1=squad_name),
+            admin_screen(
+                texts.t(
+                    'ADMIN_REMNAWAVE_UI_FINISH_SQUAD_CREATION_173',
+                    '<b>Ошибка создания сквада</b>\n\n<b>Название:</b> {value1}\n\nВозможные причины:\n• Сквад с таким названием уже существует\n• Проблемы с подключением к API\n• Недостаточно прав\n• Некорректные инбаунды',
+                ).format(value1=html.escape(str(squad_name))),
+                icon='error',
+                compact=True,
+            ),
             reply_markup=types.InlineKeyboardMarkup(
                 inline_keyboard=[
-                    [types.InlineKeyboardButton(text=' Попробовать снова', callback_data='admin_squad_create')],
-                    [types.InlineKeyboardButton(text=' К сквадам', callback_data='admin_rw_squads')],
+                    [
+                        admin_button(
+                            'Попробовать снова',
+                            callback_data='admin_squad_create',
+                            icon='plus',
+                            style='primary',
+                        )
+                    ],
+                    [
+                        admin_back_button(
+                            texts,
+                            'admin_rw_squads',
+                            label=texts.t('ADMIN_REMNAWAVE_UI_FINISH_SQUAD_CREATION_170', 'Список сквадов'),
+                        )
+                    ],
                 ]
             ),
+            parse_mode='HTML',
         )
         await callback.answer(
-            texts.t('ADMIN_REMNAWAVE_UI_FINISH_SQUAD_CREATION_176', ' Ошибка создания сквада'), show_alert=True
+            texts.t('ADMIN_REMNAWAVE_UI_FINISH_SQUAD_CREATION_176', 'Ошибка создания сквада'), show_alert=True
         )
 
 
@@ -2438,17 +2716,43 @@ async def restart_all_nodes(callback: types.CallbackQuery, db_user: User, db: As
 
     if success:
         await callback.message.edit_text(
-            texts.t('ADMIN_REMNAWAVE_UI_RESTART_ALL_NODES_177', ' Команда перезагрузки всех нод отправлена'),
-            reply_markup=types.InlineKeyboardMarkup(
-                inline_keyboard=[[types.InlineKeyboardButton(text=' К нодам', callback_data='admin_rw_nodes')]]
+            admin_screen(
+                texts.t('ADMIN_REMNAWAVE_UI_RESTART_ALL_NODES_177', 'Команда перезагрузки всех нод отправлена'),
+                icon='success',
+                compact=True,
             ),
+            reply_markup=types.InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [
+                        admin_back_button(
+                            texts,
+                            'admin_rw_nodes',
+                            label=texts.t('ADMIN_REMNAWAVE_UI_SHOW_NODES_MANAGEMENT_052', 'Управление нодами'),
+                        )
+                    ]
+                ]
+            ),
+            parse_mode='HTML',
         )
     else:
         await callback.message.edit_text(
-            texts.t('ADMIN_REMNAWAVE_UI_RESTART_ALL_NODES_179', ' Ошибка перезагрузки нод'),
-            reply_markup=types.InlineKeyboardMarkup(
-                inline_keyboard=[[types.InlineKeyboardButton(text=' К нодам', callback_data='admin_rw_nodes')]]
+            admin_screen(
+                texts.t('ADMIN_REMNAWAVE_UI_RESTART_ALL_NODES_179', 'Ошибка перезагрузки нод'),
+                icon='error',
+                compact=True,
             ),
+            reply_markup=types.InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [
+                        admin_back_button(
+                            texts,
+                            'admin_rw_nodes',
+                            label=texts.t('ADMIN_REMNAWAVE_UI_SHOW_NODES_MANAGEMENT_052', 'Управление нодами'),
+                        )
+                    ]
+                ]
+            ),
+            parse_mode='HTML',
         )
 
     await callback.answer()
@@ -2464,7 +2768,7 @@ async def show_sync_options(callback: types.CallbackQuery, db_user: User, db: As
     last_result = '—'
 
     if status.last_run_finished_at:
-        result_icon = '' if status.last_run_success else ''
+        result_icon = admin_icon('success') if status.last_run_success else admin_icon('error')
         result_label = (
             texts.t('ADMIN_REMNAWAVE_UI_BUILD_AUTO_SYNC_VIEW_009', 'успешно')
             if status.last_run_success
@@ -2473,53 +2777,64 @@ async def show_sync_options(callback: types.CallbackQuery, db_user: User, db: As
         finished_text = format_datetime(status.last_run_finished_at)
         last_result = f'{result_icon} {result_label} ({finished_text})'
     elif status.last_run_started_at:
-        last_result = texts.t('ADMIN_REMNAWAVE_UI_SHOW_SYNC_OPTIONS_183', ' Запущено {value1}').format(
+        last_result = texts.t('ADMIN_REMNAWAVE_UI_SHOW_SYNC_OPTIONS_183', 'Запущено {value1}').format(
             value1=format_datetime(status.last_run_started_at)
         )
 
     status_lines = [
-        texts.t('ADMIN_REMNAWAVE_UI_SHOW_SYNC_OPTIONS_184', ' Статус: {value1}').format(
-            value1=texts.t('ADMIN_REMNAWAVE_UI_BUILD_AUTO_SYNC_VIEW_020', ' Включена')
+        texts.t('ADMIN_REMNAWAVE_UI_SHOW_SYNC_OPTIONS_184', 'Статус: {value1}').format(
+            value1=texts.t('ADMIN_REMNAWAVE_UI_BUILD_AUTO_SYNC_VIEW_020', 'Включена')
             if status.enabled
-            else texts.t('ADMIN_REMNAWAVE_UI_BUILD_AUTO_SYNC_VIEW_021', ' Отключена')
+            else texts.t('ADMIN_REMNAWAVE_UI_BUILD_AUTO_SYNC_VIEW_021', 'Отключена')
         ),
-        texts.t('ADMIN_REMNAWAVE_UI_SHOW_SYNC_OPTIONS_187', ' Расписание: {value1}').format(value1=times_text),
-        texts.t('ADMIN_REMNAWAVE_UI_SHOW_SYNC_OPTIONS_188', ' Следующий запуск: {value1}').format(
+        texts.t('ADMIN_REMNAWAVE_UI_SHOW_SYNC_OPTIONS_187', 'Расписание: {value1}').format(value1=times_text),
+        texts.t('ADMIN_REMNAWAVE_UI_SHOW_SYNC_OPTIONS_188', 'Следующий запуск: {value1}').format(
             value1=next_run_text if status.enabled else '—'
         ),
-        texts.t('ADMIN_REMNAWAVE_UI_SHOW_SYNC_OPTIONS_189', ' Последний запуск: {value1}').format(value1=last_result),
+        texts.t('ADMIN_REMNAWAVE_UI_SHOW_SYNC_OPTIONS_189', 'Последний запуск: {value1}').format(value1=last_result),
     ]
 
-    text = texts.t(
-        'ADMIN_REMNAWAVE_UI_SHOW_SYNC_OPTIONS_190',
-        ' <b>Синхронизация с Remnawave</b>\n\n <b>Полная синхронизация выполняет:</b>\n• Создание новых пользователей из панели в боте\n• Обновление данных существующих пользователей\n• Деактивация подписок пользователей, отсутствующих в панели\n• Сохранение балансов пользователей\n•  Время выполнения: 2-5 минут\n\n <b>Важно:</b>\n• Во время синхронизации не выполняйте другие операции\n• При полной синхронизации подписки пользователей, отсутствующих в панели, будут деактивированы\n• Рекомендуется делать полную синхронизацию ежедневно\n• Баланс пользователей НЕ удаляется\n\n <b>Обратная синхронизация:</b>\n• Отправляет активных пользователей из бота в панель\n• Используйте при сбоях панели или для восстановления данных\n\n',
-    ) + '\n'.join(status_lines)
+    text = (
+        texts.t(
+            'ADMIN_REMNAWAVE_UI_SHOW_SYNC_OPTIONS_190',
+            '<b>Синхронизация с Remnawave</b>\n\n<b>Полная синхронизация выполняет:</b>\n• Создание новых пользователей из панели в боте\n• Обновление данных существующих пользователей\n• Деактивация подписок пользователей, отсутствующих в панели\n• Сохранение балансов пользователей\n• Время выполнения: 2-5 минут\n\n<b>Важно:</b>\n• Во время синхронизации не выполняйте другие операции\n• При полной синхронизации подписки пользователей, отсутствующих в панели, будут деактивированы\n• Рекомендуется делать полную синхронизацию ежедневно\n• Баланс пользователей НЕ удаляется\n\n<b>Обратная синхронизация:</b>\n• Отправляет активных пользователей из бота в панель\n• Используйте при сбоях панели или для восстановления данных',
+        )
+        + '\n'
+        + '\n'.join(status_lines)
+    )
 
     keyboard = [
         [
-            types.InlineKeyboardButton(
-                text=texts.t('ADMIN_REMNAWAVE_UI_SHOW_SYNC_OPTIONS_191', ' Запустить полную синхронизацию'),
+            admin_button(
+                _clean_legacy(texts.t('ADMIN_REMNAWAVE_UI_SHOW_SYNC_OPTIONS_191', 'Запустить полную синхронизацию')),
                 callback_data='sync_all_users',
+                icon='refresh',
+                style='success',
             )
         ],
         [
-            types.InlineKeyboardButton(
-                text=texts.t('ADMIN_REMNAWAVE_UI_SHOW_SYNC_OPTIONS_192', ' Синхронизация в панель'),
+            admin_button(
+                texts.t('ADMIN_REMNAWAVE_UI_SHOW_SYNC_OPTIONS_192', 'Синхронизация в панель'),
                 callback_data='sync_to_panel',
+                icon='upload',
+                style='primary',
             )
         ],
         [
-            types.InlineKeyboardButton(
-                text=texts.t('ADMIN_REMNAWAVE_UI_SHOW_SYNC_OPTIONS_193', ' Настройки автосинхронизации'),
+            admin_button(
+                texts.t('ADMIN_REMNAWAVE_UI_SHOW_SYNC_OPTIONS_193', 'Настройки автосинхронизации'),
                 callback_data='admin_rw_auto_sync',
+                icon='settings',
+                style='primary',
             )
         ],
-        [types.InlineKeyboardButton(text=' Назад', callback_data='admin_remnawave')],
+        [admin_back_button(texts, 'admin_remnawave')],
     ]
 
     await callback.message.edit_text(
-        text,
+        admin_screen(_clean_legacy(text), icon='sync', compact=True),
         reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
+        parse_mode='HTML',
     )
     await callback.answer()
 
@@ -2593,7 +2908,7 @@ async def prompt_auto_sync_schedule(
 
     instructions = texts.t(
         'ADMIN_REMNAWAVE_UI_PROMPT_AUTO_SYNC_SCHEDULE_198',
-        ' <b>Настройка расписания автосинхронизации</b>\n\nУкажите время запуска через запятую или с новой строки в формате HH:MM.\nТекущее расписание: <code>{value1}</code>\n\nПримеры: <code>03:00, 15:30</code> или <code>00:15\n06:00\n18:45</code>\n\nОтправьте <b>отмена</b>, чтобы вернуться без изменений.',
+        '<b>Настройка расписания автосинхронизации</b>\n\nУкажите время запуска через запятую или с новой строки в формате HH:MM.\nТекущее расписание: <code>{value1}</code>\n\nПримеры: <code>03:00, 15:30</code> или <code>00:15\n06:00\n18:45</code>\n\nОтправьте <b>отмена</b>, чтобы вернуться без изменений.',
     ).format(value1=current_schedule)
 
     await state.set_state(RemnaWaveSyncStates.waiting_for_schedule)
@@ -2603,14 +2918,15 @@ async def prompt_auto_sync_schedule(
     )
 
     await callback.message.edit_text(
-        instructions,
+        admin_screen(_clean_legacy(instructions), icon='clock', compact=True),
         parse_mode='HTML',
         reply_markup=types.InlineKeyboardMarkup(
             inline_keyboard=[
                 [
-                    types.InlineKeyboardButton(
-                        text=texts.t('ADMIN_REMNAWAVE_UI_SHOW_SQUAD_RENAME_FORM_124', ' Отмена'),
-                        callback_data='remnawave_auto_sync_cancel',
+                    admin_back_button(
+                        texts,
+                        'remnawave_auto_sync_cancel',
+                        label=texts.t('ADMIN_REMNAWAVE_UI_SHOW_SQUAD_RENAME_FORM_124', 'Отмена'),
                     )
                 ]
             ]
@@ -2657,9 +2973,13 @@ async def run_auto_sync_now(
 
     await state.clear()
     await callback.message.edit_text(
-        texts.t(
-            'ADMIN_REMNAWAVE_UI_RUN_AUTO_SYNC_NOW_202',
-            ' Запуск автосинхронизации...\n\nПодождите, это может занять несколько минут.',
+        admin_screen(
+            texts.t(
+                'ADMIN_REMNAWAVE_UI_RUN_AUTO_SYNC_NOW_202',
+                'Запуск автосинхронизации...\n\nПодождите, это может занять несколько минут.',
+            ),
+            icon='sync',
+            compact=True,
         ),
         parse_mode='HTML',
     )
@@ -2671,7 +2991,12 @@ async def run_auto_sync_now(
 
     if not result.get('started'):
         await callback.message.edit_text(
-            texts.t('ADMIN_REMNAWAVE_UI_RUN_AUTO_SYNC_NOW_204', ' <b>Синхронизация уже выполняется</b>\n\n')
+            admin_screen(
+                texts.t('ADMIN_REMNAWAVE_UI_RUN_AUTO_SYNC_NOW_204', '<b>Синхронизация уже выполняется</b>'),
+                icon='warning',
+                compact=True,
+            )
+            + '\n\n'
             + base_text,
             reply_markup=keyboard,
             parse_mode='HTML',
@@ -2683,7 +3008,7 @@ async def run_auto_sync_now(
         server_stats = result.get('server_stats') or {}
         summary = texts.t(
             'ADMIN_REMNAWAVE_UI_RUN_AUTO_SYNC_NOW_205',
-            ' <b>Синхронизация завершена</b>\n Пользователи: создано {value1}, обновлено {value2}, деактивировано {value3}, ошибок {value4}\n Серверы: создано {value5}, обновлено {value6}, удалено {value7}\n\n',
+            '<b>Синхронизация завершена</b>\n• Пользователи: создано {value1}, обновлено {value2}, деактивировано {value3}, ошибок {value4}\n• Серверы: создано {value5}, обновлено {value6}, удалено {value7}',
         ).format(
             value1=user_stats.get('created', 0),
             value2=user_stats.get('updated', 0),
@@ -2693,7 +3018,7 @@ async def run_auto_sync_now(
             value6=server_stats.get('updated', 0),
             value7=server_stats.get('removed', 0),
         )
-        final_text = summary + base_text
+        final_text = admin_screen(_clean_legacy(summary), icon='success', compact=True) + '\n\n' + base_text
         await callback.message.edit_text(
             final_text,
             reply_markup=keyboard,
@@ -2703,10 +3028,10 @@ async def run_auto_sync_now(
         error_text = result.get('error') or texts.t('ADMIN_REMNAWAVE_UI_RUN_AUTO_SYNC_NOW_206', 'Неизвестная ошибка')
         summary = texts.t(
             'ADMIN_REMNAWAVE_UI_RUN_AUTO_SYNC_NOW_207',
-            ' <b>Синхронизация завершилась с ошибкой</b>\nПричина: {value1}\n\n',
-        ).format(value1=error_text)
+            '<b>Синхронизация завершилась с ошибкой</b>\nПричина: {value1}',
+        ).format(value1=html.escape(str(error_text)))
         await callback.message.edit_text(
-            summary + base_text,
+            admin_screen(_clean_legacy(summary), icon='error', compact=True) + '\n\n' + base_text,
             reply_markup=keyboard,
             parse_mode='HTML',
         )
@@ -2751,10 +3076,15 @@ async def save_auto_sync_schedule(
 
     if not parsed_times:
         await message.answer(
-            texts.t(
-                'ADMIN_REMNAWAVE_UI_SAVE_AUTO_SYNC_SCHEDULE_210',
-                ' Не удалось распознать время. Используйте формат HH:MM, например 03:00 или 18:45.',
+            admin_screen(
+                texts.t(
+                    'ADMIN_REMNAWAVE_UI_SAVE_AUTO_SYNC_SCHEDULE_210',
+                    'Не удалось распознать время. Используйте формат HH:MM, например 03:00 или 18:45.',
+                ),
+                icon='error',
+                compact=True,
             ),
+            parse_mode='HTML',
         )
         return
 
@@ -2788,7 +3118,12 @@ async def save_auto_sync_schedule(
 
     await state.clear()
     await message.answer(
-        texts.t('ADMIN_REMNAWAVE_UI_SAVE_AUTO_SYNC_SCHEDULE_211', ' Расписание автосинхронизации обновлено')
+        admin_screen(
+            texts.t('ADMIN_REMNAWAVE_UI_SAVE_AUTO_SYNC_SCHEDULE_211', 'Расписание автосинхронизации обновлено'),
+            icon='success',
+            compact=True,
+        ),
+        parse_mode='HTML',
     )
 
 
@@ -2804,25 +3139,27 @@ async def sync_all_users(callback: types.CallbackQuery, db_user: User, db: Async
         await callback.answer(
             texts.t(
                 'ADMIN_REMNAWAVE_UI_SYNC_ALL_USERS_212',
-                ' Полная синхронизация уже выполняется — дождитесь её окончания',
+                'Полная синхронизация уже выполняется — дождитесь её окончания',
             ),
             show_alert=True,
         )
         return
 
-    progress_text = """
- <b>Выполняется полная синхронизация...</b>
+    progress_text = """<b>Выполняется полная синхронизация...</b>
 
- Этапы:
+Этапы:
 • Из панели в бота: загрузка ВСЕХ пользователей панели, создание и обновление,
   деактивация подписок отсутствующих (балансы сохраняются)
 • Из бота в панель: статусы, даты, сквады и теги тарифов всех подписок
 • Серверы: сквады панели → серверы бота
 
- Пожалуйста, подождите...
-"""
+Пожалуйста, подождите..."""
 
-    await callback.message.edit_text(progress_text, reply_markup=None)
+    await callback.message.edit_text(
+        admin_screen(_clean_legacy(progress_text), icon='sync', compact=True),
+        reply_markup=None,
+        parse_mode='HTML',
+    )
 
     remnawave_service = RemnaWaveService()
     # Одна функция на бота, кабинет и расписание: из панели в бота → серверы.
@@ -2830,13 +3167,16 @@ async def sync_all_users(callback: types.CallbackQuery, db_user: User, db: Async
         stats, server_stats = await perform_full_sync(db, remnawave_service)
     except FullSyncAlreadyRunning:
         await callback.message.edit_text(
-            texts.t(
-                'ADMIN_REMNAWAVE_UI_SYNC_ALL_USERS_214',
-                ' <b>Полная синхронизация уже выполняется</b>\n\nДождитесь её окончания и запустите снова.',
+            admin_screen(
+                texts.t(
+                    'ADMIN_REMNAWAVE_UI_SYNC_ALL_USERS_214',
+                    '<b>Полная синхронизация уже выполняется</b>\n\nДождитесь её окончания и запустите снова.',
+                ),
+                icon='warning',
+                compact=True,
             ),
-            reply_markup=types.InlineKeyboardMarkup(
-                inline_keyboard=[[types.InlineKeyboardButton(text=' Назад', callback_data='admin_remnawave')]]
-            ),
+            reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[admin_back_button(texts, 'admin_remnawave')]]),
+            parse_mode='HTML',
         )
         await callback.answer()
         return
@@ -2844,61 +3184,58 @@ async def sync_all_users(callback: types.CallbackQuery, db_user: User, db: Async
     total_operations = stats['created'] + stats['updated'] + stats.get('deleted', 0)
 
     if errors_total == 0:
-        status_emoji = ''
+        status_icon = admin_icon('success')
         status_text = texts.t('ADMIN_REMNAWAVE_UI_SYNC_ALL_USERS_216', 'успешно завершена')
     elif errors_total < total_operations:
-        status_emoji = ''
+        status_icon = admin_icon('warning')
         status_text = texts.t('ADMIN_REMNAWAVE_UI_SYNC_ALL_USERS_217', 'завершена с предупреждениями')
     else:
-        status_emoji = ''
+        status_icon = admin_icon('error')
         status_text = 'завершена с ошибками'
 
-    text = f"""
-{status_emoji} <b>Полная синхронизация {status_text}</b>
+    text = f"""{status_icon} <b>Полная синхронизация {status_text}</b>
 
- <b>Из панели в бота:</b>
-•  Создано: {stats['created']}
-•  Обновлено: {stats['updated']}
-•  Деактивировано: {stats.get('deleted', 0)}
-•  Ошибок: {stats['errors']}
+<b>Из панели в бота:</b>
+• Создано: {stats['created']}
+• Обновлено: {stats['updated']}
+• Деактивировано: {stats.get('deleted', 0)}
+• Ошибок: {stats['errors']}
 
- <b>Серверы:</b> создано {server_stats.get('created', 0)}, обновлено {server_stats.get('updated', 0)}, \
-удалено {server_stats.get('removed', 0)} из {server_stats.get('total', 0)}
-"""
+<b>Серверы:</b> создано {server_stats.get('created', 0)}, обновлено {server_stats.get('updated', 0)}, \
+удалено {server_stats.get('removed', 0)} из {server_stats.get('total', 0)}"""
 
     if stats.get('deleted', 0) > 0:
-        text += """
+        text += f"""
 
- <b>Деактивированные подписки:</b>
+<b>Деактивированные подписки:</b>
 Деактивированы подписки пользователей, которые
 отсутствуют в панели Remnawave.
- Балансы пользователей сохранены.
-"""
+{admin_icon('info')} Балансы пользователей сохранены."""
 
     if errors_total > 0:
-        text += """
+        text += f"""
 
- <b>Внимание:</b>
+{admin_icon('warning')} <b>Внимание:</b>
 Некоторые операции завершились с ошибками.
-Проверьте логи для получения подробной информации.
-"""
+Проверьте логи для получения подробной информации."""
 
     text += """
 
- <b>Как это работает:</b>
+<b>Как это работает:</b>
 • Панель — источник истины: бот забрал из неё сроки, статусы и лимиты
 • В панель бот пишет только при покупке, продлении и действиях админа
-• По расписанию выполняется эта же синхронизация
-"""
+• По расписанию выполняется эта же синхронизация"""
 
     keyboard = []
 
     if errors_total > 0:
         keyboard.append(
             [
-                types.InlineKeyboardButton(
-                    text=texts.t('ADMIN_REMNAWAVE_UI_SYNC_ALL_USERS_223', ' Повторить синхронизацию'),
+                admin_button(
+                    _clean_legacy(texts.t('ADMIN_REMNAWAVE_UI_SYNC_ALL_USERS_223', 'Повторить синхронизацию')),
                     callback_data='sync_all_users',
+                    icon='refresh',
+                    style='primary',
                 )
             ]
         )
@@ -2906,24 +3243,28 @@ async def sync_all_users(callback: types.CallbackQuery, db_user: User, db: Async
     keyboard.extend(
         [
             [
-                types.InlineKeyboardButton(
-                    text=texts.t('ADMIN_REMNAWAVE_UI_SYNC_ALL_USERS_224', ' Статистика системы'),
+                admin_button(
+                    texts.t('ADMIN_REMNAWAVE_UI_SYNC_ALL_USERS_224', 'Статистика системы'),
                     callback_data='admin_rw_system',
+                    icon='chart',
+                    style='primary',
                 ),
-                types.InlineKeyboardButton(
-                    text=texts.t('ADMIN_REMNAWAVE_UI_SYNC_ALL_USERS_225', ' Ноды'), callback_data='admin_rw_nodes'
+                admin_button(
+                    texts.t('ADMIN_REMNAWAVE_UI_SYNC_ALL_USERS_225', 'Ноды'),
+                    callback_data='admin_rw_nodes',
+                    icon='servers',
+                    style='primary',
                 ),
             ],
-            [
-                types.InlineKeyboardButton(
-                    text=texts.t('ADMIN_REMNAWAVE_UI_SHOW_SYSTEM_STATS_039', '← Назад'), callback_data='admin_remnawave'
-                )
-            ],
-            [types.InlineKeyboardButton(text=' Назад', callback_data='admin_remnawave')],
+            [admin_back_button(texts, 'admin_remnawave')],
         ]
     )
 
-    await callback.message.edit_text(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
+    await callback.message.edit_text(
+        admin_screen(_clean_legacy(text), icon='sync', compact=True),
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
+        parse_mode='HTML',
+    )
     await callback.answer()
 
 
@@ -2938,7 +3279,7 @@ async def sync_users_to_panel(
     await callback.message.edit_text(
         texts.t(
             'ADMIN_REMNAWAVE_UI_SYNC_USERS_TO_PANEL_227',
-            ' Выполняется синхронизация данных бота в панель Remnawave...\n\nЭто может занять несколько минут.',
+            'Выполняется синхронизация данных бота в панель Remnawave...\n\nЭто может занять несколько минут.',
         ),
         reply_markup=None,
     )
@@ -2947,21 +3288,20 @@ async def sync_users_to_panel(
     stats = await remnawave_service.sync_users_to_panel(db)
 
     if stats['errors'] == 0:
-        status_emoji = ''
+        status_icon = admin_icon('success')
         status_text = texts.t('ADMIN_REMNAWAVE_UI_SYNC_ALL_USERS_216', 'успешно завершена')
+    elif (stats['created'] + stats['updated']) > 0:
+        status_icon = admin_icon('warning')
+        status_text = texts.t('ADMIN_REMNAWAVE_UI_SYNC_ALL_USERS_217', 'завершена с предупреждениями')
     else:
-        status_emoji = '' if (stats['created'] + stats['updated']) > 0 else ''
-        status_text = (
-            texts.t('ADMIN_REMNAWAVE_UI_SYNC_ALL_USERS_217', 'завершена с предупреждениями')
-            if status_emoji == ''
-            else texts.t('ADMIN_REMNAWAVE_UI_VALIDATE_SUBSCRIPTIONS_247', 'завершена с ошибками')
-        )
+        status_icon = admin_icon('error')
+        status_text = texts.t('ADMIN_REMNAWAVE_UI_VALIDATE_SUBSCRIPTIONS_247', 'завершена с ошибками')
 
     text = texts.t(
         'ADMIN_REMNAWAVE_UI_SYNC_USERS_TO_PANEL_231',
-        '{value1} <b>Синхронизация в панель {value2}</b>\n\n <b>Результаты:</b>\n•  Создано: {value3}\n•  Обновлено: {value4}\n•  Ошибок: {value5}',
+        '{value1} <b>Синхронизация в панель {value2}</b>\n\n<b>Результаты:</b>\n• Создано: {value3}\n• Обновлено: {value4}\n• Ошибок: {value5}',
     ).format(
-        value1=status_emoji,
+        value1=status_icon,
         value2=status_text,
         value3=stats['created'],
         value4=stats['updated'],
@@ -2969,14 +3309,35 @@ async def sync_users_to_panel(
     )
 
     keyboard = [
-        [types.InlineKeyboardButton(text=' Повторить', callback_data='sync_to_panel')],
-        [types.InlineKeyboardButton(text=' Полная синхронизация', callback_data='sync_all_users')],
-        [types.InlineKeyboardButton(text=' К синхронизации', callback_data='admin_rw_sync')],
+        [
+            admin_button(
+                'Повторить',
+                callback_data='sync_to_panel',
+                icon='refresh',
+                style='primary',
+            )
+        ],
+        [
+            admin_button(
+                _clean_legacy(texts.t('ADMIN_REMNAWAVE_UI_SHOW_SYNC_OPTIONS_191', 'Запустить полную синхронизацию')),
+                callback_data='sync_all_users',
+                icon='refresh',
+                style='success',
+            )
+        ],
+        [
+            admin_back_button(
+                texts,
+                'admin_rw_sync',
+                label='К синхронизации',
+            )
+        ],
     ]
 
     await callback.message.edit_text(
-        text,
+        admin_screen(_clean_legacy(text), icon='sync', compact=True),
         reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
+        parse_mode='HTML',
     )
     await callback.answer()
 
@@ -2986,59 +3347,80 @@ async def sync_users_to_panel(
 async def show_sync_recommendations(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
     texts = get_texts(db_user.language)
     await callback.message.edit_text(
-        texts.t('ADMIN_REMNAWAVE_UI_SHOW_SYNC_RECOMMENDATIONS_235', ' Анализируем состояние синхронизации...'),
+        admin_screen(
+            texts.t('ADMIN_REMNAWAVE_UI_SHOW_SYNC_RECOMMENDATIONS_235', 'Анализируем состояние синхронизации...'),
+            icon='sync',
+            compact=True,
+        ),
         reply_markup=None,
+        parse_mode='HTML',
     )
 
     remnawave_service = RemnaWaveService()
     recommendations = await remnawave_service.get_sync_recommendations(db)
 
-    priority_emoji = {'low': '', 'medium': '', 'high': ''}
+    priority_icons = {
+        'low': admin_icon('battery'),
+        'medium': admin_icon('warning'),
+        'high': admin_icon('fire'),
+    }
 
-    text = f"""
- <b>Рекомендации по синхронизации</b>
+    text = f"""<b>Рекомендации по синхронизации</b>
 
-{priority_emoji.get(recommendations['priority'], '')} <b>Приоритет:</b> {recommendations['priority'].upper()}
- <b>Время выполнения:</b> {recommendations['estimated_time']}
+{priority_icons.get(recommendations['priority'], admin_icon('info'))} <b>Приоритет:</b> {recommendations['priority'].upper()}
+<b>Время выполнения:</b> {recommendations['estimated_time']}
 
 <b>Рекомендуемое действие:</b>
 """
 
     if recommendations['sync_type'] == 'all':
-        text += texts.t('ADMIN_REMNAWAVE_UI_SHOW_SYNC_RECOMMENDATIONS_237', ' Полная синхронизация')
+        text += texts.t('ADMIN_REMNAWAVE_UI_SHOW_SYNC_RECOMMENDATIONS_237', 'Полная синхронизация')
     elif recommendations['sync_type'] == 'update_only':
-        text += texts.t('ADMIN_REMNAWAVE_UI_SHOW_SYNC_RECOMMENDATIONS_238', ' Обновление данных')
+        text += texts.t('ADMIN_REMNAWAVE_UI_SHOW_SYNC_RECOMMENDATIONS_238', 'Обновление данных')
     elif recommendations['sync_type'] == 'new_only':
-        text += texts.t('ADMIN_REMNAWAVE_UI_SHOW_SYNC_RECOMMENDATIONS_239', ' Синхронизация новых')
+        text += texts.t('ADMIN_REMNAWAVE_UI_SHOW_SYNC_RECOMMENDATIONS_239', 'Синхронизация новых')
     else:
-        text += texts.t('ADMIN_REMNAWAVE_UI_SHOW_SYNC_RECOMMENDATIONS_240', ' Синхронизация не требуется')
+        text += texts.t('ADMIN_REMNAWAVE_UI_SHOW_SYNC_RECOMMENDATIONS_240', 'Синхронизация не требуется')
 
     text += texts.t('ADMIN_REMNAWAVE_UI_SHOW_SYNC_RECOMMENDATIONS_241', '\n\n<b>Причины:</b>\n')
     for reason in recommendations['reasons']:
-        text += f'• {_localize_panel_value(texts, reason)}\n'
+        text += f'• {html.escape(str(_localize_panel_value(texts, reason)))}\n'
 
     keyboard = []
 
     if recommendations['should_sync'] and recommendations['sync_type'] != 'none':
         keyboard.append(
             [
-                types.InlineKeyboardButton(
-                    text=texts.t('ADMIN_REMNAWAVE_UI_SHOW_SYNC_RECOMMENDATIONS_242', ' Выполнить рекомендацию'),
+                admin_button(
+                    texts.t('ADMIN_REMNAWAVE_UI_SHOW_SYNC_RECOMMENDATIONS_242', 'Выполнить рекомендацию'),
                     callback_data=f'sync_{recommendations["sync_type"]}_users'
                     if recommendations['sync_type'] != 'update_only'
                     else 'sync_update_data',
+                    icon='refresh',
+                    style='success',
                 )
             ]
         )
 
     keyboard.extend(
         [
-            [types.InlineKeyboardButton(text=' Другие опции', callback_data='admin_rw_sync')],
-            [types.InlineKeyboardButton(text=' Назад', callback_data='admin_remnawave')],
+            [
+                admin_button(
+                    'Другие опции',
+                    callback_data='admin_rw_sync',
+                    icon='settings',
+                    style='primary',
+                )
+            ],
+            [admin_back_button(texts, 'admin_remnawave')],
         ]
     )
 
-    await callback.message.edit_text(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
+    await callback.message.edit_text(
+        admin_screen(_clean_legacy(text), icon='chart', compact=True),
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
+        parse_mode='HTML',
+    )
     await callback.answer()
 
 
@@ -3047,35 +3429,38 @@ async def show_sync_recommendations(callback: types.CallbackQuery, db_user: User
 async def validate_subscriptions(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
     texts = get_texts(db_user.language)
     await callback.message.edit_text(
-        texts.t(
-            'ADMIN_REMNAWAVE_UI_VALIDATE_SUBSCRIPTIONS_245',
-            ' Выполняется валидация подписок...\n\nПроверяем данные, может занять несколько минут.',
+        admin_screen(
+            texts.t(
+                'ADMIN_REMNAWAVE_UI_VALIDATE_SUBSCRIPTIONS_245',
+                'Выполняется валидация подписок...\n\nПроверяем данные, может занять несколько минут.',
+            ),
+            icon='flask',
+            compact=True,
         ),
         reply_markup=None,
+        parse_mode='HTML',
     )
 
     remnawave_service = RemnaWaveService()
     stats = await remnawave_service.validate_and_fix_subscriptions(db)
 
     if stats['errors'] == 0:
-        status_emoji = ''
+        status_icon = admin_icon('success')
         status_text = texts.t('ADMIN_REMNAWAVE_UI_SYNC_ALL_USERS_216', 'успешно завершена')
     else:
-        status_emoji = ''
+        status_icon = admin_icon('error')
         status_text = 'завершена с ошибками'
 
-    text = f"""
-{status_emoji} <b>Валидация {status_text}</b>
+    text = f"""{status_icon} <b>Валидация {status_text}</b>
 
- <b>Результаты:</b>
-•  Проверено подписок: {stats['checked']}
-•  Исправлено подписок: {stats['fixed']}
-•  Найдено проблем: {stats['issues_found']}
-•  Ошибок: {stats['errors']}
-"""
+<b>Результаты:</b>
+• Проверено подписок: {stats['checked']}
+• Исправлено подписок: {stats['fixed']}
+• Найдено проблем: {stats['issues_found']}
+• Ошибок: {stats['errors']}"""
 
     if stats['fixed'] > 0:
-        text += texts.t('ADMIN_REMNAWAVE_UI_VALIDATE_SUBSCRIPTIONS_249', '\n <b>Исправленные проблемы:</b>\n')
+        text += texts.t('ADMIN_REMNAWAVE_UI_VALIDATE_SUBSCRIPTIONS_249', '\n<b>Исправленные проблемы:</b>\n')
         text += texts.t('ADMIN_REMNAWAVE_UI_VALIDATE_SUBSCRIPTIONS_250', '• Статусы просроченных подписок\n')
         text += texts.t('ADMIN_REMNAWAVE_UI_VALIDATE_SUBSCRIPTIONS_251', '• Отсутствующие данные Remnawave\n')
         text += texts.t('ADMIN_REMNAWAVE_UI_VALIDATE_SUBSCRIPTIONS_252', '• Некорректные лимиты трафика\n')
@@ -3084,16 +3469,34 @@ async def validate_subscriptions(callback: types.CallbackQuery, db_user: User, d
     if stats['errors'] > 0:
         text += texts.t(
             'ADMIN_REMNAWAVE_UI_VALIDATE_SUBSCRIPTIONS_254',
-            '\n Обнаружены ошибки при обработке.\nПроверьте логи для подробной информации.',
+            '\nОбнаружены ошибки при обработке.\nПроверьте логи для подробной информации.',
         )
 
     keyboard = [
-        [types.InlineKeyboardButton(text=' Повторить валидацию', callback_data='sync_validate')],
-        [types.InlineKeyboardButton(text=' Полная синхронизация', callback_data='sync_all_users')],
-        [types.InlineKeyboardButton(text=' К синхронизации', callback_data='admin_rw_sync')],
+        [
+            admin_button(
+                'Повторить валидацию',
+                callback_data='sync_validate',
+                icon='refresh',
+                style='primary',
+            )
+        ],
+        [
+            admin_button(
+                _clean_legacy(texts.t('ADMIN_REMNAWAVE_UI_SHOW_SYNC_OPTIONS_191', 'Запустить полную синхронизацию')),
+                callback_data='sync_all_users',
+                icon='refresh',
+                style='success',
+            )
+        ],
+        [admin_back_button(texts, 'admin_rw_sync', label='К синхронизации')],
     ]
 
-    await callback.message.edit_text(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
+    await callback.message.edit_text(
+        admin_screen(_clean_legacy(text), icon='flask', compact=True),
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
+        parse_mode='HTML',
+    )
     await callback.answer()
 
 
@@ -3102,55 +3505,76 @@ async def validate_subscriptions(callback: types.CallbackQuery, db_user: User, d
 async def cleanup_subscriptions(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
     texts = get_texts(db_user.language)
     await callback.message.edit_text(
-        texts.t(
-            'ADMIN_REMNAWAVE_UI_CLEANUP_SUBSCRIPTIONS_258',
-            ' Выполняется очистка неактуальных подписок...\n\nУдаляем подписки пользователей, отсутствующих в панели.',
+        admin_screen(
+            texts.t(
+                'ADMIN_REMNAWAVE_UI_CLEANUP_SUBSCRIPTIONS_258',
+                'Выполняется очистка неактуальных подписок...\n\nУдаляем подписки пользователей, отсутствующих в панели.',
+            ),
+            icon='broom',
+            compact=True,
         ),
         reply_markup=None,
+        parse_mode='HTML',
     )
 
     remnawave_service = RemnaWaveService()
     stats = await remnawave_service.cleanup_orphaned_subscriptions(db)
 
     if stats['errors'] == 0:
-        status_emoji = ''
+        status_icon = admin_icon('success')
         status_text = texts.t('ADMIN_REMNAWAVE_UI_SYNC_ALL_USERS_216', 'успешно завершена')
     else:
-        status_emoji = ''
+        status_icon = admin_icon('error')
         status_text = 'завершена с ошибками'
 
-    text = f"""
-{status_emoji} <b>Очистка {status_text}</b>
+    text = f"""{status_icon} <b>Очистка {status_text}</b>
 
- <b>Результаты:</b>
-•  Проверено подписок: {stats['checked']}
-•  Деактивировано: {stats['deactivated']}
-•  Ошибок: {stats['errors']}
-"""
+<b>Результаты:</b>
+• Проверено подписок: {stats['checked']}
+• Деактивировано: {stats['deactivated']}
+• Ошибок: {stats['errors']}"""
 
     if stats['deactivated'] > 0:
-        text += texts.t('ADMIN_REMNAWAVE_UI_CLEANUP_SUBSCRIPTIONS_262', '\n <b>Деактивированные подписки:</b>\n')
+        text += texts.t('ADMIN_REMNAWAVE_UI_CLEANUP_SUBSCRIPTIONS_262', '\n<b>Деактивированные подписки:</b>\n')
         text += texts.t('ADMIN_REMNAWAVE_UI_CLEANUP_SUBSCRIPTIONS_263', 'Отключены подписки пользователей, которые\n')
         text += texts.t('ADMIN_REMNAWAVE_UI_CLEANUP_SUBSCRIPTIONS_264', 'отсутствуют в панели Remnawave.\n')
     else:
         text += texts.t(
             'ADMIN_REMNAWAVE_UI_CLEANUP_SUBSCRIPTIONS_265',
-            '\n Все подписки актуальны!\nНеактуальных подписок не найдено.',
+            '\nВсе подписки актуальны!\nНеактуальных подписок не найдено.',
         )
 
     if stats['errors'] > 0:
         text += texts.t(
             'ADMIN_REMNAWAVE_UI_VALIDATE_SUBSCRIPTIONS_254',
-            '\n Обнаружены ошибки при обработке.\nПроверьте логи для подробной информации.',
+            '\nОбнаружены ошибки при обработке.\nПроверьте логи для подробной информации.',
         )
 
     keyboard = [
-        [types.InlineKeyboardButton(text=' Повторить очистку', callback_data='sync_cleanup')],
-        [types.InlineKeyboardButton(text=' Валидация', callback_data='sync_validate')],
-        [types.InlineKeyboardButton(text=' К синхронизации', callback_data='admin_rw_sync')],
+        [
+            admin_button(
+                'Повторить очистку',
+                callback_data='sync_cleanup',
+                icon='broom',
+                style='primary',
+            )
+        ],
+        [
+            admin_button(
+                'Валидация',
+                callback_data='sync_validate',
+                icon='flask',
+                style='primary',
+            )
+        ],
+        [admin_back_button(texts, 'admin_rw_sync', label='К синхронизации')],
     ]
 
-    await callback.message.edit_text(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
+    await callback.message.edit_text(
+        admin_screen(_clean_legacy(text), icon='broom', compact=True),
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
+        parse_mode='HTML',
+    )
     await callback.answer()
 
 
@@ -3159,36 +3583,39 @@ async def cleanup_subscriptions(callback: types.CallbackQuery, db_user: User, db
 async def force_cleanup_all_orphaned_users(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
     texts = get_texts(db_user.language)
     await callback.message.edit_text(
-        texts.t(
-            'ADMIN_REMNAWAVE_UI_FORCE_CLEANUP_ALL_ORPHANED_USERS_270',
-            ' Выполняется принудительная очистка всех пользователей, отсутствующих в панели...\n\n ВНИМАНИЕ: Это полностью удалит ВСЕ данные пользователей!\n Включая: транзакции, реферальные доходы, промокоды, серверы, балансы\n\n Пожалуйста, подождите...',
+        admin_screen(
+            texts.t(
+                'ADMIN_REMNAWAVE_UI_FORCE_CLEANUP_ALL_ORPHANED_USERS_270',
+                'Выполняется принудительная очистка всех пользователей, отсутствующих в панели...\n\nВНИМАНИЕ: Это полностью удалит ВСЕ данные пользователей!\nВключая: транзакции, реферальные доходы, промокоды, серверы, балансы\n\nПожалуйста, подождите...',
+            ),
+            icon='warning',
+            compact=True,
         ),
         reply_markup=None,
+        parse_mode='HTML',
     )
 
     remnawave_service = RemnaWaveService()
     stats = await remnawave_service.cleanup_orphaned_subscriptions(db)
 
     if stats['errors'] == 0:
-        status_emoji = ''
+        status_icon = admin_icon('success')
         status_text = texts.t('ADMIN_REMNAWAVE_UI_SYNC_ALL_USERS_216', 'успешно завершена')
     else:
-        status_emoji = ''
+        status_icon = admin_icon('error')
         status_text = 'завершена с ошибками'
 
-    text = f"""
-{status_emoji} <b>Принудительная очистка {status_text}</b>
+    text = f"""{status_icon} <b>Принудительная очистка {status_text}</b>
 
- <b>Результаты:</b>
-•  Проверено подписок: {stats['checked']}
-•  Полностью очищено: {stats['deactivated']}
-•  Ошибок: {stats['errors']}
-"""
+<b>Результаты:</b>
+• Проверено подписок: {stats['checked']}
+• Полностью очищено: {stats['deactivated']}
+• Ошибок: {stats['errors']}"""
 
     if stats['deactivated'] > 0:
         text += """
 
- <b>Полностью очищенные данные:</b>
+<b>Полностью очищенные данные:</b>
 • Подписки сброшены к начальному состоянию
 • Удалены ВСЕ транзакции пользователей
 • Удалены ВСЕ реферальные доходы
@@ -3196,27 +3623,44 @@ async def force_cleanup_all_orphaned_users(callback: types.CallbackQuery, db_use
 • Сброшены балансы к нулю
 • Удалены подключенные серверы
 • Сброшены HWID устройства в Remnawave
-• Очищены Remnawave UUID
-"""
+• Очищены Remnawave UUID"""
     else:
         text += texts.t(
             'ADMIN_REMNAWAVE_UI_FORCE_CLEANUP_ALL_ORPHANED_USERS_275',
-            '\n Неактуальных подписок не найдено!\nВсе пользователи синхронизированы с панелью.',
+            '\nНеактуальных подписок не найдено!\nВсе пользователи синхронизированы с панелью.',
         )
 
     if stats['errors'] > 0:
         text += texts.t(
             'ADMIN_REMNAWAVE_UI_VALIDATE_SUBSCRIPTIONS_254',
-            '\n Обнаружены ошибки при обработке.\nПроверьте логи для подробной информации.',
+            '\nОбнаружены ошибки при обработке.\nПроверьте логи для подробной информации.',
         )
 
     keyboard = [
-        [types.InlineKeyboardButton(text=' Повторить очистку', callback_data='force_cleanup_orphaned')],
-        [types.InlineKeyboardButton(text=' Полная синхронизация', callback_data='sync_all_users')],
-        [types.InlineKeyboardButton(text=' К синхронизации', callback_data='admin_rw_sync')],
+        [
+            admin_button(
+                'Повторить очистку',
+                callback_data='force_cleanup_orphaned',
+                icon='broom',
+                style='danger',
+            )
+        ],
+        [
+            admin_button(
+                _clean_legacy(texts.t('ADMIN_REMNAWAVE_UI_SHOW_SYNC_OPTIONS_191', 'Запустить полную синхронизацию')),
+                callback_data='sync_all_users',
+                icon='refresh',
+                style='success',
+            )
+        ],
+        [admin_back_button(texts, 'admin_rw_sync', label='К синхронизации')],
     ]
 
-    await callback.message.edit_text(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
+    await callback.message.edit_text(
+        admin_screen(_clean_legacy(text), icon='warning', compact=True),
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
+        parse_mode='HTML',
+    )
     await callback.answer()
 
 
@@ -3224,10 +3668,9 @@ async def force_cleanup_all_orphaned_users(callback: types.CallbackQuery, db_use
 @error_handler
 async def confirm_force_cleanup(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
     texts = get_texts(db_user.language)
-    text = """
- <b>ВНИМАНИЕ! ОПАСНАЯ ОПЕРАЦИЯ!</b>
+    text = """<b>ВНИМАНИЕ! ОПАСНАЯ ОПЕРАЦИЯ!</b>
 
- <b>Принудительная очистка полностью удалит:</b>
+<b>Принудительная очистка полностью удалит:</b>
 • ВСЕ транзакции пользователей отсутствующих в панели
 • ВСЕ реферальные доходы и связи
 • ВСЕ использования промокодов
@@ -3236,32 +3679,38 @@ async def confirm_force_cleanup(callback: types.CallbackQuery, db_user: User, db
 • ВСЕ HWID устройства в Remnawave
 • ВСЕ Remnawave UUID и ссылки
 
- <b>Это действие НЕОБРАТИМО!</b>
+<b>Это действие НЕОБРАТИМО!</b>
 
 Используйте только если:
 • Обычная синхронизация не помогает
 • Нужно полностью очистить "мусорные" данные
 • После массового удаления пользователей из панели
 
- <b>Вы действительно хотите продолжить?</b>
-"""
+<b>Вы действительно хотите продолжить?</b>"""
 
     keyboard = [
         [
-            types.InlineKeyboardButton(
-                text=texts.t('ADMIN_REMNAWAVE_UI_CONFIRM_FORCE_CLEANUP_281', ' ДА, ОЧИСТИТЬ ВСЕ'),
+            admin_button(
+                texts.t('ADMIN_REMNAWAVE_UI_CONFIRM_FORCE_CLEANUP_281', 'ДА, ОЧИСТИТЬ ВСЕ'),
                 callback_data='force_cleanup_orphaned',
+                icon='delete',
+                style='danger',
             )
         ],
         [
-            types.InlineKeyboardButton(
-                text=texts.t('ADMIN_REMNAWAVE_UI_SHOW_SQUAD_RENAME_FORM_124', ' Отмена'),
-                callback_data='admin_rw_sync',
+            admin_back_button(
+                texts,
+                'admin_rw_sync',
+                label=texts.t('ADMIN_REMNAWAVE_UI_SHOW_SQUAD_RENAME_FORM_124', 'Отмена'),
             )
         ],
     ]
 
-    await callback.message.edit_text(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
+    await callback.message.edit_text(
+        admin_screen(_clean_legacy(text), icon='warning', compact=True),
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
+        parse_mode='HTML',
+    )
     await callback.answer()
 
 
@@ -3271,24 +3720,28 @@ async def sync_users(callback: types.CallbackQuery, db_user: User, db: AsyncSess
     texts = get_texts(db_user.language)
     sync_type = callback.data.split('_')[-2] + '_' + callback.data.split('_')[-1]
 
-    progress_text = texts.t('ADMIN_REMNAWAVE_UI_SYNC_USERS_283', ' Выполняется синхронизация...\n\n')
+    progress_text = texts.t('ADMIN_REMNAWAVE_UI_SYNC_USERS_283', 'Выполняется синхронизация...\n\n')
 
     if sync_type == 'all_users':
-        progress_text += texts.t('ADMIN_REMNAWAVE_UI_SYNC_USERS_284', ' Тип: Полная синхронизация\n')
+        progress_text += texts.t('ADMIN_REMNAWAVE_UI_SYNC_USERS_284', 'Тип: Полная синхронизация\n')
         progress_text += texts.t('ADMIN_REMNAWAVE_UI_SYNC_USERS_285', '• Создание новых пользователей\n')
         progress_text += texts.t('ADMIN_REMNAWAVE_UI_SYNC_USERS_286', '• Обновление существующих\n')
         progress_text += texts.t('ADMIN_REMNAWAVE_UI_SYNC_USERS_287', '• Удаление неактуальных подписок\n')
     elif sync_type == 'new_users':
-        progress_text += texts.t('ADMIN_REMNAWAVE_UI_SYNC_USERS_288', ' Тип: Только новые пользователи\n')
+        progress_text += texts.t('ADMIN_REMNAWAVE_UI_SYNC_USERS_288', 'Тип: Только новые пользователи\n')
         progress_text += texts.t('ADMIN_REMNAWAVE_UI_SYNC_USERS_289', '• Создание пользователей из панели\n')
     elif sync_type == 'update_data':
-        progress_text += texts.t('ADMIN_REMNAWAVE_UI_SYNC_USERS_290', ' Тип: Обновление данных\n')
+        progress_text += texts.t('ADMIN_REMNAWAVE_UI_SYNC_USERS_290', 'Тип: Обновление данных\n')
         progress_text += texts.t('ADMIN_REMNAWAVE_UI_SYNC_USERS_291', '• Обновление информации о трафике\n')
         progress_text += texts.t('ADMIN_REMNAWAVE_UI_SYNC_USERS_292', '• Синхронизация подписок\n')
 
-    progress_text += texts.t('ADMIN_REMNAWAVE_UI_SYNC_USERS_293', '\n Пожалуйста, подождите...')
+    progress_text += texts.t('ADMIN_REMNAWAVE_UI_SYNC_USERS_293', '\nПожалуйста, подождите...')
 
-    await callback.message.edit_text(progress_text, reply_markup=None)
+    await callback.message.edit_text(
+        admin_screen(_clean_legacy(progress_text), icon='sync', compact=True),
+        reply_markup=None,
+        parse_mode='HTML',
+    )
 
     remnawave_service = RemnaWaveService()
 
@@ -3297,54 +3750,52 @@ async def sync_users(callback: types.CallbackQuery, db_user: User, db: AsyncSess
     stats = await remnawave_service.sync_users_from_panel(db, sync_map.get(sync_type, 'all'))
 
     total_operations = stats['created'] + stats['updated'] + stats.get('deleted', 0)
-    stats['created'] + stats['updated'] + stats.get('deleted', 0)
 
     if stats['errors'] == 0:
-        status_emoji = ''
+        status_icon = admin_icon('success')
         status_text = texts.t('ADMIN_REMNAWAVE_UI_SYNC_ALL_USERS_216', 'успешно завершена')
     elif stats['errors'] < total_operations:
-        status_emoji = ''
+        status_icon = admin_icon('warning')
         status_text = texts.t('ADMIN_REMNAWAVE_UI_SYNC_ALL_USERS_217', 'завершена с предупреждениями')
     else:
-        status_emoji = ''
+        status_icon = admin_icon('error')
         status_text = texts.t('ADMIN_REMNAWAVE_UI_VALIDATE_SUBSCRIPTIONS_247', 'завершена с ошибками')
 
-    text = f"""
-{status_emoji} <b>Синхронизация {status_text}</b>
+    text = f"""{status_icon} <b>Синхронизация {status_text}</b>
 
- <b>Результат:</b>
+<b>Результат:</b>
 """
 
     if sync_type == 'all_users':
-        text += texts.t('ADMIN_REMNAWAVE_UI_SYNC_USERS_298', '•  Создано: {value1}\n').format(value1=stats['created'])
-        text += texts.t('ADMIN_REMNAWAVE_UI_SYNC_USERS_299', '•  Обновлено: {value1}\n').format(value1=stats['updated'])
+        text += texts.t('ADMIN_REMNAWAVE_UI_SYNC_USERS_298', '• Создано: {value1}\n').format(value1=stats['created'])
+        text += texts.t('ADMIN_REMNAWAVE_UI_SYNC_USERS_299', '• Обновлено: {value1}\n').format(value1=stats['updated'])
         if 'deleted' in stats:
-            text += texts.t('ADMIN_REMNAWAVE_UI_SYNC_USERS_300', '•  Удалено: {value1}\n').format(
+            text += texts.t('ADMIN_REMNAWAVE_UI_SYNC_USERS_300', '• Удалено: {value1}\n').format(
                 value1=stats['deleted']
             )
-        text += texts.t('ADMIN_REMNAWAVE_UI_SYNC_USERS_301', '•  Ошибок: {value1}\n').format(value1=stats['errors'])
+        text += texts.t('ADMIN_REMNAWAVE_UI_SYNC_USERS_301', '• Ошибок: {value1}\n').format(value1=stats['errors'])
     elif sync_type == 'new_users':
-        text += texts.t('ADMIN_REMNAWAVE_UI_SYNC_USERS_298', '•  Создано: {value1}\n').format(value1=stats['created'])
-        text += texts.t('ADMIN_REMNAWAVE_UI_SYNC_USERS_301', '•  Ошибок: {value1}\n').format(value1=stats['errors'])
+        text += texts.t('ADMIN_REMNAWAVE_UI_SYNC_USERS_298', '• Создано: {value1}\n').format(value1=stats['created'])
+        text += texts.t('ADMIN_REMNAWAVE_UI_SYNC_USERS_301', '• Ошибок: {value1}\n').format(value1=stats['errors'])
         if stats['created'] == 0 and stats['errors'] == 0:
-            text += texts.t('ADMIN_REMNAWAVE_UI_SYNC_USERS_304', '\n Новых пользователей не найдено')
+            text += texts.t('ADMIN_REMNAWAVE_UI_SYNC_USERS_304', '\nНовых пользователей не найдено')
     elif sync_type == 'update_data':
-        text += texts.t('ADMIN_REMNAWAVE_UI_SYNC_USERS_299', '•  Обновлено: {value1}\n').format(value1=stats['updated'])
-        text += texts.t('ADMIN_REMNAWAVE_UI_SYNC_USERS_301', '•  Ошибок: {value1}\n').format(value1=stats['errors'])
+        text += texts.t('ADMIN_REMNAWAVE_UI_SYNC_USERS_299', '• Обновлено: {value1}\n').format(value1=stats['updated'])
+        text += texts.t('ADMIN_REMNAWAVE_UI_SYNC_USERS_301', '• Ошибок: {value1}\n').format(value1=stats['errors'])
         if stats['updated'] == 0 and stats['errors'] == 0:
-            text += texts.t('ADMIN_REMNAWAVE_UI_SYNC_USERS_307', '\n Все данные актуальны')
+            text += texts.t('ADMIN_REMNAWAVE_UI_SYNC_USERS_307', '\nВсе данные актуальны')
 
     if stats['errors'] > 0:
-        text += texts.t('ADMIN_REMNAWAVE_UI_SYNC_USERS_308', '\n <b>Внимание:</b>\n')
+        text += texts.t('ADMIN_REMNAWAVE_UI_SYNC_USERS_308', '\n<b>Внимание:</b>\n')
         text += texts.t('ADMIN_REMNAWAVE_UI_SYNC_USERS_309', 'Некоторые операции завершились с ошибками.\n')
         text += texts.t('ADMIN_REMNAWAVE_UI_SYNC_USERS_310', 'Проверьте логи для получения подробной информации.')
 
     if sync_type == 'all_users' and 'deleted' in stats and stats['deleted'] > 0:
-        text += texts.t('ADMIN_REMNAWAVE_UI_SYNC_USERS_311', '\n <b>Удаленные подписки:</b>\n')
+        text += texts.t('ADMIN_REMNAWAVE_UI_SYNC_USERS_311', '\n<b>Удаленные подписки:</b>\n')
         text += texts.t('ADMIN_REMNAWAVE_UI_SYNC_USERS_312', 'Деактивированы подписки пользователей,\n')
         text += texts.t('ADMIN_REMNAWAVE_UI_SYNC_USERS_313', 'которые отсутствуют в панели Remnawave.')
 
-    text += texts.t('ADMIN_REMNAWAVE_UI_SYNC_USERS_314', '\n\n <b>Рекомендации:</b>\n')
+    text += texts.t('ADMIN_REMNAWAVE_UI_SYNC_USERS_314', '\n\n<b>Рекомендации:</b>\n')
     if sync_type == 'all_users':
         text += texts.t('ADMIN_REMNAWAVE_UI_SYNC_USERS_315', '• Полная синхронизация выполнена\n')
         text += texts.t('ADMIN_REMNAWAVE_UI_SYNC_USERS_316', '• Рекомендуется запускать раз в день\n')
@@ -3360,9 +3811,11 @@ async def sync_users(callback: types.CallbackQuery, db_user: User, db: AsyncSess
     if stats['errors'] > 0:
         keyboard.append(
             [
-                types.InlineKeyboardButton(
-                    text=texts.t('ADMIN_REMNAWAVE_UI_SYNC_ALL_USERS_223', ' Повторить синхронизацию'),
+                admin_button(
+                    _clean_legacy(texts.t('ADMIN_REMNAWAVE_UI_SYNC_ALL_USERS_223', 'Повторить синхронизацию')),
                     callback_data=callback.data,
+                    icon='refresh',
+                    style='primary',
                 )
             ]
         )
@@ -3370,9 +3823,13 @@ async def sync_users(callback: types.CallbackQuery, db_user: User, db: AsyncSess
     if sync_type != 'all_users':
         keyboard.append(
             [
-                types.InlineKeyboardButton(
-                    text=texts.t('ADMIN_REMNAWAVE_UI_SHOW_SYNC_RECOMMENDATIONS_237', ' Полная синхронизация'),
+                admin_button(
+                    _clean_legacy(
+                        texts.t('ADMIN_REMNAWAVE_UI_SHOW_SYNC_OPTIONS_191', 'Запустить полную синхронизацию')
+                    ),
                     callback_data='sync_all_users',
+                    icon='refresh',
+                    style='success',
                 )
             ]
         )
@@ -3380,24 +3837,28 @@ async def sync_users(callback: types.CallbackQuery, db_user: User, db: AsyncSess
     keyboard.extend(
         [
             [
-                types.InlineKeyboardButton(
-                    text=texts.t('ADMIN_REMNAWAVE_UI_SYNC_ALL_USERS_224', ' Статистика системы'),
+                admin_button(
+                    texts.t('ADMIN_REMNAWAVE_UI_SYNC_ALL_USERS_224', 'Статистика системы'),
                     callback_data='admin_rw_system',
+                    icon='chart',
+                    style='primary',
                 ),
-                types.InlineKeyboardButton(
-                    text=texts.t('ADMIN_REMNAWAVE_UI_SYNC_ALL_USERS_225', ' Ноды'), callback_data='admin_rw_nodes'
+                admin_button(
+                    texts.t('ADMIN_REMNAWAVE_UI_SYNC_ALL_USERS_225', 'Ноды'),
+                    callback_data='admin_rw_nodes',
+                    icon='servers',
+                    style='primary',
                 ),
             ],
-            [
-                types.InlineKeyboardButton(
-                    text=texts.t('ADMIN_REMNAWAVE_UI_SHOW_SYSTEM_STATS_039', '← Назад'), callback_data='admin_remnawave'
-                )
-            ],
-            [types.InlineKeyboardButton(text=' Назад', callback_data='admin_remnawave')],
+            [admin_back_button(texts, 'admin_remnawave')],
         ]
     )
 
-    await callback.message.edit_text(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
+    await callback.message.edit_text(
+        admin_screen(_clean_legacy(text), icon='sync', compact=True),
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
+        parse_mode='HTML',
+    )
     await callback.answer()
 
 
@@ -3408,23 +3869,27 @@ async def show_squads_management(callback: types.CallbackQuery, db_user: User, d
     remnawave_service = RemnaWaveService()
     squads = await remnawave_service.get_all_squads()
 
-    text = texts.t('ADMIN_REMNAWAVE_UI_SHOW_SQUADS_MANAGEMENT_326', ' <b>Управление сквадами</b>\n\n')
+    text = texts.t('ADMIN_REMNAWAVE_UI_SHOW_SQUADS_MANAGEMENT_326', '<b>Управление сквадами</b>\n\n')
     keyboard = []
 
     if squads:
         for squad in squads:
-            text += f' <b>{squad["name"]}</b>\n'
-            text += texts.t('ADMIN_REMNAWAVE_UI_SHOW_SQUADS_MANAGEMENT_327', ' Участников: {value1}\n').format(
+            safe_name = html.escape(str(squad['name']))
+            text += f'<b>{safe_name}</b>\n'
+            text += texts.t('ADMIN_REMNAWAVE_UI_SHOW_SQUADS_MANAGEMENT_327', 'Участников: {value1}\n').format(
                 value1=squad['members_count']
             )
-            text += texts.t('ADMIN_REMNAWAVE_UI_SHOW_SQUADS_MANAGEMENT_328', ' Инбаундов: {value1}\n\n').format(
+            text += texts.t('ADMIN_REMNAWAVE_UI_SHOW_SQUADS_MANAGEMENT_328', 'Инбаундов: {value1}\n\n').format(
                 value1=squad['inbounds_count']
             )
 
             keyboard.append(
                 [
-                    types.InlineKeyboardButton(
-                        text=f' {squad["name"]}', callback_data=f'admin_squad_manage_{squad["uuid"]}'
+                    admin_button(
+                        str(squad['name']),
+                        callback_data=f'admin_squad_manage_{squad["uuid"]}',
+                        icon='servers',
+                        style='primary',
                     )
                 ]
             )
@@ -3433,12 +3898,23 @@ async def show_squads_management(callback: types.CallbackQuery, db_user: User, d
 
     keyboard.extend(
         [
-            [types.InlineKeyboardButton(text=' Создать сквад', callback_data='admin_squad_create')],
-            [types.InlineKeyboardButton(text=' Назад', callback_data='admin_remnawave')],
+            [
+                admin_button(
+                    texts.t('ADMIN_REMNAWAVE_UI_PROCESS_SQUAD_NAME_158', 'Создать сквад'),
+                    callback_data='admin_squad_create',
+                    icon='plus',
+                    style='success',
+                )
+            ],
+            [admin_back_button(texts, 'admin_remnawave')],
         ]
     )
 
-    await callback.message.edit_text(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
+    await callback.message.edit_text(
+        admin_screen(_clean_legacy(text), icon='servers', compact=True),
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
+        parse_mode='HTML',
+    )
     await callback.answer()
 
 

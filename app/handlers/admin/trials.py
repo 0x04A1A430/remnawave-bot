@@ -9,7 +9,7 @@ from app.database.crud.subscription import (
 from app.database.models import User
 from app.keyboards.admin import get_admin_trials_keyboard
 from app.localization.texts import get_texts
-from app.utils.admin_ui import admin_screen
+from app.utils.admin_ui import admin_heading, admin_quote, admin_screen
 from app.utils.decorators import admin_required, error_handler
 
 
@@ -35,7 +35,7 @@ async def show_trials_panel(
         active=stats.get('active_trials', 0),
         resettable=stats.get('resettable_trials', 0),
     )
-    message = f'<b>{title}</b>\n\n{stats_text}'
+    message = f'{admin_heading("trials", title)}\n\n{admin_quote(stats_text)}'
 
     await callback.message.edit_text(
         admin_screen(message, icon='trials', compact=True),

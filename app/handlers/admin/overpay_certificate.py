@@ -11,7 +11,7 @@ from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
 from app.database.database import AsyncSessionLocal
 from app.localization.texts import get_texts
 from app.services import overpay_certificate_service as cert_service
-from app.utils.admin_ui import admin_back_button, admin_button, admin_screen
+from app.utils.admin_ui import admin_back_button, admin_button, admin_quote, admin_screen
 from app.utils.decorators import admin_required, error_handler
 from app.utils.miniapp_buttons import strip_leading_emoji
 
@@ -70,29 +70,36 @@ def _back_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
 def _status_view(language: str = 'ru') -> tuple[str, InlineKeyboardMarkup]:
     texts = get_texts(language)
     status = cert_service.get_status()
-    lines = [texts.t('ADMIN_OVERPAY_CERT_001'), '']
+    header = texts.t('ADMIN_OVERPAY_CERT_001')
+    icon = 'certificate'
+    meta_lines: list[str] = []
 
     if not status['uploaded']:
-        lines.append(texts.t('ADMIN_OVERPAY_CERT_005'))
+        meta_lines.append(texts.t('ADMIN_OVERPAY_CERT_005'))
     elif status['valid']:
-        lines.append(texts.t('ADMIN_OVERPAY_CERT_011'))
-        lines.append(texts.t('ADMIN_OVERPAY_CERT_003').format(value1=html.escape(status['subject'])))
-        lines.append(texts.t('ADMIN_OVERPAY_CERT_004').format(value1=status['not_valid_after']))
+        icon = 'success'
+        meta_lines.append(texts.t('ADMIN_OVERPAY_CERT_011'))
+        meta_lines.append(texts.t('ADMIN_OVERPAY_CERT_003').format(value1=html.escape(status['subject'])))
+        meta_lines.append(texts.t('ADMIN_OVERPAY_CERT_004').format(value1=status['not_valid_after']))
     else:
-        lines.append(texts.t('ADMIN_OVERPAY_CERT_012'))
+        icon = 'error'
+        meta_lines.append(texts.t('ADMIN_OVERPAY_CERT_012'))
 
     if status['uploaded']:
-        lines.append(texts.t('ADMIN_OVERPAY_CERT_006').format(value1=html.escape(status['path'])))
+        meta_lines.append(texts.t('ADMIN_OVERPAY_CERT_006').format(value1=html.escape(status['path'])))
+
+    meta_body = '\n'.join(meta_lines)
+    text = f'{header}\n\n{admin_quote(meta_body)}'
 
     if status['env_locked_path'] or status['env_locked_passphrase']:
-        lines.append('')
-        lines.append(_label(texts.t('ADMIN_OVERPAY_CERT_000', ENV_LOCK_NOTE)))
+        text += '\n\n' + _label(texts.t('ADMIN_OVERPAY_CERT_000', ENV_LOCK_NOTE))
 
     buttons = [
         [
             admin_button(
                 _label(texts.t('ADMIN_OVERPAY_CERT_018')),
                 callback_data='overpay_cert:upload',
+                icon='upload',
                 style='success',
             )
         ]
@@ -118,7 +125,10 @@ def _status_view(language: str = 'ru') -> tuple[str, InlineKeyboardMarkup]:
         ]
     )
 
-    return admin_screen('\n'.join(lines), icon='success', compact=True), InlineKeyboardMarkup(inline_keyboard=buttons)
+    return (
+        admin_screen(text, icon=icon, compact=True),
+        InlineKeyboardMarkup(inline_keyboard=buttons),
+    )
 
 
 @router.callback_query(F.data == 'overpay_cert')
@@ -196,30 +206,33 @@ async def process_certificate_file(message: Message, state: FSMContext, **kwargs
     document = message.document
     if not document:
         await message.answer(
-            texts.t('ADMIN_OVERPAY_CERT_013'),
+            admin_screen(texts.t('ADMIN_OVERPAY_CERT_013'), icon='warning', compact=True),
             reply_markup=_cancel_keyboard(texts.language),
+            parse_mode='HTML',
         )
         return
 
     file_name = document.file_name or ''
     if not file_name.lower().endswith(ALLOWED_EXTENSIONS):
         await message.answer(
-            texts.t('ADMIN_OVERPAY_CERT_014'),
+            admin_screen(texts.t('ADMIN_OVERPAY_CERT_014'), icon='error', compact=True),
             reply_markup=_cancel_keyboard(texts.language),
+            parse_mode='HTML',
         )
         return
 
     if document.file_size and document.file_size > cert_service.MAX_P12_SIZE:
         await message.answer(
-            texts.t('ADMIN_OVERPAY_CERT_015'),
+            admin_screen(texts.t('ADMIN_OVERPAY_CERT_015'), icon='error', compact=True),
             reply_markup=_cancel_keyboard(texts.language),
+            parse_mode='HTML',
         )
         return
 
     await state.update_data(overpay_cert_file_id=document.file_id)
     await state.set_state(OverpayCertStates.waiting_for_passphrase)
     await message.answer(
-        texts.t('ADMIN_OVERPAY_CERT_010'),
+        admin_screen(texts.t('ADMIN_OVERPAY_CERT_010'), icon='lock', compact=True),
         reply_markup=_cancel_keyboard(texts.language),
         parse_mode='HTML',
     )
@@ -232,7 +245,7 @@ async def process_certificate_passphrase(message: Message, state: FSMContext, **
     texts = get_texts(getattr(kwargs.get('db_user'), 'language', 'ru'))
     if not message.text:
         await message.answer(
-            texts.t('ADMIN_OVERPAY_CERT_016'),
+            admin_screen(texts.t('ADMIN_OVERPAY_CERT_016'), icon='warning', compact=True),
             reply_markup=_cancel_keyboard(texts.language),
             parse_mode='HTML',
         )
@@ -251,7 +264,7 @@ async def process_certificate_passphrase(message: Message, state: FSMContext, **
 
     if not file_id:
         await message.answer(
-            texts.t('ADMIN_OVERPAY_CERT_017'),
+            admin_screen(texts.t('ADMIN_OVERPAY_CERT_017'), icon='error', compact=True),
             reply_markup=_back_keyboard(texts.language),
             parse_mode='HTML',
         )
@@ -263,7 +276,7 @@ async def process_certificate_passphrase(message: Message, state: FSMContext, **
     except TelegramBadRequest as error:
         logger.warning('Overpay: не удалось скачать файл сертификата', error=error)
         await message.answer(
-            texts.t('ADMIN_OVERPAY_CERT_020'),
+            admin_screen(texts.t('ADMIN_OVERPAY_CERT_020'), icon='error', compact=True),
             reply_markup=_back_keyboard(texts.language),
             parse_mode='HTML',
         )
@@ -274,27 +287,30 @@ async def process_certificate_passphrase(message: Message, state: FSMContext, **
             metadata = await cert_service.store_certificate(db, buffer.getvalue(), passphrase)
         except ValueError as error:
             await message.answer(
-                html.escape(_certificate_error_text(str(error), texts)),
+                admin_screen(
+                    html.escape(_certificate_error_text(str(error), texts)),
+                    icon='error',
+                    compact=True,
+                ),
                 reply_markup=_back_keyboard(texts.language),
                 parse_mode='HTML',
             )
             return
 
-    lines = [
-        texts.t('ADMIN_OVERPAY_CERT_002'),
-        '',
+    meta_lines = [
         texts.t('ADMIN_OVERPAY_CERT_003').format(value1=html.escape(metadata['subject'])),
         texts.t('ADMIN_OVERPAY_CERT_004').format(value1=metadata['not_valid_after']),
     ]
+    meta_body = '\n'.join(meta_lines)
+    message_text = f'{texts.t("ADMIN_OVERPAY_CERT_002")}\n\n{admin_quote(meta_body)}'
     if metadata['warning']:
-        lines.append('')
         warning = metadata['warning']
         if warning == cert_service.ENV_LOCK_WARNING.format(path=metadata['path']):
             warning = texts.t('ADMIN_OVERPAY_CERT_ENV_WARNING').format(path=metadata['path'])
-        lines.append(html.escape(warning))
+        message_text += f'\n\n{html.escape(warning)}'
 
     await message.answer(
-        admin_screen('\n'.join(lines), icon='success', compact=True),
+        admin_screen(message_text, icon='success', compact=True),
         reply_markup=_back_keyboard(texts.language),
         parse_mode='HTML',
     )

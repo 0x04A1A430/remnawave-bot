@@ -37,7 +37,7 @@ async def show_reports_menu(
                     'ADMIN_REPORT_UI_000', '<b>Отчеты</b>\n\nВыберите период, чтобы отправить отчет в админский топик.'
                 )
             ).strip(),
-            icon='stats',
+            icon='report',
             compact=True,
         ),
         reply_markup=get_admin_reports_keyboard(db_user.language),

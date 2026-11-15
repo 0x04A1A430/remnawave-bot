@@ -10,21 +10,24 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database.models import User
 from app.localization.texts import get_texts
-from app.utils.admin_ui import admin_back_button, admin_button, admin_screen
+from app.utils.admin_ui import admin_back_button, admin_button, admin_quote, admin_screen
 from app.utils.decorators import admin_required, error_handler
+from app.utils.miniapp_buttons import strip_leading_emoji
 
 
 logger = structlog.get_logger(__name__)
 
 LOG_PREVIEW_LIMIT = 2300
 
-# Следы прошлого оформления, которые остались в локалях перед заголовком.
-_LEGACY_TITLE_GLYPHS = '▤▣▥↻ '
+
+def _label(value: str) -> str:
+    """Подпись кнопки без старого ведущего глифа и лишних пробелов."""
+    return strip_leading_emoji(value).strip()
 
 
 def _screen_title(text: str, icon: str = 'logs') -> str:
     """Заголовок экрана в общем стиле: без legacy-маркера и ведущего пробела."""
-    return admin_screen(text.lstrip(_LEGACY_TITLE_GLYPHS), icon=icon)
+    return admin_screen(text, icon=icon)
 
 
 def _resolve_log_path() -> Path:
@@ -45,9 +48,9 @@ def _build_logs_message(log_path: Path, language: str = 'ru') -> str:
             get_texts(language)
             .t(
                 'ADMIN_SYSTEM_LOGS_UI_000',
-                ' <b>Системные логи</b>\n\nФайл <code>{v0}</code> пока не создан.\nЛоги появятся автоматически после первой записи.',
+                '<b>Системные логи</b>\n\nФайл <code>{v0}</code> пока не создан.\nЛоги появятся автоматически после первой записи.',
             )
-            .format(v0=log_path)
+            .format(v0=escape(str(log_path)))
         )
         return _screen_title(message)
 
@@ -59,9 +62,9 @@ def _build_logs_message(log_path: Path, language: str = 'ru') -> str:
             get_texts(language)
             .t(
                 'ADMIN_SYSTEM_LOGS_UI_007',
-                ' <b>Ошибка чтения логов</b>\n\nНе удалось прочитать файл <code>{v0}</code>.',
+                '<b>Ошибка чтения логов</b>\n\nНе удалось прочитать файл <code>{v0}</code>.',
             )
-            .format(v0=log_path)
+            .format(v0=escape(str(log_path)))
         )
         return _screen_title(message, icon='error')
 
@@ -77,12 +80,22 @@ def _build_logs_message(log_path: Path, language: str = 'ru') -> str:
         truncated = total_length > LOG_PREVIEW_LIMIT
 
     details_lines = [
-        _screen_title(get_texts(language).t('ADMIN_SYSTEM_LOGS_UI_002', ' <b>Системные логи</b>')),
+        _screen_title(get_texts(language).t('ADMIN_SYSTEM_LOGS_UI_002', '<b>Системные логи</b>')),
         '',
-        f'<b>Файл:</b> <code>{log_path}</code>',
-        f'<b>Обновлен:</b> {updated_at.strftime("%d.%m.%Y %H:%M:%S")}',
-        f'<b>Размер:</b> {total_length} символов',
-        (f'Показаны последние {LOG_PREVIEW_LIMIT} символов.' if truncated else 'Показано все содержимое файла.'),
+        admin_quote(
+            '\n'.join(
+                [
+                    f'<b>Файл:</b> <code>{escape(str(log_path))}</code>',
+                    f'<b>Обновлен:</b> {updated_at.strftime("%d.%m.%Y %H:%M:%S")}',
+                    f'<b>Размер:</b> {total_length} символов',
+                    (
+                        f'Показаны последние {LOG_PREVIEW_LIMIT} символов.'
+                        if truncated
+                        else 'Показано все содержимое файла.'
+                    ),
+                ]
+            )
+        ),
         '',
         _format_preview_block(preview_text),
     ]
@@ -96,23 +109,23 @@ def _get_logs_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
         inline_keyboard=[
             [
                 admin_button(
-                    texts.t('ADMIN_SYSTEM_LOGS_UI_014', ' Обновить'),
+                    _label(texts.t('ADMIN_SYSTEM_LOGS_UI_014', 'Обновить')),
                     callback_data='admin_system_logs_refresh',
                     style='primary',
                 )
             ],
             [
                 admin_button(
-                    texts.t('ADMIN_SYSTEM_LOGS_UI_015', ' Скачать лог'),
+                    _label(texts.t('ADMIN_SYSTEM_LOGS_UI_015', 'Скачать лог')),
                     callback_data='admin_system_logs_download',
-                    style='success',
+                    style='primary',
                 )
             ],
             [
                 admin_back_button(
                     texts,
                     'admin_submenu_system',
-                    label=texts.t('ADMIN_SYSTEM_LOGS_UI_016', '← Назад'),
+                    label=_label(texts.t('ADMIN_SYSTEM_LOGS_UI_016', 'Назад')),
                 )
             ],
         ]
@@ -146,7 +159,7 @@ async def refresh_system_logs(
 
     reply_markup = _get_logs_keyboard(language=db_user.language)
     await callback.message.edit_text(message, reply_markup=reply_markup, parse_mode='HTML')
-    await callback.answer(get_texts(db_user.language).t('ADMIN_SYSTEM_LOGS_UI_010', ' Обновлено'))
+    await callback.answer(_label(get_texts(db_user.language).t('ADMIN_SYSTEM_LOGS_UI_010', 'Обновлено')))
 
 
 @admin_required
@@ -160,24 +173,34 @@ async def download_system_logs(
 
     if not log_path.exists() or not log_path.is_file():
         await callback.answer(
-            get_texts(db_user.language).t('ADMIN_SYSTEM_LOGS_UI_011', ' Лог-файл не найден'), show_alert=True
+            _label(get_texts(db_user.language).t('ADMIN_SYSTEM_LOGS_UI_011', 'Лог-файл не найден')), show_alert=True
         )
         return
 
     try:
-        await callback.answer(get_texts(db_user.language).t('ADMIN_SYSTEM_LOGS_UI_012', ' Отправляю лог...'))
+        await callback.answer(_label(get_texts(db_user.language).t('ADMIN_SYSTEM_LOGS_UI_012', 'Отправляю лог...')))
 
         document = FSInputFile(log_path)
         stats = log_path.stat()
         updated_at = datetime.fromtimestamp(stats.st_mtime, tz=UTC).strftime('%d.%m.%Y %H:%M:%S')
-        caption = f' Лог-файл <code>{log_path.name}</code>\n Путь: <code>{log_path}</code>\n Обновлен: {updated_at}'
+        caption = '\n'.join(
+            [
+                f'Лог-файл <code>{escape(log_path.name)}</code>',
+                f'Путь: <code>{escape(str(log_path))}</code>',
+                f'Обновлен: {updated_at}',
+            ]
+        )
         await callback.message.answer_document(document=document, caption=caption, parse_mode='HTML')
     except Exception as error:  # pragma: no cover - защита от ошибок отправки
         logger.error('Ошибка отправки лог-файла', log_path=log_path, error=error)
         await callback.message.answer(
-            get_texts(db_user.language).t(
-                'ADMIN_SYSTEM_LOGS_UI_013',
-                ' <b>Не удалось отправить лог-файл</b>\n\nПроверьте журналы приложения или повторите попытку позже.',
+            admin_screen(
+                get_texts(db_user.language).t(
+                    'ADMIN_SYSTEM_LOGS_UI_013',
+                    '<b>Не удалось отправить лог-файл</b>\n\nПроверьте журналы приложения или повторите попытку позже.',
+                ),
+                icon='error',
+                compact=True,
             ),
             parse_mode='HTML',
         )

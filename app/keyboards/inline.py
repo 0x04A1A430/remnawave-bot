@@ -10,9 +10,10 @@ from app.config import PERIOD_PRICES, settings
 from app.database.models import User
 from app.localization.loader import DEFAULT_LANGUAGE
 from app.localization.texts import get_texts
+from app.utils.admin_ui import ADMIN_ICONS as _UI_ICONS
 from app.utils.button_emoji import make_button
 from app.utils.device_display import format_device_label
-from app.utils.miniapp_buttons import build_miniapp_or_callback_button
+from app.utils.miniapp_buttons import build_miniapp_or_callback_button, strip_leading_emoji
 from app.utils.price_display import PriceInfo, format_price_button
 from app.utils.pricing_utils import (
     apply_percentage_discount,
@@ -389,6 +390,16 @@ def _is_support_enabled() -> bool:
         return settings.SUPPORT_MENU_ENABLED
 
 
+def _are_support_tickets_enabled() -> bool:
+    """Тикеты включены — кнопка поддержки должна вести в меню тикетов, не по URL."""
+    try:
+        from app.services.support_settings_service import SupportSettingsService
+
+        return SupportSettingsService.is_tickets_enabled()
+    except Exception:
+        return settings.is_support_tickets_enabled()
+
+
 def _build_cabinet_main_menu_keyboard(
     language: str,
     texts,
@@ -545,7 +556,10 @@ def _build_cabinet_main_menu_keyboard(
                     if not section_cfg.get('enabled', True):
                         continue
                     sup_text = section_cfg.get('labels', {}).get(language, '') or texts.MENU_SUPPORT
-                    row_buttons.append(_cabinet_button(sup_text, '/support', 'menu_support'))
+                    if _are_support_tickets_enabled():
+                        row_buttons.append(make_button(text=sup_text, callback_data='menu_support', style='primary'))
+                    else:
+                        row_buttons.append(_cabinet_button(sup_text, '/support', 'menu_support'))
 
                 case 'info':
                     if not section_cfg.get('enabled', True):
@@ -836,21 +850,20 @@ def get_main_menu_keyboard(
         row = bottom_buttons[i : i + 3]
         keyboard.append(row)
 
-    # Кнопка Поддержка — отдельной строкой, прямая ссылка на канал
+    # Кнопка Поддержка — отдельной строкой.
+    # Если включены тикеты, она всегда ведёт в меню тикетов, даже когда задан
+    # SUPPORT_USERNAME: иначе URL-кнопка открывает канал и обходит тикеты.
     try:
         from app.services.support_settings_service import SupportSettingsService
 
         support_enabled = SupportSettingsService.is_support_menu_enabled()
+        tickets_enabled = SupportSettingsService.is_tickets_enabled()
     except Exception:
         support_enabled = settings.SUPPORT_MENU_ENABLED
+        tickets_enabled = settings.is_support_tickets_enabled()
 
     if support_enabled:
-        support_url = (settings.SUPPORT_USERNAME or '').strip()
-        if support_url and (
-            support_url.startswith('http://') or support_url.startswith('https://') or support_url.startswith('tg://')
-        ):
-            keyboard.append([make_button(text=texts.MENU_SUPPORT, url=support_url, style='primary')])
-        else:
+        if tickets_enabled:
             keyboard.append(
                 [
                     make_button(
@@ -860,6 +873,24 @@ def get_main_menu_keyboard(
                     )
                 ]
             )
+        else:
+            support_url = (settings.SUPPORT_USERNAME or '').strip()
+            if support_url and (
+                support_url.startswith('http://')
+                or support_url.startswith('https://')
+                or support_url.startswith('tg://')
+            ):
+                keyboard.append([make_button(text=texts.MENU_SUPPORT, url=support_url, style='primary')])
+            else:
+                keyboard.append(
+                    [
+                        make_button(
+                            text=texts.MENU_SUPPORT,
+                            callback_data='menu_support',
+                            style='primary',
+                        )
+                    ]
+                )
 
     if settings.DEBUG:
         logger.debug('DEBUG KEYBOARD: админ кнопка', is_admin=is_admin)
@@ -2767,6 +2798,8 @@ def get_support_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMark
                 make_button(
                     text=texts.t('CREATE_TICKET_BUTTON', 'Создать тикет'),
                     callback_data='create_ticket',
+                    style='success',
+                    icon_custom_emoji_id=_UI_ICONS['plus'].emoji_id,
                 )
             ]
         )
@@ -2775,6 +2808,8 @@ def get_support_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMark
                 make_button(
                     text=texts.t('MY_TICKETS_BUTTON', 'Мои тикеты'),
                     callback_data='my_tickets',
+                    style='primary',
+                    icon_custom_emoji_id=_UI_ICONS['chat'].emoji_id,
                 )
             ]
         )
@@ -2785,10 +2820,21 @@ def get_support_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMark
                 make_button(
                     text=texts.t('CONTACT_SUPPORT_BUTTON', 'Связаться с поддержкой'),
                     url=settings.get_support_contact_url() or 'https://t.me/',
+                    style='primary',
+                    icon_custom_emoji_id=_UI_ICONS['phone'].emoji_id,
                 )
             ]
         )
-    rows.append([make_button(text=texts.BACK, style='danger', callback_data='back_to_menu')])
+    rows.append(
+        [
+            make_button(
+                text=texts.BACK,
+                style='danger',
+                callback_data='back_to_menu',
+                icon_custom_emoji_id=_UI_ICONS['back'].emoji_id,
+            )
+        ]
+    )
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -4082,6 +4128,8 @@ def get_ticket_cancel_keyboard(
                 make_button(
                     text=texts.t('CANCEL_TICKET_CREATION', 'Отменить создание тикета'),
                     callback_data='cancel_ticket_creation',
+                    style='danger',
+                    icon_custom_emoji_id=_UI_ICONS['cross'].emoji_id,
                 )
             ]
         ]
@@ -4099,14 +4147,19 @@ def get_my_tickets_keyboard(
     keyboard = []
 
     for ticket in tickets:
-        status_emoji = ticket.get('status_emoji', '')
-        # Override status emoji for closed tickets in admin list
-        if ticket.get('is_closed', False):
-            status_emoji = ''
+        is_closed = bool(ticket.get('is_closed', False))
         title = ticket.get('title', 'Без названия')[:25]
-        button_text = f'{status_emoji} #{ticket["id"]} {title}'
-
-        keyboard.append([make_button(text=button_text, callback_data=f'view_ticket_{ticket["id"]}')])
+        icon = _UI_ICONS['lock'] if is_closed else _UI_ICONS['chat']
+        keyboard.append(
+            [
+                make_button(
+                    text=f'#{ticket["id"]} {title}',
+                    callback_data=f'view_ticket_{ticket["id"]}',
+                    style='primary' if not is_closed else None,
+                    icon_custom_emoji_id=icon.emoji_id,
+                )
+            ]
+        )
 
     # Пагинация
     if total_pages > 1:
@@ -4134,7 +4187,16 @@ def get_my_tickets_keyboard(
 
         keyboard.append(nav_row)
 
-    keyboard.append([make_button(text=texts.BACK, style='danger', callback_data='menu_support')])
+    keyboard.append(
+        [
+            make_button(
+                text=texts.BACK,
+                style='danger',
+                callback_data='menu_support',
+                icon_custom_emoji_id=_UI_ICONS['back'].emoji_id,
+            )
+        ]
+    )
 
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
@@ -4151,6 +4213,8 @@ def get_ticket_view_keyboard(
                 make_button(
                     text=texts.t('REPLY_TO_TICKET', 'Ответить'),
                     callback_data=f'reply_ticket_{ticket_id}',
+                    style='primary',
+                    icon_custom_emoji_id=_UI_ICONS['chat'].emoji_id,
                 )
             ]
         )
@@ -4161,11 +4225,22 @@ def get_ticket_view_keyboard(
                 make_button(
                     text=texts.t('CLOSE_TICKET', 'Закрыть тикет'),
                     callback_data=f'close_ticket_{ticket_id}',
+                    style='danger',
+                    icon_custom_emoji_id=_UI_ICONS['lock'].emoji_id,
                 )
             ]
         )
 
-    keyboard.append([make_button(text=texts.BACK, style='danger', callback_data='my_tickets')])
+    keyboard.append(
+        [
+            make_button(
+                text=texts.BACK,
+                style='danger',
+                callback_data='my_tickets',
+                icon_custom_emoji_id=_UI_ICONS['back'].emoji_id,
+            )
+        ]
+    )
 
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
@@ -4180,6 +4255,8 @@ def get_ticket_reply_cancel_keyboard(
                 make_button(
                     text=texts.t('CANCEL_REPLY', 'Отменить ответ'),
                     callback_data='cancel_ticket_reply',
+                    style='danger',
+                    icon_custom_emoji_id=_UI_ICONS['cross'].emoji_id,
                 )
             ]
         ]
@@ -4426,9 +4503,23 @@ def get_ticket_notification_keyboard(
     url_row: list[InlineKeyboardButton] = []
     if username:
         safe_username = username.lstrip('@')
-        url_row.append(make_button(text='ЛС', url=f'tg://resolve?domain={safe_username}'))
+        url_row.append(
+            make_button(
+                text='ЛС',
+                url=f'tg://resolve?domain={safe_username}',
+                style='primary',
+                icon_custom_emoji_id=_UI_ICONS['chat'].emoji_id,
+            )
+        )
     if (tg_id := _coerce_tg_user_id(telegram_id)) is not None:
-        url_row.append(make_button(text='Профиль', url=f'tg://user?id={tg_id}'))
+        url_row.append(
+            make_button(
+                text='Профиль',
+                url=f'tg://user?id={tg_id}',
+                style='primary',
+                icon_custom_emoji_id=_UI_ICONS['user'].emoji_id,
+            )
+        )
     if url_row:
         keyboard.append(url_row)
 
@@ -4439,6 +4530,8 @@ def get_ticket_notification_keyboard(
                 make_button(
                     text='К пользователю',
                     callback_data=f'admin_user_manage_{user_id}_from_ticket_{ticket_id}',
+                    style='primary',
+                    icon_custom_emoji_id=_UI_ICONS['user'].emoji_id,
                 )
             ]
         )
@@ -4451,6 +4544,8 @@ def get_ticket_notification_keyboard(
                 make_button(
                     text=texts.t('REPLY_TO_TICKET', 'Ответить'),
                     callback_data=f'admin_reply_ticket_{ticket_id}',
+                    style='primary',
+                    icon_custom_emoji_id=_UI_ICONS['chat'].emoji_id,
                 )
             ]
         )
@@ -4461,6 +4556,8 @@ def get_ticket_notification_keyboard(
                 make_button(
                     text=texts.t('CLOSE_TICKET', 'Закрыть тикет'),
                     callback_data=f'admin_close_ticket_{ticket_id}',
+                    style='danger',
+                    icon_custom_emoji_id=_UI_ICONS['lock'].emoji_id,
                 )
             ]
         )
@@ -4472,6 +4569,8 @@ def get_ticket_notification_keyboard(
                 make_button(
                     text=texts.t('UNBLOCK', 'Разблокировать'),
                     callback_data=f'admin_unblock_user_ticket_{ticket_id}',
+                    style='success',
+                    icon_custom_emoji_id=_UI_ICONS['unlock'].emoji_id,
                 )
             ]
         )
@@ -4482,13 +4581,18 @@ def get_ticket_notification_keyboard(
             make_button(
                 text=texts.t('BLOCK_FOREVER', 'Заблокировать'),
                 callback_data=f'admin_block_user_perm_ticket_{ticket_id}',
+                style='danger',
+                icon_custom_emoji_id=_UI_ICONS['prohibit'].emoji_id,
             )
         ]
         if fsm_enabled:
             block_row.append(
                 make_button(
-                    text=texts.t('BLOCK_BY_TIME', 'Блок по времени'),
+                    # В локали подпись с «⏳» — при своей иконке это дубль.
+                    text=strip_leading_emoji(texts.t('BLOCK_BY_TIME', 'Блок по времени')),
                     callback_data=f'admin_block_user_ticket_{ticket_id}',
+                    style='danger',
+                    icon_custom_emoji_id=_UI_ICONS['clock'].emoji_id,
                 )
             )
         keyboard.append(block_row)
