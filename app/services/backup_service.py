@@ -2156,7 +2156,7 @@ class BackupService:
             )
             keyboard = InlineKeyboardMarkup(
                 inline_keyboard=[
-                    [button('К бекапам', '💾', callback_data='backup_panel', style='primary')],
+                    [button('К бекапам', '🗂', callback_data='backup_panel', style='primary')],
                 ]
             )
 
@@ -2207,7 +2207,7 @@ class BackupService:
             from app.utils.notification_card import button, card, premium
 
             caption = card(
-                emoji='💾',
+                emoji='🗂',
                 title='@x1lagent · backup',
                 lines=[
                     f'{premium("📄")} <b>Файл:</b> <code>{html_lib.escape(file_name)}</code>',
