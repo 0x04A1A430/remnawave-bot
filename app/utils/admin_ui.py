@@ -451,7 +451,7 @@ def _is_back_navigation(callback: str, text: str) -> bool:
 
 
 def normalize_navigation_markup(markup: Any) -> Any:
-    """Кнопки «Назад»/«На главную» — синяя навигация, без premium-иконки."""
+    """Кнопки «Назад»/«На главную» — красный возврат, без premium-иконки."""
     from aiogram.types import InlineKeyboardMarkup
 
     if not isinstance(markup, InlineKeyboardMarkup):
@@ -465,8 +465,8 @@ def normalize_navigation_markup(markup: Any) -> Any:
             updates: dict[str, Any] = {}
             callback = button.callback_data or ''
             if _is_back_navigation(callback, button.text or ''):
-                if button.style != 'primary':
-                    updates['style'] = 'primary'
+                if button.style != 'danger':
+                    updates['style'] = 'danger'
                 if button.icon_custom_emoji_id:
                     updates['icon_custom_emoji_id'] = None
             if updates:
@@ -680,12 +680,12 @@ def admin_back_button(texts: Any, callback_data: str, *, label: str | None = Non
     """Единая кнопка возврата без premium-иконки.
 
     В локали текст уже содержит стрелку «←», поэтому иконку не добавляем (иначе
-    две стрелки), а текст не переписываем. Навигация — синяя, не красная.
+    две стрелки), а текст не переписываем. Возврат/выход — красный.
     """
     return make_button(
         text=label or texts.BACK,
         callback_data=callback_data,
-        style='primary',
+        style='danger',
     )
 
 
@@ -741,11 +741,11 @@ def decorate_admin_markup(markup: Any) -> Any:
                     updates['style'] = 'primary'
             elif _looks_like_back(callback, text):
                 # «Назад»: стрелка уже есть в тексте, иконка не нужна.
-                # Навигация синяя, не красная.
+                # Возврат/выход — красный.
                 if button.icon_custom_emoji_id:
                     updates['icon_custom_emoji_id'] = None
-                if button.style != 'primary':
-                    updates['style'] = 'primary'
+                if button.style != 'danger':
+                    updates['style'] = 'danger'
             else:
                 is_blocked = _is_blocked_user_button(callback, text)
                 desired_style = _infer_button_style(callback, text)
