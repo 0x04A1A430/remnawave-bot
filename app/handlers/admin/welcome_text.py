@@ -17,7 +17,9 @@ from app.database.models import User
 from app.keyboards.admin import get_welcome_text_keyboard
 from app.localization.texts import get_texts
 from app.states import AdminStates
+from app.utils.admin_ui import admin_icon, admin_screen
 from app.utils.decorators import admin_required, error_handler
+from app.utils.miniapp_buttons import strip_leading_emoji
 
 
 logger = structlog.get_logger(__name__)
@@ -157,7 +159,7 @@ def get_telegram_formatting_info(language: str = 'ru') -> str:
 @error_handler
 async def show_welcome_text_panel(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
     welcome_settings = await get_current_welcome_text_settings(db)
-    status_emoji = '' if welcome_settings['is_enabled'] else ''
+    status_emoji = admin_icon('success' if welcome_settings['is_enabled'] else 'error')
     status_text = (
         get_texts(db_user.language).t('ADMIN_WELCOME_UI_002', 'включено')
         if welcome_settings['is_enabled']
@@ -165,12 +167,16 @@ async def show_welcome_text_panel(callback: types.CallbackQuery, db_user: User, 
     )
 
     await callback.message.edit_text(
-        get_texts(db_user.language)
-        .t(
-            'ADMIN_WELCOME_UI_009',
-            ' Управление приветственным текстом\n\n{v0} <b>Статус:</b> {v1}\n\nЗдесь вы можете управлять текстом, который показывается новым пользователям после регистрации.\n\n Доступные плейсхолдеры для автозамены:',
-        )
-        .format(v0=status_emoji, v1=status_text),
+        admin_screen(
+            get_texts(db_user.language)
+            .t(
+                'ADMIN_WELCOME_UI_009',
+                ' Управление приветственным текстом\n\n{v0} <b>Статус:</b> {v1}\n\nЗдесь вы можете управлять текстом, который показывается новым пользователям после регистрации.\n\n Доступные плейсхолдеры для автозамены:',
+            )
+            .format(v0=status_emoji, v1=status_text),
+            icon='document',
+            compact=True,
+        ),
         reply_markup=get_welcome_text_keyboard(db_user.language, welcome_settings['is_enabled']),
         parse_mode='HTML',
     )
@@ -182,7 +188,7 @@ async def show_welcome_text_panel(callback: types.CallbackQuery, db_user: User, 
 async def toggle_welcome_text(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
     new_status = await toggle_welcome_text_status(db, db_user.id)
 
-    status_emoji = '' if new_status else ''
+    status_emoji = admin_icon('success' if new_status else 'error')
     status_text = (
         get_texts(db_user.language).t('ADMIN_WELCOME_UI_002', 'включено')
         if new_status
@@ -195,12 +201,16 @@ async def toggle_welcome_text(callback: types.CallbackQuery, db_user: User, db: 
     )
 
     await callback.message.edit_text(
-        get_texts(db_user.language)
-        .t(
-            'ADMIN_WELCOME_UI_010',
-            ' Управление приветственным текстом\n\n{v0} <b>Статус:</b> {v1}\n\n Приветственные сообщения {v2}!\n\nЗдесь вы можете управлять текстом, который показывается новым пользователям после регистрации.\n\n Доступные плейсхолдеры для автозамены:',
-        )
-        .format(v0=status_emoji, v1=status_text, v2=action_text),
+        admin_screen(
+            get_texts(db_user.language)
+            .t(
+                'ADMIN_WELCOME_UI_010',
+                ' Управление приветственным текстом\n\n{v0} <b>Статус:</b> {v1}\n\n Приветственные сообщения {v2}!\n\nЗдесь вы можете управлять текстом, который показывается новым пользователям после регистрации.\n\n Доступные плейсхолдеры для автозамены:',
+            )
+            .format(v0=status_emoji, v1=status_text, v2=action_text),
+            icon='document',
+            compact=True,
+        ),
         reply_markup=get_welcome_text_keyboard(db_user.language, new_status),
         parse_mode='HTML',
     )
@@ -215,11 +225,15 @@ async def show_current_welcome_text(callback: types.CallbackQuery, db_user: User
     is_enabled = welcome_settings['is_enabled']
 
     if not welcome_settings['id']:
-        status = get_texts(db_user.language).t('ADMIN_WELCOME_UI_006', ' Используется стандартный текст:')
+        status = strip_leading_emoji(
+            get_texts(db_user.language).t('ADMIN_WELCOME_UI_006', ' Используется стандартный текст:')
+        )
     else:
-        status = get_texts(db_user.language).t('ADMIN_WELCOME_UI_007', ' Текущий приветственный текст:')
+        status = strip_leading_emoji(
+            get_texts(db_user.language).t('ADMIN_WELCOME_UI_007', ' Текущий приветственный текст:')
+        )
 
-    status_emoji = '' if is_enabled else ''
+    status_emoji = admin_icon('success' if is_enabled else 'error')
     status_text = (
         get_texts(db_user.language).t('ADMIN_WELCOME_UI_002', 'включено')
         if is_enabled
@@ -230,12 +244,16 @@ async def show_current_welcome_text(callback: types.CallbackQuery, db_user: User
     placeholders_text = '\n'.join([f'• <code>{key}</code> - {desc}' for key, desc in placeholders.items()])
 
     await callback.message.edit_text(
-        get_texts(db_user.language)
-        .t(
-            'ADMIN_WELCOME_UI_011',
-            '{v0} <b>Статус:</b> {v1}\n\n{v2}\n\n<code>{v3}</code>\n\n Доступные плейсхолдеры:\n{v4}',
-        )
-        .format(v0=status_emoji, v1=status_text, v2=status, v3=html.escape(current_text), v4=placeholders_text),
+        admin_screen(
+            get_texts(db_user.language)
+            .t(
+                'ADMIN_WELCOME_UI_011',
+                '{v0} <b>Статус:</b> {v1}\n\n{v2}\n\n<code>{v3}</code>\n\n Доступные плейсхолдеры:\n{v4}',
+            )
+            .format(v0=status_emoji, v1=status_text, v2=status, v3=html.escape(current_text), v4=placeholders_text),
+            icon='document',
+            compact=True,
+        ),
         reply_markup=get_welcome_text_keyboard(db_user.language, is_enabled),
         parse_mode='HTML',
     )
@@ -259,7 +277,7 @@ async def show_placeholders_help(callback: types.CallbackQuery, db_user: User, d
     )
 
     await callback.message.edit_text(
-        help_text,
+        admin_screen(help_text, icon='document', compact=True),
         reply_markup=get_welcome_text_keyboard(db_user.language, welcome_settings['is_enabled']),
         parse_mode='HTML',
     )
@@ -273,7 +291,7 @@ async def show_formatting_help(callback: types.CallbackQuery, db_user: User, db:
     formatting_info = get_telegram_formatting_info(language=db_user.language)
 
     await callback.message.edit_text(
-        formatting_info,
+        admin_screen(formatting_info, icon='document', compact=True),
         reply_markup=get_welcome_text_keyboard(db_user.language, welcome_settings['is_enabled']),
         parse_mode='HTML',
     )
@@ -290,12 +308,18 @@ async def start_edit_welcome_text(callback: types.CallbackQuery, state: FSMConte
     placeholders_text = '\n'.join([f'• <code>{key}</code> - {desc}' for key, desc in placeholders.items()])
 
     await callback.message.edit_text(
-        get_texts(db_user.language)
-        .t(
-            'ADMIN_WELCOME_UI_012',
-            ' Редактирование приветственного текста\n\nТекущий текст:\n<code>{v0}</code>\n\n Доступные плейсхолдеры:\n{v1}\n\nОтправьте новый текст:',
-        )
-        .format(v0=html.escape(current_text), v1=placeholders_text),
+        admin_screen(
+            strip_leading_emoji(
+                get_texts(db_user.language)
+                .t(
+                    'ADMIN_WELCOME_UI_012',
+                    ' Редактирование приветственного текста\n\nТекущий текст:\n<code>{v0}</code>\n\n Доступные плейсхолдеры:\n{v1}\n\nОтправьте новый текст:',
+                )
+                .format(v0=html.escape(current_text), v1=placeholders_text)
+            ),
+            icon='document',
+            compact=True,
+        ),
         parse_mode='HTML',
     )
 
@@ -334,7 +358,7 @@ async def process_welcome_text_edit(message: types.Message, state: FSMContext, d
 
     if success:
         welcome_settings = await get_current_welcome_text_settings(db)
-        status_emoji = '' if welcome_settings['is_enabled'] else ''
+        status_emoji = admin_icon('success' if welcome_settings['is_enabled'] else 'error')
         status_text = (
             get_texts(db_user.language).t('ADMIN_WELCOME_UI_002', 'включено')
             if welcome_settings['is_enabled']
@@ -345,12 +369,16 @@ async def process_welcome_text_edit(message: types.Message, state: FSMContext, d
         placeholders_text = '\n'.join([f'• <code>{key}</code>' for key in placeholders.keys()])
 
         await message.answer(
-            get_texts(db_user.language)
-            .t(
-                'ADMIN_WELCOME_UI_018',
-                ' Приветственный текст успешно обновлен!\n\n{v0} <b>Статус:</b> {v1}\n\nНовый текст:\n<code>{v2}</code>\n\n Будут заменяться плейсхолдеры: {v3}',
-            )
-            .format(v0=status_emoji, v1=status_text, v2=html.escape(new_text), v3=placeholders_text),
+            admin_screen(
+                get_texts(db_user.language)
+                .t(
+                    'ADMIN_WELCOME_UI_018',
+                    ' Приветственный текст успешно обновлен!\n\n{v0} <b>Статус:</b> {v1}\n\nНовый текст:\n<code>{v2}</code>\n\n Будут заменяться плейсхолдеры: {v3}',
+                )
+                .format(v0=status_emoji, v1=status_text, v2=html.escape(new_text), v3=placeholders_text),
+                icon='success',
+                compact=True,
+            ),
             reply_markup=get_welcome_text_keyboard(db_user.language, welcome_settings['is_enabled']),
             parse_mode='HTML',
         )
@@ -372,7 +400,7 @@ async def reset_welcome_text(callback: types.CallbackQuery, db_user: User, db: A
 
     if success:
         welcome_settings = await get_current_welcome_text_settings(db)
-        status_emoji = '' if welcome_settings['is_enabled'] else ''
+        status_emoji = admin_icon('success' if welcome_settings['is_enabled'] else 'error')
         status_text = (
             get_texts(db_user.language).t('ADMIN_WELCOME_UI_002', 'включено')
             if welcome_settings['is_enabled']
@@ -380,12 +408,16 @@ async def reset_welcome_text(callback: types.CallbackQuery, db_user: User, db: A
         )
 
         await callback.message.edit_text(
-            get_texts(db_user.language)
-            .t(
-                'ADMIN_WELCOME_UI_020',
-                ' Приветственный текст сброшен на стандартный!\n\n{v0} <b>Статус:</b> {v1}\n\nСтандартный текст:\n<code>{v2}</code>\n\n Плейсхолдер <code>{{user_name}}</code> будет заменяться на имя пользователя',
-            )
-            .format(v0=status_emoji, v1=status_text, v2=html.escape(default_text)),
+            admin_screen(
+                get_texts(db_user.language)
+                .t(
+                    'ADMIN_WELCOME_UI_020',
+                    ' Приветственный текст сброшен на стандартный!\n\n{v0} <b>Статус:</b> {v1}\n\nСтандартный текст:\n<code>{v2}</code>\n\n Плейсхолдер <code>{{user_name}}</code> будет заменяться на имя пользователя',
+                )
+                .format(v0=status_emoji, v1=status_text, v2=html.escape(default_text)),
+                icon='success',
+                compact=True,
+            ),
             reply_markup=get_welcome_text_keyboard(db_user.language, welcome_settings['is_enabled']),
             parse_mode='HTML',
         )
@@ -416,20 +448,28 @@ async def show_preview_welcome_text(callback: types.CallbackQuery, db_user: User
 
     if preview_text:
         await callback.message.edit_text(
-            get_texts(db_user.language)
-            .t(
-                'ADMIN_WELCOME_UI_022',
-                " Предварительный просмотр\n\nКак будет выглядеть текст для пользователя 'Иван' (@test_user):\n\n<code>{v0}</code>",
-            )
-            .format(v0=html.escape(preview_text)),
+            admin_screen(
+                get_texts(db_user.language)
+                .t(
+                    'ADMIN_WELCOME_UI_022',
+                    " Предварительный просмотр\n\nКак будет выглядеть текст для пользователя 'Иван' (@test_user):\n\n<code>{v0}</code>",
+                )
+                .format(v0=html.escape(preview_text)),
+                icon='document',
+                compact=True,
+            ),
             reply_markup=get_welcome_text_keyboard(db_user.language, welcome_settings['is_enabled']),
             parse_mode='HTML',
         )
     else:
         await callback.message.edit_text(
-            get_texts(db_user.language).t(
-                'ADMIN_WELCOME_UI_023',
-                ' Предварительный просмотр\n\n Приветственные сообщения отключены.\nНовые пользователи не будут получать приветственный текст после регистрации.',
+            admin_screen(
+                get_texts(db_user.language).t(
+                    'ADMIN_WELCOME_UI_023',
+                    ' Предварительный просмотр\n\n Приветственные сообщения отключены.\nНовые пользователи не будут получать приветственный текст после регистрации.',
+                ),
+                icon='document',
+                compact=True,
             ),
             reply_markup=get_welcome_text_keyboard(db_user.language, welcome_settings['is_enabled']),
             parse_mode='HTML',

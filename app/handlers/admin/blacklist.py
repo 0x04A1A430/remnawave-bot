@@ -14,6 +14,7 @@ from app.database.models import User
 from app.localization.texts import get_texts
 from app.services.blacklist_service import blacklist_service
 from app.states import BlacklistStates
+from app.utils.admin_ui import admin_back_button, admin_button, admin_screen
 from app.utils.decorators import admin_required, error_handler
 
 
@@ -49,57 +50,68 @@ async def show_blacklist_settings(callback: types.CallbackQuery, db_user: User, 
         texts.t('ADMIN_BLACKLIST_UI_SHOW_BLACKLIST_SETTINGS_000', ' Включена')
         if is_enabled
         else texts.t('ADMIN_BLACKLIST_UI_SHOW_BLACKLIST_SETTINGS_001', ' Отключена')
-    )
+    ).strip()
     url_text = github_url or texts.t('ADMIN_BLACKLIST_UI_SHOW_BLACKLIST_SETTINGS_002', 'Не задан')
 
-    text = texts.t(
-        'ADMIN_BLACKLIST_UI_SHOW_BLACKLIST_SETTINGS_003',
-        '\n <b>Настройки черного списка</b>\n\nСтатус: {value1}\nURL к черному списку: <code>{value2}</code>\nКоличество записей: {value3}\n\nДействия:\n',
-    ).format(value1=status_text, value2=html.escape(url_text), value3=blacklist_count)
+    text = admin_screen(
+        texts.t(
+            'ADMIN_BLACKLIST_UI_SHOW_BLACKLIST_SETTINGS_003',
+            '\n <b>Настройки черного списка</b>\n\nСтатус: {value1}\nURL к черному списку: <code>{value2}</code>\nКоличество записей: {value3}\n\nДействия:\n',
+        ).format(value1=status_text, value2=html.escape(url_text), value3=blacklist_count),
+        icon='lock',
+        compact=True,
+    )
 
     keyboard = [
         [
-            types.InlineKeyboardButton(
-                text=texts.t('ADMIN_BLACKLIST_UI_SHOW_BLACKLIST_SETTINGS_004', ' Обновить список')
+            admin_button(
+                texts.t('ADMIN_BLACKLIST_UI_SHOW_BLACKLIST_SETTINGS_004', ' Обновить список')
                 if is_enabled
                 else texts.t('ADMIN_BLACKLIST_UI_SHOW_BLACKLIST_SETTINGS_005', ' Обновить (откл.)'),
                 callback_data='admin_blacklist_update',
+                style='primary',
             )
         ],
         [
-            types.InlineKeyboardButton(
-                text=texts.t('ADMIN_BLACKLIST_UI_SHOW_BLACKLIST_SETTINGS_006', ' Просмотреть список')
+            admin_button(
+                texts.t('ADMIN_BLACKLIST_UI_SHOW_BLACKLIST_SETTINGS_006', ' Просмотреть список')
                 if is_enabled
                 else texts.t('ADMIN_BLACKLIST_UI_SHOW_BLACKLIST_SETTINGS_007', ' Просмотр (откл.)'),
                 callback_data='admin_blacklist_view',
+                style='primary',
             )
         ],
         [
-            types.InlineKeyboardButton(
-                text=texts.t('ADMIN_BLACKLIST_UI_SHOW_BLACKLIST_SETTINGS_008', ' URL к GitHub')
+            admin_button(
+                texts.t('ADMIN_BLACKLIST_UI_SHOW_BLACKLIST_SETTINGS_008', ' URL к GitHub')
                 if not github_url
                 else texts.t('ADMIN_BLACKLIST_UI_SHOW_BLACKLIST_SETTINGS_009', ' Изменить URL'),
                 callback_data='admin_blacklist_set_url',
             )
         ],
         [
-            types.InlineKeyboardButton(
-                text=texts.t('ADMIN_BLACKLIST_UI_SHOW_BLACKLIST_SETTINGS_010', ' Включить')
+            admin_button(
+                texts.t('ADMIN_BLACKLIST_UI_SHOW_BLACKLIST_SETTINGS_010', ' Включить')
                 if not is_enabled
                 else texts.t('ADMIN_BLACKLIST_UI_SHOW_BLACKLIST_SETTINGS_011', ' Отключить'),
                 callback_data='admin_blacklist_toggle',
+                style='success' if not is_enabled else 'danger',
             )
         ],
         [
-            types.InlineKeyboardButton(
-                text=texts.t('ADMIN_BLACKLIST_UI_SHOW_BLACKLIST_SETTINGS_012', '← Назад к пользователям'),
-                callback_data='admin_users',
+            admin_back_button(
+                texts,
+                'admin_users',
+                label=texts.t('ADMIN_BLACKLIST_UI_SHOW_BLACKLIST_SETTINGS_012', '← Назад к пользователям'),
             )
         ],
-        [types.InlineKeyboardButton(text=' Назад к пользователям', callback_data='admin_users')],
     ]
 
-    await callback.message.edit_text(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
+    await callback.message.edit_text(
+        text,
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
+        parse_mode='HTML',
+    )
     await callback.answer()
 
 
@@ -130,10 +142,10 @@ async def toggle_blacklist(callback: types.CallbackQuery, db_user: User, state: 
         ).format(value1=status_text),
         reply_markup=types.InlineKeyboardMarkup(
             inline_keyboard=[
-                [types.InlineKeyboardButton(text=' Обновить статус', callback_data='admin_blacklist_settings')],
-                [types.InlineKeyboardButton(text=' Назад', callback_data='admin_blacklist_settings')],
+                [admin_back_button(texts, 'admin_blacklist_settings')],
             ]
         ),
+        parse_mode='HTML',
     )
     await callback.answer()
 
@@ -150,24 +162,49 @@ async def update_blacklist(callback: types.CallbackQuery, db_user: User, state: 
 
     if success:
         await callback.message.edit_text(
-            f' {message}',
+            admin_screen(message, icon='success'),
             reply_markup=types.InlineKeyboardMarkup(
                 inline_keyboard=[
-                    [types.InlineKeyboardButton(text=' Просмотреть список', callback_data='admin_blacklist_view')],
-                    [types.InlineKeyboardButton(text=' Ручное обновление', callback_data='admin_blacklist_update')],
-                    [types.InlineKeyboardButton(text=' Назад', callback_data='admin_blacklist_settings')],
+                    [
+                        admin_button(
+                            texts.t('ADMIN_BLACKLIST_UI_SHOW_BLACKLIST_SETTINGS_006', ' Просмотреть список'),
+                            callback_data='admin_blacklist_view',
+                            style='primary',
+                        )
+                    ],
+                    [
+                        admin_button(
+                            texts.t('ADMIN_BLACKLIST_UI_UPDATE_BLACKLIST_019', ' Ручное обновление'),
+                            callback_data='admin_blacklist_update',
+                            style='primary',
+                        )
+                    ],
+                    [admin_back_button(texts, 'admin_blacklist_settings')],
                 ]
             ),
+            parse_mode='HTML',
         )
     else:
         await callback.message.edit_text(
-            texts.t('ADMIN_BLACKLIST_UI_UPDATE_BLACKLIST_021', ' Ошибка обновления: {value1}').format(value1=message),
+            admin_screen(
+                texts.t('ADMIN_BLACKLIST_UI_UPDATE_BLACKLIST_021', ' Ошибка обновления: {value1}').format(
+                    value1=message
+                ),
+                icon='error',
+            ),
             reply_markup=types.InlineKeyboardMarkup(
                 inline_keyboard=[
-                    [types.InlineKeyboardButton(text=' Повторить', callback_data='admin_blacklist_update')],
-                    [types.InlineKeyboardButton(text=' Назад', callback_data='admin_blacklist_settings')],
+                    [
+                        admin_button(
+                            texts.t('ADMIN_BLACKLIST_UI_UPDATE_BLACKLIST_022', ' Повторить'),
+                            callback_data='admin_blacklist_update',
+                            style='primary',
+                        )
+                    ],
+                    [admin_back_button(texts, 'admin_blacklist_settings')],
                 ]
             ),
+            parse_mode='HTML',
         )
     await callback.answer()
 
@@ -198,13 +235,20 @@ async def show_blacklist_users(callback: types.CallbackQuery, db_user: User, sta
             )
 
     await callback.message.edit_text(
-        text,
+        admin_screen(text, icon='lock', compact=True),
         reply_markup=types.InlineKeyboardMarkup(
             inline_keyboard=[
-                [types.InlineKeyboardButton(text=' Обновить', callback_data='admin_blacklist_view')],
-                [types.InlineKeyboardButton(text=' Назад', callback_data='admin_blacklist_settings')],
+                [
+                    admin_button(
+                        texts.t('ADMIN_BLACKLIST_UI_SHOW_BLACKLIST_USERS_027', ' Обновить'),
+                        callback_data='admin_blacklist_view',
+                        style='primary',
+                    )
+                ],
+                [admin_back_button(texts, 'admin_blacklist_settings')],
             ]
         ),
+        parse_mode='HTML',
     )
     await callback.answer()
 
@@ -226,8 +270,9 @@ async def start_set_blacklist_url(callback: types.CallbackQuery, db_user: User, 
             'Введите новый URL к файлу черного списка на GitHub\n\nТекущий URL: {value1}\n\nПример: https://raw.githubusercontent.com/username/repository/main/blacklist.txt\n\nДля отмены используйте команду /cancel',
         ).format(value1=html.escape(current_url)),
         reply_markup=types.InlineKeyboardMarkup(
-            inline_keyboard=[[types.InlineKeyboardButton(text=' Назад', callback_data='admin_blacklist_settings')]]
+            inline_keyboard=[[admin_back_button(texts, 'admin_blacklist_settings')]]
         ),
+        parse_mode='HTML',
     )
 
     await state.set_state(BlacklistStates.waiting_for_blacklist_url)
@@ -255,13 +300,15 @@ async def process_blacklist_url(message: types.Message, db_user: User, state: FS
             reply_markup=types.InlineKeyboardMarkup(
                 inline_keyboard=[
                     [
-                        types.InlineKeyboardButton(
-                            text=texts.t('ADMIN_BLACKLIST_UI_PROCESS_BLACKLIST_URL_039', ' Настройки черного списка'),
+                        admin_button(
+                            texts.t('ADMIN_BLACKLIST_UI_PROCESS_BLACKLIST_URL_039', 'Настройки черного списка'),
                             callback_data='admin_blacklist_settings',
+                            style='danger',
                         )
                     ]
                 ]
             ),
+            parse_mode='HTML',
         )
         await state.clear()
         return
@@ -269,20 +316,25 @@ async def process_blacklist_url(message: types.Message, db_user: User, state: FS
     # Проверяем, что URL выглядит корректно
     if not url.startswith(('http://', 'https://')):
         await message.answer(
-            texts.t(
-                'ADMIN_BLACKLIST_UI_PROCESS_BLACKLIST_URL_035',
-                ' Некорректный URL. URL должен начинаться с http:// или https://',
+            admin_screen(
+                texts.t(
+                    'ADMIN_BLACKLIST_UI_PROCESS_BLACKLIST_URL_035',
+                    ' Некорректный URL. URL должен начинаться с http:// или https://',
+                ),
+                icon='error',
             ),
             reply_markup=types.InlineKeyboardMarkup(
                 inline_keyboard=[
                     [
-                        types.InlineKeyboardButton(
-                            text=texts.t('ADMIN_BLACKLIST_UI_PROCESS_BLACKLIST_URL_039', ' Настройки черного списка'),
+                        admin_button(
+                            texts.t('ADMIN_BLACKLIST_UI_PROCESS_BLACKLIST_URL_039', 'Настройки черного списка'),
                             callback_data='admin_blacklist_settings',
+                            style='danger',
                         )
                     ]
                 ]
             ),
+            parse_mode='HTML',
         )
         return
 
@@ -290,26 +342,32 @@ async def process_blacklist_url(message: types.Message, db_user: User, state: FS
     # или в систему конфигурации
 
     await message.answer(
-        texts.t(
-            'ADMIN_BLACKLIST_UI_PROCESS_BLACKLIST_URL_037',
-            ' URL к черному списку установлен:\n<code>{value1}</code>\n\nДля применения изменений перезапустите бота или измените значение\n<code>BLACKLIST_GITHUB_URL</code> в файле <code>.env</code>',
-        ).format(value1=html.escape(url)),
+        admin_screen(
+            texts.t(
+                'ADMIN_BLACKLIST_UI_PROCESS_BLACKLIST_URL_037',
+                ' URL к черному списку установлен:\n<code>{value1}</code>\n\nДля применения изменений перезапустите бота или измените значение\n<code>BLACKLIST_GITHUB_URL</code> в файле <code>.env</code>',
+            ).format(value1=html.escape(url)),
+            icon='success',
+        ),
         reply_markup=types.InlineKeyboardMarkup(
             inline_keyboard=[
                 [
-                    types.InlineKeyboardButton(
-                        text=texts.t('ADMIN_BLACKLIST_UI_SHOW_BLACKLIST_SETTINGS_004', ' Обновить список'),
+                    admin_button(
+                        texts.t('ADMIN_BLACKLIST_UI_SHOW_BLACKLIST_SETTINGS_004', ' Обновить список'),
                         callback_data='admin_blacklist_update',
+                        style='primary',
                     )
                 ],
                 [
-                    types.InlineKeyboardButton(
-                        text=texts.t('ADMIN_BLACKLIST_UI_PROCESS_BLACKLIST_URL_039', ' Настройки черного списка'),
+                    admin_button(
+                        texts.t('ADMIN_BLACKLIST_UI_PROCESS_BLACKLIST_URL_039', 'Настройки черного списка'),
                         callback_data='admin_blacklist_settings',
+                        style='danger',
                     )
                 ],
             ]
         ),
+        parse_mode='HTML',
     )
     await state.clear()
 

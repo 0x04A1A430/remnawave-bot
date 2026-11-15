@@ -14,7 +14,9 @@ from app.services.reporting_service import (
     ReportPeriod,
     reporting_service,
 )
+from app.utils.admin_ui import admin_screen
 from app.utils.decorators import admin_required, error_handler
+from app.utils.miniapp_buttons import strip_leading_emoji
 
 
 logger = structlog.get_logger(__name__)
@@ -29,7 +31,15 @@ async def show_reports_menu(
 ) -> None:
     texts = get_texts(db_user.language)
     await callback.message.edit_text(
-        texts.t('ADMIN_REPORT_UI_000', ' <b>Отчеты</b>\n\nВыберите период, чтобы отправить отчет в админский топик.'),
+        admin_screen(
+            strip_leading_emoji(
+                texts.t(
+                    'ADMIN_REPORT_UI_000', '<b>Отчеты</b>\n\nВыберите период, чтобы отправить отчет в админский топик.'
+                )
+            ).strip(),
+            icon='stats',
+            compact=True,
+        ),
         reply_markup=get_admin_reports_keyboard(db_user.language),
         parse_mode='HTML',
     )
@@ -88,6 +98,7 @@ async def _send_report(
     await callback.message.answer(
         report_text,
         reply_markup=get_admin_report_result_keyboard(language),
+        parse_mode='HTML',
     )
     await callback.answer(texts.t('ADMIN_REPORT_UI_001', 'Отчет отправлен в топик'))
 

@@ -15,7 +15,9 @@ from app.handlers.admin._text import compact_text
 from app.localization.texts import Texts, get_texts
 from app.services.system_settings_service import bot_configuration_service
 from app.states import PricingStates
+from app.utils.admin_ui import admin_back_button, admin_button, admin_screen
 from app.utils.decorators import admin_required, error_handler
+from app.utils.miniapp_buttons import strip_leading_emoji
 
 
 logger = structlog.get_logger(__name__)
@@ -377,10 +379,10 @@ def _format_trial_summary(lang_code: str, texts: Texts | None = None) -> str:
     devices = settings.TRIAL_DEVICE_LIMIT
     price_note = ''
     if settings.is_trial_paid_activation_enabled():
-        price_note = f',  {settings.format_price(settings.get_trial_activation_price())}'
+        price_note = f', {settings.format_price(settings.get_trial_activation_price())}'
 
     traffic_label = _format_traffic_label(traffic, lang_code, short=True, texts=texts)
-    devices_label = f'{devices}' if lang_code == 'ru' else f'{devices}'
+    devices_label = f'{devices}'
     days_suffix = texts.t('ADMIN_PRICE_UI_002', 'д')
     return f'{duration}{days_suffix}, {traffic_label}, {devices_label}{price_note}'
 
@@ -392,13 +394,13 @@ def _format_core_summary(lang_code: str, texts: Texts | None = None) -> str:
     traffic_limit = settings.DEFAULT_TRAFFIC_LIMIT_GB
     mode = settings.TRAFFIC_SELECTION_MODE.lower()
     if mode == 'fixed':
-        traffic_mode = texts.t('ADMIN_PRICE_MODE_FIXED', ' фиксированный')
+        traffic_mode = texts.t('ADMIN_PRICE_MODE_FIXED', 'фиксированный').strip()
     elif mode == 'fixed_with_topup':
-        traffic_mode = texts.t('ADMIN_PRICE_MODE_TOPUP', ' фиксированный + докупка')
+        traffic_mode = texts.t('ADMIN_PRICE_MODE_TOPUP', 'фиксированный + докупка').strip()
     else:
-        traffic_mode = texts.t('ADMIN_PRICE_MODE_SELECTABLE', ' выбор пакетов')
+        traffic_mode = texts.t('ADMIN_PRICE_MODE_SELECTABLE', 'выбор пакетов').strip()
     traffic_label = _format_traffic_label(traffic_limit, lang_code, short=True, texts=texts)
-    return f'{base_price}, {device_limit} , {traffic_label}, {traffic_mode}'
+    return f'{base_price}, {device_limit}, {traffic_label}, {traffic_mode}'
 
 
 def _get_period_items(lang_code: str, texts: Texts | None = None) -> list[PriceItem]:
@@ -424,8 +426,7 @@ def _get_traffic_items(lang_code: str, texts: Texts | None = None) -> list[Price
             continue
 
         label = _format_traffic_label(package['gb'], lang_code, texts=texts)
-        icon = '' if package['enabled'] else ''
-        items.append((field, f'{icon} {label}', int(package['price'])))
+        items.append((field, label, int(package['price'])))
     return items
 
 
@@ -520,22 +521,23 @@ def _build_settings_section(
         lines.append('')
 
     for entry in entries:
-        label = entry.label(lang_code, texts=texts)
+        label = strip_leading_emoji(entry.label(lang_code, texts=texts))
         value = bot_configuration_service.get_current_value(entry.key)
         formatted = bot_configuration_service.format_value_human(entry.key, value, language=texts.language)
 
         if entry.action == 'toggle':
-            state_icon = '' if bool(value) else ''
-            lines.append(f'{state_icon} <b>{label}</b> — {formatted}')
+            state_icon = '✅' if bool(value) else '❌'
+            lines.append(f'• <b>{label}</b> — {formatted}')
             button_text = texts.t(
                 'ADMIN_PRICING_SETTING_TOGGLE_STATEFUL',
                 '{icon} {label}',
             ).format(icon=state_icon, label=label)
             keyboard_rows.append(
                 [
-                    types.InlineKeyboardButton(
-                        text=button_text,
+                    admin_button(
+                        button_text.strip(),
                         callback_data=(f'admin_pricing_toggle:{section}:{_encode_setting_callback_key(entry.key)}'),
+                        style='success' if bool(value) else None,
                     )
                 ]
             )
@@ -544,13 +546,14 @@ def _build_settings_section(
             buttons: list[types.InlineKeyboardButton] = []
             for option in entry.choices:
                 is_active = value == option.value
-                icon = '' if is_active else ''
+                option_label = option.label(lang_code, texts=texts)
                 buttons.append(
-                    types.InlineKeyboardButton(
-                        text=f'{icon} {option.label(lang_code, texts=texts)}',
+                    admin_button(
+                        f'✅ {option_label}' if is_active else option_label,
                         callback_data=(
                             f'admin_pricing_choice:{section}:{_encode_setting_callback_key(entry.key)}:{option.value}'
                         ),
+                        style='success' if is_active else None,
                     )
                 )
             for i in range(0, len(buttons), 2):
@@ -559,12 +562,12 @@ def _build_settings_section(
             lines.append(f'• <b>{label}</b>: {formatted}')
             button_text = texts.t(
                 'ADMIN_PRICING_SETTING_EDIT_WITH_VALUE',
-                ' {label} • {value}',
+                '{label} • {value}',
             ).format(label=label, value=formatted)
             keyboard_rows.append(
                 [
-                    types.InlineKeyboardButton(
-                        text=button_text,
+                    admin_button(
+                        button_text.strip(),
                         callback_data=(f'admin_pricing_setting:{section}:{_encode_setting_callback_key(entry.key)}'),
                     )
                 ]
@@ -580,9 +583,10 @@ def _build_settings_section(
     else:
         lines.append(texts.t('ADMIN_PRICING_SECTION_EMPTY', 'Нет параметров для изменения.'))
 
-    keyboard_rows.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='admin_pricing', style='danger')])
+    keyboard_rows.append([admin_back_button(texts, 'admin_pricing')])
     keyboard = types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
-    return compact_text('\n'.join(lines)), keyboard
+    screen_icon = 'trials' if section == 'trial' else 'pricing'
+    return admin_screen(compact_text('\n'.join(lines)), icon=screen_icon, compact=True), keyboard
 
 
 def _build_traffic_options_section(language: str) -> tuple[str, types.InlineKeyboardMarkup]:
@@ -630,21 +634,21 @@ def _build_traffic_options_section(language: str) -> tuple[str, types.InlineKeyb
     buttons: list[types.InlineKeyboardButton] = []
 
     for package in packages:
-        icon = '' if package['enabled'] else ''
         label = _format_traffic_label(package['gb'], lang_code, short=True, texts=texts)
         buttons.append(
-            types.InlineKeyboardButton(
-                text=f'{icon} {label}',
+            admin_button(
+                label,
                 callback_data=f'admin_pricing_toggle_traffic:{package["gb"]}',
+                style='success' if package['enabled'] else None,
             )
         )
 
     for i in range(0, len(buttons), 3):
         keyboard_rows.append(buttons[i : i + 3])
 
-    keyboard_rows.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='admin_pricing', style='danger')])
+    keyboard_rows.append([admin_back_button(texts, 'admin_pricing')])
     keyboard = types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
-    return compact_text('\n'.join(lines)), keyboard
+    return admin_screen(compact_text('\n'.join(lines)), icon='pricing', compact=True), keyboard
 
 
 def _build_period_options_section(language: str) -> tuple[str, types.InlineKeyboardMarkup]:
@@ -688,11 +692,12 @@ def _build_period_options_section(language: str) -> tuple[str, types.InlineKeybo
 
     sub_buttons = []
     for days in subscription_options:
-        icon = '' if days in available_subscription else ''
+        is_active = days in available_subscription
         sub_buttons.append(
-            types.InlineKeyboardButton(
-                text=f'{icon} {days}{suffix}',
+            admin_button(
+                f'✅ {days}{suffix}' if is_active else f'{days}{suffix}',
                 callback_data=f'admin_pricing_toggle_period:subscription:{days}',
+                style='success' if is_active else None,
             )
         )
     for i in range(0, len(sub_buttons), 3):
@@ -700,19 +705,20 @@ def _build_period_options_section(language: str) -> tuple[str, types.InlineKeybo
 
     renew_buttons = []
     for days in renewal_options:
-        icon = '' if days in available_renewal else ''
+        is_active = days in available_renewal
         renew_buttons.append(
-            types.InlineKeyboardButton(
-                text=f'{icon} {days}{suffix}',
+            admin_button(
+                f'✅ {days}{suffix}' if is_active else f'{days}{suffix}',
                 callback_data=f'admin_pricing_toggle_period:renewal:{days}',
+                style='success' if is_active else None,
             )
         )
     for i in range(0, len(renew_buttons), 3):
         keyboard_rows.append(renew_buttons[i : i + 3])
 
-    keyboard_rows.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='admin_pricing', style='danger')])
+    keyboard_rows.append([admin_back_button(texts, 'admin_pricing')])
     keyboard = types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
-    return compact_text('\n'.join(lines)), keyboard
+    return admin_screen(compact_text('\n'.join(lines)), icon='calendar', compact=True), keyboard
 
 
 def _build_overview(language: str) -> tuple[str, types.InlineKeyboardMarkup]:
@@ -732,65 +738,83 @@ def _build_overview(language: str) -> tuple[str, types.InlineKeyboardMarkup]:
     summary_period_options = _build_period_options_summary(lang_code, texts=texts)
 
     lines = [
-        f' <b>{texts.t("ADMIN_PRICING_MENU_TITLE", "Управление ценами")}</b>',
+        f'<b>{texts.t("ADMIN_PRICING_MENU_TITLE", "Управление ценами")}</b>',
         texts.t(
             'ADMIN_PRICING_MENU_DESCRIPTION',
             'Быстрый доступ к настройкам тарифов, периодов и пакетов.',
         ),
         '',
         f'<b>{texts.t("ADMIN_PRICING_MENU_SUMMARY", "Краткая сводка")}</b>',
-        f' {texts.t("ADMIN_PRICING_MENU_SUMMARY_TRIAL", "Триал: {summary}").format(summary=summary_trial)}',
-        f' {texts.t("ADMIN_PRICING_MENU_SUMMARY_CORE", "Базовые лимиты: {summary}").format(summary=summary_core)}',
-        f' {texts.t("ADMIN_PRICING_MENU_SUMMARY_PERIOD_OPTIONS", "Доступные периоды: {summary}").format(summary=summary_period_options)}',
-        f' {texts.t("ADMIN_PRICING_MENU_SUMMARY_PERIODS", "Стоимость периодов: {summary}").format(summary=summary_periods)}',
-        f' {texts.t("ADMIN_PRICING_MENU_SUMMARY_TRAFFIC", "Пакеты трафика: {summary}").format(summary=summary_traffic)}',
-        f' {texts.t("ADMIN_PRICING_MENU_SUMMARY_EXTRA", "Дополнительно: {summary}").format(summary=summary_extra)}',
+        texts.t('ADMIN_PRICING_MENU_SUMMARY_TRIAL', '• Триал: {summary}').format(summary=summary_trial),
+        texts.t('ADMIN_PRICING_MENU_SUMMARY_CORE', '• Базовые лимиты: {summary}').format(summary=summary_core),
+        texts.t('ADMIN_PRICING_MENU_SUMMARY_PERIOD_OPTIONS', '• Доступные периоды: {summary}').format(
+            summary=summary_period_options
+        ),
+        texts.t('ADMIN_PRICING_MENU_SUMMARY_PERIODS', '• Стоимость периодов: {summary}').format(
+            summary=summary_periods
+        ),
+        texts.t('ADMIN_PRICING_MENU_SUMMARY_TRAFFIC', '• Пакеты трафика: {summary}').format(summary=summary_traffic),
+        texts.t('ADMIN_PRICING_MENU_SUMMARY_EXTRA', '• Дополнительно: {summary}').format(summary=summary_extra),
     ]
 
     keyboard = types.InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                types.InlineKeyboardButton(
-                    text=texts.t('ADMIN_PRICING_BUTTON_TRIAL', ' Пробный период'),
+                admin_button(
+                    texts.t('ADMIN_PRICING_BUTTON_TRIAL', 'Пробный период'),
                     callback_data='admin_pricing_section:trial',
+                    icon='trials',
+                    style='primary',
                 ),
-                types.InlineKeyboardButton(
-                    text=texts.t('ADMIN_PRICING_BUTTON_CORE', ' Настройки тарифов'),
+                admin_button(
+                    texts.t('ADMIN_PRICING_BUTTON_CORE', 'Настройки тарифов'),
                     callback_data='admin_pricing_section:core',
+                    icon='tariff',
+                    style='primary',
                 ),
             ],
             [
-                types.InlineKeyboardButton(
-                    text=texts.t('ADMIN_PRICING_BUTTON_PERIOD_OPTIONS', ' Доступные периоды'),
+                admin_button(
+                    texts.t('ADMIN_PRICING_BUTTON_PERIOD_OPTIONS', 'Доступные периоды'),
                     callback_data='admin_pricing_section:period_options',
+                    icon='calendar',
+                    style='primary',
                 ),
-                types.InlineKeyboardButton(
-                    text=texts.t('ADMIN_PRICING_BUTTON_PERIODS', ' Стоимость периодов'),
+                admin_button(
+                    texts.t('ADMIN_PRICING_BUTTON_PERIODS', 'Стоимость периодов'),
                     callback_data='admin_pricing_section:periods',
+                    icon='pricing',
+                    style='primary',
                 ),
             ],
             [
-                types.InlineKeyboardButton(
-                    text=texts.t('ADMIN_PRICING_BUTTON_TRAFFIC', ' Пакеты трафика'),
+                admin_button(
+                    texts.t('ADMIN_PRICING_BUTTON_TRAFFIC', 'Пакеты трафика'),
                     callback_data='admin_pricing_section:traffic',
+                    icon='stats',
+                    style='primary',
                 ),
-                types.InlineKeyboardButton(
-                    text=texts.t(
+                admin_button(
+                    texts.t(
                         'ADMIN_PRICING_BUTTON_TRAFFIC_OPTIONS',
-                        ' Отображение пакетов',
+                        'Отображение пакетов',
                     ),
                     callback_data='admin_pricing_section:traffic_options',
+                    icon='settings',
+                    style='primary',
                 ),
-                types.InlineKeyboardButton(
-                    text=texts.t('ADMIN_PRICING_BUTTON_EXTRA', ' Дополнительно'),
+                admin_button(
+                    texts.t('ADMIN_PRICING_BUTTON_EXTRA', 'Дополнительно'),
                     callback_data='admin_pricing_section:extra',
+                    icon='coin',
+                    style='primary',
                 ),
             ],
-            [types.InlineKeyboardButton(text=texts.BACK, callback_data='admin_panel', style='danger')],
+            [admin_back_button(texts, 'admin_panel')],
         ]
     )
 
-    return compact_text('\n'.join(lines)), keyboard
+    return admin_screen(compact_text('\n'.join(lines)), icon='pricing', compact=True), keyboard
 
 
 def _build_section(
@@ -802,13 +826,13 @@ def _build_section(
 
     if section == 'periods':
         items = _get_period_items(lang_code, texts=texts)
-        title = texts.t('ADMIN_PRICING_SECTION_PERIODS_TITLE', ' Периоды подписки')
+        title = texts.t('ADMIN_PRICING_SECTION_PERIODS_TITLE', 'Периоды подписки')
     elif section == 'traffic':
         items = _get_traffic_items(lang_code, texts=texts)
-        title = texts.t('ADMIN_PRICING_SECTION_TRAFFIC_TITLE', ' Пакеты трафика')
+        title = texts.t('ADMIN_PRICING_SECTION_TRAFFIC_TITLE', 'Пакеты трафика')
     elif section == 'extra':
         items = _get_extra_items(lang_code, texts=texts)
-        title = texts.t('ADMIN_PRICING_SECTION_EXTRA_TITLE', ' Дополнительные опции')
+        title = texts.t('ADMIN_PRICING_SECTION_EXTRA_TITLE', 'Дополнительные опции')
     elif section == 'traffic_options':
         return _build_traffic_options_section(language)
     elif section in SETTING_ENTRIES_BY_SECTION:
@@ -817,7 +841,7 @@ def _build_section(
         return _build_period_options_section(language)
     else:
         items = _get_extra_items(lang_code, texts=texts)
-        title = texts.t('ADMIN_PRICING_SECTION_EXTRA_TITLE', ' Дополнительные опции')
+        title = texts.t('ADMIN_PRICING_SECTION_EXTRA_TITLE', 'Дополнительные опции')
 
     lines = [title, '']
 
@@ -833,22 +857,22 @@ def _build_section(
     for key, label, price in items:
         keyboard_rows.append(
             [
-                types.InlineKeyboardButton(
-                    text=f'{label} • {settings.format_price(price)}',
+                admin_button(
+                    f'{strip_leading_emoji(label)} • {settings.format_price(price)}',
                     callback_data=f'admin_pricing_edit:{section}:{key}',
                 )
             ]
         )
 
-    keyboard_rows.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='admin_pricing', style='danger')])
+    keyboard_rows.append([admin_back_button(texts, 'admin_pricing')])
 
     keyboard = types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
-    return compact_text('\n'.join(lines)), keyboard
+    return admin_screen(compact_text('\n'.join(lines)), icon='pricing', compact=True), keyboard
 
 
 def _build_price_prompt(texts: Any, label: str, current_price: str) -> str:
     lines = [
-        f' <b>{texts.t("ADMIN_PRICING_EDIT_TITLE", "Изменение цены")}</b>',
+        f'<b>{texts.t("ADMIN_PRICING_EDIT_TITLE", "Изменение цены")}</b>',
         '',
         f'{texts.t("ADMIN_PRICING_EDIT_TARGET", "Текущий тариф")}: <b>{label}</b>',
         f'{texts.t("ADMIN_PRICING_EDIT_CURRENT", "Текущее значение")}: <b>{current_price}</b>',
@@ -862,7 +886,7 @@ def _build_price_prompt(texts: Any, label: str, current_price: str) -> str:
             'Напишите «Отмена», чтобы вернуться без изменений.',
         ),
     ]
-    return compact_text('\n'.join(lines))
+    return admin_screen(compact_text('\n'.join(lines)), icon='money', compact=True)
 
 
 async def _render_message(
@@ -1005,9 +1029,10 @@ async def start_price_edit(
     keyboard = types.InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                types.InlineKeyboardButton(
-                    text=texts.t('ADMIN_PRICING_EDIT_CANCEL', ' Отмена'),
-                    callback_data=f'admin_pricing_section:{section}',
+                admin_back_button(
+                    texts,
+                    f'admin_pricing_section:{section}',
+                    label=texts.t('ADMIN_PRICING_EDIT_CANCEL', 'Отмена'),
                 )
             ]
         ]
@@ -1073,12 +1098,12 @@ async def start_setting_edit(
         prompt_parts.extend(
             [
                 '',
-                f'ℹ {texts.t("ADMIN_PRICING_SETTING_FORMAT", "Формат ввода")}: {format_hint}',
-                f' {texts.t("ADMIN_PRICING_SETTING_EXAMPLE", "Пример")}: {example}',
+                f'{texts.t("ADMIN_PRICING_SETTING_FORMAT", "Формат ввода")}: {format_hint}',
+                f'{texts.t("ADMIN_PRICING_SETTING_EXAMPLE", "Пример")}: {example}',
             ]
         )
         if warning:
-            prompt_parts.append(f' {texts.t("ADMIN_PRICING_SETTING_WARNING", "Важно")}: {warning}')
+            prompt_parts.append(f'{texts.t("ADMIN_PRICING_SETTING_WARNING", "Важно")}: {warning}')
         prompt_parts.extend(
             [
                 '',
@@ -1092,14 +1117,15 @@ async def start_setting_edit(
                 ),
             ]
         )
-        prompt = '\n'.join(prompt_parts)
+        prompt = admin_screen('\n'.join(prompt_parts), icon='settings', compact=True)
 
     keyboard = types.InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                types.InlineKeyboardButton(
-                    text=texts.t('ADMIN_PRICING_EDIT_CANCEL', ' Отмена'),
-                    callback_data=f'admin_pricing_section:{section}',
+                admin_back_button(
+                    texts,
+                    f'admin_pricing_section:{section}',
+                    label=texts.t('ADMIN_PRICING_EDIT_CANCEL', 'Отмена'),
                 )
             ]
         ]

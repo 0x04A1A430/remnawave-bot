@@ -27,7 +27,9 @@ from app.handlers.admin.messages import (
 from app.keyboards.admin import get_admin_communications_submenu_keyboard
 from app.localization.texts import get_texts
 from app.services.poll_service import send_poll_to_users
+from app.utils.admin_ui import admin_back_button, admin_button, admin_screen
 from app.utils.decorators import admin_required, error_handler
+from app.utils.miniapp_buttons import strip_leading_emoji
 from app.utils.validators import get_html_help_text, validate_html_tags
 
 
@@ -257,8 +259,8 @@ def _build_polls_keyboard(polls: list[Poll], language: str) -> types.InlineKeybo
     for poll in polls[:10]:
         keyboard.append(
             [
-                types.InlineKeyboardButton(
-                    text=f' {poll.title[:40]}',
+                admin_button(
+                    poll.title[:40],
                     callback_data=f'poll_view:{poll.id}',
                 )
             ]
@@ -266,15 +268,14 @@ def _build_polls_keyboard(polls: list[Poll], language: str) -> types.InlineKeybo
 
     keyboard.append(
         [
-            types.InlineKeyboardButton(
-                text=texts.t('ADMIN_POLLS_CREATE', ' Создать опрос'),
+            admin_button(
+                strip_leading_emoji(texts.t('ADMIN_POLLS_CREATE', ' Создать опрос')),
                 callback_data='poll_create',
+                style='success',
             )
         ]
     )
-    keyboard.append(
-        [types.InlineKeyboardButton(text=texts.BACK, callback_data='admin_submenu_communications', style='danger')]
-    )
+    keyboard.append([admin_back_button(texts, 'admin_submenu_communications')])
 
     return types.InlineKeyboardMarkup(inline_keyboard=keyboard)
 
@@ -294,128 +295,107 @@ def _build_poll_details_keyboard(poll_id: int, language: str) -> types.InlineKey
     return types.InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                types.InlineKeyboardButton(
-                    text=texts.t('ADMIN_POLLS_SEND', ' Отправить'),
+                admin_button(
+                    strip_leading_emoji(texts.t('ADMIN_POLLS_SEND', ' Отправить')),
                     callback_data=f'poll_send:{poll_id}',
+                    icon='success',
+                    style='success',
                 )
             ],
             [
-                types.InlineKeyboardButton(
-                    text=texts.t('ADMIN_POLLS_STATS', ' Статистика'),
+                admin_button(
+                    strip_leading_emoji(texts.t('ADMIN_POLLS_STATS', ' Статистика')),
                     callback_data=f'poll_stats:{poll_id}',
+                    icon='stats',
+                    style='primary',
                 )
             ],
             [
-                types.InlineKeyboardButton(
-                    text=texts.t('ADMIN_POLLS_DELETE', ' Удалить'),
+                admin_button(
+                    strip_leading_emoji(texts.t('ADMIN_POLLS_DELETE', ' Удалить')),
                     callback_data=f'poll_delete:{poll_id}',
+                    icon='delete',
+                    style='danger',
                 )
             ],
-            [types.InlineKeyboardButton(text=texts.t('ADMIN_POLLS_BACK', ' К списку'), callback_data='admin_polls')],
+            [
+                admin_back_button(
+                    texts,
+                    'admin_polls',
+                    label=strip_leading_emoji(texts.t('ADMIN_POLLS_BACK', ' К списку')),
+                )
+            ],
         ]
     )
 
 
 def _build_target_keyboard(poll_id: int, language: str) -> types.InlineKeyboardMarkup:
     texts = get_texts(language)
+
+    def _target_button(label_key: str, default: str, target: str) -> types.InlineKeyboardButton:
+        return admin_button(
+            strip_leading_emoji(texts.t(label_key, default)),
+            callback_data=f'poll_target:{poll_id}:{target}',
+        )
+
     return types.InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                types.InlineKeyboardButton(
-                    text=texts.t('ADMIN_BROADCAST_TARGET_ALL', ' Всем'),
-                    callback_data=f'poll_target:{poll_id}:all',
-                ),
-                types.InlineKeyboardButton(
-                    text=texts.t('ADMIN_BROADCAST_TARGET_ACTIVE', ' С подпиской'),
-                    callback_data=f'poll_target:{poll_id}:active',
-                ),
+                _target_button('ADMIN_BROADCAST_TARGET_ALL', ' Всем', 'all'),
+                _target_button('ADMIN_BROADCAST_TARGET_ACTIVE', ' С подпиской', 'active'),
             ],
             [
-                types.InlineKeyboardButton(
-                    text=texts.t('ADMIN_BROADCAST_TARGET_TRIAL', ' Триал'),
-                    callback_data=f'poll_target:{poll_id}:trial',
-                ),
-                types.InlineKeyboardButton(
-                    text=texts.t('ADMIN_BROADCAST_TARGET_NO_SUB', ' Без подписки'),
-                    callback_data=f'poll_target:{poll_id}:no',
-                ),
+                _target_button('ADMIN_BROADCAST_TARGET_TRIAL', ' Триал', 'trial'),
+                _target_button('ADMIN_BROADCAST_TARGET_NO_SUB', ' Без подписки', 'no'),
             ],
             [
-                types.InlineKeyboardButton(
-                    text=texts.t('ADMIN_BROADCAST_TARGET_EXPIRING', ' Истекающие'),
-                    callback_data=f'poll_target:{poll_id}:expiring',
-                ),
-                types.InlineKeyboardButton(
-                    text=texts.t('ADMIN_BROADCAST_TARGET_EXPIRED', ' Истекшие'),
-                    callback_data=f'poll_target:{poll_id}:expired',
-                ),
+                _target_button('ADMIN_BROADCAST_TARGET_EXPIRING', ' Истекающие', 'expiring'),
+                _target_button('ADMIN_BROADCAST_TARGET_EXPIRED', ' Истекшие', 'expired'),
             ],
             [
-                types.InlineKeyboardButton(
-                    text=texts.t('ADMIN_BROADCAST_TARGET_ACTIVE_ZERO', ' Активна 0 ГБ'),
-                    callback_data=f'poll_target:{poll_id}:active_zero',
-                ),
-                types.InlineKeyboardButton(
-                    text=texts.t('ADMIN_BROADCAST_TARGET_TRIAL_ZERO', ' Триал 0 ГБ'),
-                    callback_data=f'poll_target:{poll_id}:trial_zero',
-                ),
+                _target_button('ADMIN_BROADCAST_TARGET_ACTIVE_ZERO', ' Активна 0 ГБ', 'active_zero'),
+                _target_button('ADMIN_BROADCAST_TARGET_TRIAL_ZERO', ' Триал 0 ГБ', 'trial_zero'),
             ],
             [
-                types.InlineKeyboardButton(
-                    text=texts.t('ADMIN_POLLS_CUSTOM_TARGET', ' По критериям'),
+                admin_button(
+                    strip_leading_emoji(texts.t('ADMIN_POLLS_CUSTOM_TARGET', ' По критериям')),
                     callback_data=f'poll_custom_menu:{poll_id}',
+                    style='primary',
                 )
             ],
-            [types.InlineKeyboardButton(text=texts.BACK, callback_data=f'poll_view:{poll_id}', style='danger')],
+            [admin_back_button(texts, f'poll_view:{poll_id}')],
         ]
     )
 
 
 def _build_custom_target_keyboard(poll_id: int, language: str) -> types.InlineKeyboardMarkup:
     texts = get_texts(language)
+
+    def _criteria_button(label_key: str, default: str, criteria: str) -> types.InlineKeyboardButton:
+        return admin_button(
+            strip_leading_emoji(texts.t(label_key, default)),
+            callback_data=f'poll_custom_target:{poll_id}:{criteria}',
+        )
+
     return types.InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                types.InlineKeyboardButton(
-                    text=texts.t('ADMIN_CRITERIA_TODAY', ' Сегодня'),
-                    callback_data=f'poll_custom_target:{poll_id}:today',
-                ),
-                types.InlineKeyboardButton(
-                    text=texts.t('ADMIN_CRITERIA_WEEK', ' За неделю'),
-                    callback_data=f'poll_custom_target:{poll_id}:week',
-                ),
+                _criteria_button('ADMIN_CRITERIA_TODAY', ' Сегодня', 'today'),
+                _criteria_button('ADMIN_CRITERIA_WEEK', ' За неделю', 'week'),
             ],
             [
-                types.InlineKeyboardButton(
-                    text=texts.t('ADMIN_CRITERIA_MONTH', ' За месяц'),
-                    callback_data=f'poll_custom_target:{poll_id}:month',
-                ),
-                types.InlineKeyboardButton(
-                    text=texts.t('ADMIN_CRITERIA_ACTIVE_TODAY', ' Активные сегодня'),
-                    callback_data=f'poll_custom_target:{poll_id}:active_today',
-                ),
+                _criteria_button('ADMIN_CRITERIA_MONTH', ' За месяц', 'month'),
+                _criteria_button('ADMIN_CRITERIA_ACTIVE_TODAY', ' Активные сегодня', 'active_today'),
             ],
             [
-                types.InlineKeyboardButton(
-                    text=texts.t('ADMIN_CRITERIA_INACTIVE_WEEK', ' Неактивные 7+ дней'),
-                    callback_data=f'poll_custom_target:{poll_id}:inactive_week',
-                ),
-                types.InlineKeyboardButton(
-                    text=texts.t('ADMIN_CRITERIA_INACTIVE_MONTH', ' Неактивные 30+ дней'),
-                    callback_data=f'poll_custom_target:{poll_id}:inactive_month',
-                ),
+                _criteria_button('ADMIN_CRITERIA_INACTIVE_WEEK', ' Неактивные 7+ дней', 'inactive_week'),
+                _criteria_button('ADMIN_CRITERIA_INACTIVE_MONTH', ' Неактивные 30+ дней', 'inactive_month'),
             ],
             [
-                types.InlineKeyboardButton(
-                    text=texts.t('ADMIN_CRITERIA_REFERRALS', ' Через рефералов'),
-                    callback_data=f'poll_custom_target:{poll_id}:referrals',
-                ),
-                types.InlineKeyboardButton(
-                    text=texts.t('ADMIN_CRITERIA_DIRECT', ' Прямая регистрация'),
-                    callback_data=f'poll_custom_target:{poll_id}:direct',
-                ),
+                _criteria_button('ADMIN_CRITERIA_REFERRALS', ' Через рефералов', 'referrals'),
+                _criteria_button('ADMIN_CRITERIA_DIRECT', ' Прямая регистрация', 'direct'),
             ],
-            [types.InlineKeyboardButton(text=texts.BACK, callback_data=f'poll_send:{poll_id}', style='danger')],
+            [admin_back_button(texts, f'poll_send:{poll_id}')],
         ]
     )
 
@@ -425,12 +405,13 @@ def _build_send_confirmation_keyboard(poll_id: int, target: str, language: str) 
     return types.InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                types.InlineKeyboardButton(
-                    text=texts.t('ADMIN_POLLS_SEND_CONFIRM_BUTTON', ' Отправить'),
+                admin_button(
+                    strip_leading_emoji(texts.t('ADMIN_POLLS_SEND_CONFIRM_BUTTON', ' Отправить')),
                     callback_data=f'poll_send_confirm:{poll_id}:{target}',
+                    style='success',
                 )
             ],
-            [types.InlineKeyboardButton(text=texts.BACK, callback_data=f'poll_send:{poll_id}', style='danger')],
+            [admin_back_button(texts, f'poll_send:{poll_id}')],
         ]
     )
 
@@ -454,7 +435,7 @@ async def show_polls_panel(callback: types.CallbackQuery, db_user: User, db: Asy
             )
 
     await callback.message.edit_text(
-        '\n'.join(lines),
+        admin_screen('\n'.join(lines), icon='stats', compact=True),
         reply_markup=_build_polls_keyboard(polls, db_user.language),
         parse_mode='HTML',
     )
@@ -886,7 +867,7 @@ async def _render_poll_details(poll: Poll, language: str) -> str:
                     texts.t('ADMIN_POLLS_OPTION_BULLET', '   • {option}').format(option=html.escape(option.text))
                 )
 
-    return '\n'.join(lines)
+    return admin_screen('\n'.join(lines), icon='stats', compact=True)
 
 
 @admin_required
@@ -1095,7 +1076,7 @@ async def show_poll_stats(
             )
 
     await callback.message.edit_text(
-        '\n'.join(lines),
+        admin_screen('\n'.join(lines), icon='stats', compact=True),
         reply_markup=_build_poll_details_keyboard(poll.id, db_user.language),
         parse_mode='HTML',
     )
@@ -1124,12 +1105,14 @@ async def confirm_poll_delete(
         reply_markup=types.InlineKeyboardMarkup(
             inline_keyboard=[
                 [
-                    types.InlineKeyboardButton(
-                        text=texts.t('ADMIN_POLLS_DELETE', ' Удалить'),
+                    admin_button(
+                        strip_leading_emoji(texts.t('ADMIN_POLLS_DELETE', ' Удалить')),
                         callback_data=f'poll_delete_confirm:{poll_id}',
+                        icon='delete',
+                        style='danger',
                     )
                 ],
-                [types.InlineKeyboardButton(text=texts.BACK, callback_data=f'poll_view:{poll_id}', style='danger')],
+                [admin_back_button(texts, f'poll_view:{poll_id}')],
             ]
         ),
         parse_mode='HTML',
@@ -1150,8 +1133,9 @@ async def delete_poll_handler(
 
     if success:
         await callback.message.edit_text(
-            texts.t('ADMIN_POLLS_DELETED', ' Опрос удалён.'),
+            admin_screen(texts.t('ADMIN_POLLS_DELETED', ' Опрос удалён.'), icon='success', compact=True),
             reply_markup=_build_polls_keyboard(await list_polls(db), db_user.language),
+            parse_mode='HTML',
         )
     else:
         await callback.answer(get_texts(db_user.language).t('POLL_NOT_FOUND'), show_alert=True)

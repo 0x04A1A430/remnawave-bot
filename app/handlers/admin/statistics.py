@@ -14,6 +14,7 @@ from app.keyboards.admin import get_admin_statistics_keyboard
 from app.localization.texts import get_texts
 from app.services.referral_reward_service import format_reward_total
 from app.services.user_service import UserService
+from app.utils.admin_ui import admin_back_button, admin_button, admin_screen
 from app.utils.decorators import admin_required, error_handler
 from app.utils.formatters import format_datetime, format_percentage
 from app.utils.timezone import local_date, local_month_start
@@ -25,9 +26,13 @@ logger = structlog.get_logger(__name__)
 @admin_required
 @error_handler
 async def show_statistics_menu(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
-    text = ' <b>Статистика системы</b>'
+    text = admin_screen('<b>Статистика системы</b>', icon='stats')
 
-    await callback.message.edit_text(text, reply_markup=get_admin_statistics_keyboard(db_user.language))
+    await callback.message.edit_text(
+        text,
+        reply_markup=get_admin_statistics_keyboard(db_user.language),
+        parse_mode='HTML',
+    )
     await callback.answer()
 
 
@@ -43,35 +48,37 @@ async def show_users_statistics(callback: types.CallbackQuery, db_user: User, db
 
     current_time = format_datetime(datetime.now(UTC))
 
-    text = f"""
- <b>Статистика пользователей</b>
+    text = admin_screen(
+        f"""<b>Статистика пользователей</b>
 
 <b>Общие показатели:</b>
-- Всего зарегистрировано: {stats['total_users']}
-- Активных: {stats['active_users']} ({active_rate})
-- Заблокированных: {stats['blocked_users']}
+• Всего зарегистрировано: {stats['total_users']}
+• Активных: {stats['active_users']} ({active_rate})
+• Заблокированных: {stats['blocked_users']}
 
 <b>Новые регистрации:</b>
-- Сегодня: {stats['new_today']}
-- За неделю: {stats['new_week']}
-- За месяц: {stats['new_month']}
+• Сегодня: {stats['new_today']}
+• За неделю: {stats['new_week']}
+• За месяц: {stats['new_month']}
 
 <b>Активность:</b>
-- Коэффициент активности: {active_rate}
-- Рост за месяц: +{stats['new_month']} ({format_percentage(stats['new_month'] / total_users * 100 if total_users > 0 else 0)})
+• Коэффициент активности: {active_rate}
+• Рост за месяц: +{stats['new_month']} ({format_percentage(stats['new_month'] / total_users * 100 if total_users > 0 else 0)})
 
-<b>Обновлено:</b> {current_time}
-"""
+<b>Обновлено:</b> {current_time}""",
+        icon='stats',
+        compact=True,
+    )
 
     keyboard = types.InlineKeyboardMarkup(
         inline_keyboard=[
-            [types.InlineKeyboardButton(text=' Обновить', callback_data='admin_stats_users')],
-            [types.InlineKeyboardButton(text=' Назад', callback_data='admin_statistics')],
+            [admin_button('Обновить', callback_data='admin_stats_users', icon='refresh', style='primary')],
+            [admin_back_button(texts, 'admin_statistics')],
         ]
     )
 
     try:
-        await callback.message.edit_text(text, reply_markup=keyboard)
+        await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='HTML')
     except Exception as e:
         if 'message is not modified' in str(e):
             await callback.answer(texts.t('ADMIN_STATISTICS_015'), show_alert=False)
@@ -93,36 +100,38 @@ async def show_subscriptions_statistics(callback: types.CallbackQuery, db_user: 
     conversion_rate = format_percentage(stats['paid_subscriptions'] / total_subs * 100 if total_subs > 0 else 0)
     current_time = format_datetime(datetime.now(UTC))
 
-    text = f"""
- <b>Статистика подписок</b>
+    text = admin_screen(
+        f"""<b>Статистика подписок</b>
 
 <b>Общие показатели:</b>
-- Всего подписок: {stats['total_subscriptions']}
-- Активных: {stats['active_subscriptions']}
-- Платных: {stats['paid_subscriptions']}
-- Триальных: {stats['trial_subscriptions']}
+• Всего подписок: {stats['total_subscriptions']}
+• Активных: {stats['active_subscriptions']}
+• Платных: {stats['paid_subscriptions']}
+• Триальных: {stats['trial_subscriptions']}
 
 <b>Конверсия:</b>
-- Из триала в платную: {conversion_rate}
-- Активных платных: {stats['paid_subscriptions']}
+• Из триала в платную: {conversion_rate}
+• Активных платных: {stats['paid_subscriptions']}
 
 <b>Продажи:</b>
-- Сегодня: {stats['purchased_today']}
-- За неделю: {stats['purchased_week']}
-- За месяц: {stats['purchased_month']}
+• Сегодня: {stats['purchased_today']}
+• За неделю: {stats['purchased_week']}
+• За месяц: {stats['purchased_month']}
 
-<b>Обновлено:</b> {current_time}
-"""
+<b>Обновлено:</b> {current_time}""",
+        icon='stats',
+        compact=True,
+    )
 
     keyboard = types.InlineKeyboardMarkup(
         inline_keyboard=[
-            [types.InlineKeyboardButton(text=' Обновить', callback_data='admin_stats_subs')],
-            [types.InlineKeyboardButton(text=' Назад', callback_data='admin_statistics')],
+            [admin_button('Обновить', callback_data='admin_stats_subs', icon='refresh', style='primary')],
+            [admin_back_button(texts, 'admin_statistics')],
         ]
     )
 
     try:
-        await callback.message.edit_text(text, reply_markup=keyboard)
+        await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='HTML')
         await callback.answer(texts.t('ADMIN_STATISTICS_012'))
     except Exception as e:
         if 'message is not modified' in str(e):
@@ -143,22 +152,21 @@ async def show_revenue_statistics(callback: types.CallbackQuery, db_user: User, 
     all_time_stats = await get_transactions_statistics(db, start_date=datetime(2020, 1, 1, tzinfo=UTC), end_date=now)
     current_time = format_datetime(datetime.now(UTC))
 
-    text = f"""
- <b>Статистика доходов</b>
+    text = f"""<b>Статистика доходов</b>
 
 <b>За текущий месяц:</b>
-- Доходы: {settings.format_price(month_stats['totals']['income_kopeks'])}
-- Расходы: {settings.format_price(month_stats['totals']['expenses_kopeks'])}
-- Прибыль: {settings.format_price(month_stats['totals']['profit_kopeks'])}
-- От подписок: {settings.format_price(abs(month_stats['totals']['subscription_income_kopeks']))}
+• Доходы: {settings.format_price(month_stats['totals']['income_kopeks'])}
+• Расходы: {settings.format_price(month_stats['totals']['expenses_kopeks'])}
+• Прибыль: {settings.format_price(month_stats['totals']['profit_kopeks'])}
+• От подписок: {settings.format_price(abs(month_stats['totals']['subscription_income_kopeks']))}
 
 <b>Сегодня:</b>
-- Транзакций: {month_stats['today']['transactions_count']}
-- Доходы: {settings.format_price(month_stats['today']['income_kopeks'])}
+• Транзакций: {month_stats['today']['transactions_count']}
+• Доходы: {settings.format_price(month_stats['today']['income_kopeks'])}
 
 <b>За все время:</b>
-- Общий доход: {settings.format_price(all_time_stats['totals']['income_kopeks'])}
-- Общая прибыль: {settings.format_price(all_time_stats['totals']['profit_kopeks'])}
+• Общий доход: {settings.format_price(all_time_stats['totals']['income_kopeks'])}
+• Общая прибыль: {settings.format_price(all_time_stats['totals']['profit_kopeks'])}
 
 <b>Способы оплаты:</b>
 """
@@ -168,17 +176,18 @@ async def show_revenue_statistics(callback: types.CallbackQuery, db_user: User, 
             text += f'• {method}: {data["count"]} ({settings.format_price(data["amount"])})\n'
 
     text += texts.t('ADMIN_STATISTICS_004').format(value1=current_time)
+    text = admin_screen(text, icon='stats', compact=True)
 
     keyboard = types.InlineKeyboardMarkup(
         inline_keyboard=[
             # [types.InlineKeyboardButton(text=" Период", callback_data="admin_revenue_period")],
-            [types.InlineKeyboardButton(text=' Обновить', callback_data='admin_stats_revenue')],
-            [types.InlineKeyboardButton(text=' Назад', callback_data='admin_statistics')],
+            [admin_button('Обновить', callback_data='admin_stats_revenue', icon='refresh', style='primary')],
+            [admin_back_button(texts, 'admin_statistics')],
         ]
     )
 
     try:
-        await callback.message.edit_text(text, reply_markup=keyboard)
+        await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='HTML')
         await callback.answer(texts.t('ADMIN_STATISTICS_012'))
     except Exception as e:
         if 'message is not modified' in str(e):
@@ -201,21 +210,20 @@ async def show_referral_statistics(callback: types.CallbackQuery, db_user: User,
 
     # Дни — вторая валюта программы: без них экран показывает «выплачено 0 ₽»
     # на установке, где начисления идут днями подписки.
-    text = f"""
- <b>Реферальная статистика</b>
+    text = f"""<b>Реферальная статистика</b>
 
 <b>Общие показатели:</b>
-- Пользователей с рефералами: {stats['users_with_referrals']}
-- Активных рефереров: {stats['active_referrers']}
-- Выплачено всего: {format_reward_total(stats['total_paid_kopeks'], stats.get('total_paid_days', 0))}
+• Пользователей с рефералами: {stats['users_with_referrals']}
+• Активных рефереров: {stats['active_referrers']}
+• Выплачено всего: {format_reward_total(stats['total_paid_kopeks'], stats.get('total_paid_days', 0))}
 
 <b>За период:</b>
-- Сегодня: {format_reward_total(stats['today_earnings_kopeks'], stats.get('today_earnings_days', 0))}
-- За неделю: {format_reward_total(stats['week_earnings_kopeks'], stats.get('week_earnings_days', 0))}
-- За месяц: {format_reward_total(stats['month_earnings_kopeks'], stats.get('month_earnings_days', 0))}
+• Сегодня: {format_reward_total(stats['today_earnings_kopeks'], stats.get('today_earnings_days', 0))}
+• За неделю: {format_reward_total(stats['week_earnings_kopeks'], stats.get('week_earnings_days', 0))}
+• За месяц: {format_reward_total(stats['month_earnings_kopeks'], stats.get('month_earnings_days', 0))}
 
 <b>Средние показатели:</b>
-- На одного рефререра: {settings.format_price(int(avg_per_referrer))}
+• На одного рефререра: {settings.format_price(int(avg_per_referrer))}
 """
 
     meaningful_levels = [row for row in (stats.get('by_level') or []) if row.get('money_kopeks') or row.get('days')]
@@ -241,16 +249,17 @@ async def show_referral_statistics(callback: types.CallbackQuery, db_user: User,
         text += texts.t('ADMIN_STATISTICS_010')
 
     text += texts.t('ADMIN_STATISTICS_004').format(value1=current_time)
+    text = admin_screen(text, icon='stats', compact=True)
 
     keyboard = types.InlineKeyboardMarkup(
         inline_keyboard=[
-            [types.InlineKeyboardButton(text=' Обновить', callback_data='admin_stats_referrals')],
-            [types.InlineKeyboardButton(text=' Назад', callback_data='admin_statistics')],
+            [admin_button('Обновить', callback_data='admin_stats_referrals', icon='refresh', style='primary')],
+            [admin_back_button(texts, 'admin_statistics')],
         ]
     )
 
     try:
-        await callback.message.edit_text(text, reply_markup=keyboard)
+        await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='HTML')
         await callback.answer(texts.t('ADMIN_STATISTICS_012'))
     except Exception as e:
         if 'message is not modified' in str(e):
@@ -281,40 +290,42 @@ async def show_summary_statistics(callback: types.CallbackQuery, db_user: User, 
     if user_stats['active_users'] > 0:
         arpu = revenue_stats['totals']['income_kopeks'] / user_stats['active_users']
 
-    text = f"""
- <b>Общая сводка системы</b>
+    text = admin_screen(
+        f"""<b>Общая сводка системы</b>
 
 <b>Пользователи:</b>
-- Всего: {user_stats['total_users']}
-- Активных: {user_stats['active_users']}
-- Новых за месяц: {user_stats['new_month']}
+• Всего: {user_stats['total_users']}
+• Активных: {user_stats['active_users']}
+• Новых за месяц: {user_stats['new_month']}
 
 <b>Подписки:</b>
-- Активных: {sub_stats['active_subscriptions']}
-- Платных: {sub_stats['paid_subscriptions']}
-- Конверсия: {format_percentage(conversion_rate)}
+• Активных: {sub_stats['active_subscriptions']}
+• Платных: {sub_stats['paid_subscriptions']}
+• Конверсия: {format_percentage(conversion_rate)}
 
 <b>Финансы (месяц):</b>
-- Доходы: {settings.format_price(revenue_stats['totals']['income_kopeks'])}
-- ARPU: {settings.format_price(int(arpu))}
-- Транзакций: {sum(data['count'] for data in revenue_stats['by_type'].values())}
+• Доходы: {settings.format_price(revenue_stats['totals']['income_kopeks'])}
+• ARPU: {settings.format_price(int(arpu))}
+• Транзакций: {sum(data['count'] for data in revenue_stats['by_type'].values())}
 
 <b>Рост:</b>
-- Пользователи: +{user_stats['new_month']} за месяц
-- Продажи: +{sub_stats['purchased_month']} за месяц
+• Пользователи: +{user_stats['new_month']} за месяц
+• Продажи: +{sub_stats['purchased_month']} за месяц
 
-<b>Обновлено:</b> {current_time}
-"""
+<b>Обновлено:</b> {current_time}""",
+        icon='stats',
+        compact=True,
+    )
 
     keyboard = types.InlineKeyboardMarkup(
         inline_keyboard=[
-            [types.InlineKeyboardButton(text=' Обновить', callback_data='admin_stats_summary')],
-            [types.InlineKeyboardButton(text=' Назад', callback_data='admin_statistics')],
+            [admin_button('Обновить', callback_data='admin_stats_summary', icon='refresh', style='primary')],
+            [admin_back_button(texts, 'admin_statistics')],
         ]
     )
 
     try:
-        await callback.message.edit_text(text, reply_markup=keyboard)
+        await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='HTML')
         await callback.answer(texts.t('ADMIN_STATISTICS_012'))
     except Exception as e:
         if 'message is not modified' in str(e):

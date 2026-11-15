@@ -44,6 +44,7 @@ from app.services.pinned_message_service import (
     unpin_active_pinned_message,
 )
 from app.states import AdminStates
+from app.utils.admin_ui import admin_screen
 from app.utils.decorators import admin_required, error_handler
 from app.utils.miniapp_buttons import BUTTON_KEY_TO_CABINET_PATH, build_miniapp_or_callback_button
 from app.utils.timezone import local_day_start
@@ -246,21 +247,22 @@ async def _persist_broadcast_result(
 @admin_required
 @error_handler
 async def show_messages_menu(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
-    text = """
- <b>Управление рассылками</b>
+    text = """<b>Управление рассылками</b>
 
 Выберите тип рассылки:
 
-- <b>Всем пользователям</b> - рассылка всем активным пользователям
-- <b>По подпискам</b> - фильтрация по типу подписки
-- <b>По критериям</b> - настраиваемые фильтры
-- <b>История</b> - просмотр предыдущих рассылок
+• <b>Всем пользователям</b> — рассылка всем активным пользователям
+• <b>По подпискам</b> — фильтрация по типу подписки
+• <b>По критериям</b> — настраиваемые фильтры
+• <b>История</b> — просмотр предыдущих рассылок
 
- Будьте осторожны с массовыми рассылками!
-"""
+<i>Будьте осторожны с массовыми рассылками!</i>"""
 
     await safe_edit_or_send_text(
-        callback, text, reply_markup=get_admin_messages_keyboard(db_user.language), parse_mode='HTML'
+        callback,
+        admin_screen(text, icon='messages', compact=True),
+        reply_markup=get_admin_messages_keyboard(db_user.language),
+        parse_mode='HTML',
     )
     await callback.answer()
 

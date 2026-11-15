@@ -5,6 +5,8 @@ import pytest
 
 from app.handlers.admin import blocked_users, user_messages
 from app.localization.texts import get_texts
+from app.utils.admin_ui import admin_icon
+from app.utils.miniapp_buttons import strip_leading_emoji
 from app.utils.validators import get_html_help_text, validate_html_tags
 
 
@@ -26,8 +28,15 @@ async def test_messages_empty_list_uses_requested_language(monkeypatch, language
     message = SimpleNamespace(edit_text=AsyncMock())
     await user_messages._render_user_messages_list(message, AsyncMock(), language)
     call = message.edit_text.await_args
-    assert call.args[0] == get_texts(language).t('ADMIN_USER_MESSAGE_017')
-    assert call.kwargs['reply_markup'].inline_keyboard[0][0].text == get_texts(language).t('ADMIN_USER_MESSAGE_032')
+    localized = get_texts(language).t('ADMIN_USER_MESSAGE_017')
+    body = localized.split('\n\n', 1)[-1]
+    rendered = call.args[0]
+    assert rendered.startswith(admin_icon('messages'))
+    assert body in rendered
+    assert '▤' not in rendered
+    assert call.kwargs['reply_markup'].inline_keyboard[0][0].text == strip_leading_emoji(
+        get_texts(language).t('ADMIN_USER_MESSAGE_032')
+    )
 
 
 @pytest.mark.parametrize('language', LANGUAGES)

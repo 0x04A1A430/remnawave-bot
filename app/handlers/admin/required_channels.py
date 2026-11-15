@@ -6,7 +6,7 @@ import structlog
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
+from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
 
 from app.database.crud.required_channel import (
     add_channel,
@@ -20,7 +20,9 @@ from app.database.database import AsyncSessionLocal
 from app.localization.texts import get_texts
 from app.services.channel_subscription_service import channel_subscription_service
 from app.services.system_settings_service import normalize_settings_language
+from app.utils.admin_ui import admin_back_button, admin_button, admin_screen
 from app.utils.decorators import admin_required
+from app.utils.miniapp_buttons import strip_leading_emoji
 
 
 logger = structlog.get_logger(__name__)
@@ -32,6 +34,11 @@ class AddChannelStates(StatesGroup):
     waiting_channel_id = State()
     waiting_channel_link = State()
     waiting_channel_title = State()
+
+
+def _label(text: str) -> str:
+    """Текст кнопки без ведущего глифа локали: иконку даёт ``admin_button``."""
+    return strip_leading_emoji(text.strip())
 
 
 # -- List channels ----------------------------------------------------------------
@@ -52,25 +59,29 @@ def _channels_keyboard(channels: list, language: str = 'ru') -> InlineKeyboardMa
         title = ch.title or ch.channel_id
         buttons.append(
             [
-                InlineKeyboardButton(
-                    text=f'{status} {title}',
+                admin_button(
+                    f'{status} {title}',
                     callback_data=f'reqch:view:{ch.id}',
+                    icon='success' if ch.is_active else 'lock',
                 )
             ]
         )
     buttons.append(
         [
-            InlineKeyboardButton(
-                text=texts.t('ADMIN_REQUIRED_CHANNELS_UI_CHANNELS_KEYBOARD_000', ' Добавить канал'),
+            admin_button(
+                _label(texts.t('ADMIN_REQUIRED_CHANNELS_UI_CHANNELS_KEYBOARD_000', 'Добавить канал')),
                 callback_data='reqch:add',
+                icon='link',
+                style='success',
             )
         ]
     )
     buttons.append(
         [
-            InlineKeyboardButton(
-                text=texts.t('ADMIN_REQUIRED_CHANNELS_UI_CHANNELS_KEYBOARD_001', '← Назад'),
-                callback_data='admin_submenu_settings',
+            admin_back_button(
+                texts,
+                'admin_submenu_settings',
+                label=_label(texts.t('ADMIN_REQUIRED_CHANNELS_UI_CHANNELS_KEYBOARD_001', 'Назад')),
             )
         ]
     )
@@ -79,24 +90,33 @@ def _channels_keyboard(channels: list, language: str = 'ru') -> InlineKeyboardMa
 
 def _channel_detail_keyboard(channel_id: int, is_active: bool, language: str = 'ru') -> InlineKeyboardMarkup:
     texts = get_texts(language)
-    toggle_text = (
-        texts.t('ADMIN_REQUIRED_CHANNELS_UI_CHANNEL_DETAIL_KEYBOARD_002', ' Отключить')
+    toggle_text = _label(
+        texts.t('ADMIN_REQUIRED_CHANNELS_UI_CHANNEL_DETAIL_KEYBOARD_002', 'Отключить')
         if is_active
-        else texts.t('ADMIN_REQUIRED_CHANNELS_UI_CHANNEL_DETAIL_KEYBOARD_003', ' Включить')
+        else texts.t('ADMIN_REQUIRED_CHANNELS_UI_CHANNEL_DETAIL_KEYBOARD_003', 'Включить')
     )
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text=toggle_text, callback_data=f'reqch:toggle:{channel_id}')],
             [
-                InlineKeyboardButton(
-                    text=texts.t('ADMIN_REQUIRED_CHANNELS_UI_CHANNEL_DETAIL_KEYBOARD_004', ' Удалить'),
-                    callback_data=f'reqch:delete:{channel_id}',
+                admin_button(
+                    toggle_text,
+                    callback_data=f'reqch:toggle:{channel_id}',
+                    icon='lock' if is_active else 'success',
                 )
             ],
             [
-                InlineKeyboardButton(
-                    text=texts.t('ADMIN_REQUIRED_CHANNELS_UI_CHANNEL_DETAIL_KEYBOARD_005', '← К списку'),
-                    callback_data='reqch:list',
+                admin_button(
+                    _label(texts.t('ADMIN_REQUIRED_CHANNELS_UI_CHANNEL_DETAIL_KEYBOARD_004', 'Удалить')),
+                    callback_data=f'reqch:delete:{channel_id}',
+                    icon='delete',
+                    style='danger',
+                )
+            ],
+            [
+                admin_back_button(
+                    texts,
+                    'reqch:list',
+                    label=_label(texts.t('ADMIN_REQUIRED_CHANNELS_UI_CHANNEL_DETAIL_KEYBOARD_005', 'К списку')),
                 )
             ],
         ]
@@ -114,17 +134,21 @@ async def show_channels_list(callback: CallbackQuery, **kwargs) -> None:
     if not channels:
         text = texts.t(
             'ADMIN_REQUIRED_CHANNELS_UI_SHOW_CHANNELS_LIST_006',
-            '<b> Обязательные каналы</b>\n\nКаналы не настроены. Нажмите «Добавить» чтобы создать.',
+            '<b>Обязательные каналы</b>\n\nКаналы не настроены. Нажмите «Добавить» чтобы создать.',
         )
     else:
-        lines = [texts.t('ADMIN_REQUIRED_CHANNELS_UI_SHOW_CHANNELS_LIST_007', '<b> Обязательные каналы</b>\n')]
+        lines = [texts.t('ADMIN_REQUIRED_CHANNELS_UI_SHOW_CHANNELS_LIST_007', '<b>Обязательные каналы</b>\n')]
         for ch in channels:
             status = '[x]' if ch.is_active else '[ ]'
             title = ch.title or ch.channel_id
             lines.append(f'{status} <code>{html.escape(ch.channel_id)}</code> — {html.escape(title)}')
         text = '\n'.join(lines)
 
-    await callback.message.edit_text(text, reply_markup=_channels_keyboard(channels, language=language))
+    await callback.message.edit_text(
+        admin_screen(text, icon='link', compact=True),
+        reply_markup=_channels_keyboard(channels, language=language),
+        parse_mode='HTML',
+    )
     await callback.answer()
 
 
@@ -150,9 +174,9 @@ async def view_channel(callback: CallbackQuery, **kwargs) -> None:
         return
 
     status = (
-        texts.t('ADMIN_REQUIRED_CHANNELS_UI_VIEW_CHANNEL_010', ' Активен')
+        texts.t('ADMIN_REQUIRED_CHANNELS_UI_VIEW_CHANNEL_010', 'Активен')
         if ch.is_active
-        else texts.t('ADMIN_REQUIRED_CHANNELS_UI_VIEW_CHANNEL_011', ' Отключён')
+        else texts.t('ADMIN_REQUIRED_CHANNELS_UI_VIEW_CHANNEL_011', 'Отключён')
     )
     text = texts.t(
         'ADMIN_REQUIRED_CHANNELS_UI_VIEW_CHANNEL_012',
@@ -166,7 +190,9 @@ async def view_channel(callback: CallbackQuery, **kwargs) -> None:
     )
 
     await callback.message.edit_text(
-        text, reply_markup=_channel_detail_keyboard(ch.id, ch.is_active, language=language)
+        admin_screen(text, icon='link', compact=True),
+        reply_markup=_channel_detail_keyboard(ch.id, ch.is_active, language=language),
+        parse_mode='HTML',
     )
     await callback.answer()
 
@@ -205,8 +231,13 @@ async def toggle_channel_handler(callback: CallbackQuery, **kwargs) -> None:
     async with AsyncSessionLocal() as db:
         channels = await get_all_channels(db)
     await callback.message.edit_text(
-        texts.t('ADMIN_REQUIRED_CHANNELS_UI_TOGGLE_CHANNEL_HANDLER_018', '<b> Обязательные каналы</b>'),
+        admin_screen(
+            texts.t('ADMIN_REQUIRED_CHANNELS_UI_TOGGLE_CHANNEL_HANDLER_018', '<b>Обязательные каналы</b>'),
+            icon='link',
+            compact=True,
+        ),
         reply_markup=_channels_keyboard(channels, language=language),
+        parse_mode='HTML',
     )
 
 
@@ -238,8 +269,13 @@ async def delete_channel_handler(callback: CallbackQuery, **kwargs) -> None:
     async with AsyncSessionLocal() as db:
         channels = await get_all_channels(db)
     await callback.message.edit_text(
-        texts.t('ADMIN_REQUIRED_CHANNELS_UI_TOGGLE_CHANNEL_HANDLER_018', '<b> Обязательные каналы</b>'),
+        admin_screen(
+            texts.t('ADMIN_REQUIRED_CHANNELS_UI_TOGGLE_CHANNEL_HANDLER_018', '<b>Обязательные каналы</b>'),
+            icon='link',
+            compact=True,
+        ),
         reply_markup=_channels_keyboard(channels, language=language),
+        parse_mode='HTML',
     )
 
 
@@ -253,10 +289,15 @@ async def start_add_channel(callback: CallbackQuery, state: FSMContext, **kwargs
     texts = get_texts(language)
     await state.set_state(AddChannelStates.waiting_channel_id)
     await callback.message.edit_text(
-        texts.t(
-            'ADMIN_REQUIRED_CHANNELS_UI_START_ADD_CHANNEL_023',
-            '<b> Добавить канал</b>\n\nОтправьте числовой ID канала (например <code>1234567890</code>).\nПрефикс <code>-100</code> добавляется автоматически.',
-        )
+        admin_screen(
+            texts.t(
+                'ADMIN_REQUIRED_CHANNELS_UI_START_ADD_CHANNEL_023',
+                '<b>Добавить канал</b>\n\nОтправьте числовой ID канала (например <code>1234567890</code>).\nПрефикс <code>-100</code> добавляется автоматически.',
+            ),
+            icon='link',
+            compact=True,
+        ),
+        parse_mode='HTML',
     )
     await callback.answer()
 
@@ -295,7 +336,8 @@ async def process_channel_id(message: Message, state: FSMContext, **kwargs) -> N
         texts.t(
             'ADMIN_REQUIRED_CHANNELS_UI_PROCESS_CHANNEL_ID_026',
             'Канал: <code>{value1}</code>\n\nТеперь отправьте ссылку на канал (например <code>https://t.me/mychannel</code>)\nИли отправьте <code>-</code> чтобы пропустить:',
-        ).format(value1=channel_id)
+        ).format(value1=channel_id),
+        parse_mode='HTML',
     )
 
 
@@ -367,23 +409,32 @@ async def process_channel_title(message: Message, state: FSMContext, **kwargs) -
 
             text = texts.t(
                 'ADMIN_REQUIRED_CHANNELS_UI_PROCESS_CHANNEL_TITLE_031',
-                ' Канал добавлен!\n\n<b>ID:</b> <code>{value1}</code>\n<b>Ссылка:</b> {value2}\n<b>Название:</b> {value3}',
+                'Канал добавлен!\n\n<b>ID:</b> <code>{value1}</code>\n<b>Ссылка:</b> {value2}\n<b>Название:</b> {value3}',
             ).format(
                 value1=html.escape(ch.channel_id),
                 value2=html.escape(ch.channel_link or '—'),
                 value3=html.escape(ch.title or '—'),
             )
+            text = admin_screen(text, icon='success', compact=True)
         except Exception as e:
-            text = texts.t(
-                'ADMIN_REQUIRED_CHANNELS_UI_PROCESS_CHANNEL_TITLE_032',
-                ' Ошибка добавления канала. Попробуйте ещё раз.',
+            text = admin_screen(
+                texts.t(
+                    'ADMIN_REQUIRED_CHANNELS_UI_PROCESS_CHANNEL_TITLE_032',
+                    'Ошибка добавления канала. Попробуйте ещё раз.',
+                ),
+                icon='error',
+                compact=True,
             )
             logger.error('Error adding channel', error=e)
 
     async with AsyncSessionLocal() as db:
         channels = await get_all_channels(db)
 
-    await message.answer(text, reply_markup=_channels_keyboard(channels, language=language))
+    await message.answer(
+        text,
+        reply_markup=_channels_keyboard(channels, language=language),
+        parse_mode='HTML',
+    )
 
 
 def register_handlers(dp_router: Router) -> None:

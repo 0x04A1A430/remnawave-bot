@@ -1,9 +1,10 @@
 import html
+import re
 
 import structlog
 from aiogram import Dispatcher, F, types
 from aiogram.filters import Command
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import InlineKeyboardMarkup
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -11,6 +12,7 @@ from app.database.crud.rules import clear_all_rules, get_rules_statistics
 from app.database.crud.ticket import TicketCRUD
 from app.database.models import User
 from app.handlers.admin import support_settings as support_settings_handlers
+from app.handlers.admin._text import compact_text
 from app.keyboards.admin import (
     get_admin_communications_submenu_keyboard,
     get_admin_main_keyboard,
@@ -22,10 +24,22 @@ from app.keyboards.admin import (
 )
 from app.localization.texts import clear_rules_cache, get_texts
 from app.services.support_settings_service import SupportSettingsService
+from app.utils.admin_ui import (
+    admin_button,
+    admin_heading,
+    admin_icon,
+    admin_quote,
+    admin_screen,
+)
 from app.utils.decorators import admin_required, error_handler
 
 
 logger = structlog.get_logger(__name__)
+
+
+def _section_text(title: str, description: str = '') -> str:
+    """Склеивает заголовок и описание, не полагаясь на \n\n в локали."""
+    return '\n\n'.join(part.strip() for part in (title, description) if part and part.strip())
 
 
 @admin_required
@@ -33,7 +47,10 @@ logger = structlog.get_logger(__name__)
 async def show_admin_panel(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
     texts = get_texts(db_user.language)
 
-    admin_text = texts.ADMIN_PANEL
+    title = texts.ADMIN_PANEL.replace('<b>', '').replace('</b>', '').strip().splitlines()[0].strip()
+    prompt = texts.t('ADMIN_MAIN_UI_006', '').strip()
+
+    stats_html = ''
     try:
         from app.services.remnawave_service import RemnaWaveService
 
@@ -43,23 +60,39 @@ async def show_admin_panel(callback: types.CallbackQuery, db_user: User, db: Asy
         users_online = system_stats.get('users_online', 0)
         users_today = system_stats.get('users_last_day', 0)
         users_week = system_stats.get('users_last_week', 0)
-        prompt = get_texts(db_user.language).t('ADMIN_MAIN_UI_006', '')
-        stats_block = (
-            get_texts(db_user.language)
-            .t(
-                'ADMIN_MAIN_UI_007',
-                '\n\n-  Онлайн сейчас: {v0}\n-  Онлайн сегодня: {v1}\n-  На этой неделе: {v2}',
-            )
-            .format(v0=users_online, v1=users_today, v2=users_week)
-        )
+
+        stats_template = texts.t(
+            'ADMIN_MAIN_UI_007',
+            '\n\n- Онлайн сейчас: {v0}\n- Онлайн сегодня: {v1}\n- На этой неделе: {v2}',
+        ).format(v0=users_online, v1=users_today, v2=users_week)
         if prompt:
-            admin_text = admin_text.replace(prompt, stats_block)
-        else:
-            admin_text = f'{admin_text.rstrip()}{stats_block}'
+            stats_template = stats_template.replace(prompt, '')
+
+        metric_icons = ('stats', 'calendar', 'chart')
+        metric_lines: list[str] = []
+        for raw_line in stats_template.splitlines():
+            line = raw_line.strip().lstrip('-•').strip()
+            # В локалях перед метриками остались декоративные символы прошлого
+            # оформления (▤, ◷, i, NEW) — убираем их, иконку даёт admin_icon.
+            line = re.sub(r'^(?:[▤▣▥◷↻⚠✓₽↑→★]+\s*)+', '', line)
+            line = re.sub(r'^(?:NEW|[iI])\s+', '', line).strip()
+            if not line:
+                continue
+            for value in (users_online, users_today, users_week):
+                line = line.replace(str(value), f'<b>{value}</b>', 1)
+            metric_lines.append(f'{admin_icon(metric_icons[min(len(metric_lines), 2)])} {line}')
+
+        if metric_lines:
+            stats_html = admin_quote('\n'.join(metric_lines))
     except Exception as e:
         logger.error('Не удалось получить статистику Remnawave для админ-панели', error=e)
 
-    await callback.message.edit_text(admin_text, reply_markup=get_admin_main_keyboard(db_user.language))
+    admin_text = compact_text('\n\n'.join(part for part in (admin_heading('crown', title), stats_html, prompt) if part))
+    await callback.message.edit_text(
+        admin_text,
+        reply_markup=get_admin_main_keyboard(db_user.language),
+        parse_mode='HTML',
+    )
     await callback.answer()
 
 
@@ -69,10 +102,14 @@ async def show_users_submenu(callback: types.CallbackQuery, db_user: User, db: A
     texts = get_texts(db_user.language)
 
     await callback.message.edit_text(
-        texts.t('ADMIN_USERS_SUBMENU_TITLE', ' **Управление пользователями и подписками**')
-        + texts.t('ADMIN_SUBMENU_SELECT_SECTION', ''),
+        admin_screen(
+            texts.t('ADMIN_USERS_SUBMENU_TITLE', ' **Управление пользователями и подписками**')
+            + texts.t('ADMIN_SUBMENU_SELECT_SECTION', ''),
+            icon='users',
+            compact=True,
+        ),
         reply_markup=get_admin_users_submenu_keyboard(db_user.language),
-        parse_mode='Markdown',
+        parse_mode='HTML',
     )
     await callback.answer()
 
@@ -83,10 +120,14 @@ async def show_promo_submenu(callback: types.CallbackQuery, db_user: User, db: A
     texts = get_texts(db_user.language)
 
     await callback.message.edit_text(
-        texts.t('ADMIN_PROMO_SUBMENU_TITLE', ' **Промокоды и статистика**')
-        + texts.t('ADMIN_SUBMENU_SELECT_SECTION', ''),
+        admin_screen(
+            texts.t('ADMIN_PROMO_SUBMENU_TITLE', ' **Промокоды и статистика**')
+            + texts.t('ADMIN_SUBMENU_SELECT_SECTION', ''),
+            icon='stats',
+            compact=True,
+        ),
         reply_markup=get_admin_promo_submenu_keyboard(db_user.language),
-        parse_mode='Markdown',
+        parse_mode='HTML',
     )
     await callback.answer()
 
@@ -97,10 +138,16 @@ async def show_communications_submenu(callback: types.CallbackQuery, db_user: Us
     texts = get_texts(db_user.language)
 
     await callback.message.edit_text(
-        texts.t('ADMIN_COMMUNICATIONS_SUBMENU_TITLE', ' **Коммуникации**\n\n')
-        + texts.t('ADMIN_COMMUNICATIONS_SUBMENU_DESCRIPTION', 'Управление рассылками и текстами интерфейса:'),
+        admin_screen(
+            _section_text(
+                texts.t('ADMIN_COMMUNICATIONS_SUBMENU_TITLE', '**Коммуникации**\n\n'),
+                texts.t('ADMIN_COMMUNICATIONS_SUBMENU_DESCRIPTION', 'Управление рассылками и текстами интерфейса:'),
+            ),
+            icon='messages',
+            compact=True,
+        ),
         reply_markup=get_admin_communications_submenu_keyboard(db_user.language),
-        parse_mode='Markdown',
+        parse_mode='HTML',
     )
     await callback.answer()
 
@@ -120,22 +167,28 @@ async def show_support_submenu(callback: types.CallbackQuery, db_user: User, db:
         kb = InlineKeyboardMarkup(
             inline_keyboard=[
                 [
-                    InlineKeyboardButton(
-                        text=texts.t('ADMIN_SUPPORT_TICKETS', ' Тикеты поддержки'), callback_data='admin_tickets'
+                    admin_button(
+                        texts.t('ADMIN_SUPPORT_TICKETS', 'Тикеты поддержки'),
+                        callback_data='admin_tickets',
+                        icon='support',
                     )
                 ],
-                [InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu', style='danger')],
+                [admin_button(texts.BACK, callback_data='back_to_menu', style='danger')],
             ]
         )
     await callback.message.edit_text(
-        texts.t('ADMIN_SUPPORT_SUBMENU_TITLE', ' **Поддержка**\n\n')
-        + (
-            texts.t('ADMIN_SUPPORT_SUBMENU_DESCRIPTION_MODERATOR', 'Доступ к тикетам.')
-            if is_moderator_only
-            else texts.t('ADMIN_SUPPORT_SUBMENU_DESCRIPTION', 'Управление тикетами и настройками поддержки:')
+        admin_screen(
+            _section_text(
+                texts.t('ADMIN_SUPPORT_SUBMENU_TITLE', '**Поддержка**\n\n'),
+                texts.t('ADMIN_SUPPORT_SUBMENU_DESCRIPTION_MODERATOR', 'Доступ к тикетам.')
+                if is_moderator_only
+                else texts.t('ADMIN_SUPPORT_SUBMENU_DESCRIPTION', 'Управление тикетами и настройками поддержки:'),
+            ),
+            icon='support',
+            compact=True,
         ),
         reply_markup=kb,
-        parse_mode='Markdown',
+        parse_mode='HTML',
     )
     await callback.answer()
 
@@ -148,13 +201,15 @@ async def show_moderator_panel(callback: types.CallbackQuery, db_user: User, db:
     kb = InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                InlineKeyboardButton(
-                    text=texts.t('ADMIN_SUPPORT_TICKETS', ' Тикеты поддержки'), callback_data='admin_tickets'
+                admin_button(
+                    texts.t('ADMIN_SUPPORT_TICKETS', 'Тикеты поддержки'),
+                    callback_data='admin_tickets',
+                    icon='support',
                 )
             ],
             [
-                InlineKeyboardButton(
-                    text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '← В главное меню'),
+                admin_button(
+                    texts.t('BACK_TO_MAIN_MENU_BUTTON', '← В главное меню'),
                     callback_data='back_to_menu',
                     style='danger',
                 )
@@ -162,9 +217,13 @@ async def show_moderator_panel(callback: types.CallbackQuery, db_user: User, db:
         ]
     )
     await callback.message.edit_text(
-        texts.t('ADMIN_SUPPORT_MODERATION_TITLE', ' <b>Модерация поддержки</b>')
-        + '\n\n'
-        + texts.t('ADMIN_SUPPORT_MODERATION_DESCRIPTION', 'Доступ к тикетам поддержки.'),
+        admin_screen(
+            texts.t('ADMIN_SUPPORT_MODERATION_TITLE', '<b>Модерация поддержки</b>')
+            + '\n\n'
+            + texts.t('ADMIN_SUPPORT_MODERATION_DESCRIPTION', 'Доступ к тикетам поддержки.'),
+            icon='support',
+            compact=True,
+        ),
         parse_mode='HTML',
         reply_markup=kb,
     )
@@ -233,18 +292,22 @@ async def show_support_audit(callback: types.CallbackQuery, db_user: User, db: A
     nav_row = []
     if total_pages > 1:
         if page > 1:
-            nav_row.append(InlineKeyboardButton(text='', callback_data=f'admin_support_audit_page_{page - 1}'))
-        nav_row.append(InlineKeyboardButton(text=f'{page}/{total_pages}', callback_data='current_page'))
+            nav_row.append(admin_button('←', callback_data=f'admin_support_audit_page_{page - 1}', style='primary'))
+        nav_row.append(admin_button(f'{page}/{total_pages}', callback_data='current_page'))
         if page < total_pages:
-            nav_row.append(InlineKeyboardButton(text='', callback_data=f'admin_support_audit_page_{page + 1}'))
+            nav_row.append(admin_button('→', callback_data=f'admin_support_audit_page_{page + 1}', style='primary'))
 
     kb_rows = []
     if nav_row:
         kb_rows.append(nav_row)
-    kb_rows.append([InlineKeyboardButton(text=texts.BACK, callback_data='admin_submenu_support', style='danger')])
+    kb_rows.append([admin_button(texts.BACK, callback_data='admin_submenu_support', style='danger')])
     kb = InlineKeyboardMarkup(inline_keyboard=kb_rows)
 
-    await callback.message.edit_text('\n'.join(lines), parse_mode='HTML', reply_markup=kb)
+    await callback.message.edit_text(
+        admin_screen('\n'.join(lines), icon='logs', compact=True),
+        parse_mode='HTML',
+        reply_markup=kb,
+    )
     await callback.answer()
 
 
@@ -254,10 +317,19 @@ async def show_settings_submenu(callback: types.CallbackQuery, db_user: User, db
     texts = get_texts(db_user.language)
 
     await callback.message.edit_text(
-        texts.t('ADMIN_SETTINGS_SUBMENU_TITLE', ' **Настройки системы**\n\n')
-        + texts.t('ADMIN_SETTINGS_SUBMENU_DESCRIPTION', 'Управление Remnawave, мониторингом и другими настройками:'),
+        admin_screen(
+            _section_text(
+                texts.t('ADMIN_SETTINGS_SUBMENU_TITLE', '**Настройки системы**\n\n'),
+                texts.t(
+                    'ADMIN_SETTINGS_SUBMENU_DESCRIPTION',
+                    'Управление Remnawave, мониторингом и другими настройками:',
+                ),
+            ),
+            icon='settings',
+            compact=True,
+        ),
         reply_markup=get_admin_settings_submenu_keyboard(db_user.language),
-        parse_mode='Markdown',
+        parse_mode='HTML',
     )
     await callback.answer()
 
@@ -268,12 +340,19 @@ async def show_system_submenu(callback: types.CallbackQuery, db_user: User, db: 
     texts = get_texts(db_user.language)
 
     await callback.message.edit_text(
-        texts.t('ADMIN_SYSTEM_SUBMENU_TITLE', ' **Системные функции**\n\n')
-        + texts.t(
-            'ADMIN_SYSTEM_SUBMENU_DESCRIPTION', 'Отчеты, обновления, логи, резервные копии и системные операции:'
+        admin_screen(
+            _section_text(
+                texts.t('ADMIN_SYSTEM_SUBMENU_TITLE', '**Системные функции**\n\n'),
+                texts.t(
+                    'ADMIN_SYSTEM_SUBMENU_DESCRIPTION',
+                    'Отчеты, обновления, логи, резервные копии и системные операции:',
+                ),
+            ),
+            icon='system',
+            compact=True,
         ),
         reply_markup=get_admin_system_submenu_keyboard(db_user.language),
-        parse_mode='Markdown',
+        parse_mode='HTML',
     )
     await callback.answer()
 

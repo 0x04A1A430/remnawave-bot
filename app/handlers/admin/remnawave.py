@@ -43,6 +43,7 @@ from app.states import (
     SquadMigrationStates,
     SquadRenameStates,
 )
+from app.utils.admin_ui import admin_back_button, admin_button, admin_screen
 from app.utils.decorators import admin_required, error_handler
 from app.utils.formatters import format_bytes, format_datetime
 
@@ -1032,12 +1033,16 @@ async def show_remnawave_menu(callback: types.CallbackQuery, db_user: User, db: 
 
     api_url_display = settings.REMNAWAVE_API_URL or '—'
 
-    text = f""" <b>Управление Remnawave</b>
+    text = f"""<b>Управление Remnawave</b>
 
- <b>Соединение:</b> {status_emoji} {connection_test.get('message', 'Нет данных')}
- <b>URL:</b> <code>{api_url_display}</code>"""
+<b>Соединение:</b> {status_emoji} {connection_test.get('message', 'Нет данных')}
+<b>URL:</b> <code>{api_url_display}</code>"""
 
-    await callback.message.edit_text(text, reply_markup=get_admin_remnawave_keyboard(db_user.language))
+    await callback.message.edit_text(
+        admin_screen(text, icon='servers', compact=True),
+        reply_markup=get_admin_remnawave_keyboard(db_user.language),
+        parse_mode='HTML',
+    )
     await callback.answer()
 
 
@@ -1050,12 +1055,11 @@ async def show_system_stats(callback: types.CallbackQuery, db_user: User, db: As
 
     if 'error' in stats:
         await callback.message.edit_text(
-            texts.t('ADMIN_REMNAWAVE_UI_SHOW_SYSTEM_STATS_027', ' Ошибка получения статистики: {value1}').format(
+            texts.t('ADMIN_REMNAWAVE_UI_SHOW_SYSTEM_STATS_027', 'Ошибка получения статистики: {value1}').format(
                 value1=stats['error']
             ),
-            reply_markup=types.InlineKeyboardMarkup(
-                inline_keyboard=[[types.InlineKeyboardButton(text=' Назад', callback_data='admin_remnawave')]]
-            ),
+            reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[admin_back_button(texts, 'admin_remnawave')]]),
+            parse_mode='HTML',
         )
         await callback.answer()
         return
@@ -1100,25 +1104,24 @@ async def show_system_stats(callback: types.CallbackQuery, db_user: User, db: As
             return f' ( {difference_str[1:]})'
         return f' ( {difference_str})'
 
-    text = f"""
- <b>Детальная статистика Remnawave</b>
+    text = f"""<b>Детальная статистика Remnawave</b>
 
- <b>Сервер:</b>
-- CPU: {server_info.get('cpu_cores', 0)} ядер
-- RAM: {format_bytes(server_info.get('memory_used', 0))} / {format_bytes(memory_total)} ({memory_used_percent:.1f}%)
-- Свободно: {format_bytes(server_info.get('memory_free', 0))}
-- Uptime: {uptime_str}
+<b>Сервер:</b>
+• CPU: {server_info.get('cpu_cores', 0)} ядер
+• RAM: {format_bytes(server_info.get('memory_used', 0))} / {format_bytes(memory_total)} ({memory_used_percent:.1f}%)
+• Свободно: {format_bytes(server_info.get('memory_free', 0))}
+• Uptime: {uptime_str}
 
- <b>Пользователи ({system.get('total_users', 0)} всего):</b>
--  Онлайн сейчас: {system.get('users_online', 0)}
--  За сутки: {system.get('users_last_day', 0)}
--  За неделю: {system.get('users_last_week', 0)}
--  Никогда не заходили: {system.get('users_never_online', 0)}
+<b>Пользователи ({system.get('total_users', 0)} всего):</b>
+• Онлайн сейчас: {system.get('users_online', 0)}
+• За сутки: {system.get('users_last_day', 0)}
+• За неделю: {system.get('users_last_week', 0)}
+• Никогда не заходили: {system.get('users_never_online', 0)}
 
 <b>Статусы пользователей:</b>
 {users_status_text}
 
- <b>Ноды ({system.get('nodes_online', 0)} онлайн):</b>"""
+<b>Ноды ({system.get('nodes_online', 0)} онлайн):</b>"""
 
     if realtime_nodes_text:
         text += texts.t('ADMIN_REMNAWAVE_UI_SHOW_SYSTEM_STATS_031', '\n<b>Реалтайм активность:</b>\n{value1}').format(
@@ -1149,40 +1152,45 @@ async def show_system_stats(callback: types.CallbackQuery, db_user: User, db: As
 
     if bandwidth.get('realtime_total', 0) > 0:
         text += f"""
- <b>Реалтайм трафик:</b>
-- Скачивание: {format_bytes(bandwidth.get('realtime_download', 0))}
-- Загрузка: {format_bytes(bandwidth.get('realtime_upload', 0))}
-- Итого: {format_bytes(bandwidth.get('realtime_total', 0))}
+<b>Реалтайм трафик:</b>
+• Скачивание: {format_bytes(bandwidth.get('realtime_download', 0))}
+• Загрузка: {format_bytes(bandwidth.get('realtime_upload', 0))}
+• Итого: {format_bytes(bandwidth.get('realtime_total', 0))}
 """
 
     text += f"""
- <b>Обновлено:</b> {format_datetime(stats.get('last_updated', datetime.now(UTC)))}
+<b>Обновлено:</b> {format_datetime(stats.get('last_updated', datetime.now(UTC)))}
 """
 
     keyboard = [
         [
-            types.InlineKeyboardButton(
-                text=texts.t('ADMIN_REMNAWAVE_UI_SHOW_SYSTEM_STATS_036', ' Обновить'), callback_data='admin_rw_system'
+            admin_button(
+                texts.t('ADMIN_REMNAWAVE_UI_SHOW_SYSTEM_STATS_036', 'Обновить'),
+                callback_data='admin_rw_system',
+                icon='refresh',
+                style='primary',
             )
         ],
         [
-            types.InlineKeyboardButton(
-                text=texts.t('ADMIN_REMNAWAVE_UI_SHOW_SYSTEM_STATS_037', ' Ноды'), callback_data='admin_rw_nodes'
+            admin_button(
+                texts.t('ADMIN_REMNAWAVE_UI_SHOW_SYSTEM_STATS_037', 'Ноды'),
+                callback_data='admin_rw_nodes',
+                style='primary',
             ),
-            types.InlineKeyboardButton(
-                text=texts.t('ADMIN_REMNAWAVE_UI_SHOW_SYSTEM_STATS_038', ' Синхронизация'),
+            admin_button(
+                texts.t('ADMIN_REMNAWAVE_UI_SHOW_SYSTEM_STATS_038', 'Синхронизация'),
                 callback_data='admin_rw_sync',
+                style='primary',
             ),
         ],
-        [
-            types.InlineKeyboardButton(
-                text=texts.t('ADMIN_REMNAWAVE_UI_SHOW_SYSTEM_STATS_039', '← Назад'), callback_data='admin_remnawave'
-            )
-        ],
-        [types.InlineKeyboardButton(text=' Назад', callback_data='admin_remnawave')],
+        [admin_back_button(texts, 'admin_remnawave')],
     ]
 
-    await callback.message.edit_text(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
+    await callback.message.edit_text(
+        admin_screen(text, icon='chart', compact=True),
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
+        parse_mode='HTML',
+    )
     await callback.answer()
 
 

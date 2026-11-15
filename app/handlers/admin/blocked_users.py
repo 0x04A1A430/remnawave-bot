@@ -15,7 +15,7 @@ from aiogram import Bot, Dispatcher, F, types
 from aiogram.enums import ParseMode
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import InlineKeyboardMarkup
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import User
@@ -25,10 +25,16 @@ from app.services.blocked_users_service import (
     BlockedUserAction,
     BlockedUsersService,
 )
+from app.utils.admin_ui import admin_back_button, admin_button, admin_screen
 from app.utils.decorators import admin_required, error_handler
 
 
 logger = structlog.get_logger(__name__)
+
+
+def _clean_lines(text: str) -> str:
+    """Убирает ведущие пробелы строк — следы иконок прошлого оформления."""
+    return '\n'.join(line.strip() for line in text.splitlines())
 
 
 # =============================================================================
@@ -100,16 +106,16 @@ class BlockedUsersText(Enum):
         '• Ошибок: {errors}'
     )
 
-    BUTTON_START_SCAN = ' Начать сканирование'
-    BUTTON_VIEW_BLOCKED = ' Список заблокированных ({count})'
-    BUTTON_DELETE_DB = ' Удалить из БД'
-    BUTTON_DELETE_REMNAWAVE = ' Удалить из Remnawave'
-    BUTTON_DELETE_BOTH = ' Удалить везде'
-    BUTTON_MARK_BLOCKED = ' Пометить как заблокированных'
-    BUTTON_CONFIRM = ' Подтвердить'
-    BUTTON_CANCEL = ' Отмена'
-    BUTTON_BACK = ' Назад'
-    BUTTON_BACK_TO_USERS = ' К пользователям'
+    BUTTON_START_SCAN = 'Начать сканирование'
+    BUTTON_VIEW_BLOCKED = 'Список заблокированных ({count})'
+    BUTTON_DELETE_DB = 'Удалить из БД'
+    BUTTON_DELETE_REMNAWAVE = 'Удалить из Remnawave'
+    BUTTON_DELETE_BOTH = 'Удалить везде'
+    BUTTON_MARK_BLOCKED = 'Пометить как заблокированных'
+    BUTTON_CONFIRM = 'Подтвердить'
+    BUTTON_CANCEL = 'Отмена'
+    BUTTON_BACK = 'Назад'
+    BUTTON_BACK_TO_USERS = 'К пользователям'
 
     def localized(self, texts: Texts) -> str:
         return texts.t(f'ADMIN_BLOCKED_{self.name}', self.value)
@@ -157,9 +163,11 @@ def get_blocked_users_menu_keyboard(
     texts = get_texts(language)
     buttons = [
         [
-            InlineKeyboardButton(
-                text=BlockedUsersText.BUTTON_START_SCAN.localized(texts),
+            admin_button(
+                BlockedUsersText.BUTTON_START_SCAN.localized(texts),
                 callback_data=BlockedUsersCallback.START_SCAN.value,
+                icon='refresh',
+                style='success',
             )
         ]
     ]
@@ -168,18 +176,21 @@ def get_blocked_users_menu_keyboard(
     if blocked_count > 0:
         buttons.append(
             [
-                InlineKeyboardButton(
-                    text=BlockedUsersText.BUTTON_VIEW_BLOCKED.localized(texts).format(count=blocked_count),
+                admin_button(
+                    BlockedUsersText.BUTTON_VIEW_BLOCKED.localized(texts).format(count=blocked_count),
                     callback_data=BlockedUsersCallback.VIEW_LIST.value,
+                    icon='lock',
+                    style='primary',
                 )
             ]
         )
 
     buttons.append(
         [
-            InlineKeyboardButton(
-                text=BlockedUsersText.BUTTON_BACK_TO_USERS.localized(texts),
-                callback_data='admin_users',
+            admin_back_button(
+                texts,
+                'admin_users',
+                label=BlockedUsersText.BUTTON_BACK_TO_USERS.localized(texts),
             )
         ]
     )
@@ -202,22 +213,24 @@ def get_blocked_list_keyboard(
         nav_row = []
         if page > 1:
             nav_row.append(
-                InlineKeyboardButton(
-                    text='',
+                admin_button(
+                    '←',
                     callback_data=f'{BlockedUsersCallback.VIEW_LIST_PAGE.value}{page - 1}',
+                    style='primary',
                 )
             )
         nav_row.append(
-            InlineKeyboardButton(
-                text=f'{page}/{total_pages}',
+            admin_button(
+                f'{page}/{total_pages}',
                 callback_data='noop',
             )
         )
         if page < total_pages:
             nav_row.append(
-                InlineKeyboardButton(
-                    text='',
+                admin_button(
+                    '→',
                     callback_data=f'{BlockedUsersCallback.VIEW_LIST_PAGE.value}{page + 1}',
+                    style='primary',
                 )
             )
         buttons.append(nav_row)
@@ -227,25 +240,32 @@ def get_blocked_list_keyboard(
         buttons.extend(
             [
                 [
-                    InlineKeyboardButton(
-                        text=BlockedUsersText.BUTTON_DELETE_DB.localized(texts),
+                    admin_button(
+                        BlockedUsersText.BUTTON_DELETE_DB.localized(texts),
                         callback_data=BlockedUsersCallback.ACTION_DELETE_DB.value,
+                        icon='delete',
+                        style='danger',
                     ),
-                    InlineKeyboardButton(
-                        text=BlockedUsersText.BUTTON_DELETE_REMNAWAVE.localized(texts),
+                    admin_button(
+                        BlockedUsersText.BUTTON_DELETE_REMNAWAVE.localized(texts),
                         callback_data=BlockedUsersCallback.ACTION_DELETE_REMNAWAVE.value,
+                        icon='delete',
+                        style='danger',
                     ),
                 ],
                 [
-                    InlineKeyboardButton(
-                        text=BlockedUsersText.BUTTON_DELETE_BOTH.localized(texts),
+                    admin_button(
+                        BlockedUsersText.BUTTON_DELETE_BOTH.localized(texts),
                         callback_data=BlockedUsersCallback.ACTION_DELETE_BOTH.value,
+                        icon='delete',
+                        style='danger',
                     ),
                 ],
                 [
-                    InlineKeyboardButton(
-                        text=BlockedUsersText.BUTTON_MARK_BLOCKED.localized(texts),
+                    admin_button(
+                        BlockedUsersText.BUTTON_MARK_BLOCKED.localized(texts),
                         callback_data=BlockedUsersCallback.ACTION_MARK.value,
+                        style='primary',
                     ),
                 ],
             ]
@@ -253,9 +273,10 @@ def get_blocked_list_keyboard(
 
     buttons.append(
         [
-            InlineKeyboardButton(
-                text=BlockedUsersText.BUTTON_BACK.localized(texts),
-                callback_data=BlockedUsersCallback.MENU.value,
+            admin_back_button(
+                texts,
+                BlockedUsersCallback.MENU.value,
+                label=BlockedUsersText.BUTTON_BACK.localized(texts),
             )
         ]
     )
@@ -276,13 +297,16 @@ def get_confirm_keyboard(action: BlockedUserAction, language: str | None = None)
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                InlineKeyboardButton(
-                    text=BlockedUsersText.BUTTON_CONFIRM.localized(texts),
+                admin_button(
+                    BlockedUsersText.BUTTON_CONFIRM.localized(texts),
                     callback_data=f'{BlockedUsersCallback.CONFIRM_PREFIX.value}{action_map[action]}',
+                    icon='success',
+                    style='success',
                 ),
-                InlineKeyboardButton(
-                    text=BlockedUsersText.BUTTON_CANCEL.localized(texts),
+                admin_button(
+                    BlockedUsersText.BUTTON_CANCEL.localized(texts),
                     callback_data=BlockedUsersCallback.CANCEL.value,
+                    style='danger',
                 ),
             ]
         ]
@@ -315,7 +339,7 @@ async def show_blocked_users_menu(
         ).format(blocked=scan_result.get('blocked_count', 0), active=scan_result.get('active_users', 0))
 
     await callback.message.edit_text(
-        text,
+        admin_screen(_clean_lines(text), icon='lock', compact=True),
         parse_mode=ParseMode.HTML,
         reply_markup=get_blocked_users_menu_keyboard(scan_result, language=db_user.language),
     )
@@ -458,7 +482,7 @@ async def show_blocked_list(
         )
 
     await callback.message.edit_text(
-        text,
+        admin_screen(_clean_lines(text), icon='lock', compact=True),
         parse_mode=ParseMode.HTML,
         reply_markup=get_blocked_list_keyboard(page, total_pages, bool(blocked_list), language=db_user.language),
     )
@@ -514,7 +538,7 @@ async def show_action_confirm(
         text += BlockedUsersText.CLEANUP_CONFIRM_MARK.localized(texts).format(count=count)
 
     await callback.message.edit_text(
-        text,
+        admin_screen(_clean_lines(text), compact=True),
         parse_mode=ParseMode.HTML,
         reply_markup=get_confirm_keyboard(action, language=db_user.language),
     )
@@ -660,7 +684,7 @@ async def handle_confirm_action(
     )
 
     await callback.message.edit_text(
-        text,
+        admin_screen(_clean_lines(text), compact=True),
         parse_mode=ParseMode.HTML,
         reply_markup=get_blocked_users_menu_keyboard(language=db_user.language),
     )

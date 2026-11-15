@@ -2151,7 +2151,7 @@ async def get_subscriptions_statistics(db: AsyncSession) -> dict:
         trial_to_paid_conversion = conversion_stats.get('conversion_rate', 0)
         renewals_count = conversion_stats.get('month_conversions', 0)
 
-        logger.info('▥ Статистика конверсии из таблицы conversions:')
+        logger.info('Статистика конверсии из таблицы conversions')
         logger.info('Общее количество конверсий', get=conversion_stats.get('total_conversions', 0))
         logger.info('Процент конверсии', trial_to_paid_conversion=trial_to_paid_conversion)
         logger.info('Конверсий за месяц', renewals_count=renewals_count)

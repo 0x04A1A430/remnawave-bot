@@ -22,6 +22,7 @@ from app.database.models import User
 from app.localization.texts import get_texts
 from app.services.remnawave_service import RemnaWaveService
 from app.states import AdminStates
+from app.utils.admin_ui import admin_back_button, admin_button, admin_screen
 from app.utils.cache import cache
 from app.utils.decorators import admin_required, error_handler
 
@@ -31,9 +32,9 @@ logger = structlog.get_logger(__name__)
 
 def _build_server_edit_view(server, language: str = 'ru'):
     status_emoji = (
-        get_texts(language).t('ADMIN_SERVER_UI_005', ' Доступен')
+        get_texts(language).t('ADMIN_SERVER_UI_005', 'Доступен')
         if server.is_available
-        else get_texts(language).t('ADMIN_SERVER_UI_006', ' Недоступен')
+        else get_texts(language).t('ADMIN_SERVER_UI_006', 'Недоступен')
     )
     price_text = (
         f'{int(server.price_rubles)} ₽'
@@ -47,16 +48,16 @@ def _build_server_edit_view(server, language: str = 'ru'):
     )
 
     trial_status = (
-        get_texts(language).t('ADMIN_SERVER_UI_009', ' Да')
+        get_texts(language).t('ADMIN_SERVER_UI_009', 'Да')
         if server.is_trial_eligible
-        else get_texts(language).t('ADMIN_SERVER_UI_010', ' Нет')
+        else get_texts(language).t('ADMIN_SERVER_UI_010', 'Нет')
     )
 
     text = (
         get_texts(language)
         .t(
             'ADMIN_SERVER_UI_000',
-            ' <b>Редактирование сервера</b>\n\n<b>Информация:</b>\n• ID: {v0}\n• UUID: <code>{v1}</code>\n• Название: {v2}\n• Оригинальное: {v3}\n• Статус: {v4}\n\n<b>Настройки:</b>\n• Цена: {v5}\n• Код страны: {v6}\n• Лимит пользователей: {v7}\n• Текущих пользователей: {v8}\n• Промогруппы: {v9}\n• Выдача триала: {v10}\n\n<b>Описание:</b>\n{v11}',
+            '<b>Редактирование сервера</b>\n\n<b>Информация:</b>\n• ID: {v0}\n• UUID: <code>{v1}</code>\n• Название: {v2}\n• Оригинальное: {v3}\n• Статус: {v4}\n\n<b>Настройки:</b>\n• Цена: {v5}\n• Код страны: {v6}\n• Лимит пользователей: {v7}\n• Текущих пользователей: {v8}\n• Промогруппы: {v9}\n• Выдача триала: {v10}\n\n<b>Описание:</b>\n{v11}',
         )
         .format(
             v0=server.id,
@@ -79,73 +80,78 @@ def _build_server_edit_view(server, language: str = 'ru'):
     keyboard = [
         [
             types.InlineKeyboardButton(
-                text=get_texts(language).t('ADMIN_SERVER_UI_060', ' Название'),
+                text=get_texts(language).t('ADMIN_SERVER_UI_060', 'Название'),
                 callback_data=f'admin_server_edit_name_{server.id}',
             ),
             types.InlineKeyboardButton(
-                text=get_texts(language).t('ADMIN_SERVER_UI_061', ' Цена'),
+                text=get_texts(language).t('ADMIN_SERVER_UI_061', 'Цена'),
                 callback_data=f'admin_server_edit_price_{server.id}',
             ),
         ],
         [
             types.InlineKeyboardButton(
-                text=get_texts(language).t('ADMIN_SERVER_UI_062', ' Страна'),
+                text=get_texts(language).t('ADMIN_SERVER_UI_062', 'Страна'),
                 callback_data=f'admin_server_edit_country_{server.id}',
             ),
             types.InlineKeyboardButton(
-                text=get_texts(language).t('ADMIN_SERVER_UI_063', ' Лимит'),
+                text=get_texts(language).t('ADMIN_SERVER_UI_063', 'Лимит'),
                 callback_data=f'admin_server_edit_limit_{server.id}',
             ),
         ],
         [
             types.InlineKeyboardButton(
-                text=get_texts(language).t('ADMIN_SERVER_UI_064', ' Юзеры'),
+                text=get_texts(language).t('ADMIN_SERVER_UI_064', 'Юзеры'),
                 callback_data=f'admin_server_users_{server.id}',
             ),
         ],
         [
             types.InlineKeyboardButton(
-                text=get_texts(language).t('ADMIN_SERVER_UI_094', ' Выдавать в триал')
+                text=get_texts(language).t('ADMIN_SERVER_UI_094', 'Выдавать в триал')
                 if not server.is_trial_eligible
-                else get_texts(language).t('ADMIN_SERVER_UI_095', ' Не выдавать в триал'),
+                else get_texts(language).t('ADMIN_SERVER_UI_095', 'Не выдавать в триал'),
                 callback_data=f'admin_server_trial_{server.id}',
             ),
         ],
         [
             types.InlineKeyboardButton(
-                text=get_texts(language).t('ADMIN_SERVER_UI_065', ' Промогруппы'),
+                text=get_texts(language).t('ADMIN_SERVER_UI_065', 'Промогруппы'),
                 callback_data=f'admin_server_edit_promo_{server.id}',
             ),
             types.InlineKeyboardButton(
-                text=get_texts(language).t('ADMIN_SERVER_UI_066', ' Описание'),
+                text=get_texts(language).t('ADMIN_SERVER_UI_066', 'Описание'),
                 callback_data=f'admin_server_edit_desc_{server.id}',
             ),
         ],
         [
             types.InlineKeyboardButton(
-                text=get_texts(language).t('ADMIN_SERVER_UI_096', ' Отключить')
+                text=get_texts(language).t('ADMIN_SERVER_UI_096', 'Отключить')
                 if server.is_available
-                else get_texts(language).t('ADMIN_SERVER_UI_097', ' Включить'),
+                else get_texts(language).t('ADMIN_SERVER_UI_097', 'Включить'),
                 callback_data=f'admin_server_toggle_{server.id}',
             )
         ],
         [
-            types.InlineKeyboardButton(text=' Удалить', callback_data=f'admin_server_delete_{server.id}'),
-            types.InlineKeyboardButton(text=' Назад', callback_data='admin_servers_list'),
+            admin_button(
+                'Удалить',
+                callback_data=f'admin_server_delete_{server.id}',
+                icon='delete',
+                style='danger',
+            ),
+            admin_back_button(get_texts(language), 'admin_servers_list'),
         ],
     ]
 
-    return text, types.InlineKeyboardMarkup(inline_keyboard=keyboard)
+    return admin_screen(text, icon='servers', compact=True), types.InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
 def _build_server_promo_groups_keyboard(server_id: int, promo_groups, selected_ids, language: str = 'ru'):
     keyboard = []
     for group in promo_groups:
-        emoji = '' if group['id'] in selected_ids else ''
+        marker = '✅' if group['id'] in selected_ids else '▫️'
         keyboard.append(
             [
                 types.InlineKeyboardButton(
-                    text=f'{emoji} {group["name"]}',
+                    text=f'{marker} {group["name"]}',
                     callback_data=f'admin_server_promo_toggle_{server_id}_{group["id"]}',
                 )
             ]
@@ -153,21 +159,15 @@ def _build_server_promo_groups_keyboard(server_id: int, promo_groups, selected_i
 
     keyboard.append(
         [
-            types.InlineKeyboardButton(
-                text=get_texts(language).t('ADMIN_SERVER_UI_069', ' Сохранить'),
+            admin_button(
+                get_texts(language).t('ADMIN_SERVER_UI_069', 'Сохранить'),
                 callback_data=f'admin_server_promo_save_{server_id}',
+                icon='success',
+                style='success',
             )
         ]
     )
-    keyboard.append(
-        [
-            types.InlineKeyboardButton(
-                text=get_texts(language).t('ADMIN_SERVER_UI_068', '← Назад'),
-                callback_data=f'admin_server_edit_{server_id}',
-            )
-        ]
-    )
-    keyboard.append([types.InlineKeyboardButton(text=' Назад', callback_data=f'admin_server_edit_{server_id}')])
+    keyboard.append([admin_back_button(get_texts(language), f'admin_server_edit_{server_id}')])
 
     return types.InlineKeyboardMarkup(inline_keyboard=keyboard)
 
@@ -177,79 +177,82 @@ def _build_server_promo_groups_keyboard(server_id: int, promo_groups, selected_i
 async def show_servers_menu(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
     stats = await get_server_statistics(db)
 
-    text = f""" <b>Управление серверами</b>
+    text = f"""<b>Управление серверами</b>
 
- <b>Статистика:</b>
+<b>Статистика:</b>
 • Всего серверов: {stats['total_servers']}
 • Доступные: {stats['available_servers']}
 • Недоступные: {stats['unavailable_servers']}
 • С подключениями: {stats['servers_with_connections']}
 
- <b>Выручка от серверов:</b>
+<b>Выручка от серверов:</b>
 • Общая: {int(stats['total_revenue_rubles'])} ₽"""
+
+    texts = get_texts(db_user.language)
 
     keyboard = [
         [
-            types.InlineKeyboardButton(
-                text=get_texts(db_user.language).t('ADMIN_SERVER_UI_070', ' Список серверов'),
+            admin_button(
+                texts.t('ADMIN_SERVER_UI_070', 'Список серверов'),
                 callback_data='admin_servers_list',
+                style='primary',
             ),
-            types.InlineKeyboardButton(
-                text=get_texts(db_user.language).t('ADMIN_SERVER_UI_071', ' Синхронизация'),
+            admin_button(
+                texts.t('ADMIN_SERVER_UI_071', 'Синхронизация'),
                 callback_data='admin_servers_sync',
+                style='primary',
             ),
         ],
         [
-            types.InlineKeyboardButton(
-                text=get_texts(db_user.language).t('ADMIN_SERVER_UI_072', ' Синхронизировать счетчики'),
+            admin_button(
+                texts.t('ADMIN_SERVER_UI_072', 'Синхронизировать счетчики'),
                 callback_data='admin_servers_sync_counts',
+                style='primary',
             ),
-            types.InlineKeyboardButton(
-                text=get_texts(db_user.language).t('ADMIN_SERVER_UI_073', ' Подробная статистика'),
+            admin_button(
+                texts.t('ADMIN_SERVER_UI_073', 'Подробная статистика'),
                 callback_data='admin_servers_stats',
+                style='primary',
             ),
         ],
-        [
-            types.InlineKeyboardButton(
-                text=get_texts(db_user.language).t('ADMIN_SERVER_UI_068', '← Назад'), callback_data='admin_panel'
-            )
-        ],
-        [types.InlineKeyboardButton(text=' Назад', callback_data='admin_panel')],
+        [admin_back_button(texts, 'admin_panel')],
     ]
 
-    await callback.message.edit_text(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
+    await callback.message.edit_text(
+        admin_screen(text, icon='servers', compact=True),
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
+        parse_mode='HTML',
+    )
     await callback.answer()
 
 
 @admin_required
 @error_handler
 async def show_servers_list(callback: types.CallbackQuery, db_user: User, db: AsyncSession, page: int = 1):
+    texts = get_texts(db_user.language)
     servers, total_count = await get_all_server_squads(db, page=page, limit=10)
     total_pages = (total_count + 9) // 10
 
     if not servers:
-        text = get_texts(db_user.language).t('ADMIN_SERVER_UI_011', ' <b>Список серверов</b>\n\n Серверы не найдены.')
+        text = texts.t('ADMIN_SERVER_UI_011', '<b>Список серверов</b>\n\nСерверы не найдены.')
     else:
-        text = get_texts(db_user.language).t('ADMIN_SERVER_UI_012', ' <b>Список серверов</b>\n\n')
-        text += (
-            get_texts(db_user.language)
-            .t('ADMIN_SERVER_UI_013', ' Всего: {v0} | Страница: {v1}/{v2}\n\n')
-            .format(v0=total_count, v1=page, v2=total_pages)
+        text = texts.t('ADMIN_SERVER_UI_012', '<b>Список серверов</b>\n\n')
+        text += texts.t('ADMIN_SERVER_UI_013', 'Всего: {v0} | Страница: {v1}/{v2}\n\n').format(
+            v0=total_count, v1=page, v2=total_pages
         )
 
         for i, server in enumerate(servers, 1 + (page - 1) * 10):
-            status_emoji = '' if server.is_available else ''
             price_text = (
                 f'{int(server.price_rubles)} ₽'
                 if server.price_kopeks > 0
-                else get_texts(db_user.language).t('ADMIN_SERVER_UI_007', 'Бесплатно')
+                else texts.t('ADMIN_SERVER_UI_007', 'Бесплатно')
             )
 
-            text += f'{i}. {status_emoji} {html.escape(server.display_name)}\n'
-            text += get_texts(db_user.language).t('ADMIN_SERVER_UI_030', '    Цена: {v0}').format(v0=price_text)
+            text += f'{i}. {html.escape(server.display_name)}\n'
+            text += texts.t('ADMIN_SERVER_UI_030', 'Цена: {v0}').format(v0=price_text)
 
             if server.max_users:
-                text += f' |  {server.current_users}/{server.max_users}'
+                text += f' | {server.current_users}/{server.max_users}'
 
             text += f'\n   UUID: <code>{server.squad_uuid}</code>\n\n'
 
@@ -260,29 +263,28 @@ async def show_servers_list(callback: types.CallbackQuery, db_user: User, db: As
         if len(keyboard) <= row_num:
             keyboard.append([])
 
-        status_emoji = '' if server.is_available else ''
         keyboard[row_num].append(
-            types.InlineKeyboardButton(
-                text=f'{status_emoji} {server.display_name[:15]}...', callback_data=f'admin_server_edit_{server.id}'
-            )
+            admin_button(f'{server.display_name[:15]}...', callback_data=f'admin_server_edit_{server.id}')
         )
 
     if total_pages > 1:
         nav_row = []
         if page > 1:
-            nav_row.append(types.InlineKeyboardButton(text='', callback_data=f'admin_servers_list_page_{page - 1}'))
+            nav_row.append(admin_button('←', callback_data=f'admin_servers_list_page_{page - 1}', style='primary'))
 
-        nav_row.append(types.InlineKeyboardButton(text=f'{page}/{total_pages}', callback_data='current_page'))
+        nav_row.append(admin_button(f'{page}/{total_pages}', callback_data='current_page'))
 
         if page < total_pages:
-            nav_row.append(types.InlineKeyboardButton(text='', callback_data=f'admin_servers_list_page_{page + 1}'))
+            nav_row.append(admin_button('→', callback_data=f'admin_servers_list_page_{page + 1}', style='primary'))
 
         keyboard.append(nav_row)
 
-    keyboard.extend([[types.InlineKeyboardButton(text=' Назад', callback_data='admin_servers')]])
+    keyboard.append([admin_back_button(texts, 'admin_servers')])
 
     await callback.message.edit_text(
-        text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard), parse_mode='HTML'
+        admin_screen(text, icon='servers', compact=True),
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
+        parse_mode='HTML',
     )
     await callback.answer()
 
@@ -882,55 +884,56 @@ async def show_server_detailed_stats(callback: types.CallbackQuery, db_user: Use
     stats = await get_server_statistics(db)
     available_servers = await get_available_server_squads(db)
 
-    text = f"""
- <b>Подробная статистика серверов</b>
+    texts = get_texts(db_user.language)
 
-<b> Общая информация:</b>
+    text = f"""<b>Подробная статистика серверов</b>
+
+<b>Общая информация:</b>
 • Всего серверов: {stats['total_servers']}
 • Доступные: {stats['available_servers']}
 • Недоступные: {stats['unavailable_servers']}
 • С активными подключениями: {stats['servers_with_connections']}
 
-<b> Финансовая статистика:</b>
+<b>Финансовая статистика:</b>
 • Общая выручка: {int(stats['total_revenue_rubles'])} ₽
 • Средняя цена за сервер: {int(stats['total_revenue_rubles'] / max(stats['servers_with_connections'], 1))} ₽
 
-<b> Топ серверов по цене:</b>
+<b>Топ серверов по цене:</b>
 """
 
     sorted_servers = sorted(available_servers, key=lambda x: x.price_kopeks, reverse=True)
 
     for i, server in enumerate(sorted_servers[:5], 1):
         price_text = (
-            f'{int(server.price_rubles)} ₽'
-            if server.price_kopeks > 0
-            else get_texts(db_user.language).t('ADMIN_SERVER_UI_007', 'Бесплатно')
+            f'{int(server.price_rubles)} ₽' if server.price_kopeks > 0 else texts.t('ADMIN_SERVER_UI_007', 'Бесплатно')
         )
-        text += f'{i}. {html.escape(server.display_name)} - {price_text}\n'
+        text += f'{i}. {html.escape(server.display_name)} — {price_text}\n'
 
     if not sorted_servers:
-        text += get_texts(db_user.language).t('ADMIN_SERVER_UI_023', 'Нет доступных серверов\n')
+        text += texts.t('ADMIN_SERVER_UI_023', 'Нет доступных серверов\n')
 
     keyboard = [
         [
-            types.InlineKeyboardButton(
-                text=get_texts(db_user.language).t('ADMIN_SERVER_UI_085', ' Обновить'),
+            admin_button(
+                texts.t('ADMIN_SERVER_UI_085', 'Обновить'),
                 callback_data='admin_servers_stats',
+                icon='refresh',
+                style='primary',
             ),
-            types.InlineKeyboardButton(
-                text=get_texts(db_user.language).t('ADMIN_SERVER_UI_086', ' Список'),
+            admin_button(
+                texts.t('ADMIN_SERVER_UI_086', 'Список'),
                 callback_data='admin_servers_list',
+                style='primary',
             ),
         ],
-        [
-            types.InlineKeyboardButton(
-                text=get_texts(db_user.language).t('ADMIN_SERVER_UI_068', '← Назад'), callback_data='admin_servers'
-            )
-        ],
-        [types.InlineKeyboardButton(text=' Назад', callback_data='admin_servers')],
+        [admin_back_button(texts, 'admin_servers')],
     ]
 
-    await callback.message.edit_text(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
+    await callback.message.edit_text(
+        admin_screen(text, icon='stats', compact=True),
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
+        parse_mode='HTML',
+    )
     await callback.answer()
 
 

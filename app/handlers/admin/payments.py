@@ -20,6 +20,7 @@ from app.services.payment_verification_service import (
     list_recent_pending_payments,
     run_manual_check,
 )
+from app.utils.admin_ui import admin_back_button, admin_button, admin_screen
 from app.utils.decorators import admin_required, error_handler
 from app.utils.formatters import format_datetime, format_time_ago, format_username
 
@@ -254,9 +255,11 @@ def _build_list_keyboard(
     if has_checkable:
         buttons.append(
             [
-                InlineKeyboardButton(
-                    text=texts.t('ADMIN_PAYMENTS_CHECK_ALL', ' Проверить все'),
+                admin_button(
+                    texts.t('ADMIN_PAYMENTS_CHECK_ALL', ' Проверить все'),
                     callback_data='admin_payments_check_all',
+                    icon='success',
+                    style='success',
                 )
             ]
         )
@@ -265,9 +268,11 @@ def _build_list_keyboard(
     if records:
         buttons.append(
             [
-                InlineKeyboardButton(
-                    text=texts.t('ADMIN_PAYMENTS_EXPORT', ' Выгрузить в файл'),
+                admin_button(
+                    texts.t('ADMIN_PAYMENTS_EXPORT', ' Выгрузить в файл'),
                     callback_data='admin_payments_export',
+                    icon='document',
+                    style='success',
                 )
             ]
         )
@@ -276,30 +281,32 @@ def _build_list_keyboard(
         navigation_row: list[InlineKeyboardButton] = []
         if page > 1:
             navigation_row.append(
-                InlineKeyboardButton(
-                    text='',
+                admin_button(
+                    '←',
                     callback_data=f'admin_payments_page_{page - 1}',
+                    style='primary',
                 )
             )
 
         navigation_row.append(
-            InlineKeyboardButton(
-                text=f'{page}/{total_pages}',
+            admin_button(
+                f'{page}/{total_pages}',
                 callback_data='admin_payments_page_current',
             )
         )
 
         if page < total_pages:
             navigation_row.append(
-                InlineKeyboardButton(
-                    text='',
+                admin_button(
+                    '→',
                     callback_data=f'admin_payments_page_{page + 1}',
+                    style='primary',
                 )
             )
 
         buttons.append(navigation_row)
 
-    buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data='admin_panel', style='danger')])
+    buttons.append([admin_back_button(texts, 'admin_panel')])
 
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
@@ -348,7 +355,7 @@ def _build_detail_keyboard(
             ]
         )
 
-    rows.append([InlineKeyboardButton(text=texts.BACK, callback_data='admin_payments', style='danger')])
+    rows.append([admin_back_button(texts, 'admin_payments')])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -377,6 +384,7 @@ def _build_record_lines(
         texts.t('ADMIN_PAYMENT_LANDING_SUFFIX') if record.source == 'landing' else ''
     )
     emoji, status_text = _status_info(record, texts=texts)
+    status_line = f'{emoji} {status_text}'.strip()
     created = format_datetime(record.created_at)
     age = format_time_ago(record.created_at, language)
     identifier = html.escape(str(record.identifier)) if record.identifier else ''
@@ -384,7 +392,7 @@ def _build_record_lines(
 
     lines = [
         f'{index}. <b>{html.escape(method_name)}</b> — {amount}',
-        f'   {emoji} {status_text}',
+        f'   {status_line}',
         f'    {created} ({age})',
         _format_user_line(record.user, language),
     ]
@@ -416,7 +424,7 @@ def _build_payment_details_text(record: PendingPayment, *, texts, language: str)
         texts.t('ADMIN_PAYMENT_DETAILS_TITLE', ' <b>Payment details</b>'),
         '',
         f'<b>{html.escape(method_name)}</b>',
-        f'{emoji} {status_text}',
+        f'{emoji} {status_text}'.strip(),
         '',
         f' {texts.t("ADMIN_PAYMENT_AMOUNT", "Amount")}: {amount}',
         f' {texts.t("ADMIN_PAYMENT_CREATED", "Created")}: {created} ({age})',
@@ -587,7 +595,11 @@ async def show_payments_overview(
     )
 
     await callback.message.edit_text(
-        '\n'.join(line for line in lines if line is not None),
+        admin_screen(
+            '\n'.join(line for line in lines if line is not None),
+            icon='payments',
+            compact=True,
+        ),
         parse_mode='HTML',
         reply_markup=keyboard,
     )

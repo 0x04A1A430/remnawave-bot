@@ -6,12 +6,14 @@ from aiogram import Dispatcher, F, Router
 from aiogram.exceptions import TelegramAPIError, TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
+from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
 
 from app.database.database import AsyncSessionLocal
 from app.localization.texts import get_texts
 from app.services import overpay_certificate_service as cert_service
+from app.utils.admin_ui import admin_back_button, admin_button, admin_screen
 from app.utils.decorators import admin_required, error_handler
+from app.utils.miniapp_buttons import strip_leading_emoji
 
 
 logger = structlog.get_logger(__name__)
@@ -21,7 +23,7 @@ router = Router(name='admin_overpay_certificate')
 ALLOWED_EXTENSIONS = ('.p12', '.pfx')
 
 ENV_LOCK_NOTE = (
-    ' OVERPAY_P12_PATH или OVERPAY_P12_PASSPHRASE заданы через переменные окружения — значения из БД не применяются.'
+    '⚠️ OVERPAY_P12_PATH или OVERPAY_P12_PASSPHRASE заданы через переменные окружения — значения из БД не применяются.'
 )
 
 
@@ -30,17 +32,38 @@ class OverpayCertStates(StatesGroup):
     waiting_for_passphrase = State()
 
 
+def _label(text: str) -> str:
+    """Текст кнопки без ведущего глифа локали: иконку даёт ``admin_button``."""
+    return strip_leading_emoji(text.strip())
+
+
 def _cancel_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
     texts = get_texts(language)
     return InlineKeyboardMarkup(
-        inline_keyboard=[[InlineKeyboardButton(text=texts.t('ADMIN_OVERPAY_CERT_022'), callback_data='overpay_cert')]]
+        inline_keyboard=[
+            [
+                admin_button(
+                    _label(texts.t('ADMIN_OVERPAY_CERT_022')),
+                    callback_data='overpay_cert',
+                    style='danger',
+                )
+            ]
+        ]
     )
 
 
 def _back_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
     texts = get_texts(language)
     return InlineKeyboardMarkup(
-        inline_keyboard=[[InlineKeyboardButton(text=texts.t('ADMIN_OVERPAY_CERT_023'), callback_data='overpay_cert')]]
+        inline_keyboard=[
+            [
+                admin_back_button(
+                    texts,
+                    'overpay_cert',
+                    label=_label(texts.t('ADMIN_OVERPAY_CERT_023')),
+                )
+            ]
+        ]
     )
 
 
@@ -63,18 +86,39 @@ def _status_view(language: str = 'ru') -> tuple[str, InlineKeyboardMarkup]:
 
     if status['env_locked_path'] or status['env_locked_passphrase']:
         lines.append('')
-        lines.append(texts.t('ADMIN_OVERPAY_CERT_000', ENV_LOCK_NOTE))
+        lines.append(_label(texts.t('ADMIN_OVERPAY_CERT_000', ENV_LOCK_NOTE)))
 
-    buttons = [[InlineKeyboardButton(text=texts.t('ADMIN_OVERPAY_CERT_018'), callback_data='overpay_cert:upload')]]
+    buttons = [
+        [
+            admin_button(
+                _label(texts.t('ADMIN_OVERPAY_CERT_018')),
+                callback_data='overpay_cert:upload',
+                style='success',
+            )
+        ]
+    ]
     if status['uploaded']:
         buttons.append(
-            [InlineKeyboardButton(text=texts.t('ADMIN_OVERPAY_CERT_021'), callback_data='overpay_cert:delete')]
+            [
+                admin_button(
+                    _label(texts.t('ADMIN_OVERPAY_CERT_021')),
+                    callback_data='overpay_cert:delete',
+                    icon='delete',
+                    style='danger',
+                )
+            ]
         )
     buttons.append(
-        [InlineKeyboardButton(text=texts.t('ADMIN_OVERPAY_CERT_019'), callback_data='admin_submenu_settings')]
+        [
+            admin_back_button(
+                texts,
+                'admin_submenu_settings',
+                label=_label(texts.t('ADMIN_OVERPAY_CERT_019')),
+            )
+        ]
     )
 
-    return '\n'.join(lines), InlineKeyboardMarkup(inline_keyboard=buttons)
+    return admin_screen('\n'.join(lines), icon='success', compact=True), InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
 @router.callback_query(F.data == 'overpay_cert')
@@ -84,7 +128,7 @@ async def show_certificate_status(callback: CallbackQuery, state: FSMContext, **
     texts = get_texts(getattr(kwargs.get('db_user'), 'language', 'ru'))
     await state.clear()
     text, keyboard = _status_view(texts.language)
-    await callback.message.edit_text(text, reply_markup=keyboard)
+    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='HTML')
     await callback.answer()
 
 
@@ -95,8 +139,9 @@ async def start_certificate_upload(callback: CallbackQuery, state: FSMContext, *
     texts = get_texts(getattr(kwargs.get('db_user'), 'language', 'ru'))
     await state.set_state(OverpayCertStates.waiting_for_file)
     await callback.message.edit_text(
-        texts.t('ADMIN_OVERPAY_CERT_007'),
+        admin_screen(texts.t('ADMIN_OVERPAY_CERT_007'), icon='success', compact=True),
         reply_markup=_cancel_keyboard(texts.language),
+        parse_mode='HTML',
     )
     await callback.answer()
 
@@ -107,17 +152,25 @@ async def start_certificate_upload(callback: CallbackQuery, state: FSMContext, *
 async def confirm_certificate_delete(callback: CallbackQuery, **kwargs) -> None:
     texts = get_texts(getattr(kwargs.get('db_user'), 'language', 'ru'))
     await callback.message.edit_text(
-        texts.t('ADMIN_OVERPAY_CERT_008'),
+        admin_screen(texts.t('ADMIN_OVERPAY_CERT_008'), icon='warning', compact=True),
         reply_markup=InlineKeyboardMarkup(
             inline_keyboard=[
                 [
-                    InlineKeyboardButton(
-                        text=texts.t('ADMIN_OVERPAY_CERT_024'), callback_data='overpay_cert:delete_confirm'
+                    admin_button(
+                        _label(texts.t('ADMIN_OVERPAY_CERT_024')),
+                        callback_data='overpay_cert:delete_confirm',
+                        icon='delete',
+                        style='danger',
                     ),
-                    InlineKeyboardButton(text=texts.t('ADMIN_OVERPAY_CERT_022'), callback_data='overpay_cert'),
+                    admin_button(
+                        _label(texts.t('ADMIN_OVERPAY_CERT_022')),
+                        callback_data='overpay_cert',
+                        style='danger',
+                    ),
                 ]
             ]
         ),
+        parse_mode='HTML',
     )
     await callback.answer()
 
@@ -132,7 +185,7 @@ async def delete_certificate(callback: CallbackQuery, state: FSMContext, **kwarg
         await cert_service.delete_certificate(db)
     await callback.answer(texts.t('ADMIN_OVERPAY_CERT_009'), show_alert=True)
     text, keyboard = _status_view(texts.language)
-    await callback.message.edit_text(text, reply_markup=keyboard)
+    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='HTML')
 
 
 @router.message(OverpayCertStates.waiting_for_file)
@@ -168,6 +221,7 @@ async def process_certificate_file(message: Message, state: FSMContext, **kwargs
     await message.answer(
         texts.t('ADMIN_OVERPAY_CERT_010'),
         reply_markup=_cancel_keyboard(texts.language),
+        parse_mode='HTML',
     )
 
 
@@ -180,6 +234,7 @@ async def process_certificate_passphrase(message: Message, state: FSMContext, **
         await message.answer(
             texts.t('ADMIN_OVERPAY_CERT_016'),
             reply_markup=_cancel_keyboard(texts.language),
+            parse_mode='HTML',
         )
         return
 
@@ -195,7 +250,11 @@ async def process_certificate_passphrase(message: Message, state: FSMContext, **
     await state.clear()
 
     if not file_id:
-        await message.answer(texts.t('ADMIN_OVERPAY_CERT_017'), reply_markup=_back_keyboard(texts.language))
+        await message.answer(
+            texts.t('ADMIN_OVERPAY_CERT_017'),
+            reply_markup=_back_keyboard(texts.language),
+            parse_mode='HTML',
+        )
         return
 
     buffer = io.BytesIO()
@@ -203,7 +262,11 @@ async def process_certificate_passphrase(message: Message, state: FSMContext, **
         await message.bot.download(file_id, destination=buffer)
     except TelegramBadRequest as error:
         logger.warning('Overpay: не удалось скачать файл сертификата', error=error)
-        await message.answer(texts.t('ADMIN_OVERPAY_CERT_020'), reply_markup=_back_keyboard(texts.language))
+        await message.answer(
+            texts.t('ADMIN_OVERPAY_CERT_020'),
+            reply_markup=_back_keyboard(texts.language),
+            parse_mode='HTML',
+        )
         return
 
     async with AsyncSessionLocal() as db:
@@ -211,8 +274,9 @@ async def process_certificate_passphrase(message: Message, state: FSMContext, **
             metadata = await cert_service.store_certificate(db, buffer.getvalue(), passphrase)
         except ValueError as error:
             await message.answer(
-                f' {html.escape(_certificate_error_text(str(error), texts))}',
+                html.escape(_certificate_error_text(str(error), texts)),
                 reply_markup=_back_keyboard(texts.language),
+                parse_mode='HTML',
             )
             return
 
@@ -227,9 +291,13 @@ async def process_certificate_passphrase(message: Message, state: FSMContext, **
         warning = metadata['warning']
         if warning == cert_service.ENV_LOCK_WARNING.format(path=metadata['path']):
             warning = texts.t('ADMIN_OVERPAY_CERT_ENV_WARNING').format(path=metadata['path'])
-        lines.append(f' {html.escape(warning)}')
+        lines.append(html.escape(warning))
 
-    await message.answer('\n'.join(lines), reply_markup=_back_keyboard(texts.language))
+    await message.answer(
+        admin_screen('\n'.join(lines), icon='success', compact=True),
+        reply_markup=_back_keyboard(texts.language),
+        parse_mode='HTML',
+    )
 
 
 def _certificate_error_text(error: str, texts) -> str:

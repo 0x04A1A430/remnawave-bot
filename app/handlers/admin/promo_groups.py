@@ -24,7 +24,9 @@ from app.keyboards.admin import (
 )
 from app.localization.texts import get_texts
 from app.states import AdminStates
+from app.utils.admin_ui import admin_back_button, admin_button, admin_screen
 from app.utils.decorators import admin_required, error_handler
+from app.utils.miniapp_buttons import strip_leading_emoji
 from app.utils.pricing_utils import format_period_description
 
 
@@ -312,79 +314,101 @@ def _build_edit_menu_content(
         )
     )
 
-    text = '\n'.join(line for line in lines if line)
+    text = admin_screen('\n'.join(line for line in lines if line), icon='users', compact=True)
 
     keyboard_rows = [
         [
-            types.InlineKeyboardButton(
-                text=texts.t(
-                    'ADMIN_PROMO_GROUP_EDIT_FIELD_NAME',
-                    ' Изменить название',
+            admin_button(
+                strip_leading_emoji(
+                    texts.t(
+                        'ADMIN_PROMO_GROUP_EDIT_FIELD_NAME',
+                        ' Изменить название',
+                    )
                 ),
                 callback_data=f'promo_group_edit_field_{group.id}_name',
+                style='primary',
             )
         ],
         [
-            types.InlineKeyboardButton(
-                text=texts.t(
-                    'ADMIN_PROMO_GROUP_EDIT_FIELD_PRIORITY',
-                    ' Приоритет',
+            admin_button(
+                strip_leading_emoji(
+                    texts.t(
+                        'ADMIN_PROMO_GROUP_EDIT_FIELD_PRIORITY',
+                        ' Приоритет',
+                    )
                 ),
                 callback_data=f'promo_group_edit_field_{group.id}_priority',
+                style='primary',
             )
         ],
         [
-            types.InlineKeyboardButton(
-                text=texts.t(
-                    'ADMIN_PROMO_GROUP_EDIT_FIELD_TRAFFIC',
-                    ' Скидка на трафик',
+            admin_button(
+                strip_leading_emoji(
+                    texts.t(
+                        'ADMIN_PROMO_GROUP_EDIT_FIELD_TRAFFIC',
+                        ' Скидка на трафик',
+                    )
                 ),
                 callback_data=f'promo_group_edit_field_{group.id}_traffic',
+                style='primary',
             )
         ],
         [
-            types.InlineKeyboardButton(
-                text=texts.t(
-                    'ADMIN_PROMO_GROUP_EDIT_FIELD_SERVERS',
-                    ' Скидка на серверы',
+            admin_button(
+                strip_leading_emoji(
+                    texts.t(
+                        'ADMIN_PROMO_GROUP_EDIT_FIELD_SERVERS',
+                        ' Скидка на серверы',
+                    )
                 ),
                 callback_data=f'promo_group_edit_field_{group.id}_servers',
+                style='primary',
             )
         ],
         [
-            types.InlineKeyboardButton(
-                text=texts.t(
-                    'ADMIN_PROMO_GROUP_EDIT_FIELD_DEVICES',
-                    ' Скидка на устройства',
+            admin_button(
+                strip_leading_emoji(
+                    texts.t(
+                        'ADMIN_PROMO_GROUP_EDIT_FIELD_DEVICES',
+                        ' Скидка на устройства',
+                    )
                 ),
                 callback_data=f'promo_group_edit_field_{group.id}_devices',
+                style='primary',
             )
         ],
         [
-            types.InlineKeyboardButton(
-                text=texts.t(
-                    'ADMIN_PROMO_GROUP_EDIT_FIELD_PERIODS',
-                    ' Скидки по периодам',
+            admin_button(
+                strip_leading_emoji(
+                    texts.t(
+                        'ADMIN_PROMO_GROUP_EDIT_FIELD_PERIODS',
+                        ' Скидки по периодам',
+                    )
                 ),
                 callback_data=f'promo_group_edit_field_{group.id}_periods',
+                style='primary',
             )
         ],
         [
-            types.InlineKeyboardButton(
-                text=_get_addon_discounts_button_text(texts, group),
+            admin_button(
+                strip_leading_emoji(_get_addon_discounts_button_text(texts, group)),
                 callback_data=f'promo_group_toggle_addons_{group.id}',
+                style='primary',
             )
         ],
         [
-            types.InlineKeyboardButton(
-                text=texts.t(
-                    'ADMIN_PROMO_GROUP_EDIT_FIELD_AUTO_ASSIGN',
-                    ' Автовыдача по тратам',
+            admin_button(
+                strip_leading_emoji(
+                    texts.t(
+                        'ADMIN_PROMO_GROUP_EDIT_FIELD_AUTO_ASSIGN',
+                        ' Автовыдача по тратам',
+                    )
                 ),
                 callback_data=f'promo_group_edit_field_{group.id}_auto',
+                style='primary',
             )
         ],
-        [types.InlineKeyboardButton(text=texts.BACK, callback_data=f'promo_group_manage_{group.id}', style='danger')],
+        [admin_back_button(texts, f'promo_group_manage_{group.id}')],
     ]
 
     keyboard = types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
@@ -392,11 +416,7 @@ def _build_edit_menu_content(
 
 
 def _get_edit_prompt_keyboard(group_id: int, texts) -> types.InlineKeyboardMarkup:
-    return types.InlineKeyboardMarkup(
-        inline_keyboard=[
-            [types.InlineKeyboardButton(text=texts.BACK, callback_data=f'promo_group_edit_{group_id}', style='danger')]
-        ]
-    )
+    return types.InlineKeyboardMarkup(inline_keyboard=[[admin_back_button(texts, f'promo_group_edit_{group_id}')]])
 
 
 async def _send_edit_menu_after_update(
@@ -453,17 +473,16 @@ async def show_promo_groups_menu(
 
         keyboard_rows = []
         for group, member_count in groups:
-            icon = '' if group.is_default else ''
             default_suffix = texts.t('ADMIN_PROMO_GROUPS_DEFAULT_LABEL', ' (базовая)') if group.is_default else ''
             members_label = texts.t(
                 'ADMIN_PROMO_GROUPS_MEMBERS_COUNT',
                 'Участников: {count}',
             ).format(count=member_count)
-            lines.append(f'{icon} <b>{html.escape(group.name)}</b>{default_suffix} — {members_label}')
+            lines.append(f'<b>{html.escape(group.name)}</b>{default_suffix} — {members_label}')
             keyboard_rows.append(
                 [
-                    types.InlineKeyboardButton(
-                        text=f'{icon} {group.name}',
+                    admin_button(
+                        group.name,
                         callback_data=f'promo_group_manage_{group.id}',
                     )
                 ]
@@ -472,13 +491,11 @@ async def show_promo_groups_menu(
         lines = [header, '', texts.t('ADMIN_PROMO_GROUPS_EMPTY', 'Промогруппы не найдены.')]
         keyboard_rows = []
 
-    keyboard_rows.append([types.InlineKeyboardButton(text='Создать', callback_data='admin_promo_group_create')])
-    keyboard_rows.append(
-        [types.InlineKeyboardButton(text=texts.BACK, callback_data='admin_submenu_promo', style='danger')]
-    )
+    keyboard_rows.append([admin_button('Создать', callback_data='admin_promo_group_create', style='success')])
+    keyboard_rows.append([admin_back_button(texts, 'admin_submenu_promo')])
 
     await callback.message.edit_text(
-        '\n'.join(line for line in lines if line is not None),
+        admin_screen('\n'.join(line for line in lines if line is not None), icon='users', compact=True),
         reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows),
         parse_mode='HTML',
     )
@@ -543,18 +560,22 @@ async def show_promo_group_details(
     if member_count > 0:
         keyboard_rows.append(
             [
-                types.InlineKeyboardButton(
-                    text=texts.t('ADMIN_PROMO_GROUP_MEMBERS_BUTTON', ' Участники'),
+                admin_button(
+                    strip_leading_emoji(texts.t('ADMIN_PROMO_GROUP_MEMBERS_BUTTON', ' Участники')),
                     callback_data=f'promo_group_members_{group.id}_page_1',
+                    icon='users',
+                    style='primary',
                 )
             ]
         )
 
     keyboard_rows.append(
         [
-            types.InlineKeyboardButton(
-                text=texts.t('ADMIN_PROMO_GROUP_EDIT_BUTTON', ' Изменить'),
+            admin_button(
+                strip_leading_emoji(texts.t('ADMIN_PROMO_GROUP_EDIT_BUTTON', ' Изменить')),
                 callback_data=f'promo_group_edit_{group.id}',
+                icon='settings',
+                style='primary',
             )
         ]
     )
@@ -562,19 +583,19 @@ async def show_promo_group_details(
     if not group.is_default:
         keyboard_rows.append(
             [
-                types.InlineKeyboardButton(
-                    text=texts.t('ADMIN_PROMO_GROUP_DELETE_BUTTON', ' Удалить'),
+                admin_button(
+                    strip_leading_emoji(texts.t('ADMIN_PROMO_GROUP_DELETE_BUTTON', ' Удалить')),
                     callback_data=f'promo_group_delete_{group.id}',
+                    icon='delete',
+                    style='danger',
                 )
             ]
         )
 
-    keyboard_rows.append(
-        [types.InlineKeyboardButton(text=texts.BACK, callback_data='admin_promo_groups', style='danger')]
-    )
+    keyboard_rows.append([admin_back_button(texts, 'admin_promo_groups')])
 
     await callback.message.edit_text(
-        text.strip(),
+        admin_screen(text, icon='users', compact=True),
         reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows),
         parse_mode='HTML',
     )
@@ -612,11 +633,7 @@ async def start_create_promo_group(
     await state.update_data(language=db_user.language)
     await callback.message.edit_text(
         texts.t('ADMIN_PROMO_GROUP_CREATE_NAME_PROMPT', 'Введите название новой промогруппы:'),
-        reply_markup=types.InlineKeyboardMarkup(
-            inline_keyboard=[
-                [types.InlineKeyboardButton(text=texts.BACK, callback_data='admin_promo_groups', style='danger')]
-            ]
-        ),
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[admin_back_button(texts, 'admin_promo_groups')]]),
     )
     await callback.answer()
 
@@ -802,20 +819,28 @@ async def process_create_group_auto_assign(
 
     await state.clear()
     await message.answer(
-        texts.t('ADMIN_PROMO_GROUP_CREATED', 'Промогруппа «{name}» создана.').format(name=html.escape(group.name)),
+        admin_screen(
+            texts.t('ADMIN_PROMO_GROUP_CREATED', 'Промогруппа «{name}» создана.').format(name=html.escape(group.name)),
+            icon='success',
+            compact=True,
+        ),
         reply_markup=types.InlineKeyboardMarkup(
             inline_keyboard=[
                 [
-                    types.InlineKeyboardButton(
-                        text=texts.t(
-                            'ADMIN_PROMO_GROUP_CREATED_BACK_BUTTON',
-                            '↩ К промогруппам',
+                    admin_button(
+                        strip_leading_emoji(
+                            texts.t(
+                                'ADMIN_PROMO_GROUP_CREATED_BACK_BUTTON',
+                                '↩ К промогруппам',
+                            )
                         ),
                         callback_data='admin_promo_groups',
+                        style='primary',
                     )
                 ]
             ]
         ),
+        parse_mode='HTML',
     )
 
 
@@ -1247,12 +1272,10 @@ async def show_promo_group_members(
         )
         keyboard.extend(pagination.inline_keyboard)
 
-    keyboard.append(
-        [types.InlineKeyboardButton(text=texts.BACK, callback_data=f'promo_group_manage_{group_id}', style='danger')]
-    )
+    keyboard.append([admin_back_button(texts, f'promo_group_manage_{group_id}')])
 
     await callback.message.edit_text(
-        f'{title}\n\n{body}',
+        admin_screen(f'{title}\n\n{body}', icon='users', compact=True),
         reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
         parse_mode='HTML',
     )
@@ -1285,12 +1308,13 @@ async def request_delete_promo_group(
     ).format(name=html.escape(group.name))
 
     await callback.message.edit_text(
-        confirm_text,
+        admin_screen(confirm_text, icon='warning', compact=True),
         reply_markup=get_confirmation_keyboard(
             confirm_action=f'promo_group_delete_confirm_{group.id}',
             cancel_action=f'promo_group_manage_{group.id}',
             language=db_user.language,
         ),
+        parse_mode='HTML',
     )
     await callback.answer()
 
@@ -1317,12 +1341,13 @@ async def delete_promo_group_confirmed(
         return
 
     await callback.message.edit_text(
-        texts.t('ADMIN_PROMO_GROUP_DELETED', 'Промогруппа «{name}» удалена.').format(name=html.escape(group.name)),
-        reply_markup=types.InlineKeyboardMarkup(
-            inline_keyboard=[
-                [types.InlineKeyboardButton(text=texts.BACK, callback_data='admin_promo_groups', style='danger')]
-            ]
+        admin_screen(
+            texts.t('ADMIN_PROMO_GROUP_DELETED', 'Промогруппа «{name}» удалена.').format(name=html.escape(group.name)),
+            icon='success',
+            compact=True,
         ),
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[admin_back_button(texts, 'admin_promo_groups')]]),
+        parse_mode='HTML',
     )
     await callback.answer()
 

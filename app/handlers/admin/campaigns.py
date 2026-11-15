@@ -32,7 +32,9 @@ from app.keyboards.admin import (
 )
 from app.localization.texts import Texts, get_texts
 from app.states import AdminStates
+from app.utils.admin_ui import admin_back_button, admin_button, admin_icon, admin_screen
 from app.utils.decorators import admin_required, error_handler
+from app.utils.miniapp_buttons import strip_leading_emoji
 
 
 logger = structlog.get_logger(__name__)
@@ -98,22 +100,55 @@ def _build_campaign_servers_keyboard(
     back_callback: str = 'admin_campaigns',
     language: str = 'ru',
 ) -> types.InlineKeyboardMarkup:
+    texts = get_texts(language)
     keyboard: list[list[types.InlineKeyboardButton]] = []
 
     for server in servers[:20]:
         is_selected = server.squad_uuid in selected_uuids
-        emoji = '' if is_selected else ('' if server.is_available else '')
-        text = f'{emoji} {server.display_name}'
-        keyboard.append([types.InlineKeyboardButton(text=text, callback_data=f'{toggle_prefix}{server.id}')])
+        icon = 'success' if is_selected else ('lock' if not server.is_available else None)
+        keyboard.append(
+            [
+                admin_button(
+                    server.display_name,
+                    callback_data=f'{toggle_prefix}{server.id}',
+                    icon=icon,
+                )
+            ]
+        )
 
     keyboard.append(
         [
-            types.InlineKeyboardButton(text=' Сохранить', callback_data=save_callback),
-            types.InlineKeyboardButton(text=' Назад', callback_data=back_callback),
+            admin_button(
+                'Сохранить',
+                callback_data=save_callback,
+                icon='success',
+                style='success',
+            ),
+            admin_back_button(texts, back_callback, label='Назад'),
         ]
     )
 
     return types.InlineKeyboardMarkup(inline_keyboard=keyboard)
+
+
+def _campaign_edit_cancel_markup(texts, campaign_id: int) -> types.InlineKeyboardMarkup:
+    """Кнопка отмены возвращает в меню редактирования кампании."""
+    return types.InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                admin_back_button(
+                    texts,
+                    f'admin_campaign_edit_{campaign_id}',
+                    label=strip_leading_emoji(texts.t('ADMIN_CAMPAIGN_UI_106', ' Отмена')),
+                )
+            ]
+        ]
+    )
+
+
+def _campaign_screen(text: str, icon: str = 'messages') -> str:
+    """Экран кампаний: снимает legacy-глиф заголовка и ведущие пустые строки."""
+    return admin_screen(strip_leading_emoji(text or ''), icon=icon, compact=True)
 
 
 async def _render_campaign_edit_menu(
@@ -126,10 +161,10 @@ async def _render_campaign_edit_menu(
     use_caption: bool = False,
 ):
     texts = get_texts(language)
-    text = (
-        get_texts(language)
-        .t('ADMIN_CAMPAIGN_UI_001', ' <b>Редактирование кампании</b>\n\n{v0}')
-        .format(v0=_format_campaign_summary(campaign, texts))
+    text = _campaign_screen(
+        texts.t('ADMIN_CAMPAIGN_UI_001', ' <b>Редактирование кампании</b>\n\n{v0}').format(
+            v0=_format_campaign_summary(campaign, texts)
+        )
     )
 
     edit_kwargs = dict(
@@ -182,8 +217,9 @@ async def show_campaigns_menu(
     )
 
     await callback.message.edit_text(
-        text,
+        _campaign_screen(text),
         reply_markup=get_admin_campaigns_keyboard(db_user.language),
+        parse_mode='HTML',
     )
     await callback.answer()
 
@@ -226,10 +262,9 @@ async def show_campaigns_overall_stats(
     )
 
     await callback.message.edit_text(
-        '\n'.join(text),
-        reply_markup=types.InlineKeyboardMarkup(
-            inline_keyboard=[[types.InlineKeyboardButton(text=' Назад', callback_data='admin_campaigns')]]
-        ),
+        _campaign_screen('\n'.join(text), icon='stats'),
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[admin_back_button(texts, 'admin_campaigns')]]),
+        parse_mode='HTML',
     )
     await callback.answer()
 
@@ -261,25 +296,34 @@ async def show_campaigns_list(
 
     if not campaigns:
         await callback.message.edit_text(
-            get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_070', ' Рекламные кампании не найдены.'),
+            _campaign_screen(get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_070', ' Рекламные кампании не найдены.')),
             reply_markup=types.InlineKeyboardMarkup(
                 inline_keyboard=[
-                    [types.InlineKeyboardButton(text=' Создать', callback_data='admin_campaigns_create')],
-                    [types.InlineKeyboardButton(text=' Назад', callback_data='admin_campaigns')],
+                    [
+                        admin_button(
+                            'Создать',
+                            callback_data='admin_campaigns_create',
+                            style='success',
+                        )
+                    ],
+                    [admin_back_button(texts, 'admin_campaigns')],
                 ]
             ),
+            parse_mode='HTML',
         )
         await callback.answer()
         return
 
-    text_lines = [get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_015', ' <b>Список кампаний</b>\n')]
+    text_lines = [
+        strip_leading_emoji(get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_015', ' <b>Список кампаний</b>\n'))
+    ]
 
     for campaign in campaigns:
         # Access from instance dict to avoid MissingGreenlet on lazy load
         regs = sa_inspect(campaign).dict.get('registrations', []) or []
         registrations = len(regs)
         total_balance = sum(r.balance_bonus_kopeks or 0 for r in regs)
-        status = '' if campaign.is_active else ''
+        status = admin_icon('success' if campaign.is_active else 'lock')
         line = (
             get_texts(db_user.language)
             .t('ADMIN_CAMPAIGN_UI_016', '{v0} <b>{v1}</b> — <code>{v2}</code>\n   Регистраций: {v3}, баланс: {v4}')
@@ -303,8 +347,8 @@ async def show_campaigns_list(
 
     keyboard_rows = [
         [
-            types.InlineKeyboardButton(
-                text=f' {campaign.name}',
+            admin_button(
+                campaign.name,
                 callback_data=f'admin_campaign_manage_{campaign.id}',
             )
         ]
@@ -322,8 +366,9 @@ async def show_campaigns_list(
     keyboard_rows.extend(pagination.inline_keyboard)
 
     await callback.message.edit_text(
-        '\n'.join(text_lines),
+        _campaign_screen('\n'.join(text_lines)),
         reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows),
+        parse_mode='HTML',
     )
     await callback.answer()
 
@@ -408,8 +453,9 @@ async def show_campaign_detail(
         text.append(f'• Последняя: {stats["last_registration"].strftime("%d.%m.%Y %H:%M")}')
 
     await callback.message.edit_text(
-        '\n'.join(text),
+        _campaign_screen('\n'.join(text)),
         reply_markup=get_campaign_management_keyboard(campaign.id, campaign.is_active, db_user.language),
+        parse_mode='HTML',
     )
     await callback.answer()
 
@@ -473,7 +519,7 @@ async def start_edit_campaign_name(
     )
 
     await callback.message.edit_text(
-        (
+        _campaign_screen(
             get_texts(db_user.language)
             .t(
                 'ADMIN_CAMPAIGN_UI_041',
@@ -481,16 +527,8 @@ async def start_edit_campaign_name(
             )
             .format(v0=html.escape(campaign.name))
         ),
-        reply_markup=types.InlineKeyboardMarkup(
-            inline_keyboard=[
-                [
-                    types.InlineKeyboardButton(
-                        text=get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_106', ' Отмена'),
-                        callback_data=f'admin_campaign_edit_{campaign_id}',
-                    )
-                ]
-            ]
-        ),
+        reply_markup=_campaign_edit_cancel_markup(get_texts(db_user.language), campaign_id),
+        parse_mode='HTML',
     )
     await callback.answer()
 
@@ -571,7 +609,7 @@ async def start_edit_campaign_start_parameter(
     )
 
     await callback.message.edit_text(
-        (
+        _campaign_screen(
             get_texts(db_user.language)
             .t(
                 'ADMIN_CAMPAIGN_UI_043',
@@ -579,16 +617,8 @@ async def start_edit_campaign_start_parameter(
             )
             .format(v0=campaign.start_parameter)
         ),
-        reply_markup=types.InlineKeyboardMarkup(
-            inline_keyboard=[
-                [
-                    types.InlineKeyboardButton(
-                        text=get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_106', ' Отмена'),
-                        callback_data=f'admin_campaign_edit_{campaign_id}',
-                    )
-                ]
-            ]
-        ),
+        reply_markup=_campaign_edit_cancel_markup(get_texts(db_user.language), campaign_id),
+        parse_mode='HTML',
     )
     await callback.answer()
 
@@ -685,7 +715,7 @@ async def start_edit_campaign_balance_bonus(
     )
 
     await callback.message.edit_text(
-        (
+        _campaign_screen(
             get_texts(db_user.language)
             .t(
                 'ADMIN_CAMPAIGN_UI_045',
@@ -693,16 +723,8 @@ async def start_edit_campaign_balance_bonus(
             )
             .format(v0=get_texts(db_user.language).format_price(campaign.balance_bonus_kopeks))
         ),
-        reply_markup=types.InlineKeyboardMarkup(
-            inline_keyboard=[
-                [
-                    types.InlineKeyboardButton(
-                        text=get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_106', ' Отмена'),
-                        callback_data=f'admin_campaign_edit_{campaign_id}',
-                    )
-                ]
-            ]
-        ),
+        reply_markup=_campaign_edit_cancel_markup(get_texts(db_user.language), campaign_id),
+        parse_mode='HTML',
     )
     await callback.answer()
 
@@ -811,7 +833,7 @@ async def start_edit_campaign_subscription_days(
     )
 
     await callback.message.edit_text(
-        (
+        _campaign_screen(
             get_texts(db_user.language)
             .t(
                 'ADMIN_CAMPAIGN_UI_047',
@@ -819,16 +841,8 @@ async def start_edit_campaign_subscription_days(
             )
             .format(v0=campaign.subscription_duration_days or 0)
         ),
-        reply_markup=types.InlineKeyboardMarkup(
-            inline_keyboard=[
-                [
-                    types.InlineKeyboardButton(
-                        text=get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_106', ' Отмена'),
-                        callback_data=f'admin_campaign_edit_{campaign_id}',
-                    )
-                ]
-            ]
-        ),
+        reply_markup=_campaign_edit_cancel_markup(get_texts(db_user.language), campaign_id),
+        parse_mode='HTML',
     )
     await callback.answer()
 
@@ -926,7 +940,7 @@ async def start_edit_campaign_subscription_traffic(
     )
 
     await callback.message.edit_text(
-        (
+        _campaign_screen(
             get_texts(db_user.language)
             .t(
                 'ADMIN_CAMPAIGN_UI_049',
@@ -934,16 +948,8 @@ async def start_edit_campaign_subscription_traffic(
             )
             .format(v0=traffic_text)
         ),
-        reply_markup=types.InlineKeyboardMarkup(
-            inline_keyboard=[
-                [
-                    types.InlineKeyboardButton(
-                        text=get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_106', ' Отмена'),
-                        callback_data=f'admin_campaign_edit_{campaign_id}',
-                    )
-                ]
-            ]
-        ),
+        reply_markup=_campaign_edit_cancel_markup(get_texts(db_user.language), campaign_id),
+        parse_mode='HTML',
     )
     await callback.answer()
 
@@ -1040,7 +1046,7 @@ async def start_edit_campaign_subscription_devices(
         current_devices = settings.DEFAULT_DEVICE_LIMIT
 
     await callback.message.edit_text(
-        (
+        _campaign_screen(
             get_texts(db_user.language)
             .t(
                 'ADMIN_CAMPAIGN_UI_051',
@@ -1048,16 +1054,8 @@ async def start_edit_campaign_subscription_devices(
             )
             .format(v0=current_devices, v1=settings.MAX_DEVICES_LIMIT)
         ),
-        reply_markup=types.InlineKeyboardMarkup(
-            inline_keyboard=[
-                [
-                    types.InlineKeyboardButton(
-                        text=get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_106', ' Отмена'),
-                        callback_data=f'admin_campaign_edit_{campaign_id}',
-                    )
-                ]
-            ]
-        ),
+        reply_markup=_campaign_edit_cancel_markup(get_texts(db_user.language), campaign_id),
+        parse_mode='HTML',
     )
     await callback.answer()
 
@@ -1172,13 +1170,14 @@ async def start_edit_campaign_subscription_servers(
     )
 
     await callback.message.edit_text(
-        (
+        _campaign_screen(
             get_texts(db_user.language).t(
                 'ADMIN_CAMPAIGN_UI_053',
                 ' <b>Редактирование доступных серверов</b>\n\nНажмите на сервер, чтобы добавить или убрать его из кампании.\nПосле выбора нажмите " Сохранить".',
             )
         ),
         reply_markup=keyboard,
+        parse_mode='HTML',
     )
     await callback.answer()
 
@@ -1353,17 +1352,11 @@ async def show_campaign_stats(
         text.append(f'Последняя регистрация: {stats["last_registration"].strftime("%d.%m.%Y %H:%M")}')
 
     await callback.message.edit_text(
-        '\n'.join(text),
+        _campaign_screen('\n'.join(text), icon='stats'),
         reply_markup=types.InlineKeyboardMarkup(
-            inline_keyboard=[
-                [
-                    types.InlineKeyboardButton(
-                        text=' Назад',
-                        callback_data=f'admin_campaign_manage_{campaign_id}',
-                    )
-                ]
-            ]
+            inline_keyboard=[[admin_back_button(texts, f'admin_campaign_manage_{campaign_id}')]]
         ),
+        parse_mode='HTML',
     )
     await callback.answer()
 
@@ -1393,11 +1386,12 @@ async def confirm_delete_campaign(
     )
 
     await callback.message.edit_text(
-        text,
+        _campaign_screen(text, icon='warning'),
         reply_markup=get_confirmation_keyboard(
             confirm_action=f'admin_campaign_delete_confirm_{campaign_id}',
             cancel_action=f'admin_campaign_manage_{campaign_id}',
         ),
+        parse_mode='HTML',
     )
     await callback.answer()
 
@@ -1419,8 +1413,12 @@ async def delete_campaign_confirmed(
 
     await delete_campaign(db, campaign)
     await callback.message.edit_text(
-        get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_056', ' Кампания удалена.'),
+        _campaign_screen(
+            get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_056', ' Кампания удалена.'),
+            icon='success',
+        ),
         reply_markup=get_admin_campaigns_keyboard(db_user.language),
+        parse_mode='HTML',
     )
     await callback.answer(get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_057', 'Удалено'))
 
@@ -1435,12 +1433,15 @@ async def start_campaign_creation(
 ):
     await state.clear()
     await callback.message.edit_text(
-        get_texts(db_user.language).t(
-            'ADMIN_CAMPAIGN_UI_058', ' <b>Создание рекламной кампании</b>\n\nВведите название кампании:'
+        _campaign_screen(
+            get_texts(db_user.language).t(
+                'ADMIN_CAMPAIGN_UI_058', ' <b>Создание рекламной кампании</b>\n\nВведите название кампании:'
+            )
         ),
         reply_markup=types.InlineKeyboardMarkup(
-            inline_keyboard=[[types.InlineKeyboardButton(text=' Назад', callback_data='admin_campaigns')]]
+            inline_keyboard=[[admin_back_button(get_texts(db_user.language), 'admin_campaigns')]]
         ),
+        parse_mode='HTML',
     )
     await state.set_state(AdminStates.creating_campaign_name)
     await callback.answer()
@@ -1532,20 +1533,26 @@ async def select_campaign_bonus_type(
     if bonus_type == 'balance':
         await state.set_state(AdminStates.creating_campaign_balance)
         await callback.message.edit_text(
-            get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_086', ' Введите сумму бонуса на баланс (в рублях):'),
-            reply_markup=types.InlineKeyboardMarkup(
-                inline_keyboard=[[types.InlineKeyboardButton(text=' Назад', callback_data='admin_campaigns')]]
+            _campaign_screen(
+                get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_086', ' Введите сумму бонуса на баланс (в рублях):')
             ),
+            reply_markup=types.InlineKeyboardMarkup(
+                inline_keyboard=[[admin_back_button(get_texts(db_user.language), 'admin_campaigns')]]
+            ),
+            parse_mode='HTML',
         )
     elif bonus_type == 'subscription':
         await state.set_state(AdminStates.creating_campaign_subscription_days)
         await callback.message.edit_text(
-            get_texts(db_user.language).t(
-                'ADMIN_CAMPAIGN_UI_103', ' Введите длительность пробной подписки в днях (1-730):'
+            _campaign_screen(
+                get_texts(db_user.language).t(
+                    'ADMIN_CAMPAIGN_UI_103', ' Введите длительность пробной подписки в днях (1-730):'
+                )
             ),
             reply_markup=types.InlineKeyboardMarkup(
-                inline_keyboard=[[types.InlineKeyboardButton(text=' Назад', callback_data='admin_campaigns')]]
+                inline_keyboard=[[admin_back_button(get_texts(db_user.language), 'admin_campaigns')]]
             ),
+            parse_mode='HTML',
         )
     elif bonus_type == 'tariff':
         # Показываем выбор тарифа
@@ -1563,18 +1570,19 @@ async def select_campaign_bonus_type(
         for tariff in tariffs[:15]:  # Максимум 15 тарифов
             keyboard.append(
                 [
-                    types.InlineKeyboardButton(
-                        text=f' {tariff.name}',
+                    admin_button(
+                        tariff.name,
                         callback_data=f'campaign_select_tariff_{tariff.id}',
                     )
                 ]
             )
-        keyboard.append([types.InlineKeyboardButton(text=' Назад', callback_data='admin_campaigns')])
+        keyboard.append([admin_back_button(get_texts(db_user.language), 'admin_campaigns')])
 
         await state.set_state(AdminStates.creating_campaign_tariff_select)
         await callback.message.edit_text(
-            get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_104', ' Выберите тариф для выдачи:'),
+            _campaign_screen(get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_104', ' Выберите тариф для выдачи:')),
             reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
+            parse_mode='HTML',
         )
     elif bonus_type == 'none':
         # Сразу создаём кампанию без бонуса
@@ -1598,8 +1606,9 @@ async def select_campaign_bonus_type(
         )
 
         await callback.message.edit_text(
-            text,
+            _campaign_screen(text, icon='success'),
             reply_markup=get_campaign_management_keyboard(campaign.id, campaign.is_active, db_user.language),
+            parse_mode='HTML',
         )
 
     await callback.answer()
@@ -1649,8 +1658,9 @@ async def process_campaign_balance_value(
     )
 
     await message.answer(
-        text,
+        _campaign_screen(text, icon='success'),
         reply_markup=get_campaign_management_keyboard(campaign.id, campaign.is_active, db_user.language),
+        parse_mode='HTML',
     )
 
 
@@ -1832,8 +1842,9 @@ async def finalize_campaign_subscription(
     )
 
     await callback.message.edit_text(
-        text,
+        _campaign_screen(text, icon='success'),
         reply_markup=get_campaign_management_keyboard(campaign.id, campaign.is_active, db_user.language),
+        parse_mode='HTML',
     )
     await callback.answer()
 
@@ -1859,12 +1870,15 @@ async def select_campaign_tariff(
     await state.update_data(campaign_tariff_id=tariff_id, campaign_tariff_name=tariff.name)
     await state.set_state(AdminStates.creating_campaign_tariff_days)
     await callback.message.edit_text(
-        get_texts(db_user.language)
-        .t('ADMIN_CAMPAIGN_UI_064', ' Выбран тариф: <b>{v0}</b>\n\n Введите длительность тарифа в днях (1-730):')
-        .format(v0=html.escape(tariff.name)),
-        reply_markup=types.InlineKeyboardMarkup(
-            inline_keyboard=[[types.InlineKeyboardButton(text=' Назад', callback_data='admin_campaigns')]]
+        _campaign_screen(
+            get_texts(db_user.language)
+            .t('ADMIN_CAMPAIGN_UI_064', ' Выбран тариф: <b>{v0}</b>\n\n Введите длительность тарифа в днях (1-730):')
+            .format(v0=html.escape(tariff.name))
         ),
+        reply_markup=types.InlineKeyboardMarkup(
+            inline_keyboard=[[admin_back_button(get_texts(db_user.language), 'admin_campaigns')]]
+        ),
+        parse_mode='HTML',
     )
     await callback.answer()
 
@@ -1927,8 +1941,9 @@ async def process_campaign_tariff_days(
     )
 
     await message.answer(
-        text,
+        _campaign_screen(text, icon='success'),
         reply_markup=get_campaign_management_keyboard(campaign.id, campaign.is_active, db_user.language),
+        parse_mode='HTML',
     )
 
 
@@ -1966,29 +1981,32 @@ async def start_edit_campaign_tariff(
     keyboard = []
     for tariff in tariffs[:15]:
         is_current = campaign.tariff_id == tariff.id
-        emoji = '' if is_current else ''
         keyboard.append(
             [
-                types.InlineKeyboardButton(
-                    text=f'{emoji} {tariff.name}',
+                admin_button(
+                    tariff.name,
                     callback_data=f'campaign_edit_set_tariff_{campaign_id}_{tariff.id}',
+                    icon='success' if is_current else None,
                 )
             ]
         )
-    keyboard.append([types.InlineKeyboardButton(text=' Назад', callback_data=f'admin_campaign_edit_{campaign_id}')])
+    keyboard.append([admin_back_button(get_texts(db_user.language), f'admin_campaign_edit_{campaign_id}')])
 
     current_tariff_name = get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_005', 'Не выбран')
     if campaign.tariff:
         current_tariff_name = campaign.tariff.name
 
     await callback.message.edit_text(
-        get_texts(db_user.language)
-        .t(
-            'ADMIN_CAMPAIGN_UI_065',
-            ' <b>Изменение тарифа кампании</b>\n\nТекущий тариф: <b>{v0}</b>\nВыберите новый тариф:',
-        )
-        .format(v0=html.escape(current_tariff_name)),
+        _campaign_screen(
+            get_texts(db_user.language)
+            .t(
+                'ADMIN_CAMPAIGN_UI_065',
+                ' <b>Изменение тарифа кампании</b>\n\nТекущий тариф: <b>{v0}</b>\nВыберите новый тариф:',
+            )
+            .format(v0=html.escape(current_tariff_name))
+        ),
         reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
+        parse_mode='HTML',
     )
     await callback.answer()
 
@@ -2066,22 +2084,16 @@ async def start_edit_campaign_tariff_days(
     )
 
     await callback.message.edit_text(
-        get_texts(db_user.language)
-        .t(
-            'ADMIN_CAMPAIGN_UI_067',
-            ' <b>Изменение длительности тарифа</b>\n\nТекущее значение: <b>{v0} д.</b>\nВведите новое количество дней (1-730):',
-        )
-        .format(v0=campaign.tariff_duration_days or 0),
-        reply_markup=types.InlineKeyboardMarkup(
-            inline_keyboard=[
-                [
-                    types.InlineKeyboardButton(
-                        text=get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_106', ' Отмена'),
-                        callback_data=f'admin_campaign_edit_{campaign_id}',
-                    )
-                ]
-            ]
+        _campaign_screen(
+            get_texts(db_user.language)
+            .t(
+                'ADMIN_CAMPAIGN_UI_067',
+                ' <b>Изменение длительности тарифа</b>\n\nТекущее значение: <b>{v0} д.</b>\nВведите новое количество дней (1-730):',
+            )
+            .format(v0=campaign.tariff_duration_days or 0)
         ),
+        reply_markup=_campaign_edit_cancel_markup(get_texts(db_user.language), campaign_id),
+        parse_mode='HTML',
     )
     await callback.answer()
 

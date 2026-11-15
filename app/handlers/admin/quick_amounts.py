@@ -2,7 +2,7 @@ import structlog
 from aiogram import Dispatcher, F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
+from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
 
 from app.database.database import AsyncSessionLocal
 from app.localization.texts import get_texts
@@ -15,7 +15,9 @@ from app.services.payment_method_config_service import (
     get_config_by_method_id,
     update_config,
 )
+from app.utils.admin_ui import admin_back_button, admin_button, admin_screen
 from app.utils.decorators import admin_required
+from app.utils.miniapp_buttons import strip_leading_emoji
 
 
 logger = structlog.get_logger(__name__)
@@ -25,6 +27,11 @@ router = Router(name='admin_quick_amounts')
 
 class QuickAmountsStates(StatesGroup):
     waiting_amounts = State()
+
+
+def _label(text: str) -> str:
+    """Текст кнопки без ведущего глифа локали: иконку даёт ``admin_button``."""
+    return strip_leading_emoji(text.strip())
 
 
 def _format_rubles(amount_kopeks: int) -> str:
@@ -57,28 +64,53 @@ def _list_keyboard(configs: list, defaults: dict, language: str = 'ru') -> Inlin
             marker = ''
         else:
             marker = '▫'
+        title = _method_title(config, defaults)
+        text = f'{marker} {title}' if marker else title
         buttons.append(
             [
-                InlineKeyboardButton(
-                    text=f'{marker} {_method_title(config, defaults)}',
+                admin_button(
+                    text,
                     callback_data=f'qamounts:view:{config.method_id}',
                 )
             ]
         )
-    buttons.append([InlineKeyboardButton(text=texts.t('ADMIN_QUICK_BACK'), callback_data='admin_submenu_settings')])
+    buttons.append([admin_back_button(texts, 'admin_submenu_settings', label=_label(texts.t('ADMIN_QUICK_BACK')))])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
 def _view_keyboard(method_id: str, quick_amounts: list[int] | None, language: str = 'ru') -> InlineKeyboardMarkup:
     texts = get_texts(language)
-    buttons = [[InlineKeyboardButton(text=texts.t('ADMIN_QUICK_EDIT'), callback_data=f'qamounts:edit:{method_id}')]]
+    buttons = [
+        [
+            admin_button(
+                _label(texts.t('ADMIN_QUICK_EDIT')),
+                callback_data=f'qamounts:edit:{method_id}',
+                icon='settings',
+                style='success',
+            )
+        ]
+    ]
     if quick_amounts != []:
-        buttons.append([InlineKeyboardButton(text=' Отключить кнопки', callback_data=f'qamounts:disable:{method_id}')])
+        buttons.append(
+            [
+                admin_button(
+                    _label('Отключить кнопки'),
+                    callback_data=f'qamounts:disable:{method_id}',
+                    icon='lock',
+                )
+            ]
+        )
     if quick_amounts is not None:
         buttons.append(
-            [InlineKeyboardButton(text=texts.t('ADMIN_QUICK_RESET'), callback_data=f'qamounts:reset:{method_id}')]
+            [
+                admin_button(
+                    _label(texts.t('ADMIN_QUICK_RESET')),
+                    callback_data=f'qamounts:reset:{method_id}',
+                    icon='refresh',
+                )
+            ]
         )
-    buttons.append([InlineKeyboardButton(text=texts.t('ADMIN_QUICK_LIST_BACK'), callback_data='qamounts:list')])
+    buttons.append([admin_back_button(texts, 'qamounts:list', label=_label(texts.t('ADMIN_QUICK_LIST_BACK')))])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
@@ -97,8 +129,12 @@ async def show_quick_amounts_list(callback: CallbackQuery, state: FSMContext, **
     async with AsyncSessionLocal() as db:
         configs = await get_all_configs(db)
     defaults = _get_method_defaults()
-    text = texts.t('ADMIN_QUICK_OVERVIEW')
-    await callback.message.edit_text(text, reply_markup=_list_keyboard(configs, defaults, texts.language))
+    text = admin_screen(texts.t('ADMIN_QUICK_OVERVIEW'), icon='money', compact=True)
+    await callback.message.edit_text(
+        text,
+        reply_markup=_list_keyboard(configs, defaults, texts.language),
+        parse_mode='HTML',
+    )
     await callback.answer()
 
 
@@ -115,8 +151,9 @@ async def view_quick_amounts(callback: CallbackQuery, state: FSMContext, **kwarg
         return
     defaults = _get_method_defaults()
     await callback.message.edit_text(
-        _view_text(config, defaults, texts.language),
+        admin_screen(_view_text(config, defaults, texts.language), icon='money', compact=True),
         reply_markup=_view_keyboard(method_id, config.quick_amounts, texts.language),
+        parse_mode='HTML',
     )
     await callback.answer()
 
@@ -135,8 +172,9 @@ async def disable_quick_amounts(callback: CallbackQuery, **kwargs) -> None:
     await callback.answer(texts.t('ADMIN_QUICK_DISABLED_NOTICE'), show_alert=True)
     defaults = _get_method_defaults()
     await callback.message.edit_text(
-        _view_text(config, defaults, texts.language),
+        admin_screen(_view_text(config, defaults, texts.language), icon='money', compact=True),
         reply_markup=_view_keyboard(method_id, config.quick_amounts, texts.language),
+        parse_mode='HTML',
     )
 
 
@@ -148,12 +186,23 @@ async def start_edit_quick_amounts(callback: CallbackQuery, state: FSMContext, *
     await state.set_state(QuickAmountsStates.waiting_amounts)
     await state.update_data(quick_amounts_method_id=method_id)
     await callback.message.edit_text(
-        texts.t('ADMIN_QUICK_PROMPT').format(limit=MAX_QUICK_AMOUNTS),
+        admin_screen(
+            texts.t('ADMIN_QUICK_PROMPT').format(limit=MAX_QUICK_AMOUNTS),
+            icon='money',
+            compact=True,
+        ),
         reply_markup=InlineKeyboardMarkup(
             inline_keyboard=[
-                [InlineKeyboardButton(text=texts.t('ADMIN_QUICK_CANCEL'), callback_data=f'qamounts:view:{method_id}')]
+                [
+                    admin_button(
+                        _label(texts.t('ADMIN_QUICK_CANCEL')),
+                        callback_data=f'qamounts:view:{method_id}',
+                        style='danger',
+                    )
+                ]
             ]
         ),
+        parse_mode='HTML',
     )
     await callback.answer()
 
@@ -171,8 +220,9 @@ async def reset_quick_amounts(callback: CallbackQuery, **kwargs) -> None:
     await callback.answer(texts.t('ADMIN_QUICK_RESET_NOTICE'), show_alert=True)
     defaults = _get_method_defaults()
     await callback.message.edit_text(
-        _view_text(config, defaults, texts.language),
+        admin_screen(_view_text(config, defaults, texts.language), icon='money', compact=True),
         reply_markup=_view_keyboard(method_id, config.quick_amounts, texts.language),
+        parse_mode='HTML',
     )
 
 
@@ -198,7 +248,8 @@ async def process_quick_amounts(message: Message, state: FSMContext, **kwargs) -
             raise ValueError(message.text)
     except (ValueError, OverflowError):
         await message.answer(
-            texts.t('ADMIN_QUICK_INVALID').format(limit=MAX_QUICK_AMOUNTS, maximum=MAX_QUICK_AMOUNT_KOPEKS // 100)
+            texts.t('ADMIN_QUICK_INVALID').format(limit=MAX_QUICK_AMOUNTS, maximum=MAX_QUICK_AMOUNT_KOPEKS // 100),
+            parse_mode='HTML',
         )
         return
 
@@ -226,10 +277,16 @@ async def process_quick_amounts(message: Message, state: FSMContext, **kwargs) -
 
     defaults = _get_method_defaults()
     await message.answer(
-        texts.t('ADMIN_QUICK_SUCCESS').format(
-            method=_method_title(config, defaults), amounts=_format_amounts_line(config.quick_amounts, texts.language)
+        admin_screen(
+            texts.t('ADMIN_QUICK_SUCCESS').format(
+                method=_method_title(config, defaults),
+                amounts=_format_amounts_line(config.quick_amounts, texts.language),
+            ),
+            icon='success',
+            compact=True,
         ),
         reply_markup=_view_keyboard(method_id, config.quick_amounts, texts.language),
+        parse_mode='HTML',
     )
 
 

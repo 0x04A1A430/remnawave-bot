@@ -9,6 +9,7 @@ from app.database.crud.subscription import (
 from app.database.models import User
 from app.keyboards.admin import get_admin_trials_keyboard
 from app.localization.texts import get_texts
+from app.utils.admin_ui import admin_screen
 from app.utils.decorators import admin_required, error_handler
 
 
@@ -25,22 +26,21 @@ async def show_trials_panel(
     texts = get_texts(db_user.language)
 
     stats = await get_trial_statistics(db)
-    message = (
-        texts.t('ADMIN_TRIALS_TITLE', ' Управление триалами')
-        + '\n\n'
-        + texts.t(
-            'ADMIN_TRIALS_STATS',
-            '• Использовано всего: {used}\n• Активно сейчас: {active}\n• Доступно к сбросу: {resettable}',
-        ).format(
-            used=stats.get('used_trials', 0),
-            active=stats.get('active_trials', 0),
-            resettable=stats.get('resettable_trials', 0),
-        )
+    title = texts.t('ADMIN_TRIALS_TITLE', 'Управление триалами').strip()
+    stats_text = texts.t(
+        'ADMIN_TRIALS_STATS',
+        '• Использовано всего: {used}\n• Активно сейчас: {active}\n• Доступно к сбросу: {resettable}',
+    ).format(
+        used=stats.get('used_trials', 0),
+        active=stats.get('active_trials', 0),
+        resettable=stats.get('resettable_trials', 0),
     )
+    message = f'<b>{title}</b>\n\n{stats_text}'
 
     await callback.message.edit_text(
-        message,
+        admin_screen(message, icon='trials', compact=True),
         reply_markup=get_admin_trials_keyboard(db_user.language),
+        parse_mode='HTML',
     )
     await callback.answer()
 
@@ -71,10 +71,11 @@ async def reset_trials(
     )
 
     await callback.message.edit_text(
-        message,
+        admin_screen(message, icon='success', compact=True),
         reply_markup=get_admin_trials_keyboard(db_user.language),
+        parse_mode='HTML',
     )
-    await callback.answer(texts.t('ADMIN_TRIALS_RESET_TOAST', ' Сброс завершен'))
+    await callback.answer(texts.t('ADMIN_TRIALS_RESET_TOAST', 'Сброс завершен').strip())
 
 
 def register_handlers(dp: Dispatcher) -> None:

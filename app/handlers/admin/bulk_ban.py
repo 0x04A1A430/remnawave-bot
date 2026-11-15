@@ -11,10 +11,18 @@ from app.database.models import User
 from app.localization.texts import get_texts
 from app.services.bulk_ban_service import bulk_ban_service
 from app.states import AdminStates
+from app.utils.admin_ui import admin_back_button, admin_button, admin_screen
 from app.utils.decorators import admin_required, error_handler
 
 
 logger = structlog.get_logger(__name__)
+
+
+def _back_to_users_markup(texts) -> types.InlineKeyboardMarkup:
+    """Единая кнопка возврата к списку пользователей."""
+    return types.InlineKeyboardMarkup(
+        inline_keyboard=[[admin_back_button(texts, 'admin_users', label=texts.t('ADMIN_BULK_BAN_UI_018', ' Назад'))]]
+    )
 
 
 @admin_required
@@ -23,20 +31,20 @@ async def start_bulk_ban_process(callback: types.CallbackQuery, db_user: User, s
     """
     Начало процесса массовой блокировки пользователей
     """
+    texts = get_texts(db_user.language)
     await callback.message.edit_text(
-        get_texts(db_user.language).t(
-            'ADMIN_BULK_BAN_UI_006',
-            ' <b>Массовая блокировка пользователей</b>\n\nВведите список Telegram ID для блокировки.\n\n<b>Форматы ввода:</b>\n• По одному ID на строку\n• Через запятую\n• Через пробел\n\nПример:\n<code>123456789\n987654321\n111222333</code>\n\nИли:\n<code>123456789, 987654321, 111222333</code>\n\nДля отмены используйте команду /cancel',
+        admin_screen(
+            texts.t(
+                'ADMIN_BULK_BAN_UI_006',
+                ' <b>Массовая блокировка пользователей</b>\n\nВведите список Telegram ID для блокировки.\n\n<b>Форматы ввода:</b>\n• По одному ID на строку\n• Через запятую\n• Через пробел\n\nПример:\n<code>123456789\n987654321\n111222333</code>\n\nИли:\n<code>123456789, 987654321, 111222333</code>\n\nДля отмены используйте команду /cancel',
+            ),
+            icon='lock',
+            compact=True,
         ),
         parse_mode='HTML',
         reply_markup=types.InlineKeyboardMarkup(
             inline_keyboard=[
-                [
-                    types.InlineKeyboardButton(
-                        text=get_texts(db_user.language).t('ADMIN_BULK_BAN_UI_017', ' Отмена'),
-                        callback_data='admin_users',
-                    )
-                ]
+                [admin_back_button(texts, 'admin_users', label=texts.t('ADMIN_BULK_BAN_UI_017', ' Отмена'))]
             ]
         ),
     )
@@ -56,16 +64,7 @@ async def process_bulk_ban_list(message: types.Message, db_user: User, state: FS
             get_texts(db_user.language).t(
                 'ADMIN_BULK_BAN_UI_009', ' Отправьте текстовое сообщение со списком Telegram ID'
             ),
-            reply_markup=types.InlineKeyboardMarkup(
-                inline_keyboard=[
-                    [
-                        types.InlineKeyboardButton(
-                            text=get_texts(db_user.language).t('ADMIN_BULK_BAN_UI_018', ' Назад'),
-                            callback_data='admin_users',
-                        )
-                    ]
-                ]
-            ),
+            reply_markup=_back_to_users_markup(get_texts(db_user.language)),
         )
         return
 
@@ -74,16 +73,7 @@ async def process_bulk_ban_list(message: types.Message, db_user: User, state: FS
     if not input_text:
         await message.answer(
             get_texts(db_user.language).t('ADMIN_BULK_BAN_UI_010', ' Введите корректный список Telegram ID'),
-            reply_markup=types.InlineKeyboardMarkup(
-                inline_keyboard=[
-                    [
-                        types.InlineKeyboardButton(
-                            text=get_texts(db_user.language).t('ADMIN_BULK_BAN_UI_018', ' Назад'),
-                            callback_data='admin_users',
-                        )
-                    ]
-                ]
-            ),
+            reply_markup=_back_to_users_markup(get_texts(db_user.language)),
         )
         return
 
@@ -96,32 +86,14 @@ async def process_bulk_ban_list(message: types.Message, db_user: User, state: FS
             get_texts(db_user.language).t(
                 'ADMIN_BULK_BAN_UI_014', ' Ошибка при обработке списка ID. Проверьте формат ввода.'
             ),
-            reply_markup=types.InlineKeyboardMarkup(
-                inline_keyboard=[
-                    [
-                        types.InlineKeyboardButton(
-                            text=get_texts(db_user.language).t('ADMIN_BULK_BAN_UI_018', ' Назад'),
-                            callback_data='admin_users',
-                        )
-                    ]
-                ]
-            ),
+            reply_markup=_back_to_users_markup(get_texts(db_user.language)),
         )
         return
 
     if not telegram_ids:
         await message.answer(
             get_texts(db_user.language).t('ADMIN_BULK_BAN_UI_011', ' Не найдено корректных Telegram ID в списке'),
-            reply_markup=types.InlineKeyboardMarkup(
-                inline_keyboard=[
-                    [
-                        types.InlineKeyboardButton(
-                            text=get_texts(db_user.language).t('ADMIN_BULK_BAN_UI_018', ' Назад'),
-                            callback_data='admin_users',
-                        )
-                    ]
-                ]
-            ),
+            reply_markup=_back_to_users_markup(get_texts(db_user.language)),
         )
         return
 
@@ -130,16 +102,7 @@ async def process_bulk_ban_list(message: types.Message, db_user: User, state: FS
             get_texts(db_user.language)
             .t('ADMIN_BULK_BAN_UI_012', ' Слишком много ID в списке ({v0}). Максимум: 1000')
             .format(v0=len(telegram_ids)),
-            reply_markup=types.InlineKeyboardMarkup(
-                inline_keyboard=[
-                    [
-                        types.InlineKeyboardButton(
-                            text=get_texts(db_user.language).t('ADMIN_BULK_BAN_UI_018', ' Назад'),
-                            callback_data='admin_users',
-                        )
-                    ]
-                ]
-            ),
+            reply_markup=_back_to_users_markup(get_texts(db_user.language)),
         )
         return
 
@@ -198,14 +161,16 @@ async def process_bulk_ban_list(message: types.Message, db_user: User, state: FS
                 )
 
         await message.answer(
-            result_text,
+            admin_screen(result_text, icon='lock', compact=True),
             parse_mode='HTML',
             reply_markup=types.InlineKeyboardMarkup(
                 inline_keyboard=[
                     [
-                        types.InlineKeyboardButton(
-                            text=get_texts(db_user.language).t('ADMIN_BULK_BAN_UI_019', ' К пользователям'),
+                        admin_button(
+                            get_texts(db_user.language).t('ADMIN_BULK_BAN_UI_019', ' К пользователям'),
                             callback_data='admin_users',
+                            icon='users',
+                            style='primary',
                         )
                     ]
                 ]
@@ -218,16 +183,7 @@ async def process_bulk_ban_list(message: types.Message, db_user: User, state: FS
             get_texts(db_user.language).t(
                 'ADMIN_BULK_BAN_UI_016', ' Произошла ошибка при выполнении массовой блокировки'
             ),
-            reply_markup=types.InlineKeyboardMarkup(
-                inline_keyboard=[
-                    [
-                        types.InlineKeyboardButton(
-                            text=get_texts(db_user.language).t('ADMIN_BULK_BAN_UI_018', ' Назад'),
-                            callback_data='admin_users',
-                        )
-                    ]
-                ]
-            ),
+            reply_markup=_back_to_users_markup(get_texts(db_user.language)),
         )
 
     await state.clear()

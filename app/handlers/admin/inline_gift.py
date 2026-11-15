@@ -61,6 +61,7 @@ from app.services.inline_gift_draft_service import (
     drop_gift_draft,
     save_gift_draft,
 )
+from app.utils.admin_ui import admin_button, admin_screen
 
 
 logger = structlog.get_logger(__name__)
@@ -476,10 +477,18 @@ def _build_subscription_caption(
 
     if multi_count > 0:
         header = texts.t('INLINE_GIFT_CAPTION_HEADER_RANDOM', 'Подарочная подписка — первым {n}').format(n=multi_count)
-        return f'<b>{header}</b>\n\n<blockquote>{body}</blockquote>\n\n<code>{hint}</code>'
+        return admin_screen(
+            f'<b>{header}</b>\n\n<blockquote>{body}</blockquote>\n\n<code>{hint}</code>',
+            icon='gift',
+            compact=True,
+        )
 
     header = texts.t('INLINE_GIFT_CAPTION_HEADER', 'Подарочная подписка для')
-    return f'<b>{header} {_recipient_html(display)}</b>\n\n<blockquote>{body}</blockquote>\n\n<code>{hint}</code>'
+    return admin_screen(
+        f'<b>{header} {_recipient_html(display)}</b>\n\n<blockquote>{body}</blockquote>\n\n<code>{hint}</code>',
+        icon='gift',
+        compact=True,
+    )
 
 
 def _temp_body_line(gb: int, days: int, texts) -> str:
@@ -516,7 +525,11 @@ def _build_combo_caption(
     body = '\n'.join(lines) if lines else '—'
     hint = texts.t('INLINE_GIFT_CAPTION_HINT', 'Нажмите кнопку ниже, чтобы активировать.')
     header = texts.t('INLINE_GIFT_CAPTION_HEADER', 'Подарочная подписка для')
-    return f'<b>{header} {_recipient_html(display)}</b>\n\n<blockquote>{body}</blockquote>\n\n<code>{hint}</code>'
+    return admin_screen(
+        f'<b>{header} {_recipient_html(display)}</b>\n\n<blockquote>{body}</blockquote>\n\n<code>{hint}</code>',
+        icon='gift',
+        compact=True,
+    )
 
 
 def _gift_syntax_thumb(texts) -> str:
@@ -668,12 +681,14 @@ async def handle_admin_inline_query(inline_query: types.InlineQuery) -> None:
         keyboard = types.InlineKeyboardMarkup(
             inline_keyboard=[
                 [
-                    types.InlineKeyboardButton(
-                        text=texts.t(
+                    admin_button(
+                        texts.t(
                             'INLINE_GIFT_ACTIVATE_BUTTON_N',
                             'Активировать (осталось: {n})',
                         ).format(n=parsed.multi_count),
                         url=deep_link,
+                        icon='gift',
+                        style='success',
                     )
                 ]
             ]
@@ -771,9 +786,11 @@ async def handle_admin_inline_query(inline_query: types.InlineQuery) -> None:
     keyboard = types.InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                types.InlineKeyboardButton(
-                    text=texts.t('INLINE_GIFT_ACTIVATE_BUTTON', 'Активировать'),
+                admin_button(
+                    texts.t('INLINE_GIFT_ACTIVATE_BUTTON', 'Активировать'),
                     url=deep_link,
+                    icon='gift',
+                    style='success',
                 )
             ]
         ]

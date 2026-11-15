@@ -48,9 +48,11 @@ from app.services.remnawave_service import RemnaWaveService
 from app.services.subscription_service import SubscriptionService
 from app.services.user_service import UserService
 from app.states import AdminStates
+from app.utils.admin_ui import admin_back_button, admin_button, admin_screen
 from app.utils.decorators import admin_required, error_handler
 from app.utils.formatters import format_datetime, format_time_ago
 from app.utils.formatting import user_html_link
+from app.utils.miniapp_buttons import strip_leading_emoji
 from app.utils.photo_message import safe_edit_or_resend
 from app.utils.user_utils import get_effective_referral_commission_percent
 
@@ -114,7 +116,7 @@ def _get_user_status_emoji(user: User) -> str:
         return ''
     if user.status == UserStatus.BLOCKED.value:
         return '×'
-    return '\ufe0f'
+    return ''
 
 
 def _get_subscription_emoji(user: User) -> str:
@@ -303,19 +305,23 @@ async def show_users_menu(callback: types.CallbackQuery, db_user: User, db: Asyn
     user_service = UserService()
     stats = await user_service.get_user_statistics(db)
 
-    text = f""" <b>Управление пользователями</b>
+    text = f"""<b>Управление пользователями</b>
 
- <b>Статистика:</b>
+<b>Статистика:</b>
 • Всего: {stats['total_users']}
 • Активных: {stats['active_users']}
 • Заблокированных: {stats['blocked_users']}
 
- <b>Новые пользователи:</b>
+<b>Новые пользователи:</b>
 • Сегодня: {stats['new_today']}
 • За неделю: {stats['new_week']}
 • За месяц: {stats['new_month']}"""
 
-    await callback.message.edit_text(compact_text(text), reply_markup=get_admin_users_keyboard(db_user.language))
+    await callback.message.edit_text(
+        admin_screen(text, icon='users', compact=True),
+        reply_markup=get_admin_users_keyboard(db_user.language),
+        parse_mode='HTML',
+    )
     await callback.answer()
 
 
@@ -347,13 +353,14 @@ async def show_users_list(
 
     if not users_data['users']:
         await callback.message.edit_text(
-            texts.t('ADMIN_USERS_LIST_008', ' Пользователи не найдены'),
+            admin_screen(texts.t('ADMIN_USERS_LIST_008', 'Пользователи не найдены'), icon='users', compact=True),
             reply_markup=get_admin_users_keyboard(db_user.language),
+            parse_mode='HTML',
         )
         await callback.answer()
         return
 
-    text = texts.t('ADMIN_USERS_LIST_004', ' <b>Список пользователей</b> (стр. {value1}/{value2})\n\n').format(
+    text = texts.t('ADMIN_USERS_LIST_004', '<b>Список пользователей</b> (стр. {value1}/{value2})\n\n').format(
         value1=page, value2=users_data['total_pages']
     )
     text += texts.t('ADMIN_USERS_LIST_001', 'Нажмите на пользователя для управления:')
@@ -398,21 +405,26 @@ async def show_users_list(
     keyboard.extend(
         [
             [
-                types.InlineKeyboardButton(
-                    text=texts.t('ADMIN_USERS_LIST_017', ' Поиск'),
+                admin_button(
+                    strip_leading_emoji(texts.t('ADMIN_USERS_LIST_017', 'Поиск')),
                     callback_data='admin_users_search',
+                    icon='user',
                 ),
-                types.InlineKeyboardButton(
-                    text=texts.t('ADMIN_USERS_LIST_018', ' Статистика'),
+                admin_button(
+                    strip_leading_emoji(texts.t('ADMIN_USERS_LIST_018', 'Статистика')),
                     callback_data='admin_users_stats',
+                    icon='stats',
+                    style='primary',
                 ),
             ],
-            [types.InlineKeyboardButton(text=' Назад', callback_data='admin_users')],
+            [admin_back_button(texts, 'admin_users')],
         ]
     )
 
     await callback.message.edit_text(
-        compact_text(text), reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard)
+        admin_screen(text, icon='users', compact=True),
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
+        parse_mode='HTML',
     )
     await callback.answer()
 
@@ -1527,7 +1539,7 @@ async def show_user_management(callback: types.CallbackQuery, db_user: User, db:
             )
         sections.append('\n'.join(restriction_lines))
 
-    text = '\n\n'.join(sections)
+    text = admin_screen('\n\n'.join(sections), icon='user', compact=True)
 
     # Проверяем состояние, чтобы определить, откуда пришел пользователь
     current_state = await state.get_state()
@@ -1553,9 +1565,11 @@ async def show_user_management(callback: types.CallbackQuery, db_user: User, db:
     # Если пришли из тикета — добавим в начало кнопку возврата к тикету
     try:
         if origin_ticket_id:
-            back_to_ticket_btn = types.InlineKeyboardButton(
-                text=_ui_texts.t('ADMIN_USERS_PROFILE_041', ' Вернуться к тикету'),
+            back_to_ticket_btn = admin_button(
+                _ui_texts.t('ADMIN_USERS_PROFILE_041', 'Вернуться к тикету'),
                 callback_data=f'admin_view_ticket_{origin_ticket_id}',
+                icon='support',
+                style='primary',
             )
             kb.inline_keyboard.insert(0, [back_to_ticket_btn])
     except Exception:

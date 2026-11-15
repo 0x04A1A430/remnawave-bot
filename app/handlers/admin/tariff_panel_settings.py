@@ -10,7 +10,7 @@ import structlog
 from aiogram import Dispatcher, F, types
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import InlineKeyboardMarkup
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.crud.tariff import get_tariff_by_id, update_tariff
@@ -18,7 +18,9 @@ from app.database.models import Tariff, User
 from app.localization.texts import get_texts
 from app.services.tariff_squad_sync import schedule_tariff_squad_sync
 from app.states import AdminStates
+from app.utils.admin_ui import admin_back_button, admin_button, admin_screen
 from app.utils.decorators import admin_required, error_handler
+from app.utils.miniapp_buttons import strip_leading_emoji
 from app.utils.panel_tag import PANEL_TAG_RULES, normalize_panel_tag
 
 
@@ -29,9 +31,9 @@ _NO_EXTERNAL_SQUAD = '-'
 
 def _yes_no(value: bool, language: str = 'ru') -> str:
     return (
-        get_texts(language).t('ADMIN_TARIFF_HELPER_YES', ' Да')
+        get_texts(language).t('ADMIN_TARIFF_HELPER_YES', 'Да')
         if value
-        else get_texts(language).t('ADMIN_TARIFF_HELPER_NO', ' Нет')
+        else get_texts(language).t('ADMIN_TARIFF_HELPER_NO', 'Нет')
     )
 
 
@@ -77,7 +79,7 @@ def render_panel_settings(tariff: Tariff, language: str = 'ru') -> str:
         get_texts(language)
         .t(
             'ADMIN_TARIFF_HELPER_RENDER_PANEL_SETTINGS_1',
-            ' <b>Ещё настройки</b>\n\nТариф: <b>{v0}</b>\n\n{v1}\n• Порядок в списке: {v2}\n\nТег панели показывается у пользователя в списке панели Remnawave — по нему видно тариф. Пусто — общий тег из настроек (триальный/платный).',
+            '<b>Ещё настройки</b>\n\nТариф: <b>{v0}</b>\n\n{v1}\n• Порядок в списке: {v2}\n\nТег панели показывается у пользователя в списке панели Remnawave — по нему видно тариф. Пусто — общий тег из настроек (триальный/платный).',
         )
         .format(
             v0=html.escape(tariff.name),
@@ -94,48 +96,68 @@ def get_panel_settings_keyboard(tariff: Tariff, language: str) -> InlineKeyboard
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                InlineKeyboardButton(
-                    text=get_texts(language).t('ADMIN_TARIFF_HELPER_TAG_BUTTON', ' Тег панели'),
+                admin_button(
+                    strip_leading_emoji(texts.t('ADMIN_TARIFF_HELPER_TAG_BUTTON', 'Тег панели')),
                     callback_data=f'admin_tariff_edit_panel_tag:{tariff.id}',
+                    icon='id',
+                    style='primary',
                 ),
-                InlineKeyboardButton(
-                    text=get_texts(language).t('ADMIN_TARIFF_HELPER_SQUAD_BUTTON', ' Внешний сквад'),
+                admin_button(
+                    strip_leading_emoji(texts.t('ADMIN_TARIFF_HELPER_SQUAD_BUTTON', 'Внешний сквад')),
                     callback_data=f'admin_tariff_edit_ext_squad:{tariff.id}',
+                    icon='servers',
+                    style='primary',
                 ),
             ],
             [
-                InlineKeyboardButton(
-                    text=get_texts(language).t('ADMIN_TARIFF_HELPER_LAVA_BUTTON', ' Продукт Lava'),
+                admin_button(
+                    strip_leading_emoji(texts.t('ADMIN_TARIFF_HELPER_LAVA_BUTTON', 'Продукт Lava')),
                     callback_data=f'admin_tariff_edit_lava:{tariff.id}',
+                    icon='link',
+                    style='primary',
                 ),
-                InlineKeyboardButton(
-                    text=get_texts(language).t('ADMIN_TARIFF_HELPER_ORDER_BUTTON', ' Порядок'),
+                admin_button(
+                    strip_leading_emoji(texts.t('ADMIN_TARIFF_HELPER_ORDER_BUTTON', 'Порядок')),
                     callback_data=f'admin_tariff_edit_order:{tariff.id}',
+                    icon='settings',
+                    style='primary',
                 ),
             ],
             [
-                InlineKeyboardButton(
-                    text=get_texts(language).t('ADMIN_TARIFF_HELPER_GIFT_DISABLE_BUTTON', ' В подарках: выключить')
-                    if gift
-                    else get_texts(language).t('ADMIN_TARIFF_HELPER_GIFT_ENABLE_BUTTON', ' В подарках: включить'),
+                admin_button(
+                    strip_leading_emoji(
+                        texts.t('ADMIN_TARIFF_HELPER_GIFT_DISABLE_BUTTON', 'В подарках: выключить')
+                        if gift
+                        else texts.t('ADMIN_TARIFF_HELPER_GIFT_ENABLE_BUTTON', 'В подарках: включить')
+                    ),
                     callback_data=f'admin_tariff_toggle_gift:{tariff.id}',
+                    icon='gift',
+                    style='success' if not gift else 'danger',
                 )
             ],
             [
-                InlineKeyboardButton(
-                    text=get_texts(language).t('ADMIN_TARIFF_HELPER_TOPUP_DISABLE_BUTTON', ' Докупка: запретить')
-                    if allow_topup
-                    else get_texts(language).t('ADMIN_TARIFF_HELPER_TOPUP_ENABLE_BUTTON', ' Докупка: разрешить'),
+                admin_button(
+                    strip_leading_emoji(
+                        texts.t('ADMIN_TARIFF_HELPER_TOPUP_DISABLE_BUTTON', 'Докупка: запретить')
+                        if allow_topup
+                        else texts.t('ADMIN_TARIFF_HELPER_TOPUP_ENABLE_BUTTON', 'Докупка: разрешить')
+                    ),
                     callback_data=f'admin_tariff_toggle_allow_topup:{tariff.id}',
+                    icon='coin',
+                    style='success' if not allow_topup else 'danger',
                 )
             ],
-            [InlineKeyboardButton(text=texts.BACK, callback_data=f'admin_tariff_view:{tariff.id}')],
+            [admin_back_button(texts, f'admin_tariff_view:{tariff.id}')],
         ]
     )
 
 
 async def _show(target: types.Message, tariff: Tariff, language: str, *, edit: bool, prefix: str = '') -> None:
-    text = f'{prefix}{render_panel_settings(tariff, language=language)}'
+    text = admin_screen(
+        strip_leading_emoji(f'{prefix}{render_panel_settings(tariff, language=language)}'),
+        icon='settings',
+        compact=True,
+    )
     keyboard = get_panel_settings_keyboard(tariff, language)
     if edit:
         await target.edit_text(text, reply_markup=keyboard, parse_mode='HTML')
@@ -214,16 +236,18 @@ async def _start_field_edit(
     await state.update_data(tariff_id=tariff.id, language=db_user.language)
     texts = get_texts(db_user.language)
     await callback.message.edit_text(
-        get_texts(db_user.language)
-        .t(
-            'ADMIN_TARIFF_HELPER_START_FIELD_EDIT_1',
-            '{v0}\n\nТариф: <b>{v1}</b>\nТекущее значение: <b>{v2}</b>\n\n{v3}',
-        )
-        .format(v0=title, v1=html.escape(tariff.name), v2=current_value, v3=prompt),
+        admin_screen(
+            get_texts(db_user.language)
+            .t(
+                'ADMIN_TARIFF_HELPER_START_FIELD_EDIT_1',
+                '{v0}\n\nТариф: <b>{v1}</b>\nТекущее значение: <b>{v2}</b>\n\n{v3}',
+            )
+            .format(v0=title, v1=html.escape(tariff.name), v2=current_value, v3=prompt),
+            icon='settings',
+            compact=True,
+        ),
         reply_markup=InlineKeyboardMarkup(
-            inline_keyboard=[
-                [InlineKeyboardButton(text=texts.CANCEL, callback_data=f'admin_tariff_edit_more:{tariff.id}')]
-            ]
+            inline_keyboard=[[admin_back_button(texts, f'admin_tariff_edit_more:{tariff.id}', label=texts.CANCEL)]]
         ),
         parse_mode='HTML',
     )
@@ -420,22 +444,22 @@ def _external_squad_keyboard(tariff: Tariff, squads: list, language: str) -> Inl
     current = getattr(tariff, 'external_squad_uuid', None)
     buttons = [
         [
-            InlineKeyboardButton(
-                text=f'{"*" if current is None else ""} Без внешнего сквада',
+            admin_button(
+                '* Без внешнего сквада' if current is None else 'Без внешнего сквада',
                 callback_data=f'admin_tariff_set_ext_squad:{tariff.id}:{_NO_EXTERNAL_SQUAD}',
             )
         ]
     ]
     for squad in squads:
-        prefix = '*' if squad.uuid == current else ''
+        prefix = '* ' if squad.uuid == current else ''
         buttons.append(
             [
-                InlineKeyboardButton(
-                    text=f'{prefix} {squad.name}', callback_data=f'admin_tariff_set_ext_squad:{tariff.id}:{squad.uuid}'
+                admin_button(
+                    f'{prefix}{squad.name}', callback_data=f'admin_tariff_set_ext_squad:{tariff.id}:{squad.uuid}'
                 )
             ]
         )
-    buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data=f'admin_tariff_edit_more:{tariff.id}')])
+    buttons.append([admin_back_button(texts, f'admin_tariff_edit_more:{tariff.id}')])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
@@ -444,14 +468,14 @@ def _external_squad_text(tariff: Tariff, squads: list, language: str = 'ru') -> 
         ''
         if squads
         else get_texts(language).t(
-            'ADMIN_TARIFF_HELPER_NO_EXTERNAL_SQUADS', '\n\n Список сквадов из панели пуст или панель недоступна.'
+            'ADMIN_TARIFF_HELPER_NO_EXTERNAL_SQUADS', '\n\n⚠ Список сквадов из панели пуст или панель недоступна.'
         )
     )
     return (
         get_texts(language)
         .t(
             'ADMIN_TARIFF_HELPER_EXTERNAL_SQUAD_TEXT_1',
-            ' <b>Внешний сквад Remnawave</b>\n\nТариф: <b>{v0}</b>\nСейчас: <b>{v1}</b>\n\nПользователи тарифа попадают в выбранный сквад; смена применяется ко всем живым подпискам тарифа.{v2}',
+            '<b>Внешний сквад Remnawave</b>\n\nТариф: <b>{v0}</b>\nСейчас: <b>{v1}</b>\n\nПользователи тарифа попадают в выбранный сквад; смена применяется ко всем живым подпискам тарифа.{v2}',
         )
         .format(v0=html.escape(tariff.name), v1=_ext_squad_display(tariff, language=language), v2=note)
     )
@@ -469,7 +493,11 @@ async def start_edit_external_squad(callback: types.CallbackQuery, db_user: User
         return
     squads = await load_external_squads()
     await callback.message.edit_text(
-        _external_squad_text(tariff, squads, language=db_user.language),
+        admin_screen(
+            strip_leading_emoji(_external_squad_text(tariff, squads, language=db_user.language)),
+            icon='servers',
+            compact=True,
+        ),
         reply_markup=_external_squad_keyboard(tariff, squads, db_user.language),
         parse_mode='HTML',
     )
@@ -502,7 +530,11 @@ async def set_external_squad(callback: types.CallbackQuery, db_user: User, db: A
 
     squads = await load_external_squads()
     await callback.message.edit_text(
-        _external_squad_text(tariff, squads, language=db_user.language),
+        admin_screen(
+            strip_leading_emoji(_external_squad_text(tariff, squads, language=db_user.language)),
+            icon='servers',
+            compact=True,
+        ),
         reply_markup=_external_squad_keyboard(tariff, squads, db_user.language),
         parse_mode='HTML',
     )

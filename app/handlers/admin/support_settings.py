@@ -13,10 +13,32 @@ from app.database.models import User
 from app.localization.texts import get_texts
 from app.services.support_settings_service import SupportSettingsService
 from app.states import SupportSettingsStates
+from app.utils.admin_ui import admin_back_button, admin_button, admin_screen
 from app.utils.decorators import admin_required, error_handler
 
 
 logger = structlog.get_logger(__name__)
+
+
+def _label(text: str) -> str:
+    """Текст кнопки без ведущих служебных пробелов: иконку даёт ``admin_button``."""
+    return text.strip()
+
+
+def _delete_keyboard(texts) -> types.InlineKeyboardMarkup:
+    """Единая кнопка «Удалить» под служебными уведомлениями."""
+    return types.InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                admin_button(
+                    _label(texts.t('DELETE_MESSAGE', 'Удалить')),
+                    callback_data='admin_support_delete_msg',
+                    icon='delete',
+                    style='danger',
+                )
+            ]
+        ]
+    )
 
 
 def _get_support_settings_keyboard(language: str) -> types.InlineKeyboardMarkup:
@@ -33,44 +55,46 @@ def _get_support_settings_keyboard(language: str) -> types.InlineKeyboardMarkup:
     status_enabled = texts.t('ADMIN_SUPPORT_SETTINGS_STATUS_ENABLED', 'Включены')
     status_disabled = texts.t('ADMIN_SUPPORT_SETTINGS_STATUS_DISABLED', 'Отключены')
 
-    def mode_button(label_key: str, default: str, active: bool) -> str:
-        prefix = '' if active else ''
-        return f'{prefix} {texts.t(label_key, default)}'
-
     rows.append(
         [
-            types.InlineKeyboardButton(
-                text=(
-                    f'{"" if menu_enabled else ""} '
-                    f'{texts.t("ADMIN_SUPPORT_SETTINGS_MENU_LABEL", "Пункт «Техподдержка» в меню")}'
-                ),
+            admin_button(
+                _label(texts.t('ADMIN_SUPPORT_SETTINGS_MENU_LABEL', 'Пункт «Техподдержка» в меню')),
                 callback_data='admin_support_toggle_menu',
+                icon='success' if menu_enabled else 'lock',
             )
         ]
     )
 
     rows.append(
         [
-            types.InlineKeyboardButton(
-                text=mode_button('ADMIN_SUPPORT_SETTINGS_MODE_TICKETS', 'Тикеты', mode == 'tickets'),
+            admin_button(
+                _label(texts.t('ADMIN_SUPPORT_SETTINGS_MODE_TICKETS', 'Тикеты')),
                 callback_data='admin_support_mode_tickets',
+                icon='support',
+                style='success' if mode == 'tickets' else None,
             ),
-            types.InlineKeyboardButton(
-                text=mode_button('ADMIN_SUPPORT_SETTINGS_MODE_CONTACT', 'Контакт', mode == 'contact'),
+            admin_button(
+                _label(texts.t('ADMIN_SUPPORT_SETTINGS_MODE_CONTACT', 'Контакт')),
                 callback_data='admin_support_mode_contact',
+                icon='user',
+                style='success' if mode == 'contact' else None,
             ),
-            types.InlineKeyboardButton(
-                text=mode_button('ADMIN_SUPPORT_SETTINGS_MODE_BOTH', 'Оба', mode == 'both'),
+            admin_button(
+                _label(texts.t('ADMIN_SUPPORT_SETTINGS_MODE_BOTH', 'Оба')),
                 callback_data='admin_support_mode_both',
+                icon='users',
+                style='success' if mode == 'both' else None,
             ),
         ]
     )
 
     rows.append(
         [
-            types.InlineKeyboardButton(
-                text=texts.t('ADMIN_SUPPORT_SETTINGS_EDIT_DESCRIPTION', ' Изменить описание'),
+            admin_button(
+                _label(texts.t('ADMIN_SUPPORT_SETTINGS_EDIT_DESCRIPTION', 'Изменить описание')),
                 callback_data='admin_support_edit_desc',
+                icon='document',
+                style='success',
             )
         ]
     )
@@ -78,25 +102,25 @@ def _get_support_settings_keyboard(language: str) -> types.InlineKeyboardMarkup:
     # Notifications block
     rows.append(
         [
-            types.InlineKeyboardButton(
-                text=(
-                    f'{"" if admin_notif else ""} '
-                    f'{texts.t("ADMIN_SUPPORT_SETTINGS_ADMIN_NOTIFICATIONS", "Админ-уведомления")}: '
+            admin_button(
+                (
+                    f'{_label(texts.t("ADMIN_SUPPORT_SETTINGS_ADMIN_NOTIFICATIONS", "Админ-уведомления"))}: '
                     f'{status_enabled if admin_notif else status_disabled}'
                 ),
                 callback_data='admin_support_toggle_admin_notifications',
+                icon='success' if admin_notif else 'lock',
             )
         ]
     )
     rows.append(
         [
-            types.InlineKeyboardButton(
-                text=(
-                    f'{"" if user_notif else ""} '
-                    f'{texts.t("ADMIN_SUPPORT_SETTINGS_USER_NOTIFICATIONS", "Пользовательские уведомления")}: '
+            admin_button(
+                (
+                    f'{_label(texts.t("ADMIN_SUPPORT_SETTINGS_USER_NOTIFICATIONS", "Пользовательские уведомления"))}: '
                     f'{status_enabled if user_notif else status_disabled}'
                 ),
                 callback_data='admin_support_toggle_user_notifications',
+                icon='success' if user_notif else 'lock',
             )
         ]
     )
@@ -104,23 +128,22 @@ def _get_support_settings_keyboard(language: str) -> types.InlineKeyboardMarkup:
     # SLA block
     rows.append(
         [
-            types.InlineKeyboardButton(
-                text=(
-                    f'{"" if sla_enabled else ""} '
-                    f'{texts.t("ADMIN_SUPPORT_SETTINGS_SLA_LABEL", "SLA")}: '
-                    f'{status_enabled if sla_enabled else status_disabled}'
-                ),
+            admin_button(
+                f'{_label(texts.t("ADMIN_SUPPORT_SETTINGS_SLA_LABEL", "SLA"))}: '
+                f'{status_enabled if sla_enabled else status_disabled}',
                 callback_data='admin_support_toggle_sla',
+                icon='success' if sla_enabled else 'lock',
             )
         ]
     )
     rows.append(
         [
-            types.InlineKeyboardButton(
-                text=texts.t('ADMIN_SUPPORT_SETTINGS_SLA_TIME', ' Время SLA: {minutes} мин').format(
-                    minutes=sla_minutes
+            admin_button(
+                _label(
+                    texts.t('ADMIN_SUPPORT_SETTINGS_SLA_TIME', 'Время SLA: {minutes} мин').format(minutes=sla_minutes)
                 ),
                 callback_data='admin_support_set_sla_minutes',
+                icon='calendar',
             )
         ]
     )
@@ -130,26 +153,34 @@ def _get_support_settings_keyboard(language: str) -> types.InlineKeyboardMarkup:
     mod_count = len(moderators)
     rows.append(
         [
-            types.InlineKeyboardButton(
-                text=texts.t('ADMIN_SUPPORT_SETTINGS_MODERATORS_COUNT', ' Модераторы: {count}').format(count=mod_count),
+            admin_button(
+                _label(
+                    texts.t('ADMIN_SUPPORT_SETTINGS_MODERATORS_COUNT', 'Модераторы: {count}').format(count=mod_count)
+                ),
                 callback_data='admin_support_list_moderators',
+                icon='users',
+                style='primary',
             )
         ]
     )
     rows.append(
         [
-            types.InlineKeyboardButton(
-                text=texts.t('ADMIN_SUPPORT_SETTINGS_ADD_MODERATOR', ' Назначить модератора'),
+            admin_button(
+                _label(texts.t('ADMIN_SUPPORT_SETTINGS_ADD_MODERATOR', 'Назначить модератора')),
                 callback_data='admin_support_add_moderator',
+                icon='user',
+                style='success',
             ),
-            types.InlineKeyboardButton(
-                text=texts.t('ADMIN_SUPPORT_SETTINGS_REMOVE_MODERATOR', ' Удалить модератора'),
+            admin_button(
+                _label(texts.t('ADMIN_SUPPORT_SETTINGS_REMOVE_MODERATOR', 'Удалить модератора')),
                 callback_data='admin_support_remove_moderator',
+                icon='delete',
+                style='danger',
             ),
         ]
     )
 
-    rows.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='admin_submenu_support', style='danger')])
+    rows.append([admin_back_button(texts, 'admin_submenu_support')])
 
     return types.InlineKeyboardMarkup(inline_keyboard=rows)
 
@@ -159,15 +190,18 @@ def _get_support_settings_keyboard(language: str) -> types.InlineKeyboardMarkup:
 async def show_support_settings(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
     texts = get_texts(db_user.language)
     desc = SupportSettingsService.get_support_info_text(db_user.language)
-    await callback.message.edit_text(
-        texts.t('ADMIN_SUPPORT_SETTINGS_TITLE', ' <b>Настройки поддержки</b>')
+    header = admin_screen(
+        texts.t('ADMIN_SUPPORT_SETTINGS_TITLE', '<b>Настройки поддержки</b>')
         + '\n\n'
         + texts.t(
             'ADMIN_SUPPORT_SETTINGS_DESCRIPTION',
             'Режим работы и видимость в меню. Ниже текущее описание меню поддержки:',
-        )
-        + '\n\n'
-        + desc,
+        ),
+        icon='support',
+        compact=True,
+    )
+    await callback.message.edit_text(
+        f'{header}\n\n{desc}',
         reply_markup=_get_support_settings_keyboard(db_user.language),
         parse_mode='HTML',
     )
@@ -216,16 +250,16 @@ class SupportAdvancedStates(StatesGroup):
 async def start_set_sla_minutes(callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext):
     texts = get_texts(db_user.language)
     await callback.message.edit_text(
-        texts.t(
-            'ADMIN_SUPPORT_SLA_SETUP_PROMPT',
-            ' <b>Настройка SLA</b>\n\nВведите количество минут ожидания ответа (целое число > 0):',
+        admin_screen(
+            texts.t(
+                'ADMIN_SUPPORT_SLA_SETUP_PROMPT',
+                '<b>Настройка SLA</b>\n\nВведите количество минут ожидания ответа (целое число > 0):',
+            ),
+            icon='settings',
+            compact=True,
         ),
         parse_mode='HTML',
-        reply_markup=types.InlineKeyboardMarkup(
-            inline_keyboard=[
-                [types.InlineKeyboardButton(text=texts.BACK, callback_data='admin_support_settings', style='danger')]
-            ]
-        ),
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[admin_back_button(texts, 'admin_support_settings')]]),
     )
     await state.set_state(SupportAdvancedStates.waiting_for_sla_minutes)
     await callback.answer()
@@ -241,20 +275,15 @@ async def handle_sla_minutes(message: types.Message, db_user: User, db: AsyncSes
         if minutes <= 0 or minutes > 1440:
             raise ValueError
     except Exception:
-        await message.answer(texts.t('ADMIN_SUPPORT_SLA_INVALID', ' Введите корректное число минут (1-1440)'))
+        await message.answer(texts.t('ADMIN_SUPPORT_SLA_INVALID', 'Введите корректное число минут (1-1440)'))
         return
     await SupportSettingsService.set_sla_minutes(db, minutes)
     await state.clear()
-    markup = types.InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                types.InlineKeyboardButton(
-                    text=texts.t('DELETE_MESSAGE', ' Удалить'), callback_data='admin_support_delete_msg'
-                )
-            ]
-        ]
+    await message.answer(
+        admin_screen(texts.t('ADMIN_SUPPORT_SLA_SAVED', 'Значение SLA сохранено'), icon='success', compact=True),
+        reply_markup=_delete_keyboard(texts),
+        parse_mode='HTML',
     )
-    await message.answer(texts.t('ADMIN_SUPPORT_SLA_SAVED', ' Значение SLA сохранено'), reply_markup=markup)
 
 
 @admin_required
@@ -262,16 +291,16 @@ async def handle_sla_minutes(message: types.Message, db_user: User, db: AsyncSes
 async def start_add_moderator(callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext):
     texts = get_texts(db_user.language)
     await callback.message.edit_text(
-        texts.t(
-            'ADMIN_SUPPORT_ASSIGN_MODERATOR_PROMPT',
-            ' <b>Назначение модератора</b>\n\nОтправьте Telegram ID пользователя (число)',
+        admin_screen(
+            texts.t(
+                'ADMIN_SUPPORT_ASSIGN_MODERATOR_PROMPT',
+                '<b>Назначение модератора</b>\n\nОтправьте Telegram ID пользователя (число)',
+            ),
+            icon='user',
+            compact=True,
         ),
         parse_mode='HTML',
-        reply_markup=types.InlineKeyboardMarkup(
-            inline_keyboard=[
-                [types.InlineKeyboardButton(text=texts.BACK, callback_data='admin_support_settings', style='danger')]
-            ]
-        ),
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[admin_back_button(texts, 'admin_support_settings')]]),
     )
     await state.set_state(SupportAdvancedStates.waiting_for_moderator_id)
     await callback.answer()
@@ -282,16 +311,16 @@ async def start_add_moderator(callback: types.CallbackQuery, db_user: User, db: 
 async def start_remove_moderator(callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext):
     texts = get_texts(db_user.language)
     await callback.message.edit_text(
-        texts.t(
-            'ADMIN_SUPPORT_REMOVE_MODERATOR_PROMPT',
-            ' <b>Удаление модератора</b>\n\nОтправьте Telegram ID пользователя (число)',
+        admin_screen(
+            texts.t(
+                'ADMIN_SUPPORT_REMOVE_MODERATOR_PROMPT',
+                '<b>Удаление модератора</b>\n\nОтправьте Telegram ID пользователя (число)',
+            ),
+            icon='delete',
+            compact=True,
         ),
         parse_mode='HTML',
-        reply_markup=types.InlineKeyboardMarkup(
-            inline_keyboard=[
-                [types.InlineKeyboardButton(text=texts.BACK, callback_data='admin_support_settings', style='danger')]
-            ]
-        ),
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[admin_back_button(texts, 'admin_support_settings')]]),
     )
     await state.set_state(SupportAdvancedStates.waiting_for_moderator_id)
     # We'll reuse the same state; next message will decide action via flag
@@ -309,33 +338,28 @@ async def handle_moderator_id(message: types.Message, db_user: User, db: AsyncSe
     try:
         tid = int(text)
     except Exception:
-        await message.answer(texts.t('ADMIN_SUPPORT_INVALID_TELEGRAM_ID', ' Введите корректный Telegram ID (число)'))
+        await message.answer(texts.t('ADMIN_SUPPORT_INVALID_TELEGRAM_ID', 'Введите корректный Telegram ID (число)'))
         return
     if action == 'remove_moderator':
         ok = await SupportSettingsService.remove_moderator(db, tid)
         msg = (
-            texts.t('ADMIN_SUPPORT_MODERATOR_REMOVED_SUCCESS', ' Модератор {tid} удалён').format(tid=tid)
+            texts.t('ADMIN_SUPPORT_MODERATOR_REMOVED_SUCCESS', 'Модератор {tid} удалён').format(tid=tid)
             if ok
-            else texts.t('ADMIN_SUPPORT_MODERATOR_REMOVED_FAIL', ' Не удалось удалить модератора')
+            else texts.t('ADMIN_SUPPORT_MODERATOR_REMOVED_FAIL', 'Не удалось удалить модератора')
         )
     else:
         ok = await SupportSettingsService.add_moderator(db, tid)
         msg = (
-            texts.t('ADMIN_SUPPORT_MODERATOR_ADDED_SUCCESS', ' Пользователь {tid} назначен модератором').format(tid=tid)
+            texts.t('ADMIN_SUPPORT_MODERATOR_ADDED_SUCCESS', 'Пользователь {tid} назначен модератором').format(tid=tid)
             if ok
-            else texts.t('ADMIN_SUPPORT_MODERATOR_ADDED_FAIL', ' Не удалось назначить модератора')
+            else texts.t('ADMIN_SUPPORT_MODERATOR_ADDED_FAIL', 'Не удалось назначить модератора')
         )
     await state.clear()
-    markup = types.InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                types.InlineKeyboardButton(
-                    text=texts.t('DELETE_MESSAGE', ' Удалить'), callback_data='admin_support_delete_msg'
-                )
-            ]
-        ]
+    await message.answer(
+        admin_screen(msg, icon='success' if ok else 'error', compact=True),
+        reply_markup=_delete_keyboard(texts),
+        parse_mode='HTML',
     )
-    await message.answer(msg, reply_markup=markup)
 
 
 @admin_required
@@ -347,16 +371,15 @@ async def list_moderators(callback: types.CallbackQuery, db_user: User, db: Asyn
         await callback.answer(texts.t('ADMIN_SUPPORT_MODERATORS_EMPTY', 'Список пуст'), show_alert=True)
         return
     text = (
-        texts.t('ADMIN_SUPPORT_MODERATORS_TITLE', ' <b>Модераторы</b>')
+        texts.t('ADMIN_SUPPORT_MODERATORS_TITLE', '<b>Модераторы</b>')
         + '\n\n'
         + '\n'.join([f'• <code>{tid}</code>' for tid in moderators])
     )
-    markup = types.InlineKeyboardMarkup(
-        inline_keyboard=[
-            [types.InlineKeyboardButton(text=texts.BACK, callback_data='admin_support_settings', style='danger')]
-        ]
+    await callback.message.edit_text(
+        admin_screen(text, icon='users', compact=True),
+        parse_mode='HTML',
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[admin_back_button(texts, 'admin_support_settings')]]),
     )
-    await callback.message.edit_text(text, parse_mode='HTML', reply_markup=markup)
     await callback.answer()
 
 
@@ -392,9 +415,11 @@ async def start_edit_desc(callback: types.CallbackQuery, db_user: User, db: Asyn
     kb_rows: list[list[types.InlineKeyboardButton]] = []
     kb_rows.append(
         [
-            types.InlineKeyboardButton(
-                text=texts.t('ADMIN_SUPPORT_SEND_DESCRIPTION', ' Прислать текст'),
+            admin_button(
+                _label(texts.t('ADMIN_SUPPORT_SEND_DESCRIPTION', 'Прислать текст')),
                 callback_data='admin_support_send_desc',
+                icon='messages',
+                style='primary',
             )
         ]
     )
@@ -402,12 +427,14 @@ async def start_edit_desc(callback: types.CallbackQuery, db_user: User, db: Asyn
     from app.config import settings
 
     support_contact_display = settings.get_support_contact_display()
-    kb_rows.append(
-        [types.InlineKeyboardButton(text=texts.BACK, callback_data='admin_support_settings', style='danger')]
-    )
+    kb_rows.append([admin_back_button(texts, 'admin_support_settings')])
 
     text_parts = [
-        texts.t('ADMIN_SUPPORT_EDIT_DESCRIPTION_TITLE', ' <b>Редактирование описания поддержки</b>'),
+        admin_screen(
+            texts.t('ADMIN_SUPPORT_EDIT_DESCRIPTION_TITLE', '<b>Редактирование описания поддержки</b>'),
+            icon='document',
+            compact=True,
+        ),
         '',
         texts.t('ADMIN_SUPPORT_EDIT_DESCRIPTION_CURRENT', 'Текущее описание:'),
         '',
@@ -435,16 +462,11 @@ async def handle_new_desc(message: types.Message, db_user: User, db: AsyncSessio
     new_text = message.html_text or message.text
     await SupportSettingsService.set_support_info_text(db, db_user.language, new_text)
     await state.clear()
-    markup = types.InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                types.InlineKeyboardButton(
-                    text=texts.t('DELETE_MESSAGE', ' Удалить'), callback_data='admin_support_delete_msg'
-                )
-            ]
-        ]
+    await message.answer(
+        admin_screen(texts.t('ADMIN_SUPPORT_DESCRIPTION_UPDATED', 'Описание обновлено.'), icon='success', compact=True),
+        reply_markup=_delete_keyboard(texts),
+        parse_mode='HTML',
     )
-    await message.answer(texts.t('ADMIN_SUPPORT_DESCRIPTION_UPDATED', ' Описание обновлено.'), reply_markup=markup)
 
 
 @admin_required
@@ -455,15 +477,7 @@ async def send_desc_copy(callback: types.CallbackQuery, db_user: User, db: Async
     current_desc_html = SupportSettingsService.get_support_info_text(db_user.language)
     current_desc_plain = re.sub(r'<[^<>]+>', '', current_desc_html)
     # attach delete button to the sent message
-    markup = types.InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                types.InlineKeyboardButton(
-                    text=texts.t('DELETE_MESSAGE', ' Удалить'), callback_data='admin_support_delete_msg'
-                )
-            ]
-        ]
-    )
+    markup = _delete_keyboard(texts)
     if len(current_desc_plain) <= 4000:
         await callback.message.answer(current_desc_plain, reply_markup=markup)
     else:

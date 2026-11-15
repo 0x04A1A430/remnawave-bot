@@ -1,6 +1,7 @@
 import asyncio
 import hashlib
 import html
+import re
 from datetime import UTC, date, datetime, timedelta
 
 import structlog
@@ -24,12 +25,22 @@ from app.services.traffic_monitoring_service import (
     traffic_monitoring_scheduler,
 )
 from app.states import AdminStates
+from app.utils.admin_ui import admin_back_button, admin_button, admin_icon, admin_screen
 from app.utils.decorators import admin_required
 from app.utils.pagination import paginate_list
 
 
 logger = structlog.get_logger(__name__)
 router = Router()
+
+# Следы прежнего оформления, оставшиеся в локалях: декоративные глифы,
+# метка NEW и лишние ведущие пробелы строк — иконку и отступы даёт admin_screen.
+_LEGACY_PREFIX_RE = re.compile(r'^[ \t]*(?:[▤▣▥◷↻]\s*|NEW\s+)*', re.MULTILINE)
+
+
+def _clean_legacy(value: str) -> str:
+    """Убирает декоративные глифы, метку NEW и ведущие пробелы строк."""
+    return _LEGACY_PREFIX_RE.sub('', value).strip()
 
 
 def _monitoring_language(event, db_user: User | None = None, fallback: str | None = None) -> str:
@@ -417,16 +428,18 @@ async def admin_monitoring_menu(callback: CallbackQuery, db_user: User | None = 
         async with AsyncSessionLocal() as db:
             status = await monitoring_service.get_monitoring_status(db)
 
-            running_status = ' Работает' if status['is_running'] else ' Остановлен'
+            running_status = (
+                f'{admin_icon("success")} Работает' if status['is_running'] else f'{admin_icon("error")} Остановлен'
+            )
             last_update = status['last_update'].strftime('%H:%M:%S') if status['last_update'] else 'Никогда'
 
-            text = f""" <b>Система мониторинга</b>
+            text = f"""<b>Система мониторинга</b>
 
- <b>Статус:</b> {running_status}
- <b>Последнее обновление:</b> {last_update}
- <b>Интервал проверки:</b> {settings.MONITORING_INTERVAL} мин
+<b>Статус:</b> {running_status}
+<b>Последнее обновление:</b> {last_update}
+<b>Интервал проверки:</b> {settings.MONITORING_INTERVAL} мин
 
- <b>Статистика за 24 часа:</b>
+<b>Статистика за 24 часа:</b>
 • Всего событий: {status['stats_24h']['total_events']}
 • Успешных: {status['stats_24h']['successful']}
 • Ошибок: {status['stats_24h']['failed']}
@@ -434,7 +447,11 @@ async def admin_monitoring_menu(callback: CallbackQuery, db_user: User | None = 
 
             language = _monitoring_language(callback, db_user)
             keyboard = get_monitoring_keyboard(language)
-            await callback.message.edit_text(compact_text(text), parse_mode='HTML', reply_markup=keyboard)
+            await callback.message.edit_text(
+                admin_screen(text, icon='chart', compact=True),
+                parse_mode='HTML',
+                reply_markup=keyboard,
+            )
 
     except Exception as e:
         logger.error('Ошибка в админ меню мониторинга', error=e)
@@ -450,9 +467,9 @@ async def admin_monitoring_settings(callback: CallbackQuery, db_user: User | Non
     texts = get_texts(language)
     try:
         global_status = (
-            texts.t('ADMIN_MONITORING_UI_ADMIN_MONITORING_SETTINGS_027', ' Включены')
+            texts.t('ADMIN_MONITORING_UI_ADMIN_MONITORING_SETTINGS_027', 'Включены')
             if NotificationSettingsService.are_notifications_globally_enabled()
-            else texts.t('ADMIN_MONITORING_UI_ADMIN_MONITORING_SETTINGS_028', ' Отключены')
+            else texts.t('ADMIN_MONITORING_UI_ADMIN_MONITORING_SETTINGS_028', 'Отключены')
         )
         second_percent = NotificationSettingsService.get_second_wave_discount_percent()
         third_percent = NotificationSettingsService.get_third_wave_discount_percent()
@@ -460,19 +477,28 @@ async def admin_monitoring_settings(callback: CallbackQuery, db_user: User | Non
 
         text = texts.t(
             'ADMIN_MONITORING_UI_ADMIN_MONITORING_SETTINGS_029',
-            ' <b>Настройки мониторинга</b>\n\n <b>Уведомления пользователям:</b> {value1}\n• Скидка 2-3 дня: {value2}%\n• Скидка после {value3} дней: {value4}%',
+            '<b>Настройки мониторинга</b>\n\n<b>Уведомления пользователям:</b> {value1}\n• Скидка 2-3 дня: {value2}%\n• Скидка после {value3} дней: {value4}%',
         ).format(value1=global_status, value2=second_percent, value3=third_days, value4=third_percent)
-
-        from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
         keyboard = InlineKeyboardMarkup(
             inline_keyboard=[
-                [InlineKeyboardButton(text=' Уведомления пользователям', callback_data='admin_mon_notify_settings')],
-                [InlineKeyboardButton(text=' Назад', callback_data='admin_submenu_settings')],
+                [
+                    admin_button(
+                        'Уведомления пользователям',
+                        callback_data='admin_mon_notify_settings',
+                        icon='messages',
+                        style='primary',
+                    )
+                ],
+                [admin_back_button(texts, 'admin_submenu_settings')],
             ]
         )
 
-        await callback.message.edit_text(compact_text(text), parse_mode='HTML', reply_markup=keyboard)
+        await callback.message.edit_text(
+            admin_screen(_clean_legacy(text), icon='chart', compact=True),
+            parse_mode='HTML',
+            reply_markup=keyboard,
+        )
 
     except Exception as e:
         logger.error('Ошибка отображения настроек мониторинга', error=e)
@@ -1007,10 +1033,14 @@ async def monitoring_logs_callback(callback: CallbackQuery, db_user: User | None
             if not all_logs:
                 text = texts.t(
                     'ADMIN_MONITORING_UI_MONITORING_LOGS_CALLBACK_082',
-                    ' <b>Логи мониторинга пусты</b>\n\nСистема еще не выполнила проверки.',
+                    '<b>Логи мониторинга пусты</b>\n\nСистема еще не выполнила проверки.',
                 )
                 keyboard = get_monitoring_logs_back_keyboard(language=language)
-                await callback.message.edit_text(compact_text(text), parse_mode='HTML', reply_markup=keyboard)
+                await callback.message.edit_text(
+                    admin_screen(_clean_legacy(text), icon='logs', compact=True),
+                    parse_mode='HTML',
+                    reply_markup=keyboard,
+                )
                 return
 
             per_page = 8
@@ -1018,11 +1048,11 @@ async def monitoring_logs_callback(callback: CallbackQuery, db_user: User | None
 
             text = texts.t(
                 'ADMIN_MONITORING_UI_MONITORING_LOGS_CALLBACK_083',
-                ' <b>Логи мониторинга</b> (стр. {value1}/{value2})\n\n',
+                '<b>Логи мониторинга</b> (стр. {value1}/{value2})\n\n',
             ).format(value1=page, value2=paginated_logs.total_pages)
 
             for log in paginated_logs.items:
-                icon = '' if log['is_success'] else ''
+                icon = admin_icon('success') if log['is_success'] else admin_icon('error')
                 time_str = log['created_at'].strftime('%m-%d %H:%M')
                 event_type = log['event_type'].replace('_', ' ').title()
 
@@ -1031,13 +1061,13 @@ async def monitoring_logs_callback(callback: CallbackQuery, db_user: User | None
                     message = message[:45] + '...'
 
                 text += f'{icon} <code>{time_str}</code> {event_type}\n'
-                text += f'    {message}\n\n'
+                text += f'<blockquote>{message}</blockquote>\n'
 
             total_success = sum(1 for log in all_logs if log['is_success'])
             total_failed = len(all_logs) - total_success
             success_rate = round(total_success / len(all_logs) * 100, 1) if all_logs else 0
 
-            text += texts.t('ADMIN_MONITORING_UI_MONITORING_LOGS_CALLBACK_084', ' <b>Общая статистика:</b>\n')
+            text += texts.t('ADMIN_MONITORING_UI_MONITORING_LOGS_CALLBACK_084', '<b>Общая статистика:</b>\n')
             text += texts.t('ADMIN_MONITORING_UI_MONITORING_LOGS_CALLBACK_085', '• Всего событий: {value1}\n').format(
                 value1=len(all_logs)
             )
@@ -1052,7 +1082,11 @@ async def monitoring_logs_callback(callback: CallbackQuery, db_user: User | None
             )
 
             keyboard = get_monitoring_logs_keyboard(page, paginated_logs.total_pages, language=language)
-            await callback.message.edit_text(compact_text(text), parse_mode='HTML', reply_markup=keyboard)
+            await callback.message.edit_text(
+                admin_screen(_clean_legacy(text), icon='logs', compact=True),
+                parse_mode='HTML',
+                reply_markup=keyboard,
+            )
 
     except Exception as e:
         logger.error('Ошибка получения логов', error=e)
@@ -2046,7 +2080,6 @@ async def receipts_reconcile_logs_details_callback(callback: CallbackQuery, db_u
 
 def get_monitoring_logs_keyboard(current_page: int, total_pages: int, language: str = 'ru'):
     texts = get_texts(language)
-    from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
     keyboard = []
 
@@ -2054,34 +2087,32 @@ def get_monitoring_logs_keyboard(current_page: int, total_pages: int, language: 
         nav_row = []
 
         if current_page > 1:
-            nav_row.append(InlineKeyboardButton(text='', callback_data=f'admin_mon_logs_page_{current_page - 1}'))
+            nav_row.append(admin_button('←', callback_data=f'admin_mon_logs_page_{current_page - 1}', style='primary'))
 
-        nav_row.append(InlineKeyboardButton(text=f'{current_page}/{total_pages}', callback_data='current_page'))
+        nav_row.append(admin_button(f'{current_page}/{total_pages}', callback_data='current_page'))
 
         if current_page < total_pages:
-            nav_row.append(InlineKeyboardButton(text='', callback_data=f'admin_mon_logs_page_{current_page + 1}'))
+            nav_row.append(admin_button('→', callback_data=f'admin_mon_logs_page_{current_page + 1}', style='primary'))
 
         keyboard.append(nav_row)
 
     keyboard.extend(
         [
             [
-                InlineKeyboardButton(
-                    text=texts.t('ADMIN_MONITORING_UI_GET_MONITORING_LOGS_KEYBOARD_190', ' Обновить'),
+                admin_button(
+                    _clean_legacy(texts.t('ADMIN_MONITORING_UI_GET_MONITORING_LOGS_KEYBOARD_190', 'Обновить')),
                     callback_data='admin_mon_logs',
+                    icon='refresh',
+                    style='primary',
                 ),
-                InlineKeyboardButton(
-                    text=texts.t('ADMIN_MONITORING_UI_GET_MONITORING_LOGS_KEYBOARD_191', ' Очистить'),
+                admin_button(
+                    _clean_legacy(texts.t('ADMIN_MONITORING_UI_GET_MONITORING_LOGS_KEYBOARD_191', 'Очистить')),
                     callback_data='admin_mon_clear_logs',
+                    icon='delete',
+                    style='danger',
                 ),
             ],
-            [
-                InlineKeyboardButton(
-                    text=texts.t('ADMIN_MONITORING_UI_NALOGO_PENDING_CALLBACK_137', '← Назад'),
-                    callback_data='admin_monitoring',
-                )
-            ],
-            [InlineKeyboardButton(text=' Назад', callback_data='admin_monitoring')],
+            [admin_back_button(texts, 'admin_monitoring')],
         ]
     )
 
@@ -2090,34 +2121,33 @@ def get_monitoring_logs_keyboard(current_page: int, total_pages: int, language: 
 
 def get_monitoring_logs_back_keyboard(language: str = 'ru'):
     texts = get_texts(language)
-    from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                InlineKeyboardButton(
-                    text=texts.t('ADMIN_MONITORING_UI_GET_MONITORING_LOGS_KEYBOARD_190', ' Обновить'),
+                admin_button(
+                    _clean_legacy(texts.t('ADMIN_MONITORING_UI_GET_MONITORING_LOGS_KEYBOARD_190', 'Обновить')),
                     callback_data='admin_mon_logs',
+                    icon='refresh',
+                    style='primary',
                 ),
-                InlineKeyboardButton(
-                    text=texts.t('ADMIN_MONITORING_UI_GET_MONITORING_LOGS_BACK_KEYBOARD_194', ' Фильтры'),
+                admin_button(
+                    _clean_legacy(texts.t('ADMIN_MONITORING_UI_GET_MONITORING_LOGS_BACK_KEYBOARD_194', 'Фильтры')),
                     callback_data='admin_mon_logs_filters',
+                    style='primary',
                 ),
             ],
             [
-                InlineKeyboardButton(
-                    text=texts.t('ADMIN_MONITORING_UI_GET_MONITORING_LOGS_BACK_KEYBOARD_195', ' Очистить логи'),
+                admin_button(
+                    _clean_legacy(
+                        texts.t('ADMIN_MONITORING_UI_GET_MONITORING_LOGS_BACK_KEYBOARD_195', 'Очистить логи')
+                    ),
                     callback_data='admin_mon_clear_logs',
+                    icon='delete',
+                    style='danger',
                 )
             ],
-            [
-                InlineKeyboardButton(
-                    text=texts.t('ADMIN_MONITORING_UI_NALOGO_PENDING_CALLBACK_137', '← Назад'),
-                    callback_data='admin_monitoring',
-                )
-            ],
-            [InlineKeyboardButton(text=' Очистить логи', callback_data='admin_mon_clear_logs')],
-            [InlineKeyboardButton(text=' Назад', callback_data='admin_monitoring')],
+            [admin_back_button(texts, 'admin_monitoring')],
         ]
     )
 

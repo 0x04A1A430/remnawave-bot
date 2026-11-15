@@ -19,8 +19,10 @@ from app.database.models import (
 )
 from app.handlers.admin._text import compact_text
 from app.localization.texts import Texts, get_texts
+from app.utils.admin_ui import admin_back_button, admin_button, admin_screen
 from app.utils.decorators import admin_required, error_handler
 from app.utils.formatters import format_datetime
+from app.utils.miniapp_buttons import strip_leading_emoji
 from app.utils.subscription_time import local_days_until
 
 
@@ -92,47 +94,55 @@ async def show_subscriptions_menu(callback: types.CallbackQuery, db_user: User, 
     texts = get_texts(db_user.language)
     stats = await get_subscriptions_statistics(db)
 
-    text = f""" <b>Управление подписками</b>
+    text = f"""<b>Управление подписками</b>
 
- <b>Статистика:</b>
-- Всего: {stats['total_subscriptions']}
-- Активных: {stats['active_subscriptions']}
-- Платных: {stats['paid_subscriptions']}
-- Триальных: {stats['trial_subscriptions']}
+<b>Статистика:</b>
+• Всего: {stats['total_subscriptions']}
+• Активных: {stats['active_subscriptions']}
+• Платных: {stats['paid_subscriptions']}
+• Триальных: {stats['trial_subscriptions']}
 
- <b>Продажи:</b>
-- Сегодня: {stats['purchased_today']}
-- За неделю: {stats['purchased_week']}
-- За месяц: {stats['purchased_month']}"""
+<b>Продажи:</b>
+• Сегодня: {stats['purchased_today']}
+• За неделю: {stats['purchased_week']}
+• За месяц: {stats['purchased_month']}"""
 
     keyboard = [
         [
-            types.InlineKeyboardButton(
-                text=texts.t('ADMIN_SUBSCRIPTIONS_UI_028', ' Список подписок'), callback_data='admin_subs_list'
+            admin_button(
+                strip_leading_emoji(texts.t('ADMIN_SUBSCRIPTIONS_UI_028', 'Список подписок')),
+                callback_data='admin_subs_list',
+                icon='document',
+                style='primary',
             ),
-            types.InlineKeyboardButton(
-                text=texts.t('ADMIN_SUBSCRIPTIONS_UI_029', ' Истекающие'), callback_data='admin_subs_expiring'
-            ),
-        ],
-        [
-            types.InlineKeyboardButton(
-                text=texts.t('ADMIN_SUBSCRIPTIONS_UI_030', ' Статистика'), callback_data='admin_subs_stats'
-            ),
-            types.InlineKeyboardButton(
-                text=texts.t('ADMIN_SUBSCRIPTIONS_UI_031', ' География'), callback_data='admin_subs_countries'
+            admin_button(
+                strip_leading_emoji(texts.t('ADMIN_SUBSCRIPTIONS_UI_029', 'Истекающие')),
+                callback_data='admin_subs_expiring',
+                icon='calendar',
+                style='primary',
             ),
         ],
         [
-            types.InlineKeyboardButton(
-                text=texts.t('ADMIN_SUBSCRIPTIONS_UI_032', '← Назад'),
-                callback_data='admin_panel',
-                style='danger',
-            )
+            admin_button(
+                strip_leading_emoji(texts.t('ADMIN_SUBSCRIPTIONS_UI_030', 'Статистика')),
+                callback_data='admin_subs_stats',
+                icon='stats',
+                style='primary',
+            ),
+            admin_button(
+                strip_leading_emoji(texts.t('ADMIN_SUBSCRIPTIONS_UI_031', 'География')),
+                callback_data='admin_subs_countries',
+                icon='servers',
+                style='primary',
+            ),
         ],
+        [admin_back_button(texts, 'admin_panel')],
     ]
 
     await callback.message.edit_text(
-        compact_text(text), reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard)
+        admin_screen(text, icon='tariff', compact=True),
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
+        parse_mode='HTML',
     )
     await callback.answer()
 
@@ -145,10 +155,10 @@ async def show_subscriptions_list(callback: types.CallbackQuery, db_user: User, 
     total_pages = (total_count + 9) // 10
 
     if not subscriptions:
-        text = texts.t('ADMIN_SUBSCRIPTIONS_UI_004', ' <b>Список подписок</b>\n\n Подписки не найдены.')
+        text = texts.t('ADMIN_SUBSCRIPTIONS_UI_004', '<b>Список подписок</b>\n\nПодписки не найдены.')
     else:
-        text = texts.t('ADMIN_SUBSCRIPTIONS_UI_005', ' <b>Список подписок</b>\n\n')
-        text += texts.t('ADMIN_SUBSCRIPTIONS_UI_006', ' Всего: {value1} | Страница: {value2}/{value3}\n\n').format(
+        text = texts.t('ADMIN_SUBSCRIPTIONS_UI_005', '<b>Список подписок</b>\n\n')
+        text += texts.t('ADMIN_SUBSCRIPTIONS_UI_006', 'Всего: {value1} | Страница: {value2}/{value3}\n\n').format(
             value1=total_count, value2=page, value3=total_pages
         )
 
@@ -158,14 +168,13 @@ async def show_subscriptions_list(callback: types.CallbackQuery, db_user: User, 
                 if sub.user
                 else texts.t('ADMIN_SUBSCRIPTIONS_UI_010', 'Неизвестно')
             )
-            sub_type = '' if sub.is_trial else ''
             status = (
-                texts.t('ADMIN_SUBSCRIPTIONS_UI_020', ' Активна')
+                texts.t('ADMIN_SUBSCRIPTIONS_UI_020', 'Активна')
                 if sub.is_active
-                else texts.t('ADMIN_SUBSCRIPTIONS_UI_021', ' Неактивна')
+                else texts.t('ADMIN_SUBSCRIPTIONS_UI_021', 'Неактивна')
             )
 
-            text += f'{i}. {sub_type} {user_info}\n'
+            text += f'{i}. {user_info}\n'
             text += texts.t('ADMIN_SUBSCRIPTIONS_UI_009', '   {value1} | До: {value2}\n').format(
                 value1=status, value2=format_datetime(sub.end_date)
             )
@@ -180,24 +189,33 @@ async def show_subscriptions_list(callback: types.CallbackQuery, db_user: User, 
     if total_pages > 1:
         nav_row = []
         if page > 1:
-            nav_row.append(types.InlineKeyboardButton(text='', callback_data=f'admin_subs_list_page_{page - 1}'))
+            nav_row.append(admin_button('←', callback_data=f'admin_subs_list_page_{page - 1}', style='primary'))
 
-        nav_row.append(types.InlineKeyboardButton(text=f'{page}/{total_pages}', callback_data='current_page'))
+        nav_row.append(admin_button(f'{page}/{total_pages}', callback_data='current_page'))
 
         if page < total_pages:
-            nav_row.append(types.InlineKeyboardButton(text='', callback_data=f'admin_subs_list_page_{page + 1}'))
+            nav_row.append(admin_button('→', callback_data=f'admin_subs_list_page_{page + 1}', style='primary'))
 
         keyboard.append(nav_row)
 
     keyboard.extend(
         [
-            [types.InlineKeyboardButton(text=' Обновить', callback_data='admin_subs_list')],
-            [types.InlineKeyboardButton(text=' Назад', callback_data='admin_subscriptions')],
+            [
+                admin_button(
+                    strip_leading_emoji(texts.t('ADMIN_SUBSCRIPTIONS_UI_034', 'Обновить')),
+                    callback_data='admin_subs_list',
+                    icon='refresh',
+                    style='primary',
+                )
+            ],
+            [admin_back_button(texts, 'admin_subscriptions')],
         ]
     )
 
     await callback.message.edit_text(
-        compact_text(text), reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard)
+        admin_screen(text, icon='tariff', compact=True),
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
+        parse_mode='HTML',
     )
     await callback.answer()
 
@@ -210,13 +228,12 @@ async def show_expiring_subscriptions(callback: types.CallbackQuery, db_user: Us
     expiring_1d = await get_expiring_subscriptions(db, 1)
     expired = await get_expired_subscriptions(db)
 
-    text = f"""
- <b>Истекающие подписки</b>
+    text = f"""<b>Истекающие подписки</b>
 
- <b>Статистика:</b>
-- Истекают через 3 дня: {len(expiring_3d)}
-- Истекают завтра: {len(expiring_1d)}
-- Уже истекли: {len(expired)}
+<b>Статистика:</b>
+• Истекают через 3 дня: {len(expiring_3d)}
+• Истекают завтра: {len(expiring_1d)}
+• Уже истекли: {len(expired)}
 
 <b>Истекают через 3 дня:</b>
 """
@@ -227,8 +244,7 @@ async def show_expiring_subscriptions(callback: types.CallbackQuery, db_user: Us
             if sub.user
             else texts.t('ADMIN_SUBSCRIPTIONS_UI_010', 'Неизвестно')
         )
-        sub_type = '' if sub.is_trial else ''
-        text += f'{sub_type} {user_info} - {format_datetime(sub.end_date)}\n'
+        text += f'{user_info} - {format_datetime(sub.end_date)}\n'
 
     if len(expiring_3d) > 5:
         text += texts.t('ADMIN_SUBSCRIPTIONS_UI_007', '... и еще {value1}\n').format(value1=len(expiring_3d) - 5)
@@ -240,20 +256,35 @@ async def show_expiring_subscriptions(callback: types.CallbackQuery, db_user: Us
             if sub.user
             else texts.t('ADMIN_SUBSCRIPTIONS_UI_010', 'Неизвестно')
         )
-        sub_type = '' if sub.is_trial else ''
-        text += f'{sub_type} {user_info} - {format_datetime(sub.end_date)}\n'
+        text += f'{user_info} - {format_datetime(sub.end_date)}\n'
 
     if len(expiring_1d) > 5:
         text += texts.t('ADMIN_SUBSCRIPTIONS_UI_007', '... и еще {value1}\n').format(value1=len(expiring_1d) - 5)
 
     keyboard = [
-        [types.InlineKeyboardButton(text=' Отправить напоминания', callback_data='admin_send_expiry_reminders')],
-        [types.InlineKeyboardButton(text=' Обновить', callback_data='admin_subs_expiring')],
-        [types.InlineKeyboardButton(text=' Назад', callback_data='admin_subscriptions')],
+        [
+            admin_button(
+                strip_leading_emoji(texts.t('ADMIN_SUBSCRIPTIONS_UI_033', 'Отправить напоминания')),
+                callback_data='admin_send_expiry_reminders',
+                icon='messages',
+                style='success',
+            )
+        ],
+        [
+            admin_button(
+                strip_leading_emoji(texts.t('ADMIN_SUBSCRIPTIONS_UI_034', 'Обновить')),
+                callback_data='admin_subs_expiring',
+                icon='refresh',
+                style='primary',
+            )
+        ],
+        [admin_back_button(texts, 'admin_subscriptions')],
     ]
 
     await callback.message.edit_text(
-        compact_text(text), reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard)
+        admin_screen(text, icon='calendar', compact=True),
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
+        parse_mode='HTML',
     )
     await callback.answer()
 
@@ -261,35 +292,35 @@ async def show_expiring_subscriptions(callback: types.CallbackQuery, db_user: Us
 @admin_required
 @error_handler
 async def show_subscriptions_stats(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+    texts = get_texts(db_user.language)
     stats = await get_subscriptions_statistics(db)
 
     expiring_3d = await get_expiring_subscriptions(db, 3)
     expiring_7d = await get_expiring_subscriptions(db, 7)
     expired = await get_expired_subscriptions(db)
 
-    text = f"""
- <b>Детальная статистика подписок</b>
+    text = f"""<b>Детальная статистика подписок</b>
 
-<b> Общая информация:</b>
+<b>Общая информация:</b>
 • Всего подписок: {stats['total_subscriptions']}
 • Активных: {stats['active_subscriptions']}
 • Неактивных: {stats['total_subscriptions'] - stats['active_subscriptions']}
 
-<b> По типам:</b>
+<b>По типам:</b>
 • Платных: {stats['paid_subscriptions']}
 • Триальных: {stats['trial_subscriptions']}
 
-<b> Продажи:</b>
+<b>Продажи:</b>
 • Сегодня: {stats['purchased_today']}
 • За неделю: {stats['purchased_week']}
 • За месяц: {stats['purchased_month']}
 
-<b> Истечение:</b>
+<b>Истечение:</b>
 • Истекают через 3 дня: {len(expiring_3d)}
 • Истекают через 7 дней: {len(expiring_7d)}
 • Уже истекли: {len(expired)}
 
-<b> Конверсия:</b>
+<b>Конверсия:</b>
 • Из триала в платную: {stats.get('trial_to_paid_conversion', 0)}%
 • Продлений: {stats.get('renewals_count', 0)}
 """
@@ -300,11 +331,13 @@ async def show_subscriptions_stats(callback: types.CallbackQuery, db_user: User,
         #     types.InlineKeyboardButton(text=" Графики", callback_data="admin_subs_charts")
         # ],
         # [types.InlineKeyboardButton(text=" Обновить", callback_data="admin_subs_stats")],
-        [types.InlineKeyboardButton(text=' Назад', callback_data='admin_subscriptions')]
+        [admin_back_button(texts, 'admin_subscriptions')]
     ]
 
     await callback.message.edit_text(
-        compact_text(text), reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard)
+        admin_screen(text, icon='stats', compact=True),
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
+        parse_mode='HTML',
     )
     await callback.answer()
 

@@ -16,7 +16,7 @@ async def cycle_display_mode_setting(
     if BotConfigurationService.is_env_overridden(key):
         await callback.answer(
             get_texts(language).t(
-                'DISPLAY_MODE_ENV_OVERRIDE', ' Значение задано через .env, измените переменную окружения'
+                'DISPLAY_MODE_ENV_OVERRIDE', 'Значение задано через .env, измените переменную окружения'
             ),
             show_alert=True,
         )

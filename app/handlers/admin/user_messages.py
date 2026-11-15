@@ -16,7 +16,9 @@ from app.database.crud.user_message import (
 )
 from app.database.models import User
 from app.localization.texts import get_texts
+from app.utils.admin_ui import admin_back_button, admin_button, admin_screen
 from app.utils.decorators import admin_required, error_handler
+from app.utils.miniapp_buttons import strip_leading_emoji
 from app.utils.validators import (
     get_html_help_text,
     sanitize_html,
@@ -34,32 +36,38 @@ class UserMessageStates(StatesGroup):
 
 def get_user_messages_keyboard(language: str = 'ru'):
     texts = get_texts(language)
-    from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+    from aiogram.types import InlineKeyboardMarkup
 
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                InlineKeyboardButton(
-                    text=texts.t('ADMIN_USER_MESSAGE_032', ' Добавить сообщение'),
+                admin_button(
+                    strip_leading_emoji(texts.t('ADMIN_USER_MESSAGE_032', ' Добавить сообщение')),
                     callback_data='add_user_message',
+                    icon='messages',
+                    style='success',
                 )
             ],
             [
-                InlineKeyboardButton(
-                    text=texts.t('ADMIN_USER_MESSAGE_033', ' Список сообщений'),
+                admin_button(
+                    strip_leading_emoji(texts.t('ADMIN_USER_MESSAGE_033', ' Список сообщений')),
                     callback_data='list_user_messages:0',
+                    style='primary',
                 )
             ],
             [
-                InlineKeyboardButton(
-                    text=texts.t('ADMIN_USER_MESSAGE_034', ' Статистика'),
+                admin_button(
+                    strip_leading_emoji(texts.t('ADMIN_USER_MESSAGE_034', ' Статистика')),
                     callback_data='user_messages_stats',
+                    icon='stats',
+                    style='primary',
                 )
             ],
             [
-                InlineKeyboardButton(
-                    text=texts.t('ADMIN_USER_MESSAGE_035', ' Назад в админку'),
-                    callback_data='admin_panel',
+                admin_back_button(
+                    texts,
+                    'admin_panel',
+                    label=strip_leading_emoji(texts.t('ADMIN_USER_MESSAGE_035', ' Назад в админку')),
                 )
             ],
         ]
@@ -68,33 +76,44 @@ def get_user_messages_keyboard(language: str = 'ru'):
 
 def get_message_actions_keyboard(message_id: int, is_active: bool, language: str = 'ru'):
     texts = get_texts(language)
-    from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+    from aiogram.types import InlineKeyboardMarkup
 
     status_text = (
-        texts.t('ADMIN_USER_MESSAGE_004', ' Деактивировать')
+        strip_leading_emoji(texts.t('ADMIN_USER_MESSAGE_004', ' Деактивировать'))
         if is_active
-        else texts.t('ADMIN_USER_MESSAGE_005', ' Активировать')
+        else strip_leading_emoji(texts.t('ADMIN_USER_MESSAGE_005', ' Активировать'))
     )
 
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                InlineKeyboardButton(
-                    text=texts.t('ADMIN_USER_MESSAGE_036', ' Редактировать'),
+                admin_button(
+                    strip_leading_emoji(texts.t('ADMIN_USER_MESSAGE_036', ' Редактировать')),
                     callback_data=f'edit_user_message:{message_id}',
+                    icon='settings',
+                    style='primary',
                 )
             ],
-            [InlineKeyboardButton(text=status_text, callback_data=f'toggle_user_message:{message_id}')],
             [
-                InlineKeyboardButton(
-                    text=texts.t('ADMIN_USER_MESSAGE_037', ' Удалить'),
+                admin_button(
+                    status_text,
+                    callback_data=f'toggle_user_message:{message_id}',
+                    style='danger' if is_active else 'success',
+                )
+            ],
+            [
+                admin_button(
+                    strip_leading_emoji(texts.t('ADMIN_USER_MESSAGE_037', ' Удалить')),
                     callback_data=f'delete_user_message:{message_id}',
+                    icon='delete',
+                    style='danger',
                 )
             ],
             [
-                InlineKeyboardButton(
-                    text=texts.t('ADMIN_USER_MESSAGE_038', ' К списку'),
-                    callback_data='list_user_messages:0',
+                admin_back_button(
+                    texts,
+                    'list_user_messages:0',
+                    label=strip_leading_emoji(texts.t('ADMIN_USER_MESSAGE_038', ' К списку')),
                 )
             ],
         ]
@@ -111,7 +130,11 @@ async def show_user_messages_panel(callback: types.CallbackQuery, db_user: User,
         ' <b>Управление сообщениями в главном меню</b>\n\nЗдесь вы можете добавлять сообщения, которые будут показываться пользователям в главном меню между информацией о подписке и кнопками действий.\n\n• Сообщения поддерживают HTML теги\n• Можно создать несколько сообщений\n• Активные сообщения показываются случайно\n• Неактивные сообщения не показываются',
     )
 
-    await callback.message.edit_text(text, reply_markup=get_user_messages_keyboard(db_user.language), parse_mode='HTML')
+    await callback.message.edit_text(
+        admin_screen(text, icon='messages', compact=True),
+        reply_markup=get_user_messages_keyboard(db_user.language),
+        parse_mode='HTML',
+    )
     await callback.answer()
 
 
@@ -119,12 +142,18 @@ async def show_user_messages_panel(callback: types.CallbackQuery, db_user: User,
 @error_handler
 async def add_user_message_start(callback: types.CallbackQuery, state: FSMContext, db_user: User, db: AsyncSession):
     await callback.message.edit_text(
-        get_texts(db_user.language)
-        .t(
-            'ADMIN_USER_MESSAGE_010',
-            ' <b>Добавление нового сообщения</b>\n\nВведите текст сообщения, которое будет показываться в главном меню.\n\n{value1}\n\nОтправьте /cancel для отмены.',
-        )
-        .format(value1=get_html_help_text(db_user.language)),
+        admin_screen(
+            strip_leading_emoji(
+                get_texts(db_user.language)
+                .t(
+                    'ADMIN_USER_MESSAGE_010',
+                    ' <b>Добавление нового сообщения</b>\n\nВведите текст сообщения, которое будет показываться в главном меню.\n\n{value1}\n\nОтправьте /cancel для отмены.',
+                )
+                .format(value1=get_html_help_text(db_user.language))
+            ),
+            icon='messages',
+            compact=True,
+        ),
         parse_mode='HTML',
     )
 
@@ -169,12 +198,16 @@ async def process_new_message_text(message: types.Message, state: FSMContext, db
         await state.clear()
 
         await message.answer(
-            f' <b>Сообщение добавлено!</b>\n\n'
-            f'<b>ID:</b> {new_message.id}\n'
-            f'<b>Статус:</b> {" Активно" if new_message.is_active else " Неактивно"}\n'
-            f'<b>Создано:</b> {new_message.created_at.strftime("%d.%m.%Y %H:%M")}\n\n'
-            f'<b>Предварительный просмотр:</b>\n'
-            f'<blockquote>{message_text}</blockquote>',
+            admin_screen(
+                f' <b>Сообщение добавлено!</b>\n\n'
+                f'<b>ID:</b> {new_message.id}\n'
+                f'<b>Статус:</b> {" Активно" if new_message.is_active else " Неактивно"}\n'
+                f'<b>Создано:</b> {new_message.created_at.strftime("%d.%m.%Y %H:%M")}\n\n'
+                f'<b>Предварительный просмотр:</b>\n'
+                f'<blockquote>{message_text}</blockquote>',
+                icon='success',
+                compact=True,
+            ),
             reply_markup=get_user_messages_keyboard(db_user.language),
             parse_mode='HTML',
         )
@@ -198,7 +231,7 @@ async def _render_user_messages_list(message: types.Message, db: AsyncSession, l
     на тот же callback.id. Рендер вынесен сюда и вызывается напрямую.
     """
     texts = get_texts(language)
-    from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+    from aiogram.types import InlineKeyboardMarkup
 
     limit = 5
     offset = page * limit
@@ -207,50 +240,73 @@ async def _render_user_messages_list(message: types.Message, db: AsyncSession, l
 
     if not messages:
         await message.edit_text(
-            texts.t(
-                'ADMIN_USER_MESSAGE_017', ' <b>Список сообщений</b>\n\nСообщений пока нет. Добавьте первое сообщение!'
+            admin_screen(
+                texts.t(
+                    'ADMIN_USER_MESSAGE_017',
+                    ' <b>Список сообщений</b>\n\nСообщений пока нет. Добавьте первое сообщение!',
+                ),
+                icon='messages',
+                compact=True,
             ),
             reply_markup=get_user_messages_keyboard(language),
             parse_mode='HTML',
         )
         return
 
-    text = texts.t('ADMIN_USER_MESSAGE_001', ' <b>Список сообщений</b>\n\n')
+    text = strip_leading_emoji(texts.t('ADMIN_USER_MESSAGE_001', ' <b>Список сообщений</b>\n\n'))
 
     for msg in messages:
-        status_emoji = '' if msg.is_active else ''
         preview = msg.message_text[:100] + '...' if len(msg.message_text) > 100 else msg.message_text
         preview = preview.replace('<', '&lt;').replace('>', '&gt;')
 
-        text += f'{status_emoji} <b>ID {msg.id}</b>\n{preview}\n {msg.created_at.strftime("%d.%m.%Y %H:%M")}\n\n'
+        text += f'<b>ID {msg.id}</b>\n{preview}\n {msg.created_at.strftime("%d.%m.%Y %H:%M")}\n\n'
 
     keyboard = []
 
     for msg in messages:
-        status_emoji = '' if msg.is_active else ''
         keyboard.append(
-            [InlineKeyboardButton(text=f'{status_emoji} ID {msg.id}', callback_data=f'view_user_message:{msg.id}')]
+            [
+                admin_button(
+                    f'ID {msg.id}',
+                    callback_data=f'view_user_message:{msg.id}',
+                    icon='success' if msg.is_active else 'lock',
+                )
+            ]
         )
 
     nav_buttons = []
     if page > 0:
-        nav_buttons.append(InlineKeyboardButton(text=' Назад', callback_data=f'list_user_messages:{page - 1}'))
+        nav_buttons.append(admin_button('←', callback_data=f'list_user_messages:{page - 1}', style='primary'))
 
     nav_buttons.append(
-        InlineKeyboardButton(text=texts.t('ADMIN_USER_MESSAGE_018', ' Добавить'), callback_data='add_user_message')
+        admin_button(
+            strip_leading_emoji(texts.t('ADMIN_USER_MESSAGE_018', ' Добавить')),
+            callback_data='add_user_message',
+            style='success',
+        )
     )
 
     if len(messages) == limit:
-        nav_buttons.append(InlineKeyboardButton(text='Вперед ', callback_data=f'list_user_messages:{page + 1}'))
+        nav_buttons.append(admin_button('→', callback_data=f'list_user_messages:{page + 1}', style='primary'))
 
     if nav_buttons:
         keyboard.append(nav_buttons)
 
     keyboard.append(
-        [InlineKeyboardButton(text=texts.t('ADMIN_USER_MESSAGE_027', ' Назад'), callback_data='user_messages_panel')]
+        [
+            admin_back_button(
+                texts,
+                'user_messages_panel',
+                label=strip_leading_emoji(texts.t('ADMIN_USER_MESSAGE_027', ' Назад')),
+            )
+        ]
     )
 
-    await message.edit_text(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard), parse_mode='HTML')
+    await message.edit_text(
+        admin_screen(text, icon='messages', compact=True),
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard),
+        parse_mode='HTML',
+    )
 
 
 @admin_required
@@ -301,7 +357,7 @@ async def view_user_message(callback: types.CallbackQuery, db_user: User, db: As
     )
 
     await callback.message.edit_text(
-        text,
+        admin_screen(text, icon='messages', compact=True),
         reply_markup=get_message_actions_keyboard(message_id, message.is_active, db_user.language),
         parse_mode='HTML',
     )
@@ -367,20 +423,25 @@ async def show_messages_stats(callback: types.CallbackQuery, db_user: User, db: 
         ' <b>Статистика сообщений</b>\n\n Всего сообщений: <b>{value1}</b>\n Активных: <b>{value2}</b>\n Неактивных: <b>{value3}</b>\n\nАктивные сообщения показываются пользователям случайным образом в главном меню между информацией о подписке и кнопками действий.',
     ).format(value1=stats['total_messages'], value2=stats['active_messages'], value3=stats['inactive_messages'])
 
-    from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+    from aiogram.types import InlineKeyboardMarkup
 
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                InlineKeyboardButton(
-                    text=texts.t('ADMIN_USER_MESSAGE_027', ' Назад'),
-                    callback_data='user_messages_panel',
+                admin_back_button(
+                    texts,
+                    'user_messages_panel',
+                    label=strip_leading_emoji(texts.t('ADMIN_USER_MESSAGE_027', ' Назад')),
                 )
             ]
         ]
     )
 
-    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='HTML')
+    await callback.message.edit_text(
+        admin_screen(strip_leading_emoji(text), icon='stats', compact=True),
+        reply_markup=keyboard,
+        parse_mode='HTML',
+    )
     await callback.answer()
 
 
@@ -401,10 +462,14 @@ async def edit_user_message_start(callback: types.CallbackQuery, state: FSMConte
         return
 
     await callback.message.edit_text(
-        texts.t(
-            'ADMIN_USER_MESSAGE_012',
-            ' <b>Редактирование сообщения ID {value1}</b>\n\n<b>Текущий текст:</b>\n<blockquote>{value2}</blockquote>\n\nВведите новый текст сообщения или отправьте /cancel для отмены:',
-        ).format(value1=message.id, value2=sanitize_html(message.message_text)),
+        admin_screen(
+            texts.t(
+                'ADMIN_USER_MESSAGE_012',
+                ' <b>Редактирование сообщения ID {value1}</b>\n\n<b>Текущий текст:</b>\n<blockquote>{value2}</blockquote>\n\nВведите новый текст сообщения или отправьте /cancel для отмены:',
+            ).format(value1=message.id, value2=sanitize_html(message.message_text)),
+            icon='messages',
+            compact=True,
+        ),
         parse_mode='HTML',
     )
 
@@ -458,11 +523,15 @@ async def process_edit_message_text(message: types.Message, state: FSMContext, d
         if updated_message:
             await state.clear()
             await message.answer(
-                f' <b>Сообщение обновлено!</b>\n\n'
-                f'<b>ID:</b> {updated_message.id}\n'
-                f'<b>Обновлено:</b> {updated_message.updated_at.strftime("%d.%m.%Y %H:%M")}\n\n'
-                f'<b>Новый текст:</b>\n'
-                f'<blockquote>{sanitize_html(new_text)}</blockquote>',
+                admin_screen(
+                    f' <b>Сообщение обновлено!</b>\n\n'
+                    f'<b>ID:</b> {updated_message.id}\n'
+                    f'<b>Обновлено:</b> {updated_message.updated_at.strftime("%d.%m.%Y %H:%M")}\n\n'
+                    f'<b>Новый текст:</b>\n'
+                    f'<blockquote>{sanitize_html(new_text)}</blockquote>',
+                    icon='success',
+                    compact=True,
+                ),
                 reply_markup=get_user_messages_keyboard(db_user.language),
                 parse_mode='HTML',
             )

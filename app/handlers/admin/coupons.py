@@ -1,4 +1,5 @@
 import html
+import re
 from datetime import UTC, datetime, timedelta
 
 import structlog
@@ -23,8 +24,10 @@ from app.keyboards.admin import get_admin_pagination_keyboard
 from app.localization.texts import get_texts
 from app.services.coupon_service import build_coupon_deeplink
 from app.states import AdminStates
+from app.utils.admin_ui import admin_back_button, admin_button, admin_icon, admin_screen
 from app.utils.decorators import admin_required, error_handler
 from app.utils.formatters import format_datetime
+from app.utils.miniapp_buttons import strip_leading_emoji
 
 
 logger = structlog.get_logger(__name__)
@@ -33,6 +36,16 @@ MAX_COUPONS_PER_BATCH = 500
 MAX_PERIOD_DAYS = 3650
 MAX_WHOLESALE_PRICE_RUBLES = 10_000_000
 
+# Следы прежнего оформления, оставшиеся в локалях: декоративные глифы в начале
+# строк и лишние ведущие пробелы — иконку и отступы даёт admin_screen.
+_LEGACY_PREFIX_RE = re.compile(r'^[ \t]*(?:[▤▣▥◷↻←▶⏭◆✓✗⚠↑][ \t]*)*', re.MULTILINE)
+
+
+def _clean_legacy(value: str) -> str:
+    """Убирает декоративные глифы и ведущие пробелы строк локали."""
+    return _LEGACY_PREFIX_RE.sub('', value).strip()
+
+
 # Admin ids with a batch-creation in flight. aiogram dispatches updates
 # concurrently, so the FSM check→clear alone is not atomic against a double tap;
 # the check+add below run with no await between them and close that window.
@@ -40,12 +53,14 @@ _batch_creation_in_progress: set[int] = set()
 
 
 def _cancel_keyboard(language: str = 'ru') -> types.InlineKeyboardMarkup:
+    texts = get_texts(language)
     return types.InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                types.InlineKeyboardButton(
-                    text=get_texts(language).t('ADMIN_COUPONS_UI_START_COUPON_BATCH_CREATION_020', ' Отмена'),
-                    callback_data='admin_coupons',
+                admin_back_button(
+                    texts,
+                    'admin_coupons',
+                    label=strip_leading_emoji(texts.t('ADMIN_COUPONS_UI_START_COUPON_BATCH_CREATION_020', 'Отмена')),
                 ),
             ]
         ]
@@ -54,12 +69,13 @@ def _cancel_keyboard(language: str = 'ru') -> types.InlineKeyboardMarkup:
 
 def _format_batch_button(batch: CouponBatch, language: str = 'ru') -> str:
     texts = get_texts(language)
-    revoked_mark = ' ' if batch.is_revoked else ''
-    return texts.t(
-        'ADMIN_COUPONS_UI_FORMAT_BATCH_BUTTON_000', '{value1}#{value2} {value3} • {value4} дн. • {value5} шт.'
-    ).format(
-        value1=revoked_mark, value2=batch.id, value3=batch.name, value4=batch.period_days, value5=batch.coupons_total
+    label = _clean_legacy(
+        texts.t(
+            'ADMIN_COUPONS_UI_FORMAT_BATCH_BUTTON_000', '{value1}#{value2} {value3} • {value4} дн. • {value5} шт.'
+        ).format(value1='', value2=batch.id, value3=batch.name, value4=batch.period_days, value5=batch.coupons_total)
     )
+    # Отозванную партию помечает иконка в подписи: make_button вынесет её в icon.
+    return f'{admin_icon("delete")} {label}' if batch.is_revoked else label
 
 
 def _format_batch_card(batch: CouponBatch, counts: dict[str, int], language: str = 'ru') -> str:
@@ -71,7 +87,7 @@ def _format_batch_card(batch: CouponBatch, counts: dict[str, int], language: str
 
     text = texts.t(
         'ADMIN_COUPONS_UI_FORMAT_BATCH_CARD_001',
-        ' <b>Партия купонов #{value1}</b>\n\n Название: {value2}\n Тариф: {value3} — {value4} дн.\n Купонов: {value5}\n',
+        '<b>Партия купонов #{value1}</b>\n\nНазвание: {value2}\nТариф: {value3} — {value4} дн.\nКупонов: {value5}\n',
     ).format(
         value1=batch.id,
         value2=html.escape(batch.name),
@@ -82,36 +98,36 @@ def _format_batch_card(batch: CouponBatch, counts: dict[str, int], language: str
 
     if batch.wholesale_price_kopeks > 0:
         total_kopeks = batch.wholesale_price_kopeks * batch.coupons_total
-        text += texts.t('ADMIN_COUPONS_UI_FORMAT_BATCH_CARD_002', ' Опт: {value1}/шт (итого {value2})\n').format(
+        text += texts.t('ADMIN_COUPONS_UI_FORMAT_BATCH_CARD_002', 'Опт: {value1}/шт (итого {value2})\n').format(
             value1=settings.format_price(batch.wholesale_price_kopeks), value2=settings.format_price(total_kopeks)
         )
 
     text += texts.t(
         'ADMIN_COUPONS_UI_FORMAT_BATCH_CARD_003',
-        '\n <b>Статусы:</b>\n Активных: {value1}\n Погашено: {value2}\n Отозвано: {value3}\n\n',
+        '\n<b>Статусы:</b>\nАктивных: {value1}\nПогашено: {value2}\nОтозвано: {value3}\n\n',
     ).format(value1=active, value2=redeemed, value3=revoked)
 
     max_per_user = getattr(batch, 'max_per_user', 0) or 0
     if max_per_user > 0:
-        text += texts.t('ADMIN_COUPONS_UI_FORMAT_BATCH_CARD_004', ' На пользователя: не более {value1} шт.\n').format(
+        text += texts.t('ADMIN_COUPONS_UI_FORMAT_BATCH_CARD_004', 'На пользователя: не более {value1} шт.\n').format(
             value1=max_per_user
         )
 
     if batch.valid_until:
-        text += texts.t('ADMIN_COUPONS_UI_FORMAT_BATCH_CARD_005', ' Действует до: {value1}\n').format(
+        text += texts.t('ADMIN_COUPONS_UI_FORMAT_BATCH_CARD_005', 'Действует до: {value1}\n').format(
             value1=format_datetime(batch.valid_until)
         )
     else:
-        text += texts.t('ADMIN_COUPONS_UI_FORMAT_BATCH_CARD_006', ' Действует: бессрочно\n')
+        text += texts.t('ADMIN_COUPONS_UI_FORMAT_BATCH_CARD_006', 'Действует: бессрочно\n')
 
-    text += texts.t('ADMIN_COUPONS_UI_FORMAT_BATCH_CARD_007', ' Создана: {value1}\n').format(
+    text += texts.t('ADMIN_COUPONS_UI_FORMAT_BATCH_CARD_007', 'Создана: {value1}\n').format(
         value1=format_datetime(batch.created_at)
     )
 
     if batch.is_revoked:
-        text += texts.t('ADMIN_COUPONS_UI_FORMAT_BATCH_CARD_008', '\n <b>Партия отозвана</b>\n')
+        text += texts.t('ADMIN_COUPONS_UI_FORMAT_BATCH_CARD_008', '\n<b>Партия отозвана</b>\n')
 
-    return text
+    return _clean_legacy(text)
 
 
 def _batch_card_keyboard(
@@ -122,33 +138,36 @@ def _batch_card_keyboard(
     if counts.get(CouponStatus.ACTIVE.value, 0) > 0:
         keyboard.append(
             [
-                types.InlineKeyboardButton(
-                    text=texts.t('ADMIN_COUPONS_UI_BATCH_CARD_KEYBOARD_009', ' Файл со ссылками'),
+                admin_button(
+                    strip_leading_emoji(texts.t('ADMIN_COUPONS_UI_BATCH_CARD_KEYBOARD_009', 'Файл со ссылками')),
                     callback_data=f'admin_coupon_export_{batch.id}',
+                    icon='document',
                 )
             ]
         )
         keyboard.append(
-            [types.InlineKeyboardButton(text=' Отозвать непогашенные', callback_data=f'admin_coupon_revoke_{batch.id}')]
+            [
+                admin_button(
+                    'Отозвать непогашенные',
+                    callback_data=f'admin_coupon_revoke_{batch.id}',
+                    icon='lock',
+                    style='danger',
+                )
+            ]
         )
     # Удаление доступно всегда (в т.ч. у отозванной/использованной партии) —
     # это способ убрать запись совсем, отзыв лишь гасит ссылки.
     keyboard.append(
         [
-            types.InlineKeyboardButton(
-                text=texts.t('ADMIN_COUPONS_UI_BATCH_CARD_KEYBOARD_011', ' Удалить партию'),
+            admin_button(
+                strip_leading_emoji(texts.t('ADMIN_COUPONS_UI_BATCH_CARD_KEYBOARD_011', 'Удалить партию')),
                 callback_data=f'admin_coupon_delete_{batch.id}',
+                icon='delete',
+                style='danger',
             )
         ]
     )
-    keyboard.append(
-        [
-            types.InlineKeyboardButton(
-                text=texts.t('ADMIN_COUPONS_UI_BATCH_CARD_KEYBOARD_012', '← Назад'), callback_data='admin_coupons'
-            )
-        ]
-    )
-    keyboard.append([types.InlineKeyboardButton(text=' Назад', callback_data='admin_coupons')])
+    keyboard.append([admin_back_button(texts, 'admin_coupons')])
     return types.InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
@@ -175,8 +194,9 @@ async def _show_batch_card(
 ) -> None:
     counts = await get_batch_status_counts(db, batch.id)
     await callback.message.edit_text(
-        _format_batch_card(batch, counts, language=language),
+        admin_screen(_format_batch_card(batch, counts, language=language), icon='gift', compact=True),
         reply_markup=_batch_card_keyboard(batch, counts, language=language),
+        parse_mode='HTML',
     )
 
 
@@ -205,7 +225,7 @@ async def _render_coupons_menu(
 
     text = texts.t(
         'ADMIN_COUPONS_UI_RENDER_COUPONS_MENU_015',
-        ' <b>Купоны</b>\n\nОптовая продажа подписок через партнёров: партия одноразовых ссылок на тариф, каждая выдаёт или продлевает подписку на N дней.\n\n Партий: {value1}',
+        '<b>Купоны</b>\n\nОптовая продажа подписок через партнёров: партия одноразовых ссылок на тариф, каждая выдаёт или продлевает подписку на N дней.\n\nПартий: {value1}',
     ).format(value1=total_count)
     if total_pages > 1:
         text += texts.t('ADMIN_COUPONS_UI_RENDER_COUPONS_MENU_016', ' (стр. {value1}/{value2})').format(
@@ -214,8 +234,10 @@ async def _render_coupons_menu(
 
     keyboard = [
         [
-            types.InlineKeyboardButton(
-                text=_format_batch_button(batch, language=language), callback_data=f'admin_coupon_manage_{batch.id}'
+            admin_button(
+                _format_batch_button(batch, language=language),
+                callback_data=f'admin_coupon_manage_{batch.id}',
+                icon='gift',
             )
         ]
         for batch in batches
@@ -229,12 +251,14 @@ async def _render_coupons_menu(
 
     keyboard.extend(
         [
-            [types.InlineKeyboardButton(text=' Создать партию', callback_data='admin_coupon_create')],
-            [types.InlineKeyboardButton(text=' Назад', callback_data='admin_submenu_promo')],
+            [admin_button('Создать партию', callback_data='admin_coupon_create', icon='gift', style='success')],
+            [admin_back_button(texts, 'admin_submenu_promo')],
         ]
     )
 
-    return text, types.InlineKeyboardMarkup(inline_keyboard=keyboard)
+    return admin_screen(_clean_legacy(text), icon='gift', compact=True), types.InlineKeyboardMarkup(
+        inline_keyboard=keyboard
+    )
 
 
 @admin_required
@@ -242,7 +266,7 @@ async def _render_coupons_menu(
 async def show_coupons_menu(callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext):
     await state.clear()
     text, keyboard = await _render_coupons_menu(db, db_user.language)
-    await callback.message.edit_text(text, reply_markup=keyboard)
+    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='HTML')
     await callback.answer()
 
 
@@ -254,7 +278,7 @@ async def handle_coupon_list_page(callback: types.CallbackQuery, db_user: User, 
     except ValueError:
         page = 1
     text, keyboard = await _render_coupons_menu(db, db_user.language, page=page)
-    await callback.message.edit_text(text, reply_markup=keyboard)
+    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='HTML')
     await callback.answer()
 
 
@@ -273,24 +297,30 @@ async def start_coupon_batch_creation(callback: types.CallbackQuery, db_user: Us
         return
 
     keyboard = [
-        [types.InlineKeyboardButton(text=tariff.name, callback_data=f'coupon_batch_tariff_{tariff.id}')]
+        [admin_button(tariff.name, callback_data=f'coupon_batch_tariff_{tariff.id}', icon='tariff')]
         for tariff in tariffs
     ]
     keyboard.append(
         [
-            types.InlineKeyboardButton(
-                text=texts.t('ADMIN_COUPONS_UI_START_COUPON_BATCH_CREATION_020', ' Отмена'),
-                callback_data='admin_coupons',
+            admin_back_button(
+                texts,
+                'admin_coupons',
+                label=strip_leading_emoji(texts.t('ADMIN_COUPONS_UI_START_COUPON_BATCH_CREATION_020', 'Отмена')),
             )
         ]
     )
 
     await callback.message.edit_text(
-        texts.t(
-            'ADMIN_COUPONS_UI_START_COUPON_BATCH_CREATION_021',
-            ' <b>Создание партии купонов</b>\n\nВыберите тариф, который будут выдавать купоны:',
+        admin_screen(
+            texts.t(
+                'ADMIN_COUPONS_UI_START_COUPON_BATCH_CREATION_021',
+                '<b>Создание партии купонов</b>\n\nВыберите тариф, который будут выдавать купоны:',
+            ),
+            icon='gift',
+            compact=True,
         ),
         reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
+        parse_mode='HTML',
     )
     await callback.answer()
 
@@ -318,11 +348,16 @@ async def select_coupon_batch_tariff(callback: types.CallbackQuery, db_user: Use
     await state.update_data(coupon_tariff_id=tariff.id, coupon_tariff_name=tariff.name)
 
     await callback.message.edit_text(
-        texts.t(
-            'ADMIN_COUPONS_UI_SELECT_COUPON_BATCH_TARIFF_024',
-            ' <b>Создание партии купонов</b>\n\nТариф: {value1}\n\n Введите количество дней подписки на купон (1-{value2}):',
-        ).format(value1=html.escape(tariff.name), value2=MAX_PERIOD_DAYS),
+        admin_screen(
+            texts.t(
+                'ADMIN_COUPONS_UI_SELECT_COUPON_BATCH_TARIFF_024',
+                '<b>Создание партии купонов</b>\n\nТариф: {value1}\n\nВведите количество дней подписки на купон (1-{value2}):',
+            ).format(value1=html.escape(tariff.name), value2=MAX_PERIOD_DAYS),
+            icon='gift',
+            compact=True,
+        ),
         reply_markup=_cancel_keyboard(db_user.language),
+        parse_mode='HTML',
     )
     await state.set_state(AdminStates.creating_coupon_batch_days)
     await callback.answer()
@@ -485,56 +520,64 @@ async def process_coupon_batch_per_user(message: types.Message, db_user: User, s
     expiry_days = data.get('coupon_expiry_days', 0)
     price_kopeks = data.get('coupon_price_kopeks', 0)
     price_line = (
-        texts.t('ADMIN_COUPONS_UI_PROCESS_COUPON_BATCH_PER_USER_037', ' Опт: {value1}/шт\n').format(
+        texts.t('ADMIN_COUPONS_UI_PROCESS_COUPON_BATCH_PER_USER_037', 'Опт: {value1}/шт\n').format(
             value1=settings.format_price(price_kopeks)
         )
         if price_kopeks > 0
         else ''
     )
     expiry_line = (
-        texts.t('ADMIN_COUPONS_UI_PROCESS_COUPON_BATCH_PER_USER_038', ' Срок: {value1} дн.\n').format(
-            value1=expiry_days
-        )
+        texts.t('ADMIN_COUPONS_UI_PROCESS_COUPON_BATCH_PER_USER_038', 'Срок: {value1} дн.\n').format(value1=expiry_days)
         if expiry_days > 0
-        else texts.t('ADMIN_COUPONS_UI_PROCESS_COUPON_BATCH_PER_USER_039', ' Срок: бессрочно\n')
+        else texts.t('ADMIN_COUPONS_UI_PROCESS_COUPON_BATCH_PER_USER_039', 'Срок: бессрочно\n')
     )
     per_user_line = (
-        texts.t('ADMIN_COUPONS_UI_PROCESS_COUPON_BATCH_PER_USER_040', ' На пользователя: {value1} шт.\n').format(
+        texts.t('ADMIN_COUPONS_UI_PROCESS_COUPON_BATCH_PER_USER_040', 'На пользователя: {value1} шт.\n').format(
             value1=max_per_user
         )
         if max_per_user > 0
-        else texts.t('ADMIN_COUPONS_UI_PROCESS_COUPON_BATCH_PER_USER_041', ' На пользователя: без ограничения\n')
+        else texts.t('ADMIN_COUPONS_UI_PROCESS_COUPON_BATCH_PER_USER_041', 'На пользователя: без ограничения\n')
     )
 
     await message.answer(
-        texts.t(
-            'ADMIN_COUPONS_UI_PROCESS_COUPON_BATCH_PER_USER_042',
-            ' <b>Подтвердите создание партии</b>\n\n Название: {value1}\n Тариф: {value2} — {value3} дн.\n Купонов: {value4}\n{value5}{value6}{value7}',
-        ).format(
-            value1=html.escape(data.get('coupon_batch_name', '')),
-            value2=html.escape(data.get('coupon_tariff_name', '')),
-            value3=data.get('coupon_period_days'),
-            value4=data.get('coupon_count'),
-            value5=price_line,
-            value6=expiry_line,
-            value7=per_user_line,
+        admin_screen(
+            texts.t(
+                'ADMIN_COUPONS_UI_PROCESS_COUPON_BATCH_PER_USER_042',
+                '<b>Подтвердите создание партии</b>\n\nНазвание: {value1}\nТариф: {value2} — {value3} дн.\nКупонов: {value4}\n{value5}{value6}{value7}',
+            ).format(
+                value1=html.escape(data.get('coupon_batch_name', '')),
+                value2=html.escape(data.get('coupon_tariff_name', '')),
+                value3=data.get('coupon_period_days'),
+                value4=data.get('coupon_count'),
+                value5=price_line,
+                value6=expiry_line,
+                value7=per_user_line,
+            ),
+            icon='gift',
+            compact=True,
         ),
         reply_markup=types.InlineKeyboardMarkup(
             inline_keyboard=[
                 [
-                    types.InlineKeyboardButton(
-                        text=texts.t('ADMIN_COUPONS_UI_PROCESS_COUPON_BATCH_PER_USER_043', ' Создать'),
+                    admin_button(
+                        strip_leading_emoji(texts.t('ADMIN_COUPONS_UI_PROCESS_COUPON_BATCH_PER_USER_043', 'Создать')),
                         callback_data='admin_coupon_create_confirm',
+                        icon='success',
+                        style='success',
                     )
                 ],
                 [
-                    types.InlineKeyboardButton(
-                        text=texts.t('ADMIN_COUPONS_UI_START_COUPON_BATCH_CREATION_020', ' Отмена'),
-                        callback_data='admin_coupons',
+                    admin_back_button(
+                        texts,
+                        'admin_coupons',
+                        label=strip_leading_emoji(
+                            texts.t('ADMIN_COUPONS_UI_START_COUPON_BATCH_CREATION_020', 'Отмена')
+                        ),
                     )
                 ],
             ]
         ),
+        parse_mode='HTML',
     )
 
 
@@ -693,26 +736,36 @@ async def ask_revoke_coupon_batch(callback: types.CallbackQuery, db_user: User, 
     active = counts.get(CouponStatus.ACTIVE.value, 0)
 
     await callback.message.edit_text(
-        texts.t(
-            'ADMIN_COUPONS_UI_ASK_REVOKE_COUPON_BATCH_052',
-            ' <b>Отзыв партии #{value1}</b>\n\n«{value2}»: будет отозвано {value3} непогашенных купонов. Их ссылки перестанут работать. Действие необратимо.\n\nПодтвердить?',
-        ).format(value1=batch.id, value2=html.escape(batch.name), value3=active),
+        admin_screen(
+            texts.t(
+                'ADMIN_COUPONS_UI_ASK_REVOKE_COUPON_BATCH_052',
+                '<b>Отзыв партии #{value1}</b>\n\n«{value2}»: будет отозвано {value3} непогашенных купонов. Их ссылки перестанут работать. Действие необратимо.\n\nПодтвердить?',
+            ).format(value1=batch.id, value2=html.escape(batch.name), value3=active),
+            icon='warning',
+            compact=True,
+        ),
         reply_markup=types.InlineKeyboardMarkup(
             inline_keyboard=[
                 [
-                    types.InlineKeyboardButton(
-                        text=texts.t('ADMIN_COUPONS_UI_ASK_REVOKE_COUPON_BATCH_053', ' Да, отозвать'),
+                    admin_button(
+                        strip_leading_emoji(texts.t('ADMIN_COUPONS_UI_ASK_REVOKE_COUPON_BATCH_053', 'Да, отозвать')),
                         callback_data=f'admin_coupon_revoke_confirm_{batch.id}',
+                        icon='lock',
+                        style='danger',
                     )
                 ],
                 [
-                    types.InlineKeyboardButton(
-                        text=texts.t('ADMIN_COUPONS_UI_START_COUPON_BATCH_CREATION_020', ' Отмена'),
-                        callback_data=f'admin_coupon_manage_{batch.id}',
+                    admin_back_button(
+                        texts,
+                        f'admin_coupon_manage_{batch.id}',
+                        label=strip_leading_emoji(
+                            texts.t('ADMIN_COUPONS_UI_START_COUPON_BATCH_CREATION_020', 'Отмена')
+                        ),
                     )
                 ],
             ]
         ),
+        parse_mode='HTML',
     )
     await callback.answer()
 
@@ -757,30 +810,40 @@ async def ask_delete_coupon_batch(callback: types.CallbackQuery, db_user: User, 
     if redeemed:
         warning = texts.t(
             'ADMIN_COUPONS_UI_ASK_DELETE_COUPON_BATCH_056',
-            '\n Среди них {value1} уже погашенных: пропадёт история, кто чем воспользовался. Выданные подписки при этом НЕ отзываются.\n',
+            '\nСреди них {value1} уже погашенных: пропадёт история, кто чем воспользовался. Выданные подписки при этом НЕ отзываются.\n',
         ).format(value1=redeemed)
 
     await callback.message.edit_text(
-        texts.t(
-            'ADMIN_COUPONS_UI_ASK_DELETE_COUPON_BATCH_057',
-            ' <b>Удаление партии #{value1}</b>\n\n«{value2}»: будет удалено {value3} купонов вместе с самой партией.\n{value4}\nЕсли нужно просто закрыть раздачу — используйте «Отозвать»: он гасит ссылки, но сохраняет историю.\n\nПодтвердить удаление?',
-        ).format(value1=batch.id, value2=html.escape(batch.name), value3=total, value4=warning),
+        admin_screen(
+            texts.t(
+                'ADMIN_COUPONS_UI_ASK_DELETE_COUPON_BATCH_057',
+                '<b>Удаление партии #{value1}</b>\n\n«{value2}»: будет удалено {value3} купонов вместе с самой партией.\n{value4}\nЕсли нужно просто закрыть раздачу — используйте «Отозвать»: он гасит ссылки, но сохраняет историю.\n\nПодтвердить удаление?',
+            ).format(value1=batch.id, value2=html.escape(batch.name), value3=total, value4=warning),
+            icon='delete',
+            compact=True,
+        ),
         reply_markup=types.InlineKeyboardMarkup(
             inline_keyboard=[
                 [
-                    types.InlineKeyboardButton(
-                        text=texts.t('ADMIN_COUPONS_UI_ASK_DELETE_COUPON_BATCH_058', ' Да, удалить'),
+                    admin_button(
+                        strip_leading_emoji(texts.t('ADMIN_COUPONS_UI_ASK_DELETE_COUPON_BATCH_058', 'Да, удалить')),
                         callback_data=f'admin_coupon_delete_confirm_{batch.id}',
+                        icon='delete',
+                        style='danger',
                     )
                 ],
                 [
-                    types.InlineKeyboardButton(
-                        text=texts.t('ADMIN_COUPONS_UI_START_COUPON_BATCH_CREATION_020', ' Отмена'),
-                        callback_data=f'admin_coupon_manage_{batch.id}',
+                    admin_back_button(
+                        texts,
+                        f'admin_coupon_manage_{batch.id}',
+                        label=strip_leading_emoji(
+                            texts.t('ADMIN_COUPONS_UI_START_COUPON_BATCH_CREATION_020', 'Отмена')
+                        ),
                     )
                 ],
             ]
         ),
+        parse_mode='HTML',
     )
     await callback.answer()
 

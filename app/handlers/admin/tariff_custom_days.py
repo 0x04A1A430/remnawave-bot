@@ -5,7 +5,7 @@ import html
 from aiogram import Dispatcher, F, types
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import InlineKeyboardMarkup
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.crud.tariff import get_tariff_by_id, update_tariff
@@ -14,8 +14,10 @@ from app.localization.texts import get_texts
 from app.services.tariff_custom_days import parse_positive_days, validate_custom_days_configuration
 from app.services.tariff_custom_traffic import parse_positive_rubles_to_kopeks
 from app.states import AdminStates
+from app.utils.admin_ui import admin_back_button, admin_button, admin_screen
 from app.utils.decorators import admin_required, error_handler
 from app.utils.formatting import format_price_kopeks
+from app.utils.miniapp_buttons import strip_leading_emoji
 
 
 _VALIDATION_ERROR_KEYS = {
@@ -55,9 +57,9 @@ def format_custom_days_settings(tariff: Tariff, language: str = 'ru') -> str:
     """Блок для карточки тарифа."""
     enabled = getattr(tariff, 'custom_days_enabled', False)
     status = (
-        get_texts(language).t('ADMIN_TARIFF_HELPER_ENABLED_STATE', ' Включено')
+        get_texts(language).t('ADMIN_TARIFF_HELPER_ENABLED_STATE', 'Включено')
         if enabled
-        else get_texts(language).t('ADMIN_TARIFF_HELPER_DISABLED_STATE', ' Выключено')
+        else get_texts(language).t('ADMIN_TARIFF_HELPER_DISABLED_STATE', 'Выключено')
     )
     return (
         get_texts(language)
@@ -78,15 +80,15 @@ def render_custom_days_settings(tariff: Tariff, language: str = 'ru') -> str:
     """Отдельный экран настроек."""
     enabled = getattr(tariff, 'custom_days_enabled', False)
     status = (
-        get_texts(language).t('ADMIN_TARIFF_HELPER_ENABLED_MODE', ' Включён')
+        get_texts(language).t('ADMIN_TARIFF_HELPER_ENABLED_MODE', 'Включён')
         if enabled
-        else get_texts(language).t('ADMIN_TARIFF_HELPER_DISABLED_MODE', ' Выключен')
+        else get_texts(language).t('ADMIN_TARIFF_HELPER_DISABLED_MODE', 'Выключен')
     )
     return (
         get_texts(language)
         .t(
             'ADMIN_TARIFF_HELPER_RENDER_CUSTOM_DAYS_SETTINGS_1',
-            ' <b>Произвольное количество дней</b>\n\nТариф: <b>{v0}</b>\n\nСтатус: {v1}\nЦена за 1 день: <b>{v2}</b>\nМинимум: <b>{v3}</b>\nМаксимум: <b>{v4}</b>\n\nПользователь сможет выбрать срок в указанных границах; цена — дни × цена за день.',
+            '<b>Произвольное количество дней</b>\n\nТариф: <b>{v0}</b>\n\nСтатус: {v1}\nЦена за 1 день: <b>{v2}</b>\nМинимум: <b>{v3}</b>\nМаксимум: <b>{v4}</b>\n\nПользователь сможет выбрать срок в указанных границах; цена — дни × цена за день.',
         )
         .format(
             v0=html.escape(tariff.name),
@@ -104,32 +106,40 @@ def get_custom_days_keyboard(tariff: Tariff, language: str) -> InlineKeyboardMar
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                InlineKeyboardButton(
-                    text=get_texts(language).t('ADMIN_TARIFF_HELPER_DISABLE_BUTTON', ' Выключить')
+                admin_button(
+                    strip_leading_emoji(texts.t('ADMIN_TARIFF_HELPER_DISABLE_BUTTON', 'Выключить'))
                     if enabled
-                    else get_texts(language).t('ADMIN_TARIFF_HELPER_ENABLE_BUTTON', ' Включить'),
+                    else strip_leading_emoji(texts.t('ADMIN_TARIFF_HELPER_ENABLE_BUTTON', 'Включить')),
                     callback_data=f'admin_tariff_toggle_custom_days:{tariff.id}',
+                    icon='lock' if enabled else 'success',
+                    style='danger' if enabled else 'success',
                 )
             ],
             [
-                InlineKeyboardButton(
-                    text=get_texts(language).t('ADMIN_TARIFF_HELPER_DAY_PRICE_BUTTON', ' Цена за 1 день'),
+                admin_button(
+                    strip_leading_emoji(texts.t('ADMIN_TARIFF_HELPER_DAY_PRICE_BUTTON', 'Цена за 1 день')),
                     callback_data=f'admin_tariff_edit_custom_days_price:{tariff.id}',
+                    icon='money',
+                    style='primary',
                 )
             ],
             [
-                InlineKeyboardButton(
-                    text=get_texts(language).t('ADMIN_TARIFF_HELPER_MIN_DAYS_BUTTON', ' Минимум дней'),
+                admin_button(
+                    strip_leading_emoji(texts.t('ADMIN_TARIFF_HELPER_MIN_DAYS_BUTTON', 'Минимум дней')),
                     callback_data=f'admin_tariff_edit_custom_days_min:{tariff.id}',
+                    icon='calendar',
+                    style='primary',
                 )
             ],
             [
-                InlineKeyboardButton(
-                    text=get_texts(language).t('ADMIN_TARIFF_HELPER_MAX_DAYS_BUTTON', ' Максимум дней'),
+                admin_button(
+                    strip_leading_emoji(texts.t('ADMIN_TARIFF_HELPER_MAX_DAYS_BUTTON', 'Максимум дней')),
                     callback_data=f'admin_tariff_edit_custom_days_max:{tariff.id}',
+                    icon='calendar',
+                    style='primary',
                 )
             ],
-            [InlineKeyboardButton(text=texts.BACK, callback_data=f'admin_tariff_view:{tariff.id}')],
+            [admin_back_button(texts, f'admin_tariff_view:{tariff.id}')],
         ]
     )
 
@@ -145,7 +155,11 @@ async def show_custom_days_settings(callback: types.CallbackQuery, db_user: User
         )
         return
     await callback.message.edit_text(
-        render_custom_days_settings(tariff, language=db_user.language),
+        admin_screen(
+            strip_leading_emoji(render_custom_days_settings(tariff, language=db_user.language)),
+            icon='calendar',
+            compact=True,
+        ),
         reply_markup=get_custom_days_keyboard(tariff, db_user.language),
         parse_mode='HTML',
     )
@@ -188,7 +202,11 @@ async def toggle_custom_days(callback: types.CallbackQuery, db_user: User, db: A
         )
 
     await callback.message.edit_text(
-        render_custom_days_settings(tariff, language=db_user.language),
+        admin_screen(
+            strip_leading_emoji(render_custom_days_settings(tariff, language=db_user.language)),
+            icon='calendar',
+            compact=True,
+        ),
         reply_markup=get_custom_days_keyboard(tariff, db_user.language),
         parse_mode='HTML',
     )
@@ -209,15 +227,24 @@ async def _start_field_edit(
     await state.update_data(tariff_id=tariff.id, language=db_user.language)
     texts = get_texts(db_user.language)
     await callback.message.edit_text(
-        get_texts(db_user.language)
-        .t(
-            'ADMIN_TARIFF_HELPER_START_FIELD_EDIT_1',
-            '{v0}\n\nТариф: <b>{v1}</b>\nТекущее значение: <b>{v2}</b>\n\n{v3}',
-        )
-        .format(v0=title, v1=html.escape(tariff.name), v2=current_value, v3=prompt),
+        admin_screen(
+            get_texts(db_user.language)
+            .t(
+                'ADMIN_TARIFF_HELPER_START_FIELD_EDIT_1',
+                '{v0}\n\nТариф: <b>{v1}</b>\nТекущее значение: <b>{v2}</b>\n\n{v3}',
+            )
+            .format(
+                v0=strip_leading_emoji(title),
+                v1=html.escape(tariff.name),
+                v2=current_value,
+                v3=prompt,
+            ),
+            icon='calendar',
+            compact=True,
+        ),
         reply_markup=InlineKeyboardMarkup(
             inline_keyboard=[
-                [InlineKeyboardButton(text=texts.CANCEL, callback_data=f'admin_tariff_edit_custom_days:{tariff.id}')]
+                [admin_back_button(texts, f'admin_tariff_edit_custom_days:{tariff.id}', label=texts.CANCEL)]
             ]
         ),
         parse_mode='HTML',
@@ -242,7 +269,7 @@ async def start_edit_custom_days_price(
         state,
         tariff,
         state_value=AdminStates.editing_tariff_custom_days_price,
-        title=get_texts(db_user.language).t('ADMIN_TARIFF_HELPER_DAY_PRICE_TITLE', ' <b>Цена за 1 день</b>'),
+        title=get_texts(db_user.language).t('ADMIN_TARIFF_HELPER_DAY_PRICE_TITLE', '<b>Цена за 1 день</b>'),
         current_value=_price(getattr(tariff, 'price_per_day_kopeks', None), language=db_user.language),
         prompt=get_texts(db_user.language).t(
             'ADMIN_TARIFF_HELPER_DAY_PRICE_PROMPT',
@@ -266,7 +293,7 @@ async def start_edit_custom_days_min(callback: types.CallbackQuery, db_user: Use
         state,
         tariff,
         state_value=AdminStates.editing_tariff_custom_days_min,
-        title=get_texts(db_user.language).t('ADMIN_TARIFF_HELPER_MIN_DAYS_TITLE', ' <b>Минимум дней</b>'),
+        title=get_texts(db_user.language).t('ADMIN_TARIFF_HELPER_MIN_DAYS_TITLE', '<b>Минимум дней</b>'),
         current_value=_days(getattr(tariff, 'min_days', None), language=db_user.language),
         prompt=get_texts(db_user.language).t(
             'ADMIN_TARIFF_HELPER_MIN_DAYS_PROMPT', 'Введите минимальный срок целым числом дней.\nПример: <code>3</code>'
@@ -289,7 +316,7 @@ async def start_edit_custom_days_max(callback: types.CallbackQuery, db_user: Use
         state,
         tariff,
         state_value=AdminStates.editing_tariff_custom_days_max,
-        title=get_texts(db_user.language).t('ADMIN_TARIFF_HELPER_MAX_DAYS_TITLE', ' <b>Максимум дней</b>'),
+        title=get_texts(db_user.language).t('ADMIN_TARIFF_HELPER_MAX_DAYS_TITLE', '<b>Максимум дней</b>'),
         current_value=_days(getattr(tariff, 'max_days', None), language=db_user.language),
         prompt=get_texts(db_user.language).t(
             'ADMIN_TARIFF_HELPER_MAX_DAYS_PROMPT',
@@ -312,7 +339,11 @@ async def _load_tariff_from_state(
 async def _finish(message: types.Message, db_user: User, state: FSMContext, tariff: Tariff, confirmation: str) -> None:
     await state.clear()
     await message.answer(
-        f'{confirmation}\n\n{render_custom_days_settings(tariff, language=db_user.language)}',
+        admin_screen(
+            f'{confirmation}\n\n{render_custom_days_settings(tariff, language=db_user.language)}',
+            icon='success',
+            compact=True,
+        ),
         reply_markup=get_custom_days_keyboard(tariff, db_user.language),
         parse_mode='HTML',
     )
@@ -330,13 +361,13 @@ async def process_custom_days_price_input(message: types.Message, db_user: User,
         await message.answer(
             get_texts(db_user.language).t(
                 'ADMIN_TARIFF_HELPER_INVALID_DAY_PRICE',
-                ' Некорректная цена. Введите положительную сумму в рублях с точностью не более двух знаков.\nПример: <code>15</code> или <code>12.50</code>',
+                'Некорректная цена. Введите положительную сумму в рублях с точностью не более двух знаков.\nПример: <code>15</code> или <code>12.50</code>',
             ),
             parse_mode='HTML',
         )
         return
     tariff = await update_tariff(db, tariff, price_per_day_kopeks=price_kopeks)
-    await _finish(message, db_user, state, tariff, f' Цена за 1 день установлена: {format_price_kopeks(price_kopeks)}')
+    await _finish(message, db_user, state, tariff, f'Цена за 1 день установлена: {format_price_kopeks(price_kopeks)}')
 
 
 @admin_required
@@ -351,7 +382,7 @@ async def process_custom_days_min_input(message: types.Message, db_user: User, d
         await message.answer(
             get_texts(db_user.language).t(
                 'ADMIN_TARIFF_HELPER_INVALID_MIN_DAYS',
-                ' Введите положительное целое число дней.\nПример: <code>3</code>',
+                'Введите положительное целое число дней.\nПример: <code>3</code>',
             ),
             parse_mode='HTML',
         )
@@ -362,7 +393,7 @@ async def process_custom_days_min_input(message: types.Message, db_user: User, d
             get_texts(db_user.language)
             .t(
                 'ADMIN_TARIFF_HELPER_PROCESS_CUSTOM_DAYS_MIN_INPUT_2',
-                ' Минимум дней не может быть больше текущего максимума ({v0} дн.).',
+                'Минимум дней не может быть больше текущего максимума ({v0} дн.).',
             )
             .format(v0=maximum)
         )
@@ -374,7 +405,7 @@ async def process_custom_days_min_input(message: types.Message, db_user: User, d
         state,
         tariff,
         get_texts(db_user.language)
-        .t('ADMIN_TARIFF_HELPER_PROCESS_CUSTOM_DAYS_MIN_INPUT_1', ' Минимум установлен: {v0} дн.')
+        .t('ADMIN_TARIFF_HELPER_PROCESS_CUSTOM_DAYS_MIN_INPUT_1', 'Минимум установлен: {v0} дн.')
         .format(v0=minimum),
     )
 
@@ -391,7 +422,7 @@ async def process_custom_days_max_input(message: types.Message, db_user: User, d
         await message.answer(
             get_texts(db_user.language).t(
                 'ADMIN_TARIFF_HELPER_INVALID_MAX_DAYS',
-                ' Введите положительное целое число дней.\nПример: <code>90</code>',
+                'Введите положительное целое число дней.\nПример: <code>90</code>',
             ),
             parse_mode='HTML',
         )
@@ -402,7 +433,7 @@ async def process_custom_days_max_input(message: types.Message, db_user: User, d
             get_texts(db_user.language)
             .t(
                 'ADMIN_TARIFF_HELPER_PROCESS_CUSTOM_DAYS_MAX_INPUT_2',
-                ' Максимум дней не может быть меньше текущего минимума ({v0} дн.).',
+                'Максимум дней не может быть меньше текущего минимума ({v0} дн.).',
             )
             .format(v0=minimum)
         )
@@ -414,7 +445,7 @@ async def process_custom_days_max_input(message: types.Message, db_user: User, d
         state,
         tariff,
         get_texts(db_user.language)
-        .t('ADMIN_TARIFF_HELPER_PROCESS_CUSTOM_DAYS_MAX_INPUT_1', ' Максимум установлен: {v0} дн.')
+        .t('ADMIN_TARIFF_HELPER_PROCESS_CUSTOM_DAYS_MAX_INPUT_1', 'Максимум установлен: {v0} дн.')
         .format(v0=maximum),
     )
 

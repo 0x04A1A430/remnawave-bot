@@ -4,18 +4,27 @@ from pathlib import Path
 
 import structlog
 from aiogram import Dispatcher, F, types
-from aiogram.types import FSInputFile, InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import FSInputFile, InlineKeyboardMarkup
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.models import User
 from app.localization.texts import get_texts
+from app.utils.admin_ui import admin_back_button, admin_button, admin_screen
 from app.utils.decorators import admin_required, error_handler
 
 
 logger = structlog.get_logger(__name__)
 
 LOG_PREVIEW_LIMIT = 2300
+
+# Следы прошлого оформления, которые остались в локалях перед заголовком.
+_LEGACY_TITLE_GLYPHS = '▤▣▥↻ '
+
+
+def _screen_title(text: str, icon: str = 'logs') -> str:
+    """Заголовок экрана в общем стиле: без legacy-маркера и ведущего пробела."""
+    return admin_screen(text.lstrip(_LEGACY_TITLE_GLYPHS), icon=icon)
 
 
 def _resolve_log_path() -> Path:
@@ -40,7 +49,7 @@ def _build_logs_message(log_path: Path, language: str = 'ru') -> str:
             )
             .format(v0=log_path)
         )
-        return message
+        return _screen_title(message)
 
     try:
         content = log_path.read_text(encoding='utf-8', errors='ignore')
@@ -54,7 +63,7 @@ def _build_logs_message(log_path: Path, language: str = 'ru') -> str:
             )
             .format(v0=log_path)
         )
-        return message
+        return _screen_title(message, icon='error')
 
     total_length = len(content)
     stats = log_path.stat()
@@ -68,12 +77,12 @@ def _build_logs_message(log_path: Path, language: str = 'ru') -> str:
         truncated = total_length > LOG_PREVIEW_LIMIT
 
     details_lines = [
-        get_texts(language).t('ADMIN_SYSTEM_LOGS_UI_002', ' <b>Системные логи</b>'),
+        _screen_title(get_texts(language).t('ADMIN_SYSTEM_LOGS_UI_002', ' <b>Системные логи</b>')),
         '',
-        f' <b>Файл:</b> <code>{log_path}</code>',
-        f' <b>Обновлен:</b> {updated_at.strftime("%d.%m.%Y %H:%M:%S")}',
-        f' <b>Размер:</b> {total_length} символов',
-        (f' Показаны последние {LOG_PREVIEW_LIMIT} символов.' if truncated else ' Показано все содержимое файла.'),
+        f'<b>Файл:</b> <code>{log_path}</code>',
+        f'<b>Обновлен:</b> {updated_at.strftime("%d.%m.%Y %H:%M:%S")}',
+        f'<b>Размер:</b> {total_length} символов',
+        (f'Показаны последние {LOG_PREVIEW_LIMIT} символов.' if truncated else 'Показано все содержимое файла.'),
         '',
         _format_preview_block(preview_text),
     ]
@@ -82,11 +91,30 @@ def _build_logs_message(log_path: Path, language: str = 'ru') -> str:
 
 
 def _get_logs_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
+    texts = get_texts(language)
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text=' Обновить', callback_data='admin_system_logs_refresh')],
-            [InlineKeyboardButton(text=' Скачать лог', callback_data='admin_system_logs_download')],
-            [InlineKeyboardButton(text=' Назад', callback_data='admin_submenu_system')],
+            [
+                admin_button(
+                    texts.t('ADMIN_SYSTEM_LOGS_UI_014', ' Обновить'),
+                    callback_data='admin_system_logs_refresh',
+                    style='primary',
+                )
+            ],
+            [
+                admin_button(
+                    texts.t('ADMIN_SYSTEM_LOGS_UI_015', ' Скачать лог'),
+                    callback_data='admin_system_logs_download',
+                    style='success',
+                )
+            ],
+            [
+                admin_back_button(
+                    texts,
+                    'admin_submenu_system',
+                    label=texts.t('ADMIN_SYSTEM_LOGS_UI_016', '← Назад'),
+                )
+            ],
         ]
     )
 

@@ -10,13 +10,30 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import User
-from app.handlers.admin._text import compact_text
 from app.localization.texts import get_texts
 from app.services.backup_service import backup_service
+from app.utils.admin_ui import admin_back_button, admin_button, admin_screen
 from app.utils.decorators import admin_required, error_handler
+from app.utils.miniapp_buttons import strip_leading_emoji
 
 
 logger = structlog.get_logger(__name__)
+
+# Следы прежнего оформления в локалях: декоративные глифы в начале строк.
+_LEGACY_PREFIX_RE = re.compile(
+    r'^[ \t]*(?:(?:[▤▣▥◷↻◀▫⚠ℹ→]|NEW(?=[ \t])|i(?=[ \t]))\ufe0f?[ \t]*)*',
+    re.MULTILINE,
+)
+
+
+def _clean_legacy(value: str) -> str:
+    """Убирает старые декоративные глифы и ведущие пробелы строк из локалей."""
+    return _LEGACY_PREFIX_RE.sub('', value).strip()
+
+
+def _label(value: str) -> str:
+    """Подпись кнопки без старого ведущего глифа и лишних пробелов."""
+    return strip_leading_emoji(value).strip()
 
 
 _BACKUP_RESULT_KEYS = {
@@ -95,34 +112,40 @@ class BackupStates(StatesGroup):
 
 
 def get_backup_main_keyboard(language: str = 'ru'):
+    texts = get_texts(language)
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                InlineKeyboardButton(
-                    text=get_texts(language).t('ADMIN_BACKUP_UI_056', ' Создать бекап'), callback_data='backup_create'
+                admin_button(
+                    _label(texts.t('ADMIN_BACKUP_UI_056', 'Создать бекап')),
+                    callback_data='backup_create',
+                    style='success',
                 ),
-                InlineKeyboardButton(
-                    text=get_texts(language).t('ADMIN_BACKUP_UI_057', ' Восстановить'), callback_data='backup_restore'
-                ),
-            ],
-            [
-                InlineKeyboardButton(
-                    text=get_texts(language).t('ADMIN_BACKUP_UI_058', ' Список бекапов'), callback_data='backup_list'
-                ),
-                InlineKeyboardButton(
-                    text=get_texts(language).t('ADMIN_BACKUP_UI_059', ' Настройки'), callback_data='backup_settings'
+                admin_button(
+                    _label(texts.t('ADMIN_BACKUP_UI_057', 'Восстановить')),
+                    callback_data='backup_restore',
+                    style='primary',
                 ),
             ],
             [
-                InlineKeyboardButton(
-                    text=get_texts(language).t('ADMIN_BACKUP_UI_054', '← Назад'), callback_data='admin_panel'
-                )
+                admin_button(
+                    _label(texts.t('ADMIN_BACKUP_UI_058', 'Список бекапов')),
+                    callback_data='backup_list',
+                    style='primary',
+                ),
+                admin_button(
+                    _label(texts.t('ADMIN_BACKUP_UI_059', 'Настройки')),
+                    callback_data='backup_settings',
+                    style='primary',
+                ),
             ],
+            [admin_back_button(texts, 'admin_panel')],
         ]
     )
 
 
 def get_backup_list_keyboard(backups: list, page: int = 1, per_page: int = 5, language: str = 'ru'):
+    texts = get_texts(language)
     keyboard = []
 
     start_idx = (page - 1) * per_page
@@ -142,10 +165,10 @@ def get_backup_list_keyboard(backups: list, page: int = 1, per_page: int = 5, la
         size_str = f'{backup.get("file_size_mb", 0):.1f}MB'
         records_str = backup.get('total_records', '?')
 
-        button_text = (
-            get_texts(language)
-            .t('ADMIN_BACKUP_UI_006', ' {v0} • {v1} • {v2} записей')
-            .format(v0=date_str, v1=size_str, v2=records_str)
+        button_text = _label(
+            texts.t('ADMIN_BACKUP_UI_006', '{v0} • {v1} • {v2} записей').format(
+                v0=date_str, v1=size_str, v2=records_str
+            )
         )
         callback_data = f'backup_manage_{backup["filename"]}'
 
@@ -156,46 +179,44 @@ def get_backup_list_keyboard(backups: list, page: int = 1, per_page: int = 5, la
         nav_row = []
 
         if page > 1:
-            nav_row.append(InlineKeyboardButton(text='', callback_data=f'backup_list_page_{page - 1}'))
+            nav_row.append(admin_button('←', callback_data=f'backup_list_page_{page - 1}', style='primary'))
 
         nav_row.append(InlineKeyboardButton(text=f'{page}/{total_pages}', callback_data='noop'))
 
         if page < total_pages:
-            nav_row.append(InlineKeyboardButton(text='', callback_data=f'backup_list_page_{page + 1}'))
+            nav_row.append(admin_button('→', callback_data=f'backup_list_page_{page + 1}', style='primary'))
 
         keyboard.append(nav_row)
 
-    keyboard.extend(
-        [
-            [
-                InlineKeyboardButton(
-                    text=get_texts(language).t('ADMIN_BACKUP_UI_054', '← Назад'), callback_data='backup_panel'
-                )
-            ]
-        ]
-    )
+    keyboard.append([admin_back_button(texts, 'backup_panel')])
 
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
 def get_backup_manage_keyboard(backup_filename: str, language: str = 'ru'):
+    texts = get_texts(language)
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                InlineKeyboardButton(
-                    text=get_texts(language).t('ADMIN_BACKUP_UI_057', ' Восстановить'),
+                admin_button(
+                    _label(texts.t('ADMIN_BACKUP_UI_057', 'Восстановить')),
                     callback_data=f'backup_restore_file_{backup_filename}',
+                    style='success',
                 )
             ],
             [
-                InlineKeyboardButton(
-                    text=get_texts(language).t('ADMIN_BACKUP_UI_060', ' Удалить'),
+                admin_button(
+                    _label(texts.t('ADMIN_BACKUP_UI_060', 'Удалить')),
                     callback_data=f'backup_delete_{backup_filename}',
+                    icon='delete',
+                    style='danger',
                 )
             ],
             [
-                InlineKeyboardButton(
-                    text=get_texts(language).t('ADMIN_BACKUP_UI_061', '← К списку'), callback_data='backup_list'
+                admin_button(
+                    _label(texts.t('ADMIN_BACKUP_UI_061', 'К списку')),
+                    callback_data='backup_list',
+                    style='danger',
                 )
             ],
         ]
@@ -203,47 +224,44 @@ def get_backup_manage_keyboard(backup_filename: str, language: str = 'ru'):
 
 
 def get_backup_settings_keyboard(settings_obj, language: str = 'ru'):
+    texts = get_texts(language)
     auto_status = (
-        get_texts(language).t('ADMIN_BACKUP_UI_007', ' Включены')
+        texts.t('ADMIN_BACKUP_UI_007', 'Включены')
         if settings_obj.auto_backup_enabled
-        else get_texts(language).t('ADMIN_BACKUP_UI_008', ' Отключены')
+        else texts.t('ADMIN_BACKUP_UI_008', 'Отключены')
     )
     compression_status = (
-        get_texts(language).t('ADMIN_BACKUP_UI_009', ' Включено')
+        texts.t('ADMIN_BACKUP_UI_009', 'Включено')
         if settings_obj.compression_enabled
-        else get_texts(language).t('ADMIN_BACKUP_UI_010', ' Отключено')
+        else texts.t('ADMIN_BACKUP_UI_010', 'Отключено')
     )
     logs_status = (
-        get_texts(language).t('ADMIN_BACKUP_UI_007', ' Включены')
+        texts.t('ADMIN_BACKUP_UI_007', 'Включены')
         if settings_obj.include_logs
-        else get_texts(language).t('ADMIN_BACKUP_UI_008', ' Отключены')
+        else texts.t('ADMIN_BACKUP_UI_008', 'Отключены')
     )
 
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                InlineKeyboardButton(
-                    text=get_texts(language).t('ADMIN_BACKUP_UI_062', ' Автобекапы: {v0}').format(v0=auto_status),
+                admin_button(
+                    _label(texts.t('ADMIN_BACKUP_UI_062', 'Автобекапы: {v0}').format(v0=auto_status)),
                     callback_data='backup_toggle_auto',
                 )
             ],
             [
-                InlineKeyboardButton(
-                    text=get_texts(language).t('ADMIN_BACKUP_UI_063', ' Сжатие: {v0}').format(v0=compression_status),
+                admin_button(
+                    _label(texts.t('ADMIN_BACKUP_UI_063', 'Сжатие: {v0}').format(v0=compression_status)),
                     callback_data='backup_toggle_compression',
                 )
             ],
             [
-                InlineKeyboardButton(
-                    text=get_texts(language).t('ADMIN_BACKUP_UI_064', ' Логи в бекапе: {v0}').format(v0=logs_status),
+                admin_button(
+                    _label(texts.t('ADMIN_BACKUP_UI_064', 'Логи в бекапе: {v0}').format(v0=logs_status)),
                     callback_data='backup_toggle_logs',
                 )
             ],
-            [
-                InlineKeyboardButton(
-                    text=get_texts(language).t('ADMIN_BACKUP_UI_054', '← Назад'), callback_data='backup_panel'
-                )
-            ],
+            [admin_back_button(texts, 'backup_panel')],
         ]
     )
 
@@ -253,26 +271,27 @@ def get_backup_settings_keyboard(settings_obj, language: str = 'ru'):
 async def show_backup_panel(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
     settings_obj = await backup_service.get_backup_settings()
 
-    status_auto = ' Включены' if settings_obj.auto_backup_enabled else ' Отключены'
+    status_auto = 'Включены' if settings_obj.auto_backup_enabled else 'Отключены'
 
-    text = f""" <b>СИСТЕМА БЕКАПОВ</b>
+    text = f"""<b>Система бекапов</b>
 
- <b>Статус:</b>
+<b>Статус:</b>
 • Автобекапы: {status_auto}
 • Интервал: {settings_obj.backup_interval_hours} часов
 • Хранить: {settings_obj.max_backups_keep} файлов
 • Сжатие: {'Да' if settings_obj.compression_enabled else 'Нет'}
 
- <b>Расположение:</b> <code>/app/data/backups</code>
+<b>Расположение:</b> <code>/app/data/backups</code>
 
- <b>Доступные операции:</b>
+<b>Доступные операции:</b>
 • Создание полного бекапа всех данных
 • Восстановление из файла бекапа
-• Управление автоматическими бекапами
-"""
+• Управление автоматическими бекапами"""
 
     await callback.message.edit_text(
-        compact_text(text), parse_mode='HTML', reply_markup=get_backup_main_keyboard(db_user.language)
+        admin_screen(text, icon='tariff', compact=True),
+        parse_mode='HTML',
+        reply_markup=get_backup_main_keyboard(db_user.language),
     )
     await callback.answer()
 
@@ -280,12 +299,19 @@ async def show_backup_panel(callback: types.CallbackQuery, db_user: User, db: As
 @admin_required
 @error_handler
 async def create_backup_handler(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
-    await callback.answer(get_texts(db_user.language).t('ADMIN_BACKUP_UI_026', ' Создание бекапа запущено...'))
+    texts = get_texts(db_user.language)
+    await callback.answer(_label(texts.t('ADMIN_BACKUP_UI_026', 'Создание бекапа запущено...')))
 
     progress_msg = await callback.message.edit_text(
-        get_texts(db_user.language).t(
-            'ADMIN_BACKUP_UI_027',
-            ' <b>Создание бекапа...</b>\n\n Экспортируем данные из базы...\nЭто может занять несколько минут.',
+        admin_screen(
+            _clean_legacy(
+                texts.t(
+                    'ADMIN_BACKUP_UI_027',
+                    '<b>Создание бекапа...</b>\n\nЭкспортируем данные из базы...\nЭто может занять несколько минут.',
+                )
+            ),
+            icon='refresh',
+            compact=True,
         ),
         parse_mode='HTML',
     )
@@ -297,17 +323,27 @@ async def create_backup_handler(callback: types.CallbackQuery, db_user: User, db
 
     if success:
         await progress_msg.edit_text(
-            get_texts(db_user.language)
-            .t('ADMIN_BACKUP_UI_036', ' <b>Бекап создан успешно!</b>\n\n{v0}')
-            .format(v0=message),
+            admin_screen(
+                _clean_legacy(
+                    texts.t('ADMIN_BACKUP_UI_036', '<b>Бекап создан успешно!</b>\n\n{v0}').format(v0=message)
+                ),
+                icon='success',
+                compact=True,
+            ),
             parse_mode='HTML',
             reply_markup=get_backup_main_keyboard(db_user.language),
         )
     else:
         await progress_msg.edit_text(
-            get_texts(db_user.language)
-            .t('ADMIN_BACKUP_UI_037', ' <b>Ошибка создания бекапа</b>\n\n{v0}')
-            .format(v0=html.escape(message)),
+            admin_screen(
+                _clean_legacy(
+                    texts.t('ADMIN_BACKUP_UI_037', '<b>Ошибка создания бекапа</b>\n\n{v0}').format(
+                        v0=html.escape(message)
+                    )
+                ),
+                icon='error',
+                compact=True,
+            ),
             parse_mode='HTML',
             reply_markup=get_backup_main_keyboard(db_user.language),
         )
@@ -316,6 +352,7 @@ async def create_backup_handler(callback: types.CallbackQuery, db_user: User, db
 @admin_required
 @error_handler
 async def show_backup_list(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+    texts = get_texts(db_user.language)
     page = 1
     if callback.data.startswith('backup_list_page_'):
         try:
@@ -326,35 +363,29 @@ async def show_backup_list(callback: types.CallbackQuery, db_user: User, db: Asy
     backups = await backup_service.get_backup_list()
 
     if not backups:
-        text = get_texts(db_user.language).t(
-            'ADMIN_BACKUP_UI_011', ' <b>Список бекапов пуст</b>\n\nБекапы еще не создавались.'
-        )
+        text = texts.t('ADMIN_BACKUP_UI_011', '<b>Список бекапов пуст</b>\n\nБекапы еще не создавались.')
         keyboard = InlineKeyboardMarkup(
             inline_keyboard=[
                 [
-                    InlineKeyboardButton(
-                        text=get_texts(db_user.language).t('ADMIN_BACKUP_UI_067', ' Создать первый бекап'),
+                    admin_button(
+                        _label(texts.t('ADMIN_BACKUP_UI_067', 'Создать первый бекап')),
                         callback_data='backup_create',
+                        style='success',
                     )
                 ],
-                [
-                    InlineKeyboardButton(
-                        text=get_texts(db_user.language).t('ADMIN_BACKUP_UI_054', '← Назад'),
-                        callback_data='backup_panel',
-                    )
-                ],
+                [admin_back_button(texts, 'backup_panel')],
             ]
         )
     else:
-        text = (
-            get_texts(db_user.language)
-            .t('ADMIN_BACKUP_UI_012', ' <b>Список бекапов</b> (всего: {v0})\n\n')
-            .format(v0=len(backups))
-        )
-        text += get_texts(db_user.language).t('ADMIN_BACKUP_UI_013', 'Выберите бекап для управления:')
+        text = texts.t('ADMIN_BACKUP_UI_012', '<b>Список бекапов</b> (всего: {v0})\n\n').format(v0=len(backups))
+        text += texts.t('ADMIN_BACKUP_UI_013', 'Выберите бекап для управления:')
         keyboard = get_backup_list_keyboard(backups, page, language=db_user.language)
 
-    await callback.message.edit_text(compact_text(text), parse_mode='HTML', reply_markup=keyboard)
+    await callback.message.edit_text(
+        admin_screen(_clean_legacy(text), icon='tariff', compact=True),
+        parse_mode='HTML',
+        reply_markup=keyboard,
+    )
     await callback.answer()
 
 
@@ -373,7 +404,8 @@ async def manage_backup_file(callback: types.CallbackQuery, db_user: User, db: A
 
     if not backup_info:
         await callback.answer(
-            get_texts(db_user.language).t('ADMIN_BACKUP_UI_038', ' Файл бекапа не найден'), show_alert=True
+            _clean_legacy(get_texts(db_user.language).t('ADMIN_BACKUP_UI_038', 'Файл бекапа не найден')),
+            show_alert=True,
         )
         return
 
@@ -386,26 +418,26 @@ async def manage_backup_file(callback: types.CallbackQuery, db_user: User, db: A
     except:
         date_str = 'Ошибка формата даты'
 
-    text = f""" <b>Информация о бекапе</b>
+    text = f"""<b>Информация о бекапе</b>
 
- <b>Файл:</b> <code>{filename}</code>
- <b>Создан:</b> {date_str}
- <b>Размер:</b> {backup_info.get('file_size_mb', 0):.2f} MB
- <b>Таблиц:</b> {backup_info.get('tables_count', '?')}
- <b>Записей:</b> {backup_info.get('total_records', '?'):,}
- <b>Сжатие:</b> {'Да' if backup_info.get('compressed') else 'Нет'}
- <b>БД:</b> {backup_info.get('database_type', 'unknown')}
+<b>Файл:</b> <code>{filename}</code>
+<b>Создан:</b> {date_str}
+<b>Размер:</b> {backup_info.get('file_size_mb', 0):.2f} MB
+<b>Таблиц:</b> {backup_info.get('tables_count', '?')}
+<b>Записей:</b> {backup_info.get('total_records', '?'):,}
+<b>Сжатие:</b> {'Да' if backup_info.get('compressed') else 'Нет'}
+<b>БД:</b> {backup_info.get('database_type', 'unknown')}
 """
 
     if backup_info.get('error'):
         text += (
             get_texts(db_user.language)
-            .t('ADMIN_BACKUP_UI_014', '\n <b>Ошибка:</b> {v0}')
+            .t('ADMIN_BACKUP_UI_014', '\n⚠ <b>Ошибка:</b> {v0}')
             .format(v0=_localize_backup_message(backup_info['error'], db_user.language))
         )
 
     await callback.message.edit_text(
-        compact_text(text),
+        admin_screen(_clean_legacy(text), icon='tariff', compact=True),
         parse_mode='HTML',
         reply_markup=get_backup_manage_keyboard(filename, language=db_user.language),
     )
@@ -416,28 +448,36 @@ async def manage_backup_file(callback: types.CallbackQuery, db_user: User, db: A
 @error_handler
 async def delete_backup_confirm(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
     filename = callback.data.replace('backup_delete_', '')
+    texts = get_texts(db_user.language)
 
-    text = get_texts(db_user.language).t('ADMIN_BACKUP_UI_002', ' <b>Удаление бекапа</b>\n\n')
-    text += get_texts(db_user.language).t('ADMIN_BACKUP_UI_003', 'Вы уверены, что хотите удалить бекап?\n\n')
-    text += f' <code>{filename}</code>\n\n'
-    text += get_texts(db_user.language).t('ADMIN_BACKUP_UI_004', ' <b>Это действие нельзя отменить!</b>')
+    text = texts.t('ADMIN_BACKUP_UI_002', '<b>Удаление бекапа</b>\n\n')
+    text += texts.t('ADMIN_BACKUP_UI_003', 'Вы уверены, что хотите удалить бекап?\n\n')
+    text += f'<code>{filename}</code>\n\n'
+    text += texts.t('ADMIN_BACKUP_UI_004', '<b>Это действие нельзя отменить!</b>')
 
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                InlineKeyboardButton(
-                    text=get_texts(db_user.language).t('ADMIN_BACKUP_UI_065', ' Да, удалить'),
+                admin_button(
+                    _label(texts.t('ADMIN_BACKUP_UI_065', 'Да, удалить')),
                     callback_data=f'backup_delete_confirm_{filename}',
+                    icon='delete',
+                    style='danger',
                 ),
-                InlineKeyboardButton(
-                    text=get_texts(db_user.language).t('ADMIN_BACKUP_UI_066', ' Отмена'),
+                admin_button(
+                    _label(texts.t('ADMIN_BACKUP_UI_066', 'Отмена')),
                     callback_data=f'backup_manage_{filename}',
+                    style='danger',
                 ),
             ]
         ]
     )
 
-    await callback.message.edit_text(compact_text(text), parse_mode='HTML', reply_markup=keyboard)
+    await callback.message.edit_text(
+        admin_screen(_clean_legacy(text), icon='delete', compact=True),
+        parse_mode='HTML',
+        reply_markup=keyboard,
+    )
     await callback.answer()
 
 
@@ -445,20 +485,26 @@ async def delete_backup_confirm(callback: types.CallbackQuery, db_user: User, db
 @error_handler
 async def delete_backup_execute(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
     filename = callback.data.replace('backup_delete_confirm_', '')
+    texts = get_texts(db_user.language)
 
     success, message = await backup_service.delete_backup(filename)
     message = _localize_backup_message(message, db_user.language)
 
     if success:
         await callback.message.edit_text(
-            get_texts(db_user.language).t('ADMIN_BACKUP_UI_039', ' <b>Бекап удален</b>\n\n{v0}').format(v0=message),
+            admin_screen(
+                _clean_legacy(texts.t('ADMIN_BACKUP_UI_039', '<b>Бекап удален</b>\n\n{v0}').format(v0=message)),
+                icon='success',
+                compact=True,
+            ),
             parse_mode='HTML',
             reply_markup=InlineKeyboardMarkup(
                 inline_keyboard=[
                     [
-                        InlineKeyboardButton(
-                            text=get_texts(db_user.language).t('ADMIN_BACKUP_UI_072', ' К списку бекапов'),
+                        admin_button(
+                            _label(texts.t('ADMIN_BACKUP_UI_072', 'К списку бекапов')),
                             callback_data='backup_list',
+                            style='primary',
                         )
                     ]
                 ]
@@ -466,7 +512,11 @@ async def delete_backup_execute(callback: types.CallbackQuery, db_user: User, db
         )
     else:
         await callback.message.edit_text(
-            get_texts(db_user.language).t('ADMIN_BACKUP_UI_040', ' <b>Ошибка удаления</b>\n\n{v0}').format(v0=message),
+            admin_screen(
+                _clean_legacy(texts.t('ADMIN_BACKUP_UI_040', '<b>Ошибка удаления</b>\n\n{v0}').format(v0=message)),
+                icon='error',
+                compact=True,
+            ),
             parse_mode='HTML',
             reply_markup=get_backup_manage_keyboard(filename, language=db_user.language),
         )
@@ -477,65 +527,68 @@ async def delete_backup_execute(callback: types.CallbackQuery, db_user: User, db
 @admin_required
 @error_handler
 async def restore_backup_start(callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext):
+    texts = get_texts(db_user.language)
     if callback.data.startswith('backup_restore_file_'):
         # Восстановление из конкретного файла
         filename = callback.data.replace('backup_restore_file_', '')
 
-        text = get_texts(db_user.language).t('ADMIN_BACKUP_UI_015', ' <b>Восстановление из бекапа</b>\n\n')
-        text += (
-            get_texts(db_user.language)
-            .t('ADMIN_BACKUP_UI_016', ' <b>Файл:</b> <code>{v0}</code>\n\n')
-            .format(v0=filename)
-        )
-        text += get_texts(db_user.language).t('ADMIN_BACKUP_UI_017', ' <b>ВНИМАНИЕ!</b>\n')
-        text += get_texts(db_user.language).t('ADMIN_BACKUP_UI_018', '• Процесс может занять несколько минут\n')
-        text += get_texts(db_user.language).t(
-            'ADMIN_BACKUP_UI_019', '• Рекомендуется создать бекап перед восстановлением\n'
-        )
-        text += get_texts(db_user.language).t('ADMIN_BACKUP_UI_020', '• Существующие данные будут дополнены\n\n')
-        text += get_texts(db_user.language).t('ADMIN_BACKUP_UI_021', 'Продолжить восстановление?')
+        text = texts.t('ADMIN_BACKUP_UI_015', '<b>Восстановление из бекапа</b>\n\n')
+        text += texts.t('ADMIN_BACKUP_UI_016', '<b>Файл:</b> <code>{v0}</code>\n\n').format(v0=filename)
+        text += texts.t('ADMIN_BACKUP_UI_017', '<b>ВНИМАНИЕ!</b>\n')
+        text += texts.t('ADMIN_BACKUP_UI_018', '• Процесс может занять несколько минут\n')
+        text += texts.t('ADMIN_BACKUP_UI_019', '• Рекомендуется создать бекап перед восстановлением\n')
+        text += texts.t('ADMIN_BACKUP_UI_020', '• Существующие данные будут дополнены\n\n')
+        text += texts.t('ADMIN_BACKUP_UI_021', 'Продолжить восстановление?')
 
         keyboard = InlineKeyboardMarkup(
             inline_keyboard=[
                 [
-                    InlineKeyboardButton(text=' Да, восстановить', callback_data=f'backup_restore_execute_{filename}'),
-                    InlineKeyboardButton(
-                        text=get_texts(db_user.language).t('ADMIN_BACKUP_UI_069', ' Очистить и восстановить'),
+                    admin_button(
+                        _label(texts.t('ADMIN_BACKUP_UI_071', 'Восстановить')),
+                        callback_data=f'backup_restore_execute_{filename}',
+                        style='success',
+                    ),
+                    admin_button(
+                        _label(texts.t('ADMIN_BACKUP_UI_069', 'Очистить и восстановить')),
                         callback_data=f'backup_restore_clear_{filename}',
+                        style='danger',
                     ),
                 ],
                 [
-                    InlineKeyboardButton(
-                        text=get_texts(db_user.language).t('ADMIN_BACKUP_UI_066', ' Отмена'),
+                    admin_button(
+                        _label(texts.t('ADMIN_BACKUP_UI_066', 'Отмена')),
                         callback_data=f'backup_manage_{filename}',
+                        style='danger',
                     )
                 ],
             ]
         )
     else:
-        text = """ <b>Восстановление из бекапа</b>
+        text = """<b>Восстановление из бекапа</b>
 
- Отправьте файл бекапа (.json, .json.gz или .tar.gz)
+Отправьте файл бекапа (.json, .json.gz или .tar.gz)
 
- <b>ВАЖНО:</b>
+<b>ВАЖНО:</b>
 • Файл должен быть создан этой системой бекапов
 • Процесс может занять несколько минут
 • Рекомендуется создать бекап перед восстановлением
 
- Или выберите из существующих бекапов ниже."""
+Или выберите из существующих бекапов ниже."""
 
         keyboard = InlineKeyboardMarkup(
             inline_keyboard=[
                 [
-                    InlineKeyboardButton(
-                        text=get_texts(db_user.language).t('ADMIN_BACKUP_UI_070', ' Выбрать из списка'),
+                    admin_button(
+                        _label(texts.t('ADMIN_BACKUP_UI_070', 'Выбрать из списка')),
                         callback_data='backup_list',
+                        style='primary',
                     )
                 ],
                 [
-                    InlineKeyboardButton(
-                        text=get_texts(db_user.language).t('ADMIN_BACKUP_UI_066', ' Отмена'),
+                    admin_button(
+                        _label(texts.t('ADMIN_BACKUP_UI_066', 'Отмена')),
                         callback_data='backup_panel',
+                        style='danger',
                     )
                 ],
             ]
@@ -543,13 +596,18 @@ async def restore_backup_start(callback: types.CallbackQuery, db_user: User, db:
 
         await state.set_state(BackupStates.waiting_backup_file)
 
-    await callback.message.edit_text(compact_text(text), parse_mode='HTML', reply_markup=keyboard)
+    await callback.message.edit_text(
+        admin_screen(_clean_legacy(text), icon='refresh', compact=True),
+        parse_mode='HTML',
+        reply_markup=keyboard,
+    )
     await callback.answer()
 
 
 @admin_required
 @error_handler
 async def restore_backup_execute(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+    texts = get_texts(db_user.language)
     if callback.data.startswith('backup_restore_execute_'):
         filename = callback.data.replace('backup_restore_execute_', '')
         clear_existing = False
@@ -557,26 +615,28 @@ async def restore_backup_execute(callback: types.CallbackQuery, db_user: User, d
         filename = callback.data.replace('backup_restore_clear_', '')
         clear_existing = True
     else:
-        await callback.answer(
-            get_texts(db_user.language).t('ADMIN_BACKUP_UI_051', ' Неверный формат команды'), show_alert=True
-        )
+        await callback.answer(_label(texts.t('ADMIN_BACKUP_UI_051', 'Неверный формат команды')), show_alert=True)
         return
 
-    await callback.answer(get_texts(db_user.language).t('ADMIN_BACKUP_UI_030', ' Восстановление запущено...'))
+    await callback.answer(_label(texts.t('ADMIN_BACKUP_UI_030', 'Восстановление запущено...')))
 
     # Показываем прогресс
     action_text = (
-        get_texts(db_user.language).t('ADMIN_BACKUP_UI_023', 'очисткой и восстановлением')
+        texts.t('ADMIN_BACKUP_UI_023', 'очисткой и восстановлением')
         if clear_existing
-        else get_texts(db_user.language).t('ADMIN_BACKUP_UI_024', 'восстановлением')
+        else texts.t('ADMIN_BACKUP_UI_024', 'восстановлением')
     )
     progress_msg = await callback.message.edit_text(
-        get_texts(db_user.language)
-        .t(
-            'ADMIN_BACKUP_UI_031',
-            ' <b>Восстановление из бекапа...</b>\n\n Работаем с {v0} данных...\n Файл: <code>{v1}</code>\n\nЭто может занять несколько минут.',
-        )
-        .format(v0=action_text, v1=filename),
+        admin_screen(
+            _clean_legacy(
+                texts.t(
+                    'ADMIN_BACKUP_UI_031',
+                    '<b>Восстановление из бекапа...</b>\n\nРаботаем с {v0} данных...\nФайл: <code>{v1}</code>\n\nЭто может занять несколько минут.',
+                ).format(v0=action_text, v1=filename)
+            ),
+            icon='refresh',
+            compact=True,
+        ),
         parse_mode='HTML',
     )
 
@@ -587,17 +647,25 @@ async def restore_backup_execute(callback: types.CallbackQuery, db_user: User, d
 
     if success:
         await progress_msg.edit_text(
-            get_texts(db_user.language)
-            .t('ADMIN_BACKUP_UI_041', ' <b>Восстановление завершено!</b>\n\n{v0}')
-            .format(v0=message),
+            admin_screen(
+                _clean_legacy(
+                    texts.t('ADMIN_BACKUP_UI_041', '<b>Восстановление завершено!</b>\n\n{v0}').format(v0=message)
+                ),
+                icon='success',
+                compact=True,
+            ),
             parse_mode='HTML',
             reply_markup=get_backup_main_keyboard(db_user.language),
         )
     else:
         await progress_msg.edit_text(
-            get_texts(db_user.language)
-            .t('ADMIN_BACKUP_UI_042', ' <b>Ошибка восстановления</b>\n\n{v0}')
-            .format(v0=message),
+            admin_screen(
+                _clean_legacy(
+                    texts.t('ADMIN_BACKUP_UI_042', '<b>Ошибка восстановления</b>\n\n{v0}').format(v0=message)
+                ),
+                icon='error',
+                compact=True,
+            ),
             parse_mode='HTML',
             reply_markup=get_backup_manage_keyboard(filename, language=db_user.language),
         )
@@ -606,17 +674,19 @@ async def restore_backup_execute(callback: types.CallbackQuery, db_user: User, d
 @admin_required
 @error_handler
 async def handle_backup_file_upload(message: types.Message, db_user: User, db: AsyncSession, state: FSMContext):
+    texts = get_texts(db_user.language)
     if not message.document:
         await message.answer(
-            get_texts(db_user.language).t(
-                'ADMIN_BACKUP_UI_043', ' Пожалуйста, отправьте файл бекапа (.json, .json.gz или .tar.gz)'
+            _clean_legacy(
+                texts.t('ADMIN_BACKUP_UI_043', 'Пожалуйста, отправьте файл бекапа (.json, .json.gz или .tar.gz)')
             ),
             reply_markup=InlineKeyboardMarkup(
                 inline_keyboard=[
                     [
-                        InlineKeyboardButton(
-                            text=get_texts(db_user.language).t('ADMIN_BACKUP_UI_073', '← Отмена'),
+                        admin_button(
+                            _label(texts.t('ADMIN_BACKUP_UI_073', 'Отмена')),
                             callback_data='backup_panel',
+                            style='danger',
                         )
                     ]
                 ]
@@ -629,15 +699,19 @@ async def handle_backup_file_upload(message: types.Message, db_user: User, db: A
 
     if not document.file_name or not any(document.file_name.endswith(ext) for ext in allowed_extensions):
         await message.answer(
-            get_texts(db_user.language).t(
-                'ADMIN_BACKUP_UI_044', ' Неподдерживаемый формат файла. Загрузите .json, .json.gz или .tar.gz файл'
+            _clean_legacy(
+                texts.t(
+                    'ADMIN_BACKUP_UI_044',
+                    'Неподдерживаемый формат файла. Загрузите .json, .json.gz или .tar.gz файл',
+                )
             ),
             reply_markup=InlineKeyboardMarkup(
                 inline_keyboard=[
                     [
-                        InlineKeyboardButton(
-                            text=get_texts(db_user.language).t('ADMIN_BACKUP_UI_073', '← Отмена'),
+                        admin_button(
+                            _label(texts.t('ADMIN_BACKUP_UI_073', 'Отмена')),
                             callback_data='backup_panel',
+                            style='danger',
                         )
                     ]
                 ]
@@ -647,13 +721,14 @@ async def handle_backup_file_upload(message: types.Message, db_user: User, db: A
 
     if document.file_size > 50 * 1024 * 1024:
         await message.answer(
-            get_texts(db_user.language).t('ADMIN_BACKUP_UI_045', ' Файл слишком большой (максимум 50MB)'),
+            _clean_legacy(texts.t('ADMIN_BACKUP_UI_045', 'Файл слишком большой (максимум 50MB)')),
             reply_markup=InlineKeyboardMarkup(
                 inline_keyboard=[
                     [
-                        InlineKeyboardButton(
-                            text=get_texts(db_user.language).t('ADMIN_BACKUP_UI_073', '← Отмена'),
+                        admin_button(
+                            _label(texts.t('ADMIN_BACKUP_UI_073', 'Отмена')),
                             callback_data='backup_panel',
+                            style='danger',
                         )
                     ]
                 ]
@@ -668,12 +743,12 @@ async def handle_backup_file_upload(message: types.Message, db_user: User, db: A
 
         await message.bot.download_file(file.file_path, temp_path)
 
-        text = f""" <b>Файл загружен</b>
+        text = f"""<b>Файл загружен</b>
 
- <b>Имя:</b> <code>{document.file_name}</code>
- <b>Размер:</b> {document.file_size / 1024 / 1024:.2f} MB
+<b>Имя:</b> <code>{document.file_name}</code>
+<b>Размер:</b> {document.file_size / 1024 / 1024:.2f} MB
 
- <b>ВНИМАНИЕ!</b>
+<b>ВНИМАНИЕ!</b>
 Процесс восстановления изменит данные в базе.
 Рекомендуется создать бекап перед восстановлением.
 
@@ -682,37 +757,43 @@ async def handle_backup_file_upload(message: types.Message, db_user: User, db: A
         keyboard = InlineKeyboardMarkup(
             inline_keyboard=[
                 [
-                    InlineKeyboardButton(
-                        text=get_texts(db_user.language).t('ADMIN_BACKUP_UI_071', ' Восстановить'),
+                    admin_button(
+                        _label(texts.t('ADMIN_BACKUP_UI_071', 'Восстановить')),
                         callback_data=f'backup_restore_execute_{temp_path.name}',
+                        style='success',
                     ),
-                    InlineKeyboardButton(
-                        text=get_texts(db_user.language).t('ADMIN_BACKUP_UI_069', ' Очистить и восстановить'),
+                    admin_button(
+                        _label(texts.t('ADMIN_BACKUP_UI_069', 'Очистить и восстановить')),
                         callback_data=f'backup_restore_clear_{temp_path.name}',
+                        style='danger',
                     ),
                 ],
                 [
-                    InlineKeyboardButton(
-                        text=get_texts(db_user.language).t('ADMIN_BACKUP_UI_066', ' Отмена'),
+                    admin_button(
+                        _label(texts.t('ADMIN_BACKUP_UI_066', 'Отмена')),
                         callback_data='backup_panel',
+                        style='danger',
                     )
                 ],
             ]
         )
 
-        await message.answer(compact_text(text), parse_mode='HTML', reply_markup=keyboard)
+        await message.answer(
+            admin_screen(text, icon='document', compact=True), parse_mode='HTML', reply_markup=keyboard
+        )
         await state.clear()
 
     except Exception as e:
         logger.error('Ошибка загрузки файла бекапа', error=e)
         await message.answer(
-            get_texts(db_user.language).t('ADMIN_BACKUP_UI_052', ' Ошибка загрузки файла: {v0!s}').format(v0=e),
+            _clean_legacy(texts.t('ADMIN_BACKUP_UI_052', 'Ошибка загрузки файла: {v0!s}').format(v0=e)),
             reply_markup=InlineKeyboardMarkup(
                 inline_keyboard=[
                     [
-                        InlineKeyboardButton(
-                            text=get_texts(db_user.language).t('ADMIN_BACKUP_UI_073', '← Отмена'),
+                        admin_button(
+                            _label(texts.t('ADMIN_BACKUP_UI_073', 'Отмена')),
                             callback_data='backup_panel',
+                            style='danger',
                         )
                     ]
                 ]
@@ -725,23 +806,22 @@ async def handle_backup_file_upload(message: types.Message, db_user: User, db: A
 async def show_backup_settings(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
     settings_obj = await backup_service.get_backup_settings()
 
-    text = f""" <b>Настройки системы бекапов</b>
+    text = f"""<b>Настройки системы бекапов</b>
 
- <b>Автоматические бекапы:</b>
-• Статус: {' Включены' if settings_obj.auto_backup_enabled else ' Отключены'}
+<b>Автоматические бекапы:</b>
+• Статус: {'Включены' if settings_obj.auto_backup_enabled else 'Отключены'}
 • Интервал: {settings_obj.backup_interval_hours} часов
 • Время запуска: {settings_obj.backup_time}
 
- <b>Хранение:</b>
+<b>Хранение:</b>
 • Максимум файлов: {settings_obj.max_backups_keep}
-• Сжатие: {' Включено' if settings_obj.compression_enabled else ' Отключено'}
-• Включать логи: {' Да' if settings_obj.include_logs else ' Нет'}
+• Сжатие: {'Включено' if settings_obj.compression_enabled else 'Отключено'}
+• Включать логи: {'Да' if settings_obj.include_logs else 'Нет'}
 
- <b>Расположение:</b> <code>{settings_obj.backup_location}</code>
-"""
+<b>Расположение:</b> <code>{settings_obj.backup_location}</code>"""
 
     await callback.message.edit_text(
-        compact_text(text),
+        admin_screen(text, icon='settings', compact=True),
         parse_mode='HTML',
         reply_markup=get_backup_settings_keyboard(settings_obj, language=db_user.language),
     )

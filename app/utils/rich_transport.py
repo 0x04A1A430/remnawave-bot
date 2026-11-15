@@ -464,11 +464,13 @@ def _sanitize_method(method: TelegramMethod[TelegramType]) -> TelegramMethod[Tel
 
     markup = getattr(method, 'reply_markup', None)
     if markup is not None:
+        from app.utils.admin_ui import decorate_admin_markup
         from app.utils.button_emoji import sanitize_markup
 
         sanitized = sanitize_markup(markup)
-        if sanitized is not markup:
-            updates['reply_markup'] = sanitized
+        decorated = decorate_admin_markup(sanitized)
+        if decorated is not markup:
+            updates['reply_markup'] = decorated
 
     if isinstance(method, AnswerCallbackQuery) and method.text and '<tg-emoji' in method.text:
         updates['text'] = _TG_EMOJI_TAG_RE.sub(r'\1', method.text)

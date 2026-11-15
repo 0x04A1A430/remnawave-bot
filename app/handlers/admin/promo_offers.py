@@ -44,9 +44,10 @@ from app.keyboards.inline import get_happ_download_button_row
 from app.localization.texts import get_texts
 from app.services.user_service import UserService
 from app.states import AdminStates
+from app.utils.admin_ui import admin_back_button, admin_button, admin_screen
 from app.utils.decorators import admin_required, error_handler
 from app.utils.formatters import format_datetime, format_duration
-from app.utils.miniapp_buttons import build_miniapp_or_callback_button
+from app.utils.miniapp_buttons import build_miniapp_or_callback_button, strip_leading_emoji
 from app.utils.subscription_utils import get_display_subscription_link
 
 
@@ -108,7 +109,6 @@ REASON_LABEL_KEYS = {
 
 OFFER_TYPE_CONFIG = {
     'test_access': {
-        'icon': '',
         'label_key': 'ADMIN_PROMO_OFFER_TEST_ACCESS',
         'default_label': 'Тестовые сервера',
         'allowed_segments': [
@@ -118,7 +118,6 @@ OFFER_TYPE_CONFIG = {
         'effect_type': 'test_access',
     },
     'extend_discount': {
-        'icon': '',
         'label_key': 'ADMIN_PROMO_OFFER_EXTEND',
         'default_label': 'Скидка на продление',
         'allowed_segments': [
@@ -127,7 +126,6 @@ OFFER_TYPE_CONFIG = {
         'effect_type': 'percent_discount',
     },
     'purchase_discount': {
-        'icon': '',
         'label_key': 'ADMIN_PROMO_OFFER_PURCHASE',
         'default_label': 'Скидка на покупку',
         'allowed_segments': [
@@ -207,89 +205,99 @@ def _build_templates_keyboard(templates: Sequence[PromoOfferTemplate], language:
     rows: list[list[InlineKeyboardButton]] = []
     for template in templates:
         config = OFFER_TYPE_CONFIG.get(template.offer_type, {})
-        icon = config.get('icon', '')
         label = texts.t(config.get('label_key', ''), config.get('default_label', template.offer_type))
         rows.append(
             [
-                InlineKeyboardButton(
-                    text=f'{icon} {label}',
+                admin_button(
+                    label,
                     callback_data=f'promo_offer_{template.id}',
                 )
             ]
         )
     rows.append(
         [
-            InlineKeyboardButton(
-                text=texts.t('ADMIN_PROMO_OFFER_LOGS', ' Лог операций'),
+            admin_button(
+                strip_leading_emoji(texts.t('ADMIN_PROMO_OFFER_LOGS', ' Лог операций')),
                 callback_data='promo_offer_logs_page_1',
+                icon='logs',
+                style='primary',
             )
         ]
     )
-    rows.append([InlineKeyboardButton(text=texts.BACK, callback_data='admin_submenu_communications', style='danger')])
+    rows.append([admin_back_button(texts, 'admin_submenu_communications')])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def _build_offer_detail_keyboard(template: PromoOfferTemplate, language: str) -> InlineKeyboardMarkup:
     texts = get_texts(language)
-    OFFER_TYPE_CONFIG.get(template.offer_type, {})
     rows: list[list[InlineKeyboardButton]] = []
 
     rows.append(
         [
-            InlineKeyboardButton(
-                text=texts.t('ADMIN_PROMO_OFFERS_UI_BUILD_OFFER_DETAIL_KEYBOARD_000', ' Текст'),
+            admin_button(
+                strip_leading_emoji(texts.t('ADMIN_PROMO_OFFERS_UI_BUILD_OFFER_DETAIL_KEYBOARD_000', ' Текст')),
                 callback_data=f'promo_offer_edit_message_{template.id}',
+                style='primary',
             ),
-            InlineKeyboardButton(
-                text=texts.t('ADMIN_PROMO_OFFERS_UI_BUILD_OFFER_DETAIL_KEYBOARD_001', ' Кнопка'),
+            admin_button(
+                strip_leading_emoji(texts.t('ADMIN_PROMO_OFFERS_UI_BUILD_OFFER_DETAIL_KEYBOARD_001', ' Кнопка')),
                 callback_data=f'promo_offer_edit_button_{template.id}',
+                style='primary',
             ),
         ]
     )
     rows.append(
         [
-            InlineKeyboardButton(
-                text=texts.t('ADMIN_PROMO_OFFERS_UI_BUILD_OFFER_DETAIL_KEYBOARD_002', ' Срок'),
+            admin_button(
+                strip_leading_emoji(texts.t('ADMIN_PROMO_OFFERS_UI_BUILD_OFFER_DETAIL_KEYBOARD_002', ' Срок')),
                 callback_data=f'promo_offer_edit_valid_{template.id}',
+                style='primary',
             ),
         ]
     )
 
     if template.offer_type != 'test_access':
-        rows[-1].append(InlineKeyboardButton(text=' %', callback_data=f'promo_offer_edit_discount_{template.id}'))
+        rows[-1].append(admin_button('%', callback_data=f'promo_offer_edit_discount_{template.id}', style='primary'))
         rows.append(
             [
-                InlineKeyboardButton(
-                    text=texts.t('ADMIN_PROMO_OFFERS_UI_BUILD_OFFER_DETAIL_KEYBOARD_003', ' Активна'),
+                admin_button(
+                    strip_leading_emoji(texts.t('ADMIN_PROMO_OFFERS_UI_BUILD_OFFER_DETAIL_KEYBOARD_003', ' Активна')),
                     callback_data=f'promo_offer_edit_active_{template.id}',
+                    style='primary',
                 ),
             ]
         )
     else:
         rows.append(
             [
-                InlineKeyboardButton(
-                    text=texts.t('ADMIN_PROMO_OFFERS_UI_BUILD_OFFER_DETAIL_KEYBOARD_004', ' Длительность'),
+                admin_button(
+                    strip_leading_emoji(
+                        texts.t('ADMIN_PROMO_OFFERS_UI_BUILD_OFFER_DETAIL_KEYBOARD_004', ' Длительность')
+                    ),
                     callback_data=f'promo_offer_edit_duration_{template.id}',
+                    style='primary',
                 ),
-                InlineKeyboardButton(
-                    text=texts.t('ADMIN_PROMO_OFFERS_UI_BUILD_OFFER_DETAIL_KEYBOARD_005', ' Сквады'),
+                admin_button(
+                    strip_leading_emoji(texts.t('ADMIN_PROMO_OFFERS_UI_BUILD_OFFER_DETAIL_KEYBOARD_005', ' Сквады')),
                     callback_data=f'promo_offer_edit_squads_{template.id}',
+                    style='primary',
                 ),
             ]
         )
 
     rows.append(
         [
-            InlineKeyboardButton(
-                text=texts.t('ADMIN_PROMO_OFFERS_UI_BUILD_OFFER_DETAIL_KEYBOARD_006', ' Отправить'),
+            admin_button(
+                strip_leading_emoji(texts.t('ADMIN_PROMO_OFFERS_UI_BUILD_OFFER_DETAIL_KEYBOARD_006', ' Отправить')),
                 callback_data=f'promo_offer_send_menu_{template.id}',
+                icon='success',
+                style='success',
             ),
         ]
     )
     rows.append(
         [
-            InlineKeyboardButton(text=texts.BACK, callback_data='admin_promo_offers', style='danger'),
+            admin_back_button(texts, 'admin_promo_offers'),
         ]
     )
     return InlineKeyboardMarkup(inline_keyboard=rows)
@@ -436,27 +444,29 @@ def _build_logs_keyboard(page: int, total_pages: int, language: str) -> InlineKe
         nav_row: list[InlineKeyboardButton] = []
         if page > 1:
             nav_row.append(
-                InlineKeyboardButton(
-                    text='',
+                admin_button(
+                    '←',
                     callback_data=f'promo_offer_logs_page_{page - 1}',
+                    style='primary',
                 )
             )
         nav_row.append(
-            InlineKeyboardButton(
-                text=f'{page}/{total_pages}',
+            admin_button(
+                f'{page}/{total_pages}',
                 callback_data=f'promo_offer_logs_page_{page}',
             )
         )
         if page < total_pages:
             nav_row.append(
-                InlineKeyboardButton(
-                    text='',
+                admin_button(
+                    '→',
                     callback_data=f'promo_offer_logs_page_{page + 1}',
+                    style='primary',
                 )
             )
         rows.append(nav_row)
 
-    rows.append([InlineKeyboardButton(text=texts.BACK, callback_data='admin_promo_offers', style='danger')])
+    rows.append([admin_back_button(texts, 'admin_promo_offers')])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -469,8 +479,8 @@ def _build_send_keyboard(template: PromoOfferTemplate, language: str) -> InlineK
     for segment, label in segments:
         rows.append(
             [
-                InlineKeyboardButton(
-                    text=_segment_label(texts, segment, label),
+                admin_button(
+                    strip_leading_emoji(_segment_label(texts, segment, label)),
                     callback_data=f'promo_offer_send_{template.id}_{segment}',
                 )
             ]
@@ -478,37 +488,25 @@ def _build_send_keyboard(template: PromoOfferTemplate, language: str) -> InlineK
 
     rows.append(
         [
-            InlineKeyboardButton(
-                text=texts.t(
-                    'ADMIN_PROMO_OFFER_SEND_USER',
-                    ' Отправка пользователю',
+            admin_button(
+                strip_leading_emoji(
+                    texts.t(
+                        'ADMIN_PROMO_OFFER_SEND_USER',
+                        ' Отправка пользователю',
+                    )
                 ),
                 callback_data=f'promo_offer_send_user_{template.id}_page_1',
+                icon='user',
+                style='primary',
             )
         ]
     )
 
-    rows.append([InlineKeyboardButton(text=texts.BACK, callback_data=f'promo_offer_{template.id}', style='danger')])
+    rows.append([admin_back_button(texts, f'promo_offer_{template.id}')])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def _build_user_button_label(user: User) -> str:
-    status_emoji_map = {
-        UserStatus.ACTIVE.value: '',
-        UserStatus.BLOCKED.value: '',
-        UserStatus.DELETED.value: '',
-    }
-    status_emoji = status_emoji_map.get(getattr(user, 'status', None), '')
-
-    subscription = getattr(user, 'subscription', None)
-    if subscription:
-        if subscription.is_trial or subscription.is_active:
-            subscription_emoji = ''
-        else:
-            subscription_emoji = ''
-    else:
-        subscription_emoji = ''
-
     name = (user.full_name or user.username or '').strip()
     if not name:
         if user.telegram_id:
@@ -523,17 +521,17 @@ def _build_user_button_label(user: User) -> str:
 
     # Build identifier: telegram_id, email, or internal id
     if user.telegram_id:
-        identifier = f' {user.telegram_id}'
+        identifier = str(user.telegram_id)
     elif user.email:
-        identifier = f' {user.email[:20]}'
+        identifier = user.email[:20]
     else:
         identifier = f'#{user.id}'
 
-    parts = [status_emoji, subscription_emoji, name, identifier]
+    parts = [name, identifier]
 
     balance = getattr(user, 'balance_kopeks', 0)
     if balance:
-        parts.append(f' {settings.format_price(balance)}')
+        parts.append(settings.format_price(balance))
 
     return ' '.join(parts)
 
@@ -600,8 +598,8 @@ async def _render_send_user_list(
     for user in users:
         keyboard_rows.append(
             [
-                InlineKeyboardButton(
-                    text=_build_user_button_label(user),
+                admin_button(
+                    _build_user_button_label(user),
                     callback_data=f'promo_offer_send_user_select_{template_id}_{user.id}',
                 )
             ]
@@ -611,31 +609,35 @@ async def _render_send_user_list(
         nav_row: list[InlineKeyboardButton] = []
         if current_page > 1:
             nav_row.append(
-                InlineKeyboardButton(
-                    text='',
+                admin_button(
+                    '←',
                     callback_data=f'promo_offer_send_user_{template_id}_page_{current_page - 1}',
+                    style='primary',
                 )
             )
         nav_row.append(
-            InlineKeyboardButton(
-                text=f'{current_page}/{total_pages}',
+            admin_button(
+                f'{current_page}/{total_pages}',
                 callback_data=f'promo_offer_send_user_{template_id}_page_{current_page}',
             )
         )
         if current_page < total_pages:
             nav_row.append(
-                InlineKeyboardButton(
-                    text='',
+                admin_button(
+                    '→',
                     callback_data=f'promo_offer_send_user_{template_id}_page_{current_page + 1}',
+                    style='primary',
                 )
             )
         keyboard_rows.append(nav_row)
 
     keyboard_rows.append(
         [
-            InlineKeyboardButton(
-                text=texts.t('ADMIN_PROMO_OFFER_SEND_USER_SEARCH', ' Поиск'),
+            admin_button(
+                strip_leading_emoji(texts.t('ADMIN_PROMO_OFFER_SEND_USER_SEARCH', ' Поиск')),
                 callback_data=f'promo_offer_send_user_search_{template_id}',
+                icon='user',
+                style='primary',
             )
         ]
     )
@@ -643,30 +645,32 @@ async def _render_send_user_list(
     if query:
         keyboard_rows.append(
             [
-                InlineKeyboardButton(
-                    text=texts.t('ADMIN_PROMO_OFFER_SEND_USER_RESET', ' Сбросить поиск'),
+                admin_button(
+                    strip_leading_emoji(texts.t('ADMIN_PROMO_OFFER_SEND_USER_RESET', ' Сбросить поиск')),
                     callback_data=f'promo_offer_send_user_reset_{template_id}',
+                    style='primary',
                 )
             ]
         )
 
     keyboard_rows.append(
         [
-            InlineKeyboardButton(
-                text=texts.t(
-                    'ADMIN_PROMO_OFFER_SEND_USER_BACK_TO_SEGMENTS',
-                    '↩ К выбору категории',
+            admin_button(
+                strip_leading_emoji(
+                    texts.t(
+                        'ADMIN_PROMO_OFFER_SEND_USER_BACK_TO_SEGMENTS',
+                        '↩ К выбору категории',
+                    )
                 ),
                 callback_data=f'promo_offer_send_menu_{template_id}',
+                style='primary',
             )
         ]
     )
-    keyboard_rows.append(
-        [InlineKeyboardButton(text=texts.BACK, callback_data=f'promo_offer_{template_id}', style='danger')]
-    )
+    keyboard_rows.append([admin_back_button(texts, f'promo_offer_{template_id}')])
 
     markup = InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
-    text = '\n'.join(lines)
+    text = admin_screen('\n'.join(lines), icon='gift', compact=True)
 
     current_message_id = message_id
     try:
@@ -714,9 +718,8 @@ def _describe_offer(
     texts = get_texts(language)
     config = OFFER_TYPE_CONFIG.get(template.offer_type, {})
     label = texts.t(config.get('label_key', ''), config.get('default_label', template.offer_type))
-    icon = config.get('icon', '')
 
-    lines = [f'{icon} <b>{html.escape(_template_display_field(template, "name", language))}</b>', '']
+    lines = [f'<b>{html.escape(_template_display_field(template, "name", language))}</b>', '']
     lines.append(texts.t('ADMIN_PROMO_OFFER_TYPE', 'Тип: {label}').format(label=label))
     lines.append(texts.t('ADMIN_PROMO_OFFER_VALID', 'Срок действия: {hours} ч').format(hours=template.valid_hours))
 
@@ -775,7 +778,7 @@ def _describe_offer(
         )
     )
 
-    return '\n'.join(lines)
+    return admin_screen('\n'.join(lines), icon='gift', compact=True)
 
 
 @admin_required
@@ -786,7 +789,7 @@ async def show_promo_offers_menu(callback: CallbackQuery, db_user: User, db: Asy
     templates = await list_promo_offer_templates(db)
     header = texts.t('ADMIN_PROMO_OFFERS_TITLE', ' <b>Промо-предложения</b>\n\nВыберите предложение для настройки:')
     await callback.message.edit_text(
-        header,
+        admin_screen(header, icon='gift', compact=True),
         reply_markup=_build_templates_keyboard(templates, db_user.language),
         parse_mode='HTML',
     )
@@ -884,7 +887,7 @@ async def show_promo_offer_logs(callback: CallbackQuery, db_user: User, db: Asyn
 
     keyboard = _build_logs_keyboard(page, total_pages, db_user.language)
     await callback.message.edit_text(
-        message_text,
+        admin_screen(message_text, icon='logs', compact=True),
         reply_markup=keyboard,
         parse_mode='HTML',
     )
@@ -1005,16 +1008,15 @@ async def _render_squad_selection(
 
     if total_count == 0:
         await callback.message.edit_text(
-            texts.t('ADMIN_PROMO_OFFER_NO_SQUADS_AVAILABLE', ' Доступные серверы не найдены.'),
-            reply_markup=InlineKeyboardMarkup(
-                inline_keyboard=[
-                    [
-                        InlineKeyboardButton(
-                            text=texts.BACK, callback_data=f'promo_offer_squad_back_{template.id}', style='danger'
-                        )
-                    ]
-                ]
+            admin_screen(
+                texts.t('ADMIN_PROMO_OFFER_NO_SQUADS_AVAILABLE', ' Доступные серверы не найдены.'),
+                icon='servers',
+                compact=True,
             ),
+            reply_markup=InlineKeyboardMarkup(
+                inline_keyboard=[[admin_back_button(texts, f'promo_offer_squad_back_{template.id}')]]
+            ),
+            parse_mode='HTML',
         )
         return
 
@@ -1068,13 +1070,13 @@ async def _render_squad_selection(
 
     keyboard_rows: list[list[InlineKeyboardButton]] = []
     for server in squads:
-        emoji = '' if server.squad_uuid == selected_uuid else ('' if server.is_available else '')
-        label = f'{emoji} {server.display_name}'
+        button_icon = 'success' if server.squad_uuid == selected_uuid else ('lock' if not server.is_available else None)
         keyboard_rows.append(
             [
-                InlineKeyboardButton(
-                    text=label,
+                admin_button(
+                    server.display_name,
                     callback_data=f'promo_offer_select_squad_{template.id}_{server.id}_{page}',
+                    icon=button_icon,
                 )
             ]
         )
@@ -1083,35 +1085,40 @@ async def _render_squad_selection(
         nav_row: list[InlineKeyboardButton] = []
         if page > 1:
             nav_row.append(
-                InlineKeyboardButton(
-                    text='',
+                admin_button(
+                    '←',
                     callback_data=f'promo_offer_squad_page_{template.id}_{page - 1}',
+                    style='primary',
                 )
             )
         if page < total_pages:
             nav_row.append(
-                InlineKeyboardButton(
-                    text='',
+                admin_button(
+                    '→',
                     callback_data=f'promo_offer_squad_page_{template.id}_{page + 1}',
+                    style='primary',
                 )
             )
         if nav_row:
             keyboard_rows.append(nav_row)
 
     action_row = [
-        InlineKeyboardButton(
-            text=texts.t('ADMIN_PROMO_OFFER_SELECT_SQUAD_CLEAR', ' Очистить'),
+        admin_button(
+            strip_leading_emoji(texts.t('ADMIN_PROMO_OFFER_SELECT_SQUAD_CLEAR', ' Очистить')),
             callback_data=f'promo_offer_clear_squad_{template.id}_{page}',
+            icon='delete',
+            style='danger',
         ),
-        InlineKeyboardButton(
-            text=texts.t('ADMIN_PROMO_OFFER_SELECT_SQUAD_BACK', '↩ Назад'),
-            callback_data=f'promo_offer_squad_back_{template.id}',
+        admin_back_button(
+            texts,
+            f'promo_offer_squad_back_{template.id}',
+            label=strip_leading_emoji(texts.t('ADMIN_PROMO_OFFER_SELECT_SQUAD_BACK', '↩ Назад')),
         ),
     ]
     keyboard_rows.append(action_row)
 
     await callback.message.edit_text(
-        text,
+        admin_screen(text, icon='servers', compact=True),
         reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard_rows),
         parse_mode='HTML',
     )
@@ -1963,28 +1970,35 @@ async def show_selected_user_details(
 
     keyboard_rows = [
         [
-            InlineKeyboardButton(
-                text=texts.t(
-                    'ADMIN_PROMO_OFFER_SEND_USER_SEND_BUTTON',
-                    ' Отправить предложение',
+            admin_button(
+                strip_leading_emoji(
+                    texts.t(
+                        'ADMIN_PROMO_OFFER_SEND_USER_SEND_BUTTON',
+                        ' Отправить предложение',
+                    )
                 ),
                 callback_data=f'promo_offer_send_user_confirm_{template_id}_{user.id}',
+                icon='success',
+                style='success',
             )
         ],
         [
-            InlineKeyboardButton(
-                text=texts.t(
-                    'ADMIN_PROMO_OFFER_SEND_USER_BACK_TO_LIST',
-                    ' К списку пользователей',
+            admin_button(
+                strip_leading_emoji(
+                    texts.t(
+                        'ADMIN_PROMO_OFFER_SEND_USER_BACK_TO_LIST',
+                        ' К списку пользователей',
+                    )
                 ),
                 callback_data=f'promo_offer_send_user_back_{template_id}',
+                style='primary',
             )
         ],
-        [InlineKeyboardButton(text=texts.BACK, callback_data=f'promo_offer_{template_id}', style='danger')],
+        [admin_back_button(texts, f'promo_offer_{template_id}')],
     ]
 
     await callback.message.edit_text(
-        '\n'.join(lines),
+        admin_screen('\n'.join(lines), icon='user', compact=True),
         reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard_rows),
         parse_mode='HTML',
     )
@@ -2312,24 +2326,26 @@ async def send_offer_to_segment(callback: CallbackQuery, db_user: User, db: Asyn
     if refreshed:
         result_keyboard_rows.append(
             [
-                InlineKeyboardButton(
-                    text=texts.t('ADMIN_PROMO_OFFER_BACK_TO_TEMPLATE', '↩ К предложению'),
+                admin_button(
+                    strip_leading_emoji(texts.t('ADMIN_PROMO_OFFER_BACK_TO_TEMPLATE', '↩ К предложению')),
                     callback_data=f'promo_offer_{refreshed.id}',
+                    style='primary',
                 )
             ]
         )
 
     result_keyboard_rows.append(
         [
-            InlineKeyboardButton(
-                text=texts.t('ADMIN_PROMO_OFFER_BACK_TO_LIST', ' К промопредложениям'),
-                callback_data='admin_promo_offers',
+            admin_back_button(
+                texts,
+                'admin_promo_offers',
+                label=strip_leading_emoji(texts.t('ADMIN_PROMO_OFFER_BACK_TO_LIST', ' К промопредложениям')),
             )
         ]
     )
 
     await callback.message.edit_text(
-        summary,
+        admin_screen(summary, icon='gift', compact=True),
         reply_markup=InlineKeyboardMarkup(inline_keyboard=result_keyboard_rows),
         parse_mode='HTML',
     )
@@ -2426,33 +2442,40 @@ async def send_offer_to_user(callback: CallbackQuery, db_user: User, db: AsyncSe
 
     keyboard_rows = [
         [
-            InlineKeyboardButton(
-                text=texts.t(
-                    'ADMIN_PROMO_OFFER_SEND_USER_BACK_TO_PROFILE',
-                    ' К профилю пользователя',
+            admin_button(
+                strip_leading_emoji(
+                    texts.t(
+                        'ADMIN_PROMO_OFFER_SEND_USER_BACK_TO_PROFILE',
+                        ' К профилю пользователя',
+                    )
                 ),
                 callback_data=f'promo_offer_send_user_select_{template.id}_{user.id}',
+                style='primary',
             )
         ],
         [
-            InlineKeyboardButton(
-                text=texts.t(
-                    'ADMIN_PROMO_OFFER_SEND_USER_BACK_TO_LIST',
-                    ' К списку пользователей',
+            admin_button(
+                strip_leading_emoji(
+                    texts.t(
+                        'ADMIN_PROMO_OFFER_SEND_USER_BACK_TO_LIST',
+                        ' К списку пользователей',
+                    )
                 ),
                 callback_data=f'promo_offer_send_user_back_{template.id}',
+                style='primary',
             )
         ],
         [
-            InlineKeyboardButton(
-                text=texts.t('ADMIN_PROMO_OFFER_BACK_TO_TEMPLATE', '↩ К предложению'),
-                callback_data=f'promo_offer_{template.id}',
+            admin_back_button(
+                texts,
+                f'promo_offer_{template.id}',
+                label=strip_leading_emoji(texts.t('ADMIN_PROMO_OFFER_BACK_TO_TEMPLATE', '↩ К предложению')),
             )
         ],
     ]
 
     await callback.message.edit_text(
-        '\n'.join(summary_lines),
+        admin_screen('\n'.join(summary_lines), icon='gift', compact=True),
         reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard_rows),
         parse_mode='HTML',
     )
