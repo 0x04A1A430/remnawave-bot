@@ -14,7 +14,7 @@ from app.localization.texts import get_texts
 from app.services.tariff_custom_days import parse_positive_days, validate_custom_days_configuration
 from app.services.tariff_custom_traffic import parse_positive_rubles_to_kopeks
 from app.states import AdminStates
-from app.utils.admin_ui import admin_back_button, admin_button, admin_screen
+from app.utils.admin_ui import admin_back_button, admin_button, admin_heading, admin_icon, admin_quote, admin_screen
 from app.utils.decorators import admin_required, error_handler
 from app.utils.formatting import format_price_kopeks
 from app.utils.miniapp_buttons import strip_leading_emoji
@@ -53,6 +53,24 @@ def _price(value: int | None, language: str = 'ru') -> str:
     )
 
 
+def _plain_title(text: str) -> str:
+    return text.replace('<b>', '').replace('</b>', '').strip()
+
+
+def _days_screen(icon: str, title: str, lines: list[str], hint: str = '') -> str:
+    body = '\n'.join(line for line in lines if line).strip()
+    parts = [admin_heading(icon, title), '', admin_quote(body)]
+    if hint:
+        parts.extend(['', hint])
+    return admin_screen('\n'.join(parts), compact=True)
+
+
+def _days_notice(icon: str, message: str) -> str:
+    if '\n' in message or len(message) > 90:
+        return admin_screen(f'{admin_heading(icon, "Внимание")}\n\n{admin_quote(message)}', compact=True)
+    return admin_screen(admin_heading(icon, message), compact=True)
+
+
 def format_custom_days_settings(tariff: Tariff, language: str = 'ru') -> str:
     """Блок для карточки тарифа."""
     enabled = getattr(tariff, 'custom_days_enabled', False)
@@ -61,18 +79,13 @@ def format_custom_days_settings(tariff: Tariff, language: str = 'ru') -> str:
         if enabled
         else get_texts(language).t('ADMIN_TARIFF_HELPER_DISABLED_STATE', 'Выключено')
     )
-    return (
-        get_texts(language)
-        .t(
-            'ADMIN_TARIFF_HELPER_FORMAT_CUSTOM_DAYS_SETTINGS_1',
-            '{v0}\n• Цена за 1 день: {v1}\n• Минимум: {v2}\n• Максимум: {v3}',
-        )
-        .format(
-            v0=status,
-            v1=_price(getattr(tariff, 'price_per_day_kopeks', None), language=language),
-            v2=_days(getattr(tariff, 'min_days', None), language=language),
-            v3=_days(getattr(tariff, 'max_days', None), language=language),
-        )
+    return '\n'.join(
+        [
+            f'{admin_icon("check" if enabled else "prohibit")} Статус: <b>{status}</b>',
+            f'{admin_icon("money")} Цена за 1 день: <b>{_price(getattr(tariff, "price_per_day_kopeks", None), language=language)}</b>',
+            f'{admin_icon("calendar")} Минимум: <b>{_days(getattr(tariff, "min_days", None), language=language)}</b>',
+            f'{admin_icon("calendar")} Максимум: <b>{_days(getattr(tariff, "max_days", None), language=language)}</b>',
+        ]
     )
 
 
@@ -84,19 +97,22 @@ def render_custom_days_settings(tariff: Tariff, language: str = 'ru') -> str:
         if enabled
         else get_texts(language).t('ADMIN_TARIFF_HELPER_DISABLED_MODE', 'Выключен')
     )
-    return (
-        get_texts(language)
-        .t(
-            'ADMIN_TARIFF_HELPER_RENDER_CUSTOM_DAYS_SETTINGS_1',
-            '<b>Произвольное количество дней</b>\n\nТариф: <b>{v0}</b>\n\nСтатус: {v1}\nЦена за 1 день: <b>{v2}</b>\nМинимум: <b>{v3}</b>\nМаксимум: <b>{v4}</b>\n\nПользователь сможет выбрать срок в указанных границах; цена — дни × цена за день.',
-        )
-        .format(
-            v0=html.escape(tariff.name),
-            v1=status,
-            v2=_price(getattr(tariff, 'price_per_day_kopeks', None), language=language),
-            v3=_days(getattr(tariff, 'min_days', None), language=language),
-            v4=_days(getattr(tariff, 'max_days', None), language=language),
-        )
+    lines = [
+        f'{admin_icon("tariff")} Тариф: <b>{html.escape(tariff.name)}</b>',
+        f'{admin_icon("check" if enabled else "prohibit")} Статус: <b>{status}</b>',
+        f'{admin_icon("money")} Цена за 1 день: <b>{_price(getattr(tariff, "price_per_day_kopeks", None), language=language)}</b>',
+        f'{admin_icon("calendar")} Минимум: <b>{_days(getattr(tariff, "min_days", None), language=language)}</b>',
+        f'{admin_icon("calendar")} Максимум: <b>{_days(getattr(tariff, "max_days", None), language=language)}</b>',
+    ]
+    hint = get_texts(language).t(
+        'ADMIN_TARIFF_HELPER_CUSTOM_DAYS_HINT',
+        'Пользователь сможет выбрать срок в указанных границах; цена — дни × цена за день.',
+    )
+    return _days_screen(
+        'calendar',
+        get_texts(language).t('ADMIN_TARIFF_HELPER_CUSTOM_DAYS_TITLE', 'Произвольное количество дней'),
+        lines,
+        hint,
     )
 
 
@@ -112,7 +128,6 @@ def get_custom_days_keyboard(tariff: Tariff, language: str) -> InlineKeyboardMar
                     else strip_leading_emoji(texts.t('ADMIN_TARIFF_HELPER_ENABLE_BUTTON', 'Включить')),
                     callback_data=f'admin_tariff_toggle_custom_days:{tariff.id}',
                     icon='lock' if enabled else 'success',
-                    style='danger' if enabled else 'success',
                 )
             ],
             [
@@ -120,7 +135,6 @@ def get_custom_days_keyboard(tariff: Tariff, language: str) -> InlineKeyboardMar
                     strip_leading_emoji(texts.t('ADMIN_TARIFF_HELPER_DAY_PRICE_BUTTON', 'Цена за 1 день')),
                     callback_data=f'admin_tariff_edit_custom_days_price:{tariff.id}',
                     icon='money',
-                    style='primary',
                 )
             ],
             [
@@ -128,7 +142,6 @@ def get_custom_days_keyboard(tariff: Tariff, language: str) -> InlineKeyboardMar
                     strip_leading_emoji(texts.t('ADMIN_TARIFF_HELPER_MIN_DAYS_BUTTON', 'Минимум дней')),
                     callback_data=f'admin_tariff_edit_custom_days_min:{tariff.id}',
                     icon='calendar',
-                    style='primary',
                 )
             ],
             [
@@ -136,7 +149,6 @@ def get_custom_days_keyboard(tariff: Tariff, language: str) -> InlineKeyboardMar
                     strip_leading_emoji(texts.t('ADMIN_TARIFF_HELPER_MAX_DAYS_BUTTON', 'Максимум дней')),
                     callback_data=f'admin_tariff_edit_custom_days_max:{tariff.id}',
                     icon='calendar',
-                    style='primary',
                 )
             ],
             [admin_back_button(texts, f'admin_tariff_view:{tariff.id}')],
@@ -155,11 +167,7 @@ async def show_custom_days_settings(callback: types.CallbackQuery, db_user: User
         )
         return
     await callback.message.edit_text(
-        admin_screen(
-            strip_leading_emoji(render_custom_days_settings(tariff, language=db_user.language)),
-            icon='calendar',
-            compact=True,
-        ),
+        render_custom_days_settings(tariff, language=db_user.language),
         reply_markup=get_custom_days_keyboard(tariff, db_user.language),
         parse_mode='HTML',
     )
@@ -202,11 +210,7 @@ async def toggle_custom_days(callback: types.CallbackQuery, db_user: User, db: A
         )
 
     await callback.message.edit_text(
-        admin_screen(
-            strip_leading_emoji(render_custom_days_settings(tariff, language=db_user.language)),
-            icon='calendar',
-            compact=True,
-        ),
+        render_custom_days_settings(tariff, language=db_user.language),
         reply_markup=get_custom_days_keyboard(tariff, db_user.language),
         parse_mode='HTML',
     )
@@ -228,20 +232,14 @@ async def _start_field_edit(
     await state.update_data(tariff_id=tariff.id, language=db_user.language)
     texts = get_texts(db_user.language)
     await callback.message.edit_text(
-        admin_screen(
-            get_texts(db_user.language)
-            .t(
-                'ADMIN_TARIFF_HELPER_START_FIELD_EDIT_1',
-                '{v0}\n\nТариф: <b>{v1}</b>\nТекущее значение: <b>{v2}</b>\n\n{v3}',
-            )
-            .format(
-                v0=strip_leading_emoji(title),
-                v1=html.escape(tariff.name),
-                v2=current_value,
-                v3=prompt,
-            ),
-            icon=icon,
-            compact=True,
+        _days_screen(
+            icon,
+            _plain_title(title),
+            [
+                f'{admin_icon("tariff")} Тариф: <b>{html.escape(tariff.name)}</b>',
+                f'{admin_icon("edit")} Текущее значение: <b>{current_value}</b>',
+            ],
+            prompt,
         ),
         reply_markup=InlineKeyboardMarkup(
             inline_keyboard=[
@@ -334,10 +332,9 @@ async def _load_tariff_from_state(
     tariff = await get_tariff_by_id(db, tariff_id) if tariff_id is not None else None
     if tariff is None:
         await message.answer(
-            admin_screen(
+            _days_notice(
+                'warning',
                 get_texts(language).t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'),
-                icon='warning',
-                compact=True,
             ),
             parse_mode='HTML',
         )
@@ -349,8 +346,7 @@ async def _finish(message: types.Message, db_user: User, state: FSMContext, tari
     await state.clear()
     await message.answer(
         admin_screen(
-            f'{confirmation}\n\n{render_custom_days_settings(tariff, language=db_user.language)}',
-            icon='success',
+            f'{admin_heading("success", confirmation)}\n\n{render_custom_days_settings(tariff, language=db_user.language)}',
             compact=True,
         ),
         reply_markup=get_custom_days_keyboard(tariff, db_user.language),
@@ -368,13 +364,12 @@ async def process_custom_days_price_input(message: types.Message, db_user: User,
         price_kopeks = parse_positive_rubles_to_kopeks(message.text or '')
     except ValueError:
         await message.answer(
-            admin_screen(
+            _days_notice(
+                'warning',
                 get_texts(db_user.language).t(
                     'ADMIN_TARIFF_HELPER_INVALID_DAY_PRICE',
                     'Некорректная цена. Введите положительную сумму в рублях с точностью не более двух знаков.\nПример: <code>15</code> или <code>12.50</code>',
                 ),
-                icon='warning',
-                compact=True,
             ),
             parse_mode='HTML',
         )
@@ -393,13 +388,12 @@ async def process_custom_days_min_input(message: types.Message, db_user: User, d
         minimum = parse_positive_days(message.text or '')
     except ValueError:
         await message.answer(
-            admin_screen(
+            _days_notice(
+                'warning',
                 get_texts(db_user.language).t(
                     'ADMIN_TARIFF_HELPER_INVALID_MIN_DAYS',
                     'Введите положительное целое число дней.\nПример: <code>3</code>',
                 ),
-                icon='warning',
-                compact=True,
             ),
             parse_mode='HTML',
         )
@@ -407,15 +401,14 @@ async def process_custom_days_min_input(message: types.Message, db_user: User, d
     maximum = getattr(tariff, 'max_days', None)
     if maximum is not None and maximum > 0 and minimum > maximum:
         await message.answer(
-            admin_screen(
+            _days_notice(
+                'warning',
                 get_texts(db_user.language)
                 .t(
                     'ADMIN_TARIFF_HELPER_PROCESS_CUSTOM_DAYS_MIN_INPUT_2',
                     'Минимум дней не может быть больше текущего максимума ({v0} дн.).',
                 )
                 .format(v0=maximum),
-                icon='warning',
-                compact=True,
             ),
             parse_mode='HTML',
         )
@@ -442,13 +435,12 @@ async def process_custom_days_max_input(message: types.Message, db_user: User, d
         maximum = parse_positive_days(message.text or '')
     except ValueError:
         await message.answer(
-            admin_screen(
+            _days_notice(
+                'warning',
                 get_texts(db_user.language).t(
                     'ADMIN_TARIFF_HELPER_INVALID_MAX_DAYS',
                     'Введите положительное целое число дней.\nПример: <code>90</code>',
                 ),
-                icon='warning',
-                compact=True,
             ),
             parse_mode='HTML',
         )
@@ -456,15 +448,14 @@ async def process_custom_days_max_input(message: types.Message, db_user: User, d
     minimum = getattr(tariff, 'min_days', None)
     if minimum is not None and minimum > 0 and maximum < minimum:
         await message.answer(
-            admin_screen(
+            _days_notice(
+                'warning',
                 get_texts(db_user.language)
                 .t(
                     'ADMIN_TARIFF_HELPER_PROCESS_CUSTOM_DAYS_MAX_INPUT_2',
                     'Максимум дней не может быть меньше текущего минимума ({v0} дн.).',
                 )
                 .format(v0=minimum),
-                icon='warning',
-                compact=True,
             ),
             parse_mode='HTML',
         )

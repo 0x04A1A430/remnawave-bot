@@ -34,7 +34,7 @@ from app.keyboards.admin import (
 )
 from app.localization.texts import get_texts
 from app.states import AdminStates
-from app.utils.admin_ui import admin_back_button, admin_button, admin_icon, admin_screen
+from app.utils.admin_ui import admin_back_button, admin_button, admin_heading, admin_icon, admin_quote, admin_screen
 from app.utils.decorators import admin_required, error_handler
 from app.utils.miniapp_buttons import strip_leading_emoji
 
@@ -56,6 +56,31 @@ def _clean_legacy(value: str) -> str:
 def _label(value: str) -> str:
     """Подпись кнопки без прежнего ведущего глифа и лишнего пробела."""
     return strip_leading_emoji(value).strip()
+
+
+_BOLD_TAGS_RE = re.compile(r'</?b>')
+
+
+def _heading(icon: str, title: str) -> str:
+    """Заголовок с premium-иконкой и <b>; существующие теги не дублируются."""
+    return admin_heading(icon, _BOLD_TAGS_RE.sub('', title or '').strip())
+
+
+def _card(title: str, lines, *, icon: str) -> str:
+    """Заголовок с иконкой и блок параметров под ним."""
+    body = '\n'.join(line for line in lines if (line or '').strip())
+    if not body:
+        return _heading(icon, title)
+    return f'{_heading(icon, title)}\n\n{admin_quote(body)}'
+
+
+def _screen(raw: str, *, icon: str) -> str:
+    """Экран: заголовок из локали + блок параметров под ним."""
+    prepared = _clean_legacy(raw or '')
+    title, separator, body = prepared.partition('\n\n')
+    if not separator or not body.strip():
+        return _heading(icon, prepared)
+    return _card(title, body.split('\n'), icon=icon)
 
 
 def _ensure_timezone(tz_name: str) -> ZoneInfo:
@@ -84,14 +109,19 @@ def _format_contest_summary(contest, texts, tz: ZoneInfo) -> str:
     summary_times = contest.daily_summary_times or summary_time
     parts = [
         status,
-        texts.t('ADMIN_CONTEST_UI_002', 'Период: <b>{value1}</b>').format(value1=period),
-        texts.t('ADMIN_CONTEST_UI_003', 'Дневная сводка: <b>{value1}</b>').format(value1=summary_times),
+        f'{admin_icon("calendar")} ' + texts.t('ADMIN_CONTEST_UI_002', 'Период: <b>{value1}</b>').format(value1=period),
+        f'{admin_icon("bell")} '
+        + texts.t('ADMIN_CONTEST_UI_003', 'Дневная сводка: <b>{value1}</b>').format(value1=summary_times),
     ]
     if contest.prize_text:
-        parts.append(texts.t('ADMIN_CONTEST_PRIZE', 'Приз: {prize}').format(prize=html.escape(contest.prize_text)))
+        parts.append(
+            f'{admin_icon("gift")} '
+            + texts.t('ADMIN_CONTEST_PRIZE', 'Приз: {prize}').format(prize=html.escape(contest.prize_text))
+        )
     if contest.last_daily_summary_date:
         parts.append(
-            texts.t('ADMIN_CONTEST_LAST_DAILY', 'Последняя сводка: {date}').format(
+            f'{admin_icon("clock")} '
+            + texts.t('ADMIN_CONTEST_LAST_DAILY', 'Последняя сводка: {date}').format(
                 date=contest.last_daily_summary_date.strftime('%d.%m')
             )
         )
@@ -215,16 +245,20 @@ async def list_contests(
     contests = await list_referral_contests(db, limit=PAGE_SIZE, offset=offset)
     texts = get_texts(db_user.language)
 
-    lines = [texts.t('ADMIN_CONTESTS_LIST_HEADER', '<b>Конкурсы</b>\n')]
+    header = texts.t('ADMIN_CONTESTS_LIST_HEADER', '<b>Конкурсы</b>')
+    blocks = [_heading('star', header)]
 
     if not contests:
-        lines.append(texts.t('ADMIN_CONTESTS_EMPTY', 'Пока нет созданных конкурсов.'))
+        blocks.append(texts.t('ADMIN_CONTESTS_EMPTY', 'Пока нет созданных конкурсов.'))
     else:
         for contest in contests:
-            lines.append(f'• <b>{html.escape(contest.title)}</b> (#{contest.id})')
             contest_tz = _ensure_timezone(contest.timezone or settings.TIMEZONE)
-            lines.append(_format_contest_summary(contest, texts, contest_tz))
-            lines.append('')
+            summary = _format_contest_summary(contest, texts, contest_tz).split('\n')
+            entry = [
+                f'{admin_icon("medal")} <b>{html.escape(contest.title)}</b> · <code>#{contest.id}</code>',
+                *(f'   {line}' for line in summary),
+            ]
+            blocks.append(admin_quote('\n'.join(entry)))
 
     keyboard_rows: list[list[types.InlineKeyboardButton]] = []
     for contest in contests:
@@ -235,7 +269,6 @@ async def list_contests(
                     title,
                     callback_data=f'admin_contest_view_{contest.id}',
                     icon='star',
-                    style='primary',
                 )
             ]
         )
@@ -250,7 +283,7 @@ async def list_contests(
     keyboard_rows.extend(pagination.inline_keyboard)
 
     await callback.message.edit_text(
-        admin_screen(_clean_legacy('\n'.join(lines)), icon='star', compact=True),
+        '\n\n'.join(blocks),
         reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows),
         parse_mode='HTML',
     )
@@ -285,25 +318,26 @@ async def show_contest_details(
     virtual_count = sum(vp.referral_count for vp in virtual_list)
     total_events = await get_contest_events_count(db, contest.id) + virtual_count
 
-    lines = [
-        f'<b>{html.escape(contest.title)}</b>',
-        _format_contest_summary(contest, texts, tz),
-        texts.t('ADMIN_CONTEST_TOTAL_EVENTS', 'Зачётов: <b>{count}</b>').format(count=total_events),
+    summary = _format_contest_summary(contest, texts, tz).split('\n')
+    meta = [
+        *(f'{admin_icon("info")} {line}' for line in summary),
+        f'{admin_icon("chart")} '
+        + texts.t('ADMIN_CONTEST_TOTAL_EVENTS', 'Зачётов: <b>{count}</b>').format(count=total_events),
     ]
+    blocks = [_heading('star', contest.title), admin_quote('\n'.join(meta))]
 
     if contest.description:
-        lines.append('')
-        lines.append(html.escape(contest.description))
+        blocks.append(f'{admin_icon("document")} {html.escape(contest.description)}')
 
     if leaderboard:
-        lines.append('')
-        lines.append(texts.t('ADMIN_CONTEST_LEADERBOARD_TITLE', 'Топ участников:'))
+        top = [texts.t('ADMIN_CONTEST_LEADERBOARD_TITLE', 'Топ участников:')]
         for idx, (name, score, _, is_virtual) in enumerate(leaderboard, start=1):
             virt_mark = f' {admin_icon("users")}' if is_virtual else ''
-            lines.append(f'{idx}. {html.escape(name)}{virt_mark} — {score}')
+            top.append(f'{idx}. {html.escape(name)}{virt_mark} — <b>{score}</b>')
+        blocks.append(admin_quote('\n'.join(top)))
 
     await callback.message.edit_text(
-        admin_screen(_clean_legacy('\n'.join(lines)), icon='star', compact=True),
+        '\n\n'.join(blocks),
         reply_markup=get_referral_contest_manage_keyboard(
             contest.id,
             is_active=contest.is_active,
@@ -483,15 +517,18 @@ async def show_leaderboard(
         await callback.answer(texts.t('ADMIN_CONTEST_EMPTY_LEADERBOARD', 'Пока нет участников.'), show_alert=True)
         return
 
-    lines = [
-        texts.t('ADMIN_CONTEST_LEADERBOARD_TITLE', 'Топ участников:'),
-    ]
+    lines = []
     for idx, (name, score, _, is_virtual) in enumerate(leaderboard, start=1):
         virt_mark = f' {admin_icon("users")}' if is_virtual else ''
-        lines.append(f'{idx}. {html.escape(name)}{virt_mark} — {score}')
+        lines.append(f'{idx}. {html.escape(name)}{virt_mark} — <b>{score}</b>')
+
+    text = (
+        f'{_heading("chart", texts.t("ADMIN_CONTEST_LEADERBOARD_TITLE", "Топ участников:").rstrip(":"))}\n\n'
+        f'{admin_quote(chr(10).join(lines))}'
+    )
 
     await callback.message.edit_text(
-        admin_screen('\n'.join(lines), icon='chart', compact=True),
+        text,
         reply_markup=get_referral_contest_manage_keyboard(
             contest_id, is_active=contest.is_active, language=db_user.language
         ),
@@ -780,40 +817,49 @@ async def show_detailed_stats(
 
     # Общее сообщение с основной статистикой
     general_lines = [
-        texts.t('ADMIN_CONTEST_UI_004', '<b>Статистика конкурса</b>'),
-        f'<b>{html.escape(contest.title)}</b>',
-        '',
-        texts.t('ADMIN_CONTEST_UI_005', 'Участников (рефереров): <b>{value1}</b>').format(
+        f'{admin_icon("medal")} <b>{html.escape(contest.title)}</b>',
+        f'{admin_icon("referrals")} '
+        + texts.t('ADMIN_CONTEST_UI_005', 'Участников (рефереров): <b>{value1}</b>').format(
             value1=stats['total_participants']
         ),
-        texts.t('ADMIN_CONTEST_UI_006', 'Приглашено рефералов: <b>{value1}</b>').format(value1=stats['total_invited']),
-        '',
-        texts.t('ADMIN_CONTEST_UI_007', 'Рефералов оплатили: <b>{value1}</b>').format(
+        f'{admin_icon("users")} '
+        + texts.t('ADMIN_CONTEST_UI_006', 'Приглашено рефералов: <b>{value1}</b>').format(
+            value1=stats['total_invited']
+        ),
+        f'{admin_icon("success")} '
+        + texts.t('ADMIN_CONTEST_UI_007', 'Рефералов оплатили: <b>{value1}</b>').format(
             value1=stats.get('paid_count', 0)
         ),
-        texts.t('ADMIN_CONTEST_UI_008', 'Рефералов не оплатили: <b>{value1}</b>').format(
+        f'{admin_icon("prohibit")} '
+        + texts.t('ADMIN_CONTEST_UI_008', 'Рефералов не оплатили: <b>{value1}</b>').format(
             value1=stats.get('unpaid_count', 0)
         ),
-        '',
-        texts.t('ADMIN_CONTEST_UI_009', '<b>СУММЫ:</b>'),
-        texts.t('ADMIN_CONTEST_UI_010', '  Покупки подписок: <b>{value1} руб.</b>').format(
+        texts.t('ADMIN_CONTEST_UI_009', '<b>Суммы:</b>'),
+        f'{admin_icon("tariff")} '
+        + texts.t('ADMIN_CONTEST_UI_010', 'Покупки подписок: <b>{value1} руб.</b>').format(
             value1=stats.get('subscription_total', 0) // 100
         ),
-        texts.t('ADMIN_CONTEST_UI_011', '  Пополнения баланса: <b>{value1} руб.</b>').format(
+        f'{admin_icon("payments")} '
+        + texts.t('ADMIN_CONTEST_UI_011', 'Пополнения баланса: <b>{value1} руб.</b>').format(
             value1=stats.get('deposit_total', 0) // 100
         ),
     ]
 
     if virtual_count > 0:
-        general_lines.append('')
         general_lines.append(
-            texts.t('ADMIN_CONTEST_UI_040', 'Виртуальных: <b>{value1}</b> (рефералов: {value2})').format(
+            f'{admin_icon("users")} '
+            + texts.t('ADMIN_CONTEST_UI_040', 'Виртуальных: <b>{value1}</b> (рефералов: {value2})').format(
                 value1=virtual_count, value2=virtual_referrals
             )
         )
 
+    stats_text = (
+        f'{_heading("chart", texts.t("ADMIN_CONTEST_UI_004", "<b>Статистика конкурса</b>"))}\n\n'
+        f'{admin_quote(chr(10).join(general_lines))}'
+    )
+
     await callback.message.edit_text(
-        admin_screen(_clean_legacy('\n'.join(general_lines)), icon='stats', compact=True),
+        stats_text,
         reply_markup=get_referral_contest_manage_keyboard(
             contest_id, is_active=contest.is_active, language=db_user.language
         ),
@@ -854,22 +900,25 @@ async def show_detailed_stats_page(
     offset = (page - 1) * PAGE_SIZE
     page_participants = participants[offset : offset + PAGE_SIZE]
 
-    lines = [
-        texts.t('ADMIN_CONTEST_UI_012', 'По участникам (страница {value1}/{value2}):').format(
-            value1=page, value2=total_pages
-        )
-    ]
-    for p in page_participants:
-        lines.extend(
-            [
-                f'• <b>{html.escape(p["full_name"] or "")}</b>',
-                texts.t('ADMIN_CONTEST_UI_055', '  Приглашено: {value1}').format(value1=p['total_referrals']),
-                texts.t('ADMIN_CONTEST_UI_056', '  Оплатили: {value1}').format(value1=p['paid_referrals']),
-                texts.t('ADMIN_CONTEST_UI_057', '  Не оплатили: {value1}').format(value1=p['unpaid_referrals']),
-                texts.t('ADMIN_CONTEST_UI_058', '  Сумма: {value1} руб.').format(value1=p['total_paid_amount'] // 100),
-                '',  # Пустая строка для разделения
-            ]
-        )
+    page_title = texts.t('ADMIN_CONTEST_UI_012', 'По участникам (страница {value1}/{value2}):').format(
+        value1=page, value2=total_pages
+    )
+    blocks = [_heading('chart', page_title.rstrip(':'))]
+    for participant in page_participants:
+        entry = [
+            f'{admin_icon("user")} <b>{html.escape(participant["full_name"] or "")}</b>',
+            f'   {admin_icon("referrals")} '
+            + texts.t('ADMIN_CONTEST_UI_055', 'Приглашено: {value1}').format(value1=participant['total_referrals']),
+            f'   {admin_icon("success")} '
+            + texts.t('ADMIN_CONTEST_UI_056', 'Оплатили: {value1}').format(value1=participant['paid_referrals']),
+            f'   {admin_icon("prohibit")} '
+            + texts.t('ADMIN_CONTEST_UI_057', 'Не оплатили: {value1}').format(value1=participant['unpaid_referrals']),
+            f'   {admin_icon("payments")} '
+            + texts.t('ADMIN_CONTEST_UI_058', 'Сумма: {value1} руб.').format(
+                value1=participant['total_paid_amount'] // 100
+            ),
+        ]
+        blocks.append(admin_quote('\n'.join(entry)))
 
     pagination = get_admin_pagination_keyboard(
         page,
@@ -880,7 +929,7 @@ async def show_detailed_stats_page(
     )
 
     await callback.message.edit_text(
-        admin_screen(_clean_legacy('\n'.join(lines)), icon='stats', compact=True),
+        '\n\n'.join(blocks),
         reply_markup=pagination,
         parse_mode='HTML',
     )
@@ -1001,7 +1050,7 @@ async def sync_contest(
     )
 
     await callback.message.answer(
-        admin_screen(_clean_legacy('\n'.join(lines)), icon='success', compact=True),
+        _screen('\n'.join(lines), icon='success'),
         parse_mode='HTML',
         reply_markup=back_keyboard,
     )
@@ -1031,7 +1080,7 @@ async def sync_contest(
     ]
 
     await callback.message.edit_text(
-        admin_screen(_clean_legacy('\n'.join(general_lines)), icon='stats', compact=True),
+        _card(contest.title, general_lines[1:], icon='chart'),
         reply_markup=get_referral_contest_manage_keyboard(
             contest_id, is_active=contest.is_active, language=db_user.language
         ),
@@ -1147,7 +1196,7 @@ async def debug_contest_transactions(
     )
 
     await callback.message.answer(
-        admin_screen(_clean_legacy('\n'.join(lines)), icon='document', compact=True),
+        _screen('\n'.join(lines), icon='document'),
         parse_mode='HTML',
         reply_markup=back_keyboard,
     )
@@ -1172,21 +1221,23 @@ async def show_virtual_participants(
 
     vps = await list_virtual_participants(db, contest_id)
 
-    lines = [
+    heading = admin_screen(
         texts.t('ADMIN_CONTEST_UI_037', '<b>Виртуальные участники</b> — {value1}').format(
             value1=html.escape(contest.title)
         ),
-        '',
-    ]
+        icon='users',
+        compact=True,
+    )
     if vps:
-        for vp in vps:
-            lines.append(
-                texts.t('ADMIN_CONTEST_UI_063', '• {value1} — {value2} реф.').format(
-                    value1=html.escape(vp.display_name), value2=vp.referral_count
-                )
+        entries = [
+            texts.t('ADMIN_CONTEST_UI_063', '• {value1} — {value2} реф.').format(
+                value1=html.escape(vp.display_name), value2=vp.referral_count
             )
+            for vp in vps
+        ]
+        text = f'{heading}\n\n{admin_quote(chr(10).join(entries))}'
     else:
-        lines.append(texts.t('ADMIN_CONTEST_UI_047', 'Пока нет виртуальных участников.'))
+        text = f'{heading}\n\n{texts.t("ADMIN_CONTEST_UI_047", "Пока нет виртуальных участников.")}'
 
     rows = [
         [
@@ -1194,13 +1245,11 @@ async def show_virtual_participants(
                 _label(texts.t('ADMIN_CONTEST_UI_069', 'Добавить')),
                 callback_data=f'admin_contest_vp_add_{contest_id}',
                 icon='success',
-                style='success',
             ),
             admin_button(
                 _label(texts.t('ADMIN_CONTEST_UI_070', 'Массовка')),
                 callback_data=f'admin_contest_vp_mass_{contest_id}',
                 icon='users',
-                style='primary',
             ),
         ],
     ]
@@ -1217,7 +1266,6 @@ async def show_virtual_participants(
                         'Удалить',
                         callback_data=f'admin_contest_vp_del_{vp.id}',
                         icon='delete',
-                        style='danger',
                     ),
                 ]
             )
@@ -1228,7 +1276,7 @@ async def show_virtual_participants(
     )
 
     await callback.message.edit_text(
-        admin_screen(_clean_legacy('\n'.join(lines)), icon='users', compact=True),
+        text,
         reply_markup=types.InlineKeyboardMarkup(inline_keyboard=rows),
         parse_mode='HTML',
     )
@@ -1344,7 +1392,6 @@ async def process_virtual_participant_count(
                         'К списку',
                         callback_data=f'admin_contest_vp_{contest_id}',
                         icon='users',
-                        style='primary',
                     )
                 ],
                 [
@@ -1352,7 +1399,6 @@ async def process_virtual_participant_count(
                         'К конкурсу',
                         callback_data=f'admin_contest_view_{contest_id}',
                         icon='star',
-                        style='primary',
                     )
                 ],
             ]
@@ -1395,21 +1441,23 @@ async def delete_virtual_participant_handler(
     vps = await list_virtual_participants(db, contest_id)
     contest = await get_referral_contest(db, contest_id)
 
-    lines = [
+    heading = admin_screen(
         texts.t('ADMIN_CONTEST_UI_037', '<b>Виртуальные участники</b> — {value1}').format(
             value1=html.escape(contest.title)
         ),
-        '',
-    ]
+        icon='users',
+        compact=True,
+    )
     if vps:
-        for v in vps:
-            lines.append(
-                texts.t('ADMIN_CONTEST_UI_063', '• {value1} — {value2} реф.').format(
-                    value1=html.escape(v.display_name), value2=v.referral_count
-                )
+        entries = [
+            texts.t('ADMIN_CONTEST_UI_063', '• {value1} — {value2} реф.').format(
+                value1=html.escape(v.display_name), value2=v.referral_count
             )
+            for v in vps
+        ]
+        text = f'{heading}\n\n{admin_quote(chr(10).join(entries))}'
     else:
-        lines.append(texts.t('ADMIN_CONTEST_UI_047', 'Пока нет виртуальных участников.'))
+        text = f'{heading}\n\n{texts.t("ADMIN_CONTEST_UI_047", "Пока нет виртуальных участников.")}'
 
     rows = [
         [
@@ -1417,13 +1465,11 @@ async def delete_virtual_participant_handler(
                 _label(texts.t('ADMIN_CONTEST_UI_069', 'Добавить')),
                 callback_data=f'admin_contest_vp_add_{contest_id}',
                 icon='success',
-                style='success',
             ),
             admin_button(
                 _label(texts.t('ADMIN_CONTEST_UI_070', 'Массовка')),
                 callback_data=f'admin_contest_vp_mass_{contest_id}',
                 icon='users',
-                style='primary',
             ),
         ],
     ]
@@ -1436,14 +1482,13 @@ async def delete_virtual_participant_handler(
                         'Удалить',
                         callback_data=f'admin_contest_vp_del_{v.id}',
                         icon='delete',
-                        style='danger',
                     ),
                 ]
             )
     rows.append([admin_back_button(texts, f'admin_contest_view_{contest_id}')])
 
     await callback.message.edit_text(
-        admin_screen(_clean_legacy('\n'.join(lines)), icon='users', compact=True),
+        text,
         reply_markup=types.InlineKeyboardMarkup(inline_keyboard=rows),
         parse_mode='HTML',
     )
@@ -1647,7 +1692,6 @@ async def process_mass_virtual_referrals(
                         _label(texts.t('ADMIN_CONTEST_UI_081', 'К списку призраков')),
                         callback_data=f'admin_contest_vp_{contest_id}',
                         icon='users',
-                        style='primary',
                     )
                 ],
                 [admin_back_button(texts, f'admin_contest_view_{contest_id}', label='К конкурсу')],
@@ -1747,7 +1791,6 @@ async def process_edit_virtual_participant_count(
                             _label(texts.t('ADMIN_CONTEST_UI_079', 'К списку')),
                             callback_data=f'admin_contest_vp_{contest_id}',
                             icon='users',
-                            style='primary',
                         )
                     ],
                 ]

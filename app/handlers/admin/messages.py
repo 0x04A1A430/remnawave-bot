@@ -1,5 +1,6 @@
 import asyncio
 import html
+import re
 from datetime import UTC, datetime, timedelta
 
 import structlog
@@ -44,7 +45,7 @@ from app.services.pinned_message_service import (
     unpin_active_pinned_message,
 )
 from app.states import AdminStates
-from app.utils.admin_ui import admin_back_button, admin_button, admin_icon, admin_screen
+from app.utils.admin_ui import admin_back_button, admin_button, admin_heading, admin_icon, admin_quote, admin_screen
 from app.utils.decorators import admin_required, error_handler
 from app.utils.miniapp_buttons import (
     BUTTON_KEY_TO_CABINET_PATH,
@@ -55,6 +56,23 @@ from app.utils.timezone import local_day_start
 
 
 logger = structlog.get_logger(__name__)
+
+_BOLD_TAGS_RE = re.compile(r'</?b>')
+_PAGE_PART_RE = re.compile(r'\([^()]*\)')
+
+
+def _heading(icon: str, title: str) -> str:
+    """Заголовок с premium-иконкой и <b>; существующие теги не дублируются."""
+    return admin_heading(icon, _BOLD_TAGS_RE.sub('', title or '').strip())
+
+
+def _screen(raw: str, *, icon: str) -> str:
+    """Экран: заголовок из локали + блок параметров под ним."""
+    prepared = (raw or '').strip()
+    title, separator, body = prepared.partition('\n\n')
+    if not separator or not body.strip():
+        return admin_screen(prepared, icon=icon, compact=True)
+    return f'{admin_screen(title, icon=icon, compact=True)}\n\n{admin_quote(body.strip())}'
 
 
 async def safe_edit_or_send_text(callback: types.CallbackQuery, text: str, reply_markup=None, parse_mode: str = 'HTML'):
@@ -251,20 +269,21 @@ async def _persist_broadcast_result(
 @admin_required
 @error_handler
 async def show_messages_menu(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
-    text = """<b>Управление рассылками</b>
-
-Выберите тип рассылки:
-
-• <b>Всем пользователям</b> — рассылка всем активным пользователям
-• <b>По подпискам</b> — фильтрация по типу подписки
-• <b>По критериям</b> — настраиваемые фильтры
-• <b>История</b> — просмотр предыдущих рассылок
-
-<i>Будьте осторожны с массовыми рассылками!</i>"""
+    options = (
+        '• <b>Всем пользователям</b> — рассылка всем активным пользователям',
+        '• <b>По подпискам</b> — фильтрация по типу подписки',
+        '• <b>По критериям</b> — настраиваемые фильтры',
+        '• <b>История</b> — просмотр предыдущих рассылок',
+    )
+    text = (
+        f'{admin_heading("messages", "Управление рассылками")}\n\n'
+        f'{admin_quote(chr(10).join(options))}\n\n'
+        '<i>Будьте осторожны с массовыми рассылками!</i>'
+    )
 
     await safe_edit_or_send_text(
         callback,
-        admin_screen(text, icon='messages', compact=True),
+        text,
         reply_markup=get_admin_messages_keyboard(db_user.language),
         parse_mode='HTML',
     )
@@ -703,6 +722,7 @@ async def show_tariff_filter(callback: types.CallbackQuery, db_user: User, db: A
                         value1=tariff.name, value2=count
                     ),
                     callback_data=f'broadcast_tariff_{tariff.id}',
+                    icon='tariff',
                 )
             ]
         )
@@ -745,12 +765,19 @@ async def show_messages_history(callback: types.CallbackQuery, db_user: User, db
     total_pages = (total_count + limit - 1) // limit
 
     if not broadcasts:
-        text = '<b>История рассылок</b>\n\nИстория рассылок пуста.\nОтправьте первую рассылку, чтобы увидеть её здесь.'
+        text = (
+            f'{admin_heading("logs", "История рассылок")}\n\n'
+            'История рассылок пуста.\nОтправьте первую рассылку, чтобы увидеть её здесь.'
+        )
         keyboard = [[admin_back_button(texts, 'admin_messages')]]
     else:
-        text = texts.t(
+        history_head = texts.t(
             'ADMIN_MESSAGES_UI_SHOW_MESSAGES_HISTORY_027', '<b>История рассылок</b> (страница {value1}/{value2})\n\n'
         ).format(value1=page, value2=total_pages)
+        page_match = _PAGE_PART_RE.search(history_head)
+        page_note = page_match.group(0).strip(' ()') if page_match else ''
+        title = _BOLD_TAGS_RE.sub('', _PAGE_PART_RE.sub('', history_head)).strip()
+        entries: list[str] = []
 
         for broadcast in broadcasts:
             status_emoji = {
@@ -770,18 +797,25 @@ async def show_messages_history(callback: types.CallbackQuery, db_user: User, db
 
             message_preview = html.escape(message_preview)
 
-            text += (
+            entries.append(
                 f'{status_emoji} <b>{broadcast.created_at.strftime("%d.%m.%Y %H:%M")}</b>\n'
-                f'• Отправлено: {broadcast.sent_count}/{broadcast.total_count} ({success_rate}%)\n'
-                f'• Аудитория: {get_target_name(broadcast.target_type)}\n'
-                f'• Админ: {html.escape(broadcast.admin_name or "")}\n'
-                f'• Сообщение: {message_preview}\n\n'
+                f'   {admin_icon("broadcast")} Отправлено: {broadcast.sent_count}/{broadcast.total_count} '
+                f'({success_rate}%)\n'
+                f'   {admin_icon("users")} Аудитория: {get_target_name(broadcast.target_type)}\n'
+                f'   {admin_icon("user")} Админ: {html.escape(broadcast.admin_name or "")}\n'
+                f'   {admin_icon("chat")} Сообщение: {message_preview}'
             )
+
+        blocks = [admin_heading('logs', title)]
+        if page_note:
+            blocks.append(f'{admin_icon("document")} {page_note}')
+        blocks.extend(admin_quote(entry) for entry in entries)
+        text = '\n\n'.join(blocks)
 
         keyboard = get_broadcast_history_keyboard(page, total_pages, db_user.language).inline_keyboard
 
     await callback.message.edit_text(
-        admin_screen(text, icon='messages', compact=True),
+        text,
         reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
         parse_mode='HTML',
     )
@@ -793,28 +827,29 @@ async def show_messages_history(callback: types.CallbackQuery, db_user: User, db
 async def show_custom_broadcast(callback: types.CallbackQuery, db_user: User, state: FSMContext, db: AsyncSession):
     stats = await get_users_statistics(db)
 
-    text = f"""<b>Рассылка по критериям</b>
-
-<b>Доступные фильтры:</b>
-
-<b>По регистрации:</b>
-• Сегодня: {stats['today']} чел.
-• За неделю: {stats['week']} чел.
-• За месяц: {stats['month']} чел.
-
-<b>По активности:</b>
-• Активные сегодня: {stats['active_today']} чел.
-• Неактивные 7+ дней: {stats['inactive_week']} чел.
-• Неактивные 30+ дней: {stats['inactive_month']} чел.
-
-<b>По источнику:</b>
-• Через рефералов: {stats['referrals']} чел.
-• Прямая регистрация: {stats['direct']} чел.
-
-Выберите критерий для фильтрации:"""
+    filters = [
+        '<b>По регистрации:</b>',
+        f'• Сегодня: {stats["today"]} чел.',
+        f'• За неделю: {stats["week"]} чел.',
+        f'• За месяц: {stats["month"]} чел.',
+        '',
+        '<b>По активности:</b>',
+        f'• Активные сегодня: {stats["active_today"]} чел.',
+        f'• Неактивные 7+ дней: {stats["inactive_week"]} чел.',
+        f'• Неактивные 30+ дней: {stats["inactive_month"]} чел.',
+        '',
+        '<b>По источнику:</b>',
+        f'• Через рефералов: {stats["referrals"]} чел.',
+        f'• Прямая регистрация: {stats["direct"]} чел.',
+    ]
+    text = (
+        f'{admin_heading("filter", "Рассылка по критериям")}\n\n'
+        f'{admin_quote(chr(10).join(filters))}\n\n'
+        'Выберите критерий для фильтрации:'
+    )
 
     await callback.message.edit_text(
-        admin_screen(text, icon='filter', compact=True),
+        text,
         reply_markup=get_custom_criteria_keyboard(db_user.language),
         parse_mode='HTML',
     )
@@ -1314,13 +1349,11 @@ async def confirm_button_selection(callback: types.CallbackQuery, db_user: User,
                 strip_leading_emoji(texts.t('ADMIN_MESSAGES_UI_CONFIRM_BUTTON_SELECTION_075', 'Отправить')),
                 callback_data='admin_confirm_broadcast',
                 icon='success',
-                style='success',
             ),
             admin_button(
                 strip_leading_emoji(texts.t('ADMIN_MESSAGES_UI_CONFIRM_BUTTON_SELECTION_076', 'Изменить кнопки')),
                 callback_data='edit_buttons',
                 icon='edit',
-                style='primary',
             ),
         ]
     ]
@@ -1332,7 +1365,6 @@ async def confirm_button_selection(callback: types.CallbackQuery, db_user: User,
                     strip_leading_emoji(texts.t('ADMIN_MESSAGES_UI_CONFIRM_BUTTON_SELECTION_077', 'Изменить медиа')),
                     callback_data='change_media',
                     icon='image',
-                    style='primary',
                 )
             ]
         )
@@ -1745,7 +1777,7 @@ async def confirm_broadcast(callback: types.CallbackQuery, db_user: User, state:
         else ''
     )
 
-    result_text = admin_screen(
+    result_text = _screen(
         texts.t(
             'ADMIN_MESSAGES_UI_CONFIRM_BROADCAST_084',
             '<b>Рассылка завершена!</b>\n\n<b>Результат:</b>\n• Отправлено: {value1}\n{value2}• Не доставлено: {value3}\n• Всего пользователей: {value4}\n• Успешность: {value5}%{value6}\n\n<b>Администратор:</b> {value7}',
@@ -1759,7 +1791,6 @@ async def confirm_broadcast(callback: types.CallbackQuery, db_user: User, state:
             value7=html.escape(admin_name),
         ),
         icon='success',
-        compact=True,
     )
 
     back_keyboard = types.InlineKeyboardMarkup(
@@ -1769,7 +1800,6 @@ async def confirm_broadcast(callback: types.CallbackQuery, db_user: User, state:
                     strip_leading_emoji(texts.t('ADMIN_MESSAGES_UI_CONFIRM_BROADCAST_085', 'К рассылкам')),
                     callback_data='admin_messages',
                     icon='messages',
-                    style='primary',
                 )
             ]
         ]

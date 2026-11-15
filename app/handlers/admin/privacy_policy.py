@@ -23,6 +23,15 @@ from app.utils.validators import get_html_help_text, validate_html_tags
 logger = structlog.get_logger(__name__)
 
 
+def _back_label(value: str) -> str:
+    """Подпись кнопки возврата: стрелка в тексте вместо premium-иконки."""
+
+    label = (value or '').strip()
+    if not label or label.lower().startswith(('←', '◀', '⬅', '⏪')):
+        return label
+    return f'← {label}'
+
+
 def _label(text: str) -> str:
     """Текст кнопки без ведущего глифа локали: иконку даёт ``admin_button``."""
     return strip_leading_emoji(text.strip())
@@ -134,8 +143,7 @@ async def _build_overview(
                     )
                 ),
                 callback_data='admin_privacy_policy_edit',
-                icon='document',
-                style='primary',
+                icon='edit',
             )
         ]
     )
@@ -151,8 +159,7 @@ async def _build_overview(
                         )
                     ),
                     callback_data='admin_privacy_policy_view',
-                    icon='document',
-                    style='primary',
+                    icon='eye',
                 )
             ]
         )
@@ -192,7 +199,6 @@ async def _build_overview(
                 ),
                 callback_data='admin_privacy_policy_display_mode',
                 icon='settings',
-                style='primary',
             )
         ]
     )
@@ -207,8 +213,7 @@ async def _build_overview(
                     )
                 ),
                 callback_data='admin_privacy_policy_help',
-                icon='document',
-                style='primary',
+                icon='question',
             )
         ]
     )
@@ -356,15 +361,14 @@ async def start_edit_privacy_policy(
                         )
                     ),
                     callback_data='admin_privacy_policy_help',
-                    icon='document',
-                    style='primary',
+                    icon='question',
                 )
             ],
             [
                 admin_button(
                     _label(texts.t('ADMIN_PRIVACY_POLICY_CANCEL', 'Отмена')),
                     callback_data='admin_privacy_policy_cancel',
-                    style='danger',
+                    icon='cross',
                 )
             ],
         ]
@@ -456,10 +460,12 @@ async def process_privacy_policy_edit(
                 admin_back_button(
                     texts,
                     'admin_privacy_policy',
-                    label=_label(
-                        texts.t(
-                            'ADMIN_PRIVACY_POLICY_BACK_BUTTON',
-                            'К настройкам политики',
+                    label=_back_label(
+                        _label(
+                            texts.t(
+                                'ADMIN_PRIVACY_POLICY_BACK_BUTTON',
+                                'К настройкам политики',
+                            )
                         )
                     ),
                 )
@@ -520,10 +526,12 @@ async def view_privacy_policy(
                 admin_back_button(
                     texts,
                     'admin_privacy_policy',
-                    label=_label(
-                        texts.t(
-                            'ADMIN_PRIVACY_POLICY_BACK_BUTTON',
-                            'К настройкам политики',
+                    label=_back_label(
+                        _label(
+                            texts.t(
+                                'ADMIN_PRIVACY_POLICY_BACK_BUTTON',
+                                'К настройкам политики',
+                            )
                         )
                     ),
                 )
@@ -537,8 +545,7 @@ async def view_privacy_policy(
                         )
                     ),
                     callback_data='admin_privacy_policy_edit',
-                    icon='document',
-                    style='primary',
+                    icon='edit',
                 )
             ],
         ]
@@ -573,10 +580,12 @@ async def show_privacy_policy_html_help(
                 admin_back_button(
                     texts,
                     'admin_privacy_policy_edit',
-                    label=_label(
-                        texts.t(
-                            'ADMIN_PRIVACY_POLICY_RETURN_TO_EDIT',
-                            'Назад к редактированию',
+                    label=_back_label(
+                        _label(
+                            texts.t(
+                                'ADMIN_PRIVACY_POLICY_RETURN_TO_EDIT',
+                                'Назад к редактированию',
+                            )
                         )
                     ),
                 )
@@ -588,10 +597,12 @@ async def show_privacy_policy_html_help(
             admin_back_button(
                 texts,
                 'admin_privacy_policy',
-                label=_label(
-                    texts.t(
-                        'ADMIN_PRIVACY_POLICY_BACK_BUTTON',
-                        'К настройкам политики',
+                label=_back_label(
+                    _label(
+                        texts.t(
+                            'ADMIN_PRIVACY_POLICY_BACK_BUTTON',
+                            'К настройкам политики',
+                        )
                     )
                 ),
             )

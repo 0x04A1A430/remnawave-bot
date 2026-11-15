@@ -16,6 +16,16 @@ from app.utils.miniapp_buttons import strip_leading_emoji
 
 logger = structlog.get_logger(__name__)
 
+
+def _back_label(value: str) -> str:
+    """Подпись кнопки возврата: стрелка в тексте вместо premium-иконки."""
+
+    label = (value or '').strip()
+    if not label or label.lower().startswith(('←', '◀', '⬅', '⏪')):
+        return label
+    return f'← {label}'
+
+
 # Следы прежнего оформления в локалях: декоративные глифы в начале строк.
 _LEGACY_PREFIX_RE = re.compile(
     r'^[ \t]*(?:(?:[▤▣▥◷↻◀▫⚠ℹ→]|NEW(?=[ \t])|i(?=[ \t]))\ufe0f?[ \t]*)*',
@@ -31,9 +41,27 @@ def _clean_legacy(value: str) -> str:
 def get_updates_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
     texts = get_texts(language)
     buttons = [
-        [admin_button('Проверить обновления', callback_data='admin_updates_check', style='success')],
-        [admin_button('Информация о версии', callback_data='admin_updates_info', style='primary')],
-        [admin_button('Открыть репозиторий', url=f'https://github.com/{version_service.repo}/releases')],
+        [
+            admin_button(
+                'Проверить обновления',
+                callback_data='admin_updates_check',
+                icon='refresh',
+            )
+        ],
+        [
+            admin_button(
+                'Информация о версии',
+                callback_data='admin_updates_info',
+                icon='info',
+            )
+        ],
+        [
+            admin_button(
+                'Открыть репозиторий',
+                url=f'https://github.com/{version_service.repo}/releases',
+                icon='link',
+            )
+        ],
         [admin_back_button(texts, 'admin_panel')],
     ]
 
@@ -47,14 +75,14 @@ def get_version_info_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
             admin_button(
                 strip_leading_emoji(texts.t('ADMIN_UPDATES_025')).strip(),
                 callback_data='admin_updates_info',
-                style='primary',
+                icon='refresh',
             )
         ],
         [
-            admin_button(
-                strip_leading_emoji(texts.t('ADMIN_UPDATES_026')).strip(),
-                callback_data='admin_updates',
-                style='danger',
+            admin_back_button(
+                texts,
+                'admin_updates',
+                label=_back_label(strip_leading_emoji(texts.t('ADMIN_UPDATES_026')).strip()),
             )
         ],
     ]
@@ -181,7 +209,7 @@ async def check_updates(callback: types.CallbackQuery, db_user: User, db: AsyncS
                     admin_button(
                         strip_leading_emoji(texts.t('ADMIN_UPDATES_032')).strip(),
                         callback_data='admin_updates_info',
-                        style='primary',
+                        icon='info',
                     )
                 ],
             )

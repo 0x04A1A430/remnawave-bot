@@ -13,9 +13,8 @@ from app.database.crud.tariff import get_tariff_by_id, update_tariff
 from app.database.models import Tariff, User
 from app.localization.texts import get_texts
 from app.states import AdminStates
-from app.utils.admin_ui import admin_back_button, admin_button, admin_screen
+from app.utils.admin_ui import admin_back_button, admin_button, admin_heading, admin_icon, admin_quote, admin_screen
 from app.utils.decorators import admin_required, error_handler
-from app.utils.miniapp_buttons import strip_leading_emoji
 
 
 def _limits(tariff: Tariff) -> dict[str, Any]:
@@ -51,14 +50,28 @@ def _visible_squads(tariff: Tariff, squads: list) -> list:
 
 
 def render_server_limits(tariff: Tariff, language: str = 'ru') -> str:
-    return (
-        get_texts(language)
-        .t(
-            'ADMIN_TARIFF_HELPER_RENDER_SERVER_LIMITS_1',
-            '<b>Лимиты трафика по серверам</b>\n\nТариф: <b>{v0}</b>\nОбщий лимит тарифа: <b>{v1} ГБ</b>\n\nНажмите на сервер и введите лимит в ГБ. <code>0</code> — использовать общий лимит тарифа.',
-        )
-        .format(v0=html.escape(tariff.name), v1=tariff.traffic_limit_gb or '∞')
+    hint = get_texts(language).t(
+        'ADMIN_TARIFF_HELPER_SERVER_LIMITS_HINT',
+        'Нажмите на сервер и введите лимит в ГБ. <code>0</code> — использовать общий лимит тарифа.',
     )
+    body = admin_quote(
+        '\n'.join(
+            [
+                f'{admin_icon("tariff")} Тариф: <b>{html.escape(tariff.name)}</b>',
+                f'{admin_icon("stats")} Общий лимит тарифа: <b>{tariff.traffic_limit_gb or "∞"} ГБ</b>',
+            ]
+        )
+    )
+    return admin_screen(
+        f'{admin_heading("servers", get_texts(language).t("ADMIN_TARIFF_HELPER_SERVER_LIMITS_TITLE", "Лимиты трафика по серверам"))}\n\n{body}\n\n{hint}',
+        compact=True,
+    )
+
+
+def _server_notice(icon: str, message: str) -> str:
+    if '\n' in message or len(message) > 90:
+        return admin_screen(f'{admin_heading(icon, "Внимание")}\n\n{admin_quote(message)}', compact=True)
+    return admin_screen(admin_heading(icon, message), compact=True)
 
 
 def get_server_limits_keyboard(tariff: Tariff, squads: list, language: str) -> InlineKeyboardMarkup:
@@ -75,7 +88,15 @@ def get_server_limits_keyboard(tariff: Tariff, squads: list, language: str) -> I
             .t('ADMIN_TARIFF_HELPER_GET_SERVER_LIMITS_KEYBOARD_2', '{v0}: по тарифу')
             .format(v0=squad.display_name)
         )
-        buttons.append([admin_button(label, callback_data=f'admin_tariff_srv_limit:{tariff.id}:{squad.squad_uuid}')])
+        buttons.append(
+            [
+                admin_button(
+                    label,
+                    callback_data=f'admin_tariff_srv_limit:{tariff.id}:{squad.squad_uuid}',
+                    icon='stats',
+                )
+            ]
+        )
     buttons.append([admin_back_button(texts, f'admin_tariff_view:{tariff.id}')])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
@@ -84,11 +105,7 @@ async def _render_screen(
     target: types.Message, tariff: Tariff, db: AsyncSession, language: str, *, edit: bool, prefix: str = ''
 ) -> None:
     squads, _ = await get_all_server_squads(db, limit=10000)
-    text = admin_screen(
-        strip_leading_emoji(f'{prefix}{render_server_limits(tariff, language=language)}'),
-        icon='servers',
-        compact=True,
-    )
+    text = admin_screen(f'{prefix}{render_server_limits(tariff, language=language)}', compact=True)
     keyboard = get_server_limits_keyboard(tariff, squads, language)
     if edit:
         await target.edit_text(text, reply_markup=keyboard, parse_mode='HTML')
@@ -124,23 +141,26 @@ async def start_edit_server_limit(callback: types.CallbackQuery, db_user: User, 
     await state.update_data(tariff_id=tariff.id, squad_uuid=squad_uuid, language=db_user.language)
     texts = get_texts(db_user.language)
     current = limit_for(tariff, squad_uuid)
+    current_display = (
+        f'{current} ГБ'
+        if current
+        else get_texts(db_user.language).t('ADMIN_TARIFF_HELPER_TARIFF_DEFAULT_SUFFIX', '(по тарифу)')
+    )
+    body = admin_quote(
+        '\n'.join(
+            [
+                f'{admin_icon("tariff")} Тариф: <b>{html.escape(tariff.name)}</b>',
+                f'{admin_icon("stats")} Текущее значение: <b>{current_display}</b>',
+            ]
+        )
+    )
+    hint = get_texts(db_user.language).t(
+        'ADMIN_TARIFF_HELPER_SERVER_LIMIT_PROMPT',
+        'Введите лимит в ГБ целым числом. <code>0</code> — по тарифу.',
+    )
     await callback.message.edit_text(
         admin_screen(
-            strip_leading_emoji(
-                get_texts(db_user.language)
-                .t(
-                    'ADMIN_TARIFF_HELPER_START_EDIT_SERVER_LIMIT_1',
-                    '<b>Лимит сервера</b>\n\nТариф: <b>{v0}</b>\nТекущее значение: <b>{v1} ГБ</b>{v2}\n\nВведите лимит в ГБ целым числом. <code>0</code> — по тарифу.',
-                )
-                .format(
-                    v0=html.escape(tariff.name),
-                    v1=current,
-                    v2=''
-                    if current
-                    else get_texts(db_user.language).t('ADMIN_TARIFF_HELPER_TARIFF_DEFAULT_SUFFIX', '(по тарифу)'),
-                )
-            ),
-            icon='servers',
+            f'{admin_heading("servers", get_texts(db_user.language).t("ADMIN_TARIFF_HELPER_SERVER_LIMIT_TITLE", "Лимит сервера"))}\n\n{body}\n\n{hint}',
             compact=True,
         ),
         reply_markup=InlineKeyboardMarkup(
@@ -161,10 +181,9 @@ async def process_server_limit_input(message: types.Message, db_user: User, db: 
     squad_uuid = data.get('squad_uuid')
     if tariff is None or not squad_uuid:
         await message.answer(
-            admin_screen(
+            _server_notice(
+                'warning',
                 get_texts(db_user.language).t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'),
-                icon='warning',
-                compact=True,
             ),
             parse_mode='HTML',
         )
@@ -177,13 +196,12 @@ async def process_server_limit_input(message: types.Message, db_user: User, db: 
             raise ValueError
     except ValueError:
         await message.answer(
-            admin_screen(
+            _server_notice(
+                'warning',
                 get_texts(db_user.language).t(
                     'ADMIN_TARIFF_HELPER_INVALID_SERVER_LIMIT',
                     'Введите целое число гигабайт, не меньше нуля. <code>0</code> — по тарифу.',
                 ),
-                icon='warning',
-                compact=True,
             ),
             parse_mode='HTML',
         )
@@ -202,7 +220,14 @@ async def process_server_limit_input(message: types.Message, db_user: User, db: 
         if limit
         else get_texts(db_user.language).t('ADMIN_TARIFF_HELPER_LIMIT_REMOVED', 'Лимит снят — по тарифу')
     )
-    await _render_screen(message, tariff, db, db_user.language, edit=False, prefix=f'{confirmation}\n\n')
+    await _render_screen(
+        message,
+        tariff,
+        db,
+        db_user.language,
+        edit=False,
+        prefix=f'{admin_heading("success", confirmation)}\n\n',
+    )
 
 
 def register_server_limits_handlers(dp: Dispatcher) -> None:

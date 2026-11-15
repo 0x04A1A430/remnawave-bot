@@ -18,6 +18,16 @@ from app.utils.miniapp_buttons import strip_leading_emoji
 
 logger = structlog.get_logger(__name__)
 
+
+def _back_label(value: str) -> str:
+    """Подпись кнопки возврата: стрелка в тексте вместо premium-иконки."""
+
+    label = (value or '').strip()
+    if not label or label.lower().startswith(('←', '◀', '⬅', '⏪')):
+        return label
+    return f'← {label}'
+
+
 router = Router(name='admin_overpay_certificate')
 
 ALLOWED_EXTENSIONS = ('.p12', '.pfx')
@@ -45,7 +55,7 @@ def _cancel_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                 admin_button(
                     _label(texts.t('ADMIN_OVERPAY_CERT_022')),
                     callback_data='overpay_cert',
-                    style='danger',
+                    icon='cross',
                 )
             ]
         ]
@@ -60,7 +70,7 @@ def _back_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                 admin_back_button(
                     texts,
                     'overpay_cert',
-                    label=_label(texts.t('ADMIN_OVERPAY_CERT_023')),
+                    label=_back_label(_label(texts.t('ADMIN_OVERPAY_CERT_023'))),
                 )
             ]
         ]
@@ -100,7 +110,6 @@ def _status_view(language: str = 'ru') -> tuple[str, InlineKeyboardMarkup]:
                 _label(texts.t('ADMIN_OVERPAY_CERT_018')),
                 callback_data='overpay_cert:upload',
                 icon='upload',
-                style='success',
             )
         ]
     ]
@@ -111,7 +120,6 @@ def _status_view(language: str = 'ru') -> tuple[str, InlineKeyboardMarkup]:
                     _label(texts.t('ADMIN_OVERPAY_CERT_021')),
                     callback_data='overpay_cert:delete',
                     icon='delete',
-                    style='danger',
                 )
             ]
         )
@@ -120,7 +128,7 @@ def _status_view(language: str = 'ru') -> tuple[str, InlineKeyboardMarkup]:
             admin_back_button(
                 texts,
                 'admin_submenu_settings',
-                label=_label(texts.t('ADMIN_OVERPAY_CERT_019')),
+                label=_back_label(_label(texts.t('ADMIN_OVERPAY_CERT_019'))),
             )
         ]
     )
@@ -170,12 +178,11 @@ async def confirm_certificate_delete(callback: CallbackQuery, **kwargs) -> None:
                         _label(texts.t('ADMIN_OVERPAY_CERT_024')),
                         callback_data='overpay_cert:delete_confirm',
                         icon='delete',
-                        style='danger',
                     ),
                     admin_button(
                         _label(texts.t('ADMIN_OVERPAY_CERT_022')),
                         callback_data='overpay_cert',
-                        style='danger',
+                        icon='cross',
                     ),
                 ]
             ]

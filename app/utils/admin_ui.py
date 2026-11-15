@@ -12,7 +12,16 @@
   в HTML и добавляет иконку к заголовку;
 - ``admin_button`` не меняет callback_data и не дублирует иконку, если она уже
   есть в тексте кнопки;
-- back/cancel остаются ``danger``, как в пользовательской части.
+- пагинация (``←``, ``→``, ``1/3``, callbacks ``*_page_*``, ``current_page``,
+  ``noop``) и кнопки «Назад» живут без premium-иконок и без цвета: стрелка уже
+  есть в тексте;
+- в админке кнопки не красятся. ``danger`` остаётся только у забаненных
+  пользователей в списке (текст начинается с ``×``), остальные админ-кнопки
+  нейтральные, даже если экран просил ``primary``/``success``/``danger``;
+- иконки глубоких меню (save/create/edit/delete/refresh/search/filter/chart/
+  backup/chat …) сохраняются;
+- пользовательские кнопки (callback вне админ-пространства) не трогаются:
+  там back/cancel по-прежнему ``danger``, как и было.
 """
 
 from __future__ import annotations
@@ -159,7 +168,6 @@ _LEGACY_BOLD_RE = re.compile(r'\*\*(.+?)\*\*', re.DOTALL)
 _ZERO_WIDTH_RE = re.compile(r'[\ufeff\u200b]')
 _LEGACY_LINE_GLYPHS_RE = re.compile(r'^[ \t]*(?:[▤▣▥◷↻]\s*)+', re.MULTILINE)
 _LEGACY_BUTTON_GLYPHS_RE = re.compile(r'^[▤▣▥◷↻]+\s*')
-_LEADING_BACK_ARROW_RE = re.compile(r'^[←◀⬅⏪\s]+')
 
 # Общие разделы админки: иконка подставляется по callback_data на отправке.
 # Это покрывает и клавиатуры из app/keyboards/admin.py, и кнопки, собранные
@@ -248,17 +256,6 @@ ADMIN_BUTTON_ICONS: dict[str, str] = {
     'admin_blocked_list': 'lock',
 }
 
-# Только разделы, уникальные для админки: пользовательская кнопка «Админ-панель»
-# уже несёт свою иконку и не должна менять цвет.
-ADMIN_BUTTON_STYLES: dict[str, str] = {
-    'admin_submenu_users': 'primary',
-    'admin_submenu_support': 'primary',
-    'admin_submenu_settings': 'primary',
-    'admin_trials': 'success',
-    'admin_trials_reset': 'primary',
-    'admin_payments': 'success',
-}
-
 # Префиксы callback_data для глубоких меню: конкретные правила идут раньше
 # общих. Нужны, потому что кнопки вложенных экранов собираются динамически
 # (`admin_tariff_edit_name:{id}`, `promo_manage_{id}` и т.п.).
@@ -344,102 +341,33 @@ _ADMIN_CALLBACK_PREFIXES = (
     'overpay_',
     'user_message',
     'list_user_messages',
-    'back_to_',
 )
 
-_DANGER_MARKERS = (
-    'delete',
-    'remove',
-    'cancel',
-    'clear',
-    'reset',
-    'revoke',
-    'stop',
-    'disable',
-    'deactivate',
-    'block',
-    'ban',
-    'close_ticket',
-    'close_all',
-    'drop',
-    'wipe',
-    'удал',
-    'отмен',
-    'назад',
-    'очист',
-    'сброс',
-    'отключ',
-    'деактив',
-    'заблок',
-    'закрыть',
-)
-_SUCCESS_MARKERS = (
-    'create',
-    'add',
-    'save',
-    'confirm',
-    'apply',
-    'enable',
-    'activate',
-    'start',
-    'send',
-    'publish',
-    'restore',
-    'topup',
-    'pay',
-    'создат',
-    'добав',
-    'сохран',
-    'подтверд',
-    'примен',
-    'включ',
-    'актив',
-    'запуст',
-    'отправ',
-    'опублик',
-    'восстанов',
-    'пополн',
-    'оплат',
-)
-_PRIMARY_MARKERS = (
-    'list',
-    'view',
-    'show',
-    'stats',
-    'settings',
-    'search',
-    'edit',
-    'open',
-    'page',
-    'next',
-    'prev',
-    'filter',
-    'export',
-    'download',
-    'detail',
-    'info',
-    'select',
-    'choose',
-    'history',
-    'log',
-    'report',
-    'список',
-    'просмотр',
-    'статистик',
-    'настрой',
-    'поиск',
-    'редакт',
-    'открыт',
-    'страниц',
-    'фильтр',
-    'экспорт',
-    'скач',
-    'подроб',
-    'истор',
-    'лог',
-    'отчёт',
-)
-_BACK_TEXT_MARKERS = ('←', '◀', '⬅', '⏪', 'назад', 'back')
+# Служебные callback'и листалки: общие для админки и пользовательской части,
+# поэтому их цвет/иконка снимаются всегда.
+_PAGINATION_CALLBACKS = frozenset({'current_page', 'noop'})
+
+# «Назад» ищем строго: «Backups» не должен считаться back-кнопкой.
+_BACK_TEXT_RE = re.compile(r'^(?:[←◀⬅⏪]|назад\b|back\b)', re.IGNORECASE)
+_PAGINATION_TEXTS = frozenset({'←', '→', '◀', '▶', '‹', '›'})
+_PAGE_COUNTER_RE = re.compile(r'^(?:\D{0,12})?\d+\s*/\s*\d+$')
+_PAGE_NUMBER_RE = re.compile(r'^\d+$')
+_PAGE_CALLBACK_RE = re.compile(r'(?:^|_)page(?:_|$)')
+
+
+def _is_pagination_button(callback: str, text: str) -> bool:
+    """Служебный элемент листалки: стрелка, счётчик «1/3», номер страницы."""
+    stripped = text.strip()
+    if stripped in _PAGINATION_TEXTS or _PAGE_COUNTER_RE.match(stripped):
+        return True
+    # Номер страницы — только вместе с page-callback: «← К списку» на
+    # *_page_* это back-кнопка, а не листалка.
+    return bool(_PAGE_CALLBACK_RE.search(callback)) and bool(_PAGE_NUMBER_RE.match(stripped))
+
+
+def _is_blocked_user_button(callback: str, text: str) -> bool:
+    """Красным оставляем только забаненных пользователей в списке."""
+    return callback.startswith('admin_user_manage_') and text.lstrip().startswith('×')
 
 
 def _is_admin_callback(callback: str) -> bool:
@@ -449,38 +377,15 @@ def _is_admin_callback(callback: str) -> bool:
 def _looks_like_back(callback: str, text: str) -> bool:
     if callback.startswith(('back_to_', 'admin_back_')) or callback.endswith('_back'):
         return True
-    lowered = text.strip().lower()
-    return lowered.startswith(_BACK_TEXT_MARKERS)
+    return bool(_BACK_TEXT_RE.match(text.strip()))
 
 
-def _infer_button_style(callback: str, text: str) -> str | None:
-    """Цвет для глубоких меню: явные правила экрана важнее этого fallback."""
-    if not _is_admin_callback(callback):
+def _infer_button_icon(callback: str, text: str) -> str | None:
+    """Иконка глубокого меню по callback/тексту; back и листалка — без иконки."""
+    if _looks_like_back(callback, text) or _is_pagination_button(callback, text):
         return None
-    if _looks_like_back(callback, text):
-        return 'danger'
-    lowered = f'{callback} {text}'.lower()
-    if any(marker in lowered for marker in _DANGER_MARKERS):
-        return 'danger'
-    if any(marker in lowered for marker in _SUCCESS_MARKERS):
-        return 'success'
-    if any(marker in lowered for marker in _PRIMARY_MARKERS):
-        return 'primary'
-    # Для админских действий по умолчанию даём навигационный цвет, чтобы
-    # глубокие меню не оставались серыми.
-    return 'primary'
 
-
-def _infer_button_icon(callback: str, text: str, style: str | None) -> str | None:
     lowered = f'{callback} {text}'.lower()
-    if style == 'danger':
-        if _looks_like_back(callback, text):
-            return 'back'
-        if any(marker in lowered for marker in ('delete', 'remove', 'clear', 'wipe', 'drop', 'удал', 'очист')):
-            return 'delete'
-        if any(marker in lowered for marker in ('block', 'ban', 'lock', 'заблок')):
-            return 'lock'
-        return 'warning'
 
     # Действие важнее раздела: «Сохранить» в карточке тарифа — это дискета,
     # а не иконка тарифа.
@@ -490,6 +395,8 @@ def _infer_button_icon(callback: str, text: str, style: str | None) -> str | Non
         return 'plus'
     if any(marker in lowered for marker in ('edit', 'редакт', 'измен')):
         return 'edit'
+    if any(marker in lowered for marker in ('delete', 'remove', 'удал', 'очист')):
+        return 'delete'
     if any(marker in lowered for marker in ('send', 'отправ', 'publish', 'опублик')):
         return 'broadcast'
     if any(marker in lowered for marker in ('refresh', 'обнов', 'sync', 'синхрон')):
@@ -589,23 +496,31 @@ def admin_button(
 
 
 def admin_back_button(texts: Any, callback_data: str, *, label: str | None = None) -> Any:
-    """Единая кнопка возврата: последняя в ряду, как в пользовательских меню."""
-    raw_label = label or texts.BACK
-    # Убираем старую текстовую стрелку: её место занимает premium-иконка.
-    clean_label = _LEADING_BACK_ARROW_RE.sub('', raw_label).strip() or raw_label
+    """Единая кнопка возврата без premium-иконки и без цвета.
+
+    В локали текст уже содержит стрелку «←», поэтому иконку не добавляем (иначе
+    две стрелки), а текст не переписываем. Нейтральный цвет поддерживает и
+    ``decorate_admin_markup``: explicit ``danger`` у админского back снимается.
+    """
     return make_button(
-        text=clean_label,
+        text=label or texts.BACK,
         callback_data=callback_data,
-        style='danger',
-        icon_custom_emoji_id=ADMIN_ICONS['back'].emoji_id,
     )
 
 
 def decorate_admin_markup(markup: Any) -> Any:
-    """Добавляет иконки/цвета кнопкам админки по callback_data.
+    """Приводит кнопки админки к общей политике прямо на отправке.
 
-    Вызывается на общем пути отправки. Не переопределяет уже заданную иконку
-    или цвет, поэтому явные настройки экрана всегда выигрывают.
+    Что делает:
+    - пагинация и «Назад» — без premium-иконок и без цвета;
+    - ``danger`` остаётся только у забаненных пользователей в списке;
+      остальные админ-кнопки становятся нейтральными, даже если экран задал
+      ``primary``/``success``/``danger``;
+    - иконки глубоких меню сохраняются, недостающие подставляются по
+      callback/тексту.
+
+    Пользовательские кнопки (callback вне ``admin_``/``promo_``/``poll_``/
+    ``backup_``/…) не трогаются: там back/cancel остаются ``danger``.
     """
     from aiogram.types import InlineKeyboardMarkup
 
@@ -619,9 +534,16 @@ def decorate_admin_markup(markup: Any) -> Any:
         for button in row:
             updates: dict[str, Any] = {}
             callback = button.callback_data or ''
-            is_admin_button = _is_admin_callback(callback)
-
             text = button.text or ''
+
+            is_admin_button = _is_admin_callback(callback)
+            is_pagination = _is_pagination_button(callback, text) and (
+                is_admin_button or callback in _PAGINATION_CALLBACKS
+            )
+            if not is_admin_button and not is_pagination:
+                new_row.append(button)
+                continue
+
             if is_admin_button:
                 cleaned = _ZERO_WIDTH_RE.sub('', text).strip()
                 cleaned = _LEGACY_BUTTON_GLYPHS_RE.sub('', cleaned).strip()
@@ -629,17 +551,30 @@ def decorate_admin_markup(markup: Any) -> Any:
                     updates['text'] = cleaned
                     text = cleaned
 
-            style = button.style
-            if not style:
-                style = ADMIN_BUTTON_STYLES.get(callback) or _infer_button_style(callback, text)
-                if style:
-                    updates['style'] = style
+            if is_pagination:
+                # Служебные стрелки/счётчики: без premium-эмодзи и цвета.
+                if button.icon_custom_emoji_id:
+                    updates['icon_custom_emoji_id'] = None
+                if button.style:
+                    updates['style'] = None
+            elif _looks_like_back(callback, text):
+                # «Назад»: стрелка уже есть в тексте, иконка и цвет не нужны.
+                if button.icon_custom_emoji_id:
+                    updates['icon_custom_emoji_id'] = None
+                if button.style:
+                    updates['style'] = None
+            else:
+                # Красный — только забаненные пользователи, остальное нейтрально.
+                is_blocked = _is_blocked_user_button(callback, text)
+                desired_style = 'danger' if is_blocked else None
+                if button.style != desired_style:
+                    updates['style'] = desired_style
 
-            if not button.icon_custom_emoji_id and '<tg-emoji' not in text:
-                icon_name = _infer_button_icon(callback, text, style)
-                token = ADMIN_ICONS.get(icon_name) if icon_name else None
-                if token:
-                    updates['icon_custom_emoji_id'] = token.emoji_id
+                if not is_blocked and not button.icon_custom_emoji_id and '<tg-emoji' not in text:
+                    icon_name = _infer_button_icon(callback, text)
+                    token = ADMIN_ICONS.get(icon_name) if icon_name else None
+                    if token:
+                        updates['icon_custom_emoji_id'] = token.emoji_id
 
             if updates:
                 new_row.append(button.model_copy(update=updates))

@@ -927,6 +927,7 @@ def get_info_menu_keyboard(
                 make_button(
                     text=texts.t('MENU_FAQ', 'FAQ'),
                     callback_data='menu_faq',
+                    icon_custom_emoji_id=_UI_ICONS['question'].emoji_id,
                 )
             ]
         )
@@ -937,6 +938,7 @@ def get_info_menu_keyboard(
                 make_button(
                     text=texts.t('MENU_PROMO_GROUPS_INFO', 'Промогруппы'),
                     callback_data='menu_info_promo_groups',
+                    icon_custom_emoji_id=_UI_ICONS['tag'].emoji_id,
                 )
             ]
         )
@@ -947,6 +949,7 @@ def get_info_menu_keyboard(
                 make_button(
                     text=texts.t('MENU_PRIVACY_POLICY', 'Политика конф.'),
                     callback_data='menu_privacy_policy',
+                    icon_custom_emoji_id=_UI_ICONS['shield'].emoji_id,
                 )
             ]
         )
@@ -957,12 +960,21 @@ def get_info_menu_keyboard(
                 make_button(
                     text=texts.t('MENU_PUBLIC_OFFER', 'Оферта'),
                     callback_data='menu_public_offer',
+                    icon_custom_emoji_id=_UI_ICONS['document'].emoji_id,
                 )
             ]
         )
 
     if show_rules:
-        buttons.append([make_button(text=texts.MENU_RULES, callback_data='menu_rules')])
+        buttons.append(
+            [
+                make_button(
+                    text=texts.MENU_RULES,
+                    callback_data='menu_rules',
+                    icon_custom_emoji_id=_UI_ICONS['rules'].emoji_id,
+                )
+            ]
+        )
 
     for page_id, page_title in custom_pages or []:
         buttons.append(
@@ -970,6 +982,7 @@ def get_info_menu_keyboard(
                 make_button(
                     text=page_title,
                     callback_data=f'info_page:{page_id}:1',
+                    icon_custom_emoji_id=_UI_ICONS['document'].emoji_id,
                 )
             ]
         )
@@ -980,7 +993,15 @@ def get_info_menu_keyboard(
     if server_status_mode == 'external_link':
         status_url = settings.get_server_status_external_url()
         if status_url:
-            buttons.append([make_button(text=server_status_text, url=status_url)])
+            buttons.append(
+                [
+                    make_button(
+                        text=server_status_text,
+                        url=status_url,
+                        icon_custom_emoji_id=_UI_ICONS['chart'].emoji_id,
+                    )
+                ]
+            )
     elif server_status_mode == 'external_link_miniapp':
         status_url = settings.get_server_status_external_url()
         if status_url:
@@ -989,6 +1010,7 @@ def get_info_menu_keyboard(
                     make_button(
                         text=server_status_text,
                         web_app=types.WebAppInfo(url=status_url),
+                        icon_custom_emoji_id=_UI_ICONS['chart'].emoji_id,
                     )
                 ]
             )
@@ -998,12 +1020,22 @@ def get_info_menu_keyboard(
                 make_button(
                     text=server_status_text,
                     callback_data='menu_server_status',
+                    icon_custom_emoji_id=_UI_ICONS['chart'].emoji_id,
                 )
             ]
         )
 
     if settings.is_language_selection_enabled():
-        buttons.append([make_button(text=texts.MENU_LANGUAGE, callback_data='menu_language', style='primary')])
+        buttons.append(
+            [
+                make_button(
+                    text=texts.MENU_LANGUAGE,
+                    callback_data='menu_language',
+                    style='primary',
+                    icon_custom_emoji_id=_UI_ICONS['network'].emoji_id,
+                )
+            ]
+        )
 
     buttons.append([make_button(text=texts.BACK, style='danger', callback_data='back_to_menu')])
 
@@ -2831,7 +2863,6 @@ def get_support_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMark
                 text=texts.BACK,
                 style='danger',
                 callback_data='back_to_menu',
-                icon_custom_emoji_id=_UI_ICONS['back'].emoji_id,
             )
         ]
     )
@@ -4193,7 +4224,6 @@ def get_my_tickets_keyboard(
                 text=texts.BACK,
                 style='danger',
                 callback_data='menu_support',
-                icon_custom_emoji_id=_UI_ICONS['back'].emoji_id,
             )
         ]
     )
@@ -4237,7 +4267,6 @@ def get_ticket_view_keyboard(
                 text=texts.BACK,
                 style='danger',
                 callback_data='my_tickets',
-                icon_custom_emoji_id=_UI_ICONS['back'].emoji_id,
             )
         ]
     )

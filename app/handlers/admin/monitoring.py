@@ -25,7 +25,14 @@ from app.services.traffic_monitoring_service import (
     traffic_monitoring_scheduler,
 )
 from app.states import AdminStates
-from app.utils.admin_ui import admin_back_button, admin_button, admin_icon, admin_screen
+from app.utils.admin_ui import (
+    admin_back_button as _admin_back_button,
+    admin_button,
+    admin_heading,
+    admin_icon,
+    admin_quote,
+    admin_screen,
+)
 from app.utils.decorators import admin_required
 from app.utils.pagination import paginate_list
 
@@ -37,11 +44,28 @@ router = Router()
 # метка NEW и лишние ведущие пробелы строк — иконку и отступы даёт admin_screen.
 _LEGACY_PREFIX_RE = re.compile(r'^[ \t]*(?:[▤▣▥◷↻]\s*|NEW\s+)*', re.MULTILINE)
 _LEGACY_BULLET_RE = re.compile(r'(?<=• )(?:[▤▣▥◷↻]\s*|NEW\s+)+')
+_BACK_ARROWS = ('←', '◀', '⬅', '⏪')
 
 
 def _clean_legacy(value: str) -> str:
     """Убирает декоративные глифы, метку NEW и ведущие пробелы строк."""
     return _LEGACY_BULLET_RE.sub('', _LEGACY_PREFIX_RE.sub('', value)).strip()
+
+
+def admin_back_button(texts, callback_data: str, *, label: str | None = None):
+    """Кнопка возврата: стрелка в тексте, без premium-иконки и цвета."""
+    text = label or texts.BACK
+    if not text.lstrip().startswith(_BACK_ARROWS):
+        text = f'← {text}'
+    return _admin_back_button(texts, callback_data, label=text)
+
+
+def _quote_after_title(value: str) -> str:
+    """Оставляет заголовок вне цитаты, а параметры после него — в blockquote."""
+    title, separator, body = value.partition('\n\n')
+    if not separator or not body.strip():
+        return value
+    return f'{title}\n\n{admin_quote(body)}'
 
 
 def _monitoring_language(event, db_user: User | None = None, fallback: str | None = None) -> str:
@@ -56,6 +80,62 @@ def _format_toggle(enabled: bool, language: str = 'ru') -> str:
         texts.t('ADMIN_MONITORING_UI_FORMAT_TOGGLE_000', 'Вкл')
         if enabled
         else texts.t('ADMIN_MONITORING_UI_FORMAT_TOGGLE_001', 'Выкл')
+    )
+
+
+def _statistics_week_counters(week_logs):
+    week_success = sum(1 for log in week_logs if log['is_success'])
+    week_errors = len(week_logs) - week_success
+    return week_success, week_errors
+
+
+def _build_monitoring_statistics_text(sub_stats, mon_status, week_logs) -> str:
+    """Статистика мониторинга: заголовок, блоки параметров в цитатах."""
+    week_success, week_errors = _statistics_week_counters(week_logs)
+
+    subscriptions_block = '\n'.join(
+        [
+            f'{admin_icon("tariff")} <b>Подписки</b>',
+            f'• Всего: {sub_stats["total_subscriptions"]}',
+            f'• Активных: {sub_stats["active_subscriptions"]}',
+            f'• Тестовых: {sub_stats["trial_subscriptions"]}',
+            f'• Платных: {sub_stats["paid_subscriptions"]}',
+        ]
+    )
+    today_block = '\n'.join(
+        [
+            f'{admin_icon("clock")} <b>За сегодня</b>',
+            f'• Успешных операций: {mon_status["stats_24h"]["successful"]}',
+            f'• Ошибок: {mon_status["stats_24h"]["failed"]}',
+            f'• Успешность: {mon_status["stats_24h"]["success_rate"]}%',
+        ]
+    )
+    week_block = '\n'.join(
+        [
+            f'{admin_icon("calendar")} <b>За неделю</b>',
+            f'• Всего событий: {len(week_logs)}',
+            f'• Успешных: {week_success}',
+            f'• Ошибок: {week_errors}',
+            f'• Успешность: {round(week_success / len(week_logs) * 100, 1) if week_logs else 0}%',
+        ]
+    )
+    system_block = '\n'.join(
+        [
+            f'{admin_icon("settings")} <b>Система</b>',
+            f'• Интервал: {settings.MONITORING_INTERVAL} мин',
+            f'• Уведомления: {"Вкл" if getattr(settings, "ENABLE_NOTIFICATIONS", True) else "Выкл"}',
+            f'• Автооплата: {", ".join(map(str, settings.get_autopay_warning_days()))} дней',
+        ]
+    )
+
+    return '\n\n'.join(
+        [
+            admin_heading('chart', 'Статистика мониторинга'),
+            admin_quote(subscriptions_block),
+            admin_quote(today_block),
+            admin_quote(week_block),
+            admin_quote(system_block),
+        ]
     )
 
 
@@ -102,7 +182,6 @@ def _build_notification_settings_view(language: str):
                     ).format(value1=trial_channel_status),
                     callback_data='admin_mon_notify_toggle_trial_channel',
                     icon='bell',
-                    style='primary',
                 )
             ],
             [
@@ -110,7 +189,6 @@ def _build_notification_settings_view(language: str):
                     texts.t('ADMIN_MONITORING_UI_BUILD_NOTIFICATION_SETTINGS_VIEW_004', 'Тест: отписка от канала'),
                     callback_data='admin_mon_notify_preview_trial_channel',
                     icon='airplane',
-                    style='primary',
                 )
             ],
             [
@@ -120,7 +198,6 @@ def _build_notification_settings_view(language: str):
                     ).format(value1=expired_1d_status),
                     callback_data='admin_mon_notify_toggle_expired_1d',
                     icon='bell',
-                    style='primary',
                 )
             ],
             [
@@ -128,7 +205,6 @@ def _build_notification_settings_view(language: str):
                     texts.t('ADMIN_MONITORING_UI_BUILD_NOTIFICATION_SETTINGS_VIEW_006', 'Тест: 1 день после истечения'),
                     callback_data='admin_mon_notify_preview_expired_1d',
                     icon='airplane',
-                    style='primary',
                 )
             ],
             [
@@ -138,7 +214,6 @@ def _build_notification_settings_view(language: str):
                     ).format(value1=second_wave_status),
                     callback_data='admin_mon_notify_toggle_expired_2d',
                     icon='bell',
-                    style='primary',
                 )
             ],
             [
@@ -146,7 +221,6 @@ def _build_notification_settings_view(language: str):
                     'Тест: скидка 2-3 день',
                     callback_data='admin_mon_notify_preview_expired_2d',
                     icon='airplane',
-                    style='primary',
                 )
             ],
             [
@@ -156,7 +230,6 @@ def _build_notification_settings_view(language: str):
                     ).format(value1=second_percent),
                     callback_data='admin_mon_notify_edit_2d_percent',
                     icon='edit',
-                    style='primary',
                 )
             ],
             [
@@ -166,7 +239,6 @@ def _build_notification_settings_view(language: str):
                     ).format(value1=second_hours),
                     callback_data='admin_mon_notify_edit_2d_hours',
                     icon='clock',
-                    style='primary',
                 )
             ],
             [
@@ -177,7 +249,6 @@ def _build_notification_settings_view(language: str):
                     ).format(value1=third_wave_status, value2=third_days),
                     callback_data='admin_mon_notify_toggle_expired_nd',
                     icon='bell',
-                    style='primary',
                 )
             ],
             [
@@ -185,7 +256,6 @@ def _build_notification_settings_view(language: str):
                     texts.t('ADMIN_MONITORING_UI_BUILD_NOTIFICATION_SETTINGS_VIEW_012', 'Тест: скидка спустя дни'),
                     callback_data='admin_mon_notify_preview_expired_nd',
                     icon='airplane',
-                    style='primary',
                 )
             ],
             [
@@ -195,7 +265,6 @@ def _build_notification_settings_view(language: str):
                     ).format(value1=third_days, value2=third_percent),
                     callback_data='admin_mon_notify_edit_nd_percent',
                     icon='edit',
-                    style='primary',
                 )
             ],
             [
@@ -206,7 +275,6 @@ def _build_notification_settings_view(language: str):
                     ).format(value1=third_days, value2=third_hours),
                     callback_data='admin_mon_notify_edit_nd_hours',
                     icon='clock',
-                    style='primary',
                 )
             ],
             [
@@ -216,7 +284,6 @@ def _build_notification_settings_view(language: str):
                     ).format(value1=third_days),
                     callback_data='admin_mon_notify_edit_nd_threshold',
                     icon='calendar',
-                    style='primary',
                 )
             ],
             [
@@ -224,14 +291,16 @@ def _build_notification_settings_view(language: str):
                     texts.t('ADMIN_MONITORING_UI_BUILD_NOTIFICATION_SETTINGS_VIEW_016', 'Отправить все тесты'),
                     callback_data='admin_mon_notify_preview_all',
                     icon='broadcast',
-                    style='success',
                 )
             ],
             [admin_back_button(texts, 'admin_mon_settings')],
         ]
     )
 
-    return admin_screen(_clean_legacy(summary_text), icon='bell', compact=True), keyboard
+    return (
+        admin_screen(_quote_after_title(_clean_legacy(summary_text)), icon='bell', compact=True),
+        keyboard,
+    )
 
 
 async def _build_notification_preview_message(language: str, notification_type: str):
@@ -453,17 +522,29 @@ async def admin_monitoring_menu(callback: CallbackQuery, db_user: User | None = 
             )
             last_update = status['last_update'].strftime('%H:%M:%S') if status['last_update'] else 'Никогда'
 
-            text = f"""<b>Система мониторинга</b>
-
-<b>Статус:</b> {running_status}
-<b>Последнее обновление:</b> {last_update}
-<b>Интервал проверки:</b> {settings.MONITORING_INTERVAL} мин
-
-<b>Статистика за 24 часа:</b>
-• Всего событий: {status['stats_24h']['total_events']}
-• Успешных: {status['stats_24h']['successful']}
-• Ошибок: {status['stats_24h']['failed']}
-• Успешность: {status['stats_24h']['success_rate']}%"""
+            status_block = '\n'.join(
+                [
+                    f'{running_status}',
+                    f'{admin_icon("clock")} <b>Последнее обновление:</b> {last_update}',
+                    f'{admin_icon("refresh")} <b>Интервал проверки:</b> {settings.MONITORING_INTERVAL} мин',
+                ]
+            )
+            stats_block = '\n'.join(
+                [
+                    f'{admin_icon("stats")} <b>Статистика за 24 часа</b>',
+                    f'• Всего событий: {status["stats_24h"]["total_events"]}',
+                    f'• Успешных: {status["stats_24h"]["successful"]}',
+                    f'• Ошибок: {status["stats_24h"]["failed"]}',
+                    f'• Успешность: {status["stats_24h"]["success_rate"]}%',
+                ]
+            )
+            text = '\n\n'.join(
+                [
+                    admin_heading('chart', 'Система мониторинга'),
+                    admin_quote(status_block),
+                    admin_quote(stats_block),
+                ]
+            )
 
             language = _monitoring_language(callback, db_user)
             keyboard = get_monitoring_keyboard(language)
@@ -507,7 +588,6 @@ async def admin_monitoring_settings(callback: CallbackQuery, db_user: User | Non
                         'Уведомления пользователям',
                         callback_data='admin_mon_notify_settings',
                         icon='messages',
-                        style='primary',
                     )
                 ],
                 [admin_back_button(texts, 'admin_submenu_settings')],
@@ -515,7 +595,7 @@ async def admin_monitoring_settings(callback: CallbackQuery, db_user: User | Non
         )
 
         await callback.message.edit_text(
-            admin_screen(_clean_legacy(text), icon='chart', compact=True),
+            admin_screen(_quote_after_title(_clean_legacy(text)), icon='chart', compact=True),
             parse_mode='HTML',
             reply_markup=keyboard,
         )
@@ -916,14 +996,22 @@ async def force_check_callback(callback: CallbackQuery, db_user: User | None = N
         async with AsyncSessionLocal() as db:
             results = await monitoring_service.force_check_subscriptions(db)
 
-            text = f"""<b>Принудительная проверка завершена</b>
-
-<b>Результаты проверки:</b>
-• Истекших подписок: {results['expired']}
-• Истекающих подписок: {results['expiring']}
-• Готовых к автооплате: {results['autopay_ready']}
-
-<b>Время проверки:</b> {datetime.now(UTC).strftime('%H:%M:%S')}"""
+            text = '\n\n'.join(
+                [
+                    admin_heading('check', 'Принудительная проверка завершена'),
+                    admin_quote(
+                        '\n'.join(
+                            [
+                                f'{admin_icon("stats")} <b>Результаты проверки</b>',
+                                f'• Истекших подписок: {results["expired"]}',
+                                f'• Истекающих подписок: {results["expiring"]}',
+                                f'• Готовых к автооплате: {results["autopay_ready"]}',
+                            ]
+                        )
+                    ),
+                    f'{admin_icon("clock")} <b>Время проверки:</b> {datetime.now(UTC).strftime("%H:%M:%S")}',
+                ]
+            )
 
             from aiogram.types import InlineKeyboardMarkup
 
@@ -982,34 +1070,49 @@ async def traffic_check_callback(callback: CallbackQuery, db_user: User | None =
         snapshot_age = await traffic_monitoring_scheduler_v2.service.get_snapshot_age_minutes()
         threshold_gb = traffic_monitoring_scheduler_v2.service.get_fast_check_threshold_gb()
 
-        text = f"""<b>Проверка трафика завершена</b>
-
-<b>Результаты (дельта):</b>
-• Превышений за интервал: {len(violations)}
-• Порог дельты: {threshold_gb} ГБ
-• Возраст snapshot: {snapshot_age:.1f} мин
-
-<b>Время проверки:</b> {datetime.now(UTC).strftime('%H:%M:%S')}"""
+        text = '\n\n'.join(
+            [
+                admin_heading('chart', 'Проверка трафика завершена'),
+                admin_quote(
+                    '\n'.join(
+                        [
+                            f'{admin_icon("wifi")} <b>Результаты (дельта)</b>',
+                            f'• Превышений за интервал: {len(violations)}',
+                            f'• Порог дельты: {threshold_gb} ГБ',
+                            f'• Возраст snapshot: {snapshot_age:.1f} мин',
+                        ]
+                    )
+                ),
+                f'{admin_icon("clock")} <b>Время проверки:</b> {datetime.now(UTC).strftime("%H:%M:%S")}',
+            ]
+        )
 
         if violations:
-            text += texts.t('ADMIN_MONITORING_UI_TRAFFIC_CHECK_CALLBACK_074', '\n<b>Превышения дельты:</b>\n')
+            violations_block = texts.t(
+                'ADMIN_MONITORING_UI_TRAFFIC_CHECK_CALLBACK_074', f'{admin_icon("warning")} <b>Превышения дельты</b>\n'
+            )
             for v in violations[:10]:
                 # Числовой id панели не режется срезом, а при отсутствии идентичности
                 # нельзя уронить весь экран в «Ошибка» — показываем прочерк.
                 fallback = f'ID {v.user_id}' if v.user_id else '—'
                 name = html.escape(v.full_name or '') or fallback
-                text += texts.t('ADMIN_MONITORING_UI_TRAFFIC_CHECK_CALLBACK_075', '• {value1}: +{value2} ГБ\n').format(
-                    value1=name, value2=format(v.used_traffic_gb, '.1f')
-                )
+                violations_block += texts.t(
+                    'ADMIN_MONITORING_UI_TRAFFIC_CHECK_CALLBACK_075', '• {value1}: +{value2} ГБ\n'
+                ).format(value1=name, value2=format(v.used_traffic_gb, '.1f'))
             if len(violations) > 10:
-                text += texts.t('ADMIN_MONITORING_UI_TRAFFIC_CHECK_CALLBACK_076', '... и ещё {value1}\n').format(
-                    value1=len(violations) - 10
-                )
-            text += texts.t(
-                'ADMIN_MONITORING_UI_TRAFFIC_CHECK_CALLBACK_077', '\nУведомления отправлены (с учётом кулдауна)'
+                violations_block += texts.t(
+                    'ADMIN_MONITORING_UI_TRAFFIC_CHECK_CALLBACK_076', '... и ещё {value1}\n'
+                ).format(value1=len(violations) - 10)
+            violations_block += texts.t(
+                'ADMIN_MONITORING_UI_TRAFFIC_CHECK_CALLBACK_077', 'Уведомления отправлены (с учётом кулдауна)'
             )
+            text += '\n\n' + admin_quote(violations_block.strip())
         else:
-            text += texts.t('ADMIN_MONITORING_UI_TRAFFIC_CHECK_CALLBACK_078', '\nПревышений не обнаружено')
+            text += (
+                '\n\n'
+                f'{admin_icon("success")} '
+                + texts.t('ADMIN_MONITORING_UI_TRAFFIC_CHECK_CALLBACK_078', 'Превышений не обнаружено').strip()
+            )
 
         from aiogram.types import InlineKeyboardMarkup
 
@@ -1020,7 +1123,6 @@ async def traffic_check_callback(callback: CallbackQuery, db_user: User | None =
                         'Повторить',
                         callback_data='admin_mon_traffic_check',
                         icon='refresh',
-                        style='primary',
                     )
                 ],
                 [admin_back_button(texts, 'admin_monitoring')],
@@ -1055,9 +1157,11 @@ async def monitoring_logs_callback(callback: CallbackQuery, db_user: User | None
             all_logs = await monitoring_service.get_monitoring_logs(db, limit=1000)
 
             if not all_logs:
-                text = texts.t(
-                    'ADMIN_MONITORING_UI_MONITORING_LOGS_CALLBACK_082',
-                    '<b>Логи мониторинга пусты</b>\n\nСистема еще не выполнила проверки.',
+                text = _quote_after_title(
+                    texts.t(
+                        'ADMIN_MONITORING_UI_MONITORING_LOGS_CALLBACK_082',
+                        '<b>Логи мониторинга пусты</b>\n\nСистема еще не выполнила проверки.',
+                    )
                 )
                 keyboard = get_monitoring_logs_back_keyboard(language=language)
                 await callback.message.edit_text(
@@ -1070,10 +1174,11 @@ async def monitoring_logs_callback(callback: CallbackQuery, db_user: User | None
             per_page = 8
             paginated_logs = paginate_list(all_logs, page=page, per_page=per_page)
 
-            text = texts.t(
-                'ADMIN_MONITORING_UI_MONITORING_LOGS_CALLBACK_083',
-                '<b>Логи мониторинга</b> (стр. {value1}/{value2})\n\n',
-            ).format(value1=page, value2=paginated_logs.total_pages)
+            text = admin_heading('logs', 'Логи мониторинга')
+            text += '\n\n' + admin_quote(
+                f'{admin_icon("document")} <b>Страница:</b> {page}/{paginated_logs.total_pages}'
+            )
+            text += '\n\n'
 
             for log in paginated_logs.items:
                 icon = admin_icon('success') if log['is_success'] else admin_icon('error')
@@ -1091,23 +1196,25 @@ async def monitoring_logs_callback(callback: CallbackQuery, db_user: User | None
             total_failed = len(all_logs) - total_success
             success_rate = round(total_success / len(all_logs) * 100, 1) if all_logs else 0
 
-            text += texts.t('ADMIN_MONITORING_UI_MONITORING_LOGS_CALLBACK_084', '<b>Общая статистика:</b>\n')
-            text += texts.t('ADMIN_MONITORING_UI_MONITORING_LOGS_CALLBACK_085', '• Всего событий: {value1}\n').format(
-                value1=len(all_logs)
-            )
-            text += texts.t('ADMIN_MONITORING_UI_MONITORING_LOGS_CALLBACK_086', '• Успешных: {value1}\n').format(
+            stats_block = f'{admin_icon("stats")} <b>Общая статистика</b>\n'
+            stats_block += texts.t(
+                'ADMIN_MONITORING_UI_MONITORING_LOGS_CALLBACK_085', '• Всего событий: {value1}\n'
+            ).format(value1=len(all_logs))
+            stats_block += texts.t('ADMIN_MONITORING_UI_MONITORING_LOGS_CALLBACK_086', '• Успешных: {value1}\n').format(
                 value1=total_success
             )
-            text += texts.t('ADMIN_MONITORING_UI_MONITORING_LOGS_CALLBACK_087', '• Ошибок: {value1}\n').format(
+            stats_block += texts.t('ADMIN_MONITORING_UI_MONITORING_LOGS_CALLBACK_087', '• Ошибок: {value1}\n').format(
                 value1=total_failed
             )
-            text += texts.t('ADMIN_MONITORING_UI_MONITORING_LOGS_CALLBACK_088', '• Успешность: {value1}%').format(
-                value1=success_rate
-            )
+            stats_block += texts.t(
+                'ADMIN_MONITORING_UI_MONITORING_LOGS_CALLBACK_088', '• Успешность: {value1}%'
+            ).format(value1=success_rate)
+
+            text += '\n' + admin_quote(stats_block.strip())
 
             keyboard = get_monitoring_logs_keyboard(page, paginated_logs.total_pages, language=language)
             await callback.message.edit_text(
-                admin_screen(_clean_legacy(text), icon='logs', compact=True),
+                admin_screen(_clean_legacy(text), icon='logs'),
                 parse_mode='HTML',
                 reply_markup=keyboard,
             )
@@ -1154,18 +1261,31 @@ async def test_notifications_callback(callback: CallbackQuery, db_user: User | N
     language = _monitoring_language(callback, db_user)
     texts = get_texts(language)
     try:
-        test_message = f"""
- <b>Тестовое уведомление системы мониторинга</b>
-
-Это тестовое сообщение для проверки работы системы уведомлений.
-
- <b>Статус системы:</b>
-• Мониторинг: {' Работает' if monitoring_service.is_running else ' Остановлен'}
-• Уведомления: {' Включены' if settings.ENABLE_NOTIFICATIONS else ' Отключены'}
-• Время теста: {datetime.now(UTC).strftime('%H:%M:%S %d.%m.%Y')}
-
- Если вы получили это сообщение, система уведомлений работает корректно!
-"""
+        monitor_icon = admin_icon('success') if monitoring_service.is_running else admin_icon('error')
+        notify_icon = admin_icon('bell') if settings.ENABLE_NOTIFICATIONS else admin_icon('bell_off')
+        test_message = '\n\n'.join(
+            [
+                admin_heading('bell', 'Тестовое уведомление системы мониторинга'),
+                f'{admin_icon("info")} Это тестовое сообщение для проверки работы системы уведомлений.',
+                admin_quote(
+                    '\n'.join(
+                        [
+                            f'{admin_icon("settings")} <b>Статус системы</b>',
+                            (
+                                f'• Мониторинг: {monitor_icon} '
+                                f'{"Работает" if monitoring_service.is_running else "Остановлен"}'
+                            ),
+                            (
+                                f'• Уведомления: {notify_icon} '
+                                f'{"Включены" if settings.ENABLE_NOTIFICATIONS else "Отключены"}'
+                            ),
+                            f'• Время теста: {datetime.now(UTC).strftime("%H:%M:%S %d.%m.%Y")}',
+                        ]
+                    )
+                ),
+                f'{admin_icon("check")} Если вы получили это сообщение, система уведомлений работает корректно!',
+            ]
+        )
 
         await callback.bot.send_message(callback.from_user.id, test_message, parse_mode='HTML')
 
@@ -1200,32 +1320,7 @@ async def monitoring_statistics_callback(callback: CallbackQuery, db_user: User 
             week_logs = await monitoring_service.get_monitoring_logs(db, limit=1000)
             week_logs = [log for log in week_logs if log['created_at'] >= week_ago]
 
-            week_success = sum(1 for log in week_logs if log['is_success'])
-            week_errors = len(week_logs) - week_success
-
-            text = f"""<b>Статистика мониторинга</b>
-
-<b>Подписки:</b>
-• Всего: {sub_stats['total_subscriptions']}
-• Активных: {sub_stats['active_subscriptions']}
-• Тестовых: {sub_stats['trial_subscriptions']}
-• Платных: {sub_stats['paid_subscriptions']}
-
-<b>За сегодня:</b>
-• Успешных операций: {mon_status['stats_24h']['successful']}
-• Ошибок: {mon_status['stats_24h']['failed']}
-• Успешность: {mon_status['stats_24h']['success_rate']}%
-
-<b>За неделю:</b>
-• Всего событий: {len(week_logs)}
-• Успешных: {week_success}
-• Ошибок: {week_errors}
-• Успешность: {round(week_success / len(week_logs) * 100, 1) if week_logs else 0}%
-
-<b>Система:</b>
-• Интервал: {settings.MONITORING_INTERVAL} мин
-• Уведомления: {'Вкл' if getattr(settings, 'ENABLE_NOTIFICATIONS', True) else 'Выкл'}
-• Автооплата: {', '.join(map(str, settings.get_autopay_warning_days()))} дней"""
+            text = _build_monitoring_statistics_text(sub_stats, mon_status, week_logs)
 
             # Добавляем информацию о чеках NaloGO
             if settings.is_nalogo_enabled():
@@ -1237,10 +1332,13 @@ async def monitoring_statistics_callback(callback: CallbackQuery, db_user: User 
                 pending_amount = nalogo_status.get('pending_verification_amount', 0)
 
                 service_status = admin_icon('success') if running else admin_icon('error')
-                nalogo_section = f"""
-<b>Чеки NaloGO:</b>
-• Сервис: {service_status} {'Работает' if running else 'Остановлен'}
-• В очереди: {queue_len} чек(ов)"""
+                nalogo_section = '\n'.join(
+                    [
+                        f'{admin_icon("pricing")} <b>Чеки NaloGO</b>',
+                        f'• Сервис: {service_status} {"Работает" if running else "Остановлен"}',
+                        f'• В очереди: {queue_len} чек(ов)',
+                    ]
+                )
                 if queue_len > 0:
                     nalogo_section += texts.t(
                         'ADMIN_MONITORING_UI_MONITORING_STATISTICS_CALLBACK_106', '\n• На сумму: {value1} ₽'
@@ -1254,7 +1352,7 @@ async def monitoring_statistics_callback(callback: CallbackQuery, db_user: User 
                         value1=pending_count,
                         value2=format(pending_amount, ',.2f'),
                     )
-                text += nalogo_section
+                text += '\n\n' + admin_quote(nalogo_section)
 
             from aiogram.types import InlineKeyboardMarkup
 
@@ -1271,7 +1369,6 @@ async def monitoring_statistics_callback(callback: CallbackQuery, db_user: User 
                             ).format(value1=nalogo_status['queue_length']),
                             callback_data='admin_mon_nalogo_force_process',
                             icon='upload',
-                            style='success',
                         )
                     )
                 pending_count = nalogo_status.get('pending_verification_count', 0)
@@ -1283,7 +1380,6 @@ async def monitoring_statistics_callback(callback: CallbackQuery, db_user: User 
                             ).format(value1=pending_count),
                             callback_data='admin_mon_nalogo_pending',
                             icon='eye',
-                            style='primary',
                         )
                     )
                 nalogo_buttons.append(
@@ -1291,7 +1387,6 @@ async def monitoring_statistics_callback(callback: CallbackQuery, db_user: User 
                         texts.t('ADMIN_MONITORING_UI_MONITORING_STATISTICS_CALLBACK_110', 'Сверка чеков'),
                         callback_data='admin_mon_receipts_missing',
                         icon='document',
-                        style='primary',
                     )
                 )
                 buttons.append(nalogo_buttons)
@@ -1370,32 +1465,8 @@ async def nalogo_force_process_callback(callback: CallbackQuery, db_user: User |
             week_ago = datetime.now(UTC) - timedelta(days=7)
             week_logs = await monitoring_service.get_monitoring_logs(db, limit=1000)
             week_logs = [log for log in week_logs if log['created_at'] >= week_ago]
-            week_success = sum(1 for log in week_logs if log['is_success'])
-            week_errors = len(week_logs) - week_success
 
-            stats_text = f"""<b>Статистика мониторинга</b>
-
-<b>Подписки:</b>
-• Всего: {sub_stats['total_subscriptions']}
-• Активных: {sub_stats['active_subscriptions']}
-• Тестовых: {sub_stats['trial_subscriptions']}
-• Платных: {sub_stats['paid_subscriptions']}
-
-<b>За сегодня:</b>
-• Успешных операций: {mon_status['stats_24h']['successful']}
-• Ошибок: {mon_status['stats_24h']['failed']}
-• Успешность: {mon_status['stats_24h']['success_rate']}%
-
-<b>За неделю:</b>
-• Всего событий: {len(week_logs)}
-• Успешных: {week_success}
-• Ошибок: {week_errors}
-• Успешность: {round(week_success / len(week_logs) * 100, 1) if week_logs else 0}%
-
-<b>Система:</b>
-• Интервал: {settings.MONITORING_INTERVAL} мин
-• Уведомления: {'Вкл' if getattr(settings, 'ENABLE_NOTIFICATIONS', True) else 'Выкл'}
-• Автооплата: {', '.join(map(str, settings.get_autopay_warning_days()))} дней"""
+            stats_text = _build_monitoring_statistics_text(sub_stats, mon_status, week_logs)
 
             if settings.is_nalogo_enabled():
                 nalogo_status = await nalogo_queue_service.get_status()
@@ -1427,7 +1498,6 @@ async def nalogo_force_process_callback(callback: CallbackQuery, db_user: User |
                             ).format(value1=nalogo_status['queue_length']),
                             callback_data='admin_mon_nalogo_force_process',
                             icon='upload',
-                            style='success',
                         )
                     )
                 nalogo_buttons.append(
@@ -1435,7 +1505,6 @@ async def nalogo_force_process_callback(callback: CallbackQuery, db_user: User |
                         texts.t('ADMIN_MONITORING_UI_MONITORING_STATISTICS_CALLBACK_110', 'Сверка чеков'),
                         callback_data='admin_mon_receipts_missing',
                         icon='document',
-                        style='primary',
                     )
                 )
                 buttons.append(nalogo_buttons)
@@ -1494,12 +1563,14 @@ async def nalogo_pending_callback(callback: CallbackQuery, db_user: User | None 
             )
             return
 
-        text = texts.t(
-            'ADMIN_MONITORING_UI_NALOGO_PENDING_CALLBACK_131', '<b>Чеки требующие проверки: {value1}</b>\n\n'
-        ).format(value1=len(receipts))
-        text += texts.t(
-            'ADMIN_MONITORING_UI_NALOGO_PENDING_CALLBACK_132', 'Проверьте в lknpd.nalog.ru созданы ли эти чеки.\n\n'
+        text = admin_heading('pricing', f'Чеки требующие проверки: {len(receipts)}')
+        text += '\n\n' + admin_quote(
+            f'{admin_icon("info")} '
+            + texts.t(
+                'ADMIN_MONITORING_UI_NALOGO_PENDING_CALLBACK_132', 'Проверьте в lknpd.nalog.ru созданы ли эти чеки.'
+            ).strip()
         )
+        text += '\n\n'
 
         buttons = []
         for i, receipt in enumerate(receipts[:10], 1):
@@ -1508,11 +1579,11 @@ async def nalogo_pending_callback(callback: CallbackQuery, db_user: User | None 
             created_at = receipt.get('created_at', '')[:16].replace('T', ' ')
             error = receipt.get('error', '')[:50]
 
-            text += f'<b>{i}. {amount:,.2f} ₽</b>\n'
-            text += f'{html.escape(created_at)}\n'
-            text += f'<code>{html.escape(str(payment_id)[:20])}...</code>\n'
+            text += f'{admin_icon("pricing")} <b>{i}. {amount:,.2f} ₽</b>\n'
+            text += f'{admin_icon("clock")} {html.escape(created_at)}\n'
+            text += f'{admin_icon("key")} <code>{html.escape(str(payment_id)[:20])}...</code>\n'
             if error:
-                text += f'{html.escape(error)}\n'
+                text += f'{admin_icon("warning")} {html.escape(error)}\n'
             text += '\n'
 
             # Кнопки для каждого чека
@@ -1525,7 +1596,6 @@ async def nalogo_pending_callback(callback: CallbackQuery, db_user: User | None 
                         ),
                         callback_data=f'admin_nalogo_verified:{token}',
                         icon='success',
-                        style='success',
                     ),
                     admin_button(
                         texts.t('ADMIN_MONITORING_UI_NALOGO_PENDING_CALLBACK_134', 'Отправить ({value1})').format(
@@ -1533,7 +1603,6 @@ async def nalogo_pending_callback(callback: CallbackQuery, db_user: User | None 
                         ),
                         callback_data=f'admin_nalogo_retry:{token}',
                         icon='upload',
-                        style='primary',
                     ),
                 ]
             )
@@ -1549,7 +1618,6 @@ async def nalogo_pending_callback(callback: CallbackQuery, db_user: User | None 
                     texts.t('ADMIN_MONITORING_UI_NALOGO_PENDING_CALLBACK_136', 'Очистить всё (проверено)'),
                     callback_data='admin_nalogo_clear_pending',
                     icon='delete',
-                    style='danger',
                 )
             ]
         )
@@ -1814,19 +1882,22 @@ async def receipts_link_old_callback(callback: CallbackQuery, db_user: User | No
             if linked > 0:
                 await db.commit()
 
-            text = texts.t('ADMIN_MONITORING_UI_RECEIPTS_LINK_OLD_CALLBACK_155', '<b>Привязка завершена</b>\n\n')
-            text += texts.t(
-                'ADMIN_MONITORING_UI_RECEIPTS_LINK_OLD_CALLBACK_156', 'Всего транзакций: {value1}\n'
-            ).format(value1=len(transactions))
-            text += texts.t('ADMIN_MONITORING_UI_RECEIPTS_LINK_OLD_CALLBACK_157', 'Чеков в NaloGO: {value1}\n').format(
-                value1=len(incomes)
-            )
-            text += texts.t(
-                'ADMIN_MONITORING_UI_RECEIPTS_LINK_OLD_CALLBACK_158', 'Привязано: <b>{value1}</b>\n'
-            ).format(value1=linked)
-            text += texts.t(
-                'ADMIN_MONITORING_UI_RECEIPTS_LINK_OLD_CALLBACK_159', 'Не удалось привязать: {value1}'
-            ).format(value1=len(transactions) - linked)
+            text = admin_heading('check', 'Привязка завершена')
+            link_lines = [
+                texts.t('ADMIN_MONITORING_UI_RECEIPTS_LINK_OLD_CALLBACK_156', '• Всего транзакций: {value1}').format(
+                    value1=len(transactions)
+                ),
+                texts.t('ADMIN_MONITORING_UI_RECEIPTS_LINK_OLD_CALLBACK_157', '• Чеков в NaloGO: {value1}').format(
+                    value1=len(incomes)
+                ),
+                texts.t('ADMIN_MONITORING_UI_RECEIPTS_LINK_OLD_CALLBACK_158', '• Привязано: <b>{value1}</b>').format(
+                    value1=linked
+                ),
+                texts.t(
+                    'ADMIN_MONITORING_UI_RECEIPTS_LINK_OLD_CALLBACK_159', '• Не удалось привязать: {value1}'
+                ).format(value1=len(transactions) - linked),
+            ]
+            text += '\n\n' + admin_quote('\n'.join(link_lines))
 
             keyboard = InlineKeyboardMarkup(
                 inline_keyboard=[
@@ -1900,7 +1971,6 @@ async def _do_reconcile_logs(callback: CallbackQuery, db_user: User | None = Non
                                     'Обновить',
                                     callback_data='admin_mon_reconcile_logs',
                                     icon='refresh',
-                                    style='primary',
                                 )
                             ],
                             [admin_back_button(texts, 'admin_mon_statistics')],
@@ -1974,34 +2044,44 @@ async def _do_reconcile_logs(callback: CallbackQuery, db_user: User | None = Non
         missing_count = len(payments_without_receipts)
         missing_amount = sum(p['amount'] for p in payments_without_receipts)
 
-        text = texts.t('ADMIN_MONITORING_UI_DO_RECONCILE_LOGS_170', '<b>Сверка по логам</b>\n\n')
-        text += texts.t('ADMIN_MONITORING_UI_DO_RECONCILE_LOGS_171', '<b>Всего платежей:</b> {value1}\n').format(
-            value1=total_payments
-        )
-        text += texts.t('ADMIN_MONITORING_UI_DO_RECONCILE_LOGS_172', '<b>Чеков создано:</b> {value1}\n\n').format(
-            value1=total_receipts
-        )
+        text = admin_heading('document', 'Сверка по логам')
+        overview_lines = [
+            texts.t('ADMIN_MONITORING_UI_DO_RECONCILE_LOGS_171', '• Всего платежей: {value1}').format(
+                value1=total_payments
+            ),
+            texts.t('ADMIN_MONITORING_UI_DO_RECONCILE_LOGS_172', '• Чеков создано: {value1}').format(
+                value1=total_receipts
+            ),
+        ]
+        text += '\n\n' + admin_quote('\n'.join(overview_lines))
 
         if missing_count == 0:
-            text += texts.t('ADMIN_MONITORING_UI_DO_RECONCILE_LOGS_173', '<b>Все платежи имеют чеки!</b>')
+            text += (
+                '\n\n'
+                f'{admin_icon("success")} '
+                + texts.t('ADMIN_MONITORING_UI_DO_RECONCILE_LOGS_173', 'Все платежи имеют чеки!').strip()
+            )
         else:
-            text += texts.t(
-                'ADMIN_MONITORING_UI_DO_RECONCILE_LOGS_174', '<b>Без чеков:</b> {value1} платежей на {value2} ₽\n\n'
+            missing_block = texts.t(
+                'ADMIN_MONITORING_UI_DO_RECONCILE_LOGS_174', '{value1} платежей на {value2} ₽'
             ).format(value1=missing_count, value2=format(missing_amount, ',.2f'))
+            missing_block = f'{admin_icon("warning")} <b>Без чеков:</b> ' + missing_block + '\n'
 
             # Показываем по датам (последние)
             sorted_dates = sorted(by_date.keys(), reverse=True)
             for date_str in sorted_dates[:7]:
                 date_payments = by_date[date_str]
                 date_amount = sum(p['amount'] for p in date_payments)
-                text += texts.t(
+                missing_block += texts.t(
                     'ADMIN_MONITORING_UI_DO_RECONCILE_LOGS_175', '• <b>{value1}:</b> {value2} шт. на {value3} ₽\n'
                 ).format(value1=date_str, value2=len(date_payments), value3=format(date_amount, ',.2f'))
 
             if len(sorted_dates) > 7:
-                text += texts.t('ADMIN_MONITORING_UI_DO_RECONCILE_LOGS_176', '\n<i>...и ещё {value1} дней</i>').format(
-                    value1=len(sorted_dates) - 7
-                )
+                missing_block += texts.t(
+                    'ADMIN_MONITORING_UI_DO_RECONCILE_LOGS_176', '<i>...и ещё {value1} дней</i>'
+                ).format(value1=len(sorted_dates) - 7)
+
+            text += '\n\n' + admin_quote(missing_block.strip())
 
         keyboard = InlineKeyboardMarkup(
             inline_keyboard=[
@@ -2010,7 +2090,6 @@ async def _do_reconcile_logs(callback: CallbackQuery, db_user: User | None = Non
                         'Обновить',
                         callback_data='admin_mon_reconcile_logs',
                         icon='refresh',
-                        style='primary',
                     )
                 ],
                 [
@@ -2018,7 +2097,6 @@ async def _do_reconcile_logs(callback: CallbackQuery, db_user: User | None = Non
                         'Детали',
                         callback_data='admin_mon_reconcile_logs_details',
                         icon='logs',
-                        style='primary',
                     )
                 ],
                 [admin_back_button(texts, 'admin_mon_statistics')],
@@ -2116,18 +2194,22 @@ async def receipts_reconcile_logs_details_callback(callback: CallbackQuery, db_u
         missing.sort(key=lambda x: (x['date'], x['time']), reverse=True)
 
         if not missing:
-            text = texts.t('ADMIN_MONITORING_UI_DO_RECONCILE_LOGS_173', '<b>Все платежи имеют чеки!</b>')
+            text = '\n\n'.join(
+                [
+                    admin_heading('logs', 'Платежи без чеков'),
+                    f'{admin_icon("success")} '
+                    + texts.t('ADMIN_MONITORING_UI_DO_RECONCILE_LOGS_173', 'Все платежи имеют чеки!').strip(),
+                ]
+            )
         else:
-            text = texts.t(
-                'ADMIN_MONITORING_UI_RECEIPTS_RECONCILE_LOGS_DETAILS_CALLBACK_186',
-                '<b>Платежи без чеков ({value1} шт.)</b>\n\n',
-            ).format(value1=len(missing))
+            text = admin_heading('logs', f'Платежи без чеков: {len(missing)}')
+            text += '\n\n'
 
             for p in missing[:20]:
                 text += (
-                    f'• <b>{html.escape(p["date"])} {html.escape(p["time"])}</b>\n'
-                    f'User: {html.escape(str(p["user_id"]))} | {p["amount"]:.0f}₽\n'
-                    f'<code>{html.escape(str(p["payment_id"])[:18])}...</code>\n\n'
+                    f'{admin_icon("clock")} <b>{html.escape(p["date"])} {html.escape(p["time"])}</b>\n'
+                    f'{admin_icon("user")} User: {html.escape(str(p["user_id"]))} | {p["amount"]:.0f}₽\n'
+                    f'{admin_icon("key")} <code>{html.escape(str(p["payment_id"])[:18])}...</code>\n\n'
                 )
 
             if len(missing) > 20:
@@ -2170,12 +2252,12 @@ def get_monitoring_logs_keyboard(current_page: int, total_pages: int, language: 
         nav_row = []
 
         if current_page > 1:
-            nav_row.append(admin_button('←', callback_data=f'admin_mon_logs_page_{current_page - 1}', style='primary'))
+            nav_row.append(admin_button('←', callback_data=f'admin_mon_logs_page_{current_page - 1}'))
 
         nav_row.append(admin_button(f'{current_page}/{total_pages}', callback_data='current_page'))
 
         if current_page < total_pages:
-            nav_row.append(admin_button('→', callback_data=f'admin_mon_logs_page_{current_page + 1}', style='primary'))
+            nav_row.append(admin_button('→', callback_data=f'admin_mon_logs_page_{current_page + 1}'))
 
         keyboard.append(nav_row)
 
@@ -2186,13 +2268,11 @@ def get_monitoring_logs_keyboard(current_page: int, total_pages: int, language: 
                     _clean_legacy(texts.t('ADMIN_MONITORING_UI_GET_MONITORING_LOGS_KEYBOARD_190', 'Обновить')),
                     callback_data='admin_mon_logs',
                     icon='refresh',
-                    style='primary',
                 ),
                 admin_button(
                     _clean_legacy(texts.t('ADMIN_MONITORING_UI_GET_MONITORING_LOGS_KEYBOARD_191', 'Очистить')),
                     callback_data='admin_mon_clear_logs',
                     icon='delete',
-                    style='danger',
                 ),
             ],
             [admin_back_button(texts, 'admin_monitoring')],
@@ -2212,12 +2292,11 @@ def get_monitoring_logs_back_keyboard(language: str = 'ru'):
                     _clean_legacy(texts.t('ADMIN_MONITORING_UI_GET_MONITORING_LOGS_KEYBOARD_190', 'Обновить')),
                     callback_data='admin_mon_logs',
                     icon='refresh',
-                    style='primary',
                 ),
                 admin_button(
                     _clean_legacy(texts.t('ADMIN_MONITORING_UI_GET_MONITORING_LOGS_BACK_KEYBOARD_194', 'Фильтры')),
                     callback_data='admin_mon_logs_filters',
-                    style='primary',
+                    icon='filter',
                 ),
             ],
             [
@@ -2227,7 +2306,6 @@ def get_monitoring_logs_back_keyboard(language: str = 'ru'):
                     ),
                     callback_data='admin_mon_clear_logs',
                     icon='delete',
-                    style='danger',
                 )
             ],
             [admin_back_button(texts, 'admin_monitoring')],
@@ -2260,7 +2338,11 @@ async def monitoring_command(message: Message, db_user: User | None = None):
             )
 
             await message.answer(
-                admin_screen(_clean_legacy(text), icon='chart', compact=True),
+                admin_screen(
+                    _quote_after_title(_clean_legacy(text)),
+                    icon='chart',
+                    compact=True,
+                ),
                 parse_mode='HTML',
             )
 
@@ -2442,7 +2524,6 @@ def _build_traffic_settings_keyboard(language: str = 'ru') -> InlineKeyboardMark
                     ).format(value1=_format_traffic_toggle(fast_enabled, language=language)),
                     callback_data='admin_traffic_toggle_fast',
                     icon='fire',
-                    style='success' if fast_enabled else 'danger',
                 )
             ],
             [
@@ -2452,7 +2533,6 @@ def _build_traffic_settings_keyboard(language: str = 'ru') -> InlineKeyboardMark
                     ),
                     callback_data='admin_traffic_edit_fast_interval',
                     icon='clock',
-                    style='primary',
                 )
             ],
             [
@@ -2462,7 +2542,6 @@ def _build_traffic_settings_keyboard(language: str = 'ru') -> InlineKeyboardMark
                     ).format(value1=fast_threshold),
                     callback_data='admin_traffic_edit_fast_threshold',
                     icon='filter',
-                    style='primary',
                 )
             ],
             [
@@ -2472,7 +2551,6 @@ def _build_traffic_settings_keyboard(language: str = 'ru') -> InlineKeyboardMark
                     ).format(value1=_format_traffic_toggle(daily_enabled, language=language)),
                     callback_data='admin_traffic_toggle_daily',
                     icon='calendar',
-                    style='success' if daily_enabled else 'danger',
                 )
             ],
             [
@@ -2482,7 +2560,6 @@ def _build_traffic_settings_keyboard(language: str = 'ru') -> InlineKeyboardMark
                     ).format(value1=daily_time),
                     callback_data='admin_traffic_edit_daily_time',
                     icon='clock',
-                    style='primary',
                 )
             ],
             [
@@ -2492,7 +2569,6 @@ def _build_traffic_settings_keyboard(language: str = 'ru') -> InlineKeyboardMark
                     ).format(value1=daily_threshold),
                     callback_data='admin_traffic_edit_daily_threshold',
                     icon='filter',
-                    style='primary',
                 )
             ],
             [
@@ -2502,7 +2578,6 @@ def _build_traffic_settings_keyboard(language: str = 'ru') -> InlineKeyboardMark
                     ),
                     callback_data='admin_traffic_edit_cooldown',
                     icon='clock',
-                    style='primary',
                 )
             ],
             [admin_back_button(texts, 'admin_monitoring')],
@@ -2550,7 +2625,7 @@ def _build_traffic_settings_text(language: str = 'ru') -> str:
             value1=len(excluded_user_ids)
         )
 
-    return admin_screen(_clean_legacy(text), icon='filter', compact=True)
+    return admin_screen(_quote_after_title(_clean_legacy(text)), icon='filter', compact=True)
 
 
 @router.callback_query(F.data == 'admin_mon_traffic_settings')

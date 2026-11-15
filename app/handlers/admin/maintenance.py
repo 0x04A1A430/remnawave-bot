@@ -197,7 +197,7 @@ async def toggle_maintenance_mode(callback: types.CallbackQuery, db_user: User, 
                         admin_button(
                             texts.t('ADMIN_MAINTENANCE_059', 'Отмена'),
                             callback_data='maintenance_panel',
-                            style='danger',
+                            icon='cross',
                         )
                     ]
                 ]
@@ -253,7 +253,7 @@ async def process_maintenance_reason(message: types.Message, db_user: User, db: 
                     admin_button(
                         texts.t('ADMIN_MAINTENANCE_060', 'Панель техработ'),
                         callback_data='maintenance_panel',
-                        style='primary',
+                        icon='tools',
                     )
                 ]
             ]
@@ -395,20 +395,34 @@ async def send_manual_notification(callback: types.CallbackQuery, db_user: User,
     keyboard = types.InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                admin_button(texts.t('ADMIN_MAINTENANCE_017', 'Онлайн'), callback_data='manual_notify_online'),
-                admin_button(texts.t('ADMIN_MAINTENANCE_018', 'Офлайн'), callback_data='manual_notify_offline'),
+                admin_button(
+                    texts.t('ADMIN_MAINTENANCE_017', 'Онлайн'),
+                    callback_data='manual_notify_online',
+                    icon='success',
+                ),
+                admin_button(
+                    texts.t('ADMIN_MAINTENANCE_018', 'Офлайн'),
+                    callback_data='manual_notify_offline',
+                    icon='error',
+                ),
             ],
             [
-                admin_button(texts.t('ADMIN_MAINTENANCE_019', 'Проблемы'), callback_data='manual_notify_degraded'),
                 admin_button(
-                    texts.t('ADMIN_MAINTENANCE_020', 'Обслуживание'), callback_data='manual_notify_maintenance'
+                    texts.t('ADMIN_MAINTENANCE_019', 'Проблемы'),
+                    callback_data='manual_notify_degraded',
+                    icon='warning',
+                ),
+                admin_button(
+                    texts.t('ADMIN_MAINTENANCE_020', 'Обслуживание'),
+                    callback_data='manual_notify_maintenance',
+                    icon='tools',
                 ),
             ],
             [
                 admin_button(
                     texts.t('ADMIN_MAINTENANCE_059', 'Отмена'),
                     callback_data='maintenance_panel',
-                    style='danger',
+                    icon='cross',
                 )
             ],
         ]
@@ -465,7 +479,7 @@ async def handle_manual_notification(callback: types.CallbackQuery, db_user: Use
                     admin_button(
                         texts.t('ADMIN_MAINTENANCE_059', 'Отмена'),
                         callback_data='maintenance_panel',
-                        style='danger',
+                        icon='cross',
                     )
                 ]
             ]
@@ -543,7 +557,7 @@ async def process_notification_message(message: types.Message, db_user: User, db
                     admin_button(
                         texts.t('ADMIN_MAINTENANCE_060', 'Панель техработ'),
                         callback_data='maintenance_panel',
-                        style='primary',
+                        icon='tools',
                     )
                 ]
             ]

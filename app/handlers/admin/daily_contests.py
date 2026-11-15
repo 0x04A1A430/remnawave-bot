@@ -22,7 +22,7 @@ from app.keyboards.admin import (
 from app.localization.texts import get_texts
 from app.services.contest_rotation_service import contest_rotation_service
 from app.states import AdminStates
-from app.utils.admin_ui import admin_back_button, admin_button, admin_heading, admin_icon, admin_screen
+from app.utils.admin_ui import admin_back_button, admin_button, admin_heading, admin_icon, admin_quote, admin_screen
 from app.utils.decorators import admin_required, error_handler
 from app.utils.miniapp_buttons import strip_leading_emoji
 
@@ -37,6 +37,12 @@ _LEGACY_PREFIX_RE = re.compile(r'^[ \t]*(?:(?:NEW|[▤▣▥◷↻←→▶⏭�
 def _clean_legacy(value: str) -> str:
     """Убирает декоративные глифы и ведущие пробелы строк локали."""
     return _LEGACY_PREFIX_RE.sub('', value or '').strip()
+
+
+def _payload_prompt(texts) -> str:
+    """Заголовок блока JSON: инструкция локали без хвостового двоеточия."""
+    prompt = texts.t('ADMIN_CONTEST_PAYLOAD_PROMPT', 'Отправьте JSON payload для игры (словарь настроек):')
+    return prompt.strip().rstrip(':').strip()
 
 
 def _label(value: str) -> str:
@@ -69,10 +75,11 @@ async def show_daily_contests(
     texts = get_texts(db_user.language)
     templates = await list_templates(db, enabled_only=False)
 
-    lines = [admin_heading('star', texts.t('ADMIN_DAILY_CONTESTS_TITLE', 'Ежедневные конкурсы')), '']
+    heading = admin_heading('star', texts.t('ADMIN_DAILY_CONTESTS_TITLE', 'Ежедневные конкурсы'))
     if not templates:
-        lines.append(texts.t('ADMIN_CONTESTS_EMPTY', 'Пока нет созданных конкурсов.'))
+        text = f'{heading}\n\n{texts.t("ADMIN_CONTESTS_EMPTY", "Пока нет созданных конкурсов.")}'
     else:
+        lines = []
         for tpl in templates:
             status = admin_icon('success') if tpl.is_enabled else admin_icon('lock')
             prize_info = f'{tpl.prize_value} ({tpl.prize_type})' if tpl.prize_type else tpl.prize_value
@@ -88,6 +95,7 @@ async def show_daily_contests(
                     value5=tpl.max_winners,
                 )
             )
+        text = f'{heading}\n\n{admin_quote(chr(10).join(lines))}'
 
     keyboard_rows = []
     if templates:
@@ -97,7 +105,6 @@ async def show_daily_contests(
                     _label(texts.t('ADMIN_DAILY_CONTEST_UI_021', 'Закрыть все активные раунды')),
                     callback_data='admin_daily_close_all',
                     icon='lock',
-                    style='danger',
                 )
             ]
         )
@@ -107,7 +114,6 @@ async def show_daily_contests(
                     _label(texts.t('ADMIN_DAILY_CONTEST_UI_022', 'Сбросить попытки во всех активных раундах')),
                     callback_data='admin_daily_reset_all_attempts',
                     icon='refresh',
-                    style='danger',
                 )
             ]
         )
@@ -117,7 +123,6 @@ async def show_daily_contests(
                     _label(texts.t('ADMIN_DAILY_CONTEST_UI_023', 'Запустить все активные конкурсы')),
                     callback_data='admin_daily_start_all',
                     icon='success',
-                    style='success',
                 )
             ]
         )
@@ -128,14 +133,13 @@ async def show_daily_contests(
                     tpl.name,
                     callback_data=f'admin_daily_contest_{tpl.id}',
                     icon='star',
-                    style='primary',
                 )
             ]
         )
     keyboard_rows.append([admin_back_button(texts, 'admin_contests')])
 
     await callback.message.edit_text(
-        admin_screen(_clean_legacy('\n'.join(lines)), icon='star', compact=True),
+        text,
         reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows),
         parse_mode='HTML',
     )
@@ -167,22 +171,28 @@ async def show_daily_contest(
         if tpl.is_enabled
         else texts.t('ADMIN_CONTEST_STATUS_INACTIVE', 'Выключен').strip()
     )
+    heading = admin_heading('star', tpl.name)
     lines = [
-        f'<b>{html.escape(tpl.name)}</b> (slug: {html.escape(tpl.slug)})',
-        f'{state_icon} {status_text}',
-        texts.t('ADMIN_DAILY_CONTEST_UI_008', 'Тип приза: {value1} | Значение: {value2}').format(
+        f'{state_icon} {status_text} — <code>{html.escape(tpl.slug)}</code>',
+        f'{admin_icon("gift")} '
+        + texts.t('ADMIN_DAILY_CONTEST_UI_008', 'Тип приза: {value1} | Значение: {value2}').format(
             value1=html.escape(str(tpl.prize_type or 'days')), value2=html.escape(str(tpl.prize_value or '1'))
         ),
-        texts.t('ADMIN_DAILY_CONTEST_UI_009', 'Макс победителей: {value1}').format(value1=tpl.max_winners),
-        texts.t('ADMIN_DAILY_CONTEST_UI_010', 'Попыток/польз: {value1}').format(value1=tpl.attempts_per_user),
-        texts.t('ADMIN_DAILY_CONTEST_UI_011', 'Раундов в день: {value1}').format(value1=tpl.times_per_day),
-        texts.t('ADMIN_DAILY_CONTEST_UI_012', 'Расписание: {value1}').format(
+        f'{admin_icon("medal")} '
+        + texts.t('ADMIN_DAILY_CONTEST_UI_009', 'Макс победителей: {value1}').format(value1=tpl.max_winners),
+        f'{admin_icon("user")} '
+        + texts.t('ADMIN_DAILY_CONTEST_UI_010', 'Попыток/польз: {value1}').format(value1=tpl.attempts_per_user),
+        f'{admin_icon("repeat")} '
+        + texts.t('ADMIN_DAILY_CONTEST_UI_011', 'Раундов в день: {value1}').format(value1=tpl.times_per_day),
+        f'{admin_icon("clock")} '
+        + texts.t('ADMIN_DAILY_CONTEST_UI_012', 'Расписание: {value1}').format(
             value1=html.escape(str(tpl.schedule_times or '-'))
         ),
-        texts.t('ADMIN_DAILY_CONTEST_UI_013', 'Длительность раунда: {value1} ч.').format(value1=tpl.cooldown_hours),
+        f'{admin_icon("calendar")} '
+        + texts.t('ADMIN_DAILY_CONTEST_UI_013', 'Длительность раунда: {value1} ч.').format(value1=tpl.cooldown_hours),
     ]
     await callback.message.edit_text(
-        admin_screen(_clean_legacy('\n'.join(lines)), icon='star', compact=True),
+        f'{heading}\n\n{admin_quote(chr(10).join(lines))}',
         reply_markup=get_daily_contest_manage_keyboard(tpl.id, tpl.is_enabled, db_user.language),
         parse_mode='HTML',
     )
@@ -402,11 +412,7 @@ async def edit_payload(
     kb = types.InlineKeyboardMarkup(inline_keyboard=[[admin_back_button(texts, f'admin_daily_contest_{template_id}')]])
     # HTML-блок с JSON намеренно не сжимается: отступы здесь — часть данных.
     await callback.message.edit_text(
-        admin_screen(
-            texts.t('ADMIN_CONTEST_PAYLOAD_PROMPT', 'Отправьте JSON payload для игры (словарь настроек):\n')
-            + f'<code>{html.escape(payload_json)}</code>',
-            icon='document',
-        ),
+        f'{admin_heading("document", _payload_prompt(texts))}\n\n<pre>{html.escape(payload_json)}</pre>',
         reply_markup=kb,
         parse_mode='HTML',
     )

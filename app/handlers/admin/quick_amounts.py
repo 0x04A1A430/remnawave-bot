@@ -15,12 +15,22 @@ from app.services.payment_method_config_service import (
     get_config_by_method_id,
     update_config,
 )
-from app.utils.admin_ui import admin_back_button, admin_button, admin_screen
+from app.utils.admin_ui import admin_back_button, admin_button, admin_quote, admin_screen
 from app.utils.decorators import admin_required
 from app.utils.miniapp_buttons import strip_leading_emoji
 
 
 logger = structlog.get_logger(__name__)
+
+
+def _back_label(value: str) -> str:
+    """Подпись кнопки возврата: стрелка в тексте вместо premium-иконки."""
+
+    label = (value or '').strip()
+    if not label or label.lower().startswith(('←', '◀', '⬅', '⏪')):
+        return label
+    return f'← {label}'
+
 
 router = Router(name='admin_quick_amounts')
 
@@ -60,18 +70,21 @@ def _list_keyboard(configs: list, defaults: dict, language: str = 'ru') -> Inlin
     texts = get_texts(language)
     buttons = []
     for config in configs:
-        # ▫ помечает методы, работающие на значениях по умолчанию (см. ADMIN_QUICK_OVERVIEW).
-        marker = '▫ ' if config.quick_amounts is None else ''
+        # Значения по умолчанию помечаем иконкой настроек, свои суммы — монетой.
+        default_icon = config.quick_amounts is None
         title = _method_title(config, defaults)
         buttons.append(
             [
                 admin_button(
-                    f'{marker}{title}',
+                    title,
                     callback_data=f'qamounts:view:{config.method_id}',
+                    icon='settings' if default_icon else 'money',
                 )
             ]
         )
-    buttons.append([admin_back_button(texts, 'admin_submenu_settings', label=_label(texts.t('ADMIN_QUICK_BACK')))])
+    buttons.append(
+        [admin_back_button(texts, 'admin_submenu_settings', label=_back_label(_label(texts.t('ADMIN_QUICK_BACK'))))]
+    )
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
@@ -83,7 +96,6 @@ def _view_keyboard(method_id: str, quick_amounts: list[int] | None, language: st
                 _label(texts.t('ADMIN_QUICK_EDIT')),
                 callback_data=f'qamounts:edit:{method_id}',
                 icon='edit',
-                style='primary',
             )
         ]
     ]
@@ -94,7 +106,6 @@ def _view_keyboard(method_id: str, quick_amounts: list[int] | None, language: st
                     _label('Отключить кнопки'),
                     callback_data=f'qamounts:disable:{method_id}',
                     icon='lock',
-                    style='danger',
                 )
             ]
         )
@@ -105,19 +116,28 @@ def _view_keyboard(method_id: str, quick_amounts: list[int] | None, language: st
                     _label(texts.t('ADMIN_QUICK_RESET')),
                     callback_data=f'qamounts:reset:{method_id}',
                     icon='refresh',
-                    style='danger',
                 )
             ]
         )
-    buttons.append([admin_back_button(texts, 'qamounts:list', label=_label(texts.t('ADMIN_QUICK_LIST_BACK')))])
+    buttons.append(
+        [admin_back_button(texts, 'qamounts:list', label=_back_label(_label(texts.t('ADMIN_QUICK_LIST_BACK'))))]
+    )
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
 def _view_text(config, defaults: dict, language: str = 'ru') -> str:
     texts = get_texts(language)
-    return texts.t('ADMIN_QUICK_VIEW').format(
+    text = texts.t('ADMIN_QUICK_VIEW').format(
         method=_method_title(config, defaults), amounts=_format_amounts_line(config.quick_amounts, language)
     )
+    title, separator, rest = text.partition('\n\n')
+    if not separator:
+        return text
+    params, note_separator, note = rest.partition('\n\n')
+    text = f'{title}\n\n{admin_quote(params)}'
+    if note_separator:
+        text += f'\n\n{note}'
+    return text
 
 
 @router.callback_query(F.data == 'qamounts:list')
@@ -196,7 +216,7 @@ async def start_edit_quick_amounts(callback: CallbackQuery, state: FSMContext, *
                     admin_button(
                         _label(texts.t('ADMIN_QUICK_CANCEL')),
                         callback_data=f'qamounts:view:{method_id}',
-                        style='danger',
+                        icon='cross',
                     )
                 ]
             ]

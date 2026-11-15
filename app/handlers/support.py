@@ -21,6 +21,11 @@ logger = structlog.get_logger(__name__)
 # Ведущие украшения локалей: юникод-эмодзи, селекторы, стрелки «←».
 _LEADING_GLYPHS_RE = re.compile(r'^[\s\u200b\u200d\ufe0f\u20e3←⬅→➡◀▶►‹›«»•·●○◉◎▪▫■□◆◇]+')
 _HTML_TAG_RE = re.compile(r'</?[a-zA-Z][^>]*>')
+# Блочная разметка: если она уже есть, свою цитату не добавляем (иначе вложенность).
+_BLOCK_TAG_RE = re.compile(r'<(?:blockquote|pre)\b', re.IGNORECASE)
+
+# Заголовок экрана поддержки: та же premium-иконка, что и в динамических текстах.
+_SUPPORT_ICON = 'tools'
 
 
 def _title(raw: str) -> str:
@@ -36,24 +41,49 @@ def _title(raw: str) -> str:
     return plain.strip(':').strip()
 
 
+def _support_body(body: str) -> str:
+    """Тело экрана одной цитатой, если своих блоков в тексте ещё нет."""
+    body = compact_blank_lines(body)
+    if not body or _BLOCK_TAG_RE.search(body):
+        return body
+    return admin_quote(body)
+
+
+def _support_heading(texts) -> str:
+    return admin_heading(_SUPPORT_ICON, _title(texts.MENU_SUPPORT))
+
+
+def _split_heading(body: str) -> tuple[str | None, str]:
+    """Отделяет первую строку, если это уже готовый <b>-заголовок.
+
+    Содержание админского текста не переписываем: свой заголовок оставляем
+    как есть и лишь добавляем premium-иконку, если её там нет.
+    """
+    first, _, rest = body.partition('\n')
+    if '<b>' not in first:
+        return None, body
+    if first.lstrip().startswith('<tg-emoji'):
+        return first.strip(), rest
+    return f'{admin_icon(_SUPPORT_ICON)} {_LEADING_GLYPHS_RE.sub("", first).strip()}', rest
+
+
 def _support_caption(texts, info_text: str) -> str:
-    """Экран поддержки: premium-заголовок + описание из настроек.
+    """Экран поддержки: premium-заголовок + тело цитатой.
 
     Описание редактируется админом и часто уже начинается со своего <b>-заголовка
-    — второй заголовок ему не добавляем, только иконку.
+    — второй заголовок ему не добавляем, только иконку. Текст самого описания
+    (HTML, списки, ссылки) сохраняется без изменений.
     """
     body = compact_blank_lines(info_text or '')
-    icon = admin_icon('support')
     if not body:
-        return admin_heading('support', _title(texts.MENU_SUPPORT))
+        return _support_heading(texts)
 
-    first, _, rest = body.partition('\n')
-    first = _LEADING_GLYPHS_RE.sub('', first).strip()
-    if '<b>' in first:
-        # Свой premium-эмодзи в заголовке админа уже есть — второй не ставим.
-        heading = first if first.startswith('<tg-emoji') else f'{icon} {first}'
-        return compact_blank_lines(f'{heading}\n\n{rest}')
-    return compact_blank_lines(f'{admin_heading("support", _title(texts.MENU_SUPPORT))}\n\n{body}')
+    heading, rest = _split_heading(body)
+    if heading is None:
+        heading, rest = _support_heading(texts), body
+
+    rest = _support_body(rest)
+    return compact_blank_lines(f'{heading}\n\n{rest}') if rest else heading
 
 
 def _payment_caption(texts) -> str:

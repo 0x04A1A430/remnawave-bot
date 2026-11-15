@@ -16,7 +16,13 @@ from app.handlers.admin._text import compact_text
 from app.localization.texts import Texts, get_texts
 from app.services.system_settings_service import bot_configuration_service
 from app.states import PricingStates
-from app.utils.admin_ui import admin_back_button, admin_button, admin_screen
+from app.utils.admin_ui import (
+    admin_back_button,
+    admin_button,
+    admin_heading,
+    admin_icon,
+    admin_quote,
+)
 from app.utils.decorators import admin_required, error_handler
 from app.utils.miniapp_buttons import strip_leading_emoji
 
@@ -494,6 +500,27 @@ def _build_extra_summary(items: Iterable[PriceItem], fallback: str) -> str:
     return ', '.join(parts) if parts else fallback
 
 
+def _pricing_line(icon: str, label: str, value: Any) -> str:
+    """Строка параметра в blockquote: premium-иконка + жирная подпись."""
+    return f'{admin_icon(icon)} <b>{label}:</b> {value}'
+
+
+def _pricing_screen(icon: str, title: str, lines: Iterable[str], hint: str = '') -> str:
+    """Экран прайсинга: заголовок с иконкой, параметры в blockquote, подсказка."""
+    body = '\n'.join(line for line in lines if line).strip()
+    parts = [admin_heading(icon, title), '', admin_quote(body or '—')]
+    if hint:
+        parts.extend(['', hint])
+    return compact_text('\n'.join(parts))
+
+
+def _pricing_notice(icon: str, message: str) -> str:
+    """Короткое уведомление — жирный заголовок; длинное — заголовок + цитата."""
+    if '\n' in message or len(message) > 90:
+        return compact_text(f'{admin_heading(icon, "Внимание")}\n\n{admin_quote(message)}')
+    return admin_heading(icon, message)
+
+
 def _build_settings_section(
     section: str,
     language: str,
@@ -509,17 +536,8 @@ def _build_settings_section(
     else:
         title = texts.t('ADMIN_PRICING_SECTION_SETTINGS_GENERIC', 'Настройки')
 
-    lines: list[str] = [title, '']
+    rows: list[str] = []
     keyboard_rows: list[list[types.InlineKeyboardButton]] = []
-
-    if entries:
-        lines.append(
-            texts.t(
-                'ADMIN_PRICING_SECTION_CURRENT',
-                'Текущие значения:',
-            )
-        )
-        lines.append('')
 
     for entry in entries:
         label = strip_leading_emoji(entry.label(lang_code, texts=texts))
@@ -527,40 +545,36 @@ def _build_settings_section(
         formatted = bot_configuration_service.format_value_human(entry.key, value, language=texts.language)
 
         if entry.action == 'toggle':
-            state_icon = '✅' if bool(value) else '❌'
-            lines.append(f'• <b>{label}</b> — {formatted}')
-            button_text = texts.t(
-                'ADMIN_PRICING_SETTING_TOGGLE_STATEFUL',
-                '{icon} {label}',
-            ).format(icon=state_icon, label=label)
+            state_icon = 'check' if bool(value) else 'prohibit'
+            rows.append(f'<b>{label}</b> — {formatted}')
             keyboard_rows.append(
                 [
                     admin_button(
-                        button_text.strip(),
+                        label,
                         callback_data=(f'admin_pricing_toggle:{section}:{_encode_setting_callback_key(entry.key)}'),
-                        style='success' if bool(value) else None,
+                        icon=state_icon,
                     )
                 ]
             )
         elif entry.action == 'choice' and entry.choices:
-            lines.append(f'• <b>{label}</b>: {formatted}')
+            rows.append(f'{admin_icon("settings")} <b>{label}</b>: {formatted}')
             buttons: list[types.InlineKeyboardButton] = []
             for option in entry.choices:
                 is_active = value == option.value
                 option_label = option.label(lang_code, texts=texts)
                 buttons.append(
                     admin_button(
-                        f'✅ {option_label}' if is_active else option_label,
+                        option_label,
                         callback_data=(
                             f'admin_pricing_choice:{section}:{_encode_setting_callback_key(entry.key)}:{option.value}'
                         ),
-                        style='success' if is_active else 'primary',
+                        icon='check' if is_active else 'settings',
                     )
                 )
             for i in range(0, len(buttons), 2):
                 keyboard_rows.append(buttons[i : i + 2])
         else:
-            lines.append(f'• <b>{label}</b>: {formatted}')
+            rows.append(f'{admin_icon("edit")} <b>{label}</b>: {formatted}')
             button_text = texts.t(
                 'ADMIN_PRICING_SETTING_EDIT_WITH_VALUE',
                 '{label} • {value}',
@@ -571,25 +585,22 @@ def _build_settings_section(
                         button_text.strip(),
                         callback_data=(f'admin_pricing_setting:{section}:{_encode_setting_callback_key(entry.key)}'),
                         icon='edit',
-                        style='primary',
                     )
                 ]
             )
 
         description = entry.description(lang_code, texts=texts)
         if description:
-            lines.append(f'<i>{description}</i>')
-        lines.append('')
+            rows.extend([f'<i>{description}</i>', ''])
 
-    if entries:
-        lines.append(texts.t('ADMIN_PRICING_SECTION_PROMPT', ''))
-    else:
-        lines.append(texts.t('ADMIN_PRICING_SECTION_EMPTY', 'Нет параметров для изменения.'))
+    if not entries:
+        rows.append(texts.t('ADMIN_PRICING_SECTION_EMPTY', 'Нет параметров для изменения.'))
 
     keyboard_rows.append([admin_back_button(texts, 'admin_pricing')])
     keyboard = types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
     screen_icon = 'trials' if section == 'trial' else 'pricing'
-    return admin_screen(compact_text('\n'.join(lines)), icon=screen_icon, compact=True), keyboard
+    hint = texts.t('ADMIN_PRICING_SECTION_PROMPT', '') if entries else ''
+    return _pricing_screen(screen_icon, title, rows, hint), keyboard
 
 
 def _build_traffic_options_section(language: str) -> tuple[str, types.InlineKeyboardMarkup]:
@@ -602,7 +613,7 @@ def _build_traffic_options_section(language: str) -> tuple[str, types.InlineKeyb
         'Отображение пакетов трафика',
     )
 
-    lines: list[str] = [title, '']
+    rows: list[str] = []
 
     enabled_labels = [
         _format_traffic_label(package['gb'], lang_code, short=True, texts=texts)
@@ -611,27 +622,21 @@ def _build_traffic_options_section(language: str) -> tuple[str, types.InlineKeyb
     ]
 
     if enabled_labels:
-        lines.append(
-            texts.t(
+        rows.append(
+            f'{admin_icon("stats")} '
+            + texts.t(
                 'ADMIN_PRICING_SECTION_TRAFFIC_OPTIONS_ACTIVE',
                 'Активные пакеты: {items}',
             ).format(items=', '.join(enabled_labels))
         )
     else:
-        lines.append(
-            texts.t(
+        rows.append(
+            f'{admin_icon("prohibit")} '
+            + texts.t(
                 'ADMIN_PRICING_SECTION_TRAFFIC_OPTIONS_NONE',
                 'Активных пакетов нет.',
             )
         )
-
-    lines.append('')
-    lines.append(
-        texts.t(
-            'ADMIN_PRICING_SECTION_TRAFFIC_OPTIONS_PROMPT',
-            'Нажмите на пакет, чтобы включить или выключить его отображение.',
-        )
-    )
 
     keyboard_rows: list[list[types.InlineKeyboardButton]] = []
     buttons: list[types.InlineKeyboardButton] = []
@@ -642,7 +647,7 @@ def _build_traffic_options_section(language: str) -> tuple[str, types.InlineKeyb
             admin_button(
                 label,
                 callback_data=f'admin_pricing_toggle_traffic:{package["gb"]}',
-                style='success' if package['enabled'] else None,
+                icon='check' if package['enabled'] else 'prohibit',
             )
         )
 
@@ -651,7 +656,11 @@ def _build_traffic_options_section(language: str) -> tuple[str, types.InlineKeyb
 
     keyboard_rows.append([admin_back_button(texts, 'admin_pricing')])
     keyboard = types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
-    return admin_screen(compact_text('\n'.join(lines)), icon='pricing', compact=True), keyboard
+    hint = texts.t(
+        'ADMIN_PRICING_SECTION_TRAFFIC_OPTIONS_PROMPT',
+        'Нажмите на пакет, чтобы включить или выключить его отображение.',
+    )
+    return _pricing_screen('pricing', title, rows, hint), keyboard
 
 
 def _build_period_options_section(language: str) -> tuple[str, types.InlineKeyboardMarkup]:
@@ -666,29 +675,24 @@ def _build_period_options_section(language: str) -> tuple[str, types.InlineKeybo
     renewal_options = (30, 60, 90, 180, 360)
 
     title = texts.t('ADMIN_PRICING_SECTION_PERIOD_OPTIONS_TITLE', 'Доступные периоды')
-    lines: list[str] = [title, '']
+    rows: list[str] = []
 
     sub_list = ', '.join(f'{days}{suffix}' for days in sorted(available_subscription)) or '—'
     renew_list = ', '.join(f'{days}{suffix}' for days in sorted(available_renewal)) or '—'
 
-    lines.append(
-        texts.t(
+    rows.append(
+        f'{admin_icon("calendar")} '
+        + texts.t(
             'ADMIN_PRICING_SECTION_PERIOD_OPTIONS_SUB',
             'Активные периоды подписки: {items}',
         ).format(items=sub_list)
     )
-    lines.append(
-        texts.t(
+    rows.append(
+        f'{admin_icon("calendar")} '
+        + texts.t(
             'ADMIN_PRICING_SECTION_PERIOD_OPTIONS_RENEW',
             'Активные периоды продления: {items}',
         ).format(items=renew_list)
-    )
-    lines.append('')
-    lines.append(
-        texts.t(
-            'ADMIN_PRICING_SECTION_PERIOD_OPTIONS_PROMPT',
-            'Нажмите на период, чтобы включить или выключить его отображение.',
-        )
     )
 
     keyboard_rows: list[list[types.InlineKeyboardButton]] = []
@@ -698,9 +702,9 @@ def _build_period_options_section(language: str) -> tuple[str, types.InlineKeybo
         is_active = days in available_subscription
         sub_buttons.append(
             admin_button(
-                f'✅ {days}{suffix}' if is_active else f'{days}{suffix}',
+                f'{days}{suffix}',
                 callback_data=f'admin_pricing_toggle_period:subscription:{days}',
-                style='success' if is_active else None,
+                icon='check' if is_active else 'calendar',
             )
         )
     for i in range(0, len(sub_buttons), 3):
@@ -711,9 +715,9 @@ def _build_period_options_section(language: str) -> tuple[str, types.InlineKeybo
         is_active = days in available_renewal
         renew_buttons.append(
             admin_button(
-                f'✅ {days}{suffix}' if is_active else f'{days}{suffix}',
+                f'{days}{suffix}',
                 callback_data=f'admin_pricing_toggle_period:renewal:{days}',
-                style='success' if is_active else None,
+                icon='check' if is_active else 'calendar',
             )
         )
     for i in range(0, len(renew_buttons), 3):
@@ -721,7 +725,11 @@ def _build_period_options_section(language: str) -> tuple[str, types.InlineKeybo
 
     keyboard_rows.append([admin_back_button(texts, 'admin_pricing')])
     keyboard = types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
-    return admin_screen(compact_text('\n'.join(lines)), icon='calendar', compact=True), keyboard
+    hint = texts.t(
+        'ADMIN_PRICING_SECTION_PERIOD_OPTIONS_PROMPT',
+        'Нажмите на период, чтобы включить или выключить его отображение.',
+    )
+    return _pricing_screen('calendar', title, rows, hint), keyboard
 
 
 def _build_overview(language: str) -> tuple[str, types.InlineKeyboardMarkup]:
@@ -740,24 +748,30 @@ def _build_overview(language: str) -> tuple[str, types.InlineKeyboardMarkup]:
     summary_core = _format_core_summary(lang_code, texts=texts)
     summary_period_options = _build_period_options_summary(lang_code, texts=texts)
 
-    lines = [
-        f'<b>{texts.t("ADMIN_PRICING_MENU_TITLE", "Управление ценами")}</b>',
-        texts.t(
-            'ADMIN_PRICING_MENU_DESCRIPTION',
-            'Быстрый доступ к настройкам тарифов, периодов и пакетов.',
+    def summary_row(icon: str, key: str, default: str, **kwargs: Any) -> str:
+        value = texts.t(key, default).format(**kwargs).strip()
+        return f'{admin_icon(icon)} {value.lstrip("• ").strip()}'
+
+    description = texts.t(
+        'ADMIN_PRICING_MENU_DESCRIPTION',
+        'Быстрый доступ к настройкам тарифов, периодов и пакетов.',
+    )
+    rows = [
+        summary_row('trials', 'ADMIN_PRICING_MENU_SUMMARY_TRIAL', '• Триал: {summary}', summary=summary_trial),
+        summary_row('tariff', 'ADMIN_PRICING_MENU_SUMMARY_CORE', '• Базовые лимиты: {summary}', summary=summary_core),
+        summary_row(
+            'calendar',
+            'ADMIN_PRICING_MENU_SUMMARY_PERIOD_OPTIONS',
+            '• Доступные периоды: {summary}',
+            summary=summary_period_options,
         ),
-        '',
-        f'<b>{texts.t("ADMIN_PRICING_MENU_SUMMARY", "Краткая сводка")}</b>',
-        texts.t('ADMIN_PRICING_MENU_SUMMARY_TRIAL', '• Триал: {summary}').format(summary=summary_trial),
-        texts.t('ADMIN_PRICING_MENU_SUMMARY_CORE', '• Базовые лимиты: {summary}').format(summary=summary_core),
-        texts.t('ADMIN_PRICING_MENU_SUMMARY_PERIOD_OPTIONS', '• Доступные периоды: {summary}').format(
-            summary=summary_period_options
+        summary_row(
+            'pricing', 'ADMIN_PRICING_MENU_SUMMARY_PERIODS', '• Стоимость периодов: {summary}', summary=summary_periods
         ),
-        texts.t('ADMIN_PRICING_MENU_SUMMARY_PERIODS', '• Стоимость периодов: {summary}').format(
-            summary=summary_periods
+        summary_row(
+            'stats', 'ADMIN_PRICING_MENU_SUMMARY_TRAFFIC', '• Пакеты трафика: {summary}', summary=summary_traffic
         ),
-        texts.t('ADMIN_PRICING_MENU_SUMMARY_TRAFFIC', '• Пакеты трафика: {summary}').format(summary=summary_traffic),
-        texts.t('ADMIN_PRICING_MENU_SUMMARY_EXTRA', '• Дополнительно: {summary}').format(summary=summary_extra),
+        summary_row('coin', 'ADMIN_PRICING_MENU_SUMMARY_EXTRA', '• Дополнительно: {summary}', summary=summary_extra),
     ]
 
     keyboard = types.InlineKeyboardMarkup(
@@ -767,13 +781,11 @@ def _build_overview(language: str) -> tuple[str, types.InlineKeyboardMarkup]:
                     texts.t('ADMIN_PRICING_BUTTON_TRIAL', 'Пробный период'),
                     callback_data='admin_pricing_section:trial',
                     icon='trials',
-                    style='primary',
                 ),
                 admin_button(
                     texts.t('ADMIN_PRICING_BUTTON_CORE', 'Настройки тарифов'),
                     callback_data='admin_pricing_section:core',
                     icon='tariff',
-                    style='primary',
                 ),
             ],
             [
@@ -781,13 +793,11 @@ def _build_overview(language: str) -> tuple[str, types.InlineKeyboardMarkup]:
                     texts.t('ADMIN_PRICING_BUTTON_PERIOD_OPTIONS', 'Доступные периоды'),
                     callback_data='admin_pricing_section:period_options',
                     icon='calendar',
-                    style='primary',
                 ),
                 admin_button(
                     texts.t('ADMIN_PRICING_BUTTON_PERIODS', 'Стоимость периодов'),
                     callback_data='admin_pricing_section:periods',
                     icon='pricing',
-                    style='primary',
                 ),
             ],
             [
@@ -795,7 +805,6 @@ def _build_overview(language: str) -> tuple[str, types.InlineKeyboardMarkup]:
                     texts.t('ADMIN_PRICING_BUTTON_TRAFFIC', 'Пакеты трафика'),
                     callback_data='admin_pricing_section:traffic',
                     icon='stats',
-                    style='primary',
                 ),
                 admin_button(
                     texts.t(
@@ -804,20 +813,20 @@ def _build_overview(language: str) -> tuple[str, types.InlineKeyboardMarkup]:
                     ),
                     callback_data='admin_pricing_section:traffic_options',
                     icon='settings',
-                    style='primary',
                 ),
                 admin_button(
                     texts.t('ADMIN_PRICING_BUTTON_EXTRA', 'Дополнительно'),
                     callback_data='admin_pricing_section:extra',
                     icon='coin',
-                    style='primary',
                 ),
             ],
             [admin_back_button(texts, 'admin_panel')],
         ]
     )
 
-    return admin_screen(compact_text('\n'.join(lines)), icon='pricing', compact=True), keyboard
+    title = texts.t('ADMIN_PRICING_MENU_TITLE', 'Управление ценами')
+    text = _pricing_screen('pricing', title, rows)
+    return compact_text(f'{text}\n\n{description}' if description else text), keyboard
 
 
 def _build_section(
@@ -830,12 +839,15 @@ def _build_section(
     if section == 'periods':
         items = _get_period_items(lang_code, texts=texts)
         title = texts.t('ADMIN_PRICING_SECTION_PERIODS_TITLE', 'Периоды подписки')
+        screen_icon, row_icon = 'pricing', 'calendar'
     elif section == 'traffic':
         items = _get_traffic_items(lang_code, texts=texts)
         title = texts.t('ADMIN_PRICING_SECTION_TRAFFIC_TITLE', 'Пакеты трафика')
+        screen_icon, row_icon = 'stats', 'stats'
     elif section == 'extra':
         items = _get_extra_items(lang_code, texts=texts)
         title = texts.t('ADMIN_PRICING_SECTION_EXTRA_TITLE', 'Дополнительные опции')
+        screen_icon, row_icon = 'coin', 'coin'
     elif section == 'traffic_options':
         return _build_traffic_options_section(language)
     elif section in SETTING_ENTRIES_BY_SECTION:
@@ -845,16 +857,17 @@ def _build_section(
     else:
         items = _get_extra_items(lang_code, texts=texts)
         title = texts.t('ADMIN_PRICING_SECTION_EXTRA_TITLE', 'Дополнительные опции')
+        screen_icon, row_icon = 'coin', 'coin'
 
-    lines = [title, '']
+    rows: list[str] = []
 
     if items:
         for key, label, price in items:
-            lines.append(f'• {label} — {settings.format_price(price)}')
-        lines.append('')
-        lines.append(texts.t('ADMIN_PRICING_SECTION_PROMPT', ''))
+            rows.append(f'{admin_icon(row_icon)} {label} — {settings.format_price(price)}')
+        hint = texts.t('ADMIN_PRICING_SECTION_PROMPT', '')
     else:
-        lines.append(texts.t('ADMIN_PRICING_SECTION_EMPTY', 'Нет доступных значений.'))
+        rows.append(texts.t('ADMIN_PRICING_SECTION_EMPTY', 'Нет доступных значений.'))
+        hint = ''
 
     keyboard_rows: list[list[types.InlineKeyboardButton]] = []
     for key, label, price in items:
@@ -864,7 +877,6 @@ def _build_section(
                     f'{strip_leading_emoji(label)} • {settings.format_price(price)}',
                     callback_data=f'admin_pricing_edit:{section}:{key}',
                     icon='edit',
-                    style='primary',
                 )
             ]
         )
@@ -872,26 +884,32 @@ def _build_section(
     keyboard_rows.append([admin_back_button(texts, 'admin_pricing')])
 
     keyboard = types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
-    return admin_screen(compact_text('\n'.join(lines)), icon='pricing', compact=True), keyboard
+    return _pricing_screen(screen_icon, title, rows, hint), keyboard
 
 
 def _build_price_prompt(texts: Any, label: str, current_price: str) -> str:
-    lines = [
-        f'<b>{texts.t("ADMIN_PRICING_EDIT_TITLE", "Изменение цены")}</b>',
-        '',
-        f'{texts.t("ADMIN_PRICING_EDIT_TARGET", "Текущий тариф")}: <b>{label}</b>',
-        f'{texts.t("ADMIN_PRICING_EDIT_CURRENT", "Текущее значение")}: <b>{current_price}</b>',
-        '',
-        texts.t(
-            'ADMIN_PRICING_EDIT_PROMPT',
-            'Введите новую стоимость в рублях (например 990 или 990.50). Для бесплатного тарифа укажите 0.',
-        ),
-        texts.t(
-            'ADMIN_PRICING_EDIT_CANCEL_HINT',
-            'Напишите «Отмена», чтобы вернуться без изменений.',
-        ),
+    params = [
+        _pricing_line('pricing', texts.t('ADMIN_PRICING_EDIT_TARGET', 'Текущий тариф'), f'<b>{label}</b>'),
+        _pricing_line('money', texts.t('ADMIN_PRICING_EDIT_CURRENT', 'Текущее значение'), f'<b>{current_price}</b>'),
     ]
-    return admin_screen(compact_text('\n'.join(lines)), icon='money', compact=True)
+    hint = '\n'.join(
+        [
+            texts.t(
+                'ADMIN_PRICING_EDIT_PROMPT',
+                'Введите новую стоимость в рублях (например 990 или 990.50). Для бесплатного тарифа укажите 0.',
+            ),
+            texts.t(
+                'ADMIN_PRICING_EDIT_CANCEL_HINT',
+                'Напишите «Отмена», чтобы вернуться без изменений.',
+            ),
+        ]
+    )
+    return _pricing_screen(
+        'money',
+        texts.t('ADMIN_PRICING_EDIT_TITLE', 'Изменение цены'),
+        params,
+        hint,
+    )
 
 
 async def _render_message(
@@ -1092,26 +1110,22 @@ async def start_setting_edit(
         format_hint = guidance.get('format') or ''
         example = guidance.get('example') or '—'
         warning = guidance.get('warning') or ''
-        prompt_parts = [
-            f'<b>{texts.t("ADMIN_PRICING_SETTING_EDIT_TITLE", "Настройка параметра")}</b>',
-            '',
-            f'{texts.t("ADMIN_PRICING_SETTING_PARAMETER", "Параметр")}: <b>{label}</b>',
-            f'{texts.t("ADMIN_PRICING_SETTING_CURRENT", "Текущее значение")}: <b>{formatted_current}</b>',
+        params = [
+            _pricing_line('settings', texts.t('ADMIN_PRICING_SETTING_PARAMETER', 'Параметр'), f'<b>{label}</b>'),
+            _pricing_line(
+                'edit',
+                texts.t('ADMIN_PRICING_SETTING_CURRENT', 'Текущее значение'),
+                f'<b>{formatted_current}</b>',
+            ),
+            _pricing_line('document', texts.t('ADMIN_PRICING_SETTING_FORMAT', 'Формат ввода'), format_hint),
+            _pricing_line('info', texts.t('ADMIN_PRICING_SETTING_EXAMPLE', 'Пример'), example),
         ]
-        if description:
-            prompt_parts.extend(['', description])
-        prompt_parts.extend(
-            [
-                '',
-                f'{texts.t("ADMIN_PRICING_SETTING_FORMAT", "Формат ввода")}: {format_hint}',
-                f'{texts.t("ADMIN_PRICING_SETTING_EXAMPLE", "Пример")}: {example}',
-            ]
-        )
         if warning:
-            prompt_parts.append(f'{texts.t("ADMIN_PRICING_SETTING_WARNING", "Важно")}: {warning}')
-        prompt_parts.extend(
+            params.append(_pricing_line('warning', texts.t('ADMIN_PRICING_SETTING_WARNING', 'Важно'), warning))
+        if description:
+            params.extend(['', f'<i>{description}</i>'])
+        hint = '\n'.join(
             [
-                '',
                 texts.t(
                     'ADMIN_PRICING_SETTING_PROMPT',
                     'Отправьте новое значение или напишите «Отмена». Для очистки используйте none.',
@@ -1122,7 +1136,12 @@ async def start_setting_edit(
                 ),
             ]
         )
-        prompt = admin_screen('\n'.join(prompt_parts), icon='settings', compact=True)
+        prompt = _pricing_screen(
+            'settings',
+            texts.t('ADMIN_PRICING_SETTING_EDIT_TITLE', 'Настройка параметра'),
+            params,
+            hint,
+        )
 
     keyboard = types.InlineKeyboardMarkup(
         inline_keyboard=[
@@ -1157,10 +1176,9 @@ async def process_pricing_input(
 
     if not key:
         await message.answer(
-            admin_screen(
+            _pricing_notice(
+                'warning',
                 texts.t('ADMIN_PRICING_EDIT_EXPIRED', 'Сессия редактирования истекла.'),
-                icon='warning',
-                compact=True,
             ),
             parse_mode='HTML',
         )
@@ -1180,10 +1198,9 @@ async def process_pricing_input(
                 section_keyboard,
             )
         await message.answer(
-            admin_screen(
+            _pricing_notice(
+                'info',
                 texts.t('ADMIN_PRICING_EDIT_CANCELLED', 'Изменения отменены.'),
-                icon='info',
-                compact=True,
             ),
             parse_mode='HTML',
         )
@@ -1194,13 +1211,12 @@ async def process_pricing_input(
             new_value = _parse_price_input(raw_value)
         except ValueError:
             await message.answer(
-                admin_screen(
+                _pricing_notice(
+                    'warning',
                     texts.t(
                         'ADMIN_PRICING_EDIT_INVALID',
                         'Не удалось распознать цену. Укажите число в рублях (например 990 или 990.50).',
                     ),
-                    icon='warning',
-                    compact=True,
                 ),
                 parse_mode='HTML',
             )
@@ -1214,7 +1230,7 @@ async def process_pricing_input(
                 'Не удалось обновить параметр. Проверьте формат значения.',
             )
             await message.answer(
-                admin_screen(html.escape(error_text), icon='warning', compact=True),
+                _pricing_notice('warning', html.escape(error_text)),
                 parse_mode='HTML',
             )
             return
@@ -1250,13 +1266,12 @@ async def process_pricing_input(
         key, bot_configuration_service.get_current_value(key), language=texts.language
     )
     await message.answer(
-        admin_screen(
+        _pricing_notice(
+            'success',
             texts.t(
                 'ADMIN_PRICING_SETTING_SUCCESS',
                 'Параметр {label} обновлен: {value}',
             ).format(label=label, value=formatted_value),
-            icon='success',
-            compact=True,
         ),
         parse_mode='HTML',
     )

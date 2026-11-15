@@ -23,6 +23,15 @@ from app.utils.validators import get_html_help_text, validate_html_tags
 logger = structlog.get_logger(__name__)
 
 
+def _back_label(value: str) -> str:
+    """Подпись кнопки возврата: стрелка в тексте вместо premium-иконки."""
+
+    label = (value or '').strip()
+    if not label or label.lower().startswith(('←', '◀', '⬅', '⏪')):
+        return label
+    return f'← {label}'
+
+
 def _label(text: str) -> str:
     """Текст кнопки без ведущего глифа локали: иконку даёт ``admin_button``."""
     return strip_leading_emoji(text.strip())
@@ -134,8 +143,7 @@ async def _build_overview(
                     )
                 ),
                 callback_data='admin_public_offer_edit',
-                icon='document',
-                style='primary',
+                icon='edit',
             )
         ]
     )
@@ -151,8 +159,7 @@ async def _build_overview(
                         )
                     ),
                     callback_data='admin_public_offer_view',
-                    icon='document',
-                    style='primary',
+                    icon='eye',
                 )
             ]
         )
@@ -192,7 +199,6 @@ async def _build_overview(
                 ),
                 callback_data='admin_public_offer_display_mode',
                 icon='settings',
-                style='primary',
             )
         ]
     )
@@ -207,8 +213,7 @@ async def _build_overview(
                     )
                 ),
                 callback_data='admin_public_offer_help',
-                icon='document',
-                style='primary',
+                icon='question',
             )
         ]
     )
@@ -356,15 +361,14 @@ async def start_edit_public_offer(
                         )
                     ),
                     callback_data='admin_public_offer_help',
-                    icon='document',
-                    style='primary',
+                    icon='question',
                 )
             ],
             [
                 admin_button(
                     _label(texts.t('ADMIN_PUBLIC_OFFER_CANCEL', 'Отмена')),
                     callback_data='admin_public_offer_cancel',
-                    style='danger',
+                    icon='cross',
                 )
             ],
         ]
@@ -459,10 +463,12 @@ async def process_public_offer_edit(
                 admin_back_button(
                     texts,
                     'admin_public_offer',
-                    label=_label(
-                        texts.t(
-                            'ADMIN_PUBLIC_OFFER_BACK_BUTTON',
-                            'К настройкам оферты',
+                    label=_back_label(
+                        _label(
+                            texts.t(
+                                'ADMIN_PUBLIC_OFFER_BACK_BUTTON',
+                                'К настройкам оферты',
+                            )
                         )
                     ),
                 )
@@ -532,10 +538,12 @@ async def view_public_offer(
                 admin_back_button(
                     texts,
                     'admin_public_offer',
-                    label=_label(
-                        texts.t(
-                            'ADMIN_PUBLIC_OFFER_BACK_BUTTON',
-                            'К настройкам оферты',
+                    label=_back_label(
+                        _label(
+                            texts.t(
+                                'ADMIN_PUBLIC_OFFER_BACK_BUTTON',
+                                'К настройкам оферты',
+                            )
                         )
                     ),
                 )
@@ -549,8 +557,7 @@ async def view_public_offer(
                         )
                     ),
                     callback_data='admin_public_offer_edit',
-                    icon='document',
-                    style='primary',
+                    icon='edit',
                 )
             ],
         ]
@@ -585,10 +592,12 @@ async def show_public_offer_html_help(
                 admin_back_button(
                     texts,
                     'admin_public_offer_edit',
-                    label=_label(
-                        texts.t(
-                            'ADMIN_PUBLIC_OFFER_RETURN_TO_EDIT',
-                            'Назад к редактированию',
+                    label=_back_label(
+                        _label(
+                            texts.t(
+                                'ADMIN_PUBLIC_OFFER_RETURN_TO_EDIT',
+                                'Назад к редактированию',
+                            )
                         )
                     ),
                 )
@@ -600,10 +609,12 @@ async def show_public_offer_html_help(
             admin_back_button(
                 texts,
                 'admin_public_offer',
-                label=_label(
-                    texts.t(
-                        'ADMIN_PUBLIC_OFFER_BACK_BUTTON',
-                        'К настройкам оферты',
+                label=_back_label(
+                    _label(
+                        texts.t(
+                            'ADMIN_PUBLIC_OFFER_BACK_BUTTON',
+                            'К настройкам оферты',
+                        )
                     )
                 ),
             )

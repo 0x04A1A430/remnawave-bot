@@ -688,7 +688,6 @@ async def handle_admin_inline_query(inline_query: types.InlineQuery) -> None:
                         ).format(n=parsed.multi_count),
                         url=deep_link,
                         icon='gift',
-                        style='success',
                     )
                 ]
             ]
@@ -793,7 +792,6 @@ async def handle_admin_inline_query(inline_query: types.InlineQuery) -> None:
                     texts.t('INLINE_GIFT_ACTIVATE_BUTTON', 'Активировать'),
                     url=deep_link,
                     icon='gift',
-                    style='success',
                 )
             ]
         ]

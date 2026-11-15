@@ -22,6 +22,15 @@ from app.utils.validators import get_html_help_text, validate_html_tags
 logger = structlog.get_logger(__name__)
 
 
+def _back_label(value: str) -> str:
+    """Подпись кнопки возврата: стрелка в тексте вместо premium-иконки."""
+
+    label = (value or '').strip()
+    if not label or label.lower().startswith(('←', '◀', '⬅', '⏪')):
+        return label
+    return f'← {label}'
+
+
 def _label(text: str) -> str:
     """Текст кнопки без ведущего глифа локали: иконку даёт ``admin_button``."""
     return strip_leading_emoji(text.strip())
@@ -155,8 +164,7 @@ async def _build_overview(
             admin_button(
                 _label(texts.t('ADMIN_FAQ_ADD_PAGE_BUTTON', 'Добавить страницу')),
                 callback_data='admin_faq_create',
-                icon='faq',
-                style='success',
+                icon='plus',
             )
         ]
     )
@@ -200,7 +208,6 @@ async def _build_overview(
                 ),
                 callback_data='admin_faq_display_mode',
                 icon='settings',
-                style='primary',
             )
         ]
     )
@@ -210,8 +217,7 @@ async def _build_overview(
             admin_button(
                 _label(texts.t('ADMIN_FAQ_HTML_HELP', 'HTML помощь')),
                 callback_data='admin_faq_help',
-                icon='document',
-                style='primary',
+                icon='question',
             )
         ]
     )
@@ -326,7 +332,7 @@ async def start_create_faq_page(
                     admin_button(
                         _label(texts.t('ADMIN_FAQ_CANCEL_BUTTON', 'Отмена')),
                         callback_data='admin_faq_cancel',
-                        style='danger',
+                        icon='cross',
                     )
                 ]
             ]
@@ -487,7 +493,7 @@ async def process_new_faq_content(
                 admin_back_button(
                     texts,
                     'admin_faq',
-                    label=_label(texts.t('ADMIN_FAQ_BACK_TO_LIST', 'К настройкам FAQ')),
+                    label=_back_label(_label(texts.t('ADMIN_FAQ_BACK_TO_LIST', 'К настройкам FAQ'))),
                 )
             ]
         ]
@@ -595,8 +601,7 @@ async def show_faq_page_details(
             admin_button(
                 _label(texts.t('ADMIN_FAQ_EDIT_TITLE_BUTTON', 'Изменить заголовок')),
                 callback_data=f'admin_faq_edit_title:{page.id}',
-                icon='document',
-                style='primary',
+                icon='edit',
             )
         ]
     )
@@ -605,8 +610,7 @@ async def show_faq_page_details(
             admin_button(
                 _label(texts.t('ADMIN_FAQ_EDIT_CONTENT_BUTTON', 'Изменить текст')),
                 callback_data=f'admin_faq_edit_content:{page.id}',
-                icon='document',
-                style='primary',
+                icon='edit',
             )
         ]
     )
@@ -635,14 +639,12 @@ async def show_faq_page_details(
             admin_button(
                 _label(texts.t('ADMIN_FAQ_PAGE_MOVE_UP', 'Выше')),
                 callback_data=f'admin_faq_move:{page.id}:up',
-                icon='refresh',
-                style='primary',
+                icon='arrow_up',
             ),
             admin_button(
                 _label(texts.t('ADMIN_FAQ_PAGE_MOVE_DOWN', 'Ниже')),
                 callback_data=f'admin_faq_move:{page.id}:down',
-                icon='refresh',
-                style='primary',
+                icon='arrow_down',
             ),
         ]
     )
@@ -653,7 +655,6 @@ async def show_faq_page_details(
                 _label(texts.t('ADMIN_FAQ_PAGE_DELETE_BUTTON', 'Удалить')),
                 callback_data=f'admin_faq_delete:{page.id}',
                 icon='delete',
-                style='danger',
             )
         ]
     )
@@ -663,7 +664,7 @@ async def show_faq_page_details(
             admin_back_button(
                 texts,
                 'admin_faq',
-                label=_label(texts.t('ADMIN_FAQ_BACK_TO_LIST', 'К настройкам FAQ')),
+                label=_back_label(_label(texts.t('ADMIN_FAQ_BACK_TO_LIST', 'К настройкам FAQ'))),
             )
         ]
     )
@@ -729,7 +730,7 @@ async def start_edit_faq_title(
                     admin_button(
                         _label(texts.t('ADMIN_FAQ_CANCEL_BUTTON', 'Отмена')),
                         callback_data=f'admin_faq_page:{page.id}',
-                        style='danger',
+                        icon='cross',
                     )
                 ]
             ]
@@ -816,7 +817,7 @@ async def process_edit_faq_title(
                     admin_back_button(
                         texts,
                         'admin_faq',
-                        label=_label(texts.t('ADMIN_FAQ_BACK_TO_LIST', 'К настройкам FAQ')),
+                        label=_back_label(_label(texts.t('ADMIN_FAQ_BACK_TO_LIST', 'К настройкам FAQ'))),
                     )
                 ]
             ]
@@ -875,7 +876,7 @@ async def start_edit_faq_content(
                     admin_button(
                         _label(texts.t('ADMIN_FAQ_CANCEL_BUTTON', 'Отмена')),
                         callback_data=f'admin_faq_page:{page.id}',
-                        style='danger',
+                        icon='cross',
                     )
                 ]
             ]
@@ -977,7 +978,7 @@ async def process_edit_faq_content(
                     admin_back_button(
                         texts,
                         'admin_faq',
-                        label=_label(texts.t('ADMIN_FAQ_BACK_TO_LIST', 'К настройкам FAQ')),
+                        label=_back_label(_label(texts.t('ADMIN_FAQ_BACK_TO_LIST', 'К настройкам FAQ'))),
                     )
                 ]
             ]
@@ -1163,13 +1164,13 @@ async def show_faq_html_help(
             admin_back_button(
                 texts,
                 'admin_faq',
-                label=_label(texts.t('ADMIN_FAQ_BACK_TO_LIST', 'К настройкам FAQ')),
+                label=_back_label(_label(texts.t('ADMIN_FAQ_BACK_TO_LIST', 'К настройкам FAQ'))),
             )
         ]
     ]
 
     await callback.message.edit_text(
-        admin_screen(help_text, icon='document'),
+        admin_screen(help_text, icon='question'),
         reply_markup=types.InlineKeyboardMarkup(inline_keyboard=buttons),
         parse_mode='HTML',
     )

@@ -1,4 +1,5 @@
 import html
+import re
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 
 import structlog
@@ -27,13 +28,30 @@ from app.handlers.admin.messages import (
 from app.keyboards.admin import get_admin_communications_submenu_keyboard
 from app.localization.texts import get_texts
 from app.services.poll_service import send_poll_to_users
-from app.utils.admin_ui import admin_back_button, admin_button, admin_screen
+from app.utils.admin_ui import admin_back_button, admin_button, admin_heading, admin_icon, admin_quote, admin_screen
 from app.utils.decorators import admin_required, error_handler
 from app.utils.miniapp_buttons import strip_leading_emoji
 from app.utils.validators import get_html_help_text, validate_html_tags
 
 
 logger = structlog.get_logger(__name__)
+
+_BOLD_TAGS_RE = re.compile(r'</?b>')
+
+
+def _heading(icon: str, title: str) -> str:
+    """Заголовок с premium-иконкой и <b>; существующие теги не дублируются."""
+    return admin_heading(icon, _BOLD_TAGS_RE.sub('', title or '').strip())
+
+
+def _prompt_body(raw: str) -> str:
+    """Промпт без повторённого заголовка экрана из локали."""
+    prepared = (raw or '').strip()
+    if '\n\n' in prepared:
+        head, _, body = prepared.partition('\n\n')
+        if '<b>' in head or '<tg-emoji' in head:
+            return body.strip()
+    return prepared
 
 
 def _safe_format_price(amount_kopeks: int) -> str:
@@ -152,106 +170,83 @@ def _render_creation_progress(
     status_message: str | None = None,
     error_message: str | None = None,
 ) -> str:
-    lines: list[str] = [texts.t('ADMIN_POLLS_CREATION_HEADER')]
-
-    title_prompt = texts.t(
-        'ADMIN_POLLS_CREATION_TITLE_PROMPT',
-        'Введите заголовок опроса:',
-    )
-    lines.append('')
-    lines.append(title_prompt)
+    heading = _heading('stats', texts.t('ADMIN_POLLS_CREATION_HEADER', '<b>Создание опроса</b>'))
+    params: list[str] = []
 
     title = data.get('title')
     if title:
-        lines.append(f'• {html.escape(title)}')
-
-    if next_step == 'title':
-        if error_message:
-            lines.append('')
-            lines.append(error_message)
-        return admin_screen('\n'.join(lines), icon='stats', compact=True)
-
-    description_prompt = texts.t(
-        'ADMIN_POLLS_CREATION_DESCRIPTION_PROMPT',
-        'Введите описание опроса. HTML разрешён.\nОтправьте /skip, чтобы пропустить.',
-    )
-
-    lines.append('')
-    lines.append(description_prompt)
+        params.append(f'{admin_icon("edit")} {html.escape(title)}')
 
     if 'description' in data:
         description = data.get('description')
         if description:
-            lines.append(f'• {description}')
+            params.append(f'{admin_icon("document")} {description}')
         else:
-            lines.append(
-                '• '
+            params.append(
+                f'{admin_icon("document")} '
                 + texts.t(
                     'ADMIN_POLLS_CREATION_DESCRIPTION_SKIPPED',
                     'Описание пропущено.',
                 )
             )
-    else:
-        lines.append('')
-        lines.append(get_html_help_text())
-
-    if next_step == 'description':
-        if error_message:
-            lines.append('')
-            lines.append(error_message)
-        return admin_screen('\n'.join(lines), icon='stats', compact=True)
-
-    reward_prompt = texts.t(
-        'ADMIN_POLLS_CREATION_REWARD_PROMPT',
-        'Введите сумму награды в рублях. Отправьте 0 чтобы отключить награду.',
-    )
-
-    lines.append('')
-    lines.append(reward_prompt)
 
     if 'reward_enabled' in data:
         if data.get('reward_enabled'):
-            amount = data.get('reward_amount_kopeks', 0)
-            lines.append(f'• {_safe_format_price(amount)}')
+            params.append(
+                f'{admin_icon("gift")} '
+                + texts.t('ADMIN_POLLS_REWARD_ENABLED', 'Награда: {amount}').format(
+                    amount=_safe_format_price(data.get('reward_amount_kopeks', 0))
+                )
+            )
         else:
-            lines.append(texts.t('ADMIN_POLLS_REWARD_DISABLED', 'Награда отключена'))
-
-    if next_step == 'reward':
-        if error_message:
-            lines.append('')
-            lines.append(error_message)
-        return admin_screen('\n'.join(lines), icon='stats', compact=True)
-
-    question_prompt = texts.t(
-        'ADMIN_POLLS_CREATION_QUESTION_PROMPT',
-        (
-            'Введите вопрос и варианты ответов.\n'
-            'Каждая строка — отдельный вариант.\n'
-            'Первая строка — текст вопроса.\n'
-            'Отправьте /done, когда вопросы будут добавлены.'
-        ),
-    )
-
-    lines.append('')
-    lines.append(question_prompt)
+            params.append(f'{admin_icon("gift")} ' + texts.t('ADMIN_POLLS_REWARD_DISABLED', 'Награда отключена'))
 
     questions = data.get('questions', [])
     if questions:
-        lines.append('')
+        params.append(
+            f'{admin_icon("question")} '
+            + texts.t('ADMIN_POLLS_QUESTIONS_COUNT', 'Вопросов: {count}').format(count=len(questions))
+        )
         for idx, question in enumerate(questions, start=1):
-            lines.append(f'{idx}. {html.escape(question["text"])}')
+            params.append(f'{idx}. {html.escape(question["text"])}')
             for option in question['options']:
-                lines.append(f'   • {html.escape(option)}')
+                params.append(f'   • {html.escape(option)}')
+
+    prompts = {
+        'title': texts.t('ADMIN_POLLS_CREATION_TITLE_PROMPT', 'Введите заголовок опроса:'),
+        'description': texts.t(
+            'ADMIN_POLLS_CREATION_DESCRIPTION_PROMPT',
+            'Введите описание опроса. HTML разрешён.\nОтправьте /skip, чтобы пропустить.',
+        ),
+        'reward': texts.t(
+            'ADMIN_POLLS_CREATION_REWARD_PROMPT',
+            'Введите сумму награды в рублях. Отправьте 0 чтобы отключить награду.',
+        ),
+        'questions': texts.t(
+            'ADMIN_POLLS_CREATION_QUESTION_PROMPT',
+            (
+                'Введите вопрос и варианты ответов.\n'
+                'Каждая строка — отдельный вариант.\n'
+                'Первая строка — текст вопроса.\n'
+                'Отправьте /done, когда вопросы будут добавлены.'
+            ),
+        ),
+    }
+
+    blocks = [heading]
+    if params:
+        blocks.append(admin_quote('\n'.join(params)))
+    blocks.append(_prompt_body(prompts.get(next_step, '')))
+
+    if next_step == 'description' and 'description' not in data:
+        blocks.append(get_html_help_text())
 
     if status_message:
-        lines.append('')
-        lines.append(status_message)
-
+        blocks.append(status_message)
     if error_message:
-        lines.append('')
-        lines.append(error_message)
+        blocks.append(error_message)
 
-    return admin_screen('\n'.join(lines), icon='stats', compact=True)
+    return '\n\n'.join(block for block in blocks if block)
 
 
 class PollCreationStates(StatesGroup):
@@ -271,6 +266,7 @@ def _build_polls_keyboard(polls: list[Poll], language: str) -> types.InlineKeybo
                 admin_button(
                     poll.title[:40],
                     callback_data=f'poll_view:{poll.id}',
+                    icon='stats',
                 )
             ]
         )
@@ -280,7 +276,7 @@ def _build_polls_keyboard(polls: list[Poll], language: str) -> types.InlineKeybo
             admin_button(
                 strip_leading_emoji(texts.t('ADMIN_POLLS_CREATE', 'Создать опрос')),
                 callback_data='poll_create',
-                style='success',
+                icon='plus',
             )
         ]
     )
@@ -308,7 +304,6 @@ def _build_poll_details_keyboard(poll_id: int, language: str) -> types.InlineKey
                     strip_leading_emoji(texts.t('ADMIN_POLLS_SEND', 'Отправить')),
                     callback_data=f'poll_send:{poll_id}',
                     icon='success',
-                    style='success',
                 )
             ],
             [
@@ -316,7 +311,6 @@ def _build_poll_details_keyboard(poll_id: int, language: str) -> types.InlineKey
                     strip_leading_emoji(texts.t('ADMIN_POLLS_STATS', 'Статистика')),
                     callback_data=f'poll_stats:{poll_id}',
                     icon='stats',
-                    style='primary',
                 )
             ],
             [
@@ -324,7 +318,6 @@ def _build_poll_details_keyboard(poll_id: int, language: str) -> types.InlineKey
                     strip_leading_emoji(texts.t('ADMIN_POLLS_DELETE', 'Удалить')),
                     callback_data=f'poll_delete:{poll_id}',
                     icon='delete',
-                    style='danger',
                 )
             ],
             [
@@ -341,10 +334,22 @@ def _build_poll_details_keyboard(poll_id: int, language: str) -> types.InlineKey
 def _build_target_keyboard(poll_id: int, language: str) -> types.InlineKeyboardMarkup:
     texts = get_texts(language)
 
+    target_icons = {
+        'all': 'users',
+        'active': 'success',
+        'trial': 'trials',
+        'no': 'prohibit',
+        'expiring': 'clock',
+        'expired': 'lock',
+        'active_zero': 'warning',
+        'trial_zero': 'warning',
+    }
+
     def _target_button(label_key: str, default: str, target: str) -> types.InlineKeyboardButton:
         return admin_button(
             strip_leading_emoji(texts.t(label_key, default)),
             callback_data=f'poll_target:{poll_id}:{target}',
+            icon=target_icons.get(target, 'users'),
         )
 
     return types.InlineKeyboardMarkup(
@@ -369,7 +374,7 @@ def _build_target_keyboard(poll_id: int, language: str) -> types.InlineKeyboardM
                 admin_button(
                     strip_leading_emoji(texts.t('ADMIN_POLLS_CUSTOM_TARGET', 'По критериям')),
                     callback_data=f'poll_custom_menu:{poll_id}',
-                    style='primary',
+                    icon='filter',
                 )
             ],
             [admin_back_button(texts, f'poll_view:{poll_id}')],
@@ -380,10 +385,22 @@ def _build_target_keyboard(poll_id: int, language: str) -> types.InlineKeyboardM
 def _build_custom_target_keyboard(poll_id: int, language: str) -> types.InlineKeyboardMarkup:
     texts = get_texts(language)
 
+    criteria_icons = {
+        'today': 'calendar',
+        'week': 'calendar',
+        'month': 'calendar',
+        'active_today': 'eye',
+        'inactive_week': 'clock',
+        'inactive_month': 'clock',
+        'referrals': 'referrals',
+        'direct': 'user',
+    }
+
     def _criteria_button(label_key: str, default: str, criteria: str) -> types.InlineKeyboardButton:
         return admin_button(
             strip_leading_emoji(texts.t(label_key, default)),
             callback_data=f'poll_custom_target:{poll_id}:{criteria}',
+            icon=criteria_icons.get(criteria, 'filter'),
         )
 
     return types.InlineKeyboardMarkup(
@@ -417,7 +434,7 @@ def _build_send_confirmation_keyboard(poll_id: int, target: str, language: str) 
                 admin_button(
                     strip_leading_emoji(texts.t('ADMIN_POLLS_SEND_CONFIRM_BUTTON', 'Отправить')),
                     callback_data=f'poll_send_confirm:{poll_id}:{target}',
-                    style='success',
+                    icon='broadcast',
                 )
             ],
             [admin_back_button(texts, f'poll_send:{poll_id}')],
@@ -431,20 +448,23 @@ async def show_polls_panel(callback: types.CallbackQuery, db_user: User, db: Asy
     polls = await list_polls(db)
     texts = get_texts(db_user.language)
 
-    lines = [texts.t('ADMIN_POLLS_LIST_TITLE', '<b>Опросы</b>'), '']
+    heading = _heading('stats', texts.t('ADMIN_POLLS_LIST_TITLE', '<b>Опросы</b>'))
     if not polls:
-        lines.append(texts.t('ADMIN_POLLS_LIST_EMPTY', 'Опросов пока нет.'))
+        text = f'{heading}\n\n{texts.t("ADMIN_POLLS_LIST_EMPTY", "Опросов пока нет.")}'
     else:
+        lines = []
         for poll in polls[:10]:
             reward = _format_reward_text(poll, db_user.language)
+            questions = texts.t('ADMIN_POLLS_QUESTIONS_COUNT', 'Вопросов: {count}').format(count=len(poll.questions))
             lines.append(
-                f'• <b>{html.escape(poll.title)}</b> — '
-                f'{texts.t("ADMIN_POLLS_QUESTIONS_COUNT", "Вопросов: {count}").format(count=len(poll.questions))}\n'
-                f'  {reward}'
+                f'{admin_icon("stats")} <b>{html.escape(poll.title)}</b>\n'
+                f'   {admin_icon("question")} {questions}\n'
+                f'   {admin_icon("gift")} {reward}'
             )
+        text = f'{heading}\n\n{admin_quote(chr(10).join(lines))}'
 
     await callback.message.edit_text(
-        admin_screen('\n'.join(lines), icon='stats', compact=True),
+        text,
         reply_markup=_build_polls_keyboard(polls, db_user.language),
         parse_mode='HTML',
     )
@@ -847,22 +867,29 @@ async def process_poll_question(
 
 async def _render_poll_details(poll: Poll, language: str) -> str:
     texts = get_texts(language)
-    lines = [f'<b>{html.escape(poll.title)}</b>']
-    if poll.description:
-        lines.append(html.escape(poll.description))
+    heading = _heading('stats', poll.title)
 
-    lines.append(_format_reward_text(poll, language))
-    lines.append(texts.t('ADMIN_POLLS_QUESTIONS_COUNT', 'Вопросов: {count}').format(count=len(poll.questions)))
+    meta = [f'{admin_icon("gift")} {_format_reward_text(poll, language)}']
+    meta.append(
+        f'{admin_icon("question")} '
+        + texts.t('ADMIN_POLLS_QUESTIONS_COUNT', 'Вопросов: {count}').format(count=len(poll.questions))
+    )
+    if poll.description:
+        meta.insert(0, f'{admin_icon("document")} {html.escape(poll.description)}')
+
+    blocks = [heading, admin_quote('\n'.join(meta))]
 
     if poll.questions:
-        lines.append('')
-        lines.append(texts.t('ADMIN_POLLS_QUESTION_LIST_HEADER', '<b>Вопросы:</b>'))
+        questions = [texts.t('ADMIN_POLLS_QUESTION_LIST_HEADER', '<b>Вопросы:</b>')]
         for idx, question in enumerate(sorted(poll.questions, key=lambda q: q.order), start=1):
-            lines.append(f'{idx}. {html.escape(question.text)}')
+            questions.append(f'<b>{idx}. {html.escape(question.text)}</b>')
             for option in sorted(question.options, key=lambda o: o.order):
-                lines.append(texts.t('ADMIN_POLLS_OPTION_BULLET', '• {option}').format(option=html.escape(option.text)))
+                questions.append(
+                    '   ' + texts.t('ADMIN_POLLS_OPTION_BULLET', '• {option}').format(option=html.escape(option.text))
+                )
+        blocks.append('\n'.join(questions))
 
-    return admin_screen('\n'.join(lines), icon='stats', compact=True)
+    return '\n\n'.join(block for block in blocks if block)
 
 
 @admin_required
@@ -951,13 +978,12 @@ async def _show_send_confirmation(
 
     audience_name = get_target_display_name(target)
     texts = get_texts(db_user.language)
-    confirmation_text = admin_screen(
+    confirmation_text = _heading(
+        'question',
         texts.t(
             'ADMIN_POLLS_SEND_CONFIRM',
             'Отправить опрос «{title}» аудитории «{audience}»? Пользователей: {count}',
         ).format(title=html.escape(poll.title), audience=audience_name, count=user_count),
-        icon='question',
-        compact=True,
     )
 
     await callback.message.edit_text(
@@ -1034,14 +1060,16 @@ async def confirm_poll_send(
 
     result = await send_poll_to_users(callback.bot, db, poll, users)
 
-    result_text = admin_screen(
+    result_lines = (
         texts.t(
             'ADMIN_POLLS_SEND_RESULT',
             'Отправка завершена\nУспешно: {sent}\nОшибок: {failed}\nПропущено: {skipped}\nВсего: {total}',
-        ).format(**result),
-        icon='success',
-        compact=True,
+        )
+        .format(**result)
+        .split('\n')
     )
+    summary_lines = [f'{admin_icon("check")} {line}' for line in result_lines[1:] if line]
+    result_text = f'{_heading("success", result_lines[0])}\n\n{admin_quote(chr(10).join(summary_lines))}'
 
     await callback.message.edit_text(
         result_text,
@@ -1068,31 +1096,31 @@ async def show_poll_stats(
     texts = get_texts(db_user.language)
 
     reward_sum = settings.format_price(stats['reward_sum_kopeks'])
-    lines = [texts.t('ADMIN_POLLS_STATS_HEADER', '<b>Статистика опроса</b>'), '']
-    lines.append(
-        texts.t(
-            'ADMIN_POLLS_STATS_OVERVIEW',
-            'Всего приглашено: {total}\nЗавершили: {completed}\nВыплачено наград: {reward}',
-        ).format(
-            total=stats['total_responses'],
-            completed=stats['completed_responses'],
-            reward=reward_sum,
-        )
+    heading = _heading('chart', texts.t('ADMIN_POLLS_STATS_HEADER', '<b>Статистика опроса</b>'))
+    overview = texts.t(
+        'ADMIN_POLLS_STATS_OVERVIEW',
+        'Всего приглашено: {total}\nЗавершили: {completed}\nВыплачено наград: {reward}',
+    ).format(
+        total=stats['total_responses'],
+        completed=stats['completed_responses'],
+        reward=reward_sum,
     )
+    blocks = [heading, admin_quote(overview)]
 
     for question in stats['questions']:
-        lines.append('')
-        lines.append(f'<b>{html.escape(question["text"])}</b>')
+        lines = [f'<b>{html.escape(question["text"])}</b>']
         for option in question['options']:
             lines.append(
-                texts.t(
+                '   '
+                + texts.t(
                     'ADMIN_POLLS_STATS_OPTION_LINE',
                     '• {option}: {count}',
                 ).format(option=html.escape(option['text']), count=option['count'])
             )
+        blocks.append('\n'.join(lines))
 
     await callback.message.edit_text(
-        admin_screen('\n'.join(lines), icon='stats', compact=True),
+        '\n\n'.join(blocks),
         reply_markup=_build_poll_details_keyboard(poll.id, db_user.language),
         parse_mode='HTML',
     )
@@ -1129,7 +1157,6 @@ async def confirm_poll_delete(
                         strip_leading_emoji(texts.t('ADMIN_POLLS_DELETE', 'Удалить')),
                         callback_data=f'poll_delete_confirm:{poll_id}',
                         icon='delete',
-                        style='danger',
                     )
                 ],
                 [admin_back_button(texts, f'poll_view:{poll_id}')],

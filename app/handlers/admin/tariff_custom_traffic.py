@@ -17,7 +17,7 @@ from app.services.tariff_custom_traffic import (
     validate_custom_traffic_configuration,
 )
 from app.states import AdminStates
-from app.utils.admin_ui import admin_back_button, admin_button, admin_screen
+from app.utils.admin_ui import admin_back_button, admin_button, admin_heading, admin_icon, admin_quote, admin_screen
 from app.utils.decorators import admin_required, error_handler
 from app.utils.formatting import format_price_kopeks
 from app.utils.miniapp_buttons import strip_leading_emoji
@@ -47,6 +47,25 @@ def _format_custom_traffic_value(value: int | None, suffix: str = '', language: 
     return f'{value}{suffix}'
 
 
+def _plain_title(text: str) -> str:
+    """Убирает HTML-обёртку из локализованного заголовка перед admin_heading."""
+    return text.replace('<b>', '').replace('</b>', '').strip()
+
+
+def _traffic_screen(icon: str, title: str, lines: list[str], hint: str = '') -> str:
+    body = '\n'.join(line for line in lines if line).strip()
+    parts = [admin_heading(icon, title), '', admin_quote(body)]
+    if hint:
+        parts.extend(['', hint])
+    return admin_screen('\n'.join(parts), compact=True)
+
+
+def _traffic_notice(icon: str, message: str) -> str:
+    if '\n' in message or len(message) > 90:
+        return admin_screen(f'{admin_heading(icon, "Внимание")}\n\n{admin_quote(message)}', compact=True)
+    return admin_screen(admin_heading(icon, message), compact=True)
+
+
 def format_custom_traffic_settings(tariff: Tariff, language: str = 'ru') -> str:
     """Format custom-traffic state for the main tariff card."""
     enabled = getattr(tariff, 'custom_traffic_enabled', False)
@@ -71,13 +90,13 @@ def format_custom_traffic_settings(tariff: Tariff, language: str = 'ru') -> str:
         maximum, get_texts(language).t('ADMIN_TARIFF_HELPER_GB_SUFFIX', ' ГБ'), language=language
     )
 
-    return (
-        get_texts(language)
-        .t(
-            'ADMIN_TARIFF_HELPER_FORMAT_CUSTOM_TRAFFIC_SETTINGS_1',
-            '{v0}\n• Цена за 1 ГБ: {v1}\n• Минимальный объём: {v2}\n• Максимальный объём: {v3}',
-        )
-        .format(v0=status, v1=price_display, v2=minimum_display, v3=maximum_display)
+    return '\n'.join(
+        [
+            f'{admin_icon("check" if enabled else "prohibit")} Статус: <b>{status}</b>',
+            f'{admin_icon("money")} Цена за 1 ГБ: <b>{price_display}</b>',
+            f'{admin_icon("stats")} Минимальный объём: <b>{minimum_display}</b>',
+            f'{admin_icon("stats")} Максимальный объём: <b>{maximum_display}</b>',
+        ]
     )
 
 
@@ -105,13 +124,22 @@ def render_custom_traffic_settings(tariff: Tariff, language: str = 'ru') -> str:
         maximum, get_texts(language).t('ADMIN_TARIFF_HELPER_GB_SUFFIX', ' ГБ'), language=language
     )
 
-    return (
-        get_texts(language)
-        .t(
-            'ADMIN_TARIFF_HELPER_RENDER_CUSTOM_TRAFFIC_SETTINGS_1',
-            '<b>Произвольный трафик</b>\n\nТариф: <b>{v0}</b>\n\nСтатус: {v1}\nЦена за 1 ГБ: <b>{v2}</b>\nМинимальный объём: <b>{v3}</b>\nМаксимальный объём: <b>{v4}</b>\n\nПользователь сможет выбрать объём трафика в указанных границах. Цена выбранного объёма добавляется к цене периода.',
-        )
-        .format(v0=html.escape(tariff.name), v1=status, v2=price_display, v3=minimum_display, v4=maximum_display)
+    lines = [
+        f'{admin_icon("tariff")} Тариф: <b>{html.escape(tariff.name)}</b>',
+        f'{admin_icon("check" if enabled else "prohibit")} Статус: <b>{status}</b>',
+        f'{admin_icon("money")} Цена за 1 ГБ: <b>{price_display}</b>',
+        f'{admin_icon("stats")} Минимальный объём: <b>{minimum_display}</b>',
+        f'{admin_icon("stats")} Максимальный объём: <b>{maximum_display}</b>',
+    ]
+    hint = get_texts(language).t(
+        'ADMIN_TARIFF_HELPER_CUSTOM_TRAFFIC_HINT',
+        'Пользователь сможет выбрать объём трафика в указанных границах. Цена выбранного объёма добавляется к цене периода.',
+    )
+    return _traffic_screen(
+        'stats',
+        get_texts(language).t('ADMIN_TARIFF_HELPER_CUSTOM_TRAFFIC_TITLE', 'Произвольный трафик'),
+        lines,
+        hint,
     )
 
 
@@ -132,7 +160,6 @@ def get_custom_traffic_keyboard(tariff: Tariff, language: str) -> InlineKeyboard
                     toggle_text,
                     callback_data=f'admin_tariff_toggle_custom_traffic:{tariff.id}',
                     icon='lock' if enabled else 'success',
-                    style='danger' if enabled else 'success',
                 )
             ],
             [
@@ -140,7 +167,6 @@ def get_custom_traffic_keyboard(tariff: Tariff, language: str) -> InlineKeyboard
                     strip_leading_emoji(texts.t('ADMIN_TARIFF_HELPER_TRAFFIC_PRICE_BUTTON', 'Цена за 1 ГБ')),
                     callback_data=f'admin_tariff_edit_custom_traffic_price:{tariff.id}',
                     icon='money',
-                    style='primary',
                 )
             ],
             [
@@ -148,7 +174,6 @@ def get_custom_traffic_keyboard(tariff: Tariff, language: str) -> InlineKeyboard
                     strip_leading_emoji(texts.t('ADMIN_TARIFF_HELPER_MIN_TRAFFIC_BUTTON', 'Минимальный объём')),
                     callback_data=f'admin_tariff_edit_custom_traffic_min:{tariff.id}',
                     icon='stats',
-                    style='primary',
                 )
             ],
             [
@@ -156,7 +181,6 @@ def get_custom_traffic_keyboard(tariff: Tariff, language: str) -> InlineKeyboard
                     strip_leading_emoji(texts.t('ADMIN_TARIFF_HELPER_MAX_TRAFFIC_BUTTON', 'Максимальный объём')),
                     callback_data=f'admin_tariff_edit_custom_traffic_max:{tariff.id}',
                     icon='stats',
-                    style='primary',
                 )
             ],
             [admin_back_button(texts, f'admin_tariff_view:{tariff.id}')],
@@ -184,11 +208,7 @@ async def show_custom_traffic_settings(
         return
 
     await callback.message.edit_text(
-        admin_screen(
-            strip_leading_emoji(render_custom_traffic_settings(tariff, language=db_user.language)),
-            icon='tariff',
-            compact=True,
-        ),
+        render_custom_traffic_settings(tariff, language=db_user.language),
         reply_markup=get_custom_traffic_keyboard(tariff, db_user.language),
         parse_mode='HTML',
     )
@@ -239,11 +259,7 @@ async def toggle_custom_traffic(
         )
 
     await callback.message.edit_text(
-        admin_screen(
-            strip_leading_emoji(render_custom_traffic_settings(tariff, language=db_user.language)),
-            icon='tariff',
-            compact=True,
-        ),
+        render_custom_traffic_settings(tariff, language=db_user.language),
         reply_markup=get_custom_traffic_keyboard(tariff, db_user.language),
         parse_mode='HTML',
     )
@@ -268,20 +284,14 @@ async def _start_custom_traffic_field_edit(
     texts = get_texts(db_user.language)
 
     await callback.message.edit_text(
-        admin_screen(
-            get_texts(db_user.language)
-            .t(
-                'ADMIN_TARIFF_HELPER_START_FIELD_EDIT_1',
-                '{v0}\n\nТариф: <b>{v1}</b>\nТекущее значение: <b>{v2}</b>\n\n{v3}',
-            )
-            .format(
-                v0=strip_leading_emoji(title),
-                v1=html.escape(tariff.name),
-                v2=current_value,
-                v3=prompt,
-            ),
-            icon=icon,
-            compact=True,
+        _traffic_screen(
+            icon,
+            _plain_title(title),
+            [
+                f'{admin_icon("tariff")} Тариф: <b>{html.escape(tariff.name)}</b>',
+                f'{admin_icon("edit")} Текущее значение: <b>{current_value}</b>',
+            ],
+            prompt,
         ),
         reply_markup=InlineKeyboardMarkup(
             inline_keyboard=[
@@ -423,10 +433,9 @@ async def _load_custom_traffic_tariff_from_state(
     tariff = await get_tariff_by_id(db, tariff_id) if tariff_id is not None else None
     if tariff is None:
         await message.answer(
-            admin_screen(
+            _traffic_notice(
+                'warning',
                 get_texts(language).t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'),
-                icon='warning',
-                compact=True,
             ),
             parse_mode='HTML',
         )
@@ -445,8 +454,7 @@ async def _send_custom_traffic_update_result(
     await state.clear()
     await message.answer(
         admin_screen(
-            f'{confirmation}\n\n{render_custom_traffic_settings(tariff, language=db_user.language)}',
-            icon='success',
+            f'{admin_heading("success", confirmation)}\n\n{render_custom_traffic_settings(tariff, language=db_user.language)}',
             compact=True,
         ),
         reply_markup=get_custom_traffic_keyboard(tariff, db_user.language),
@@ -471,13 +479,12 @@ async def process_custom_traffic_price_input(
         price_kopeks = parse_positive_rubles_to_kopeks(message.text or '')
     except ValueError:
         await message.answer(
-            admin_screen(
+            _traffic_notice(
+                'warning',
                 get_texts(db_user.language).t(
                     'ADMIN_TARIFF_HELPER_INVALID_TRAFFIC_PRICE',
                     'Некорректная цена. Введите положительную сумму в рублях с точностью не более двух знаков.\nПример: <code>2</code> или <code>2.50</code>',
                 ),
-                icon='warning',
-                compact=True,
             ),
             parse_mode='HTML',
         )
@@ -512,10 +519,9 @@ async def process_custom_traffic_min_input(
         minimum = parse_positive_gb(message.text or '')
     except ValueError:
         await message.answer(
-            admin_screen(
+            _traffic_notice(
+                'warning',
                 'Введите положительное целое число гигабайт.\nПример: <code>5</code>',
-                icon='warning',
-                compact=True,
             ),
             parse_mode='HTML',
         )
@@ -524,15 +530,14 @@ async def process_custom_traffic_min_input(
     maximum = getattr(tariff, 'max_traffic_gb', None)
     if maximum is not None and maximum > 0 and minimum > maximum:
         await message.answer(
-            admin_screen(
+            _traffic_notice(
+                'warning',
                 get_texts(db_user.language)
                 .t(
                     'ADMIN_TARIFF_HELPER_PROCESS_CUSTOM_TRAFFIC_MIN_INPUT_2',
                     'Минимальный объём не может быть больше текущего максимума ({v0} ГБ).',
                 )
                 .format(v0=maximum),
-                icon='warning',
-                compact=True,
             ),
             parse_mode='HTML',
         )
@@ -567,13 +572,12 @@ async def process_custom_traffic_max_input(
         maximum = parse_positive_gb(message.text or '')
     except ValueError:
         await message.answer(
-            admin_screen(
+            _traffic_notice(
+                'warning',
                 get_texts(db_user.language).t(
                     'ADMIN_TARIFF_HELPER_INVALID_MAX_TRAFFIC',
                     'Введите положительное целое число гигабайт.\nПример: <code>100</code>',
                 ),
-                icon='warning',
-                compact=True,
             ),
             parse_mode='HTML',
         )
@@ -582,15 +586,14 @@ async def process_custom_traffic_max_input(
     minimum = getattr(tariff, 'min_traffic_gb', None)
     if minimum is not None and minimum > 0 and maximum < minimum:
         await message.answer(
-            admin_screen(
+            _traffic_notice(
+                'warning',
                 get_texts(db_user.language)
                 .t(
                     'ADMIN_TARIFF_HELPER_PROCESS_CUSTOM_TRAFFIC_MAX_INPUT_2',
                     'Максимальный объём не может быть меньше текущего минимума ({v0} ГБ).',
                 )
                 .format(v0=minimum),
-                icon='warning',
-                compact=True,
             ),
             parse_mode='HTML',
         )

@@ -1652,6 +1652,10 @@ class AdminNotificationService:
 
         Если указана category и для неё настроен топик — возвращает его.
         Иначе — fallback на self.topic_id (общий топик).
+
+        Единственный источник топиков — settings (ADMIN_NOTIFICATIONS_*_TOPIC_ID),
+        включая тикеты (NotificationCategory.TICKETS →
+        ADMIN_NOTIFICATIONS_TICKET_TOPIC_ID). Хардкод топиков здесь недопустим.
         """
         if category:
             topic = self.category_topics.get(category)

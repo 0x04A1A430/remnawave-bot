@@ -32,7 +32,7 @@ from app.keyboards.admin import (
 )
 from app.localization.texts import Texts, get_texts
 from app.states import AdminStates
-from app.utils.admin_ui import admin_back_button, admin_button, admin_icon, admin_quote, admin_screen
+from app.utils.admin_ui import admin_back_button, admin_button, admin_heading, admin_icon, admin_quote, admin_screen
 from app.utils.decorators import admin_required, error_handler
 from app.utils.miniapp_buttons import strip_leading_emoji
 
@@ -85,11 +85,32 @@ def _format_campaign_summary(campaign, texts) -> str:
     else:
         bonus_info = texts.t('ADMIN_CAMPAIGN_UI_093', ' Неизвестный тип бонуса')
 
-    return admin_quote(
-        texts.t(
+    summary_lines = [
+        line
+        for line in texts.t(
             'ADMIN_CAMPAIGN_UI_000', '<b>{v0}</b>\nСтартовый параметр: <code>{v1}</code>\nСтатус: {v2}\n{v3}\n'
-        ).format(v0=html.escape(campaign.name), v1=html.escape(campaign.start_parameter), v2=status, v3=bonus_info)
-    )
+        )
+        .format(
+            v0=html.escape(campaign.name),
+            v1=html.escape(campaign.start_parameter),
+            v2=status,
+            v3=bonus_info,
+        )
+        .split('\n')
+        if line.strip()
+    ]
+
+    parts = [summary_lines[0]]
+    if len(summary_lines) > 1:
+        parts.append(f'{admin_icon("link")} {summary_lines[1]}')
+    if len(summary_lines) > 2:
+        parts.append(summary_lines[2])
+    reward_lines = summary_lines[3:]
+    if reward_lines:
+        parts.append(f'{admin_icon("gift")} {reward_lines[0]}')
+        parts.extend(f'   {line}' for line in reward_lines[1:])
+
+    return admin_quote('\n'.join(parts))
 
 
 async def _get_bot_deep_link(callback: types.CallbackQuery, start_parameter: str) -> str:
@@ -133,7 +154,6 @@ def _build_campaign_servers_keyboard(
                 'Сохранить',
                 callback_data=save_callback,
                 icon='save',
-                style='success',
             ),
             admin_back_button(texts, back_callback, label='Назад'),
         ]
@@ -158,8 +178,13 @@ def _campaign_edit_cancel_markup(texts, campaign_id: int) -> types.InlineKeyboar
 
 
 def _campaign_screen(text: str, icon: str = 'messages') -> str:
-    """Экран кампании: без legacy-глифов, ведущих пробелов и пустых краёв."""
-    return admin_screen(_clean_legacy(strip_leading_emoji(text or '')), icon=icon, compact=True)
+    """Экран кампании: заголовок с иконкой и блок параметров под ним."""
+    prepared = _clean_legacy(strip_leading_emoji(text or ''))
+    title, separator, body = prepared.partition('\n\n')
+    body = body.strip()
+    if not separator or not body or '<blockquote>' in body.lower():
+        return admin_screen(prepared, icon=icon, compact=True)
+    return f'{admin_screen(title, icon=icon, compact=True)}\n\n{admin_quote(body)}'
 
 
 async def _render_campaign_edit_menu(
@@ -172,11 +197,14 @@ async def _render_campaign_edit_menu(
     use_caption: bool = False,
 ):
     texts = get_texts(language)
-    text = _campaign_screen(
-        texts.t('ADMIN_CAMPAIGN_UI_001', '<b>Редактирование кампании</b>\n\n{v0}').format(
-            v0=_format_campaign_summary(campaign, texts)
-        ),
-        icon='edit',
+    text = '\n\n'.join(
+        [
+            admin_heading(
+                'edit',
+                texts.t('ADMIN_CAMPAIGN_UI_001', '<b>Редактирование кампании</b>\n\n{v0}').split('\n\n', 1)[0].strip(),
+            ),
+            _format_campaign_summary(campaign, texts),
+        ]
     )
 
     edit_kwargs = dict(
@@ -212,13 +240,11 @@ async def show_campaigns_menu(
     texts = get_texts(db_user.language)
     overview = await get_campaigns_overview(db)
 
-    text = (
-        get_texts(db_user.language)
-        .t(
+    menu_blob = _clean_legacy(
+        texts.t(
             'ADMIN_CAMPAIGN_UI_002',
             ' <b>Рекламные кампании</b>\n\nВсего кампаний: <b>{v0}</b>\nАктивных: <b>{v1}</b> | Выключены: <b>{v2}</b>\nРегистраций: <b>{v3}</b>\nВыдано баланса: <b>{v4}</b>\nВыдано подписок: <b>{v5}</b>',
-        )
-        .format(
+        ).format(
             v0=overview['total'],
             v1=overview['active'],
             v2=overview['inactive'],
@@ -227,6 +253,11 @@ async def show_campaigns_menu(
             v5=overview['subscription_total'],
         )
     )
+    menu_title, _, menu_body = menu_blob.partition('\n\n')
+    menu_lines = [line for line in menu_body.split('\n') if line.strip()]
+    menu_icons = ('messages', 'success', 'chart', 'money', 'tariff')
+    menu_stats = '\n'.join(f'{admin_icon(icon)} {line}' for icon, line in zip(menu_icons, menu_lines, strict=False))
+    text = f'{admin_screen(menu_title, icon="messages", compact=True)}\n\n{admin_quote(menu_stats)}'
 
     await callback.message.edit_text(
         _campaign_screen(text),
@@ -246,7 +277,7 @@ async def show_campaigns_overall_stats(
     texts = get_texts(db_user.language)
     overview = await get_campaigns_overview(db)
 
-    text = [get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_009', ' <b>Общая статистика кампаний</b>\n')]
+    text = []
     text.append(
         get_texts(db_user.language)
         .t('ADMIN_CAMPAIGN_UI_010', 'Всего кампаний: <b>{v0}</b>')
@@ -273,8 +304,11 @@ async def show_campaigns_overall_stats(
         .format(v0=overview['subscription_total'])
     )
 
+    stats_icons = ('messages', 'success', 'calendar', 'money', 'tariff')
+    stats_lines = '\n'.join(f'{admin_icon(icon)} {line}' for icon, line in zip(stats_icons, text, strict=False))
+    heading = admin_screen(texts.t('ADMIN_CAMPAIGN_UI_009', '<b>Общая статистика кампаний</b>'), icon='chart')
     await callback.message.edit_text(
-        _campaign_screen('\n'.join(text), icon='stats'),
+        f'{heading}\n\n{admin_quote(stats_lines)}',
         reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[admin_back_button(texts, 'admin_campaigns')]]),
         parse_mode='HTML',
     )
@@ -316,7 +350,6 @@ async def show_campaigns_list(
                             'Создать',
                             callback_data='admin_campaigns_create',
                             icon='plus',
-                            style='success',
                         )
                     ],
                     [admin_back_button(texts, 'admin_campaigns')],
@@ -364,7 +397,6 @@ async def show_campaigns_list(
                 campaign.name,
                 callback_data=f'admin_campaign_manage_{campaign.id}',
                 icon='messages',
-                style='primary',
             )
         ]
         for campaign in campaigns
@@ -381,7 +413,7 @@ async def show_campaigns_list(
     keyboard_rows.extend(pagination.inline_keyboard)
 
     await callback.message.edit_text(
-        _campaign_screen('\n'.join(text_lines), icon='document'),
+        _campaign_screen('\n\n'.join(text_lines), icon='document'),
         reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows),
         parse_mode='HTML',
     )
@@ -408,13 +440,7 @@ async def show_campaign_detail(
     stats = await get_campaign_statistics(db, campaign_id)
     deep_link = await _get_bot_deep_link(callback, campaign.start_parameter)
 
-    text = [get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_017', ' <b>Управление кампанией</b>\n')]
-    text.append(_format_campaign_summary(campaign, texts))
-    text.append('')
-    text.append(
-        get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_018', 'Ссылка: <code>{v0}</code>').format(v0=deep_link)
-    )
-    text.append(get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_019', '\n <b>Статистика</b>'))
+    text: list[str] = []
     text.append(
         get_texts(db_user.language)
         .t('ADMIN_CAMPAIGN_UI_020', '• Регистраций: <b>{v0}</b>')
@@ -468,8 +494,41 @@ async def show_campaign_detail(
     if stats['last_registration']:
         text.append(f'• Последняя: {stats["last_registration"].strftime("%d.%m.%Y %H:%M")}')
 
+    stats_icons = (
+        'users',
+        'money',
+        'tariff',
+        'payments',
+        'trials',
+        'chart',
+        'chart',
+        'chart',
+        'coin',
+        'coin',
+        'clock',
+    )
+    stats_lines = '\n'.join(
+        f'{admin_icon(icon)} {line.lstrip("• ").lstrip()}' for icon, line in zip(stats_icons, text, strict=False)
+    )
+    link_line = get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_018', 'Ссылка: <code>{v0}</code>').format(v0=deep_link)
+    text_blocks = [
+        admin_screen(
+            get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_017', '<b>Управление кампанией</b>'),
+            icon='settings',
+            compact=True,
+        ),
+        _format_campaign_summary(campaign, texts),
+        admin_quote(f'{admin_icon("link")} {link_line}'),
+        admin_screen(
+            get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_019', '<b>Статистика</b>'),
+            icon='chart',
+            compact=True,
+        ),
+        admin_quote(stats_lines),
+    ]
+
     await callback.message.edit_text(
-        _campaign_screen('\n'.join(text), icon='settings'),
+        '\n\n'.join(text_blocks),
         reply_markup=get_campaign_management_keyboard(campaign.id, campaign.is_active, db_user.language),
         parse_mode='HTML',
     )
@@ -1477,9 +1536,7 @@ async def show_campaign_stats(
     texts = get_texts(db_user.language)
     stats = await get_campaign_statistics(db, campaign_id)
 
-    text = [get_texts(db_user.language).t('ADMIN_CAMPAIGN_UI_034', '<b>Статистика кампании</b>\n')]
-    text.append(_format_campaign_summary(campaign, texts))
-    text.append('')
+    text: list[str] = []
     text.append(
         get_texts(db_user.language)
         .t('ADMIN_CAMPAIGN_UI_035', 'Регистраций: <b>{v0}</b>')
@@ -1498,8 +1555,24 @@ async def show_campaign_stats(
     if stats['last_registration']:
         text.append(f'Последняя регистрация: {stats["last_registration"].strftime("%d.%m.%Y %H:%M")}')
 
+    stats_icons = ('users', 'money', 'tariff', 'clock', 'coin')
+    stats_lines = '\n'.join(
+        f'{admin_icon(icon)} {line.lstrip("• ").lstrip()}' for icon, line in zip(stats_icons, text, strict=False)
+    )
     await callback.message.edit_text(
-        _campaign_screen('\n'.join(text), icon='stats'),
+        '\n\n'.join(
+            [
+                admin_heading(
+                    'chart',
+                    get_texts(db_user.language)
+                    .t('ADMIN_CAMPAIGN_UI_034', '<b>Статистика кампании</b>\n')
+                    .split('\n', 1)[0]
+                    .strip(),
+                ),
+                _format_campaign_summary(campaign, texts),
+                admin_quote(stats_lines),
+            ]
+        ),
         reply_markup=types.InlineKeyboardMarkup(
             inline_keyboard=[[admin_back_button(texts, f'admin_campaign_manage_{campaign_id}')]]
         ),
@@ -1767,14 +1840,19 @@ async def select_campaign_bonus_type(
         deep_link = await _get_bot_deep_link(callback, campaign.start_parameter)
         texts = get_texts(db_user.language)
         summary = _format_campaign_summary(campaign, texts)
-        text = (
-            get_texts(db_user.language)
-            .t('ADMIN_CAMPAIGN_UI_004', '<b>Кампания создана!</b>\n\n{v0}\nСсылка: <code>{v1}</code>')
-            .format(v0=summary, v1=html.escape(deep_link))
+        created_blob = get_texts(db_user.language).t(
+            'ADMIN_CAMPAIGN_UI_004', '<b>Кампания создана!</b>\n\n{v0}\nСсылка: <code>{v1}</code>'
+        )
+        text = '\n\n'.join(
+            [
+                admin_heading('success', created_blob.split('\n\n', 1)[0].strip()),
+                summary,
+                admin_quote(f'{admin_icon("link")} <code>{html.escape(deep_link)}</code>'),
+            ]
         )
 
         await callback.message.edit_text(
-            _campaign_screen(text, icon='success'),
+            text,
             reply_markup=get_campaign_management_keyboard(campaign.id, campaign.is_active, db_user.language),
             parse_mode='HTML',
         )
@@ -1828,14 +1906,19 @@ async def process_campaign_balance_value(
     deep_link = await _get_bot_deep_link_from_message(message, campaign.start_parameter)
     texts = get_texts(db_user.language)
     summary = _format_campaign_summary(campaign, texts)
-    text = (
-        get_texts(db_user.language)
-        .t('ADMIN_CAMPAIGN_UI_004', '<b>Кампания создана!</b>\n\n{v0}\nСсылка: <code>{v1}</code>')
-        .format(v0=summary, v1=html.escape(deep_link))
+    created_blob = get_texts(db_user.language).t(
+        'ADMIN_CAMPAIGN_UI_004', '<b>Кампания создана!</b>\n\n{v0}\nСсылка: <code>{v1}</code>'
+    )
+    text = '\n\n'.join(
+        [
+            admin_heading('success', created_blob.split('\n\n', 1)[0].strip()),
+            summary,
+            admin_quote(f'{admin_icon("link")} <code>{html.escape(deep_link)}</code>'),
+        ]
     )
 
     await message.answer(
-        _campaign_screen(text, icon='success'),
+        text,
         reply_markup=get_campaign_management_keyboard(campaign.id, campaign.is_active, db_user.language),
         parse_mode='HTML',
     )
@@ -2044,14 +2127,19 @@ async def finalize_campaign_subscription(
     deep_link = await _get_bot_deep_link(callback, campaign.start_parameter)
     texts = get_texts(db_user.language)
     summary = _format_campaign_summary(campaign, texts)
-    text = (
-        get_texts(db_user.language)
-        .t('ADMIN_CAMPAIGN_UI_004', '<b>Кампания создана!</b>\n\n{v0}\nСсылка: <code>{v1}</code>')
-        .format(v0=summary, v1=html.escape(deep_link))
+    created_blob = get_texts(db_user.language).t(
+        'ADMIN_CAMPAIGN_UI_004', '<b>Кампания создана!</b>\n\n{v0}\nСсылка: <code>{v1}</code>'
+    )
+    text = '\n\n'.join(
+        [
+            admin_heading('success', created_blob.split('\n\n', 1)[0].strip()),
+            summary,
+            admin_quote(f'{admin_icon("link")} <code>{html.escape(deep_link)}</code>'),
+        ]
     )
 
     await callback.message.edit_text(
-        _campaign_screen(text, icon='success'),
+        text,
         reply_markup=get_campaign_management_keyboard(campaign.id, campaign.is_active, db_user.language),
         parse_mode='HTML',
     )
@@ -2154,14 +2242,19 @@ async def process_campaign_tariff_days(
     deep_link = await _get_bot_deep_link_from_message(message, campaign.start_parameter)
     texts = get_texts(db_user.language)
     summary = _format_campaign_summary(campaign, texts)
-    text = (
-        get_texts(db_user.language)
-        .t('ADMIN_CAMPAIGN_UI_004', '<b>Кампания создана!</b>\n\n{v0}\nСсылка: <code>{v1}</code>')
-        .format(v0=summary, v1=html.escape(deep_link))
+    created_blob = get_texts(db_user.language).t(
+        'ADMIN_CAMPAIGN_UI_004', '<b>Кампания создана!</b>\n\n{v0}\nСсылка: <code>{v1}</code>'
+    )
+    text = '\n\n'.join(
+        [
+            admin_heading('success', created_blob.split('\n\n', 1)[0].strip()),
+            summary,
+            admin_quote(f'{admin_icon("link")} <code>{html.escape(deep_link)}</code>'),
+        ]
     )
 
     await message.answer(
-        _campaign_screen(text, icon='success'),
+        text,
         reply_markup=get_campaign_management_keyboard(campaign.id, campaign.is_active, db_user.language),
         parse_mode='HTML',
     )

@@ -18,7 +18,7 @@ from app.database.models import Tariff, User
 from app.localization.texts import get_texts
 from app.services.tariff_squad_sync import schedule_tariff_squad_sync
 from app.states import AdminStates
-from app.utils.admin_ui import admin_back_button, admin_button, admin_screen
+from app.utils.admin_ui import admin_back_button, admin_button, admin_heading, admin_icon, admin_quote, admin_screen
 from app.utils.decorators import admin_required, error_handler
 from app.utils.miniapp_buttons import strip_leading_emoji
 from app.utils.panel_tag import PANEL_TAG_RULES, normalize_panel_tag
@@ -56,36 +56,55 @@ def _lava_display(tariff: Tariff, language: str = 'ru') -> str:
     )
 
 
+def _plain_title(text: str) -> str:
+    return text.replace('<b>', '').replace('</b>', '').strip()
+
+
+def _panel_screen(icon: str, title: str, lines: list[str], hint: str = '') -> str:
+    body = '\n'.join(line for line in lines if line).strip()
+    parts = [admin_heading(icon, title), '', admin_quote(body)]
+    if hint:
+        parts.extend(['', hint])
+    return admin_screen('\n'.join(parts), compact=True)
+
+
+def _panel_notice(icon: str, message: str) -> str:
+    if '\n' in message or len(message) > 90:
+        return admin_screen(f'{admin_heading(icon, "Внимание")}\n\n{admin_quote(message)}', compact=True)
+    return admin_screen(admin_heading(icon, message), compact=True)
+
+
 def format_panel_settings(tariff: Tariff, language: str = 'ru') -> str:
     """Блок для карточки тарифа."""
-    return (
-        get_texts(language)
-        .t(
-            'ADMIN_TARIFF_HELPER_FORMAT_PANEL_SETTINGS_1',
-            '• Тег панели: {v0}\n• Внешний сквад: {v1}\n• Продукт Lava: {v2}\n• В подарках: {v3}\n• Докупка трафика разрешена: {v4}',
-        )
-        .format(
-            v0=_tag_display(tariff, language=language),
-            v1=_ext_squad_display(tariff, language=language),
-            v2=_lava_display(tariff, language=language),
-            v3=_yes_no(getattr(tariff, 'show_in_gift', True), language=language),
-            v4=_yes_no(getattr(tariff, 'allow_traffic_topup', True), language=language),
-        )
+    return '\n'.join(
+        [
+            f'{admin_icon("id")} Тег панели: {_tag_display(tariff, language=language)}',
+            f'{admin_icon("servers")} Внешний сквад: {_ext_squad_display(tariff, language=language)}',
+            f'{admin_icon("link")} Продукт Lava: {_lava_display(tariff, language=language)}',
+            f'{admin_icon("gift")} В подарках: {_yes_no(getattr(tariff, "show_in_gift", True), language=language)}',
+            (
+                f'{admin_icon("coin")} Докупка трафика разрешена: '
+                f'{_yes_no(getattr(tariff, "allow_traffic_topup", True), language=language)}'
+            ),
+        ]
     )
 
 
 def render_panel_settings(tariff: Tariff, language: str = 'ru') -> str:
-    return (
-        get_texts(language)
-        .t(
-            'ADMIN_TARIFF_HELPER_RENDER_PANEL_SETTINGS_1',
-            '<b>Ещё настройки</b>\n\nТариф: <b>{v0}</b>\n\n{v1}\n• Порядок в списке: {v2}\n\nТег панели показывается у пользователя в списке панели Remnawave — по нему видно тариф. Пусто — общий тег из настроек (триальный/платный).',
-        )
-        .format(
-            v0=html.escape(tariff.name),
-            v1=format_panel_settings(tariff, language=language),
-            v2=getattr(tariff, 'display_order', 0),
-        )
+    lines = [
+        f'{admin_icon("tariff")} Тариф: <b>{html.escape(tariff.name)}</b>',
+        format_panel_settings(tariff, language=language),
+        f'{admin_icon("settings")} Порядок в списке: <b>{getattr(tariff, "display_order", 0)}</b>',
+    ]
+    hint = get_texts(language).t(
+        'ADMIN_TARIFF_HELPER_PANEL_HINT',
+        'Тег панели показывается у пользователя в списке панели Remnawave — по нему видно тариф. Пусто — общий тег из настроек (триальный/платный).',
+    )
+    return _panel_screen(
+        'settings',
+        get_texts(language).t('ADMIN_TARIFF_HELPER_PANEL_TITLE', 'Ещё настройки'),
+        lines,
+        hint,
     )
 
 
@@ -100,13 +119,11 @@ def get_panel_settings_keyboard(tariff: Tariff, language: str) -> InlineKeyboard
                     strip_leading_emoji(texts.t('ADMIN_TARIFF_HELPER_TAG_BUTTON', 'Тег панели')),
                     callback_data=f'admin_tariff_edit_panel_tag:{tariff.id}',
                     icon='id',
-                    style='primary',
                 ),
                 admin_button(
                     strip_leading_emoji(texts.t('ADMIN_TARIFF_HELPER_SQUAD_BUTTON', 'Внешний сквад')),
                     callback_data=f'admin_tariff_edit_ext_squad:{tariff.id}',
                     icon='servers',
-                    style='primary',
                 ),
             ],
             [
@@ -114,13 +131,11 @@ def get_panel_settings_keyboard(tariff: Tariff, language: str) -> InlineKeyboard
                     strip_leading_emoji(texts.t('ADMIN_TARIFF_HELPER_LAVA_BUTTON', 'Продукт Lava')),
                     callback_data=f'admin_tariff_edit_lava:{tariff.id}',
                     icon='link',
-                    style='primary',
                 ),
                 admin_button(
                     strip_leading_emoji(texts.t('ADMIN_TARIFF_HELPER_ORDER_BUTTON', 'Порядок')),
                     callback_data=f'admin_tariff_edit_order:{tariff.id}',
                     icon='settings',
-                    style='primary',
                 ),
             ],
             [
@@ -132,7 +147,6 @@ def get_panel_settings_keyboard(tariff: Tariff, language: str) -> InlineKeyboard
                     ),
                     callback_data=f'admin_tariff_toggle_gift:{tariff.id}',
                     icon='gift',
-                    style='success' if not gift else 'danger',
                 )
             ],
             [
@@ -144,7 +158,6 @@ def get_panel_settings_keyboard(tariff: Tariff, language: str) -> InlineKeyboard
                     ),
                     callback_data=f'admin_tariff_toggle_allow_topup:{tariff.id}',
                     icon='coin',
-                    style='success' if not allow_topup else 'danger',
                 )
             ],
             [admin_back_button(texts, f'admin_tariff_view:{tariff.id}')],
@@ -153,11 +166,7 @@ def get_panel_settings_keyboard(tariff: Tariff, language: str) -> InlineKeyboard
 
 
 async def _show(target: types.Message, tariff: Tariff, language: str, *, edit: bool, prefix: str = '') -> None:
-    text = admin_screen(
-        strip_leading_emoji(f'{prefix}{render_panel_settings(tariff, language=language)}'),
-        icon='settings',
-        compact=True,
-    )
+    text = admin_screen(f'{prefix}{render_panel_settings(tariff, language=language)}', compact=True)
     keyboard = get_panel_settings_keyboard(tariff, language)
     if edit:
         await target.edit_text(text, reply_markup=keyboard, parse_mode='HTML')
@@ -236,15 +245,14 @@ async def _start_field_edit(
     await state.update_data(tariff_id=tariff.id, language=db_user.language)
     texts = get_texts(db_user.language)
     await callback.message.edit_text(
-        admin_screen(
-            get_texts(db_user.language)
-            .t(
-                'ADMIN_TARIFF_HELPER_START_FIELD_EDIT_1',
-                '{v0}\n\nТариф: <b>{v1}</b>\nТекущее значение: <b>{v2}</b>\n\n{v3}',
-            )
-            .format(v0=strip_leading_emoji(title), v1=html.escape(tariff.name), v2=current_value, v3=prompt),
-            icon='settings',
-            compact=True,
+        _panel_screen(
+            'settings',
+            _plain_title(title),
+            [
+                f'{admin_icon("tariff")} Тариф: <b>{html.escape(tariff.name)}</b>',
+                f'{admin_icon("edit")} Текущее значение: <b>{current_value}</b>',
+            ],
+            prompt,
         ),
         reply_markup=InlineKeyboardMarkup(
             inline_keyboard=[[admin_back_button(texts, f'admin_tariff_edit_more:{tariff.id}', label=texts.CANCEL)]]
@@ -334,10 +342,9 @@ async def _load_tariff_from_state(
     tariff = await get_tariff_by_id(db, tariff_id) if tariff_id is not None else None
     if tariff is None:
         await message.answer(
-            admin_screen(
+            _panel_notice(
+                'warning',
                 get_texts(language).t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'),
-                icon='warning',
-                compact=True,
             ),
             parse_mode='HTML',
         )
@@ -347,7 +354,7 @@ async def _load_tariff_from_state(
 
 async def _finish(message: types.Message, db_user: User, state: FSMContext, tariff: Tariff, confirmation: str) -> None:
     await state.clear()
-    await _show(message, tariff, db_user.language, edit=False, prefix=f'{confirmation}\n\n')
+    await _show(message, tariff, db_user.language, edit=False, prefix=f'{admin_heading("success", confirmation)}\n\n')
 
 
 @admin_required
@@ -361,7 +368,8 @@ async def process_panel_tag_input(message: types.Message, db_user: User, db: Asy
         tag = None if raw == '-' else normalize_panel_tag(raw)
     except ValueError:
         await message.answer(
-            admin_screen(
+            _panel_notice(
+                'warning',
                 get_texts(db_user.language)
                 .t('ADMIN_TARIFF_HELPER_PROCESS_PANEL_TAG_INPUT_2', '{v0}. Попробуйте ещё раз:')
                 .format(
@@ -369,8 +377,6 @@ async def process_panel_tag_input(message: types.Message, db_user: User, db: Asy
                         'ADMIN_TARIFF_VALIDATION_PANEL_TAG_ERROR', f'Тег панели: {PANEL_TAG_RULES}'
                     )
                 ),
-                icon='warning',
-                compact=True,
             ),
             parse_mode='HTML',
         )
@@ -418,12 +424,11 @@ async def process_display_order_input(message: types.Message, db_user: User, db:
             raise ValueError
     except ValueError:
         await message.answer(
-            admin_screen(
+            _panel_notice(
+                'warning',
                 get_texts(db_user.language).t(
                     'ADMIN_TARIFF_HELPER_INVALID_ORDER', 'Введите целое число от 0. Попробуйте ещё раз:'
                 ),
-                icon='warning',
-                compact=True,
             ),
             parse_mode='HTML',
         )
@@ -465,6 +470,7 @@ def _external_squad_keyboard(tariff: Tariff, squads: list, language: str) -> Inl
             admin_button(
                 no_squad_label,
                 callback_data=f'admin_tariff_set_ext_squad:{tariff.id}:{_NO_EXTERNAL_SQUAD}',
+                icon='prohibit',
             )
         ]
     ]
@@ -475,6 +481,7 @@ def _external_squad_keyboard(tariff: Tariff, squads: list, language: str) -> Inl
                 admin_button(
                     f'{mark}{strip_leading_emoji(squad.name)}',
                     callback_data=f'admin_tariff_set_ext_squad:{tariff.id}:{squad.uuid}',
+                    icon='servers',
                 )
             ]
         )
@@ -483,20 +490,28 @@ def _external_squad_keyboard(tariff: Tariff, squads: list, language: str) -> Inl
 
 
 def _external_squad_text(tariff: Tariff, squads: list, language: str = 'ru') -> str:
-    note = (
-        ''
-        if squads
-        else get_texts(language).t(
-            'ADMIN_TARIFF_HELPER_NO_EXTERNAL_SQUADS', '\n\n⚠ Список сквадов из панели пуст или панель недоступна.'
-        )
+    hint = get_texts(language).t(
+        'ADMIN_TARIFF_HELPER_EXTERNAL_SQUAD_HINT',
+        'Пользователи тарифа попадают в выбранный сквад; смена применяется ко всем живым подпискам тарифа.',
     )
-    return (
-        get_texts(language)
-        .t(
-            'ADMIN_TARIFF_HELPER_EXTERNAL_SQUAD_TEXT_1',
-            '<b>Внешний сквад Remnawave</b>\n\nТариф: <b>{v0}</b>\nСейчас: <b>{v1}</b>\n\nПользователи тарифа попадают в выбранный сквад; смена применяется ко всем живым подпискам тарифа.{v2}',
+    if not squads:
+        hint = '\n'.join(
+            [
+                hint,
+                get_texts(language).t(
+                    'ADMIN_TARIFF_HELPER_NO_EXTERNAL_SQUADS',
+                    '⚠ Список сквадов из панели пуст или панель недоступна.',
+                ),
+            ]
         )
-        .format(v0=html.escape(tariff.name), v1=_ext_squad_display(tariff, language=language), v2=note)
+    return _panel_screen(
+        'servers',
+        get_texts(language).t('ADMIN_TARIFF_HELPER_EXTERNAL_SQUAD_TITLE', 'Внешний сквад Remnawave'),
+        [
+            f'{admin_icon("tariff")} Тариф: <b>{html.escape(tariff.name)}</b>',
+            f'{admin_icon("servers")} Сейчас: <b>{_ext_squad_display(tariff, language=language)}</b>',
+        ],
+        hint,
     )
 
 
@@ -512,11 +527,7 @@ async def start_edit_external_squad(callback: types.CallbackQuery, db_user: User
         return
     squads = await load_external_squads()
     await callback.message.edit_text(
-        admin_screen(
-            strip_leading_emoji(_external_squad_text(tariff, squads, language=db_user.language)),
-            icon='servers',
-            compact=True,
-        ),
+        _external_squad_text(tariff, squads, language=db_user.language),
         reply_markup=_external_squad_keyboard(tariff, squads, db_user.language),
         parse_mode='HTML',
     )
@@ -549,11 +560,7 @@ async def set_external_squad(callback: types.CallbackQuery, db_user: User, db: A
 
     squads = await load_external_squads()
     await callback.message.edit_text(
-        admin_screen(
-            strip_leading_emoji(_external_squad_text(tariff, squads, language=db_user.language)),
-            icon='servers',
-            compact=True,
-        ),
+        _external_squad_text(tariff, squads, language=db_user.language),
         reply_markup=_external_squad_keyboard(tariff, squads, db_user.language),
         parse_mode='HTML',
     )

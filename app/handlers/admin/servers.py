@@ -23,7 +23,14 @@ from app.database.models import User
 from app.localization.texts import get_texts
 from app.services.remnawave_service import RemnaWaveService
 from app.states import AdminStates
-from app.utils.admin_ui import admin_back_button, admin_button, admin_icon, admin_screen
+from app.utils.admin_ui import (
+    admin_back_button as _admin_back_button,
+    admin_button,
+    admin_heading,
+    admin_icon,
+    admin_quote,
+    admin_screen,
+)
 from app.utils.cache import cache
 from app.utils.decorators import admin_required, error_handler
 
@@ -34,130 +41,143 @@ logger = structlog.get_logger(__name__)
 # Иконку и отступы даёт admin_screen, поэтому префиксы строк срезаем.
 _LEGACY_PREFIX_RE = re.compile(r'^[ \t]*(?:[▤▣▥◷↻↑↓]\s*|NEW\s+)+', re.MULTILINE)
 _LEGACY_BULLET_RE = re.compile(r'(?<=• )(?:[▤▣▥◷↻↑↓]\s*|NEW\s+)+')
+_BACK_ARROWS = ('←', '◀', '⬅', '⏪')
 
 
 def _clean_legacy(value: str) -> str:
     return _LEGACY_BULLET_RE.sub('', _LEGACY_PREFIX_RE.sub('', value)).strip()
 
 
+def admin_back_button(texts, callback_data: str, *, label: str | None = None):
+    """Кнопка возврата: стрелка в тексте, без premium-иконки и цвета."""
+    text = label or texts.BACK
+    if not text.lstrip().startswith(_BACK_ARROWS):
+        text = f'← {text}'
+    return _admin_back_button(texts, callback_data, label=text)
+
+
 def _build_server_edit_view(server, language: str = 'ru'):
-    status_emoji = (
-        get_texts(language).t('ADMIN_SERVER_UI_005', 'Доступен')
+    texts = get_texts(language)
+    status_text = (
+        texts.t('ADMIN_SERVER_UI_005', 'Доступен')
         if server.is_available
-        else get_texts(language).t('ADMIN_SERVER_UI_006', 'Недоступен')
+        else texts.t('ADMIN_SERVER_UI_006', 'Недоступен')
     )
+    status_icon = admin_icon('success') if server.is_available else admin_icon('error')
     price_text = (
-        f'{int(server.price_rubles)} ₽'
-        if server.price_kopeks > 0
-        else get_texts(language).t('ADMIN_SERVER_UI_007', 'Бесплатно')
+        f'{int(server.price_rubles)} ₽' if server.price_kopeks > 0 else texts.t('ADMIN_SERVER_UI_007', 'Бесплатно')
     )
     promo_groups_text = (
         ', '.join(sorted(pg.name for pg in server.allowed_promo_groups))
         if server.allowed_promo_groups
-        else get_texts(language).t('ADMIN_SERVER_UI_008', 'Не выбраны')
+        else texts.t('ADMIN_SERVER_UI_008', 'Не выбраны')
     )
 
     trial_status = (
-        get_texts(language).t('ADMIN_SERVER_UI_009', 'Да')
-        if server.is_trial_eligible
-        else get_texts(language).t('ADMIN_SERVER_UI_010', 'Нет')
+        texts.t('ADMIN_SERVER_UI_009', 'Да') if server.is_trial_eligible else texts.t('ADMIN_SERVER_UI_010', 'Нет')
+    )
+    original_name = (
+        html.escape(server.original_name) if server.original_name else texts.t('ADMIN_SERVER_UI_026', 'Не указано')
+    )
+    description = (
+        html.escape(server.description) if server.description else texts.t('ADMIN_SERVER_UI_026', 'Не указано')
     )
 
-    text = (
-        get_texts(language)
-        .t(
-            'ADMIN_SERVER_UI_000',
-            '<b>Редактирование сервера</b>\n\n<b>Информация:</b>\n• ID: {v0}\n• UUID: <code>{v1}</code>\n• Название: {v2}\n• Оригинальное: {v3}\n• Статус: {v4}\n\n<b>Настройки:</b>\n• Цена: {v5}\n• Код страны: {v6}\n• Лимит пользователей: {v7}\n• Текущих пользователей: {v8}\n• Промогруппы: {v9}\n• Выдача триала: {v10}\n\n<b>Описание:</b>\n{v11}',
-        )
-        .format(
-            v0=server.id,
-            v1=server.squad_uuid,
-            v2=html.escape(server.display_name),
-            v3=html.escape(server.original_name)
-            if server.original_name
-            else get_texts(language).t('ADMIN_SERVER_UI_026', 'Не указано'),
-            v4=status_emoji,
-            v5=price_text,
-            v6=server.country_code or get_texts(language).t('ADMIN_SERVER_UI_024', 'Не указан'),
-            v7=server.max_users or get_texts(language).t('ADMIN_SERVER_UI_025', 'Без лимита'),
-            v8=server.current_users,
-            v9=html.escape(promo_groups_text),
-            v10=trial_status,
-            v11=html.escape(server.description)
-            if server.description
-            else get_texts(language).t('ADMIN_SERVER_UI_026', 'Не указано'),
-        )
+    info_block = '\n'.join(
+        [
+            f'{admin_icon("id")} <b>Информация</b>',
+            f'• ID: <code>{server.id}</code>',
+            f'• UUID: <code>{server.squad_uuid}</code>',
+            f'• Название: {html.escape(server.display_name)}',
+            f'• Оригинальное: {original_name}',
+            f'• Статус: {status_icon} {status_text}',
+        ]
+    )
+
+    settings_block = '\n'.join(
+        [
+            f'{admin_icon("settings")} <b>Настройки</b>',
+            f'• Цена: {admin_icon("pricing")} {price_text}',
+            (f'• Код страны: {admin_icon("map")} {server.country_code or texts.t("ADMIN_SERVER_UI_024", "Не указан")}'),
+            (
+                f'• Лимит пользователей: {admin_icon("users")} '
+                f'{server.max_users or texts.t("ADMIN_SERVER_UI_025", "Без лимита")}'
+            ),
+            f'• Текущих пользователей: {server.current_users}',
+            f'• Промогруппы: {html.escape(promo_groups_text)}',
+            f'• Выдача триала: {admin_icon("trials")} {trial_status}',
+        ]
+    )
+
+    text = '\n\n'.join(
+        [
+            admin_heading('servers', 'Редактирование сервера'),
+            admin_quote(info_block),
+            admin_quote(settings_block),
+            f'{admin_icon("document")} <b>Описание</b>\n{description}',
+        ]
     )
 
     keyboard = [
         [
             admin_button(
-                get_texts(language).t('ADMIN_SERVER_UI_060', 'Название'),
+                texts.t('ADMIN_SERVER_UI_060', 'Название'),
                 callback_data=f'admin_server_edit_name_{server.id}',
                 icon='edit',
-                style='primary',
             ),
             admin_button(
-                get_texts(language).t('ADMIN_SERVER_UI_061', 'Цена'),
+                texts.t('ADMIN_SERVER_UI_061', 'Цена'),
                 callback_data=f'admin_server_edit_price_{server.id}',
                 icon='pricing',
-                style='primary',
             ),
         ],
         [
             admin_button(
-                get_texts(language).t('ADMIN_SERVER_UI_062', 'Страна'),
+                texts.t('ADMIN_SERVER_UI_062', 'Страна'),
                 callback_data=f'admin_server_edit_country_{server.id}',
                 icon='map',
-                style='primary',
             ),
             admin_button(
-                get_texts(language).t('ADMIN_SERVER_UI_063', 'Лимит'),
+                texts.t('ADMIN_SERVER_UI_063', 'Лимит'),
                 callback_data=f'admin_server_edit_limit_{server.id}',
                 icon='users',
-                style='primary',
             ),
         ],
         [
             admin_button(
-                get_texts(language).t('ADMIN_SERVER_UI_064', 'Юзеры'),
+                texts.t('ADMIN_SERVER_UI_064', 'Юзеры'),
                 callback_data=f'admin_server_users_{server.id}',
                 icon='users',
-                style='primary',
             ),
         ],
         [
             admin_button(
-                get_texts(language).t('ADMIN_SERVER_UI_094', 'Выдавать в триал')
+                texts.t('ADMIN_SERVER_UI_094', 'Выдавать в триал')
                 if not server.is_trial_eligible
-                else get_texts(language).t('ADMIN_SERVER_UI_095', 'Не выдавать в триал'),
+                else texts.t('ADMIN_SERVER_UI_095', 'Не выдавать в триал'),
                 callback_data=f'admin_server_trial_{server.id}',
                 icon='trials',
-                style='primary',
             ),
         ],
         [
             admin_button(
-                get_texts(language).t('ADMIN_SERVER_UI_065', 'Промогруппы'),
+                texts.t('ADMIN_SERVER_UI_065', 'Промогруппы'),
                 callback_data=f'admin_server_edit_promo_{server.id}',
                 icon='users_group',
-                style='primary',
             ),
             admin_button(
-                get_texts(language).t('ADMIN_SERVER_UI_066', 'Описание'),
+                texts.t('ADMIN_SERVER_UI_066', 'Описание'),
                 callback_data=f'admin_server_edit_desc_{server.id}',
                 icon='edit',
-                style='primary',
             ),
         ],
         [
             admin_button(
-                get_texts(language).t('ADMIN_SERVER_UI_096', 'Отключить')
+                texts.t('ADMIN_SERVER_UI_096', 'Отключить')
                 if server.is_available
-                else get_texts(language).t('ADMIN_SERVER_UI_097', 'Включить'),
+                else texts.t('ADMIN_SERVER_UI_097', 'Включить'),
                 callback_data=f'admin_server_toggle_{server.id}',
                 icon='lock' if server.is_available else 'unlock',
-                style='danger' if server.is_available else 'success',
             )
         ],
         [
@@ -165,9 +185,8 @@ def _build_server_edit_view(server, language: str = 'ru'):
                 'Удалить',
                 callback_data=f'admin_server_delete_{server.id}',
                 icon='delete',
-                style='danger',
             ),
-            admin_back_button(get_texts(language), 'admin_servers_list'),
+            admin_back_button(texts, 'admin_servers_list'),
         ],
     ]
 
@@ -195,8 +214,7 @@ def _build_server_promo_groups_keyboard(server_id: int, promo_groups, selected_i
             admin_button(
                 get_texts(language).t('ADMIN_SERVER_UI_069', 'Сохранить'),
                 callback_data=f'admin_server_promo_save_{server_id}',
-                icon='success',
-                style='success',
+                icon='save',
             )
         ]
     )
@@ -210,42 +228,55 @@ def _build_server_promo_groups_keyboard(server_id: int, promo_groups, selected_i
 async def show_servers_menu(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
     stats = await get_server_statistics(db)
 
-    text = f"""<b>Управление серверами</b>
-
-<b>Статистика:</b>
-• Всего серверов: {stats['total_servers']}
-• Доступные: {stats['available_servers']}
-• Недоступные: {stats['unavailable_servers']}
-• С подключениями: {stats['servers_with_connections']}
-
-<b>Выручка от серверов:</b>
-• Общая: {int(stats['total_revenue_rubles'])} ₽"""
-
     texts = get_texts(db_user.language)
+
+    overview = '\n'.join(
+        [
+            f'{admin_icon("servers")} <b>Статистика</b>',
+            f'• Всего серверов: {stats["total_servers"]}',
+            f'• Доступные: {admin_icon("success")} {stats["available_servers"]}',
+            f'• Недоступные: {admin_icon("error")} {stats["unavailable_servers"]}',
+            f'• С подключениями: {stats["servers_with_connections"]}',
+        ]
+    )
+    revenue = '\n'.join(
+        [
+            f'{admin_icon("money")} <b>Выручка от серверов</b>',
+            f'• Общая: {int(stats["total_revenue_rubles"])} ₽',
+        ]
+    )
+
+    text = '\n\n'.join(
+        [
+            admin_heading('servers', 'Управление серверами'),
+            admin_quote(overview),
+            admin_quote(revenue),
+        ]
+    )
 
     keyboard = [
         [
             admin_button(
                 texts.t('ADMIN_SERVER_UI_070', 'Список серверов'),
                 callback_data='admin_servers_list',
-                style='primary',
+                icon='servers',
             ),
             admin_button(
                 texts.t('ADMIN_SERVER_UI_071', 'Синхронизация'),
                 callback_data='admin_servers_sync',
-                style='primary',
+                icon='sync',
             ),
         ],
         [
             admin_button(
                 texts.t('ADMIN_SERVER_UI_072', 'Синхронизировать счетчики'),
                 callback_data='admin_servers_sync_counts',
-                style='primary',
+                icon='refresh',
             ),
             admin_button(
                 texts.t('ADMIN_SERVER_UI_073', 'Подробная статистика'),
                 callback_data='admin_servers_stats',
-                style='primary',
+                icon='chart',
             ),
         ],
         [admin_back_button(texts, 'admin_panel')],
@@ -267,12 +298,23 @@ async def show_servers_list(callback: types.CallbackQuery, db_user: User, db: As
     total_pages = (total_count + 9) // 10
 
     if not servers:
-        text = texts.t('ADMIN_SERVER_UI_011', '<b>Список серверов</b>\n\nСерверы не найдены.')
-    else:
-        text = texts.t('ADMIN_SERVER_UI_012', '<b>Список серверов</b>\n\n')
-        text += texts.t('ADMIN_SERVER_UI_013', 'Всего: {v0} | Страница: {v1}/{v2}\n\n').format(
-            v0=total_count, v1=page, v2=total_pages
+        text = '\n\n'.join(
+            [
+                admin_heading('servers', 'Список серверов'),
+                admin_quote(f'{admin_icon("warning")} Серверы не найдены.'),
+            ]
         )
+    else:
+        text = admin_heading('servers', 'Список серверов')
+        text += '\n\n' + admin_quote(
+            '\n'.join(
+                [
+                    f'• Всего: {total_count}',
+                    f'• Страница: {page}/{total_pages}',
+                ]
+            )
+        )
+        text += '\n\n'
 
         for i, server in enumerate(servers, 1 + (page - 1) * 10):
             price_text = (
@@ -281,13 +323,10 @@ async def show_servers_list(callback: types.CallbackQuery, db_user: User, db: As
                 else texts.t('ADMIN_SERVER_UI_007', 'Бесплатно')
             )
 
-            text += f'{i}. {html.escape(server.display_name)}\n'
-            text += texts.t('ADMIN_SERVER_UI_030', 'Цена: {v0}').format(v0=price_text)
-
-            if server.max_users:
-                text += f' | {server.current_users}/{server.max_users}'
-
-            text += f'\n   UUID: <code>{server.squad_uuid}</code>\n\n'
+            users_text = f' | {server.current_users}/{server.max_users}' if server.max_users else ''
+            text += f'{admin_icon("servers")} <b>{i}. {html.escape(server.display_name)}</b>\n'
+            text += f'{admin_icon("pricing")} {price_text}{users_text}\n'
+            text += f'{admin_icon("key")} UUID: <code>{server.squad_uuid}</code>\n\n'
 
     keyboard = []
 
@@ -301,20 +340,19 @@ async def show_servers_list(callback: types.CallbackQuery, db_user: User, db: As
             admin_button(
                 label,
                 callback_data=f'admin_server_edit_{server.id}',
-                icon='servers',
-                style='primary',
+                icon='edit',
             )
         )
 
     if total_pages > 1:
         nav_row = []
         if page > 1:
-            nav_row.append(admin_button('←', callback_data=f'admin_servers_list_page_{page - 1}', style='primary'))
+            nav_row.append(admin_button('←', callback_data=f'admin_servers_list_page_{page - 1}'))
 
         nav_row.append(admin_button(f'{page}/{total_pages}', callback_data='current_page'))
 
         if page < total_pages:
-            nav_row.append(admin_button('→', callback_data=f'admin_servers_list_page_{page + 1}', style='primary'))
+            nav_row.append(admin_button('→', callback_data=f'admin_servers_list_page_{page + 1}'))
 
         keyboard.append(nav_row)
 
@@ -366,29 +404,34 @@ async def sync_servers_with_remnawave(callback: types.CallbackQuery, db_user: Us
 
         await cache.delete_pattern('available_countries*')
 
-        text = f"""<b>Синхронизация завершена</b>
-
-<b>Результаты:</b>
-• Создано новых серверов: {created}
-• Обновлено существующих: {updated}
-• Удалено отсутствующих: {removed}
-• Всего обработано: {len(squads)}
-
-{admin_icon('info')} Новые серверы созданы как недоступные.
-Настройте их в списке серверов."""
+        results_block = '\n'.join(
+            [
+                f'{admin_icon("stats")} <b>Результаты</b>',
+                f'• Создано новых серверов: {created}',
+                f'• Обновлено существующих: {updated}',
+                f'• Удалено отсутствующих: {removed}',
+                f'• Всего обработано: {len(squads)}',
+            ]
+        )
+        text = '\n\n'.join(
+            [
+                admin_heading('success', 'Синхронизация завершена'),
+                admin_quote(results_block),
+                (f'{admin_icon("info")} Новые серверы созданы как недоступные.\nНастройте их в списке серверов.'),
+            ]
+        )
 
         keyboard = [
             [
                 admin_button(
                     texts.t('ADMIN_SERVER_UI_070', 'Список серверов'),
                     callback_data='admin_servers_list',
-                    style='primary',
+                    icon='servers',
                 ),
                 admin_button(
                     texts.t('ADMIN_SERVER_UI_098', 'Повторить'),
                     callback_data='admin_servers_sync',
                     icon='refresh',
-                    style='primary',
                 ),
             ],
             [admin_back_button(texts, 'admin_servers')],
@@ -466,20 +509,18 @@ async def show_server_users(callback: types.CallbackQuery, db_user: User, db: As
     safe_name = html.escape(server.display_name or '—')
     safe_uuid = html.escape(server.squad_uuid or '—')
 
-    header = [
-        texts.t('ADMIN_SERVER_UI_015', '<b>Пользователи сервера</b>'),
-        '',
-        texts.t('ADMIN_SERVER_UI_016', '• Сервер: {v0}').format(v0=safe_name),
-        f'• UUID: <code>{safe_uuid}</code>',
-        texts.t('ADMIN_SERVER_UI_017', '• Подключений: {v0}').format(v0=total_users),
+    header_meta = [
+        f'{admin_icon("servers")} <b>Сервер:</b> {safe_name}',
+        f'{admin_icon("key")} <b>UUID:</b> <code>{safe_uuid}</code>',
+        f'{admin_icon("users")} <b>Подключений:</b> {total_users}',
     ]
 
     if total_pages > 1:
-        header.append(texts.t('ADMIN_SERVER_UI_032', '• Страница: {v0}/{v1}').format(v0=page, v1=total_pages))
+        header_meta.append(f'{admin_icon("document")} <b>Страница:</b> {page}/{total_pages}')
 
-    header.append('')
-
-    text = '\n'.join(header)
+    text = admin_heading('users', 'Пользователи сервера')
+    text += '\n\n' + admin_quote('\n'.join(header_meta))
+    text += '\n\n'
 
     def _get_status_icon(status_text: str) -> str:
         if not status_text:
@@ -496,11 +537,11 @@ async def show_server_users(callback: types.CallbackQuery, db_user: User, db: As
                 user_link = f'<a href="tg://user?id={user.telegram_id}">{safe_user_name}</a>'
             else:
                 user_link = f'<b>{safe_user_name}</b>'
-            lines.append(f'{index}. {user_link}')
+            lines.append(f'{admin_icon("user")} {index}. {user_link}')
 
-        text += '\n' + '\n'.join(lines)
+        text += '\n'.join(lines)
     else:
-        text += texts.t('ADMIN_SERVER_UI_018', 'Пользователи не найдены.')
+        text += f'{admin_icon("warning")} {texts.t("ADMIN_SERVER_UI_018", "Пользователи не найдены.")}'
 
     keyboard: list[list[types.InlineKeyboardButton]] = []
 
@@ -544,7 +585,6 @@ async def show_server_users(callback: types.CallbackQuery, db_user: User, db: As
                 admin_button(
                     '←',
                     callback_data=f'admin_server_users_{server_id}_{page - 1}',
-                    style='primary',
                 )
             )
 
@@ -560,7 +600,6 @@ async def show_server_users(callback: types.CallbackQuery, db_user: User, db: As
                 admin_button(
                     '→',
                     callback_data=f'admin_server_users_{server_id}_{page + 1}',
-                    style='primary',
                 )
             )
 
@@ -878,15 +917,16 @@ async def delete_server_confirm(callback: types.CallbackQuery, db_user: User, db
         await callback.answer(texts.t('ADMIN_SERVER_UI_044', 'Сервер не найден!'), show_alert=True)
         return
 
-    text = f"""<b>Удаление сервера</b>
-
-Вы действительно хотите удалить сервер:
-<b>{html.escape(server.display_name)}</b>
-
-{admin_icon('warning')} <b>Внимание!</b>
-Сервер можно удалить только если к нему нет активных подключений.
-
-Это действие нельзя отменить!"""
+    text = '\n\n'.join(
+        [
+            admin_heading('warning', 'Удаление сервера'),
+            admin_quote(
+                f'{admin_icon("servers")} <b>Сервер:</b> {html.escape(server.display_name)}\n'
+                f'{admin_icon("warning")} Сервер можно удалить только если к нему нет активных подключений.'
+            ),
+            f'{admin_icon("prohibit")} <b>Это действие нельзя отменить!</b>',
+        ]
+    )
 
     keyboard = [
         [
@@ -894,7 +934,6 @@ async def delete_server_confirm(callback: types.CallbackQuery, db_user: User, db
                 texts.t('ADMIN_SERVER_UI_083', 'Да, удалить'),
                 callback_data=f'admin_server_delete_confirm_{server_id}',
                 icon='delete',
-                style='danger',
             ),
             admin_back_button(
                 texts,
@@ -984,31 +1023,46 @@ async def show_server_detailed_stats(callback: types.CallbackQuery, db_user: Use
 
     texts = get_texts(db_user.language)
 
-    text = f"""<b>Подробная статистика серверов</b>
+    overview = '\n'.join(
+        [
+            f'{admin_icon("servers")} <b>Общая информация</b>',
+            f'• Всего серверов: {stats["total_servers"]}',
+            f'• Доступные: {admin_icon("success")} {stats["available_servers"]}',
+            f'• Недоступные: {admin_icon("error")} {stats["unavailable_servers"]}',
+            f'• С активными подключениями: {stats["servers_with_connections"]}',
+        ]
+    )
+    finance = '\n'.join(
+        [
+            f'{admin_icon("money")} <b>Финансовая статистика</b>',
+            f'• Общая выручка: {int(stats["total_revenue_rubles"])} ₽',
+            (
+                f'• Средняя цена за сервер: '
+                f'{int(stats["total_revenue_rubles"] / max(stats["servers_with_connections"], 1))} ₽'
+            ),
+        ]
+    )
 
-<b>Общая информация:</b>
-• Всего серверов: {stats['total_servers']}
-• Доступные: {stats['available_servers']}
-• Недоступные: {stats['unavailable_servers']}
-• С активными подключениями: {stats['servers_with_connections']}
-
-<b>Финансовая статистика:</b>
-• Общая выручка: {int(stats['total_revenue_rubles'])} ₽
-• Средняя цена за сервер: {int(stats['total_revenue_rubles'] / max(stats['servers_with_connections'], 1))} ₽
-
-<b>Топ серверов по цене:</b>
-"""
-
+    top_block = f'{admin_icon("star")} <b>Топ серверов по цене</b>\n'
     sorted_servers = sorted(available_servers, key=lambda x: x.price_kopeks, reverse=True)
 
     for i, server in enumerate(sorted_servers[:5], 1):
         price_text = (
             f'{int(server.price_rubles)} ₽' if server.price_kopeks > 0 else texts.t('ADMIN_SERVER_UI_007', 'Бесплатно')
         )
-        text += f'{i}. {html.escape(server.display_name)} — {price_text}\n'
+        top_block += f'• {i}. {html.escape(server.display_name)} — {price_text}\n'
 
     if not sorted_servers:
-        text += texts.t('ADMIN_SERVER_UI_023', 'Нет доступных серверов\n')
+        top_block += f'{admin_icon("warning")} {texts.t("ADMIN_SERVER_UI_023", "Нет доступных серверов")}'
+
+    text = '\n\n'.join(
+        [
+            admin_heading('stats', 'Подробная статистика серверов'),
+            admin_quote(overview),
+            admin_quote(finance),
+            top_block,
+        ]
+    )
 
     keyboard = [
         [
@@ -1016,12 +1070,11 @@ async def show_server_detailed_stats(callback: types.CallbackQuery, db_user: Use
                 texts.t('ADMIN_SERVER_UI_085', 'Обновить'),
                 callback_data='admin_servers_stats',
                 icon='refresh',
-                style='primary',
             ),
             admin_button(
                 texts.t('ADMIN_SERVER_UI_086', 'Список'),
                 callback_data='admin_servers_list',
-                style='primary',
+                icon='servers',
             ),
         ],
         [admin_back_button(texts, 'admin_servers')],
@@ -1525,25 +1578,25 @@ async def sync_server_user_counts_handler(callback: types.CallbackQuery, db_user
 
         updated_count = await sync_server_user_counts(db)
 
-        text = f"""<b>Синхронизация завершена</b>
-
-<b>Результат:</b>
-• Обновлено серверов: {updated_count}
-
-Счетчики пользователей синхронизированы с реальными данными."""
+        text = '\n\n'.join(
+            [
+                admin_heading('success', 'Синхронизация завершена'),
+                admin_quote(f'{admin_icon("stats")} <b>Обновлено серверов:</b> {updated_count}'),
+                f'{admin_icon("info")} Счетчики пользователей синхронизированы с реальными данными.',
+            ]
+        )
 
         keyboard = [
             [
                 admin_button(
                     texts.t('ADMIN_SERVER_UI_070', 'Список серверов'),
                     callback_data='admin_servers_list',
-                    style='primary',
+                    icon='servers',
                 ),
                 admin_button(
                     texts.t('ADMIN_SERVER_UI_098', 'Повторить'),
                     callback_data='admin_servers_sync_counts',
                     icon='refresh',
-                    style='primary',
                 ),
             ],
             [admin_back_button(texts, 'admin_servers')],

@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database.models import User
 from app.localization.texts import get_texts
-from app.utils.admin_ui import admin_back_button, admin_button, admin_quote, admin_screen
+from app.utils.admin_ui import admin_back_button, admin_button, admin_heading, admin_quote, admin_screen
 from app.utils.decorators import admin_required, error_handler
 from app.utils.miniapp_buttons import strip_leading_emoji
 
@@ -111,21 +111,21 @@ def _get_logs_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                 admin_button(
                     _label(texts.t('ADMIN_SYSTEM_LOGS_UI_014', 'Обновить')),
                     callback_data='admin_system_logs_refresh',
-                    style='primary',
+                    icon='refresh',
                 )
             ],
             [
                 admin_button(
                     _label(texts.t('ADMIN_SYSTEM_LOGS_UI_015', 'Скачать лог')),
                     callback_data='admin_system_logs_download',
-                    style='primary',
+                    icon='download',
                 )
             ],
             [
                 admin_back_button(
                     texts,
                     'admin_submenu_system',
-                    label=_label(texts.t('ADMIN_SYSTEM_LOGS_UI_016', 'Назад')),
+                    label=f'← {_label(texts.t("ADMIN_SYSTEM_LOGS_UI_016", "Назад"))}',
                 )
             ],
         ]
@@ -183,11 +183,17 @@ async def download_system_logs(
         document = FSInputFile(log_path)
         stats = log_path.stat()
         updated_at = datetime.fromtimestamp(stats.st_mtime, tz=UTC).strftime('%d.%m.%Y %H:%M:%S')
-        caption = '\n'.join(
+        caption = '\n\n'.join(
             [
-                f'Лог-файл <code>{escape(log_path.name)}</code>',
-                f'Путь: <code>{escape(str(log_path))}</code>',
-                f'Обновлен: {updated_at}',
+                admin_heading('logs', escape(log_path.name)),
+                admin_quote(
+                    '\n'.join(
+                        [
+                            f'<b>Путь:</b> <code>{escape(str(log_path))}</code>',
+                            f'<b>Обновлен:</b> {updated_at}',
+                        ]
+                    )
+                ),
             ]
         )
         await callback.message.answer_document(document=document, caption=caption, parse_mode='HTML')

@@ -1,4 +1,5 @@
 import html
+import re
 import time
 from datetime import UTC, datetime, timedelta
 
@@ -38,10 +39,18 @@ from app.utils.timezone import format_local_datetime
 logger = structlog.get_logger(__name__)
 
 
+_HTML_TAG_RE = re.compile(r'</?[a-zA-Z][^>]*>')
+
+
 def _label(text: str) -> str:
     """Текст кнопки без ведущих служебных символов и глифов локали."""
     cleaned = (text or '').lstrip('\ufe0f\u200b\ufeff \t')
     return strip_leading_emoji(cleaned)
+
+
+def _plain(text: str) -> str:
+    """Текст для alert'ов: Telegram показывает их без parse_mode, теги — мусор."""
+    return html.unescape(_HTML_TAG_RE.sub('', text or '')).strip()
 
 
 def _delete_keyboard(texts) -> types.InlineKeyboardMarkup:
@@ -66,7 +75,7 @@ async def show_admin_tickets(callback: types.CallbackQuery, db_user: User, db: A
     # permission gate: admin or active moderator only
     if not (settings.is_admin(callback.from_user.id) or SupportSettingsService.is_moderator(callback.from_user.id)):
         texts = get_texts(db_user.language)
-        await callback.answer(texts.ACCESS_DENIED, show_alert=True)
+        await callback.answer(_plain(texts.ACCESS_DENIED), show_alert=True)
         return
 
     # Определяем текущую страницу и scope
@@ -194,7 +203,7 @@ async def view_admin_ticket(
     texts = get_texts(db_user.language)
     if not (settings.is_admin(callback.from_user.id) or SupportSettingsService.is_moderator(callback.from_user.id)):
         texts = get_texts(db_user.language)
-        await callback.answer(texts.ACCESS_DENIED, show_alert=True)
+        await callback.answer(_plain(texts.ACCESS_DENIED), show_alert=True)
         return
 
     # Парсим ticket_id и page из callback_data
@@ -215,7 +224,7 @@ async def view_admin_ticket(
             ticket_id = int(data_str.split('_')[-1])
         except (ValueError, AttributeError):
             texts = get_texts(db_user.language)
-            await callback.answer(texts.t('TICKET_NOT_FOUND', 'Тикет не найден.'), show_alert=True)
+            await callback.answer(_plain(texts.t('TICKET_NOT_FOUND', 'Тикет не найден.')), show_alert=True)
             return
 
     if state is None:
@@ -225,7 +234,7 @@ async def view_admin_ticket(
 
     if not ticket:
         texts = get_texts(db_user.language)
-        await callback.answer(texts.t('TICKET_NOT_FOUND', 'Тикет не найден.'), show_alert=True)
+        await callback.answer(_plain(texts.t('TICKET_NOT_FOUND', 'Тикет не найден.')), show_alert=True)
         return
 
     # Формируем заголовок тикета
@@ -402,7 +411,7 @@ async def reply_to_admin_ticket(callback: types.CallbackQuery, state: FSMContext
     texts = get_texts(db_user.language)
     if not (settings.is_admin(callback.from_user.id) or SupportSettingsService.is_moderator(callback.from_user.id)):
         texts = get_texts(db_user.language)
-        await callback.answer(texts.ACCESS_DENIED, show_alert=True)
+        await callback.answer(_plain(texts.ACCESS_DENIED), show_alert=True)
         return
     ticket_id = int(callback.data.replace('admin_reply_ticket_', ''))
 
@@ -410,7 +419,7 @@ async def reply_to_admin_ticket(callback: types.CallbackQuery, state: FSMContext
     if not isinstance(message, types.Message):
         # None или InaccessibleMessage (например, уведомление старше 48ч) — редактировать нельзя
         await callback.answer(
-            texts.t('MESSAGE_TOO_OLD', 'Сообщение устарело, откройте тикет в панели.'), show_alert=True
+            _plain(texts.t('MESSAGE_TOO_OLD', 'Сообщение устарело, откройте тикет в панели.')), show_alert=True
         )
         return
 
@@ -647,16 +656,20 @@ async def mark_ticket_as_answered(callback: types.CallbackQuery, db_user: User, 
 
         if success:
             texts = get_texts(db_user.language)
-            await callback.answer(texts.t('TICKET_MARKED_ANSWERED', 'Тикет отмечен как отвеченный.'), show_alert=True)
+            await callback.answer(
+                _plain(texts.t('TICKET_MARKED_ANSWERED', 'Тикет отмечен как отвеченный.')), show_alert=True
+            )
 
             # Обновляем сообщение
             await view_admin_ticket(callback, db_user, db, state)
         else:
-            await callback.answer(texts.t('TICKET_UPDATE_ERROR', 'Ошибка при обновлении тикета.'), show_alert=True)
+            await callback.answer(
+                _plain(texts.t('TICKET_UPDATE_ERROR', 'Ошибка при обновлении тикета.')), show_alert=True
+            )
 
     except Exception as e:
         logger.error('Error marking ticket as answered', error=e)
-        await callback.answer(texts.t('TICKET_UPDATE_ERROR', 'Ошибка при обновлении тикета.'), show_alert=True)
+        await callback.answer(_plain(texts.t('TICKET_UPDATE_ERROR', 'Ошибка при обновлении тикета.')), show_alert=True)
 
 
 async def close_all_open_admin_tickets(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
@@ -664,21 +677,21 @@ async def close_all_open_admin_tickets(callback: types.CallbackQuery, db_user: U
     texts = get_texts(db_user.language)
     if not (settings.is_admin(callback.from_user.id) or SupportSettingsService.is_moderator(callback.from_user.id)):
         texts = get_texts(db_user.language)
-        await callback.answer(texts.ACCESS_DENIED, show_alert=True)
+        await callback.answer(_plain(texts.ACCESS_DENIED), show_alert=True)
         return
 
     try:
         closed_ticket_ids = await TicketCRUD.close_all_open_tickets(db)
     except Exception as error:
         logger.error('Error closing all open tickets', error=error)
-        await callback.answer(texts.t('TICKET_UPDATE_ERROR', 'Ошибка при обновлении тикета.'), show_alert=True)
+        await callback.answer(_plain(texts.t('TICKET_UPDATE_ERROR', 'Ошибка при обновлении тикета.')), show_alert=True)
         return
 
     closed_count = len(closed_ticket_ids)
 
     if closed_count == 0:
         await callback.answer(
-            _label(texts.t('ADMIN_CLOSE_ALL_OPEN_TICKETS_EMPTY', 'ℹ Нет открытых тикетов для закрытия.')),
+            _plain(_label(texts.t('ADMIN_CLOSE_ALL_OPEN_TICKETS_EMPTY', 'ℹ Нет открытых тикетов для закрытия.'))),
             show_alert=True,
         )
         return
@@ -719,7 +732,7 @@ async def close_all_open_admin_tickets(callback: types.CallbackQuery, db_user: U
     except Exception:
         # Если не удалось отправить отдельное сообщение, пробуем ответить алертом
         try:
-            await callback.answer(success_text, show_alert=True)
+            await callback.answer(_plain(success_text), show_alert=True)
         except Exception:
             pass
 
@@ -728,7 +741,7 @@ async def close_admin_ticket(callback: types.CallbackQuery, db_user: User, db: A
     """Закрыть тикет админом"""
     texts = get_texts(db_user.language)
     if not (settings.is_admin(callback.from_user.id) or SupportSettingsService.is_moderator(callback.from_user.id)):
-        await callback.answer(texts.ACCESS_DENIED, show_alert=True)
+        await callback.answer(_plain(texts.ACCESS_DENIED), show_alert=True)
         return
     ticket_id = int(callback.data.replace('admin_close_ticket_', ''))
 
@@ -774,7 +787,7 @@ async def close_admin_ticket(callback: types.CallbackQuery, db_user: User, db: A
                     parse_mode='HTML',
                 )
             except Exception:
-                await callback.answer(texts.t('TICKET_CLOSED', 'Тикет закрыт.'), show_alert=True)
+                await callback.answer(_plain(texts.t('TICKET_CLOSED', 'Тикет закрыт.')), show_alert=True)
 
             # Обновляем inline-клавиатуру в текущем сообщении без кнопок действий.
             # В группе — групповой клавиатурой, а не экраном личной админки.
@@ -785,11 +798,11 @@ async def close_admin_ticket(callback: types.CallbackQuery, db_user: User, db: A
                     reply_markup=get_admin_ticket_view_keyboard(ticket_id, True, db_user.language)
                 )
         else:
-            await callback.answer(texts.t('TICKET_CLOSE_ERROR', 'Ошибка при закрытии тикета.'), show_alert=True)
+            await callback.answer(_plain(texts.t('TICKET_CLOSE_ERROR', 'Ошибка при закрытии тикета.')), show_alert=True)
 
     except Exception as e:
         logger.error('Error closing admin ticket', error=e)
-        await callback.answer(texts.t('TICKET_CLOSE_ERROR', 'Ошибка при закрытии тикета.'), show_alert=True)
+        await callback.answer(_plain(texts.t('TICKET_CLOSE_ERROR', 'Ошибка при закрытии тикета.')), show_alert=True)
 
 
 async def cancel_admin_ticket_reply(callback: types.CallbackQuery, state: FSMContext, db_user: User):
@@ -797,7 +810,7 @@ async def cancel_admin_ticket_reply(callback: types.CallbackQuery, state: FSMCon
     texts = get_texts(db_user.language)
     if not (settings.is_admin(callback.from_user.id) or SupportSettingsService.is_moderator(callback.from_user.id)):
         texts = get_texts(db_user.language)
-        await callback.answer(texts.ACCESS_DENIED, show_alert=True)
+        await callback.answer(_plain(texts.ACCESS_DENIED), show_alert=True)
         return
     await state.clear()
 
@@ -823,14 +836,14 @@ async def block_user_in_ticket(callback: types.CallbackQuery, state: FSMContext,
     texts = get_texts(db_user.language)
     if not (settings.is_admin(callback.from_user.id) or SupportSettingsService.is_moderator(callback.from_user.id)):
         texts = get_texts(db_user.language)
-        await callback.answer(texts.ACCESS_DENIED, show_alert=True)
+        await callback.answer(_plain(texts.ACCESS_DENIED), show_alert=True)
         return
     ticket_id = int(callback.data.replace('admin_block_user_ticket_', ''))
     message = callback.message
     if not isinstance(message, types.Message):
         # None или InaccessibleMessage (например, уведомление старше 48ч) — редактировать нельзя
         await callback.answer(
-            texts.t('MESSAGE_TOO_OLD', 'Сообщение устарело, откройте тикет в панели.'), show_alert=True
+            _plain(texts.t('MESSAGE_TOO_OLD', 'Сообщение устарело, откройте тикет в панели.')), show_alert=True
         )
         return
     # Save original ticket message ids to update it after blocking without reopening
@@ -1164,7 +1177,7 @@ async def unblock_user_in_ticket(callback: types.CallbackQuery, db_user: User, d
     texts = get_texts(db_user.language)
     if not (settings.is_admin(callback.from_user.id) or SupportSettingsService.is_moderator(callback.from_user.id)):
         texts = get_texts(db_user.language)
-        await callback.answer(texts.ACCESS_DENIED, show_alert=True)
+        await callback.answer(_plain(texts.ACCESS_DENIED), show_alert=True)
         return
     ticket_id = int(callback.data.replace('admin_unblock_user_ticket_', ''))
     ok = await TicketCRUD.set_user_reply_block(db, ticket_id, permanent=False, until=None)
@@ -1214,14 +1227,14 @@ async def unblock_user_in_ticket(callback: types.CallbackQuery, db_user: User, d
         else:
             await view_admin_ticket(callback, db_user, db, state)
     else:
-        await callback.answer(texts.t('ADMIN_TICKETS_UI_UNBLOCK_USER_IN_TICKET_053', 'Ошибка'), show_alert=True)
+        await callback.answer(_plain(texts.t('ADMIN_TICKETS_UI_UNBLOCK_USER_IN_TICKET_053', 'Ошибка')), show_alert=True)
 
 
 async def block_user_permanently(callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext):
     texts = get_texts(db_user.language)
     if not (settings.is_admin(callback.from_user.id) or SupportSettingsService.is_moderator(callback.from_user.id)):
         texts = get_texts(db_user.language)
-        await callback.answer(texts.ACCESS_DENIED, show_alert=True)
+        await callback.answer(_plain(texts.ACCESS_DENIED), show_alert=True)
         return
     ticket_id = int(callback.data.replace('admin_block_user_perm_ticket_', ''))
     ok = await TicketCRUD.set_user_reply_block(db, ticket_id, permanent=True, until=None)
@@ -1272,7 +1285,7 @@ async def block_user_permanently(callback: types.CallbackQuery, db_user: User, d
         else:
             await view_admin_ticket(callback, db_user, db, state)
     else:
-        await callback.answer(texts.t('ADMIN_TICKETS_UI_UNBLOCK_USER_IN_TICKET_053', 'Ошибка'), show_alert=True)
+        await callback.answer(_plain(texts.t('ADMIN_TICKETS_UI_UNBLOCK_USER_IN_TICKET_053', 'Ошибка')), show_alert=True)
 
 
 async def _notify_ticket_reply_by_email(user: User, ticket: Ticket, reply_text: str, db: AsyncSession) -> None:
@@ -1347,17 +1360,24 @@ async def notify_user_about_ticket_reply(bot: Bot, ticket: Ticket, reply_text: s
             'TICKET_REPLY_NOTIFICATION',
             ' Получен ответ по тикету #{ticket_id}\n\n{reply_preview}\n\nНажмите кнопку ниже, чтобы перейти к тикету:',
         ).format(ticket_id=ticket.id, reply_preview=html.escape(preview_text(reply_text)))
+        # Те же кнопки, что и в остальных уведомлениях: подпись из локали без
+        # юникод-глифа, иконка — premium-эмодзи. callback_data не меняется.
         keyboard = types.InlineKeyboardMarkup(
             inline_keyboard=[
                 [
-                    types.InlineKeyboardButton(
-                        text=texts.t('VIEW_TICKET', 'Посмотреть тикет'), callback_data=f'view_ticket_{ticket.id}'
+                    admin_button(
+                        _label(texts.t('VIEW_TICKET', 'Посмотреть тикет')),
+                        callback_data=f'view_ticket_{ticket.id}',
+                        icon='chat',
+                        style='primary',
                     )
                 ],
                 [
-                    types.InlineKeyboardButton(
-                        text=texts.t('CLOSE_NOTIFICATION', ' Закрыть уведомление'),
+                    admin_button(
+                        _label(texts.t('CLOSE_NOTIFICATION', 'Закрыть уведомление')),
                         callback_data=f'close_ticket_notification_{ticket.id}',
+                        icon='cross',
+                        style='danger',
                     )
                 ],
             ]
@@ -1379,6 +1399,7 @@ async def notify_user_about_ticket_reply(bot: Bot, ticket: Ticket, reply_text: s
                     **{last_message.media_type: last_message.media_file_id},
                     caption=caption,
                     reply_markup=keyboard,
+                    parse_mode='HTML',
                 )
                 return
             except TelegramBadRequest as media_error:
@@ -1395,6 +1416,7 @@ async def notify_user_about_ticket_reply(bot: Bot, ticket: Ticket, reply_text: s
             chat_id=chat_id,
             text=base_text,
             reply_markup=keyboard,
+            parse_mode='HTML',
         )
 
         logger.info('Ticket reply notification sent to user', ticket_id=ticket.id, chat_id=chat_id)
@@ -1441,21 +1463,21 @@ def register_handlers(dp: Dispatcher):
         # permission gate for attachments view
         if not (settings.is_admin(callback.from_user.id) or SupportSettingsService.is_moderator(callback.from_user.id)):
             texts = get_texts(db_user.language)
-            await callback.answer(texts.ACCESS_DENIED, show_alert=True)
+            await callback.answer(_plain(texts.ACCESS_DENIED), show_alert=True)
             return
         texts = get_texts(db_user.language)
         try:
             ticket_id = int(callback.data.replace('admin_ticket_attachments_', ''))
         except ValueError:
-            await callback.answer(texts.t('TICKET_NOT_FOUND', 'Тикет не найден.'), show_alert=True)
+            await callback.answer(_plain(texts.t('TICKET_NOT_FOUND', 'Тикет не найден.')), show_alert=True)
             return
         ticket = await TicketCRUD.get_ticket_by_id(db, ticket_id, load_messages=True)
         if not ticket:
-            await callback.answer(texts.t('TICKET_NOT_FOUND', 'Тикет не найден.'), show_alert=True)
+            await callback.answer(_plain(texts.t('TICKET_NOT_FOUND', 'Тикет не найден.')), show_alert=True)
             return
         attachments = [item for message in ticket.messages for item in get_ticket_media(message)]
         if not attachments:
-            await callback.answer(texts.t('NO_ATTACHMENTS', 'Вложений нет.'), show_alert=True)
+            await callback.answer(_plain(texts.t('NO_ATTACHMENTS', 'Вложений нет.')), show_alert=True)
             return
         from aiogram.types import InputMediaDocument, InputMediaPhoto, InputMediaVideo
 

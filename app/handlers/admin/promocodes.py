@@ -27,7 +27,7 @@ from app.keyboards.admin import (
 )
 from app.localization.texts import get_texts
 from app.states import AdminStates
-from app.utils.admin_ui import admin_back_button, admin_button, admin_icon, admin_quote, admin_screen
+from app.utils.admin_ui import admin_back_button, admin_button, admin_heading, admin_icon, admin_quote, admin_screen
 from app.utils.decorators import admin_required, error_handler
 from app.utils.formatters import format_datetime
 
@@ -54,6 +54,28 @@ def _clean_legacy(value: str) -> str:
     return _LEGACY_PREFIX_RE.sub('', value).strip()
 
 
+_BOLD_TAGS_RE = re.compile(r'</?b>')
+_PAGE_SUFFIX_RE = re.compile(r'\s*\([^()]*\)\s*$')
+
+
+def _heading(icon: str, title: str) -> str:
+    """Заголовок с premium-иконкой и <b>; существующие теги не дублируются."""
+    return admin_heading(icon, _BOLD_TAGS_RE.sub('', title or '').strip())
+
+
+def _screen(raw: str, *, icon: str) -> str:
+    """Карточка: заголовок из локали + блок параметров под ним."""
+    prepared = _clean_legacy(raw or '')
+    title, separator, body = prepared.partition('\n\n')
+    if not separator:
+        return _heading(icon, prepared)
+
+    body = body.strip()
+    if not body:
+        return _heading(icon, title)
+    return f'{_heading(icon, title)}\n\n{admin_quote(body)}'
+
+
 @admin_required
 @error_handler
 async def show_promocodes_menu(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
@@ -61,14 +83,14 @@ async def show_promocodes_menu(callback: types.CallbackQuery, db_user: User, db:
     active_codes = await get_promocodes_count(db, is_active=True)
 
     stats_body = (
-        f'<b>Всего промокодов:</b> {total_codes}\n'
-        f'<b>Активных:</b> {active_codes}\n'
-        f'<b>Неактивных:</b> {total_codes - active_codes}'
+        f'{admin_icon("promo")} <b>Всего промокодов:</b> {total_codes}\n'
+        f'{admin_icon("success")} <b>Активных:</b> {active_codes}\n'
+        f'{admin_icon("prohibit")} <b>Неактивных:</b> {total_codes - active_codes}'
     )
-    text = f'<b>Управление промокодами</b>\n\n{admin_quote(stats_body)}'
+    text = f'{admin_heading("promo", "Управление промокодами")}\n\n{admin_quote(stats_body)}'
 
     await callback.message.edit_text(
-        admin_screen(text, icon='promo', compact=True),
+        text,
         reply_markup=get_admin_promocodes_keyboard(db_user.language),
         parse_mode='HTML',
     )
@@ -95,9 +117,16 @@ async def show_promocodes_list(callback: types.CallbackQuery, db_user: User, db:
         await callback.answer()
         return
 
-    text = texts.t('ADMIN_PROMOCODE_UI_001', '<b>Список промокодов</b> (стр. {v0}/{v1})\n\n').format(
-        v0=page, v1=total_pages
+    header_blob = _clean_legacy(
+        texts.t('ADMIN_PROMOCODE_UI_001', '<b>Список промокодов</b> (стр. {v0}/{v1})\n\n').format(
+            v0=page, v1=total_pages
+        )
     )
+    header_title, _, header_rest = header_blob.partition('\n\n')
+    page_match = _PAGE_SUFFIX_RE.search(header_title)
+    page_note = page_match.group(0).strip(' ()') if page_match else ''
+    header_title = _PAGE_SUFFIX_RE.sub('', header_title).strip()
+    text = ''
     keyboard = []
 
     for promo in promocodes:
@@ -180,7 +209,7 @@ async def show_promocodes_list(callback: types.CallbackQuery, db_user: User, db:
                 .format(v0=format_datetime(promo.valid_until))
             )
 
-        keyboard.append([admin_button(promo.code, callback_data=f'promo_manage_{promo.id}')])
+        keyboard.append([admin_button(promo.code, callback_data=f'promo_manage_{promo.id}', icon='promo')])
 
         text += '\n'
 
@@ -192,13 +221,19 @@ async def show_promocodes_list(callback: types.CallbackQuery, db_user: User, db:
 
     keyboard.extend(
         [
-            [admin_button('Создать', callback_data='admin_promo_create', icon='plus', style='success')],
+            [admin_button('Создать', callback_data='admin_promo_create', icon='plus')],
             [admin_back_button(texts, 'admin_promocodes')],
         ]
     )
 
+    cards = [admin_quote(chunk.strip()) for chunk in _clean_legacy(text).split('\n\n') if chunk.strip()]
+    blocks = [_heading('promo', header_title)]
+    if page_note:
+        blocks.append(f'{admin_icon("document")} {page_note}')
+    blocks.extend(cards)
+
     await callback.message.edit_text(
-        admin_screen(_clean_legacy(text), icon='promo', compact=True),
+        '\n\n'.join(blocks),
         reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
         parse_mode='HTML',
     )
@@ -339,7 +374,6 @@ async def show_promocode_management(callback: types.CallbackQuery, db_user: User
                 _clean_legacy(texts.t('ADMIN_PROMOCODE_UI_076', 'Редактировать')),
                 callback_data=f'promo_edit_{promo.id}',
                 icon='edit',
-                style='primary',
             ),
             admin_button(
                 _clean_legacy(texts.t('ADMIN_PROMOCODE_UI_077', 'Переключить статус')),
@@ -353,13 +387,11 @@ async def show_promocode_management(callback: types.CallbackQuery, db_user: User
                 _clean_legacy(texts.t('ADMIN_PROMOCODE_UI_078', 'Статистика')),
                 callback_data=f'promo_stats_{promo.id}',
                 icon='stats',
-                style='primary',
             ),
             admin_button(
                 _clean_legacy(texts.t('ADMIN_PROMOCODE_UI_079', 'Удалить')),
                 callback_data=f'promo_delete_{promo.id}',
                 icon='delete',
-                style='danger',
             ),
         ],
         [
@@ -370,7 +402,7 @@ async def show_promocode_management(callback: types.CallbackQuery, db_user: User
     ]
 
     await callback.message.edit_text(
-        admin_screen(_clean_legacy(text), icon='promo', compact=True),
+        _screen(text, icon='promo'),
         reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
         parse_mode='HTML',
     )
@@ -446,7 +478,7 @@ async def show_promocode_edit_menu(callback: types.CallbackQuery, db_user: User,
     else:
         text += get_texts(db_user.language).t('ADMIN_PROMOCODE_UI_023', '• Срок: бессрочно\n')
 
-    text += get_texts(db_user.language).t('ADMIN_PROMOCODE_UI_007', 'Выберите параметр для изменения:')
+    hint = get_texts(db_user.language).t('ADMIN_PROMOCODE_UI_007', 'Выберите параметр для изменения:')
 
     keyboard = [
         [
@@ -512,7 +544,7 @@ async def show_promocode_edit_menu(callback: types.CallbackQuery, db_user: User,
     keyboard.extend([[admin_back_button(texts, f'promo_manage_{promo.id}')]])
 
     await callback.message.edit_text(
-        admin_screen(_clean_legacy(text), icon='promo', compact=True),
+        f'{_screen(text, icon="edit")}\n\n{hint}',
         reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
         parse_mode='HTML',
     )
@@ -891,6 +923,7 @@ async def process_promocode_code(message: types.Message, db_user: User, state: F
                     admin_button(
                         f'{promo_group.name} (↑{promo_group.priority})',
                         callback_data=f'promo_select_group_{promo_group.id}',
+                        icon='users',
                     )
                 ]
             )
@@ -1125,10 +1158,10 @@ async def handle_edit_value(message: types.Message, db_user: User, state: FSMCon
                 reply_markup=types.InlineKeyboardMarkup(
                     inline_keyboard=[
                         [
-                            admin_button(
-                                _clean_legacy(texts.t('ADMIN_PROMOCODE_UI_121', 'К промокоду')),
-                                callback_data=f'promo_manage_{promo_id}',
-                                style='primary',
+                            admin_back_button(
+                                texts,
+                                f'promo_manage_{promo_id}',
+                                label=_clean_legacy(texts.t('ADMIN_PROMOCODE_UI_121', 'К промокоду')),
                             )
                         ]
                     ]
@@ -1158,10 +1191,10 @@ async def handle_edit_value(message: types.Message, db_user: User, state: FSMCon
                 reply_markup=types.InlineKeyboardMarkup(
                     inline_keyboard=[
                         [
-                            admin_button(
-                                _clean_legacy(texts.t('ADMIN_PROMOCODE_UI_121', 'К промокоду')),
-                                callback_data=f'promo_manage_{promo_id}',
-                                style='primary',
+                            admin_back_button(
+                                texts,
+                                f'promo_manage_{promo_id}',
+                                label=_clean_legacy(texts.t('ADMIN_PROMOCODE_UI_121', 'К промокоду')),
                             )
                         ]
                     ]
@@ -1305,10 +1338,10 @@ async def handle_edit_uses(message: types.Message, db_user: User, state: FSMCont
             reply_markup=types.InlineKeyboardMarkup(
                 inline_keyboard=[
                     [
-                        admin_button(
-                            _clean_legacy(texts.t('ADMIN_PROMOCODE_UI_121', 'К промокоду')),
-                            callback_data=f'promo_manage_{promo_id}',
-                            style='primary',
+                        admin_back_button(
+                            texts,
+                            f'promo_manage_{promo_id}',
+                            label=_clean_legacy(texts.t('ADMIN_PROMOCODE_UI_121', 'К промокоду')),
                         )
                     ]
                 ]
@@ -1479,10 +1512,12 @@ async def process_promocode_expiry(message: types.Message, db_user: User, state:
             reply_markup=types.InlineKeyboardMarkup(
                 inline_keyboard=[
                     [
-                        admin_button(
-                            _clean_legacy(get_texts(db_user.language).t('ADMIN_PROMOCODE_UI_115', 'К промокодам')),
-                            callback_data='admin_promocodes',
-                            style='primary',
+                        admin_back_button(
+                            get_texts(db_user.language),
+                            'admin_promocodes',
+                            label=_clean_legacy(
+                                get_texts(db_user.language).t('ADMIN_PROMOCODE_UI_115', 'К промокодам')
+                            ),
                         )
                     ]
                 ]
@@ -1586,10 +1621,12 @@ async def process_discount_hours(message: types.Message, db_user: User, state: F
             reply_markup=types.InlineKeyboardMarkup(
                 inline_keyboard=[
                     [
-                        admin_button(
-                            _clean_legacy(get_texts(db_user.language).t('ADMIN_PROMOCODE_UI_115', 'К промокодам')),
-                            callback_data='admin_promocodes',
-                            style='primary',
+                        admin_back_button(
+                            get_texts(db_user.language),
+                            'admin_promocodes',
+                            label=_clean_legacy(
+                                get_texts(db_user.language).t('ADMIN_PROMOCODE_UI_115', 'К промокодам')
+                            ),
                         )
                     ]
                 ]
@@ -1670,10 +1707,10 @@ async def handle_edit_expiry(message: types.Message, db_user: User, state: FSMCo
             reply_markup=types.InlineKeyboardMarkup(
                 inline_keyboard=[
                     [
-                        admin_button(
-                            _clean_legacy(texts.t('ADMIN_PROMOCODE_UI_121', 'К промокоду')),
-                            callback_data=f'promo_manage_{promo_id}',
-                            style='primary',
+                        admin_back_button(
+                            texts,
+                            f'promo_manage_{promo_id}',
+                            label=_clean_legacy(texts.t('ADMIN_PROMOCODE_UI_121', 'К промокоду')),
                         )
                     ]
                 ]
@@ -1777,16 +1814,17 @@ async def confirm_delete_promocode(callback: types.CallbackQuery, db_user: User,
 
     texts = get_texts(db_user.language)
     details = (
-        f'<b>Информация о промокоде</b>\n'
-        f'• Использований: {promo.current_uses}/{promo.max_uses}\n'
-        f'• Статус: {"Активен" if promo.is_active else "Неактивен"}\n'
-        f'• ID: <code>{promo.id}</code>'
+        f'{admin_icon("promo")} Код: <code>{html.escape(promo.code)}</code>\n'
+        f'{admin_icon("chart")} Использований: <b>{promo.current_uses}/{promo.max_uses}</b>\n'
+        f'{admin_icon("success") if promo.is_active else admin_icon("prohibit")} '
+        f'Статус: {"Активен" if promo.is_active else "Неактивен"}\n'
+        f'{admin_icon("id")} ID: <code>{promo.id}</code>'
     )
     text = (
-        '<b>Подтверждение удаления</b>\n\n'
-        f'Вы действительно хотите удалить промокод <code>{html.escape(promo.code)}</code>?\n\n'
+        f'{admin_heading("warning", "Подтверждение удаления")}\n\n'
         f'{admin_quote(details)}\n\n'
-        '<b>Внимание:</b> это действие нельзя отменить!'
+        f'Удалить промокод <code>{html.escape(promo.code)}</code>?\n'
+        f'{admin_icon("warning")} Это действие нельзя отменить.'
     )
 
     keyboard = types.InlineKeyboardMarkup(
@@ -1796,7 +1834,6 @@ async def confirm_delete_promocode(callback: types.CallbackQuery, db_user: User,
                     _clean_legacy(texts.t('ADMIN_PROMOCODE_UI_114', 'Да, удалить')),
                     callback_data=f'promo_delete_confirm_{promo.id}',
                     icon='delete',
-                    style='danger',
                 ),
                 admin_back_button(
                     texts,
@@ -1808,7 +1845,7 @@ async def confirm_delete_promocode(callback: types.CallbackQuery, db_user: User,
     )
 
     await callback.message.edit_text(
-        admin_screen(text, icon='warning', compact=True),
+        text,
         reply_markup=keyboard,
         parse_mode='HTML',
     )
@@ -1864,15 +1901,14 @@ async def show_promocode_stats(callback: types.CallbackQuery, db_user: User, db:
 
     texts = get_texts(db_user.language)
     overview = (
-        f'<b>Общая статистика</b>\n'
-        f'• Всего использований: {stats["total_uses"]}\n'
-        f'• Использований сегодня: {stats["today_uses"]}\n'
-        f'• Осталось использований: {promo.max_uses - promo.current_uses}'
+        f'{admin_icon("chart")} Всего использований: <b>{stats["total_uses"]}</b>\n'
+        f'{admin_icon("calendar")} Использований сегодня: <b>{stats["today_uses"]}</b>\n'
+        f'{admin_icon("infinity")} Осталось использований: <b>{promo.max_uses - promo.current_uses}</b>'
     )
-    text = f'<b>Статистика промокода</b> <code>{html.escape(promo.code)}</code>\n\n{admin_quote(overview)}\n\n'
+    heading = admin_heading('chart', f'Статистика промокода {promo.code}')
+    blocks = [heading, admin_quote(overview)]
 
-    text += '<b>Последние использования:</b>\n'
-
+    uses: list[str] = []
     if stats['recent_uses']:
         for use in stats['recent_uses'][:5]:
             use_date = format_datetime(use.used_at)
@@ -1886,14 +1922,18 @@ async def show_promocode_stats(callback: types.CallbackQuery, db_user: User, db:
             else:
                 user_display = f'ID{use.user_id}'
 
-            text += f'• {use_date} | {user_display}\n'
+            uses.append(f'{admin_icon("user")} {use_date} — {user_display}')
     else:
-        text += texts.t('ADMIN_PROMOCODE_UI_037', '• Пока не было использований\n')
+        uses.append(
+            f'{admin_icon("info")} ' + _clean_legacy(texts.t('ADMIN_PROMOCODE_UI_037', 'Пока не было использований'))
+        )
+
+    blocks.append('\n'.join(uses))
 
     keyboard = types.InlineKeyboardMarkup(inline_keyboard=[[admin_back_button(texts, f'promo_manage_{promo.id}')]])
 
     await callback.message.edit_text(
-        admin_screen(_clean_legacy(text), icon='stats', compact=True),
+        '\n\n'.join(blocks),
         reply_markup=keyboard,
         parse_mode='HTML',
     )
@@ -1908,13 +1948,12 @@ async def show_general_promocode_stats(callback: types.CallbackQuery, db_user: U
 
     texts = get_texts(db_user.language)
     overview = (
-        f'<b>Основные показатели</b>\n'
-        f'• Всего промокодов: {total_codes}\n'
-        f'• Активных: {active_codes}\n'
-        f'• Неактивных: {total_codes - active_codes}'
+        f'{admin_icon("promo")} Всего промокодов: <b>{total_codes}</b>\n'
+        f'{admin_icon("success")} Активных: <b>{active_codes}</b>\n'
+        f'{admin_icon("prohibit")} Неактивных: <b>{total_codes - active_codes}</b>'
     )
     text = (
-        f'<b>Общая статистика промокодов</b>\n\n{admin_quote(overview)}\n\n'
+        f'{admin_heading("chart", "Общая статистика промокодов")}\n\n{admin_quote(overview)}\n\n'
         'Для детальной статистики выберите конкретный промокод из списка.'
     )
 
@@ -1924,7 +1963,7 @@ async def show_general_promocode_stats(callback: types.CallbackQuery, db_user: U
                 admin_button(
                     'К промокодам',
                     callback_data='admin_promo_list',
-                    style='primary',
+                    icon='promo',
                 )
             ],
             [admin_back_button(texts, 'admin_promocodes')],
@@ -1932,7 +1971,7 @@ async def show_general_promocode_stats(callback: types.CallbackQuery, db_user: U
     )
 
     await callback.message.edit_text(
-        admin_screen(text, icon='stats', compact=True),
+        text,
         reply_markup=keyboard,
         parse_mode='HTML',
     )

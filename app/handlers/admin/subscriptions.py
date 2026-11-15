@@ -20,7 +20,7 @@ from app.database.models import (
     User,
 )
 from app.localization.texts import Texts, get_texts
-from app.utils.admin_ui import admin_back_button, admin_button, admin_screen
+from app.utils.admin_ui import admin_back_button, admin_button, admin_icon, admin_quote, admin_screen
 from app.utils.decorators import admin_required, error_handler
 from app.utils.formatters import format_datetime
 from app.utils.miniapp_buttons import strip_leading_emoji
@@ -95,18 +95,23 @@ async def show_subscriptions_menu(callback: types.CallbackQuery, db_user: User, 
     texts = get_texts(db_user.language)
     stats = await get_subscriptions_statistics(db)
 
-    text = f"""<b>Управление подписками</b>
-
-<b>Статистика:</b>
-• Всего: {stats['total_subscriptions']}
-• Активных: {stats['active_subscriptions']}
-• Платных: {stats['paid_subscriptions']}
-• Триальных: {stats['trial_subscriptions']}
-
-<b>Продажи:</b>
-• Сегодня: {stats['purchased_today']}
-• За неделю: {stats['purchased_week']}
-• За месяц: {stats['purchased_month']}"""
+    text = (
+        '<b>Управление подписками</b>\n\n'
+        + admin_quote(
+            '<b>Статистика</b>\n'
+            f'{admin_icon("tariff")} Всего: {stats["total_subscriptions"]}\n'
+            f'{admin_icon("success")} Активных: {stats["active_subscriptions"]}\n'
+            f'{admin_icon("star")} Платных: {stats["paid_subscriptions"]}\n'
+            f'{admin_icon("trials")} Триальных: {stats["trial_subscriptions"]}'
+        )
+        + '\n\n'
+        + admin_quote(
+            '<b>Продажи</b>\n'
+            f'{admin_icon("calendar")} Сегодня: {stats["purchased_today"]}\n'
+            f'{admin_icon("chart")} За неделю: {stats["purchased_week"]}\n'
+            f'{admin_icon("stats")} За месяц: {stats["purchased_month"]}'
+        )
+    )
 
     keyboard = [
         [
@@ -114,13 +119,11 @@ async def show_subscriptions_menu(callback: types.CallbackQuery, db_user: User, 
                 strip_leading_emoji(texts.t('ADMIN_SUBSCRIPTIONS_UI_028', 'Список подписок')),
                 callback_data='admin_subs_list',
                 icon='document',
-                style='primary',
             ),
             admin_button(
                 strip_leading_emoji(texts.t('ADMIN_SUBSCRIPTIONS_UI_029', 'Истекающие')),
                 callback_data='admin_subs_expiring',
                 icon='calendar',
-                style='primary',
             ),
         ],
         [
@@ -128,13 +131,11 @@ async def show_subscriptions_menu(callback: types.CallbackQuery, db_user: User, 
                 strip_leading_emoji(texts.t('ADMIN_SUBSCRIPTIONS_UI_030', 'Статистика')),
                 callback_data='admin_subs_stats',
                 icon='stats',
-                style='primary',
             ),
             admin_button(
                 strip_leading_emoji(texts.t('ADMIN_SUBSCRIPTIONS_UI_031', 'География')),
                 callback_data='admin_subs_countries',
                 icon='servers',
-                style='primary',
             ),
         ],
         [admin_back_button(texts, 'admin_panel')],
@@ -158,10 +159,11 @@ async def show_subscriptions_list(callback: types.CallbackQuery, db_user: User, 
     if not subscriptions:
         text = texts.t('ADMIN_SUBSCRIPTIONS_UI_004', '<b>Список подписок</b>\n\nПодписки не найдены.')
     else:
-        text = texts.t('ADMIN_SUBSCRIPTIONS_UI_005', '<b>Список подписок</b>\n\n')
-        text += texts.t('ADMIN_SUBSCRIPTIONS_UI_006', 'Всего: {value1} | Страница: {value2}/{value3}\n\n').format(
+        header = texts.t('ADMIN_SUBSCRIPTIONS_UI_005', '<b>Список подписок</b>\n\n')
+        summary = texts.t('ADMIN_SUBSCRIPTIONS_UI_006', 'Всего: {value1} | Страница: {value2}/{value3}\n\n').format(
             value1=total_count, value2=page, value3=total_pages
         )
+        text = header + admin_quote(summary.strip().lstrip('▤▣▥◷↻ ')) + '\n\n'
 
         for i, sub in enumerate(subscriptions, 1 + (page - 1) * 10):
             user_info = (
@@ -169,20 +171,23 @@ async def show_subscriptions_list(callback: types.CallbackQuery, db_user: User, 
                 if sub.user
                 else texts.t('ADMIN_SUBSCRIPTIONS_UI_010', 'Неизвестно')
             )
+            status_icon = admin_icon('success') if sub.is_active else admin_icon('prohibit')
             status = (
                 texts.t('ADMIN_SUBSCRIPTIONS_UI_020', 'Активна')
                 if sub.is_active
                 else texts.t('ADMIN_SUBSCRIPTIONS_UI_021', 'Неактивна')
             )
 
-            text += f'{i}. {user_info}\n'
-            text += texts.t('ADMIN_SUBSCRIPTIONS_UI_009', '   {value1} | До: {value2}\n').format(
+            text += f'{i}. {admin_icon("user")} {user_info}\n'
+            status_line = texts.t('ADMIN_SUBSCRIPTIONS_UI_009', '   {value1} | До: {value2}\n').format(
                 value1=status, value2=format_datetime(sub.end_date)
             )
+            text += f'{status_icon} {status_line.strip()}\n'
             if sub.device_limit is not None:
-                text += texts.t('ADMIN_SUBSCRIPTIONS_UI_022', '    Устройств: {value1}\n').format(
+                devices_line = texts.t('ADMIN_SUBSCRIPTIONS_UI_022', '    Устройств: {value1}\n').format(
                     value1=Texts.format_device_limit(sub.device_limit)
                 )
+                text += f'{admin_icon("devices")} {devices_line.strip()}\n'
             text += '\n'
 
     keyboard = []
@@ -190,12 +195,12 @@ async def show_subscriptions_list(callback: types.CallbackQuery, db_user: User, 
     if total_pages > 1:
         nav_row = []
         if page > 1:
-            nav_row.append(admin_button('←', callback_data=f'admin_subs_list_page_{page - 1}', style='primary'))
+            nav_row.append(admin_button('←', callback_data=f'admin_subs_list_page_{page - 1}'))
 
         nav_row.append(admin_button(f'{page}/{total_pages}', callback_data='current_page'))
 
         if page < total_pages:
-            nav_row.append(admin_button('→', callback_data=f'admin_subs_list_page_{page + 1}', style='primary'))
+            nav_row.append(admin_button('→', callback_data=f'admin_subs_list_page_{page + 1}'))
 
         keyboard.append(nav_row)
 
@@ -206,7 +211,6 @@ async def show_subscriptions_list(callback: types.CallbackQuery, db_user: User, 
                     strip_leading_emoji(texts.t('ADMIN_SUBSCRIPTIONS_UI_034', 'Обновить')),
                     callback_data='admin_subs_list',
                     icon='refresh',
-                    style='primary',
                 )
             ],
             [admin_back_button(texts, 'admin_subscriptions')],
@@ -229,35 +233,37 @@ async def show_expiring_subscriptions(callback: types.CallbackQuery, db_user: Us
     expiring_1d = await get_expiring_subscriptions(db, 1)
     expired = await get_expired_subscriptions(db)
 
-    text = f"""<b>Истекающие подписки</b>
-
-<b>Статистика:</b>
-• Истекают через 3 дня: {len(expiring_3d)}
-• Истекают завтра: {len(expiring_1d)}
-• Уже истекли: {len(expired)}
-
-<b>Истекают через 3 дня:</b>
-"""
+    stats_body = (
+        '<b>Статистика</b>\n'
+        f'{admin_icon("clock")} Истекают через 3 дня: {len(expiring_3d)}\n'
+        f'{admin_icon("calendar")} Истекают завтра: {len(expiring_1d)}\n'
+        f'{admin_icon("prohibit")} Уже истекли: {len(expired)}'
+    )
+    text = (
+        f'<b>Истекающие подписки</b>\n\n{admin_quote(stats_body)}\n\n'
+        f'{admin_icon("calendar")} <b>Истекают через 3 дня</b>\n'
+    )
 
     for sub in expiring_3d[:5]:
         user_info = (
-            (f'ID{sub.user.telegram_id}' if sub.user.telegram_id else sub.user.email or f'#{sub.user.id}')
+            (f'ID {sub.user.telegram_id}' if sub.user.telegram_id else sub.user.email or f'#{sub.user.id}')
             if sub.user
             else texts.t('ADMIN_SUBSCRIPTIONS_UI_010', 'Неизвестно')
         )
-        text += f'{user_info} - {format_datetime(sub.end_date)}\n'
+        text += f'{admin_icon("user")} {user_info} - {format_datetime(sub.end_date)}\n'
 
     if len(expiring_3d) > 5:
         text += texts.t('ADMIN_SUBSCRIPTIONS_UI_007', '... и еще {value1}\n').format(value1=len(expiring_3d) - 5)
 
-    text += texts.t('ADMIN_SUBSCRIPTIONS_UI_002', '\n<b>Истекают завтра:</b>\n')
+    tomorrow_heading = texts.t('ADMIN_SUBSCRIPTIONS_UI_002', '\n<b>Истекают завтра:</b>\n').strip()
+    text += f'\n{admin_icon("clock")} {tomorrow_heading}\n'
     for sub in expiring_1d[:5]:
         user_info = (
-            (f'ID{sub.user.telegram_id}' if sub.user.telegram_id else sub.user.email or f'#{sub.user.id}')
+            (f'ID {sub.user.telegram_id}' if sub.user.telegram_id else sub.user.email or f'#{sub.user.id}')
             if sub.user
             else texts.t('ADMIN_SUBSCRIPTIONS_UI_010', 'Неизвестно')
         )
-        text += f'{user_info} - {format_datetime(sub.end_date)}\n'
+        text += f'{admin_icon("user")} {user_info} - {format_datetime(sub.end_date)}\n'
 
     if len(expiring_1d) > 5:
         text += texts.t('ADMIN_SUBSCRIPTIONS_UI_007', '... и еще {value1}\n').format(value1=len(expiring_1d) - 5)
@@ -268,7 +274,6 @@ async def show_expiring_subscriptions(callback: types.CallbackQuery, db_user: Us
                 strip_leading_emoji(texts.t('ADMIN_SUBSCRIPTIONS_UI_033', 'Отправить напоминания')),
                 callback_data='admin_send_expiry_reminders',
                 icon='messages',
-                style='success',
             )
         ],
         [
@@ -276,7 +281,6 @@ async def show_expiring_subscriptions(callback: types.CallbackQuery, db_user: Us
                 strip_leading_emoji(texts.t('ADMIN_SUBSCRIPTIONS_UI_034', 'Обновить')),
                 callback_data='admin_subs_expiring',
                 icon='refresh',
-                style='primary',
             )
         ],
         [admin_back_button(texts, 'admin_subscriptions')],
@@ -300,31 +304,42 @@ async def show_subscriptions_stats(callback: types.CallbackQuery, db_user: User,
     expiring_7d = await get_expiring_subscriptions(db, 7)
     expired = await get_expired_subscriptions(db)
 
-    text = f"""<b>Детальная статистика подписок</b>
-
-<b>Общая информация:</b>
-• Всего подписок: {stats['total_subscriptions']}
-• Активных: {stats['active_subscriptions']}
-• Неактивных: {stats['total_subscriptions'] - stats['active_subscriptions']}
-
-<b>По типам:</b>
-• Платных: {stats['paid_subscriptions']}
-• Триальных: {stats['trial_subscriptions']}
-
-<b>Продажи:</b>
-• Сегодня: {stats['purchased_today']}
-• За неделю: {stats['purchased_week']}
-• За месяц: {stats['purchased_month']}
-
-<b>Истечение:</b>
-• Истекают через 3 дня: {len(expiring_3d)}
-• Истекают через 7 дней: {len(expiring_7d)}
-• Уже истекли: {len(expired)}
-
-<b>Конверсия:</b>
-• Из триала в платную: {stats.get('trial_to_paid_conversion', 0)}%
-• Продлений: {stats.get('renewals_count', 0)}
-"""
+    text = (
+        '<b>Детальная статистика подписок</b>\n\n'
+        + admin_quote(
+            '<b>Общая информация</b>\n'
+            f'{admin_icon("tariff")} Всего подписок: {stats["total_subscriptions"]}\n'
+            f'{admin_icon("success")} Активных: {stats["active_subscriptions"]}\n'
+            f'{admin_icon("prohibit")} Неактивных: '
+            f'{stats["total_subscriptions"] - stats["active_subscriptions"]}'
+        )
+        + '\n\n'
+        + admin_quote(
+            '<b>По типам</b>\n'
+            f'{admin_icon("star")} Платных: {stats["paid_subscriptions"]}\n'
+            f'{admin_icon("trials")} Триальных: {stats["trial_subscriptions"]}'
+        )
+        + '\n\n'
+        + admin_quote(
+            '<b>Продажи</b>\n'
+            f'{admin_icon("calendar")} Сегодня: {stats["purchased_today"]}\n'
+            f'{admin_icon("chart")} За неделю: {stats["purchased_week"]}\n'
+            f'{admin_icon("stats")} За месяц: {stats["purchased_month"]}'
+        )
+        + '\n\n'
+        + admin_quote(
+            '<b>Истечение</b>\n'
+            f'{admin_icon("clock")} Истекают через 3 дня: {len(expiring_3d)}\n'
+            f'{admin_icon("calendar")} Истекают через 7 дней: {len(expiring_7d)}\n'
+            f'{admin_icon("prohibit")} Уже истекли: {len(expired)}'
+        )
+        + '\n\n'
+        + admin_quote(
+            '<b>Конверсия</b>\n'
+            f'{admin_icon("repeat")} Из триала в платную: {stats.get("trial_to_paid_conversion", 0)}%\n'
+            f'{admin_icon("refresh")} Продлений: {stats.get("renewals_count", 0)}'
+        )
+    )
 
     keyboard = [[admin_back_button(texts, 'admin_subscriptions')]]
 
@@ -351,7 +366,7 @@ async def show_countries_management(callback: types.CallbackQuery, db_user: User
         text = texts.t('ADMIN_SUBSCRIPTIONS_UI_008', '<b>Управление странами</b>\n\n')
 
         if nodes_data:
-            text += texts.t('ADMIN_SUBSCRIPTIONS_UI_011', '<b>Доступные серверы:</b>\n')
+            servers_body = texts.t('ADMIN_SUBSCRIPTIONS_UI_011', '<b>Доступные серверы:</b>\n').strip()
             countries = {}
 
             for node in nodes_data:
@@ -367,67 +382,70 @@ async def show_countries_management(callback: types.CallbackQuery, db_user: User
                 total_nodes = len(nodes)
 
                 country_flag = get_country_flag(country)
-                text += (
+                servers_body += '\n' + (
                     texts.t('ADMIN_SUBSCRIPTIONS_UI_023', '{value1} {value2}: {value3}/{value4} серверов\n')
                     .format(
                         value1=country_flag, value2=html.escape(str(country)), value3=active_nodes, value4=total_nodes
                     )
                     .lstrip()
+                    .rstrip('\n')
                 )
 
                 total_users_online = sum(n.get('users_online', 0) or 0 for n in nodes)
                 if total_users_online > 0:
-                    text += texts.t('ADMIN_SUBSCRIPTIONS_UI_035', '    Пользователей онлайн: {value1}\n').format(
-                        value1=total_users_online
-                    )
+                    servers_body += '\n' + texts.t(
+                        'ADMIN_SUBSCRIPTIONS_UI_035', '    Пользователей онлайн: {value1}\n'
+                    ).format(value1=total_users_online).rstrip('\n')
+            text += admin_quote(servers_body) + '\n\n'
         else:
             text += texts.t('ADMIN_SUBSCRIPTIONS_UI_012', 'Не удалось загрузить данные о серверах\n')
 
         if squads_data:
-            text += texts.t('ADMIN_SUBSCRIPTIONS_UI_013', '\n<b>Всего сквадов:</b> {value1}\n').format(
+            squads_body = texts.t('ADMIN_SUBSCRIPTIONS_UI_013', '\n<b>Всего сквадов:</b> {value1}\n').format(
                 value1=len(squads_data)
             )
 
             total_members = sum(squad.get('members_count', 0) for squad in squads_data)
-            text += texts.t('ADMIN_SUBSCRIPTIONS_UI_014', '<b>Участников в сквадах:</b> {value1}\n').format(
+            squads_body += texts.t('ADMIN_SUBSCRIPTIONS_UI_014', '<b>Участников в сквадах:</b> {value1}\n').format(
                 value1=total_members
             )
 
-            text += texts.t('ADMIN_SUBSCRIPTIONS_UI_015', '\n<b>Сквады:</b>\n')
+            squads_body += texts.t('ADMIN_SUBSCRIPTIONS_UI_015', '\n<b>Сквады:</b>\n')
             for squad in squads_data[:5]:
                 name = html.escape(str(squad.get('name') or texts.t('ADMIN_SUBSCRIPTIONS_UI_010', 'Неизвестно')))
                 members = squad.get('members_count', 0)
                 inbounds = squad.get('inbounds_count', 0)
-                text += texts.t(
+                squads_body += texts.t(
                     'ADMIN_SUBSCRIPTIONS_UI_024', '• {value1}: {value2} участников, {value3} inbound(s)\n'
                 ).format(value1=name, value2=members, value3=inbounds)
 
             if len(squads_data) > 5:
-                text += texts.t('ADMIN_SUBSCRIPTIONS_UI_025', '... и еще {value1} сквадов\n').format(
+                squads_body += texts.t('ADMIN_SUBSCRIPTIONS_UI_025', '... и еще {value1} сквадов\n').format(
                     value1=len(squads_data) - 5
                 )
+            text += admin_quote(squads_body.strip()) + '\n\n'
 
         user_stats = await get_users_by_countries(db)
         if user_stats:
-            text += texts.t('ADMIN_SUBSCRIPTIONS_UI_016', '\n<b>Пользователи по регионам:</b>\n')
+            regions_body = texts.t('ADMIN_SUBSCRIPTIONS_UI_016', '\n<b>Пользователи по регионам:</b>\n').strip()
             for country, count in user_stats.items():
                 country_flag = get_country_flag(country)
-                text += (
+                regions_body += '\n' + (
                     texts.t('ADMIN_SUBSCRIPTIONS_UI_026', '{value1} {value2}: {value3} пользователей\n')
                     .format(value1=country_flag, value2=html.escape(str(country)), value3=count)
                     .lstrip()
+                    .rstrip('\n')
                 )
+            text += admin_quote(regions_body)
 
     except Exception as e:
         logger.error('Ошибка получения данных о странах', error=e)
-        text = f"""<b>Управление странами</b>
-
-<b>Ошибка загрузки данных</b>
-Не удалось получить информацию о серверах.
-
-Проверьте подключение к RemnaWave API.
-
-<b>Детали ошибки:</b> {html.escape(str(e))}"""
+        text = '<b>Управление странами</b>\n\n' + admin_quote(
+            '<b>Ошибка загрузки данных</b>\n'
+            'Не удалось получить информацию о серверах.\n\n'
+            'Проверьте подключение к RemnaWave API.\n\n'
+            f'<b>Детали ошибки:</b> {html.escape(str(e))}'
+        )
 
     keyboard = [
         [
@@ -435,7 +453,6 @@ async def show_countries_management(callback: types.CallbackQuery, db_user: User
                 strip_leading_emoji(texts.t('ADMIN_SUBSCRIPTIONS_UI_034', 'Обновить')),
                 callback_data='admin_subs_countries',
                 icon='refresh',
-                style='primary',
             )
         ],
         [
@@ -443,13 +460,11 @@ async def show_countries_management(callback: types.CallbackQuery, db_user: User
                 strip_leading_emoji(texts.t('ADMIN_SUBSCRIPTIONS_UI_036', 'Статистика нод')),
                 callback_data='admin_rw_nodes',
                 icon='chart',
-                style='primary',
             ),
             admin_button(
                 strip_leading_emoji(texts.t('ADMIN_SUBSCRIPTIONS_UI_037', 'Сквады')),
                 callback_data='admin_rw_squads',
                 icon='servers',
-                style='primary',
             ),
         ],
         [admin_back_button(texts, 'admin_subscriptions')],

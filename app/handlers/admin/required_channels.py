@@ -20,12 +20,22 @@ from app.database.database import AsyncSessionLocal
 from app.localization.texts import get_texts
 from app.services.channel_subscription_service import channel_subscription_service
 from app.services.system_settings_service import normalize_settings_language
-from app.utils.admin_ui import admin_back_button, admin_button, admin_icon, admin_screen
+from app.utils.admin_ui import admin_back_button, admin_button, admin_icon, admin_quote, admin_screen
 from app.utils.decorators import admin_required
 from app.utils.miniapp_buttons import strip_leading_emoji
 
 
 logger = structlog.get_logger(__name__)
+
+
+def _back_label(value: str) -> str:
+    """Подпись кнопки возврата: стрелка в тексте вместо premium-иконки."""
+
+    label = (value or '').strip()
+    if not label or label.lower().startswith(('←', '◀', '⬅', '⏪')):
+        return label
+    return f'← {label}'
+
 
 router = Router(name='admin_required_channels')
 
@@ -95,8 +105,7 @@ def _channels_keyboard(channels: list, language: str = 'ru') -> InlineKeyboardMa
             admin_button(
                 _label(texts.t('ADMIN_REQUIRED_CHANNELS_UI_CHANNELS_KEYBOARD_000', 'Добавить канал')),
                 callback_data='reqch:add',
-                icon='link',
-                style='success',
+                icon='plus',
             )
         ]
     )
@@ -105,7 +114,7 @@ def _channels_keyboard(channels: list, language: str = 'ru') -> InlineKeyboardMa
             admin_back_button(
                 texts,
                 'admin_submenu_settings',
-                label=_label(texts.t('ADMIN_REQUIRED_CHANNELS_UI_CHANNELS_KEYBOARD_001', 'Назад')),
+                label=_back_label(_label(texts.t('ADMIN_REQUIRED_CHANNELS_UI_CHANNELS_KEYBOARD_001', 'Назад'))),
             )
         ]
     )
@@ -126,7 +135,6 @@ def _channel_detail_keyboard(channel_id: int, is_active: bool, language: str = '
                     toggle_text,
                     callback_data=f'reqch:toggle:{channel_id}',
                     icon='lock' if is_active else 'success',
-                    style='danger' if is_active else 'success',
                 )
             ],
             [
@@ -134,14 +142,15 @@ def _channel_detail_keyboard(channel_id: int, is_active: bool, language: str = '
                     _label(texts.t('ADMIN_REQUIRED_CHANNELS_UI_CHANNEL_DETAIL_KEYBOARD_004', 'Удалить')),
                     callback_data=f'reqch:delete:{channel_id}',
                     icon='delete',
-                    style='danger',
                 )
             ],
             [
                 admin_back_button(
                     texts,
                     'reqch:list',
-                    label=_label(texts.t('ADMIN_REQUIRED_CHANNELS_UI_CHANNEL_DETAIL_KEYBOARD_005', 'К списку')),
+                    label=_back_label(
+                        _label(texts.t('ADMIN_REQUIRED_CHANNELS_UI_CHANNEL_DETAIL_KEYBOARD_005', 'К списку'))
+                    ),
                 )
             ],
         ]
@@ -203,6 +212,9 @@ async def view_channel(callback: CallbackQuery, **kwargs) -> None:
         value4=status,
         value5=ch.sort_order,
     )
+    title, separator, params = text.partition('\n\n')
+    if separator and params:
+        text = f'{title}\n\n{admin_quote(params)}'
 
     await callback.message.edit_text(
         admin_screen(text, icon='link', compact=True),
@@ -457,6 +469,11 @@ async def process_channel_title(message: Message, state: FSMContext, **kwargs) -
                 value2=html.escape(ch.channel_link or '—'),
                 value3=html.escape(ch.title or '—'),
             )
+            title, separator, params = text.partition('\n\n')
+            if separator and params:
+                if '<b>' not in title:
+                    title = f'<b>{title}</b>'
+                text = f'{title}\n\n{admin_quote(params)}'
             text = admin_screen(text, icon='success', compact=True)
         except Exception as e:
             text = admin_screen(

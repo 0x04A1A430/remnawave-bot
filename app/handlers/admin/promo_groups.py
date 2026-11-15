@@ -1,4 +1,5 @@
 import html
+import re
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 
 import structlog
@@ -24,13 +25,25 @@ from app.keyboards.admin import (
 )
 from app.localization.texts import get_texts
 from app.states import AdminStates
-from app.utils.admin_ui import admin_back_button, admin_button, admin_screen
+from app.utils.admin_ui import admin_back_button, admin_button, admin_heading, admin_icon, admin_quote, admin_screen
 from app.utils.decorators import admin_required, error_handler
 from app.utils.miniapp_buttons import strip_leading_emoji
 from app.utils.pricing_utils import format_period_description
 
 
 logger = structlog.get_logger(__name__)
+
+_BOLD_TAGS_RE = re.compile(r'</?b>')
+
+
+def _heading(icon: str, title: str) -> str:
+    """Заголовок с premium-иконкой и <b>; существующие теги не дублируются."""
+    return admin_heading(icon, _BOLD_TAGS_RE.sub('', title or '').strip())
+
+
+def _quote_lines(lines) -> str:
+    """Блок параметров: строки с иконками, без пустых элементов."""
+    return admin_quote('\n'.join(line for line in lines if line))
 
 
 async def _prompt_screen(message: types.Message, text: str, *, icon: str = 'users') -> None:
@@ -43,8 +56,11 @@ async def _error_screen(message: types.Message, text: str) -> None:
     await message.answer(admin_screen(text, icon='warning', compact=True), parse_mode='HTML')
 
 
+_DISCOUNT_LINE_ICONS = ('servers', 'wifi', 'devices')
+
+
 def _format_discount_lines(texts, group) -> list[str]:
-    return [
+    lines = [
         texts.t(
             'ADMIN_PROMO_GROUP_DISCOUNTS_HEADER',
             'Скидки промогруппы:',
@@ -62,19 +78,28 @@ def _format_discount_lines(texts, group) -> list[str]:
             '• Устройства: {percent}%',
         ).format(percent=group.device_discount_percent),
     ]
+    return [
+        lines[0],
+        *(
+            f'{admin_icon(icon)} {line.lstrip("• ").lstrip()}'
+            for icon, line in zip(_DISCOUNT_LINE_ICONS, lines[1:], strict=True)
+        ),
+    ]
 
 
 def _format_addon_discounts_line(texts, group: PromoGroup) -> str:
     enabled = getattr(group, 'apply_discounts_to_addons', True)
     if enabled:
-        return texts.t(
+        line = texts.t(
             'ADMIN_PROMO_GROUP_ADDON_DISCOUNT_ENABLED',
             'Скидки на доп. услуги: <b>включены</b>',
         )
-    return texts.t(
+        return f'{admin_icon("success")} {line}'
+    line = texts.t(
         'ADMIN_PROMO_GROUP_ADDON_DISCOUNT_DISABLED',
         'Скидки на доп. услуги: <b>отключены</b>',
     )
+    return f'{admin_icon("lock")} {line}'
 
 
 def _get_addon_discounts_button_text(texts, group: PromoGroup) -> str:
@@ -136,12 +161,13 @@ def _format_period_discounts_lines(texts, group: PromoGroup, language: str) -> l
         'Скидки по периодам:',
     )
 
-    lines = [header]
+    lines = [f'{admin_icon("calendar")} {header}']
 
     for period_days, percent in discounts.items():
         period_display = format_period_description(period_days, language)
         lines.append(
-            texts.t('PROMO_GROUP_PERIOD_DISCOUNT_ITEM', '{period} — {percent}%').format(
+            f'{admin_icon("clock")} '
+            + texts.t('PROMO_GROUP_PERIOD_DISCOUNT_ITEM', '{period} — {percent}%').format(
                 period=period_display,
                 percent=percent,
             )
@@ -224,26 +250,29 @@ def _format_rubles(amount_kopeks: int) -> str:
 
 def _format_priority_line(texts, group: PromoGroup) -> str:
     priority = getattr(group, 'priority', 0)
-    return texts.t(
+    line = texts.t(
         'ADMIN_PROMO_GROUP_PRIORITY_LINE',
         'Приоритет: {priority}',
     ).format(priority=priority)
+    return f'{admin_icon("settings")} {line}'
 
 
 def _format_auto_assign_line(texts, group: PromoGroup) -> str:
     threshold = getattr(group, 'auto_assign_total_spent_kopeks', 0) or 0
 
     if threshold <= 0:
-        return texts.t(
+        line = texts.t(
             'ADMIN_PROMO_GROUP_AUTO_ASSIGN_DISABLED',
             'Автовыдача по суммарным тратам: отключена',
         )
+        return f'{admin_icon("lock")} {line}'
 
     amount = _format_rubles(threshold)
-    return texts.t(
+    line = texts.t(
         'ADMIN_PROMO_GROUP_AUTO_ASSIGN_LINE',
         'Автовыдача по суммарным тратам: от {amount} ₽',
     ).format(amount=amount)
+    return f'{admin_icon("coin")} {line}'
 
 
 def _format_auto_assign_value(value_kopeks: int | None) -> str:
@@ -317,14 +346,12 @@ def _build_edit_menu_content(
     period_lines = _format_period_discounts_lines(texts, group, language)
     lines.extend(period_lines)
 
-    lines.append(
-        texts.t(
-            'ADMIN_PROMO_GROUP_EDIT_MENU_HINT',
-            'Выберите параметр для изменения:',
-        )
+    hint = texts.t(
+        'ADMIN_PROMO_GROUP_EDIT_MENU_HINT',
+        'Выберите параметр для изменения:',
     )
 
-    text = admin_screen('\n'.join(line for line in lines if line), icon='users', compact=True)
+    text = f'{_heading("users", header)}\n\n{_quote_lines(lines[1:])}\n\n{hint}'
 
     keyboard_rows = [
         [
@@ -336,7 +363,7 @@ def _build_edit_menu_content(
                     )
                 ),
                 callback_data=f'promo_group_edit_field_{group.id}_name',
-                style='primary',
+                icon='edit',
             )
         ],
         [
@@ -348,7 +375,7 @@ def _build_edit_menu_content(
                     )
                 ),
                 callback_data=f'promo_group_edit_field_{group.id}_priority',
-                style='primary',
+                icon='settings',
             )
         ],
         [
@@ -360,7 +387,7 @@ def _build_edit_menu_content(
                     )
                 ),
                 callback_data=f'promo_group_edit_field_{group.id}_traffic',
-                style='primary',
+                icon='wifi',
             )
         ],
         [
@@ -372,7 +399,7 @@ def _build_edit_menu_content(
                     )
                 ),
                 callback_data=f'promo_group_edit_field_{group.id}_servers',
-                style='primary',
+                icon='servers',
             )
         ],
         [
@@ -384,7 +411,7 @@ def _build_edit_menu_content(
                     )
                 ),
                 callback_data=f'promo_group_edit_field_{group.id}_devices',
-                style='primary',
+                icon='devices',
             )
         ],
         [
@@ -396,7 +423,7 @@ def _build_edit_menu_content(
                     )
                 ),
                 callback_data=f'promo_group_edit_field_{group.id}_periods',
-                style='primary',
+                icon='calendar',
             )
         ],
         [
@@ -404,7 +431,6 @@ def _build_edit_menu_content(
                 strip_leading_emoji(_get_addon_discounts_button_text(texts, group)),
                 callback_data=f'promo_group_toggle_addons_{group.id}',
                 icon='lock' if getattr(group, 'apply_discounts_to_addons', True) else 'unlock',
-                style='danger' if getattr(group, 'apply_discounts_to_addons', True) else 'success',
             )
         ],
         [
@@ -416,7 +442,7 @@ def _build_edit_menu_content(
                     )
                 ),
                 callback_data=f'promo_group_edit_field_{group.id}_auto',
-                style='primary',
+                icon='coin',
             )
         ],
         [admin_back_button(texts, f'promo_group_manage_{group.id}')],
@@ -481,7 +507,16 @@ async def show_promo_groups_menu(
             'ADMIN_PROMO_GROUPS_SUMMARY',
             'Всего групп: {count}\nВсего участников: {members}',
         ).format(count=len(groups), members=total_members)
-        lines = [header, '', summary, '']
+        summary_lines = summary.split('\n')
+        summary_block = admin_quote(
+            '\n'.join(
+                [
+                    f'{admin_icon("users_group")} {summary_lines[0]}',
+                    *(f'{admin_icon("user")} {line}' for line in summary_lines[1:]),
+                ]
+            )
+        )
+        members_lines = []
 
         keyboard_rows = []
         for group, member_count in groups:
@@ -490,26 +525,27 @@ async def show_promo_groups_menu(
                 'ADMIN_PROMO_GROUPS_MEMBERS_COUNT',
                 'Участников: {count}',
             ).format(count=member_count)
-            lines.append(f'<b>{html.escape(group.name)}</b>{default_suffix} — {members_label}')
+            group_icon = admin_icon('star') if group.is_default else admin_icon('tag')
+            members_lines.append(f'{group_icon} <b>{html.escape(group.name)}</b>{default_suffix} — {members_label}')
             keyboard_rows.append(
                 [
                     admin_button(
                         group.name,
                         callback_data=f'promo_group_manage_{group.id}',
+                        icon='star' if group.is_default else 'tag',
                     )
                 ]
             )
+        body = '\n\n'.join(part for part in (summary_block, _quote_lines(members_lines)) if part)
     else:
-        lines = [header, '', texts.t('ADMIN_PROMO_GROUPS_EMPTY', 'Промогруппы не найдены.')]
+        body = texts.t('ADMIN_PROMO_GROUPS_EMPTY', 'Промогруппы не найдены.')
         keyboard_rows = []
 
-    keyboard_rows.append(
-        [admin_button('Создать', callback_data='admin_promo_group_create', icon='plus', style='success')]
-    )
+    keyboard_rows.append([admin_button('Создать', callback_data='admin_promo_group_create', icon='plus')])
     keyboard_rows.append([admin_back_button(texts, 'admin_submenu_promo')])
 
     await callback.message.edit_text(
-        admin_screen('\n'.join(line for line in lines if line is not None), icon='users', compact=True),
+        f'{_heading("users", header)}\n\n{body}',
         reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows),
         parse_mode='HTML',
     )
@@ -553,22 +589,23 @@ async def show_promo_group_details(
             '<b>Промогруппа:</b> {name}',
         ).format(name=html.escape(group.name))
     ]
-    lines.extend(_format_discount_lines(texts, group))
-    lines.append(_format_auto_assign_line(texts, group))
-    lines.append(
-        texts.t(
+    details = [line for line in lines if line]
+    details.extend(_format_discount_lines(texts, group))
+    details.append(_format_auto_assign_line(texts, group))
+    details.append(
+        f'{admin_icon("users")} '
+        + texts.t(
             'ADMIN_PROMO_GROUP_DETAILS_MEMBERS',
             'Участников: {count}',
         ).format(count=member_count)
     )
 
-    period_lines = _format_period_discounts_lines(texts, group, db_user.language)
-    lines.extend(period_lines)
+    details.extend(_format_period_discounts_lines(texts, group, db_user.language))
 
     if default_note:
-        lines.append(default_note)
+        details.append(f'{admin_icon("info")} {default_note}')
 
-    text = '\n'.join(line for line in lines if line)
+    text = f'{_heading("users", details[0])}\n\n{_quote_lines(details[1:])}'
 
     keyboard_rows = []
     if member_count > 0:
@@ -578,7 +615,6 @@ async def show_promo_group_details(
                     strip_leading_emoji(texts.t('ADMIN_PROMO_GROUP_MEMBERS_BUTTON', 'Участники')),
                     callback_data=f'promo_group_members_{group.id}_page_1',
                     icon='users',
-                    style='primary',
                 )
             ]
         )
@@ -589,7 +625,6 @@ async def show_promo_group_details(
                 strip_leading_emoji(texts.t('ADMIN_PROMO_GROUP_EDIT_BUTTON', 'Изменить')),
                 callback_data=f'promo_group_edit_{group.id}',
                 icon='settings',
-                style='primary',
             )
         ]
     )
@@ -601,7 +636,6 @@ async def show_promo_group_details(
                     strip_leading_emoji(texts.t('ADMIN_PROMO_GROUP_DELETE_BUTTON', 'Удалить')),
                     callback_data=f'promo_group_delete_{group.id}',
                     icon='delete',
-                    style='danger',
                 )
             ]
         )
@@ -609,7 +643,7 @@ async def show_promo_group_details(
     keyboard_rows.append([admin_back_button(texts, 'admin_promo_groups')])
 
     await callback.message.edit_text(
-        admin_screen(text, icon='users', compact=True),
+        text,
         reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows),
         parse_mode='HTML',
     )
@@ -1291,6 +1325,7 @@ async def show_promo_group_members(
 
     if not members:
         body = texts.t('ADMIN_PROMO_GROUP_MEMBERS_EMPTY', 'В этой группе пока нет участников.')
+        text = f'{_heading("users", title)}\n\n{body}'
     else:
         lines = []
         for index, user in enumerate(members, start=offset + 1):
@@ -1302,8 +1337,8 @@ async def show_promo_group_members(
             else:
                 user_link = f'<b>{safe_name}</b>'
                 tg_display = user.email or f'#{user.id}'
-            lines.append(f'{index}. {user_link} (ID {user.id}, {username}, TG {tg_display})')
-        body = '\n'.join(lines)
+            lines.append(f'{admin_icon("user")} {index}. {user_link} (ID {user.id}, {username}, TG {tg_display})')
+        text = f'{_heading("users", title)}\n\n{_quote_lines(lines)}'
 
     keyboard = []
     if total_pages > 1:
@@ -1319,7 +1354,7 @@ async def show_promo_group_members(
     keyboard.append([admin_back_button(texts, f'promo_group_manage_{group_id}')])
 
     await callback.message.edit_text(
-        admin_screen(f'{title}\n\n{body}', icon='users', compact=True),
+        text,
         reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
         parse_mode='HTML',
     )

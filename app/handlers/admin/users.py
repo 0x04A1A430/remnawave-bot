@@ -47,7 +47,7 @@ from app.services.remnawave_service import RemnaWaveService
 from app.services.subscription_service import SubscriptionService
 from app.services.user_service import UserService
 from app.states import AdminStates
-from app.utils.admin_ui import admin_back_button, admin_button, admin_icon, admin_screen
+from app.utils.admin_ui import admin_back_button, admin_button, admin_icon, admin_quote, admin_screen
 from app.utils.decorators import admin_required, error_handler
 from app.utils.formatters import format_datetime, format_time_ago
 from app.utils.formatting import user_html_link
@@ -122,6 +122,14 @@ def _clean_legacy_glyphs(text: str) -> str:
     return _LEGACY_GLYPHS_RE.sub(' ', text).strip()
 
 
+def _quote_blocks(text: str) -> str:
+    """Первый блок оставляет заголовком, остальные параметры уводит в <blockquote>."""
+    blocks = [block.strip() for block in text.split('\n\n') if block.strip()]
+    if len(blocks) < 2:
+        return text.strip()
+    return blocks[0] + '\n\n' + '\n\n'.join(admin_quote(block) for block in blocks[1:])
+
+
 def _get_user_status_emoji(user: User) -> str:
     """Возвращает символ статуса пользователя (стиль старого бота)."""
     if user.status == UserStatus.ACTIVE.value:
@@ -145,12 +153,9 @@ def _get_subscription_emoji(user: User) -> str:
 
 
 def _get_user_button_style(user: User) -> str | None:
-    """Цвет кнопки пользователя: красный для забаненных, зелёный при подписке."""
+    """Цвет кнопки пользователя: красный остаётся только у забаненных."""
     if user.status == UserStatus.BLOCKED.value:
         return 'danger'
-    subscriptions = getattr(user, 'subscriptions', None) or []
-    if any(s.is_active for s in subscriptions):
-        return 'success'
     return None
 
 
@@ -305,13 +310,11 @@ async def _show_users_list_filtered(
                     strip_leading_emoji(texts.t('ADMIN_USERS_LIST_017', 'Поиск')),
                     callback_data='admin_users_search',
                     icon='search',
-                    style='primary',
                 ),
                 admin_button(
                     strip_leading_emoji(texts.t('ADMIN_USERS_LIST_018', 'Статистика')),
                     callback_data='admin_users_stats',
                     icon='stats',
-                    style='primary',
                 ),
             ],
             [admin_back_button(texts, 'admin_users')],
@@ -332,17 +335,22 @@ async def show_users_menu(callback: types.CallbackQuery, db_user: User, db: Asyn
     user_service = UserService()
     stats = await user_service.get_user_statistics(db)
 
-    text = f"""<b>Управление пользователями</b>
-
-<b>Статистика:</b>
-• Всего: {stats['total_users']}
-• Активных: {stats['active_users']}
-• Заблокированных: {stats['blocked_users']}
-
-<b>Новые пользователи:</b>
-• Сегодня: {stats['new_today']}
-• За неделю: {stats['new_week']}
-• За месяц: {stats['new_month']}"""
+    text = (
+        '<b>Управление пользователями</b>\n\n'
+        + admin_quote(
+            '<b>Статистика</b>\n'
+            f'{admin_icon("users")} Всего: {stats["total_users"]}\n'
+            f'{admin_icon("success")} Активных: {stats["active_users"]}\n'
+            f'{admin_icon("prohibit")} Заблокированных: {stats["blocked_users"]}'
+        )
+        + '\n\n'
+        + admin_quote(
+            '<b>Новые пользователи</b>\n'
+            f'{admin_icon("calendar")} Сегодня: {stats["new_today"]}\n'
+            f'{admin_icon("chart")} За неделю: {stats["new_week"]}\n'
+            f'{admin_icon("stats")} За месяц: {stats["new_month"]}'
+        )
+    )
 
     await callback.message.edit_text(
         admin_screen(text, icon='users', compact=True),
@@ -438,13 +446,11 @@ async def show_users_list(
                     strip_leading_emoji(texts.t('ADMIN_USERS_LIST_017', 'Поиск')),
                     callback_data='admin_users_search',
                     icon='search',
-                    style='primary',
                 ),
                 admin_button(
                     strip_leading_emoji(texts.t('ADMIN_USERS_LIST_018', 'Статистика')),
                     callback_data='admin_users_stats',
                     icon='stats',
-                    style='primary',
                 ),
             ],
             [admin_back_button(texts, 'admin_users')],
@@ -508,14 +514,14 @@ async def show_users_ready_to_renew(
             'Сейчас нет пользователей, которые подходят под этот фильтр.',
         )
         await callback.message.edit_text(
-            admin_screen(f'{header}\n\n{description}\n\n{empty_text}', icon='calendar', compact=True),
+            admin_screen(f'{header}\n\n{admin_quote(description)}\n\n{empty_text}', icon='calendar', compact=True),
             reply_markup=get_admin_users_keyboard(db_user.language),
             parse_mode='HTML',
         )
         await callback.answer()
         return
 
-    text = f'{header}\n\n{description}\n\n'
+    text = f'{header}\n\n{admin_quote(description)}\n\n'
     text += texts.t('ADMIN_USERS_LIST_001', 'Нажмите на пользователя для управления:')
 
     keyboard = []
@@ -573,13 +579,11 @@ async def show_users_ready_to_renew(
                     strip_leading_emoji(texts.t('ADMIN_USERS_LIST_017', 'Поиск')),
                     callback_data='admin_users_search',
                     icon='search',
-                    style='primary',
                 ),
                 admin_button(
                     strip_leading_emoji(texts.t('ADMIN_USERS_LIST_018', 'Статистика')),
                     callback_data='admin_users_stats',
                     icon='stats',
-                    style='primary',
                 ),
             ],
             [admin_back_button(texts, 'admin_users')],
@@ -632,14 +636,14 @@ async def show_potential_customers(
             'Сейчас нет пользователей, которые подходят под этот фильтр.',
         )
         await callback.message.edit_text(
-            admin_screen(f'{header}\n\n{description}\n\n{empty_text}', icon='star', compact=True),
+            admin_screen(f'{header}\n\n{admin_quote(description)}\n\n{empty_text}', icon='star', compact=True),
             reply_markup=get_admin_users_keyboard(db_user.language),
             parse_mode='HTML',
         )
         await callback.answer()
         return
 
-    text = f'{header}\n\n{description}\n\n'
+    text = f'{header}\n\n{admin_quote(description)}\n\n'
     text += texts.t('ADMIN_USERS_LIST_001', 'Нажмите на пользователя для управления:')
 
     keyboard = []
@@ -686,13 +690,11 @@ async def show_potential_customers(
                     strip_leading_emoji(texts.t('ADMIN_USERS_LIST_017', 'Поиск')),
                     callback_data='admin_users_search',
                     icon='search',
-                    style='primary',
                 ),
                 admin_button(
                     strip_leading_emoji(texts.t('ADMIN_USERS_LIST_018', 'Статистика')),
                     callback_data='admin_users_stats',
                     icon='stats',
-                    style='primary',
                 ),
             ],
             [admin_back_button(texts, 'admin_users')],
@@ -790,9 +792,11 @@ async def start_user_search(callback: types.CallbackQuery, db_user: User, state:
     texts = get_texts(db_user.language)
     await callback.message.edit_text(
         admin_screen(
-            texts.t(
-                'ADMIN_USERS_LIST_014',
-                '<b>Поиск пользователя</b>\n\nВведите для поиска:\n• Telegram ID\n• Username (без @)\n• Имя или фамилию\n\nИли нажмите /cancel для отмены',
+            _quote_blocks(
+                texts.t(
+                    'ADMIN_USERS_LIST_014',
+                    '<b>Поиск пользователя</b>\n\nВведите для поиска:\n• Telegram ID\n• Username (без @)\n• Имя или фамилию\n\nИли нажмите /cancel для отмены',
+                ),
             ),
             icon='search',
             compact=True,
@@ -865,30 +869,41 @@ async def show_users_statistics(callback: types.CallbackQuery, db_user: User, db
     )
     avg_balance = avg_balance_result.scalar() or 0
 
-    text = f"""<b>Детальная статистика пользователей</b>
-
-<b>Общие показатели:</b>
-• Всего: {stats['total_users']}
-• Активных: {stats['active_users']}
-• Заблокированных: {stats['blocked_users']}
-
-<b>Подписки:</b>
-• С активной подпиской: {users_with_subscription}
-• На триале: {trial_users}
-• Без подписки: {users_without_subscription}
-
-<b>Финансы:</b>
-• Средний баланс: {settings.format_price(int(avg_balance))}
-
-<b>Регистрации:</b>
-• Сегодня: {stats['new_today']}
-• За неделю: {stats['new_week']}
-• За месяц: {stats['new_month']}
-
-<b>Активность:</b>
-• Конверсия в подписку: {(users_with_subscription / max(stats['active_users'], 1) * 100):.1f}%
-• Доля триальных: {(trial_users / max(users_with_subscription, 1) * 100):.1f}%
-"""
+    text = (
+        '<b>Детальная статистика пользователей</b>\n\n'
+        + admin_quote(
+            '<b>Общие показатели</b>\n'
+            f'{admin_icon("users")} Всего: {stats["total_users"]}\n'
+            f'{admin_icon("success")} Активных: {stats["active_users"]}\n'
+            f'{admin_icon("prohibit")} Заблокированных: {stats["blocked_users"]}'
+        )
+        + '\n\n'
+        + admin_quote(
+            '<b>Подписки</b>\n'
+            f'{admin_icon("tariff")} С активной подпиской: {users_with_subscription}\n'
+            f'{admin_icon("trials")} На триале: {trial_users}\n'
+            f'{admin_icon("user")} Без подписки: {users_without_subscription}'
+        )
+        + '\n\n'
+        + admin_quote(
+            f'<b>Финансы</b>\n{admin_icon("money")} Средний баланс: {settings.format_price(int(avg_balance))}'
+        )
+        + '\n\n'
+        + admin_quote(
+            '<b>Регистрации</b>\n'
+            f'{admin_icon("calendar")} Сегодня: {stats["new_today"]}\n'
+            f'{admin_icon("chart")} За неделю: {stats["new_week"]}\n'
+            f'{admin_icon("stats")} За месяц: {stats["new_month"]}'
+        )
+        + '\n\n'
+        + admin_quote(
+            '<b>Активность</b>\n'
+            f'{admin_icon("chart")} Конверсия в подписку: '
+            f'{(users_with_subscription / max(stats["active_users"], 1) * 100):.1f}%\n'
+            f'{admin_icon("trials")} Доля триальных: '
+            f'{(trial_users / max(users_with_subscription, 1) * 100):.1f}%'
+        )
+    )
 
     texts = get_texts(db_user.language)
     await callback.message.edit_text(
@@ -900,7 +915,6 @@ async def show_users_statistics(callback: types.CallbackQuery, db_user: User, db
                         strip_leading_emoji(texts.t('ADMIN_USERS_LIST_021', 'Обновить')),
                         callback_data='admin_users_stats',
                         icon='refresh',
-                        style='primary',
                     )
                 ],
                 [admin_back_button(texts, 'admin_users')],
@@ -940,11 +954,12 @@ async def _render_user_subscription_overview(
         if len(subs_list) > 1:
             user_link = user_html_link(user)
             user_id_display = user.telegram_id or user.email or f'#{user.id}'
-            text = texts.t('ADMIN_USERS_PROFILE_015', '<b>Выберите подписку для управления</b>\n\n')
-            text += f'{user_link} (ID: <code>{user_id_display}</code>)\n\n'
-            text += texts.t('ADMIN_USERS_PROFILE_016', 'У пользователя <b>{value1}</b> подписок:\n\n').format(
+            header = texts.t('ADMIN_USERS_PROFILE_015', '<b>Выберите подписку для управления</b>\n\n')
+            meta = f'{admin_icon("user")} {user_link} (ID: <code>{user_id_display}</code>)'
+            count_line = texts.t('ADMIN_USERS_PROFILE_016', 'У пользователя <b>{value1}</b> подписок:\n\n').format(
                 value1=len(subs_list)
             )
+            text = header + admin_quote(f'{meta}\n{count_line.strip()}')
 
             picker_keyboard = []
             for sub in sorted(subs_list, key=lambda s: s.id):
@@ -961,7 +976,6 @@ async def _render_user_subscription_overview(
                             btn_text,
                             callback_data=f'admin_user_sub_select_{user_id}_{sub.id}',
                             icon='key',
-                            style='success' if sub.is_active else None,
                         )
                     ]
                 )
@@ -995,16 +1009,16 @@ async def _render_user_subscription_overview(
     # Suffix used to route back to this exact subscription in multi-tariff mode
     _sid = f'_s{subscription.id}' if settings.is_multi_tariff_enabled() and subscription else ''
 
-    text = texts.t('ADMIN_USERS_PROFILE_000', '<b>Подписка и настройки пользователя</b>\n\n')
+    header = texts.t('ADMIN_USERS_PROFILE_000', '<b>Подписка и настройки пользователя</b>\n\n')
     user_link = user_html_link(user)
     user_id_display = user.telegram_id or user.email or f'#{user.id}'
-    text += f'• {user_link} (ID: <code>{user_id_display}</code>)\n\n'
+    params: list[str] = [f'{admin_icon("id")} {user_link} (ID: <code>{user_id_display}</code>)']
 
     keyboard = []
 
     if subscription:
-        status_emoji = '+' if subscription.is_active else '-'
-        type_emoji = '*' if subscription.is_trial else '$'
+        status_icon = admin_icon('success') if subscription.is_active else admin_icon('prohibit')
+        type_icon = admin_icon('trials') if subscription.is_trial else admin_icon('star')
 
         traffic_display = f'{subscription.traffic_used_gb:.1f}/'
         if subscription.traffic_limit_gb == 0:
@@ -1014,65 +1028,95 @@ async def _render_user_subscription_overview(
                 value1=subscription.traffic_limit_gb
             )
 
-        text += texts.t('ADMIN_USERS_PROFILE_005', '<b>Статус:</b> {value1} {value2}\n').format(
-            value1=status_emoji,
-            value2=texts.t('ADMIN_USERS_PROFILE_035', 'Активна')
-            if subscription.is_active
-            else texts.t('ADMIN_USERS_PROFILE_036', 'Неактивна'),
+        params.append(
+            texts.t('ADMIN_USERS_PROFILE_005', '<b>Статус:</b> {value1} {value2}\n')
+            .format(
+                value1=status_icon,
+                value2=texts.t('ADMIN_USERS_PROFILE_035', 'Активна')
+                if subscription.is_active
+                else texts.t('ADMIN_USERS_PROFILE_036', 'Неактивна'),
+            )
+            .rstrip('\n')
         )
-        text += texts.t('ADMIN_USERS_PROFILE_006', '<b>Тип:</b> {value1} {value2}\n').format(
-            value1=type_emoji,
-            value2=texts.t('ADMIN_USERS_PROFILE_037', 'Триал')
-            if subscription.is_trial
-            else texts.t('ADMIN_USERS_PROFILE_038', 'Платная'),
+        params.append(
+            texts.t('ADMIN_USERS_PROFILE_006', '<b>Тип:</b> {value1} {value2}\n')
+            .format(
+                value1=type_icon,
+                value2=texts.t('ADMIN_USERS_PROFILE_037', 'Триал')
+                if subscription.is_trial
+                else texts.t('ADMIN_USERS_PROFILE_038', 'Платная'),
+            )
+            .rstrip('\n')
         )
 
         # Отображение тарифа
         if subscription.tariff_id:
             tariff = await get_tariff_by_id(db, subscription.tariff_id)
             if tariff:
-                text += texts.t('ADMIN_USERS_PROFILE_026', '<b>Тариф:</b> {value1}\n').format(
-                    value1=html.escape(tariff.name)
+                params.append(
+                    texts.t('ADMIN_USERS_PROFILE_026', '<b>Тариф:</b> {value1}\n')
+                    .format(value1=html.escape(tariff.name))
+                    .rstrip('\n')
                 )
             else:
-                text += texts.t('ADMIN_USERS_PROFILE_027', '<b>Тариф:</b> ID {value1} (удалён)\n').format(
-                    value1=subscription.tariff_id
+                params.append(
+                    texts.t('ADMIN_USERS_PROFILE_027', '<b>Тариф:</b> ID {value1} (удалён)\n')
+                    .format(value1=subscription.tariff_id)
+                    .rstrip('\n')
                 )
 
-        text += texts.t('ADMIN_USERS_PROFILE_007', '<b>Начало:</b> {value1}\n').format(
-            value1=format_datetime(subscription.start_date)
+        params.append(
+            texts.t('ADMIN_USERS_PROFILE_007', '<b>Начало:</b> {value1}\n')
+            .format(value1=format_datetime(subscription.start_date))
+            .rstrip('\n')
         )
-        text += texts.t('ADMIN_USERS_PROFILE_008', '<b>Окончание:</b> {value1}\n').format(
-            value1=format_datetime(subscription.end_date)
+        params.append(
+            texts.t('ADMIN_USERS_PROFILE_008', '<b>Окончание:</b> {value1}\n')
+            .format(value1=format_datetime(subscription.end_date))
+            .rstrip('\n')
         )
-        text += texts.t('ADMIN_USERS_PROFILE_009', '<b>Трафик:</b> {value1}\n').format(value1=traffic_display)
-        text += texts.t('ADMIN_USERS_PROFILE_010', '<b>Устройства:</b> {value1}\n').format(
-            value1=Texts.format_device_limit(subscription.device_limit)
+        params.append(
+            texts.t('ADMIN_USERS_PROFILE_009', '<b>Трафик:</b> {value1}\n').format(value1=traffic_display).rstrip('\n')
+        )
+        params.append(
+            texts.t('ADMIN_USERS_PROFILE_010', '<b>Устройства:</b> {value1}\n')
+            .format(value1=Texts.format_device_limit(subscription.device_limit))
+            .rstrip('\n')
         )
 
         if subscription.is_active:
             days_left = (subscription.end_date - datetime.now(UTC)).days
-            text += f'<b>Осталось дней:</b> {days_left}\n'
+            params.append(f'{admin_icon("clock")} <b>Осталось дней:</b> {days_left}')
 
         current_squads = subscription.connected_squads or []
         if current_squads:
-            text += texts.t('ADMIN_USERS_PROFILE_020', '\n<b>Подключенные серверы:</b>\n')
+            params.append(
+                f'{admin_icon("servers")} '
+                + texts.t('ADMIN_USERS_PROFILE_020', '\n<b>Подключенные серверы:</b>\n').strip()
+            )
             for squad_uuid in current_squads:
                 try:
                     server = await get_server_squad_by_uuid(db, squad_uuid)
                     if server:
-                        text += f'• {html.escape(server.display_name)}\n'
+                        params.append(f'• {html.escape(server.display_name)}')
                     else:
-                        text += texts.t('ADMIN_USERS_PROFILE_042', '• {value1}... (неизвестный)\n').format(
-                            value1=squad_uuid[:8]
+                        params.append(
+                            texts.t('ADMIN_USERS_PROFILE_042', '• {value1}... (неизвестный)\n')
+                            .format(value1=squad_uuid[:8])
+                            .rstrip('\n')
                         )
                 except Exception as e:
                     logger.error('Ошибка получения сервера', squad_uuid=squad_uuid, error=e)
-                    text += texts.t('ADMIN_USERS_PROFILE_043', '• {value1}... (ошибка загрузки)\n').format(
-                        value1=squad_uuid[:8]
+                    params.append(
+                        texts.t('ADMIN_USERS_PROFILE_043', '• {value1}... (ошибка загрузки)\n')
+                        .format(value1=squad_uuid[:8])
+                        .rstrip('\n')
                     )
         else:
-            text += texts.t('ADMIN_USERS_PROFILE_021', '\n<b>Подключенные серверы:</b> отсутствуют\n')
+            params.append(
+                f'{admin_icon("servers")} '
+                + texts.t('ADMIN_USERS_PROFILE_021', '\n<b>Подключенные серверы:</b> отсутствуют\n').strip()
+            )
 
         keyboard = [
             [
@@ -1080,13 +1124,11 @@ async def _render_user_subscription_overview(
                     strip_leading_emoji(texts.t('ADMIN_USERS_PROFILE_044', 'Продлить')),
                     callback_data=f'admin_sub_extend_{user_id}{_sid}',
                     icon='calendar',
-                    style='success',
                 ),
                 admin_button(
                     strip_leading_emoji(texts.t('ADMIN_USERS_PROFILE_045', 'Купить подписку')),
                     callback_data=f'admin_sub_buy_{user_id}{_sid}',
                     icon='pricing',
-                    style='success',
                 ),
             ],
             [
@@ -1094,13 +1136,11 @@ async def _render_user_subscription_overview(
                     strip_leading_emoji(texts.t('ADMIN_USERS_PROFILE_046', 'Тип подписки')),
                     callback_data=f'admin_sub_change_type_{user_id}{_sid}',
                     icon='repeat',
-                    style='primary',
                 ),
                 admin_button(
                     strip_leading_emoji(texts.t('ADMIN_USERS_PROFILE_047', 'Добавить трафик')),
                     callback_data=f'admin_sub_traffic_{user_id}{_sid}',
                     icon='plus',
-                    style='success',
                 ),
             ],
             [
@@ -1108,13 +1148,11 @@ async def _render_user_subscription_overview(
                     strip_leading_emoji(texts.t('ADMIN_USERS_PROFILE_048', 'Сменить сервер')),
                     callback_data=f'admin_user_change_server_{user_id}{_sid}',
                     icon='servers',
-                    style='primary',
                 ),
                 admin_button(
                     strip_leading_emoji(texts.t('ADMIN_USERS_PROFILE_049', 'Устройства')),
                     callback_data=f'admin_user_devices_{user_id}{_sid}',
                     icon='devices',
-                    style='primary',
                 ),
             ],
             [
@@ -1122,13 +1160,11 @@ async def _render_user_subscription_overview(
                     strip_leading_emoji(texts.t('ADMIN_USERS_PROFILE_050', 'Лимит трафика')),
                     callback_data=f'admin_user_traffic_{user_id}{_sid}',
                     icon='battery',
-                    style='primary',
                 ),
                 admin_button(
                     strip_leading_emoji(texts.t('ADMIN_USERS_PROFILE_051', 'Сбросить устройства')),
                     callback_data=f'admin_user_reset_devices_{user_id}{_sid}',
                     icon='refresh',
-                    style='danger',
                 ),
             ],
             [
@@ -1136,7 +1172,6 @@ async def _render_user_subscription_overview(
                     strip_leading_emoji(texts.t('ADMIN_USERS_PROFILE_052', 'Автоплатёж')),
                     callback_data=f'admin_user_autopay_{user_id}{_sid}',
                     icon='payments',
-                    style='primary',
                 ),
             ],
         ]
@@ -1149,13 +1184,11 @@ async def _render_user_subscription_overview(
                         strip_leading_emoji(texts.t('ADMIN_USERS_PROFILE_057', 'Сменить тариф')),
                         callback_data=f'admin_sub_change_tariff_{user_id}{_sid}',
                         icon='tariff',
-                        style='primary',
                     ),
                     admin_button(
                         strip_leading_emoji(texts.t('ADMIN_USERS_PROFILE_058', 'Купить тариф')),
                         callback_data=f'admin_tariff_buy_{user_id}{_sid}',
                         icon='pricing',
-                        style='success',
                     ),
                 ]
             )
@@ -1167,7 +1200,6 @@ async def _render_user_subscription_overview(
                         strip_leading_emoji(texts.t('ADMIN_USERS_PROFILE_059', 'Деактивировать')),
                         callback_data=f'admin_sub_deactivate_{user_id}{_sid}',
                         icon='prohibit',
-                        style='danger',
                     )
                 ]
             )
@@ -1177,7 +1209,6 @@ async def _render_user_subscription_overview(
                     strip_leading_emoji(texts.t('ADMIN_USERS_PROFILE_053', 'Активировать')),
                     callback_data=f'admin_sub_activate_{user_id}{_sid}',
                     icon='check',
-                    style='success',
                 ),
             ]
             if settings.is_multi_tariff_enabled() and subscription_id:
@@ -1186,7 +1217,6 @@ async def _render_user_subscription_overview(
                         strip_leading_emoji(texts.t('ADMIN_USERS_PROFILE_060', 'Удалить')),
                         callback_data=f'admin_sub_delete_{user_id}{_sid}',
                         icon='delete',
-                        style='danger',
                     )
                 )
             keyboard.append(row)
@@ -1199,13 +1229,12 @@ async def _render_user_subscription_overview(
                     strip_leading_emoji(texts.t('ADMIN_USERS_PROFILE_054', 'Обнулить подписку')),
                     callback_data=f'admin_sub_reset_{user_id}{_sid}',
                     icon='broom',
-                    style='danger',
                 )
             ]
         )
     else:
-        text += texts.t('ADMIN_USERS_PROFILE_011', '<b>Подписка отсутствует</b>\n\n')
-        text += texts.t('ADMIN_USERS_PROFILE_012', 'Пользователь еще не активировал подписку.')
+        params.append(texts.t('ADMIN_USERS_PROFILE_011', '<b>Подписка отсутствует</b>\n\n').strip())
+        params.append(texts.t('ADMIN_USERS_PROFILE_012', 'Пользователь еще не активировал подписку.'))
 
         keyboard = [
             [
@@ -1213,16 +1242,16 @@ async def _render_user_subscription_overview(
                     strip_leading_emoji(texts.t('ADMIN_USERS_PROFILE_055', 'Выдать триал')),
                     callback_data=f'admin_sub_grant_trial_{user_id}',
                     icon='gift',
-                    style='success',
                 ),
                 admin_button(
                     strip_leading_emoji(texts.t('ADMIN_USERS_PROFILE_056', 'Выдать подписку')),
                     callback_data=f'admin_sub_grant_{user_id}',
                     icon='certificate',
-                    style='success',
                 ),
             ]
         ]
+
+    text = header + admin_quote('\n'.join(params))
 
     if subscription is not None:
         from app.services.cispay_recurrent_guard import has_live_cispay
@@ -1239,7 +1268,6 @@ async def _render_user_subscription_overview(
                         strip_leading_emoji(texts.t('ADMIN_USERS_PROFILE_061', 'Отключить автоплатёж CisPay')),
                         callback_data=f'admin_cisrec_cancel:{user_id}:{subscription.id}',
                         icon='prohibit',
-                        style='danger',
                     )
                 ]
             )
@@ -1317,23 +1345,32 @@ async def show_user_transactions(callback: types.CallbackQuery, db_user: User, d
 
     transactions = await get_user_transactions(db, user_id, limit=10)
 
-    text = texts.t('ADMIN_USERS_PROFILE_001', '<b>Транзакции пользователя</b>\n\n')
+    header = texts.t('ADMIN_USERS_PROFILE_001', '<b>Транзакции пользователя</b>\n\n')
     user_link = user_html_link(user)
     user_id_display = user.telegram_id or user.email or f'#{user.id}'
-    text += f'{user_link} (ID: <code>{user_id_display}</code>)\n'
-    text += texts.t('ADMIN_USERS_PROFILE_002', 'Текущий баланс: {value1}\n\n').format(
+    balance_line = texts.t('ADMIN_USERS_PROFILE_002', 'Текущий баланс: {value1}\n\n').format(
         value1=settings.format_price(user.balance_kopeks)
+    )
+    text = header + admin_quote(
+        f'{admin_icon("user")} {user_link} (ID: <code>{user_id_display}</code>)\n'
+        f'{admin_icon("money")} {balance_line.strip()}'
     )
 
     if transactions:
-        text += texts.t('ADMIN_USERS_PROFILE_013', '<b>Последние транзакции:</b>\n\n')
-
+        entries = []
         for transaction in transactions:
-            text += f'{settings.format_price(abs(transaction.amount_kopeks))}\n'
-            text += f'{html.escape(transaction.description or "")}\n'
-            text += f'{format_datetime(transaction.created_at)}\n\n'
+            entries.append(
+                f'{admin_icon("coin")} {settings.format_price(abs(transaction.amount_kopeks))}\n'
+                f'{html.escape(transaction.description or "")}\n'
+                f'{admin_icon("calendar")} {format_datetime(transaction.created_at)}'
+            )
+        text += '\n\n' + admin_quote(
+            texts.t('ADMIN_USERS_PROFILE_013', '<b>Последние транзакции:</b>\n\n').strip()
+            + '\n\n'
+            + '\n\n'.join(entries)
+        )
     else:
-        text += texts.t('ADMIN_USERS_PROFILE_014', '<b>Транзакции отсутствуют</b>')
+        text += '\n\n' + admin_quote(texts.t('ADMIN_USERS_PROFILE_014', '<b>Транзакции отсутствуют</b>'))
 
     await callback.message.edit_text(
         admin_screen(text, icon='payments', compact=True),
@@ -1360,9 +1397,11 @@ async def confirm_user_delete(callback: types.CallbackQuery, db_user: User):
 
     await callback.message.edit_text(
         admin_screen(
-            get_texts(db_user.language).t(
-                'ADMIN_USERS_PROFILE_022',
-                '<b>Удаление пользователя</b>\n\n⚠ <b>ВНИМАНИЕ!</b>\nВы уверены, что хотите удалить этого пользователя?\n\nЭто действие:\n• Пометит пользователя как удаленного\n• Деактивирует его подписку\n• Заблокирует доступ к боту\n\nДанное действие необратимо!',
+            _quote_blocks(
+                get_texts(db_user.language).t(
+                    'ADMIN_USERS_PROFILE_022',
+                    '<b>Удаление пользователя</b>\n\n⚠ <b>ВНИМАНИЕ!</b>\nВы уверены, что хотите удалить этого пользователя?\n\nЭто действие:\n• Пометит пользователя как удаленного\n• Деактивирует его подписку\n• Заблокирует доступ к боту\n\nДанное действие необратимо!',
+                ),
             ),
             icon='delete',
             compact=True,
@@ -1396,7 +1435,6 @@ async def delete_user_account(callback: types.CallbackQuery, db_user: User, db: 
                             strip_leading_emoji(texts.t('ADMIN_USERS_PROFILE_062', 'К списку пользователей')),
                             callback_data='admin_users_list',
                             icon='users',
-                            style='primary',
                         )
                     ]
                 ]
@@ -1415,7 +1453,6 @@ async def delete_user_account(callback: types.CallbackQuery, db_user: User, db: 
                             strip_leading_emoji(texts.t('ADMIN_USERS_PROFILE_063', 'К пользователю')),
                             callback_data=f'admin_user_manage_{user_id}',
                             icon='user',
-                            style='primary',
                         )
                     ]
                 ]
@@ -1672,7 +1709,13 @@ async def show_user_management(callback: types.CallbackQuery, db_user: User, db:
             )
         sections.append('\n'.join(restriction_lines))
 
-    text = admin_screen('\n\n'.join(sections), icon='user', compact=True)
+    profile_title, _, profile_body = sections[0].partition('\n\n')
+    body_sections = [profile_body, *sections[1:]] if profile_body else sections[1:]
+    text = admin_screen(
+        profile_title + '\n\n' + '\n\n'.join(admin_quote(section) for section in body_sections if section),
+        icon='user',
+        compact=True,
+    )
 
     # Проверяем состояние, чтобы определить, откуда пришел пользователь
     current_state = await state.get_state()
@@ -1702,7 +1745,6 @@ async def show_user_management(callback: types.CallbackQuery, db_user: User, db:
                 _ui_texts.t('ADMIN_USERS_PROFILE_041', 'Вернуться к тикету'),
                 callback_data=f'admin_view_ticket_{origin_ticket_id}',
                 icon='support',
-                style='primary',
             )
             kb.inline_keyboard.insert(0, [back_to_ticket_btn])
     except Exception:
@@ -1750,27 +1792,27 @@ async def _build_user_referrals_view(
         count=len(referrals),
     )
 
-    lines: list[str] = [header, summary]
+    summary_lines: list[str] = [summary]
 
     if user.referral_commission_percent is None and settings.is_referral_levels_scheme():
         # В многоуровневой схеме «стандартный процент» не существует: у каждого
         # уровня свой, а пустой означает ноль. Печатать REFERRAL_COMMISSION_PERCENT
         # значит называть админу ставку, по которой ничего не начисляется.
-        lines.append(
+        summary_lines.append(
             texts.t(
                 'ADMIN_USER_REFERRAL_COMMISSION_LEVELS',
                 '• Процент комиссии: по уровням реферальной схемы',
             )
         )
     elif user.referral_commission_percent is None:
-        lines.append(
+        summary_lines.append(
             texts.t(
                 'ADMIN_USER_REFERRAL_COMMISSION_DEFAULT',
                 '• Процент комиссии: {percent}% (стандартное значение)',
             ).format(percent=effective_percent)
         )
     else:
-        lines.append(
+        summary_lines.append(
             texts.t(
                 'ADMIN_USER_REFERRAL_COMMISSION_CUSTOM',
                 '• Индивидуальный процент: {percent}% (стандарт: {default_percent}%)',
@@ -1780,13 +1822,15 @@ async def _build_user_referrals_view(
             )
         )
 
+    lines: list[str] = [header, admin_quote('\n'.join(summary_lines))]
+
     if referrals:
-        lines.append(
+        list_lines = [
             texts.t(
                 'ADMIN_USER_REFERRALS_LIST_HEADER',
                 '<b>Список рефералов:</b>',
             )
-        )
+        ]
         items = []
         for referral in referrals[:limit]:
             username_part = f', @{referral.username}' if referral.username else ''
@@ -1808,21 +1852,24 @@ async def _build_user_referrals_view(
                 )
             )
 
-        lines.append('\n'.join(items))
+        list_lines.append('\n'.join(items))
 
         if len(referrals) > limit:
             remaining = len(referrals) - limit
-            lines.append(
+            list_lines.append(
                 texts.t(
                     'ADMIN_USER_REFERRALS_LIST_TRUNCATED',
                     '• … и ещё {count} рефералов',
                 ).format(count=remaining)
             )
+        lines.append(admin_quote('\n'.join(list_lines)))
     else:
         lines.append(
-            texts.t(
-                'ADMIN_USER_REFERRALS_EMPTY',
-                'Рефералов пока нет.',
+            admin_quote(
+                texts.t(
+                    'ADMIN_USER_REFERRALS_EMPTY',
+                    'Рефералов пока нет.',
+                )
             )
         )
 
@@ -1845,7 +1892,6 @@ async def _build_user_referrals_view(
                     ),
                     callback_data=f'admin_user_referral_percent_{user_id}',
                     icon='pricing',
-                    style='primary',
                 )
             ],
             [
@@ -1858,7 +1904,6 @@ async def _build_user_referrals_view(
                     ),
                     callback_data=f'admin_user_referrals_edit_{user_id}',
                     icon='edit',
-                    style='primary',
                 )
             ],
             [admin_back_button(texts, f'admin_user_manage_{user_id}')],
@@ -1958,7 +2003,6 @@ async def start_edit_referral_percent(
                     ),
                     callback_data=f'admin_user_referral_percent_reset_{user_id}',
                     icon='refresh',
-                    style='danger',
                 )
             ],
             [admin_back_button(texts, f'admin_user_referrals_{user_id}')],
@@ -2491,12 +2535,8 @@ async def _render_user_promo_group(message: types.Message, language: str, user: 
         )
         discount_line = ''
 
-    text = (
-        f'{texts.ADMIN_USER_PROMO_GROUP_TITLE}\n\n'
-        f'{current_line}\n'
-        f'{discount_line}\n\n'
-        f'{texts.ADMIN_USER_PROMO_GROUP_SELECT}'
-    )
+    details = current_line + (f'\n{discount_line}' if discount_line else '')
+    text = f'{texts.ADMIN_USER_PROMO_GROUP_TITLE}\n\n{admin_quote(details)}\n\n{texts.ADMIN_USER_PROMO_GROUP_SELECT}'
 
     await message.edit_text(
         admin_screen(text, icon='users', compact=True),
@@ -2612,9 +2652,11 @@ async def start_balance_edit(callback: types.CallbackQuery, db_user: User, state
 
     await callback.message.edit_text(
         admin_screen(
-            texts.t(
-                'ADMIN_USERS_RESTRICTIONS_016',
-                '<b>Изменение баланса</b>\n\nВведите сумму для изменения баланса:\n• Положительное число для пополнения\n• Отрицательное число для списания\n• Примеры: 100, -50, 25.5\n\nИли нажмите /cancel для отмены',
+            _quote_blocks(
+                texts.t(
+                    'ADMIN_USERS_RESTRICTIONS_016',
+                    '<b>Изменение баланса</b>\n\nВведите сумму для изменения баланса:\n• Положительное число для пополнения\n• Отрицательное число для списания\n• Примеры: 100, -50, 25.5\n\nИли нажмите /cancel для отмены',
+                ),
             ),
             icon='money',
             compact=True,
@@ -2922,9 +2964,11 @@ async def confirm_user_block(callback: types.CallbackQuery, db_user: User):
 
     await callback.message.edit_text(
         admin_screen(
-            get_texts(db_user.language).t(
-                'ADMIN_USERS_RESTRICTIONS_017',
-                '<b>Блокировка пользователя</b>\n\nВы уверены, что хотите заблокировать этого пользователя?\nПользователь потеряет доступ к боту.',
+            _quote_blocks(
+                get_texts(db_user.language).t(
+                    'ADMIN_USERS_RESTRICTIONS_017',
+                    '<b>Блокировка пользователя</b>\n\nВы уверены, что хотите заблокировать этого пользователя?\nПользователь потеряет доступ к боту.',
+                ),
             ),
             icon='lock',
             compact=True,
@@ -3008,10 +3052,9 @@ async def show_user_restrictions(callback: types.CallbackQuery, db_user: User, d
     restriction_subscription = getattr(user, 'restriction_subscription', False)
     restriction_reason = getattr(user, 'restriction_reason', None)
 
-    text_lines = [
-        texts.t('ADMIN_USERS_RESTRICTIONS_004', '⚠ <b>Ограничения пользователя</b>'),
-        html.escape(user.full_name),
-        '',
+    title = strip_leading_emoji(texts.t('ADMIN_USERS_RESTRICTIONS_004', '⚠ <b>Ограничения пользователя</b>'))
+    body_lines = [
+        f'{admin_icon("user")} {html.escape(user.full_name)}',
         texts.t('ADMIN_USERS_RESTRICTIONS_005', '— разрешено, — запрещено'),
         '',
         texts.t('ADMIN_USERS_RESTRICTIONS_006', '{value1} Пополнение баланса').format(
@@ -3023,8 +3066,8 @@ async def show_user_restrictions(callback: types.CallbackQuery, db_user: User, d
     ]
 
     if restriction_reason:
-        text_lines.append('')
-        text_lines.append(
+        body_lines.append('')
+        body_lines.append(
             texts.t('ADMIN_USERS_RESTRICTIONS_012', '<b>Причина:</b> {value1}').format(
                 value1=html.escape(restriction_reason)
             )
@@ -3038,7 +3081,7 @@ async def show_user_restrictions(callback: types.CallbackQuery, db_user: User, d
     )
 
     await callback.message.edit_text(
-        admin_screen(strip_leading_emoji('\n'.join(text_lines)), icon='prohibit', compact=True),
+        admin_screen(f'{title}\n\n{admin_quote("\n".join(body_lines))}', icon='prohibit', compact=True),
         reply_markup=keyboard,
         parse_mode='HTML',
     )
@@ -3124,15 +3167,19 @@ async def ask_restriction_reason(callback: types.CallbackQuery, db_user: User, d
     await state.set_state(AdminStates.editing_user_restriction_reason)
     await state.update_data(restriction_user_id=user_id)
 
-    text = texts.t(
-        'ADMIN_USERS_RESTRICTIONS_000',
-        '<b>Введите причину ограничения</b>\n\nЭта причина будет показана пользователю при попытке выполнить запрещённое действие.\n\n',
+    text = _quote_blocks(
+        texts.t(
+            'ADMIN_USERS_RESTRICTIONS_000',
+            '<b>Введите причину ограничения</b>\n\nЭта причина будет показана пользователю при попытке выполнить запрещённое действие.\n\n',
+        )
     )
     if current_reason:
-        text += texts.t('ADMIN_USERS_RESTRICTIONS_010', 'Текущая причина: <i>{value1}</i>\n\n').format(
-            value1=html.escape(current_reason)
+        text += '\n\n' + admin_quote(
+            texts.t('ADMIN_USERS_RESTRICTIONS_010', 'Текущая причина: <i>{value1}</i>\n\n')
+            .format(value1=html.escape(current_reason))
+            .strip()
         )
-    text += texts.t('ADMIN_USERS_RESTRICTIONS_001', 'Отправьте новую причину или /cancel для отмены:')
+    text += '\n\n' + texts.t('ADMIN_USERS_RESTRICTIONS_001', 'Отправьте новую причину или /cancel для отмены:')
 
     await callback.message.edit_text(
         admin_screen(text, icon='edit', compact=True),
@@ -3290,39 +3337,53 @@ async def show_inactive_users(callback: types.CallbackQuery, db_user: User, db: 
 
     will_delete = len(inactive_users) - with_active_sub
 
-    text = texts.t('ADMIN_USERS_RESTRICTIONS_002', '<b>Неактивные пользователи</b>\n')
-    text += texts.t('ADMIN_USERS_RESTRICTIONS_003', 'Без активности более {value1} месяцев: {value2}\n').format(
-        value1=months, value2=len(inactive_users)
-    )
-    text += texts.t(
-        'ADMIN_USERS_CLEANUP_SUBSCRIPTION_RULE',
-        'Подписка отсутствует или истекла более {value1} дней назад.\n',
-    ).format(value1=max(1, int(settings.INACTIVE_USER_SUBSCRIPTION_EXPIRE_DAYS)))
-    if with_active_sub > 0:
-        text += texts.t('ADMIN_USERS_RESTRICTIONS_013', 'С активной подпиской (не будут удалены): {value1}\n').format(
-            value1=with_active_sub
+    header = texts.t('ADMIN_USERS_RESTRICTIONS_002', '<b>Неактивные пользователи</b>\n').strip()
+    stats_lines = [
+        texts.t('ADMIN_USERS_RESTRICTIONS_003', 'Без активности более {value1} месяцев: {value2}\n')
+        .format(value1=months, value2=len(inactive_users))
+        .strip(),
+        texts.t(
+            'ADMIN_USERS_CLEANUP_SUBSCRIPTION_RULE',
+            'Подписка отсутствует или истекла более {value1} дней назад.\n',
         )
-        text += texts.t('ADMIN_USERS_RESTRICTIONS_014', 'Будет удалено: {value1}\n').format(value1=will_delete)
-    text += '\n'
+        .format(value1=max(1, int(settings.INACTIVE_USER_SUBSCRIPTION_EXPIRE_DAYS)))
+        .strip(),
+    ]
+    if with_active_sub > 0:
+        stats_lines.append(
+            texts.t('ADMIN_USERS_RESTRICTIONS_013', 'С активной подпиской (не будут удалены): {value1}\n')
+            .format(value1=with_active_sub)
+            .strip()
+        )
+        stats_lines.append(
+            texts.t('ADMIN_USERS_RESTRICTIONS_014', 'Будет удалено: {value1}\n').format(value1=will_delete).strip()
+        )
+    text = header + '\n\n' + admin_quote('\n'.join(stats_lines)) + '\n\n'
 
+    user_lines = []
     for user in inactive_users[:10]:
         user_link = user_html_link(user)
         user_id_display = user.telegram_id or user.email or f'#{user.id}'
         has_active = any(s.is_active for s in (getattr(user, 'subscriptions', None) or []))
-        sub_badge = ' •' if has_active else ''
-        text += f'{user_link}{sub_badge}\n'
-        text += f'<code>{user_id_display}</code>\n'
+        sub_badge = f' {admin_icon("tariff")}' if has_active else ''
         last_activity_display = (
             format_time_ago(user.last_activity, db_user.language)
             if user.last_activity
             else texts.t('ADMIN_USERS_RESTRICTIONS_021', 'Никогда')
         )
-        text += f'{last_activity_display}\n\n'
+        user_lines.append(f'{admin_icon("user")} {user_link}{sub_badge}')
+        user_lines.append(f'<code>{user_id_display}</code>')
+        user_lines.append(f'{admin_icon("clock")} {last_activity_display}')
+        user_lines.append('')
 
     if len(inactive_users) > 10:
-        text += texts.t('ADMIN_USERS_RESTRICTIONS_015', '... и еще {value1} пользователей').format(
-            value1=len(inactive_users) - 10
+        user_lines.append(
+            texts.t('ADMIN_USERS_RESTRICTIONS_015', '... и еще {value1} пользователей').format(
+                value1=len(inactive_users) - 10
+            )
         )
+
+    text += admin_quote('\n'.join(user_lines).strip())
 
     keyboard = [
         [
@@ -3330,7 +3391,6 @@ async def show_inactive_users(callback: types.CallbackQuery, db_user: User, db: 
                 strip_leading_emoji(texts.t('ADMIN_USERS_CLEANUP_INACTIVE', 'Очистить неактивных')),
                 callback_data='admin_cleanup_inactive',
                 icon='delete',
-                style='danger',
             )
         ],
         [admin_back_button(texts, 'admin_users')],
@@ -3366,19 +3426,27 @@ async def prepare_cleanup_inactive_users(callback: types.CallbackQuery, db_user:
         return
 
     will_delete = len(inactive_users) - with_active_sub
-    text = texts.t('ADMIN_USERS_CLEANUP_TITLE', '<b>Очистка неактивных пользователей</b>')
-    text += '\n\n' + texts.t(
-        'ADMIN_USERS_CLEANUP_BODY',
-        'Без активности более {value1} мес.: <b>{value2}</b>\nБудет удалено из бота и панели Remnawave: <b>{value3}</b>',
-    ).format(value1=months, value2=len(inactive_users), value3=will_delete)
-    text += '\n' + texts.t(
-        'ADMIN_USERS_CLEANUP_SUBSCRIPTION_RULE',
-        'Подписка отсутствует или истекла более {value1} дней назад.\n',
-    ).format(value1=max(1, int(settings.INACTIVE_USER_SUBSCRIPTION_EXPIRE_DAYS)))
-    if with_active_sub > 0:
-        text += '\n' + texts.t('ADMIN_USERS_CLEANUP_SKIPPED', 'С активной подпиской (пропущено): {value1}').format(
-            value1=with_active_sub
+    title = texts.t('ADMIN_USERS_CLEANUP_TITLE', '<b>Очистка неактивных пользователей</b>')
+    body_lines = [
+        texts.t(
+            'ADMIN_USERS_CLEANUP_BODY',
+            'Без активности более {value1} мес.: <b>{value2}</b>\n'
+            'Будет удалено из бота и панели Remnawave: <b>{value3}</b>',
+        ).format(value1=months, value2=len(inactive_users), value3=will_delete),
+        texts.t(
+            'ADMIN_USERS_CLEANUP_SUBSCRIPTION_RULE',
+            'Подписка отсутствует или истекла более {value1} дней назад.\n',
         )
+        .format(value1=max(1, int(settings.INACTIVE_USER_SUBSCRIPTION_EXPIRE_DAYS)))
+        .strip(),
+    ]
+    if with_active_sub > 0:
+        body_lines.append(
+            texts.t('ADMIN_USERS_CLEANUP_SKIPPED', 'С активной подпиской (пропущено): {value1}').format(
+                value1=with_active_sub
+            )
+        )
+    text = title + '\n\n' + admin_quote('\n'.join(body_lines))
     text += '\n\n' + texts.t(
         'ADMIN_USERS_CLEANUP_WARNING',
         'Удаление необратимо: профиль в боте, подписки и аккаунт в панели исчезнут.',
@@ -3390,7 +3458,6 @@ async def prepare_cleanup_inactive_users(callback: types.CallbackQuery, db_user:
                 strip_leading_emoji(texts.t('ADMIN_USERS_CLEANUP_CONFIRM_BUTTON', 'Удалить везде')),
                 callback_data='admin_cleanup_inactive_confirm',
                 icon='delete',
-                style='danger',
             )
         ],
         [admin_back_button(texts, 'admin_users')],
@@ -3411,9 +3478,11 @@ async def confirm_user_unblock(callback: types.CallbackQuery, db_user: User):
 
     await callback.message.edit_text(
         admin_screen(
-            get_texts(db_user.language).t(
-                'ADMIN_USERS_RESTRICTIONS_022',
-                '<b>Разблокировка пользователя</b>\n\nВы уверены, что хотите разблокировать этого пользователя?\nПользователь снова получит доступ к боту.',
+            _quote_blocks(
+                get_texts(db_user.language).t(
+                    'ADMIN_USERS_RESTRICTIONS_022',
+                    '<b>Разблокировка пользователя</b>\n\nВы уверены, что хотите разблокировать этого пользователя?\nПользователь снова получит доступ к боту.',
+                ),
             ),
             icon='unlock',
             compact=True,
@@ -3636,7 +3705,7 @@ async def show_user_statistics(callback: types.CallbackQuery, db_user: User, db:
         text += texts.t('ADMIN_USERS_STATS_031', '• Доходов нет\n')
 
     await callback.message.edit_text(
-        admin_screen(text, icon='stats', compact=True),
+        admin_screen(_quote_blocks(text), icon='stats', compact=True),
         reply_markup=types.InlineKeyboardMarkup(
             inline_keyboard=[
                 [
@@ -3733,9 +3802,11 @@ async def extend_user_subscription(callback: types.CallbackQuery, db_user: User,
 
     await callback.message.edit_text(
         admin_screen(
-            texts.t(
-                'ADMIN_USERS_SUBACTIONS_002',
-                '<b>Продление подписки</b>\n\nВведите количество дней для изменения:\n• Положительные значения продлят подписку\n• Отрицательные сократят срок подписки\n• Диапазон: от -365 до 365 дней (0 недопустимо)\n\nИли нажмите /cancel для отмены',
+            _quote_blocks(
+                texts.t(
+                    'ADMIN_USERS_SUBACTIONS_002',
+                    '<b>Продление подписки</b>\n\nВведите количество дней для изменения:\n• Положительные значения продлят подписку\n• Отрицательные сократят срок подписки\n• Диапазон: от -365 до 365 дней (0 недопустимо)\n\nИли нажмите /cancel для отмены',
+                ),
             ),
             icon='calendar',
             compact=True,
@@ -3974,9 +4045,11 @@ async def add_subscription_traffic(callback: types.CallbackQuery, db_user: User,
 
     await callback.message.edit_text(
         admin_screen(
-            texts.t(
-                'ADMIN_USERS_SUBACTIONS_005',
-                '<b>Добавление трафика</b>\n\nВведите количество ГБ для добавления:\n• Например: 50, 100, 500\n• Максимум: 10000 ГБ\n\nИли нажмите /cancel для отмены',
+            _quote_blocks(
+                texts.t(
+                    'ADMIN_USERS_SUBACTIONS_005',
+                    '<b>Добавление трафика</b>\n\nВведите количество ГБ для добавления:\n• Например: 50, 100, 500\n• Максимум: 10000 ГБ\n\nИли нажмите /cancel для отмены',
+                ),
             ),
             icon='wifi',
             compact=True,
@@ -4202,9 +4275,11 @@ async def deactivate_user_subscription(callback: types.CallbackQuery, db_user: U
 
     await callback.message.edit_text(
         admin_screen(
-            get_texts(db_user.language).t(
-                'ADMIN_USERS_SUBACTIONS_008',
-                '<b>Деактивация подписки</b>\n\nВы уверены, что хотите деактивировать подписку этого пользователя?\nПользователь потеряет доступ к сервису.',
+            _quote_blocks(
+                get_texts(db_user.language).t(
+                    'ADMIN_USERS_SUBACTIONS_008',
+                    '<b>Деактивация подписки</b>\n\nВы уверены, что хотите деактивировать подписку этого пользователя?\nПользователь потеряет доступ к сервису.',
+                ),
             ),
             icon='prohibit',
             compact=True,
@@ -4288,9 +4363,11 @@ async def reset_user_subscription(callback: types.CallbackQuery, db_user: User, 
 
     await callback.message.edit_text(
         admin_screen(
-            get_texts(db_user.language).t(
-                'ADMIN_USERS_SUBACTIONS_009',
-                '<b>Обнуление подписки</b>\n\nПодписка будет полностью обнулена «как будто пользователь её не оформлял»:\n• срок и наспамленные дни сбрасываются\n• трафик и доступ к серверам снимаются\n• пользователь <b>отключается</b> в панели RemnaWave (не удаляется)\n\nСам пользователь и его тикеты <b>остаются</b> в боте.\nПосле этого он сможет купить тариф с нуля и выбрать срок.',
+            _quote_blocks(
+                get_texts(db_user.language).t(
+                    'ADMIN_USERS_SUBACTIONS_009',
+                    '<b>Обнуление подписки</b>\n\nПодписка будет полностью обнулена «как будто пользователь её не оформлял»:\n• срок и наспамленные дни сбрасываются\n• трафик и доступ к серверам снимаются\n• пользователь <b>отключается</b> в панели RemnaWave (не удаляется)\n\nСам пользователь и его тикеты <b>остаются</b> в боте.\nПосле этого он сможет купить тариф с нуля и выбрать срок.',
+                ),
             ),
             icon='broom',
             compact=True,
@@ -4384,9 +4461,11 @@ async def delete_user_subscription(callback: types.CallbackQuery, db_user: User,
 
     await callback.message.edit_text(
         admin_screen(
-            texts.t(
-                'ADMIN_USERS_SUBACTIONS_010',
-                '<b>Удаление подписки</b>\n\n⚠ Подписка будет полностью удалена из системы.\nЭто действие необратимо!',
+            _quote_blocks(
+                texts.t(
+                    'ADMIN_USERS_SUBACTIONS_010',
+                    '<b>Удаление подписки</b>\n\n⚠ Подписка будет полностью удалена из системы.\nЭто действие необратимо!',
+                ),
             ),
             icon='delete',
             compact=True,
@@ -4616,9 +4695,11 @@ async def grant_paid_subscription(callback: types.CallbackQuery, db_user: User, 
 
     await callback.message.edit_text(
         admin_screen(
-            texts.t(
-                'ADMIN_USERS_SUBACTIONS_012',
-                '<b>Выдача подписки</b>\n\nВведите количество дней подписки:\n• Например: 30, 90, 180, 365\n• Максимум: 730 дней\n\nИли нажмите /cancel для отмены',
+            _quote_blocks(
+                texts.t(
+                    'ADMIN_USERS_SUBACTIONS_012',
+                    '<b>Выдача подписки</b>\n\nВведите количество дней подписки:\n• Например: 30, 90, 180, 365\n• Максимум: 730 дней\n\nИли нажмите /cancel для отмены',
+                ),
             ),
             icon='gift',
             compact=True,
@@ -4859,9 +4940,9 @@ async def _show_servers_for_user(
             )
             return
 
-        text = '<b>Управление серверами</b>\n\n'
-        text += '<i>[x] — сквад подключён, [ ] — не подключён.</i>\n'
-        text += 'Нажмите на сервер, чтобы переключить:\n'
+        text = '<b>Управление серверами</b>\n\n' + admin_quote(
+            '<i>[x] — сквад подключён, [ ] — не подключён.</i>\nНажмите на сервер, чтобы переключить:'
+        )
 
         keyboard = []
         for server in all_servers:
@@ -4892,7 +4973,6 @@ async def _show_servers_for_user(
                     strip_leading_emoji(texts.t('ADMIN_USERS_LIMITS_031', 'Готово')),
                     callback_data=back_cb,
                     icon='check',
-                    style='success',
                 ),
             ]
         )
@@ -5035,10 +5115,12 @@ async def start_devices_edit(callback: types.CallbackQuery, db_user: User, state
 
     await callback.message.edit_text(
         admin_screen(
-            texts.t(
-                'ADMIN_USERS_LIMITS_008',
-                '<b>Изменение количества устройств</b>\n\nВведите новое количество устройств (от 1 до {value1}):\n• Текущее значение будет заменено\n\nИли нажмите /cancel для отмены',
-            ).format(value1=limit_display),
+            _quote_blocks(
+                texts.t(
+                    'ADMIN_USERS_LIMITS_008',
+                    '<b>Изменение количества устройств</b>\n\nВведите новое количество устройств (от 1 до {value1}):\n• Текущее значение будет заменено\n\nИли нажмите /cancel для отмены',
+                ).format(value1=limit_display)
+            ),
             icon='devices',
             compact=True,
         ),
@@ -5230,9 +5312,11 @@ async def start_traffic_edit(callback: types.CallbackQuery, db_user: User, state
 
     await callback.message.edit_text(
         admin_screen(
-            texts.t(
-                'ADMIN_USERS_LIMITS_009',
-                '<b>Изменение лимита трафика</b>\n\nВведите новый лимит трафика в ГБ:\n• 0 - безлимитный трафик\n• Примеры: 50, 100, 500, 1000\n• Максимум: 10000 ГБ\n\nИли нажмите /cancel для отмены',
+            _quote_blocks(
+                texts.t(
+                    'ADMIN_USERS_LIMITS_009',
+                    '<b>Изменение лимита трафика</b>\n\nВведите новый лимит трафика в ГБ:\n• 0 - безлимитный трафик\n• Примеры: 50, 100, 500, 1000\n• Максимум: 10000 ГБ\n\nИли нажмите /cancel для отмены',
+                )
             ),
             icon='battery',
             compact=True,
@@ -5454,9 +5538,11 @@ async def confirm_reset_devices(callback: types.CallbackQuery, db_user: User):
 
     await callback.message.edit_text(
         admin_screen(
-            get_texts(db_user.language).t(
-                'ADMIN_USERS_LIMITS_012',
-                '<b>Сброс устройств пользователя</b>\n\n⚠ <b>ВНИМАНИЕ!</b>\nВы уверены, что хотите сбросить все HWID устройства этого пользователя?\n\nЭто действие:\n• Удалит все привязанные устройства\n• Пользователь сможет заново подключить устройства\n• Действие необратимо!\n\nПродолжить?',
+            _quote_blocks(
+                get_texts(db_user.language).t(
+                    'ADMIN_USERS_LIMITS_012',
+                    '<b>Сброс устройств пользователя</b>\n\n⚠ <b>ВНИМАНИЕ!</b>\nВы уверены, что хотите сбросить все HWID устройства этого пользователя?\n\nЭто действие:\n• Удалит все привязанные устройства\n• Пользователь сможет заново подключить устройства\n• Действие необратимо!\n\nПродолжить?',
+                ),
             ),
             icon='refresh',
             compact=True,
@@ -6038,9 +6124,11 @@ async def cleanup_inactive_users(callback: types.CallbackQuery, db_user: User, d
         logger.error('Очистка неактивных отменена: не удалось создать бекап', error=backup_message)
         await callback.message.edit_text(
             admin_screen(
-                texts.t(
-                    'ADMIN_USERS_CLEANUP_BACKUP_FAILED',
-                    '<b>Удаление отменено</b>\n\nНе удалось создать резервную копию. Пользователи не тронуты.',
+                _quote_blocks(
+                    texts.t(
+                        'ADMIN_USERS_CLEANUP_BACKUP_FAILED',
+                        '<b>Удаление отменено</b>\n\nНе удалось создать резервную копию. Пользователи не тронуты.',
+                    ),
                 ),
                 icon='error',
                 compact=True,
@@ -6067,18 +6155,25 @@ async def cleanup_inactive_users(callback: types.CallbackQuery, db_user: User, d
         force_panel_delete=True,
     )
 
-    text = texts.t(
+    done_text = texts.t(
         'ADMIN_USERS_CLEANUP_DONE',
         '<b>Очистка завершена</b>\n\nУдалено из бота и панели Remnawave: <b>{value1}</b>',
     ).format(value1=deleted_count)
+    title, _, done_line = done_text.partition('\n\n')
+    done_lines = [done_line]
     if skipped_count > 0:
-        text += texts.t('ADMIN_USERS_CLEANUP_DONE_SKIPPED', '\nПропущено (активная подписка): {value1}').format(
-            value1=skipped_count
+        done_lines.append(
+            texts.t('ADMIN_USERS_CLEANUP_DONE_SKIPPED', '\nПропущено (активная подписка): {value1}').format(
+                value1=skipped_count
+            )
         )
     if backup_path:
-        text += texts.t('ADMIN_USERS_CLEANUP_BACKUP_FILE', '\nБекап: <code>{value1}</code>').format(
-            value1=html.escape(Path(backup_path).name)
+        done_lines.append(
+            texts.t('ADMIN_USERS_CLEANUP_BACKUP_FILE', '\nБекап: <code>{value1}</code>').format(
+                value1=html.escape(Path(backup_path).name)
+            )
         )
+    text = title + '\n\n' + admin_quote('\n'.join(line.strip() for line in done_lines))
 
     await callback.message.edit_text(
         admin_screen(text, icon='success', compact=True),
@@ -6128,10 +6223,17 @@ async def change_subscription_type(callback: types.CallbackQuery, db_user: User,
         else texts.t('ADMIN_USERS_PURCHASE_038', 'Платная')
     )
 
-    text = texts.t('ADMIN_USERS_PURCHASE_001', '<b>Смена типа подписки</b>\n\n')
-    text += f'{html.escape(profile["user"].full_name)}\n'
-    text += texts.t('ADMIN_USERS_PURCHASE_002', 'Текущий тип: {value1}\n\n').format(value1=current_type)
-    text += texts.t('ADMIN_USERS_PURCHASE_003', 'Выберите новый тип подписки:')
+    header = texts.t('ADMIN_USERS_PURCHASE_001', '<b>Смена типа подписки</b>\n\n')
+    current_line = texts.t('ADMIN_USERS_PURCHASE_002', 'Текущий тип: {value1}\n\n').format(value1=current_type)
+    text = (
+        header
+        + admin_quote(
+            f'{admin_icon("user")} {html.escape(profile["user"].full_name)}\n'
+            f'{admin_icon("repeat")} {current_line.strip()}'
+        )
+        + '\n\n'
+        + texts.t('ADMIN_USERS_PURCHASE_003', 'Выберите новый тип подписки:')
+    )
 
     keyboard = []
 
@@ -6142,7 +6244,6 @@ async def change_subscription_type(callback: types.CallbackQuery, db_user: User,
                     strip_leading_emoji(texts.t('ADMIN_USERS_PURCHASE_108', 'Сделать платной')),
                     callback_data=f'admin_sub_type_paid_{user_id}{_sid}',
                     icon='check',
-                    style='success',
                 )
             ]
         )
@@ -6153,7 +6254,6 @@ async def change_subscription_type(callback: types.CallbackQuery, db_user: User,
                     strip_leading_emoji(texts.t('ADMIN_USERS_PURCHASE_109', 'Сделать триальной')),
                     callback_data=f'admin_sub_type_trial_{user_id}{_sid}',
                     icon='gift',
-                    style='success',
                 )
             ]
         )
@@ -6277,11 +6377,10 @@ async def admin_buy_subscription(callback: types.CallbackQuery, db_user: User, d
         ]
     )
 
-    text = texts.t('ADMIN_USERS_PURCHASE_004', '<b>Покупка подписки для пользователя</b>\n\n')
+    header = texts.t('ADMIN_USERS_PURCHASE_004', '<b>Покупка подписки для пользователя</b>\n\n')
     target_user_link = user_html_link(target_user)
     target_user_id_display = target_user.telegram_id or target_user.email or f'#{target_user.id}'
-    text += f'{target_user_link} (ID: {target_user_id_display})\n'
-    text += texts.t('ADMIN_USERS_PURCHASE_005', 'Баланс пользователя: {value1}\n\n').format(
+    balance_line = texts.t('ADMIN_USERS_PURCHASE_005', 'Баланс пользователя: {value1}\n\n').format(
         value1=settings.format_price(target_user.balance_kopeks)
     )
     traffic_text = (
@@ -6293,12 +6392,20 @@ async def admin_buy_subscription(callback: types.CallbackQuery, db_user: User, d
     if devices_limit is None:
         devices_limit = settings.DEFAULT_DEVICE_LIMIT
     servers_count = len(subscription.connected_squads or [])
-    text += texts.t('ADMIN_USERS_PURCHASE_006', 'Трафик: {value1}\n').format(value1=traffic_text)
-    text += texts.t('ADMIN_USERS_PURCHASE_007', 'Устройства: {value1}\n').format(
-        value1=Texts.format_device_limit(devices_limit)
-    )
-    text += texts.t('ADMIN_USERS_PURCHASE_008', 'Серверов: {value1}\n\n').format(value1=servers_count)
-    text += texts.t('ADMIN_USERS_PURCHASE_009', 'Выберите период подписки:\n')
+    param_lines = [
+        f'{admin_icon("user")} {target_user_link} (ID: {target_user_id_display})',
+        f'{admin_icon("money")} {balance_line.strip()}',
+        f'{admin_icon("battery")} '
+        + texts.t('ADMIN_USERS_PURCHASE_006', 'Трафик: {value1}\n').format(value1=traffic_text).strip(),
+        f'{admin_icon("devices")} '
+        + texts.t('ADMIN_USERS_PURCHASE_007', 'Устройства: {value1}\n')
+        .format(value1=Texts.format_device_limit(devices_limit))
+        .strip(),
+        f'{admin_icon("servers")} '
+        + texts.t('ADMIN_USERS_PURCHASE_008', 'Серверов: {value1}\n\n').format(value1=servers_count).strip(),
+    ]
+    text = header + admin_quote('\n'.join(param_lines))
+    text += '\n\n' + texts.t('ADMIN_USERS_PURCHASE_009', 'Выберите период подписки:\n')
 
     await callback.message.edit_text(
         admin_screen(text, icon='pricing', compact=True),
@@ -6382,13 +6489,15 @@ async def admin_buy_subscription_confirm(callback: types.CallbackQuery, db_user:
         # одинаковыми и админ увидит «не хватает 0 ₽».
         await callback.message.edit_text(
             admin_screen(
-                texts.t(
-                    'ADMIN_USERS_PURCHASE_067',
-                    '<b>Недостаточно средств на балансе пользователя</b>\n\nБаланс пользователя: {value1}\nСтоимость подписки: {value2}\nНе хватает: {value3}\n\nПополните баланс пользователя перед покупкой.',
-                ).format(
-                    value1=settings.format_price(target_user.balance_kopeks, round_kopeks=False),
-                    value2=settings.format_price(price_kopeks, round_kopeks=False),
-                    value3=settings.format_price(missing_kopeks, round_kopeks=False),
+                _quote_blocks(
+                    texts.t(
+                        'ADMIN_USERS_PURCHASE_067',
+                        '<b>Недостаточно средств на балансе пользователя</b>\n\nБаланс пользователя: {value1}\nСтоимость подписки: {value2}\nНе хватает: {value3}\n\nПополните баланс пользователя перед покупкой.',
+                    ).format(
+                        value1=settings.format_price(target_user.balance_kopeks, round_kopeks=False),
+                        value2=settings.format_price(price_kopeks, round_kopeks=False),
+                        value3=settings.format_price(missing_kopeks, round_kopeks=False),
+                    )
                 ),
                 icon='warning',
                 compact=True,
@@ -6409,15 +6518,10 @@ async def admin_buy_subscription_confirm(callback: types.CallbackQuery, db_user:
         await callback.answer()
         return
 
-    text = texts.t('ADMIN_USERS_PURCHASE_010', '<b>Подтверждение покупки подписки</b>\n\n')
+    header = texts.t('ADMIN_USERS_PURCHASE_010', '<b>Подтверждение покупки подписки</b>\n\n')
     target_user_link = user_html_link(target_user)
     target_user_id_display = target_user.telegram_id or target_user.email or f'#{target_user.id}'
-    text += f'{target_user_link} (ID: {target_user_id_display})\n'
-    text += texts.t('ADMIN_USERS_PURCHASE_011', 'Период подписки: {value1} дней\n').format(value1=period_days)
-    text += texts.t('ADMIN_USERS_PURCHASE_012', 'Стоимость: {value1}\n').format(
-        value1=settings.format_price(price_kopeks)
-    )
-    text += texts.t('ADMIN_USERS_PURCHASE_005', 'Баланс пользователя: {value1}\n\n').format(
+    balance_line = texts.t('ADMIN_USERS_PURCHASE_005', 'Баланс пользователя: {value1}\n\n').format(
         value1=settings.format_price(target_user.balance_kopeks)
     )
     traffic_text = (
@@ -6429,12 +6533,28 @@ async def admin_buy_subscription_confirm(callback: types.CallbackQuery, db_user:
     if devices_limit is None:
         devices_limit = settings.DEFAULT_DEVICE_LIMIT
     servers_count = len(subscription.connected_squads or [])
-    text += texts.t('ADMIN_USERS_PURCHASE_006', 'Трафик: {value1}\n').format(value1=traffic_text)
-    text += texts.t('ADMIN_USERS_PURCHASE_007', 'Устройства: {value1}\n').format(
-        value1=Texts.format_device_limit(devices_limit)
+    param_lines = [
+        f'{admin_icon("user")} {target_user_link} (ID: {target_user_id_display})',
+        f'{admin_icon("calendar")} '
+        + texts.t('ADMIN_USERS_PURCHASE_011', 'Период подписки: {value1} дней\n').format(value1=period_days).strip(),
+        f'{admin_icon("pricing")} '
+        + texts.t('ADMIN_USERS_PURCHASE_012', 'Стоимость: {value1}\n')
+        .format(value1=settings.format_price(price_kopeks))
+        .strip(),
+        f'{admin_icon("money")} {balance_line.strip()}',
+        f'{admin_icon("battery")} '
+        + texts.t('ADMIN_USERS_PURCHASE_006', 'Трафик: {value1}\n').format(value1=traffic_text).strip(),
+        f'{admin_icon("devices")} '
+        + texts.t('ADMIN_USERS_PURCHASE_007', 'Устройства: {value1}\n')
+        .format(value1=Texts.format_device_limit(devices_limit))
+        .strip(),
+        f'{admin_icon("servers")} '
+        + texts.t('ADMIN_USERS_PURCHASE_008', 'Серверов: {value1}\n\n').format(value1=servers_count).strip(),
+    ]
+    text = header + admin_quote('\n'.join(param_lines))
+    text += '\n\n' + texts.t(
+        'ADMIN_USERS_PURCHASE_013', 'Вы уверены, что хотите купить подписку для этого пользователя?'
     )
-    text += texts.t('ADMIN_USERS_PURCHASE_008', 'Серверов: {value1}\n\n').format(value1=servers_count)
-    text += texts.t('ADMIN_USERS_PURCHASE_013', 'Вы уверены, что хотите купить подписку для этого пользователя?')
 
     keyboard = [
         [
@@ -6442,7 +6562,6 @@ async def admin_buy_subscription_confirm(callback: types.CallbackQuery, db_user:
                 strip_leading_emoji(texts.t('ADMIN_BLOCKED_BUTTON_CONFIRM', 'Подтвердить')),
                 callback_data=f'admin_buy_sub_execute_{user_id}_{period_days}_{price_kopeks}{_sid}',
                 icon='check',
-                style='success',
             )
         ],
         [
@@ -6745,16 +6864,19 @@ async def admin_buy_subscription_execute(callback: types.CallbackQuery, db_user:
         target_user_id_display = target_user.telegram_id or target_user.email or f'#{target_user.id}'
         await callback.message.edit_text(
             admin_screen(
-                texts.t(
-                    'ADMIN_USERS_PURCHASE_068',
-                    '{value1}\n\n{value2} (ID: {value3})\nСписано: {value4}\nПодписка действительна до: {value5}',
-                ).format(
-                    value1=message,
-                    value2=target_user_link,
-                    value3=target_user_id_display,
-                    value4=settings.format_price(price_kopeks),
-                    value5=format_datetime(subscription.end_date),
+                _quote_blocks(
+                    texts.t(
+                        'ADMIN_USERS_PURCHASE_068',
+                        '{value1}\n\n{value2} (ID: {value3})\nСписано: {value4}\nПодписка действительна до: {value5}',
+                    ).format(
+                        value1=message,
+                        value2=target_user_link,
+                        value3=target_user_id_display,
+                        value4=settings.format_price(price_kopeks),
+                        value5=format_datetime(subscription.end_date),
+                    ),
                 ),
+                icon='success',
                 compact=True,
             ),
             reply_markup=types.InlineKeyboardMarkup(
@@ -6840,9 +6962,11 @@ async def admin_buy_tariff(callback: types.CallbackQuery, db_user: User, db: Asy
     if not tariffs:
         await callback.message.edit_text(
             admin_screen(
-                texts.t(
-                    'ADMIN_USERS_PURCHASE_069',
-                    '<b>Нет доступных тарифов</b>\n\nСоздайте тарифы в разделе управления тарифами.',
+                _quote_blocks(
+                    texts.t(
+                        'ADMIN_USERS_PURCHASE_069',
+                        '<b>Нет доступных тарифов</b>\n\nСоздайте тарифы в разделе управления тарифами.',
+                    ),
                 ),
                 icon='tariff',
                 compact=True,
@@ -6855,13 +6979,17 @@ async def admin_buy_tariff(callback: types.CallbackQuery, db_user: User, db: Asy
 
     target_user_link = user_html_link(target_user)
     target_user_id_display = target_user.telegram_id or target_user.email or f'#{target_user.id}'
-    text = texts.t('ADMIN_USERS_PURCHASE_014', '<b>Покупка тарифа для пользователя</b>\n\n')
-    text += f'{target_user_link} (ID: {target_user_id_display})\n'
-    text += texts.t('ADMIN_USERS_PURCHASE_015', 'Баланс: {value1}\n\n').format(
+    header = texts.t('ADMIN_USERS_PURCHASE_014', '<b>Покупка тарифа для пользователя</b>\n\n')
+    balance_line = texts.t('ADMIN_USERS_PURCHASE_015', 'Баланс: {value1}\n\n').format(
         value1=settings.format_price(target_user.balance_kopeks)
     )
-    text += texts.t('ADMIN_USERS_PURCHASE_016', '<b>Выберите тариф:</b>\n\n')
+    text = header + admin_quote(
+        f'{admin_icon("user")} {target_user_link} (ID: {target_user_id_display})\n'
+        f'{admin_icon("money")} {balance_line.strip()}'
+    )
+    text += '\n\n' + texts.t('ADMIN_USERS_PURCHASE_016', '<b>Выберите тариф:</b>\n\n').strip() + '\n\n'
 
+    tariff_lines = []
     for tariff in tariffs:
         traffic = (
             ''
@@ -6870,12 +6998,17 @@ async def admin_buy_tariff(callback: types.CallbackQuery, db_user: User, db: Asy
         )
         prices = tariff.period_prices or {}
         min_price = min(prices.values()) if prices else 0
-        text += texts.t('ADMIN_USERS_PURCHASE_041', '<b>{value1}</b> — {value2} / {value3}  от {value4}\n').format(
-            value1=html.escape(tariff.name),
-            value2=traffic,
-            value3=tariff.device_limit,
-            value4=settings.format_price(min_price),
+        tariff_lines.append(
+            texts.t('ADMIN_USERS_PURCHASE_041', '<b>{value1}</b> — {value2} / {value3}  от {value4}\n')
+            .format(
+                value1=html.escape(tariff.name),
+                value2=traffic,
+                value3=tariff.device_limit,
+                value4=settings.format_price(min_price),
+            )
+            .strip()
         )
+    text += admin_quote('\n'.join(tariff_lines))
 
     keyboard = []
     for tariff in tariffs:
@@ -6964,20 +7097,30 @@ async def admin_buy_tariff_period(callback: types.CallbackQuery, db_user: User, 
         else texts.t('ADMIN_USERS_LIMITS_011', '{value1} ГБ').format(value1=tariff.traffic_limit_gb)
     )
 
-    text = texts.t('ADMIN_USERS_PURCHASE_014', '<b>Покупка тарифа для пользователя</b>\n\n')
-    text += f'{target_user_link} (ID: {target_user_id_display})\n'
-    text += texts.t('ADMIN_USERS_PURCHASE_015', 'Баланс: {value1}\n\n').format(
+    header = texts.t('ADMIN_USERS_PURCHASE_014', '<b>Покупка тарифа для пользователя</b>\n\n')
+    balance_line = texts.t('ADMIN_USERS_PURCHASE_015', 'Баланс: {value1}\n\n').format(
         value1=settings.format_price(target_user.balance_kopeks)
     )
-    text += texts.t('ADMIN_USERS_PURCHASE_017', '<b>Тариф: {value1}</b>\n').format(value1=html.escape(tariff.name))
-    text += texts.t('ADMIN_USERS_PURCHASE_018', 'Трафик: {value1}\n').format(value1=traffic)
-    text += texts.t('ADMIN_USERS_PURCHASE_019', 'Устройств: {value1}\n').format(
-        value1=Texts.format_device_limit(device_limit)
-    )
-    text += texts.t('ADMIN_USERS_PURCHASE_008', 'Серверов: {value1}\n\n').format(
-        value1=len(tariff.allowed_squads) if tariff.allowed_squads else 0
-    )
-    text += texts.t('ADMIN_USERS_PURCHASE_020', 'Выберите период:')
+    param_lines = [
+        f'{admin_icon("user")} {target_user_link} (ID: {target_user_id_display})',
+        f'{admin_icon("money")} {balance_line.strip()}',
+        f'{admin_icon("tariff")} '
+        + texts.t('ADMIN_USERS_PURCHASE_017', '<b>Тариф: {value1}</b>\n')
+        .format(value1=html.escape(tariff.name))
+        .strip(),
+        f'{admin_icon("battery")} '
+        + texts.t('ADMIN_USERS_PURCHASE_018', 'Трафик: {value1}\n').format(value1=traffic).strip(),
+        f'{admin_icon("devices")} '
+        + texts.t('ADMIN_USERS_PURCHASE_019', 'Устройств: {value1}\n')
+        .format(value1=Texts.format_device_limit(device_limit))
+        .strip(),
+        f'{admin_icon("servers")} '
+        + texts.t('ADMIN_USERS_PURCHASE_008', 'Серверов: {value1}\n\n')
+        .format(value1=len(tariff.allowed_squads) if tariff.allowed_squads else 0)
+        .strip(),
+    ]
+    text = header + admin_quote('\n'.join(param_lines))
+    text += '\n\n' + texts.t('ADMIN_USERS_PURCHASE_020', 'Выберите период:')
 
     prices = {'1': tariff.daily_price_kopeks} if tariff.is_daily else (tariff.period_prices or {})
     keyboard = []
@@ -7055,13 +7198,15 @@ async def admin_buy_tariff_confirm(callback: types.CallbackQuery, db_user: User,
         missing = price_kopeks - target_user.balance_kopeks
         await callback.message.edit_text(
             admin_screen(
-                texts.t(
-                    'ADMIN_USERS_PURCHASE_071',
-                    '<b>Недостаточно средств</b>\n\nБаланс: {value1}\nСтоимость: {value2}\nНе хватает: {value3}\n\nПополните баланс пользователя перед покупкой.',
-                ).format(
-                    value1=settings.format_price(target_user.balance_kopeks, round_kopeks=False),
-                    value2=settings.format_price(price_kopeks, round_kopeks=False),
-                    value3=settings.format_price(missing, round_kopeks=False),
+                _quote_blocks(
+                    texts.t(
+                        'ADMIN_USERS_PURCHASE_071',
+                        '<b>Недостаточно средств</b>\n\nБаланс: {value1}\nСтоимость: {value2}\nНе хватает: {value3}\n\nПополните баланс пользователя перед покупкой.',
+                    ).format(
+                        value1=settings.format_price(target_user.balance_kopeks, round_kopeks=False),
+                        value2=settings.format_price(price_kopeks, round_kopeks=False),
+                        value3=settings.format_price(missing, round_kopeks=False),
+                    )
                 ),
                 icon='warning',
                 compact=True,
@@ -7090,20 +7235,31 @@ async def admin_buy_tariff_confirm(callback: types.CallbackQuery, db_user: User,
     )
 
     text = texts.t('ADMIN_USERS_PURCHASE_021', '<b>Подтверждение покупки тарифа</b>\n\n')
-    text += f'{target_user_link} (ID: {target_user_id_display})\n'
-    text += texts.t('ADMIN_USERS_PURCHASE_015', 'Баланс: {value1}\n\n').format(
+    balance_line = texts.t('ADMIN_USERS_PURCHASE_015', 'Баланс: {value1}\n\n').format(
         value1=settings.format_price(target_user.balance_kopeks)
     )
-    text += texts.t('ADMIN_USERS_PURCHASE_017', '<b>Тариф: {value1}</b>\n').format(value1=html.escape(tariff.name))
-    text += texts.t('ADMIN_USERS_PURCHASE_018', 'Трафик: {value1}\n').format(value1=traffic)
-    text += texts.t('ADMIN_USERS_PURCHASE_019', 'Устройств: {value1}\n').format(
-        value1=Texts.format_device_limit(device_limit)
-    )
-    text += texts.t('ADMIN_USERS_PURCHASE_022', 'Период: {value1} дней\n').format(value1=period)
-    text += texts.t('ADMIN_USERS_PURCHASE_023', 'Стоимость: {value1}\n\n').format(
-        value1=settings.format_price(price_kopeks)
-    )
-    text += texts.t('ADMIN_USERS_PURCHASE_024', 'Подтвердить покупку?')
+    param_lines = [
+        f'{admin_icon("user")} {target_user_link} (ID: {target_user_id_display})',
+        f'{admin_icon("money")} {balance_line.strip()}',
+        f'{admin_icon("tariff")} '
+        + texts.t('ADMIN_USERS_PURCHASE_017', '<b>Тариф: {value1}</b>\n')
+        .format(value1=html.escape(tariff.name))
+        .strip(),
+        f'{admin_icon("battery")} '
+        + texts.t('ADMIN_USERS_PURCHASE_018', 'Трафик: {value1}\n').format(value1=traffic).strip(),
+        f'{admin_icon("devices")} '
+        + texts.t('ADMIN_USERS_PURCHASE_019', 'Устройств: {value1}\n')
+        .format(value1=Texts.format_device_limit(device_limit))
+        .strip(),
+        f'{admin_icon("calendar")} '
+        + texts.t('ADMIN_USERS_PURCHASE_022', 'Период: {value1} дней\n').format(value1=period).strip(),
+        f'{admin_icon("pricing")} '
+        + texts.t('ADMIN_USERS_PURCHASE_023', 'Стоимость: {value1}\n\n')
+        .format(value1=settings.format_price(price_kopeks))
+        .strip(),
+    ]
+    text = text + admin_quote('\n'.join(param_lines))
+    text += '\n\n' + texts.t('ADMIN_USERS_PURCHASE_024', 'Подтвердить покупку?')
 
     keyboard = [
         [
@@ -7111,7 +7267,6 @@ async def admin_buy_tariff_confirm(callback: types.CallbackQuery, db_user: User,
                 strip_leading_emoji(texts.t('ADMIN_BLOCKED_BUTTON_CONFIRM', 'Подтвердить')),
                 callback_data=f'admin_tariff_buy_exec_{user_id}_{tariff_id}_{period}_{price_kopeks}',
                 icon='check',
-                style='success',
             )
         ],
         [
@@ -7303,18 +7458,20 @@ async def admin_buy_tariff_execute(callback: types.CallbackQuery, db_user: User,
 
         await callback.message.edit_text(
             admin_screen(
-                texts.t(
-                    'ADMIN_USERS_PURCHASE_074',
-                    '<b>Тариф успешно куплен!</b>\n\n{value1} (ID: {value2})\nТариф: {value3}\nТрафик: {value4}\nУстройств: {value5}\nПериод: {value6} дней\nСписано: {value7}\nДействует до: {value8}',
-                ).format(
-                    value1=target_user_link,
-                    value2=target_user_id_display,
-                    value3=html.escape(tariff.name),
-                    value4=traffic,
-                    value5=Texts.format_device_limit(subscription.device_limit),
-                    value6=period,
-                    value7=settings.format_price(price_kopeks),
-                    value8=format_datetime(subscription.end_date),
+                _quote_blocks(
+                    texts.t(
+                        'ADMIN_USERS_PURCHASE_074',
+                        '<b>Тариф успешно куплен!</b>\n\n{value1} (ID: {value2})\nТариф: {value3}\nТрафик: {value4}\nУстройств: {value5}\nПериод: {value6} дней\nСписано: {value7}\nДействует до: {value8}',
+                    ).format(
+                        value1=target_user_link,
+                        value2=target_user_id_display,
+                        value3=html.escape(tariff.name),
+                        value4=traffic,
+                        value5=Texts.format_device_limit(subscription.device_limit),
+                        value6=period,
+                        value7=settings.format_price(price_kopeks),
+                        value8=format_datetime(subscription.end_date),
+                    ),
                 ),
                 icon='success',
                 compact=True,
@@ -7529,9 +7686,11 @@ async def show_admin_tariff_change(callback: types.CallbackQuery, db_user: User,
     if not tariffs:
         await callback.message.edit_text(
             admin_screen(
-                texts.t(
-                    'ADMIN_USERS_PURCHASE_069',
-                    '<b>Нет доступных тарифов</b>\n\nСоздайте тарифы в разделе управления тарифами.',
+                _quote_blocks(
+                    texts.t(
+                        'ADMIN_USERS_PURCHASE_069',
+                        '<b>Нет доступных тарифов</b>\n\nСоздайте тарифы в разделе управления тарифами.',
+                    ),
                 ),
                 icon='tariff',
                 compact=True,
@@ -7547,18 +7706,18 @@ async def show_admin_tariff_change(callback: types.CallbackQuery, db_user: User,
     if subscription.tariff_id:
         current_tariff = await get_tariff_by_id(db, subscription.tariff_id)
 
-    text = texts.t('ADMIN_USERS_PURCHASE_025', '<b>Смена тарифа пользователя</b>\n\n')
+    header = texts.t('ADMIN_USERS_PURCHASE_025', '<b>Смена тарифа пользователя</b>\n\n')
     user_link = user_html_link(user)
-    text += f'{user_link}\n\n'
 
     if current_tariff:
-        text += texts.t('ADMIN_USERS_PURCHASE_043', '<b>Текущий тариф:</b> {value1}\n\n').format(
+        current_line = texts.t('ADMIN_USERS_PURCHASE_043', '<b>Текущий тариф:</b> {value1}\n\n').format(
             value1=html.escape(current_tariff.name)
         )
     else:
-        text += texts.t('ADMIN_USERS_PURCHASE_044', '<b>Текущий тариф:</b> не установлен\n\n')
+        current_line = texts.t('ADMIN_USERS_PURCHASE_044', '<b>Текущий тариф:</b> не установлен\n\n')
 
-    text += texts.t('ADMIN_USERS_PURCHASE_026', 'Выберите новый тариф:\n')
+    text = header + admin_quote(f'{admin_icon("user")} {user_link}\n{admin_icon("tariff")} {current_line.strip()}')
+    text += '\n\n' + texts.t('ADMIN_USERS_PURCHASE_026', 'Выберите новый тариф:\n')
 
     keyboard = []
     for tariff in tariffs:
@@ -7659,17 +7818,24 @@ async def select_admin_tariff_change(callback: types.CallbackQuery, db_user: Use
 
     text = texts.t('ADMIN_USERS_PURCHASE_027', '<b>Подтверждение смены тарифа</b>\n\n')
     user_link = user_html_link(user)
-    text += f'{user_link}\n\n'
-    text += texts.t('ADMIN_USERS_PURCHASE_028', '<b>Новый тариф:</b> {value1}\n').format(
-        value1=html.escape(tariff.name)
+    param_lines = [
+        f'{admin_icon("user")} {user_link}',
+        f'{admin_icon("tariff")} '
+        + texts.t('ADMIN_USERS_PURCHASE_028', '<b>Новый тариф:</b> {value1}\n')
+        .format(value1=html.escape(tariff.name))
+        .strip(),
+        texts.t('ADMIN_USERS_STATS_011', '• Устройства: {value1}\n')
+        .format(value1=Texts.format_device_limit(tariff.device_limit))
+        .strip(),
+        texts.t('ADMIN_USERS_PURCHASE_030', '• Трафик: {value1}\n').format(value1=traffic_str).strip(),
+        texts.t('ADMIN_USERS_PURCHASE_031', '• Серверы: {value1}\n\n').format(value1=servers_count).strip(),
+    ]
+    text += admin_quote('\n'.join(param_lines))
+    text += '\n\n' + admin_quote(
+        texts.t('ADMIN_USERS_PURCHASE_032', 'Параметры подписки будут обновлены в соответствии с тарифом.\n').strip()
+        + '\n'
+        + texts.t('ADMIN_USERS_PURCHASE_033', 'Дата окончания подписки не изменится.').strip()
     )
-    text += texts.t('ADMIN_USERS_STATS_011', '• Устройства: {value1}\n').format(
-        value1=Texts.format_device_limit(tariff.device_limit)
-    )
-    text += texts.t('ADMIN_USERS_PURCHASE_030', '• Трафик: {value1}\n').format(value1=traffic_str)
-    text += texts.t('ADMIN_USERS_PURCHASE_031', '• Серверы: {value1}\n\n').format(value1=servers_count)
-    text += texts.t('ADMIN_USERS_PURCHASE_032', 'Параметры подписки будут обновлены в соответствии с тарифом.\n')
-    text += texts.t('ADMIN_USERS_PURCHASE_033', 'Дата окончания подписки не изменится.')
 
     confirmation_data = f'admin_sub_tariff_confirm_{tariff_id}_{user_id}{_sid}'
     if getattr(subscription, 'traffic_accounting_mode', None) == 'managed':
@@ -7683,7 +7849,6 @@ async def select_admin_tariff_change(callback: types.CallbackQuery, db_user: Use
                 strip_leading_emoji(texts.t('ADMIN_BLOCKED_BUTTON_CONFIRM', 'Подтвердить')),
                 callback_data=confirmation_data,
                 icon='check',
-                style='success',
             ),
             admin_back_button(
                 texts,
@@ -7879,16 +8044,18 @@ async def confirm_admin_tariff_change(callback: types.CallbackQuery, db_user: Us
 
         await callback.message.edit_text(
             admin_screen(
-                texts.t(
-                    'ADMIN_USERS_PURCHASE_080',
-                    '<b>Тариф успешно изменен</b>\n\nНовый тариф: <b>{value1}</b>\n• Устройства: {value2}\n• Трафик: {value3}\n• Серверы: {value4}',
-                ).format(
-                    value1=html.escape(tariff.name),
-                    value2=Texts.format_device_limit(subscription.device_limit),
-                    value3=''
-                    if tariff.traffic_limit_gb == 0
-                    else texts.t('ADMIN_USERS_LIMITS_011', '{value1} ГБ').format(value1=tariff.traffic_limit_gb),
-                    value4=len(tariff.allowed_squads) if tariff.allowed_squads else 0,
+                _quote_blocks(
+                    texts.t(
+                        'ADMIN_USERS_PURCHASE_080',
+                        '<b>Тариф успешно изменен</b>\n\nНовый тариф: <b>{value1}</b>\n• Устройства: {value2}\n• Трафик: {value3}\n• Серверы: {value4}',
+                    ).format(
+                        value1=html.escape(tariff.name),
+                        value2=Texts.format_device_limit(subscription.device_limit),
+                        value3=''
+                        if tariff.traffic_limit_gb == 0
+                        else texts.t('ADMIN_USERS_LIMITS_011', '{value1} ГБ').format(value1=tariff.traffic_limit_gb),
+                        value4=len(tariff.allowed_squads) if tariff.allowed_squads else 0,
+                    ),
                 ),
                 icon='success',
                 compact=True,
@@ -7913,8 +8080,10 @@ async def confirm_admin_tariff_change(callback: types.CallbackQuery, db_user: Us
 
         await callback.message.edit_text(
             admin_screen(
-                texts.t('ADMIN_USERS_PURCHASE_102', '<b>Ошибка смены тарифа</b>\n\nДетали: {value1}').format(
-                    value1=html.escape(str(e))
+                _quote_blocks(
+                    texts.t('ADMIN_USERS_PURCHASE_102', '<b>Ошибка смены тарифа</b>\n\nДетали: {value1}').format(
+                        value1=html.escape(str(e))
+                    ),
                 ),
                 icon='error',
                 compact=True,
@@ -7995,15 +8164,17 @@ async def show_admin_user_autopay(callback: types.CallbackQuery, db_user: User, 
         else texts.t('ADMIN_USERS_PURCHASE_049', 'по умолчанию (самый дешёвый период тарифа)')
     )
 
-    text = texts.t(
-        'ADMIN_USERS_PURCHASE_034',
-        '<b>Настройки автоплатежа</b>\n\n<b>Статус:</b> {value1}\n<b>Списание за:</b> {value2} дн. до окончания\n<b>Период продления:</b> {value3}\n\nГлобальный дефолт периода: {value4}',
-    ).format(
-        value1=status_text,
-        value2=subscription.autopay_days_before,
-        value3=period_text,
-        value4=getattr(settings, 'DEFAULT_AUTOPAY_PERIOD_DAYS', 0)
-        or texts.t('ADMIN_USERS_PURCHASE_082', 'самый короткий период тарифа'),
+    text = _quote_blocks(
+        texts.t(
+            'ADMIN_USERS_PURCHASE_034',
+            '<b>Настройки автоплатежа</b>\n\n<b>Статус:</b> {value1}\n<b>Списание за:</b> {value2} дн. до окончания\n<b>Период продления:</b> {value3}\n\nГлобальный дефолт периода: {value4}',
+        ).format(
+            value1=status_text,
+            value2=subscription.autopay_days_before,
+            value3=period_text,
+            value4=getattr(settings, 'DEFAULT_AUTOPAY_PERIOD_DAYS', 0)
+            or texts.t('ADMIN_USERS_PURCHASE_082', 'самый короткий период тарифа'),
+        )
     )
 
     toggle_label = (
@@ -8017,7 +8188,6 @@ async def show_admin_user_autopay(callback: types.CallbackQuery, db_user: User, 
                 strip_leading_emoji(toggle_label),
                 callback_data=f'admin_user_autopay_toggle_{user_id}{_sid}',
                 icon='prohibit' if subscription.autopay_enabled else 'check',
-                style='danger' if subscription.autopay_enabled else 'success',
             )
         ],
         [
@@ -8025,7 +8195,6 @@ async def show_admin_user_autopay(callback: types.CallbackQuery, db_user: User, 
                 strip_leading_emoji(texts.t('ADMIN_USERS_PURCHASE_103', 'Дни до списания')),
                 callback_data=f'admin_user_autopay_days_{user_id}{_sid}',
                 icon='calendar',
-                style='primary',
             )
         ],
         [
@@ -8033,7 +8202,6 @@ async def show_admin_user_autopay(callback: types.CallbackQuery, db_user: User, 
                 strip_leading_emoji(texts.t('ADMIN_USERS_PURCHASE_104', 'Период продления')),
                 callback_data=f'admin_user_autopay_period_{user_id}{_sid}',
                 icon='repeat',
-                style='primary',
             )
         ],
         [
@@ -8179,9 +8347,11 @@ async def show_admin_user_autopay_period(callback: types.CallbackQuery, db_user:
 
     await callback.message.edit_text(
         admin_screen(
-            texts.t(
-                'ADMIN_USERS_PURCHASE_059',
-                '<b>Период автоплатежа</b>\n\nВыберите период, на который автоплатёж будет продлевать подписку.\n<i>"По умолчанию" — глобальный дефолт из .env, иначе самый дешёвый период тарифа.</i>',
+            _quote_blocks(
+                texts.t(
+                    'ADMIN_USERS_PURCHASE_059',
+                    '<b>Период автоплатежа</b>\n\nВыберите период, на который автоплатёж будет продлевать подписку.\n<i>"По умолчанию" — глобальный дефолт из .env, иначе самый дешёвый период тарифа.</i>',
+                )
             ),
             icon='repeat',
             compact=True,

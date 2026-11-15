@@ -19,6 +19,16 @@ from app.utils.miniapp_buttons import strip_leading_emoji
 
 logger = structlog.get_logger(__name__)
 
+
+def _back_label(value: str) -> str:
+    """Подпись кнопки возврата: стрелка в тексте вместо premium-иконки."""
+
+    label = (value or '').strip()
+    if not label or label.lower().startswith(('←', '◀', '⬅', '⏪')):
+        return label
+    return f'← {label}'
+
+
 # Следы прежнего оформления в локалях: декоративные глифы в начале строк.
 _LEGACY_PREFIX_RE = re.compile(
     r'^[ \t]*(?:(?:[▤▣▥◷↻◀▫⚠ℹ→]|NEW(?=[ \t])|i(?=[ \t]))\ufe0f?[ \t]*)*',
@@ -119,24 +129,24 @@ def get_backup_main_keyboard(language: str = 'ru'):
                 admin_button(
                     _label(texts.t('ADMIN_BACKUP_UI_056', 'Создать бекап')),
                     callback_data='backup_create',
-                    style='success',
+                    icon='plus',
                 ),
                 admin_button(
                     _label(texts.t('ADMIN_BACKUP_UI_057', 'Восстановить')),
                     callback_data='backup_restore',
-                    style='primary',
+                    icon='upload',
                 ),
             ],
             [
                 admin_button(
                     _label(texts.t('ADMIN_BACKUP_UI_058', 'Список бекапов')),
                     callback_data='backup_list',
-                    style='primary',
+                    icon='folder',
                 ),
                 admin_button(
                     _label(texts.t('ADMIN_BACKUP_UI_059', 'Настройки')),
                     callback_data='backup_settings',
-                    style='primary',
+                    icon='settings',
                 ),
             ],
             [admin_back_button(texts, 'admin_panel')],
@@ -172,19 +182,27 @@ def get_backup_list_keyboard(backups: list, page: int = 1, per_page: int = 5, la
         )
         callback_data = f'backup_manage_{backup["filename"]}'
 
-        keyboard.append([InlineKeyboardButton(text=button_text, callback_data=callback_data)])
+        keyboard.append(
+            [
+                admin_button(
+                    button_text,
+                    callback_data=callback_data,
+                    icon='backup',
+                )
+            ]
+        )
 
     if len(backups) > per_page:
         total_pages = (len(backups) + per_page - 1) // per_page
         nav_row = []
 
         if page > 1:
-            nav_row.append(admin_button('←', callback_data=f'backup_list_page_{page - 1}', style='primary'))
+            nav_row.append(admin_button('←', callback_data=f'backup_list_page_{page - 1}'))
 
         nav_row.append(InlineKeyboardButton(text=f'{page}/{total_pages}', callback_data='noop'))
 
         if page < total_pages:
-            nav_row.append(admin_button('→', callback_data=f'backup_list_page_{page + 1}', style='primary'))
+            nav_row.append(admin_button('→', callback_data=f'backup_list_page_{page + 1}'))
 
         keyboard.append(nav_row)
 
@@ -201,7 +219,7 @@ def get_backup_manage_keyboard(backup_filename: str, language: str = 'ru'):
                 admin_button(
                     _label(texts.t('ADMIN_BACKUP_UI_057', 'Восстановить')),
                     callback_data=f'backup_restore_file_{backup_filename}',
-                    style='success',
+                    icon='upload',
                 )
             ],
             [
@@ -209,14 +227,13 @@ def get_backup_manage_keyboard(backup_filename: str, language: str = 'ru'):
                     _label(texts.t('ADMIN_BACKUP_UI_060', 'Удалить')),
                     callback_data=f'backup_delete_{backup_filename}',
                     icon='delete',
-                    style='danger',
                 )
             ],
             [
-                admin_button(
-                    _label(texts.t('ADMIN_BACKUP_UI_061', 'К списку')),
-                    callback_data='backup_list',
-                    style='primary',
+                admin_back_button(
+                    texts,
+                    'backup_list',
+                    label=_back_label(_label(texts.t('ADMIN_BACKUP_UI_061', 'К списку'))),
                 )
             ],
         ]
@@ -247,21 +264,21 @@ def get_backup_settings_keyboard(settings_obj, language: str = 'ru'):
                 admin_button(
                     _label(texts.t('ADMIN_BACKUP_UI_062', 'Автобекапы: {v0}').format(v0=auto_status)),
                     callback_data='backup_toggle_auto',
-                    style='primary',
+                    icon='calendar',
                 )
             ],
             [
                 admin_button(
                     _label(texts.t('ADMIN_BACKUP_UI_063', 'Сжатие: {v0}').format(v0=compression_status)),
                     callback_data='backup_toggle_compression',
-                    style='primary',
+                    icon='save',
                 )
             ],
             [
                 admin_button(
                     _label(texts.t('ADMIN_BACKUP_UI_064', 'Логи в бекапе: {v0}').format(v0=logs_status)),
                     callback_data='backup_toggle_logs',
-                    style='primary',
+                    icon='logs',
                 )
             ],
             [admin_back_button(texts, 'backup_panel')],
@@ -383,7 +400,7 @@ async def show_backup_list(callback: types.CallbackQuery, db_user: User, db: Asy
                     admin_button(
                         _label(texts.t('ADMIN_BACKUP_UI_067', 'Создать первый бекап')),
                         callback_data='backup_create',
-                        style='success',
+                        icon='plus',
                     )
                 ],
                 [admin_back_button(texts, 'backup_panel')],
@@ -484,12 +501,11 @@ async def delete_backup_confirm(callback: types.CallbackQuery, db_user: User, db
                     _label(texts.t('ADMIN_BACKUP_UI_065', 'Да, удалить')),
                     callback_data=f'backup_delete_confirm_{filename}',
                     icon='delete',
-                    style='danger',
                 ),
                 admin_button(
                     _label(texts.t('ADMIN_BACKUP_UI_066', 'Отмена')),
                     callback_data=f'backup_manage_{filename}',
-                    style='danger',
+                    icon='cross',
                 ),
             ]
         ]
@@ -526,7 +542,7 @@ async def delete_backup_execute(callback: types.CallbackQuery, db_user: User, db
                         admin_button(
                             _label(texts.t('ADMIN_BACKUP_UI_072', 'К списку бекапов')),
                             callback_data='backup_list',
-                            style='primary',
+                            icon='folder',
                         )
                     ]
                 ]
@@ -554,8 +570,11 @@ async def restore_backup_start(callback: types.CallbackQuery, db_user: User, db:
         # Восстановление из конкретного файла
         filename = callback.data.replace('backup_restore_file_', '')
 
-        text = texts.t('ADMIN_BACKUP_UI_015', '<b>Восстановление из бекапа</b>\n\n')
-        text += texts.t('ADMIN_BACKUP_UI_016', '<b>Файл:</b> <code>{v0}</code>\n\n').format(v0=html.escape(filename))
+        text = texts.t('ADMIN_BACKUP_UI_015', '<b>Восстановление из бекапа</b>')
+        file_block = admin_quote(
+            texts.t('ADMIN_BACKUP_UI_016', '<b>Файл:</b> <code>{v0}</code>').format(v0=html.escape(filename))
+        )
+        text += f'\n\n{file_block}\n\n'
         text += texts.t('ADMIN_BACKUP_UI_017', '<b>Внимание!</b>\n')
         text += texts.t('ADMIN_BACKUP_UI_018', '• Процесс может занять несколько минут\n')
         text += texts.t('ADMIN_BACKUP_UI_019', '• Рекомендуется создать бекап перед восстановлением\n')
@@ -568,19 +587,19 @@ async def restore_backup_start(callback: types.CallbackQuery, db_user: User, db:
                     admin_button(
                         _label(texts.t('ADMIN_BACKUP_UI_071', 'Восстановить')),
                         callback_data=f'backup_restore_execute_{filename}',
-                        style='success',
+                        icon='upload',
                     ),
                     admin_button(
                         _label(texts.t('ADMIN_BACKUP_UI_069', 'Очистить и восстановить')),
                         callback_data=f'backup_restore_clear_{filename}',
-                        style='danger',
+                        icon='delete',
                     ),
                 ],
                 [
                     admin_button(
                         _label(texts.t('ADMIN_BACKUP_UI_066', 'Отмена')),
                         callback_data=f'backup_manage_{filename}',
-                        style='danger',
+                        icon='cross',
                     )
                 ],
             ]
@@ -603,14 +622,14 @@ async def restore_backup_start(callback: types.CallbackQuery, db_user: User, db:
                     admin_button(
                         _label(texts.t('ADMIN_BACKUP_UI_070', 'Выбрать из списка')),
                         callback_data='backup_list',
-                        style='primary',
+                        icon='folder',
                     )
                 ],
                 [
                     admin_button(
                         _label(texts.t('ADMIN_BACKUP_UI_066', 'Отмена')),
                         callback_data='backup_panel',
-                        style='danger',
+                        icon='cross',
                     )
                 ],
             ]
@@ -699,8 +718,12 @@ async def handle_backup_file_upload(message: types.Message, db_user: User, db: A
     texts = get_texts(db_user.language)
     if not message.document:
         await message.answer(
-            _clean_legacy(
-                texts.t('ADMIN_BACKUP_UI_043', 'Пожалуйста, отправьте файл бекапа (.json, .json.gz или .tar.gz)')
+            admin_screen(
+                _clean_legacy(
+                    texts.t('ADMIN_BACKUP_UI_043', 'Пожалуйста, отправьте файл бекапа (.json, .json.gz или .tar.gz)')
+                ),
+                icon='warning',
+                compact=True,
             ),
             reply_markup=InlineKeyboardMarkup(
                 inline_keyboard=[
@@ -708,11 +731,12 @@ async def handle_backup_file_upload(message: types.Message, db_user: User, db: A
                         admin_button(
                             _label(texts.t('ADMIN_BACKUP_UI_073', 'Отмена')),
                             callback_data='backup_panel',
-                            style='danger',
+                            icon='cross',
                         )
                     ]
                 ]
             ),
+            parse_mode='HTML',
         )
         return
 
@@ -721,11 +745,15 @@ async def handle_backup_file_upload(message: types.Message, db_user: User, db: A
 
     if not document.file_name or not any(document.file_name.endswith(ext) for ext in allowed_extensions):
         await message.answer(
-            _clean_legacy(
-                texts.t(
-                    'ADMIN_BACKUP_UI_044',
-                    'Неподдерживаемый формат файла. Загрузите .json, .json.gz или .tar.gz файл',
-                )
+            admin_screen(
+                _clean_legacy(
+                    texts.t(
+                        'ADMIN_BACKUP_UI_044',
+                        'Неподдерживаемый формат файла. Загрузите .json, .json.gz или .tar.gz файл',
+                    )
+                ),
+                icon='error',
+                compact=True,
             ),
             reply_markup=InlineKeyboardMarkup(
                 inline_keyboard=[
@@ -733,28 +761,34 @@ async def handle_backup_file_upload(message: types.Message, db_user: User, db: A
                         admin_button(
                             _label(texts.t('ADMIN_BACKUP_UI_073', 'Отмена')),
                             callback_data='backup_panel',
-                            style='danger',
+                            icon='cross',
                         )
                     ]
                 ]
             ),
+            parse_mode='HTML',
         )
         return
 
     if document.file_size > 50 * 1024 * 1024:
         await message.answer(
-            _clean_legacy(texts.t('ADMIN_BACKUP_UI_045', 'Файл слишком большой (максимум 50MB)')),
+            admin_screen(
+                _clean_legacy(texts.t('ADMIN_BACKUP_UI_045', 'Файл слишком большой (максимум 50MB)')),
+                icon='error',
+                compact=True,
+            ),
             reply_markup=InlineKeyboardMarkup(
                 inline_keyboard=[
                     [
                         admin_button(
                             _label(texts.t('ADMIN_BACKUP_UI_073', 'Отмена')),
                             callback_data='backup_panel',
-                            style='danger',
+                            icon='cross',
                         )
                     ]
                 ]
             ),
+            parse_mode='HTML',
         )
         return
 
@@ -794,19 +828,19 @@ async def handle_backup_file_upload(message: types.Message, db_user: User, db: A
                     admin_button(
                         _label(texts.t('ADMIN_BACKUP_UI_071', 'Восстановить')),
                         callback_data=f'backup_restore_execute_{temp_path.name}',
-                        style='success',
+                        icon='upload',
                     ),
                     admin_button(
                         _label(texts.t('ADMIN_BACKUP_UI_069', 'Очистить и восстановить')),
                         callback_data=f'backup_restore_clear_{temp_path.name}',
-                        style='danger',
+                        icon='delete',
                     ),
                 ],
                 [
                     admin_button(
                         _label(texts.t('ADMIN_BACKUP_UI_066', 'Отмена')),
                         callback_data='backup_panel',
-                        style='danger',
+                        icon='cross',
                     )
                 ],
             ]
@@ -832,7 +866,7 @@ async def handle_backup_file_upload(message: types.Message, db_user: User, db: A
                         admin_button(
                             _label(texts.t('ADMIN_BACKUP_UI_073', 'Отмена')),
                             callback_data='backup_panel',
-                            style='danger',
+                            icon='cross',
                         )
                     ]
                 ]

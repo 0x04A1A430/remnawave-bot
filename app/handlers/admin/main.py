@@ -173,7 +173,7 @@ async def show_support_submenu(callback: types.CallbackQuery, db_user: User, db:
                         icon='support',
                     )
                 ],
-                [admin_button(texts.BACK, callback_data='back_to_menu', style='danger')],
+                [admin_back_button(texts, 'back_to_menu')],
             ]
         )
     await callback.message.edit_text(
@@ -208,10 +208,10 @@ async def show_moderator_panel(callback: types.CallbackQuery, db_user: User, db:
                 )
             ],
             [
-                admin_button(
-                    texts.t('BACK_TO_MAIN_MENU_BUTTON', '← В главное меню'),
-                    callback_data='back_to_menu',
-                    style='danger',
+                admin_back_button(
+                    texts,
+                    'back_to_menu',
+                    label=texts.t('BACK_TO_MAIN_MENU_BUTTON', '← В главное меню'),
                 )
             ],
         ]
@@ -300,7 +300,7 @@ async def show_support_audit(callback: types.CallbackQuery, db_user: User, db: A
     kb_rows = []
     if nav_row:
         kb_rows.append(nav_row)
-    kb_rows.append([admin_button(texts.BACK, callback_data='admin_submenu_support', style='danger')])
+    kb_rows.append([admin_back_button(texts, 'admin_submenu_support')])
     kb = InlineKeyboardMarkup(inline_keyboard=kb_rows)
 
     await callback.message.edit_text(

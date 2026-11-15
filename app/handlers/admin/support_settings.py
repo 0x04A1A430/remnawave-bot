@@ -34,7 +34,6 @@ def _delete_keyboard(texts) -> types.InlineKeyboardMarkup:
                     _label(texts.t('DELETE_MESSAGE', 'Удалить')),
                     callback_data='admin_support_delete_msg',
                     icon='delete',
-                    style='danger',
                 )
             ]
         ]
@@ -43,7 +42,6 @@ def _delete_keyboard(texts) -> types.InlineKeyboardMarkup:
 
 def _get_support_settings_keyboard(language: str) -> types.InlineKeyboardMarkup:
     texts = get_texts(language)
-    mode = SupportSettingsService.get_system_mode()
     menu_enabled = SupportSettingsService.is_support_menu_enabled()
     admin_notif = SupportSettingsService.get_admin_ticket_notifications_enabled()
     user_notif = SupportSettingsService.get_user_ticket_notifications_enabled()
@@ -71,19 +69,16 @@ def _get_support_settings_keyboard(language: str) -> types.InlineKeyboardMarkup:
                 _label(texts.t('ADMIN_SUPPORT_SETTINGS_MODE_TICKETS', 'Тикеты')),
                 callback_data='admin_support_mode_tickets',
                 icon='support',
-                style='success' if mode == 'tickets' else None,
             ),
             admin_button(
                 _label(texts.t('ADMIN_SUPPORT_SETTINGS_MODE_CONTACT', 'Контакт')),
                 callback_data='admin_support_mode_contact',
                 icon='user',
-                style='success' if mode == 'contact' else None,
             ),
             admin_button(
                 _label(texts.t('ADMIN_SUPPORT_SETTINGS_MODE_BOTH', 'Оба')),
                 callback_data='admin_support_mode_both',
                 icon='users',
-                style='success' if mode == 'both' else None,
             ),
         ]
     )
@@ -93,8 +88,7 @@ def _get_support_settings_keyboard(language: str) -> types.InlineKeyboardMarkup:
             admin_button(
                 _label(texts.t('ADMIN_SUPPORT_SETTINGS_EDIT_DESCRIPTION', 'Изменить описание')),
                 callback_data='admin_support_edit_desc',
-                icon='document',
-                style='primary',
+                icon='edit',
             )
         ]
     )
@@ -159,7 +153,6 @@ def _get_support_settings_keyboard(language: str) -> types.InlineKeyboardMarkup:
                 ),
                 callback_data='admin_support_list_moderators',
                 icon='users',
-                style='primary',
             )
         ]
     )
@@ -168,14 +161,12 @@ def _get_support_settings_keyboard(language: str) -> types.InlineKeyboardMarkup:
             admin_button(
                 _label(texts.t('ADMIN_SUPPORT_SETTINGS_ADD_MODERATOR', 'Назначить модератора')),
                 callback_data='admin_support_add_moderator',
-                icon='user',
-                style='success',
+                icon='plus',
             ),
             admin_button(
                 _label(texts.t('ADMIN_SUPPORT_SETTINGS_REMOVE_MODERATOR', 'Удалить модератора')),
                 callback_data='admin_support_remove_moderator',
                 icon='delete',
-                style='danger',
             ),
         ]
     )
@@ -430,8 +421,7 @@ async def start_edit_desc(callback: types.CallbackQuery, db_user: User, db: Asyn
             admin_button(
                 _label(texts.t('ADMIN_SUPPORT_SEND_DESCRIPTION', 'Прислать текст')),
                 callback_data='admin_support_send_desc',
-                icon='messages',
-                style='primary',
+                icon='edit',
             )
         ]
     )

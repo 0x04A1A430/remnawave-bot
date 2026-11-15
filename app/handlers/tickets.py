@@ -1369,7 +1369,7 @@ async def notify_admins_about_new_ticket(ticket: Ticket, db: AsyncSession):
         except Exception:
             user = None
         full_name = html.escape(user.full_name or '') if user else 'Unknown'
-        telegram_id_display = (user.telegram_id or user.email or f'#{user.id}') if user else '—'
+        telegram_id_display = html.escape(str(user.telegram_id or user.email or f'#{user.id}')) if user else '—'
         username_display = format_username_link(user.username if user else None, 'отсутствует')
 
         # Загружаем первое сообщение для получения медиа и превью текста
@@ -1386,19 +1386,23 @@ async def notify_admins_about_new_ticket(ticket: Ticket, db: AsyncSession):
 
         safe_title = html.escape(title) if title else '—'
 
-        notification_text = (
-            f'<b>НОВЫЙ ТИКЕТ</b>\n\n'
-            f'<b>ID:</b> <code>{ticket.id}</code>\n'
-            f'<tg-emoji emoji-id="5771887475421090729">👤</tg-emoji> <b>Пользователь:</b> {full_name}\n'
-            f'<b>ID:</b> <code>{telegram_id_display}</code>\n'
-            f'<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> <b>Username:</b> {username_display}\n'
-            f'<tg-emoji emoji-id="5886330010054168711">📝</tg-emoji> <b>Заголовок:</b> {safe_title}\n'
+        notification_text = _screen(
+            'bell',
+            'Новый тикет',
+            quote=[
+                f'{admin_icon("id")} <b>ID:</b> <code>{ticket.id}</code>',
+                f'{admin_icon("user")} <b>Пользователь:</b> {full_name}',
+                f'{admin_icon("id")} <b>Telegram ID:</b> <code>{telegram_id_display}</code>',
+                f'{admin_icon("user")} <b>Username:</b> {username_display}',
+                f'{admin_icon("document")} <b>Заголовок:</b> {safe_title}',
+                f'{admin_icon("calendar")} <b>Создан:</b> {format_local_datetime(ticket.created_at, "%d.%m.%Y %H:%M")}',
+            ],
+            body=(
+                f'{admin_icon("chat")} <b>Сообщение:</b>\n<blockquote>{html.escape(message_preview)}</blockquote>'
+                if message_preview
+                else ''
+            ),
         )
-
-        if message_preview:
-            notification_text += f'\n<b>Сообщение:</b>\n{html.escape(message_preview)}\n'
-
-        notification_text += f'\n<tg-emoji emoji-id="5967412305338568701">📅</tg-emoji> <b>Создан:</b> {format_local_datetime(ticket.created_at, "%d.%m.%Y %H:%M")}\n'
 
         from app.services.maintenance_service import maintenance_service
 
@@ -1446,20 +1450,27 @@ async def notify_admins_about_ticket_reply(
         except Exception:
             user = None
         full_name = html.escape(user.full_name or '') if user else 'Unknown'
-        telegram_id_display = (user.telegram_id or user.email or f'#{user.id}') if user else '—'
+        telegram_id_display = html.escape(str(user.telegram_id or user.email or f'#{user.id}')) if user else '—'
         username_display = format_username_link(user.username if user else None, 'отсутствует')
 
         reply_preview = preview_text(reply_text)
         safe_title = html.escape(title) if title else '—'
 
-        notification_text = (
-            f'<tg-emoji emoji-id="5886666250158870040">💬</tg-emoji> <b>ОТВЕТ НА ТИКЕТ</b>\n\n'
-            f'<b>ID тикета:</b> <code>{ticket.id}</code>\n'
-            f'<tg-emoji emoji-id="5886330010054168711">📝</tg-emoji> <b>Заголовок:</b> {safe_title}\n'
-            f'<tg-emoji emoji-id="5771887475421090729">👤</tg-emoji> <b>Пользователь:</b> {full_name}\n'
-            f'<b>ID:</b> <code>{telegram_id_display}</code>\n'
-            f'<tg-emoji emoji-id="5985833664884250583">📱</tg-emoji> <b>Username:</b> {username_display}\n\n'
-            f'<b>Сообщение:</b>\n{html.escape(reply_preview)}\n'
+        notification_text = _screen(
+            'chat',
+            'Ответ на тикет',
+            quote=[
+                f'{admin_icon("id")} <b>ID тикета:</b> <code>{ticket.id}</code>',
+                f'{admin_icon("document")} <b>Заголовок:</b> {safe_title}',
+                f'{admin_icon("user")} <b>Пользователь:</b> {full_name}',
+                f'{admin_icon("id")} <b>Telegram ID:</b> <code>{telegram_id_display}</code>',
+                f'{admin_icon("user")} <b>Username:</b> {username_display}',
+            ],
+            body=(
+                f'{admin_icon("chat")} <b>Сообщение:</b>\n<blockquote>{html.escape(reply_preview)}</blockquote>'
+                if reply_preview
+                else ''
+            ),
         )
 
         from app.services.maintenance_service import maintenance_service

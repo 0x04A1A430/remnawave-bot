@@ -69,6 +69,9 @@ async def reset_trials(
         active=stats.get('active_trials', 0),
         resettable=stats.get('resettable_trials', 0),
     )
+    title, separator, stats_block = message.partition('\n\n')
+    if separator and stats_block:
+        message = f'<b>{title.strip()}</b>\n\n{admin_quote(stats_block.strip())}'
 
     await callback.message.edit_text(
         admin_screen(message, icon='success', compact=True),
