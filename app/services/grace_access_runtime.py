@@ -71,6 +71,7 @@ from app.services.grace_access_service import (
 )
 from app.services.panel_sync import is_subscription_live, panel_date_is_closing, panel_expire_at
 from app.services.panel_sync.payload import resolve_panel_status
+from app.utils.db_errors import is_transient_db_error
 
 
 logger = structlog.get_logger(__name__)
@@ -1034,8 +1035,14 @@ class GraceAccessRuntime:
                 await self.run_once()
             except asyncio.CancelledError:
                 raise
-            except Exception:
-                logger.exception('Grace runtime iteration failed; the next iteration will retry')
+            except Exception as error:
+                if is_transient_db_error(error):
+                    logger.warning(
+                        'Grace runtime iteration skipped: database unavailable; retrying next iteration',
+                        error_type=type(error).__name__,
+                    )
+                else:
+                    logger.exception('Grace runtime iteration failed; the next iteration will retry')
 
             try:
                 await asyncio.wait_for(self._stop_event.wait(), timeout=interval)

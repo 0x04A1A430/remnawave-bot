@@ -20,6 +20,7 @@ from sqlalchemy import select
 
 from app.database.database import AsyncSessionLocal
 from app.database.models import Subscription, User
+from app.utils.db_errors import is_transient_db_error
 
 
 logger = structlog.get_logger(__name__)
@@ -117,8 +118,14 @@ class RemnaWaveRetryQueue:
                 # create is an upsert through panel_sync: it reuses the current
                 # identity and also recovers a paid account never created yet.
                 self.enqueue(subscription_id, user_id, action='create')
-        except Exception:
-            logger.exception('Could not recover pending panel expiries; retrying next cycle')
+        except Exception as error:
+            if is_transient_db_error(error):
+                logger.warning(
+                    'Could not recover pending panel expiries: database unavailable; retrying next cycle',
+                    error_type=type(error).__name__,
+                )
+            else:
+                logger.exception('Could not recover pending panel expiries; retrying next cycle')
 
     async def process_pending(self) -> None:
         from app.services.paid_traffic_reset_service import process_pending_daily_resets
@@ -128,8 +135,14 @@ class RemnaWaveRetryQueue:
                 await process_pending_daily_resets(AsyncSessionLocal, limit=5)
         except TimeoutError:
             logger.warning('Paid traffic reset recovery reached its time budget; continuing expiry delivery')
-        except Exception:
-            logger.exception('Could not recover paid daily traffic resets; retrying next cycle')
+        except Exception as error:
+            if is_transient_db_error(error):
+                logger.warning(
+                    'Could not recover paid daily traffic resets: database unavailable; retrying next cycle',
+                    error_type=type(error).__name__,
+                )
+            else:
+                logger.exception('Could not recover paid daily traffic resets; retrying next cycle')
         await self._recover_pending_expiries()
         if not self._queue:
             return
@@ -183,6 +196,12 @@ class RemnaWaveRetryQueue:
                     )
 
             except Exception as error:
+                if is_transient_db_error(error):
+                    logger.warning(
+                        'Retry paused: database unavailable; re-enqueued',
+                        subscription_id=item.subscription_id,
+                        error_type=type(error).__name__,
+                    )
                 self._requeue(item, str(error))
             finally:
                 self._processing_subscription_ids.discard(item.subscription_id)

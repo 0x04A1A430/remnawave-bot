@@ -2364,6 +2364,9 @@
 - `app/utils/currency_converter.py` — Python-модуль
   Классы: `CurrencyConverter` (8 методов)
   Функции: нет
+- `app/utils/db_errors.py` — Python-модуль
+  Классы: нет
+  Функции: `is_transient_db_error` — True для недоступной БД/сети, которую имеет смысл просто повторить.
 - `app/utils/decorators.py` — Python-модуль
   Классы: нет
   Функции: `admin_required`, `auth_required` — Простая проверка на наличие пользователя в апдейте. Middleware уже подтягивает db_user,, `error_handler`, `state_cleanup`, `typing_action`, `rate_limit`
@@ -6307,6 +6310,9 @@
 - `tests/utils/test_codeql_input_boundaries.py` — Python-модуль
   Классы: нет
   Функции: `parsing_deadline`, `test_unterminated_escaped_metric_label_is_bounded`, `test_unterminated_long_tag_is_bounded`, `test_unterminated_rich_blocks_are_bounded`, `test_article_sanitization_removes_executable_markup`, `test_metric_label_escapes_and_adjacent_labels_still_parse`, `test_rich_segmentation_preserves_existing_short_input_semantics`, `test_blacklist_conversion_uses_parsed_host_and_blob_path`, `test_article_keeps_editor_formatting_and_uploaded_media`, `test_article_preserves_trusted_embeds_with_forced_sandbox`, `test_article_removes_untrusted_embed_source`, `test_legacy_article_response_is_sanitized_without_rewriting_storage`
+- `tests/utils/test_db_errors.py` — Python-модуль
+  Классы: нет
+  Функции: `test_name_resolution_is_transient`, `test_connection_errors_are_transient`, `test_business_errors_are_not_transient`
 - `tests/utils/test_decorator_localization.py` — Python-модуль
   Классы: нет
   Функции: `test_denied_admin_action_uses_account_language_without_calling_handler`, `test_error_message_uses_positional_account_or_telegram_language`
